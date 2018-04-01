@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package core_grpc;
+
+// Based on https://github.com/tendermint/tendermint/blob/master/rpc/grpc/types.proto.
+
+//----------------------------------------
+// Message types
+
+//----------------------------------------
+// Abstract types
+
+message KVPair {
+  string key = 1;
+  enum Type {
+    STRING = 0;
+    INT = 1;
+  }
+  Type value_type = 2;
+  string value_string = 3;
+  int64 value_int = 4;
+}
+
+//----------------------------------------
+// Request types
+
+message RequestPing {
+}
+
+message RequestBroadcastTx {
+  bytes tx = 1;
+}
+
+//----------------------------------------
+// Response types
+
+message ResponseCheckTx {
+    uint32 code = 1;
+    bytes data = 2;
+    string log = 3;
+    int64 gas = 4;
+    int64 fee = 5;
+}
+
+message ResponseDeliverTx {
+    uint32 code = 1;
+    bytes data = 2;
+    string log = 3;
+    repeated KVPair tags = 4;
+}
+
+message ResponsePing {
+}
+
+message ResponseBroadcastTx {
+    ResponseCheckTx check_tx = 1;
+    ResponseDeliverTx deliver_tx = 2;
+}
+
+//----------------------------------------
+// Service Definition
+
+service BroadcastAPI {
+  rpc Ping(RequestPing) returns (ResponsePing) ;
+  rpc BroadcastTx(RequestBroadcastTx) returns (ResponseBroadcastTx) ;
+}

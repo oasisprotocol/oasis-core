@@ -1,0 +1,15 @@
+[package]
+name = "token-api"
+version = "0.1.0-alpha.1"
+authors = [
+    "Raymond Cheng <me@raymondcheng.net>",
+    "Jernej Kos <jernej@kos.mx>"
+]
+build = "build.rs"
+
+[dependencies]
+ekiden-core = { path = "../../../core/common" }
+protobuf = "1.4.3"
+
+[build-dependencies]
+ekiden-tools = { path = "../../../tools" }

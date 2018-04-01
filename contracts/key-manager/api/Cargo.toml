@@ -1,0 +1,15 @@
+[package]
+name = "ekiden-key-manager-api"
+version = "0.1.0-alpha.1"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Ekiden key manager API"
+keywords = ["ekiden"]
+repository = "https://github.com/ekiden/ekiden"
+build = "build.rs"
+
+[dependencies]
+ekiden-core = { path = "../../../core/common", version = "0.1.0-alpha.1" }
+protobuf = "1.4.3"
+
+[build-dependencies]
+ekiden-tools = { path = "../../../tools", version = "0.1.0-alpha.1" }

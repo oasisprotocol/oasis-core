@@ -1,0 +1,24 @@
+enclave {
+    trusted {
+        // Incoming RPC call interface (client -> enclave).
+        public void rpc_call(
+            [user_check] const uint8_t *request_data,
+            size_t request_length,
+            [user_check] uint8_t *response_data,
+            size_t response_capacity,
+            [out] size_t *response_length
+        );
+    };
+
+    untrusted {
+        // Outgoing RPC call interface (enclave -> {enclave, service}).
+        void untrusted_rpc_call(
+            uint16_t endpoint,
+            [in, size=request_length] const uint8_t *request_data,
+            size_t request_length,
+            [out, size=response_capacity] uint8_t *response_data,
+            size_t response_capacity,
+            [out] size_t *response_length
+        );
+    };
+};

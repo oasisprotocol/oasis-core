@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package compute_web3;
+
+service Compute {
+    // Contract interface.
+    rpc CallContract (CallContractRequest) returns (CallContractResponse) {}
+}
+
+message CallContractRequest {
+    // Raw contract request payload that will be passed to the
+    // contract (Protocol Buffers serialized).
+    bytes payload = 1;
+}
+
+message CallContractResponse {
+    // Raw contract dependent response payload (Protocol Buffers serialized).
+    bytes payload = 1;
+}

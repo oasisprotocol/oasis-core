@@ -1,0 +1,22 @@
+# Build.
+/target/
+**/*.rs.bk
+*.a
+*.o
+*.so
+**/generated
+Cargo.lock
+Xargo.toml
+
+# Enclave compilation
+Enclave_t.c
+Enclave_t.h
+
+# IDE.
+.idea/*
+
+# Temporary files.
+*.swp
+
+# Saved enclave identity.
+/identity*.pb

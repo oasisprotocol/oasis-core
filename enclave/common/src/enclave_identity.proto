@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package enclave_identity;
+
+message AvReport {
+    // Raw AV report body (must be raw as the signature is computed over it). The body
+    // is JSON-encoded as per the IAS API specification.
+    bytes body = 1;
+    // AV report signature.
+    bytes signature = 2;
+    // AV report signing certificate chain in PEM format.
+    bytes certificates = 3;
+}
+
+message SavedIdentity {
+    // A space for an SGX sealed data struct that contains the enclave identity.
+    // The structure within the sealed data is internal to the enclave identity component.
+    bytes sealed_identity = 1;
+    // The current AV report used in the enclave identity proof for the saved enclave identity.
+    AvReport av_report = 2;
+}
+
+message IdentityProof {
+    // The public identity string.
+    bytes public_identity = 1;
+    // The attestation verification report report.
+    AvReport av_report = 2;
+}

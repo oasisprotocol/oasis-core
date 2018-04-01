@@ -1,0 +1,5 @@
+extend = "../Makefile.toml"
+
+[env]
+BUILD_FOR_HOST_TARGET = "false"
+BUILD_FOR_SGX_TARGET = "true"

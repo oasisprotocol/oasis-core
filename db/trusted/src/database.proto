@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package database;
+
+// Cryptographic secretbox (encrypted and authenticated).
+message CryptoSecretbox {
+    // Padded ciphertext.
+    bytes ciphertext = 1;
+    // Nonce.
+    bytes nonce = 2;
+}
+
+// Structure used to store diffs.
+message BsdiffPatch {
+    // Length of new blob.
+    uint64 new_length = 1;
+    // Compressed patch stream from bsdiff.
+    bytes patch_bz2 = 2;
+}
+
+// Serialized state.
+message State {
+    message KeyValue {
+        bytes key = 1;
+        bytes value = 2;
+    }
+
+    repeated KeyValue state = 1;
+}

@@ -1,0 +1,18 @@
+[package]
+name = "ekiden-db-untrusted"
+version = "0.1.0-alpha.1"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Ekiden database (untrusted part)"
+keywords = ["ekiden"]
+repository = "https://github.com/ekiden/ekiden"
+
+[features]
+sgx-simulation = []
+
+[dependencies]
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden1" }
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.1" }
+ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.1" }
+
+[build-dependencies]
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.1" }

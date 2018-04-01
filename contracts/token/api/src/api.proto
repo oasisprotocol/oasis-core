@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package token;
+
+message TransferRequest {
+    string sender = 2;
+    string destination = 3;
+    uint64 value = 4;
+}
+
+message TransferResponse {
+}
+
+message CreateRequest {
+    string sender = 1;
+    uint64 initial_supply = 2;
+    string token_name = 3;
+    string token_symbol = 4;
+}
+
+message CreateResponse {
+}
+
+message GetBalanceRequest {
+    string account = 1;
+}
+
+message GetBalanceResponse {
+    uint64 balance = 1;
+}

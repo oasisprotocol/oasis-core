@@ -1,0 +1,41 @@
+[workspace]
+members = [
+    "tools",
+
+    # Common.
+    "common",
+
+    # Enclave loader.
+    "enclave/common",
+    "enclave/untrusted",
+    "enclave/trusted",
+
+    # RPC (+ attestation).
+    "rpc/common",
+    "rpc/client",
+    "rpc/untrusted",
+    "rpc/trusted",
+    "rpc/edl",
+
+    # Database.
+    "db/untrusted",
+    "db/trusted",
+    "db/edl",
+
+    # Core.
+    "core/common",
+    "core/untrusted",
+    "core/trusted",
+    "core/edl",
+
+    # Compute node.
+    "compute/api",
+    "compute",
+
+    # Consensus node.
+    "consensus/api",
+    "consensus",
+
+    # Clients.
+    "clients/token",
+]

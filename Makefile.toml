@@ -1,0 +1,108 @@
+[env]
+PROJECT_ROOT = { script = ["git rev-parse --show-toplevel"] }
+EKIDEN_ROOT = "${PROJECT_ROOT}"
+INTEL_SGX_SDK = "/opt/sgxsdk"
+SGX_ARCH = "x64"
+XARGO_TARGET_PATH = "${EKIDEN_ROOT}/xargo"
+XARGO_DEFAULT_CONFIG_TEMPLATE = "${EKIDEN_ROOT}/xargo/Xargo.toml.template"
+BUILD_FOR_SGX_TARGET = "false"
+BUILD_FOR_HOST_TARGET = "true"
+
+[tasks.default]
+alias = "build-flow"
+
+[tasks.env-debug]
+env = { "BUILD_MODE" = "debug" }
+
+[tasks.env-release]
+env = { "BUILD_MODE" = "release" }
+
+[tasks.env-sgx-xargo]
+env = { "RUSTFLAGS" = "-Z force-unstable-if-unmarked", "RUST_TARGET_PATH" = "${XARGO_TARGET_PATH}" }
+
+[tasks.build-flow]
+dependencies = [
+    "env-debug",
+    "pre-build",
+    "build",
+    "post-build",
+]
+
+[tasks.build-release-flow]
+dependencies = [
+    "env-release",
+    "pre-build",
+    "build-release",
+    "post-build",
+]
+
+[tasks.build]
+# Alias needed to clear cargo-make defaults.
+alias = "build-debug"
+
+[tasks.build-debug]
+dependencies = [
+    "build-no-sgx",
+    "env-sgx-xargo",
+    "build-sgx",
+]
+
+[tasks.build-release]
+# Alias needed to clear cargo-make defaults.
+alias = "build-release-custom"
+
+[tasks.build-release-custom]
+dependencies = [
+    "build-no-sgx-release",
+    "env-sgx-xargo",
+    "build-sgx-release",
+]
+
+[tasks.build-no-sgx]
+condition = { env = { "BUILD_FOR_HOST_TARGET" = "true" } }
+command = "cargo"
+args = ["build"]
+
+[tasks.build-sgx]
+condition = { env = { "BUILD_FOR_SGX_TARGET" = "true" } }
+script = ['''
+    cleanup_xargo_toml() {
+        rm -f Xargo.toml
+    }
+
+    if [ ! -f Xargo.toml ]; then
+        cp ${XARGO_DEFAULT_CONFIG_TEMPLATE} Xargo.toml
+        trap cleanup_xargo_toml EXIT INT TERM
+    fi
+
+    xargo build --target x86_64-unknown-linux-sgx
+''']
+
+[tasks.build-no-sgx-release]
+condition = { env = { "BUILD_FOR_HOST_TARGET" = "true" } }
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.build-sgx-release]
+condition = { env = { "BUILD_FOR_SGX_TARGET" = "true" } }
+script = ['''
+    cleanup_xargo_toml() {
+        rm -f Xargo.toml
+    }
+
+    if [ ! -f Xargo.toml ]; then
+        cp ${XARGO_DEFAULT_CONFIG_TEMPLATE} Xargo.toml
+        trap cleanup_xargo_toml EXIT INT TERM
+    fi
+
+    xargo build --target x86_64-unknown-linux-sgx --release
+''']
+
+[tasks.test-flow]
+alias = "empty"
+
+[tasks.checkstyle]
+condition = { channels = [ "nightly" ] }
+install_crate = "rustfmt-nightly"
+command = "cargo"
+args = ["fmt", "--", "--write-mode=diff"]

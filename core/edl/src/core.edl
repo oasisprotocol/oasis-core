@@ -1,0 +1,4 @@
+enclave {
+    // Import from Intel SGX SDK.
+    from "sgx_tstdc.edl" import *;
+};

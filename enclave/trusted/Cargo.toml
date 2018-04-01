@@ -1,0 +1,16 @@
+[package]
+name = "ekiden-enclave-trusted"
+version = "0.1.0-alpha.1"
+authors = [
+    "Jernej Kos <jernej@kos.mx>"
+]
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.1" }
+ekiden-enclave-common = { path = "../common", version = "0.1.0-alpha.1" }
+lazy_static = { version = "1.0", features = ["spin_no_std"] }
+protobuf = "1.4.3"
+sodalite = "0.3.0"
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden1" }

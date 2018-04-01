@@ -1,0 +1,4 @@
+extend = "../Makefile.toml"
+
+[env]
+BUILD_FOR_SGX_TARGET = "true"

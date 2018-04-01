@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package consensus;
+
+message StoredTx {
+    oneof stored {
+        bytes replace = 1;
+        bytes diff = 2;
+        bytes checkpoint = 3;
+    }
+}
+
+service Consensus {
+    rpc Get (GetRequest) returns (GetResponse) {}
+    rpc GetDiffs (GetDiffsRequest) returns (GetDiffsResponse) {}
+    rpc Replace (ReplaceRequest) returns (ReplaceResponse) {}
+    rpc AddDiff (AddDiffRequest) returns (AddDiffResponse) {}
+}
+
+message Checkpoint {
+    bytes payload = 1;
+    uint64 height = 2;
+}
+
+message GetRequest {
+}
+
+message GetResponse {
+    Checkpoint checkpoint = 1;
+    repeated bytes diffs = 2;
+}
+
+message GetDiffsRequest {
+    uint64 since_height = 1;
+}
+
+message GetDiffsResponse {
+    Checkpoint checkpoint = 1;
+    repeated bytes diffs = 2;
+}
+
+message ReplaceRequest {
+    bytes payload = 1;
+}
+
+message ReplaceResponse {
+}
+
+message AddDiffRequest {
+    bytes payload = 1;
+}
+
+message AddDiffResponse {
+}

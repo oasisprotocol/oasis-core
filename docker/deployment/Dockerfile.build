@@ -1,0 +1,35 @@
+FROM docker.io/ekiden/development:0.1.0-alpha.0
+
+ENV HOME="/root"
+ENV PATH="${HOME}/.cargo/bin:${PATH}"
+ENV INTEL_SGX_SDK="/opt/sgxsdk"
+ENV SGX_MODE="SIM"
+ENV SGX_ARCH="x64"
+
+# We need a newer version of python-protobuf than is available in the distro.
+# Installing this stuff through pip also sidesteps the need to upgrade gcc.
+RUN apt-get update # 20180204
+RUN apt-get install -y --no-install-recommends python-pip
+# Benchmarks don't run the evaluation, so no scipy or sklearn
+RUN pip install numpy pandas xlrd protobuf
+
+# Copy code.
+ADD . /code
+
+# Build all Ekiden binaries and resources.
+RUN cd /code && \
+    cargo make build-release-flow
+
+# Package all binaries and resources.
+RUN mkdir -p /package/bin /package/lib /package/res && \
+    cp /code/target/enclave/*.signed.so /package/lib && \
+    cp /code/target/enclave/*.mrenclave /package/lib && \
+    cp /code/target/release/ekiden-compute /package/bin && \
+    cp /code/target/release/ekiden-consensus /package/bin && \
+    cp /code/docker/deployment/Dockerfile.runtime /package/Dockerfile
+
+# This is a builder container which outputs the contents of the package
+# on standard output. This enables the runtime and the builder container
+# to be different and reduces the image size considerably.
+WORKDIR /package
+CMD tar cvzhf - .

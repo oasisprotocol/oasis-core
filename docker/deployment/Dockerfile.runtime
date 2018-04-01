@@ -1,0 +1,9 @@
+FROM tozd/sgx:ubuntu-xenial
+
+ENV PATH="/ekiden/bin:${PATH}"
+
+# install dependencies needed by learner contracts
+RUN apt-get install -y python-pip
+RUN pip install numpy pandas protobuf xlrd
+
+ADD . /ekiden

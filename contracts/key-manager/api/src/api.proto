@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package key_manager;
+
+message GetOrCreateKeyRequest {
+    // Key name.
+    string name = 1;
+    // Key size.
+    uint32 size = 2;
+}
+
+message GetOrCreateKeyResponse {
+    // Key in clear text. Note that keys can be sent like this as the
+    // key manager requires a mutually authenticated secure channel.
+    bytes key = 1;
+}

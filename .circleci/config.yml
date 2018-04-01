@@ -1,0 +1,82 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: ekiden/testing
+    steps:
+      # Set up
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - checkout
+
+      # Build
+      - run: cargo make build-flow
+
+      # Rustfmt
+      - run: cargo make checkstyle
+
+      # Cargo tests. Some tests are excluded as they currently don't compile.
+      - run: |
+          cargo test --all \
+            --exclude ekiden-untrusted \
+            --exclude ekiden-enclave-untrusted \
+            --exclude ekiden-rpc-untrusted \
+            --exclude ekiden-db-untrusted \
+            --exclude ekiden-consensus \
+            -- --test-threads 1
+
+      # Cargo benchmarks. We first fetch the latest benchmark results from master and then
+      # compare against them.
+      - run: |
+          set +e
+          set +o pipefail
+          wget -q -O - "https://circleci.com/api/v1.1/project/github/sunblaze-ucb/ekiden/latest/artifacts/?branch=master&circle-token=${CIRCLE_TOKEN}" | grep -o 'https://[^"]*' | xargs -P4 -I % wget -q -O /tmp/benchmarks-master.json %?circle-token=${CIRCLE_TOKEN}
+      - run: |
+          ./scripts/benchmark.py \
+              ekiden-rpc-trusted \
+              ekiden-db-trusted \
+              --output /tmp/benchmarks.json \
+              --compare-to /tmp/benchmarks-master.json
+      - store_artifacts:
+          path: /tmp/benchmarks.json
+          destination: benchmarks
+
+      # Create enclave output directory.
+      - run: mkdir -p target/enclave
+      # Install ekiden-tools.
+      - run: cargo install --force --path tools ekiden-tools
+      # Build key manager contract.
+      - run: cargo ekiden build-contract ekiden-key-manager --path contracts/key-manager --output target/enclave
+      # Build token contract.
+      - run: cargo ekiden build-contract token --path contracts/token --output-identity --output target/enclave
+      # Start the consensus node.
+      - run:
+          command: ./target/debug/ekiden-consensus
+          background: true
+      # Start tendermint node.
+      - run: tendermint init
+      - run:
+          command: tendermint node --consensus.create_empty_blocks=false --rpc.laddr tcp://0.0.0.0:46666 --rpc.grpc_laddr tcp://0.0.0.0:46657
+          background: true
+      # Start key manager compute node.
+      - run:
+          command: ./target/debug/ekiden-compute target/enclave/ekiden-key-manager.so -p 9003 --disable-key-manager --identity-file identity-km.pb
+          background: true
+      # Start token compute node.
+      - run:
+          command: ./target/debug/ekiden-compute target/enclave/token.so --identity-file identity-token.pb
+          background: true
+      # Start token client.
+      - run: ./target/debug/token-client --mr-enclave $(cat target/enclave/token.mrenclave)
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
+experimental:
+  notify:
+    branches:
+      only:
+        - master

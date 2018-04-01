@@ -1,0 +1,15 @@
+[package]
+name = "client-utils"
+version = "0.1.0-alpha.1"
+authors = [
+    "Nick Hynes <nhynes@berkeley.edu>",
+    "Jernej Kos <jernej@kos.mx>"
+]
+
+[features]
+benchmark = ["threadpool", "time", "histogram"]
+
+[dependencies]
+threadpool = { version = "1.7.1", optional = true }
+time = { version = "0.1", optional = true }
+histogram = { version = "0.6.8", optional = true }

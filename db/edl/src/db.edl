@@ -1,0 +1,34 @@
+enclave {
+    trusted {
+        public void db_state_diff(
+            [user_check] const uint8_t *old,
+            size_t old_length,
+            [user_check] const uint8_t *new,
+            size_t new_length,
+            [user_check] uint8_t *diff,
+            size_t diff_capacity,
+            [out] size_t *diff_length
+        );
+
+        public void db_state_apply(
+            [user_check] const uint8_t *old,
+            size_t old_length,
+            [user_check] const uint8_t *diff,
+            size_t diff_length,
+            [user_check] uint8_t *new,
+            size_t new_capacity,
+            [out] size_t *new_length
+        );
+
+        public void db_state_set(
+            [user_check] const uint8_t *state,
+            size_t state_length
+        );
+
+        public void db_state_get(
+            [user_check] uint8_t *state,
+            size_t state_capacity,
+            [out] size_t *state_length
+        );
+    };
+};
