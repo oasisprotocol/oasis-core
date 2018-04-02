@@ -79,10 +79,14 @@ which set up the Docker containers for you.
 
 ### Consensus node
 
-The consensus node is built by the `cargo run` command.  To run it,
-
+The consensus node should have been built by the `cargo make` command above.  To build it
+separately, use
 ```bash
-$ bash scripts/sgx-enter.sh
+root@xxxx:/code# (cd consensus; cargo build)
+```
+
+To run the consensus node, use
+```bash
 root@xxxx:/code# target/debug/ekiden-consensus -x
 ```
 
