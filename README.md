@@ -79,26 +79,18 @@ which set up the Docker containers for you.
 
 ### Consensus node
 
-To build and run a consensus node:
+The consensus node is built by the `cargo run` command.  To run it,
+
 ```bash
 $ bash scripts/sgx-enter.sh
-$ cargo run -p consensus
+root@xxxx:/code# target/debug/ekiden-consensus -x
 ```
 
-The consensus node depends on a local instance of Tendermint
-To start a Tendermint docker container that is linked to the container above:
-```bash
-$ bash ./scripts/tendermint-start.sh
-```
-
-Occasionally, you'll need to clear all persistent data. To clear all data:
-```bash
-$ bash ./scripts/tendermint-clear.sh
-```
+The `-x` flag tells the consensus node to not depend on Tendermint.
 
 ### Compute node
 
-Currently, the 3 processes (compute, consensus, tendermint) look for each other on `localhost`.
+Currently, the 2 processes (compute and consensus) look for each other on `localhost`.
 In order to attach secondary shells to an existing container, run
 ```bash
 $ bash scripts/sgx-enter.sh
