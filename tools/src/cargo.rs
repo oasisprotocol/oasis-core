@@ -178,8 +178,8 @@ impl ProjectRoot {
                 if let Some(parent) = current_dir.parent() {
                     current_dir = parent;
                 } else {
-                    // We've reached the root.
-                    return Err(Error::new("failed to discover project workspace"));
+                    // We've reached the root, project is its own workspace.
+                    break path.clone();
                 }
             }
         };
