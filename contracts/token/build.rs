@@ -9,6 +9,6 @@ fn main() {
     ekiden_tools::generate_mod("src/generated", &[]);
     ekiden_tools::generate_contract_identity(
         "src/generated/key-manager.identity",
-        "../../target/enclave/ekiden-key-manager.so",
+        "../../target/contract/ekiden-key-manager.so",
     );
 }
