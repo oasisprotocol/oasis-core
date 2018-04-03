@@ -36,8 +36,11 @@ development Docker container already comes with `cargo-make` preinstalled.
 To build everything required for running Ekiden, simply run the following in the top-level
 directory:
 ```bash
-$ cargo make
+root@xxxx:/code# cargo make
 ```
+(Here the prompt is `root@xxxx:/code`, where the `xxxx` is a hex
+string associated with the docker container, because the command is
+being entered into the shell running in the container.)
 
 This should install any required dependencies and build all packages. By default SGX code is
 built in simulation mode. To change this, do `export SGX_MODE=HW` (currently untested) before
@@ -51,7 +54,7 @@ code.
 
 To obtain the enclave hash, there is a utility that you can run:
 ```bash
-$ python scripts/parse_enclave.py target/enclave/token.signed.so
+root@xxxx:/code# python scripts/parse_enclave.py target/enclave/token.signed.so
 ```
 
 This utility will output a lot of enclave metadata, the important part is:
@@ -110,7 +113,7 @@ scripts/run_contract.sh CONTRACT
 
 To get a list of built contract enclaves:
 ```bash
-$ ls ./target/enclave/*.signed.so
+root@xxxx:/code# ls ./target/enclave/*.signed.so
 ```
 
 ### Key manager
@@ -119,14 +122,14 @@ The key manager contract is special and must be run in a compute node listening 
 by default. Run it as you would run any other compute node, but specifying the key manager
 contract and changing the port:
 ```bash
-$ scripts/run_contract.sh ekiden-key-manager -p 9003 --disable-key-manager --consensus-host disabled
+root@xxxx:/code# scripts/run_contract.sh ekiden-key-manager -p 9003 --disable-key-manager --consensus-host disabled
 ```
 
 ### Contract client
 
 To run the token contract client:
 ```bash
-$ scripts/run_contract.sh --client token
+root@xxxx:/code# scripts/run_contract.sh --client token
 ```
 
 ## Developing
@@ -134,7 +137,7 @@ $ scripts/run_contract.sh --client token
 We welcome anyone to fork and submit a pull request! Please make sure to run `rustfmt` before submitting.
 
 ```bash
-$ cargo make format
+root@xxxx:/code# cargo make format
 ```
 
 ## Packages
