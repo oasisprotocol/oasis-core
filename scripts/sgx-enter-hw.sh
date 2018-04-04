@@ -9,6 +9,15 @@ EKIDEN_CONTAINER_NAME=${EKIDEN_CONTAINER_NAME:-$(basename ${WORK_DIR})}
 ekiden_image=${EKIDEN_DOCKER_IMAGE:-ekiden/development:0.1.0-alpha.0}
 ekiden_shell=${EKIDEN_DOCKER_SHELL:-bash}
 
+# Setting the environment variable EKIDEN_DOCKER_DETACH_KEYS to
+# something like 'ctrl-[,ctrl-q' will change it from the default of
+# ctrl-p,ctrl-q which can be annoying to bash users used to
+# emacs-style previous-history (as opposed to using up-arrow) to go
+# back through the command history.  NB: it would be bad if the
+# environment variable contained spaces.
+
+DETACH=${EKIDEN_DOCKER_DETACH_KEYS:+"--detach-keys ${EKIDEN_DOCKER_DETACH_KEYS}"}
+
 which docker >/dev/null || {
   echo "ERROR: Please install Docker first."
   exit 1
@@ -18,7 +27,7 @@ which docker >/dev/null || {
 if [ ! "$(docker ps -q -f name=${EKIDEN_CONTAINER_NAME})" ]; then
   if [ "$(docker ps -aq -f name=${EKIDEN_CONTAINER_NAME})" ]; then
     docker start ${EKIDEN_CONTAINER_NAME}
-    docker exec -i -t ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
+    docker exec -i -t ${DETACH} ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
   else
     # privileged for aesmd
     docker run -t -i \
@@ -28,9 +37,10 @@ if [ ! "$(docker ps -q -f name=${EKIDEN_CONTAINER_NAME})" ]; then
       -e "SGX_MODE=HW" \
       -e "INTEL_SGX_SDK=/opt/sgxsdk" \
       -w /code \
+      ${DETACH} \
       "$ekiden_image" \
       /usr/bin/env $ekiden_shell
   fi
 else
-  docker exec -i -t ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
+  docker exec -i -t ${DETACH} ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
 fi
