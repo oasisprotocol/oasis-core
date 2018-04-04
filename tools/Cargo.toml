@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-tools"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden build tools"
 keywords = ["ekiden"]
@@ -18,7 +18,7 @@ ansi_term = "0.11"
 toml = "0.4"
 serde = "1.0"
 serde_derive = "1.0"
-ekiden-common = { path = "../common", version = "0.1.0-alpha.1" }
+ekiden-common = { path = "../common", version = "0.1.0-alpha.2" }
 
 [[bin]]
 name = "cargo-ekiden"

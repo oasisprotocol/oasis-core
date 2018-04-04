@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-common"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden common functionality (available to both trusted and untrusted parts)"
 keywords = ["ekiden"]

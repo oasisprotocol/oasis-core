@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-enclave-edl"
-version = "0.1.0"
+version = "0.1.0-alpha.2"
 
 [dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.1" }
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.2" }

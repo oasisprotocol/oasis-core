@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-consensus-api"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden consensus node API"
 keywords = ["ekiden"]
@@ -13,6 +13,6 @@ grpc = "0.2.1"
 tls-api = "0.1.12"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.1" }
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.2" }
 protoc-rust = "1.4"
 protoc-rust-grpc = "0.2.1"

@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-consensus"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden consensus node"
 keywords = ["ekiden"]
@@ -8,7 +8,7 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-ekiden-consensus-api = { path = "./api", version = "0.1.0-alpha.1" }
+ekiden-consensus-api = { path = "./api", version = "0.1.0-alpha.2" }
 abci = { git = "https://github.com/ekiden/tendermint-abci" }
 clap = "2.29.1"
 futures = "0.1"
@@ -21,7 +21,7 @@ tokio-core = "0.1"
 tokio-proto = "0.1"
 
 [build-dependencies]
-ekiden-tools = { path = "../tools", version = "0.1.0-alpha.1" }
+ekiden-tools = { path = "../tools", version = "0.1.0-alpha.2" }
 protoc-rust = "1.4"
 protoc-rust-grpc = "0.2.1"
 
