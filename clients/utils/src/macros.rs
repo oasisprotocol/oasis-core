@@ -9,7 +9,7 @@ macro_rules! default_app {
                  .long("host")
                  .short("h")
                  .takes_value(true)
-                 .default_value("localhost")
+                 .default_value("127.0.0.1")
                  .display_order(1))
             .arg(Arg::with_name("port")
                  .long("port")
