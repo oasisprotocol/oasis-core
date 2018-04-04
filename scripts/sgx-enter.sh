@@ -14,11 +14,17 @@ which docker >/dev/null || {
   exit 1
 }
 
+# Setting the environment variable EKIDEN_DOCKER_DETACH_KEYS to something
+# like 'ctrl-[,ctrl-q' will change it from the default of ctrl-p,ctrl-q
+# which can be annoying to bash users used to emacs-style previous-line
+# (as opposed to using up-arrow) to go back through the command history.
+DETACH=${EKIDEN_DOCKER_DETACH_KEYS:+"--detach-keys ${EKIDEN_DOCKER_DETACH_KEYS}"}
+
 # Start SGX Rust Docker container.
 if [ ! "$(docker ps -q -f name=${EKIDEN_CONTAINER_NAME})" ]; then
   if [ "$(docker ps -aq -f name=${EKIDEN_CONTAINER_NAME})" ]; then
     docker start ${EKIDEN_CONTAINER_NAME}
-    docker exec -i -t ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
+    docker exec -i -t $DETACH ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
   else
     docker run -t -i \
       --name "${EKIDEN_CONTAINER_NAME}" \
@@ -26,9 +32,10 @@ if [ ! "$(docker ps -q -f name=${EKIDEN_CONTAINER_NAME})" ]; then
       -e "SGX_MODE=SIM" \
       -e "INTEL_SGX_SDK=/opt/sgxsdk" \
       -w /code \
+      $DETACH \
       "$ekiden_image" \
       /usr/bin/env $ekiden_shell
   fi
 else
-  docker exec -i -t ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
+  docker exec -i -t $DETACH ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
 fi
