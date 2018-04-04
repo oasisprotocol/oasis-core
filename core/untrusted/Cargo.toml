@@ -1,15 +1,15 @@
 [package]
 name = "ekiden-untrusted"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden untrusted library"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.1" }
-ekiden-rpc-untrusted = { path = "../../rpc/untrusted", version = "0.1.0-alpha.1" }
-ekiden-db-untrusted = { path = "../../db/untrusted", version = "0.1.0-alpha.1" }
+ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.2" }
+ekiden-rpc-untrusted = { path = "../../rpc/untrusted", version = "0.1.0-alpha.2" }
+ekiden-db-untrusted = { path = "../../db/untrusted", version = "0.1.0-alpha.2" }
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.1" }
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.2" }

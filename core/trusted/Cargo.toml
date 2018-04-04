@@ -1,13 +1,13 @@
 [package]
 name = "ekiden-trusted"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden trusted library"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.1.0-alpha.1" }
-ekiden-rpc-trusted = { path = "../../rpc/trusted", version = "0.1.0-alpha.1" }
-ekiden-db-trusted = { path = "../../db/trusted", version = "0.1.0-alpha.1" }
-ekiden-key-manager-client = { path = "../../contracts/key-manager/client", version = "0.1.0-alpha.1" }
+ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.1.0-alpha.2" }
+ekiden-rpc-trusted = { path = "../../rpc/trusted", version = "0.1.0-alpha.2" }
+ekiden-db-trusted = { path = "../../db/trusted", version = "0.1.0-alpha.2" }
+ekiden-key-manager-client = { path = "../../contracts/key-manager/client", version = "0.1.0-alpha.2" }

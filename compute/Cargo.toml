@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-compute"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden compute node"
 keywords = ["ekiden"]
@@ -12,11 +12,11 @@ no_cache = []
 no_diffs = []
 
 [dependencies]
-ekiden-core = { path = "../core/common", version = "0.1.0-alpha.1" }
-ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.1" }
-ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.1" }
-ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.1" }
-ekiden-consensus-api = { path = "../consensus/api", version = "0.1.0-alpha.1" }
+ekiden-core = { path = "../core/common", version = "0.1.0-alpha.2" }
+ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.2" }
+ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.2" }
+ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.2" }
+ekiden-consensus-api = { path = "../consensus/api", version = "0.1.0-alpha.2" }
 protobuf = "1.4.2"
 grpc = "0.2.1"
 futures = "0.1"
@@ -34,7 +34,7 @@ time = "0.1"
 tokio-core = "0.1"
 
 [build-dependencies]
-ekiden-tools = { path = "../tools", version = "0.1.0-alpha.1" }
-ekiden-edl = { path = "../core/edl", version = "0.1.0-alpha.1" }
+ekiden-tools = { path = "../tools", version = "0.1.0-alpha.2" }
+ekiden-edl = { path = "../core/edl", version = "0.1.0-alpha.2" }
 protoc-rust = "1.4"
 protoc-rust-grpc = "0.2.1"
