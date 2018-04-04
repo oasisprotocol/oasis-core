@@ -25,7 +25,9 @@ with_api! {
     create_enclave_rpc!(api);
 }
 
-fn get_or_create_key(request: &Request<GetOrCreateKeyRequest>) -> Result<GetOrCreateKeyResponse> {
+pub fn get_or_create_key(
+    request: &Request<GetOrCreateKeyRequest>,
+) -> Result<GetOrCreateKeyResponse> {
     let mut response = GetOrCreateKeyResponse::new();
 
     // Query the key store.

@@ -28,7 +28,7 @@ with_api! {
     create_enclave_rpc!(api);
 }
 
-fn create(request: &CreateRequest) -> Result<CreateResponse> {
+pub fn create(request: &CreateRequest) -> Result<CreateResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
@@ -42,7 +42,7 @@ fn create(request: &CreateRequest) -> Result<CreateResponse> {
     Ok(CreateResponse::new())
 }
 
-fn transfer(request: &TransferRequest) -> Result<TransferResponse> {
+pub fn transfer(request: &TransferRequest) -> Result<TransferResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
@@ -55,7 +55,7 @@ fn transfer(request: &TransferRequest) -> Result<TransferResponse> {
     Ok(TransferResponse::new())
 }
 
-fn get_balance(request: &GetBalanceRequest) -> Result<GetBalanceResponse> {
+pub fn get_balance(request: &GetBalanceRequest) -> Result<GetBalanceResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
