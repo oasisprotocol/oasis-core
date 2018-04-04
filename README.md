@@ -26,28 +26,31 @@ To start the SGX development container:
 $ ./scripts/sgx-enter.sh
 ```
 
-All the following commands should be run in the container and not on the host.
+All the following commands should be run in the container and not on
+the host.  The actual prompt from the bash shell running in the
+container will look like `root@xxxx:/code#' where `xxxx` is the docker
+container id; in the text below, we will just use `#`.
 
 ## Building core contracts
 
 For building contracts we have our own Cargo extension which should be installed:
 ```bash
-$ cargo install --force --path tools ekiden-tools
+# cargo install --force --path tools ekiden-tools
 ```
 
 The following examples use the key manager and token contracts, but the process is the
 same for any contract. To build the key manager (required by all other contracts):
 ```bash
-$ cd contracts/key-manager
-$ cargo ekiden build-contract
+# cd contracts/key-manager
+# cargo ekiden build-contract
 ```
 
 The built contract will be stored under `target/contract/ekiden-key-manager.so`.
 
 To build the token contract:
 ```bash
-$ cd contracts/token
-$ cargo ekiden build-contract
+# cd contracts/token
+# cargo ekiden build-contract
 ```
 
 The built contract will be stored under `target/contract/token.so`.
@@ -60,14 +63,14 @@ token contract, but the process is the same for any contract.
 
 To start the dummy consensus node:
 ```bash
-$ cargo run -p ekiden-consensus -- -x
+# cargo run -p ekiden-consensus -- -x
 ```
 
 The `-x` flag tells the consensus node to not depend on Tendermint.
 
 To start the compute node for the key manager contract:
 ```bash
-$ cargo run -p ekiden-compute -- \
+# cargo run -p ekiden-compute -- \
     -p 9003 \
     --disable-key-manager \
     --identity-file /tmp/key-manager.identity.pb \
@@ -76,7 +79,7 @@ $ cargo run -p ekiden-compute -- \
 
 To start the compute node for the token contract:
 ```bash
-$ cargo run -p ekiden-compute -- \
+# cargo run -p ekiden-compute -- \
     --identity-file /tmp/token.identity.pb \
     target/contract/token.so
 ```
@@ -92,7 +95,7 @@ Development notes:
 
 To run all tests (some should be skipped due to compile errors):
 ```bash
-$ cargo test --all \
+# cargo test --all \
     --exclude ekiden-untrusted \
     --exclude ekiden-enclave-untrusted \
     --exclude ekiden-rpc-untrusted \
@@ -106,7 +109,7 @@ $ cargo test --all \
 We welcome anyone to fork and submit a pull request! Please make sure to run `rustfmt` before submitting.
 
 ```bash
-$ cargo fmt
+# cargo fmt
 ```
 
 ## Packages
