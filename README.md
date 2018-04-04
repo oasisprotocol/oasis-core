@@ -1,138 +1,107 @@
 # Ekiden
 
-[![CircleCI](https://circleci.com/gh/sunblaze-ucb/ekiden.svg?style=svg&circle-token=1e61090ac6971ca5db0514e4593d5fdeff83f6a9)](https://circleci.com/gh/sunblaze-ucb/ekiden)
+[![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
 
 ## Dependencies
 
 Here is a brief list of system dependencies currently used for development:
 - [rustc](https://www.rust-lang.org/en-US/)
 - [cargo](http://doc.crates.io/)
-- [cargo-make](https://crates.io/crates/cargo-make)
 - [xargo](https://github.com/japaric/xargo)
 - [docker](https://www.docker.com/)
-- [rust-sgx-sdk](https://github.com/ekiden/rust-sgx-sdk)
 - [protoc](https://github.com/google/protobuf/releases)
 
-## Checking out
+## Developing, building and running external contracts
 
-The repository uses submodules so be sure to check them out by doing:
-```bash
-$ git submodule update --init --recursive
-```
+For instructions on building contracts, you should check out the documentation of the
+[hello world contract](https://github.com/oasislabs/contract-helloworld).
 
-## Building
+## Setting up the development environment
 
 The easiest way to build SGX code is to use the provided scripts, which run a Docker
-container with all the included tools. This has been tested on MacOS and Ubuntu with `SGX_MODE=SIM`.
+container with all the included tools.
 
 To start the SGX development container:
 ```bash
 $ ./scripts/sgx-enter.sh
 ```
 
-Ekiden uses [`cargo-make`](https://crates.io/crates/cargo-make) as the build system. The
-development Docker container already comes with `cargo-make` preinstalled.
+All the following commands should be run in the container and not on
+the host.  The actual prompt from the bash shell running in the
+container will look like `root@xxxx:/code#' where `xxxx` is the docker
+container id; in the text below, we will just use `#`.
 
-To build everything required for running Ekiden, simply run the following in the top-level
-directory:
+## Building core contracts
+
+For building contracts we have our own Cargo extension which should be installed:
 ```bash
-root@xxxx:/code# cargo make
+# cargo install --force --path tools ekiden-tools
 ```
 
-(Here the shell prompt is `root@xxxx:/code`, where the `xxxx` is a hex
-string associated with the docker container, because the command is
-being entered into the shell running inside the container.  Below we
-just use `#` to indicate that commands are being run inside the
-container.)
-
-This should install any required dependencies and build all packages. By default SGX code is
-built in simulation mode. To change this, do `export SGX_MODE=HW` (currently untested) before
-running the `cargo make` command.
-
-## Obtaining contract MRENCLAVE
-
-In order to establish authenticated channels with Ekiden contract enclaves, the client needs
-to know the enclave hash (MRENCLAVE) so it knows that it is talking with the correct contract
-code.
-
-To obtain the enclave hash, there is a utility that you can run:
+The following examples use the key manager and token contracts, but the process is the
+same for any contract. To build the key manager (required by all other contracts):
 ```bash
-# python scripts/parse_enclave.py target/enclave/token.signed.so
+# cd contracts/key-manager
+# cargo ekiden build-contract
 ```
 
-This utility will output a lot of enclave metadata, the important part is:
-```
-         ...
-         ENCLAVEHASH    e38ded31efe3beb062081dc9a7f9af4b785ae8fa2ce61e0bddec2b6aedb02484
-         ...
-```
+The built contract will be stored under `target/contract/ekiden-key-manager.so`.
 
-You will need this hash when running the contract client (see below).
-
-## Obtaining SPID and generating PKCS#12 bundle
-
-In order to communicate with Intel Attestation Service (IAS), you need to generate a certificate
-and get an SPID from Intel. For more information on that process, see the following links:
-* [How to create self-signed certificates for use with Intel SGX RA](https://software.intel.com/en-us/articles/how-to-create-self-signed-certificates-for-use-with-intel-sgx-remote-attestation-using)
-* [Apply for an SPID](https://software.intel.com/formfill/sgx-onboarding)
-
-You will need to pass both SPID and the PKCS#12 bundle when starting the compute node.
-
-## Running
-
-The easiest way to run Ekiden is through the provided scripts,
-which set up the Docker containers for you.
-
-### Consensus node
-
-The consensus node should have been built by the `cargo make` command above.  To build it
-separately, use
+To build the token contract:
 ```bash
-# (cd consensus; cargo build)
+# cd contracts/token
+# cargo ekiden build-contract
 ```
 
-To run the consensus node, use
+The built contract will be stored under `target/contract/token.so`.
+
+## Running a contract
+
+You need to run multiple Ekiden services, so it is recommended to run each of these in a
+separate container shell, attached to the same container. The following examples use the
+token contract, but the process is the same for any contract.
+
+To start the dummy consensus node:
 ```bash
-# target/debug/ekiden-consensus -x
+# cargo run -p ekiden-consensus -- -x
 ```
 
 The `-x` flag tells the consensus node to not depend on Tendermint.
 
-### Compute node
-
-Currently, the 2 processes (compute and consensus) look for each other on `localhost`.
-In order to attach secondary shells to an existing container, run
+To start the compute node for the key manager contract:
 ```bash
-$ bash scripts/sgx-enter.sh
+# cargo run -p ekiden-compute -- \
+    -p 9003 \
+    --disable-key-manager \
+    --identity-file /tmp/key-manager.identity.pb \
+    target/contract/ekiden-key-manager.so
 ```
 
-To run a contract on a compute node:
+To start the compute node for the token contract:
 ```bash
-# optionally set the following env vars
-export IAS_SPID="<IAS SPID>"
-export IAS_PKCS="client.pfx"
-scripts/run_contract.sh CONTRACT
+# cargo run -p ekiden-compute -- \
+    --identity-file /tmp/token.identity.pb \
+    target/contract/token.so
 ```
 
-To get a list of built contract enclaves:
+The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.
+
+Development notes:
+
+* If you are developing a contract and changing things, be sure to remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`) as it will otherwise fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
+* Also, when the contract hash changes, the contract will be unable to decrypt any old state as the key manager will give it fresh keys. So be sure to also clear (if you are using a Tendermint node) and restart the consensus node.
+
+## Running tests and benchmarks
+
+To run all tests (some should be skipped due to compile errors):
 ```bash
-# ls ./target/enclave/*.signed.so
-```
-
-### Key manager
-
-The key manager contract is special and must be run in a compute node listening on port `9003`
-by default. Run it as you would run any other compute node, but specifying the key manager
-contract and changing the port:
-```bash
-# scripts/run_contract.sh ekiden-key-manager -p 9003 --disable-key-manager --consensus-host disabled
-```
-
-### Contract client
-
-To run the token contract client:
-```bash
-# scripts/run_contract.sh --client token
+# cargo test --all \
+    --exclude ekiden-untrusted \
+    --exclude ekiden-enclave-untrusted \
+    --exclude ekiden-rpc-untrusted \
+    --exclude ekiden-db-untrusted \
+    --exclude ekiden-consensus \
+    -- --test-threads 1
 ```
 
 ## Developing
@@ -140,7 +109,7 @@ To run the token contract client:
 We welcome anyone to fork and submit a pull request! Please make sure to run `rustfmt` before submitting.
 
 ```bash
-# cargo make format
+# cargo fmt
 ```
 
 ## Packages

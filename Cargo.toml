@@ -36,6 +36,10 @@ members = [
     "consensus/api",
     "consensus",
 
+    # Core contracts.
+    "contracts/key-manager",
+    "contracts/token",
+
     # Clients.
     "clients/token",
 ]

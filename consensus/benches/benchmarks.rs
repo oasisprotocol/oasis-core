@@ -15,7 +15,7 @@ use lib::generated::consensus_grpc::Consensus;
 
 fn spawn_client_server() -> consensus_grpc::ConsensusClient {
     let config = lib::Config {
-        tendermint_host: String::from("localhost"),
+        tendermint_host: String::from("127.0.0.1"),
         tendermint_port: 46657,
         tendermint_abci_port: 46658,
         grpc_port: 9002,
@@ -29,7 +29,7 @@ fn spawn_client_server() -> consensus_grpc::ConsensusClient {
     // Give time for Tendermint to connect
     thread::sleep(time::Duration::from_millis(3000));
 
-    consensus_grpc::ConsensusClient::new_plain("localhost", client_port, Default::default())
+    consensus_grpc::ConsensusClient::new_plain("127.0.0.1", client_port, Default::default())
         .unwrap()
 }
 

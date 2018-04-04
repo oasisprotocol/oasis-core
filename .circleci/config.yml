@@ -10,12 +10,6 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - checkout
 
-      # Build
-      - run: cargo make build-flow
-
-      # Rustfmt
-      - run: cargo make checkstyle
-
       # Cargo tests. Some tests are excluded as they currently don't compile.
       - run: |
           cargo test --all \
@@ -24,6 +18,7 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-consensus \
+            --exclude token \
             -- --test-threads 1
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
@@ -31,7 +26,7 @@ jobs:
       - run: |
           set +e
           set +o pipefail
-          wget -q -O - "https://circleci.com/api/v1.1/project/github/sunblaze-ucb/ekiden/latest/artifacts/?branch=master&circle-token=${CIRCLE_TOKEN}" | grep -o 'https://[^"]*' | xargs -P4 -I % wget -q -O /tmp/benchmarks-master.json %?circle-token=${CIRCLE_TOKEN}
+          wget -q -O - "https://circleci.com/api/v1.1/project/github/oasislabs/ekiden/latest/artifacts/?branch=master&circle-token=${CIRCLE_TOKEN}" | grep -o 'https://[^"]*' | xargs -P4 -I % wget -q -O /tmp/benchmarks-master.json %?circle-token=${CIRCLE_TOKEN}
       - run: |
           ./scripts/benchmark.py \
               ekiden-rpc-trusted \
@@ -42,14 +37,25 @@ jobs:
           path: /tmp/benchmarks.json
           destination: benchmarks
 
-      # Create enclave output directory.
-      - run: mkdir -p target/enclave
       # Install ekiden-tools.
       - run: cargo install --force --path tools ekiden-tools
       # Build key manager contract.
-      - run: cargo ekiden build-contract ekiden-key-manager --path contracts/key-manager --output target/enclave
+      - run:
+          command: cargo ekiden build-contract
+          working_directory: contracts/key-manager
       # Build token contract.
-      - run: cargo ekiden build-contract token --path contracts/token --output-identity --output target/enclave
+      - run:
+          command: cargo ekiden build-contract --output-identity
+          working_directory: contracts/token
+      # Run token contract tests.
+      - run: cargo test -p token
+      # Ensure everything is built. This needs to be after the key manager contract is built.
+      - run: cargo build
+      # Check style. This needs to be after everything is built.
+      - run: cargo fmt -- --write-mode=diff
+
+      # Contract end-to-end tests.
+
       # Start the consensus node.
       - run:
           command: ./target/debug/ekiden-consensus
@@ -61,14 +67,14 @@ jobs:
           background: true
       # Start key manager compute node.
       - run:
-          command: ./target/debug/ekiden-compute target/enclave/ekiden-key-manager.so -p 9003 --disable-key-manager --identity-file identity-km.pb
+          command: ./target/debug/ekiden-compute target/contract/ekiden-key-manager.so -p 9003 --disable-key-manager --identity-file identity-km.pb
           background: true
       # Start token compute node.
       - run:
-          command: ./target/debug/ekiden-compute target/enclave/token.so --identity-file identity-token.pb
+          command: ./target/debug/ekiden-compute target/contract/token.so --identity-file identity-token.pb
           background: true
       # Start token client.
-      - run: ./target/debug/token-client --mr-enclave $(cat target/enclave/token.mrenclave)
+      - run: ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
 workflows:
   version: 2

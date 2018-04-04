@@ -82,7 +82,7 @@ fn main() {
             Arg::with_name("key-manager-host")
                 .long("key-manager-host")
                 .takes_value(true)
-                .default_value("localhost"),
+                .default_value("127.0.0.1"),
         )
         .arg(
             Arg::with_name("key-manager-port")
@@ -94,7 +94,7 @@ fn main() {
             Arg::with_name("consensus-host")
                 .long("consensus-host")
                 .takes_value(true)
-                .default_value("localhost"),
+                .default_value("127.0.0.1"),
         )
         .arg(
             Arg::with_name("consensus-port")

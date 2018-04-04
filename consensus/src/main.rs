@@ -12,7 +12,7 @@ fn main() {
             Arg::with_name("tendermint-host")
                 .long("tendermint-host")
                 .takes_value(true)
-                .default_value("localhost"),
+                .default_value("127.0.0.1"),
         )
         .arg(
             Arg::with_name("tendermint-port")
