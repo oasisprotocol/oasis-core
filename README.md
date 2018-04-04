@@ -38,9 +38,12 @@ directory:
 ```bash
 root@xxxx:/code# cargo make
 ```
-(Note that the shell prompt is `root@xxxx:/code`, where the `xxxx` is a hex
+
+(Here the shell prompt is `root@xxxx:/code`, where the `xxxx` is a hex
 string associated with the docker container, because the command is
-being entered into the bash shell running inside the container.)
+being entered into the shell running inside the container.  Below we
+just use `#` to indicate that commands are being run inside the
+container.)
 
 This should install any required dependencies and build all packages. By default SGX code is
 built in simulation mode. To change this, do `export SGX_MODE=HW` (currently untested) before
@@ -54,7 +57,7 @@ code.
 
 To obtain the enclave hash, there is a utility that you can run:
 ```bash
-root@xxxx:/code# python scripts/parse_enclave.py target/enclave/token.signed.so
+# python scripts/parse_enclave.py target/enclave/token.signed.so
 ```
 
 This utility will output a lot of enclave metadata, the important part is:
@@ -85,12 +88,12 @@ which set up the Docker containers for you.
 The consensus node should have been built by the `cargo make` command above.  To build it
 separately, use
 ```bash
-root@xxxx:/code# (cd consensus; cargo build)
+# (cd consensus; cargo build)
 ```
 
 To run the consensus node, use
 ```bash
-root@xxxx:/code# target/debug/ekiden-consensus -x
+# target/debug/ekiden-consensus -x
 ```
 
 The `-x` flag tells the consensus node to not depend on Tendermint.
@@ -113,7 +116,7 @@ scripts/run_contract.sh CONTRACT
 
 To get a list of built contract enclaves:
 ```bash
-root@xxxx:/code# ls ./target/enclave/*.signed.so
+# ls ./target/enclave/*.signed.so
 ```
 
 ### Key manager
@@ -122,14 +125,14 @@ The key manager contract is special and must be run in a compute node listening 
 by default. Run it as you would run any other compute node, but specifying the key manager
 contract and changing the port:
 ```bash
-root@xxxx:/code# scripts/run_contract.sh ekiden-key-manager -p 9003 --disable-key-manager --consensus-host disabled
+# scripts/run_contract.sh ekiden-key-manager -p 9003 --disable-key-manager --consensus-host disabled
 ```
 
 ### Contract client
 
 To run the token contract client:
 ```bash
-root@xxxx:/code# scripts/run_contract.sh --client token
+# scripts/run_contract.sh --client token
 ```
 
 ## Developing
@@ -137,7 +140,7 @@ root@xxxx:/code# scripts/run_contract.sh --client token
 We welcome anyone to fork and submit a pull request! Please make sure to run `rustfmt` before submitting.
 
 ```bash
-root@xxxx:/code# cargo make format
+# cargo make format
 ```
 
 ## Packages
