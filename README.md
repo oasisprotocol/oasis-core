@@ -38,9 +38,9 @@ directory:
 ```bash
 root@xxxx:/code# cargo make
 ```
-(Here the shell prompt is `root@xxxx:/code`, where the `xxxx` is a hex
+(Note that the shell prompt is `root@xxxx:/code`, where the `xxxx` is a hex
 string associated with the docker container, because the command is
-being entered into the shell running inside the container.)
+being entered into the bash shell running inside the container.)
 
 This should install any required dependencies and build all packages. By default SGX code is
 built in simulation mode. To change this, do `export SGX_MODE=HW` (currently untested) before
