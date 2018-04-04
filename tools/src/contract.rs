@@ -339,9 +339,7 @@ impl<'a> ContractBuilder<'a> {
         };
 
         // Ensure contract output path is available.
-        DirBuilder::new()
-            .recursive(true)
-            .create(&self.output_path)?;
+        DirBuilder::new().recursive(true).create(&self.output_path)?;
 
         let signer_status = Command::new(signer_path)
             .arg("sign")
