@@ -67,11 +67,11 @@ jobs:
           background: true
       # Start key manager compute node.
       - run:
-          command: ./target/debug/ekiden-compute target/contract/ekiden-key-manager.so -p 9003 --disable-key-manager --identity-file identity-km.pb
+          command: ./target/debug/ekiden-compute target/contract/ekiden-key-manager.so -p 9003 --disable-key-manager --no-persist-identity
           background: true
       # Start token compute node.
       - run:
-          command: ./target/debug/ekiden-compute target/contract/token.so --identity-file identity-token.pb
+          command: ./target/debug/ekiden-compute target/contract/token.so --no-persist-identity
           background: true
       # Start token client.
       - run: ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
