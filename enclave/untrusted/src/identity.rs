@@ -31,7 +31,11 @@ pub trait IAS {
 pub trait EnclaveIdentity {
     /// Initialize the enclave identity. Load it from a file or create one if it doesn't exist.
     /// Returns the identity proof.
-    fn identity_init(&self, ias: &IAS, saved_identity_path: &Path) -> Result<api::IdentityProof>;
+    fn identity_init(
+        &self,
+        ias: &IAS,
+        saved_identity_path: Option<&Path>,
+    ) -> Result<api::IdentityProof>;
 }
 
 const SEALED_DATA_CAPACITY: usize = 1024;
@@ -51,8 +55,12 @@ const PUBLIC_IDENTITY_CAPACITY: usize = 1024;
 impl EnclaveIdentity for Enclave {
     /// Restore a saved identity, creating one and saving it if we don't already have one. Returns
     /// the enclave identity proof.
-    fn identity_init(&self, ias: &IAS, saved_identity_path: &Path) -> Result<api::IdentityProof> {
-        if let Ok(mut file) = std::fs::File::open(saved_identity_path) {
+    fn identity_init(
+        &self,
+        ias: &IAS,
+        saved_identity_path: Option<&Path>,
+    ) -> Result<api::IdentityProof> {
+        if let Ok(mut file) = std::fs::File::open(saved_identity_path.unwrap_or(Path::new(""))) {
             // Have saved identity. Load it.
             let mut saved_identity: api::SavedIdentity = protobuf::parse_from_reader(&mut file)?;
             let sealed_identity_length = saved_identity.get_sealed_identity().len();
@@ -101,6 +109,7 @@ impl EnclaveIdentity for Enclave {
             let mut identity_proof = api::IdentityProof::new();
             identity_proof.set_public_identity(public_identity);
             identity_proof.set_av_report(saved_identity.take_av_report());
+
             Ok(identity_proof)
         } else {
             // TODO: handle other errors
@@ -237,13 +246,16 @@ impl EnclaveIdentity for Enclave {
             }
 
             // Save the identity.
-            let mut file = std::fs::File::create(saved_identity_path)?;
-            saved_identity.write_to_writer(&mut file)?;
+            if let Some(saved_identity_path) = saved_identity_path {
+                let mut file = std::fs::File::create(saved_identity_path)?;
+                saved_identity.write_to_writer(&mut file)?;
+            }
 
             // Assemble the enclave identity proof.
             let mut identity_proof = api::IdentityProof::new();
             identity_proof.set_public_identity(public_identity);
             identity_proof.set_av_report(saved_identity.take_av_report());
+
             Ok(identity_proof)
         }
     }

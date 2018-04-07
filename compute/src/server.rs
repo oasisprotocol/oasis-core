@@ -11,8 +11,10 @@ use futures::sync::oneshot;
 use time;
 
 use std;
+use std::borrow::Borrow;
 use std::error::Error as StdError;
 use std::fmt::Write;
+use std::path::Path;
 use std::sync::Mutex;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
@@ -77,7 +79,7 @@ impl ComputeServerWorker {
         max_batch_size: usize,
         max_batch_timeout: u64,
         ias: &IAS,
-        saved_identity_path: &str,
+        saved_identity_path: Option<&Path>,
     ) -> Self {
         let (contract, identity_proof) =
             Self::create_contract(contract_filename, ias, saved_identity_path);
@@ -111,14 +113,14 @@ impl ComputeServerWorker {
     fn create_contract(
         contract_filename: &str,
         ias: &IAS,
-        saved_identity_path: &str,
+        saved_identity_path: Option<&Path>,
     ) -> (Enclave, IdentityProof) {
         // TODO: Handle contract initialization errors.
         let contract = Enclave::new(contract_filename).unwrap();
 
         // Initialize contract.
         let identity_proof = contract
-            .identity_init(ias, saved_identity_path.as_ref())
+            .identity_init(ias, saved_identity_path)
             .expect("EnclaveIdentity::identity_init");
 
         // Show contract MRENCLAVE in hex format.
@@ -402,11 +404,11 @@ impl ComputeServerImpl {
         max_batch_size: usize,
         max_batch_timeout: u64,
         ias: IAS,
-        saved_identity_path: &str,
+        saved_identity_path: Option<&Path>,
     ) -> Self {
         let contract_filename_owned = String::from(contract_filename);
         let consensus_host_owned = String::from(consensus_host);
-        let saved_identity_path_owned = String::from(saved_identity_path);
+        let saved_identity_path_owned = saved_identity_path.map(|p| p.to_owned());
 
         let (request_sender, request_receiver) = channel();
         // move request_receiver
@@ -418,7 +420,7 @@ impl ComputeServerImpl {
                 max_batch_size,
                 max_batch_timeout,
                 &ias,
-                &saved_identity_path_owned,
+                saved_identity_path_owned.as_ref().map(|p| p.borrow()),
             ).work(request_receiver);
         });
 

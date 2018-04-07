@@ -73,14 +73,14 @@ To start the compute node for the key manager contract:
 # cargo run -p ekiden-compute -- \
     -p 9003 \
     --disable-key-manager \
-    --identity-file /tmp/key-manager.identity.pb \
+    --no-persist-identity \
     target/contract/ekiden-key-manager.so
 ```
 
 To start the compute node for the token contract:
 ```bash
 # cargo run -p ekiden-compute -- \
-    --identity-file /tmp/token.identity.pb \
+    --no-persist-identity \
     target/contract/token.so
 ```
 
@@ -88,7 +88,7 @@ The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `900
 
 Development notes:
 
-* If you are developing a contract and changing things, be sure to remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`) as it will otherwise fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
+* If you are developing a contract and changing things, be sure to either use the `--no-persist-identity` flag or remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`). Otherwise the compute node will fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
 * Also, when the contract hash changes, the contract will be unable to decrypt any old state as the key manager will give it fresh keys. So be sure to also clear (if you are using a Tendermint node) and restart the consensus node.
 
 ## Running tests and benchmarks

@@ -137,6 +137,11 @@ fn main() {
                 .default_value("identity.pb")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("no-persist-identity")
+                .long("no-persist-identity")
+                .help("Do not persist enclave identity (useful for contract development)")
+        )
         .get_matches();
 
     let port = value_t!(matches, "port", u16).unwrap_or(9001);
@@ -185,7 +190,13 @@ fn main() {
         value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
         value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000) * 1_000_000,
         ias,
-        matches.value_of("identity-file").unwrap_or("identity.pb"),
+        if matches.is_present("no-persist-identity") {
+            None
+        } else {
+            Some(Path::new(
+                matches.value_of("identity-file").unwrap_or("identity.pb"),
+            ))
+        },
     )));
     let num_threads = value_t!(matches, "grpc-threads", usize).unwrap();
     server.http.set_cpu_pool_threads(num_threads);
