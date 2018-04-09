@@ -20,12 +20,6 @@ futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 ekiden-compute-api = { path = "../../compute/api", version = "0.1.0-alpha.2" }
 byteorder = "1.2.1"
 futures = "0.1"
-grpc = "0.2.1"
-httpbis  = "0.4.1"
+grpcio = "0.2.2"
 rand = "0.4"
-tls-api  = "0.1.12"
 tokio-core = "0.1"
-
-[build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.2" }
-protoc-rust-grpc = "0.2.1"

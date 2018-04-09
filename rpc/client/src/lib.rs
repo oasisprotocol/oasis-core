@@ -1,11 +1,7 @@
 #[cfg(not(target_env = "sgx"))]
-extern crate grpc;
+extern crate grpcio;
 #[cfg(not(target_env = "sgx"))]
 extern crate rand;
-#[cfg(not(target_env = "sgx"))]
-extern crate tls_api;
-#[cfg(not(target_env = "sgx"))]
-extern crate tokio_core;
 
 extern crate futures;
 extern crate protobuf;

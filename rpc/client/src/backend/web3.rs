@@ -1,8 +1,7 @@
 //! gRPC client backend.
 use std::sync::{Arc, Mutex};
 
-use grpc;
-use tokio_core;
+use grpcio;
 
 use futures::future::{self, Future};
 
@@ -12,7 +11,7 @@ use protobuf::Message;
 use ekiden_common::error::{Error, Result};
 use ekiden_rpc_common::api;
 
-use ekiden_compute_api::{CallContractRequest, Compute, ComputeClient};
+use ekiden_compute_api::{CallContractRequest, ComputeClient};
 
 use super::{ContractClientBackend, ContractClientCredentials};
 use super::super::future::ClientFuture;
@@ -40,24 +39,25 @@ struct ComputeNodes {
 
 impl ComputeNodes {
     /// Construct new pool of compute nodes.
-    fn new(nodes: &[ComputeNodeAddress]) -> Result<Self> {
+    fn new(environment: Arc<grpcio::Environment>, nodes: &[ComputeNodeAddress]) -> Result<Self> {
         let instance = ComputeNodes::default();
 
         for node in nodes {
-            instance.add_node(node)?;
+            instance.add_node(environment.clone(), node)?;
         }
 
         Ok(instance)
     }
 
     /// Add a new compute node.
-    fn add_node(&self, address: &ComputeNodeAddress) -> Result<()> {
-        // TODO: Pass specific reactor to the compute client as otherwise it will spawn a new thread.
-        let client = match ComputeClient::new_plain(&address.host, address.port, Default::default())
-        {
-            Ok(client) => client,
-            _ => return Err(Error::new("Failed to initialize gRPC client")),
-        };
+    fn add_node(
+        &self,
+        environment: Arc<grpcio::Environment>,
+        address: &ComputeNodeAddress,
+    ) -> Result<()> {
+        let channel = grpcio::ChannelBuilder::new(environment)
+            .connect(&format!("{}:{}", address.host, address.port));
+        let client = ComputeClient::new(channel);
 
         let mut nodes = self.nodes.lock().unwrap();
         nodes.push(ComputeNode {
@@ -104,30 +104,25 @@ impl ComputeNodes {
                                 // Found a non-failed node.
                                 let cloned_nodes = cloned_nodes.clone();
 
-                                return Box::new(
-                                    node.client
-                                        .call_contract(
-                                            grpc::RequestOptions::new(),
-                                            rpc_request.clone(),
-                                        )
-                                        .drop_metadata()
-                                        .then(move |result| {
-                                            match result {
-                                                Ok(mut response) => {
-                                                    Ok(future::Loop::Break(response.take_payload()))
-                                                }
-                                                Err(_) => {
-                                                    let mut nodes = cloned_nodes.lock().unwrap();
-                                                    // Since we never remove or reorder nodes, we can be sure that this
-                                                    // index always belongs to the specified node and we can avoid sharing
-                                                    // and locking individual node instances.
-                                                    nodes[index].failed = true;
-
-                                                    Ok(future::Loop::Continue(()))
-                                                }
+                                return match node.client.call_contract_async(&rpc_request) {
+                                    Ok(call) => Box::new(call.then(move |result| {
+                                        match result {
+                                            Ok(mut response) => {
+                                                Ok(future::Loop::Break(response.take_payload()))
                                             }
-                                        }),
-                                );
+                                            Err(_) => {
+                                                let mut nodes = cloned_nodes.lock().unwrap();
+                                                // Since we never remove or reorder nodes, we can be sure that this
+                                                // index always belongs to the specified node and we can avoid sharing
+                                                // and locking individual node instances.
+                                                nodes[index].failed = true;
+
+                                                Ok(future::Loop::Continue(()))
+                                            }
+                                        }
+                                    })),
+                                    Err(error) => Box::new(future::err(Error::from(error))),
+                                };
                             }
                             None => {}
                         }
@@ -162,17 +157,20 @@ impl ComputeNodes {
 
 /// gRPC client backend.
 pub struct Web3ContractClientBackend {
-    /// Handle of the reactor used for running all futures.
-    reactor: tokio_core::reactor::Remote,
+    /// Concurrency environment for gRPC communication.
+    environment: Arc<grpcio::Environment>,
+    /// Completion queue for executing futures. This is an instance of Client because
+    /// the grpcio API for doing this directly using an Executor is not exposed.
+    completion_queue: grpcio::Client,
     /// Pool of compute nodes that the client can use.
     nodes: ComputeNodes,
 }
 
 impl Web3ContractClientBackend {
     /// Construct new Web3 contract client backend.
-    pub fn new(reactor: tokio_core::reactor::Remote, host: &str, port: u16) -> Result<Self> {
+    pub fn new(environment: Arc<grpcio::Environment>, host: &str, port: u16) -> Result<Self> {
         Self::new_pool(
-            reactor,
+            environment,
             &[
                 ComputeNodeAddress {
                     host: host.to_string(),
@@ -184,18 +182,23 @@ impl Web3ContractClientBackend {
 
     /// Construct new Web3 contract client backend with a pool of nodes.
     pub fn new_pool(
-        reactor: tokio_core::reactor::Remote,
+        environment: Arc<grpcio::Environment>,
         nodes: &[ComputeNodeAddress],
     ) -> Result<Self> {
         Ok(Web3ContractClientBackend {
-            reactor: reactor.clone(),
-            nodes: ComputeNodes::new(&nodes)?,
+            // Create a dummy channel, needed for executing futures. This is required because
+            // the API for doing this directly using an Executor is not exposed.
+            completion_queue: grpcio::Client::new(
+                grpcio::ChannelBuilder::new(environment.clone()).connect(""),
+            ),
+            nodes: ComputeNodes::new(environment.clone(), &nodes)?,
+            environment,
         })
     }
 
     /// Add a new compute node for this client.
     pub fn add_node(&self, address: &ComputeNodeAddress) -> Result<()> {
-        self.nodes.add_node(&address)
+        self.nodes.add_node(self.environment.clone(), &address)
     }
 
     /// Perform a raw contract call via gRPC.
@@ -207,7 +210,7 @@ impl Web3ContractClientBackend {
 impl ContractClientBackend for Web3ContractClientBackend {
     /// Spawn future using an executor.
     fn spawn<F: Future<Item = (), Error = ()> + Send + 'static>(&self, future: F) {
-        self.reactor.spawn(move |_| future);
+        self.completion_queue.spawn(future)
     }
 
     /// Call contract.

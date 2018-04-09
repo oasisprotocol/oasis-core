@@ -34,15 +34,8 @@ macro_rules! default_app {
 #[macro_export]
 macro_rules! default_backend {
     ($args:ident) => {{
-        // Create reactor (event loop) in a separate thread.
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let mut reactor = tokio_core::reactor::Core::new().unwrap();
-            tx.send(reactor.remote()).unwrap();
-            reactor.run(futures::empty::<(), ()>()).unwrap();
-        });
-
-        let remote = rx.recv().unwrap();
+        // Create gRPC event loop.
+        let grpc_environment = std::sync::Arc::new(grpcio::EnvBuilder::new().build());
 
         if $args.is_present("nodes") {
             // Pool of compute nodes.
@@ -64,12 +57,12 @@ macro_rules! default_backend {
                 .collect();
 
             ekiden_rpc_client::backend::Web3ContractClientBackend::new_pool(
-                remote,
+                grpc_environment,
                 &nodes
             ).unwrap()
         } else {
             ekiden_rpc_client::backend::Web3ContractClientBackend::new(
-                remote,
+                grpc_environment,
                 $args.value_of("host").unwrap(),
                 value_t!($args, "port", u16).unwrap_or(9001)
             ).unwrap()

@@ -4,14 +4,11 @@ extern crate sgx_types;
 
 extern crate base64;
 extern crate futures;
-extern crate futures_cpupool;
-extern crate grpc;
+extern crate grpcio;
 extern crate protobuf;
 extern crate reqwest;
 extern crate thread_local;
 extern crate time;
-extern crate tls_api;
-extern crate tokio_core;
 
 #[macro_use]
 extern crate clap;
@@ -31,14 +28,15 @@ mod handlers;
 mod server;
 
 use std::path::Path;
+use std::sync::Arc;
 use std::thread;
 
-use ekiden_compute_api::ComputeServer;
+use ekiden_compute_api::create_compute;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_untrusted::rpc::router::RpcRouter;
 
 use clap::{App, Arg};
-use server::ComputeServerImpl;
+use server::ComputeService;
 
 fn main() {
     let matches = App::new("Ekiden Compute Node")
@@ -144,10 +142,9 @@ fn main() {
         )
         .get_matches();
 
-    let port = value_t!(matches, "port", u16).unwrap_or(9001);
-
-    // Create reactor (event loop).
-    let reactor = tokio_core::reactor::Core::new().unwrap();
+    // Create gRPC event loops.
+    let num_threads = value_t!(matches, "grpc-threads", usize).unwrap();
+    let grpc_environment = Arc::new(grpcio::Environment::new(num_threads));
 
     // Setup IAS.
     let ias = ias::IAS::new(if matches.is_present("ias-spid") {
@@ -169,7 +166,7 @@ fn main() {
         if !matches.is_present("disable-key-manager") {
             router.add_handler(handlers::ContractForwarder::new(
                 ClientEndpoint::KeyManager,
-                reactor.remote(),
+                grpc_environment.clone(),
                 matches.value_of("key-manager-host").unwrap().to_string(),
                 value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
             ));
@@ -177,13 +174,12 @@ fn main() {
     }
 
     // Start the gRPC server.
-    let mut server = grpc::ServerBuilder::new_plain();
-    server.http.set_port(port);
     let contract_filename = matches.value_of("contract").unwrap();
     if !Path::new(contract_filename).exists() {
         panic!(format!("Could not find contract: {}", contract_filename))
     }
-    server.add_service(ComputeServer::new_service_def(ComputeServerImpl::new(
+
+    let service = create_compute(ComputeService::new(
         &contract_filename,
         matches.value_of("consensus-host").unwrap(),
         value_t!(matches, "consensus-port", u16).unwrap_or(9002),
@@ -197,13 +193,19 @@ fn main() {
                 matches.value_of("identity-file").unwrap_or("identity.pb"),
             ))
         },
-    )));
-    let num_threads = value_t!(matches, "grpc-threads", usize).unwrap();
-    server.http.set_cpu_pool_threads(num_threads);
-    // TODO: Reuse the same event loop in gRPC once this is exposed.
-    let _server = server.build().expect("server");
+    ));
 
-    println!("Compute node listening at {}", port);
+    let port = value_t!(matches, "port", u16).unwrap_or(9001);
+    let mut server = grpcio::ServerBuilder::new(grpc_environment)
+        .register_service(service)
+        .bind("0.0.0.0", port)
+        .build()
+        .expect("Failed to build gRPC server for compute node");
+    server.start();
+
+    for &(ref host, port) in server.bind_addrs() {
+        println!("Compute node listening on {}:{}", host, port);
+    }
 
     // Start the Prometheus metrics endpoint.
     if let Ok(metrics_addr) = value_t!(matches, "metrics-addr", std::net::SocketAddr) {

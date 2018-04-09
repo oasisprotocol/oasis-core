@@ -1,7 +1,8 @@
 //! RPC client backend.
 
-use ekiden_enclave_common::api::IdentityProof;
 use sodalite;
+
+use ekiden_enclave_common::api::IdentityProof;
 
 pub struct ContractClientCredentials {
     /// The long-term client key.

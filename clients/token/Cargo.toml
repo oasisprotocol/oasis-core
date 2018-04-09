@@ -17,4 +17,4 @@ token-api = { path = "../../contracts/token/api" }
 clap = "2.29.1"
 rand = "0.4"
 futures = "0.1"
-tokio-core = "0.1"
+grpcio = "0.2.2"

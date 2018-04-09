@@ -1,4 +1,5 @@
-use grpc;
+use grpcio;
+use grpcio::{RpcStatus, RpcStatusCode};
 
 use protobuf;
 use protobuf::Message;
@@ -15,11 +16,11 @@ use std::borrow::Borrow;
 use std::error::Error as StdError;
 use std::fmt::Write;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use ekiden_compute_api::{CallContractRequest, CallContractResponse, Compute};
-use ekiden_consensus_api::{self, Consensus, ConsensusClient};
+use ekiden_consensus_api::{self, ConsensusClient};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
 use ekiden_core::error::{Error, Result};
@@ -83,6 +84,18 @@ impl ComputeServerWorker {
     ) -> Self {
         let (contract, identity_proof) =
             Self::create_contract(contract_filename, ias, saved_identity_path);
+
+        // Construct consensus client.
+        let consensus = match consensus_host {
+            "none" => None,
+            consensus_host => {
+                let env = Arc::new(grpcio::EnvBuilder::new().build());
+                let channel = grpcio::ChannelBuilder::new(env)
+                    .connect(&format!("{}:{}", consensus_host, consensus_port));
+                Some(ConsensusClient::new(channel))
+            }
+        };
+
         ComputeServerWorker {
             contract,
             identity_proof,
@@ -92,20 +105,7 @@ impl ComputeServerWorker {
             max_batch_timeout: max_batch_timeout,
             // Connect to consensus node
             // TODO: Use TLS client.
-            consensus: match ConsensusClient::new_plain(
-                &consensus_host,
-                consensus_port,
-                Default::default(),
-            ) {
-                Ok(client) => Some(client),
-                _ => {
-                    eprintln!(
-                        "WARNING: Failed to create consensus client. No state will be fetched."
-                    );
-
-                    None
-                }
-            },
+            consensus: consensus,
         }
     }
 
@@ -185,30 +185,21 @@ impl ComputeServerWorker {
 
             match cached_state_height {
                 Some(height) => {
-                    let (_, consensus_response, _) = self.consensus
-                        .as_ref()
-                        .unwrap()
-                        .get_diffs(grpc::RequestOptions::new(), {
-                            let mut consensus_request =
-                                ekiden_consensus_api::GetDiffsRequest::new();
-                            consensus_request.set_since_height(height);
-                            consensus_request
-                        })
-                        .wait()?;
+                    let consensus_response = self.consensus.as_ref().unwrap().get_diffs(&{
+                        let mut consensus_request = ekiden_consensus_api::GetDiffsRequest::new();
+                        consensus_request.set_since_height(height);
+                        consensus_request
+                    })?;
                     if consensus_response.has_checkpoint() {
                         self.set_cached_state(consensus_response.get_checkpoint())?;
                     }
                     Some(self.advance_cached_state(consensus_response.get_diffs())?)
                 }
                 None => {
-                    if let Ok((_, consensus_response, _)) = self.consensus
+                    if let Ok(consensus_response) = self.consensus
                         .as_ref()
                         .unwrap()
-                        .get(
-                            grpc::RequestOptions::new(),
-                            ekiden_consensus_api::GetRequest::new(),
-                        )
-                        .wait()
+                        .get(&ekiden_consensus_api::GetRequest::new())
                     {
                         self.set_cached_state(consensus_response.get_checkpoint())?;
                         Some(self.advance_cached_state(consensus_response.get_diffs())?)
@@ -288,15 +279,11 @@ impl ComputeServerWorker {
                     let diff_res = self.contract
                         .db_state_diff(&orig_encrypted_state, &encrypted_state)?;
 
-                    self.consensus
-                        .as_ref()
-                        .unwrap()
-                        .add_diff(grpc::RequestOptions::new(), {
-                            let mut add_diff_req = ekiden_consensus_api::AddDiffRequest::new();
-                            add_diff_req.set_payload(diff_res);
-                            add_diff_req
-                        })
-                        .wait()?;
+                    self.consensus.as_ref().unwrap().add_diff(&{
+                        let mut add_diff_req = ekiden_consensus_api::AddDiffRequest::new();
+                        add_diff_req.set_payload(diff_res);
+                        add_diff_req
+                    })?;
                 }
                 None => {
                     let mut consensus_replace_request = ekiden_consensus_api::ReplaceRequest::new();
@@ -305,8 +292,7 @@ impl ComputeServerWorker {
                     self.consensus
                         .as_ref()
                         .unwrap()
-                        .replace(grpc::RequestOptions::new(), consensus_replace_request)
-                        .wait()?;
+                        .replace(&consensus_replace_request)?;
                 }
             }
         }
@@ -384,7 +370,7 @@ impl ComputeServerWorker {
     }
 }
 
-pub struct ComputeServerImpl {
+struct ComputeServiceInner {
     /// Channel for submitting requests to the worker. This is only used to
     /// initialize a thread-local clone of the sender handle, so that there
     /// is no need for locking during request processing.
@@ -395,7 +381,12 @@ pub struct ComputeServerImpl {
     ins: instrumentation::HandlerMetrics,
 }
 
-impl ComputeServerImpl {
+#[derive(Clone)]
+pub struct ComputeService {
+    inner: Arc<ComputeServiceInner>,
+}
+
+impl ComputeService {
     /// Create new compute server instance.
     pub fn new(
         contract_filename: &str,
@@ -424,32 +415,35 @@ impl ComputeServerImpl {
             ).work(request_receiver);
         });
 
-        ComputeServerImpl {
-            request_sender: Mutex::new(request_sender),
-            tl_request_sender: ThreadLocal::new(),
-            ins: instrumentation::HandlerMetrics::new(),
+        ComputeService {
+            inner: Arc::new(ComputeServiceInner {
+                request_sender: Mutex::new(request_sender),
+                tl_request_sender: ThreadLocal::new(),
+                ins: instrumentation::HandlerMetrics::new(),
+            }),
         }
     }
 
     /// Get thread-local request sender.
     fn get_request_sender(&self) -> &Sender<QueuedRequest> {
-        self.tl_request_sender.get_or(|| {
+        self.inner.tl_request_sender.get_or(|| {
             // Only take the lock when we need to clone the sender for a new thread.
-            let request_sender = self.request_sender.lock().unwrap();
+            let request_sender = self.inner.request_sender.lock().unwrap();
             Box::new(request_sender.clone())
         })
     }
 }
 
-impl Compute for ComputeServerImpl {
+impl Compute for ComputeService {
     fn call_contract(
         &self,
-        _options: grpc::RequestOptions,
+        ctx: grpcio::RpcContext,
         rpc_request: CallContractRequest,
-    ) -> grpc::SingleResponse<CallContractResponse> {
+        sink: grpcio::UnarySink<CallContractResponse>,
+    ) {
         // Instrumentation.
-        self.ins.reqs_received.inc();
-        let _client_timer = self.ins.req_time_client.start_timer();
+        self.inner.ins.reqs_received.inc();
+        let _client_timer = self.inner.ins.req_time_client.start_timer();
 
         // Send request to worker thread.
         let (response_sender, response_receiver) = oneshot::channel();
@@ -461,10 +455,17 @@ impl Compute for ComputeServerImpl {
             .unwrap();
 
         // Prepare response future.
-        grpc::SingleResponse::no_metadata(response_receiver.then(|result| match result {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(error)) => Err(grpc::Error::Panic(error.description().to_owned())),
-            Err(error) => Err(grpc::Error::Panic(error.description().to_owned())),
-        }))
+        let f = response_receiver.then(|result| match result {
+            Ok(Ok(response)) => sink.success(response),
+            Ok(Err(error)) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Internal,
+                Some(error.description().to_owned()),
+            )),
+            Err(error) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Internal,
+                Some(error.description().to_owned()),
+            )),
+        });
+        ctx.spawn(f.map_err(|_error| ()));
     }
 }

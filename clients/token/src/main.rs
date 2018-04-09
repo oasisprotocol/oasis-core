@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate clap;
 extern crate futures;
+extern crate grpcio;
 extern crate rand;
-extern crate tokio_core;
 
 #[macro_use]
 extern crate client_utils;

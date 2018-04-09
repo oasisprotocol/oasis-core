@@ -1,6 +1,6 @@
-extern crate grpc;
+extern crate futures;
+extern crate grpcio;
 extern crate protobuf;
-extern crate tls_api;
 
 mod generated;
 

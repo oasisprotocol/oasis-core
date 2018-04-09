@@ -2,7 +2,9 @@
 //! which are registered using RpcRouter.
 
 use futures::Future;
-use tokio_core;
+use grpcio;
+
+use std::sync::Arc;
 
 use ekiden_core::error::{Error, Result};
 use ekiden_core::rpc::client::ClientEndpoint;
@@ -25,13 +27,13 @@ pub struct ContractForwarder {
 impl ContractForwarder {
     pub fn new(
         endpoint: ClientEndpoint,
-        reactor: tokio_core::reactor::Remote,
+        environment: Arc<grpcio::Environment>,
         host: String,
         port: u16,
     ) -> Self {
         ContractForwarder {
             endpoint: endpoint,
-            client: Web3ContractClientBackend::new(reactor, &host, port).unwrap(),
+            client: Web3ContractClientBackend::new(environment, &host, port).unwrap(),
         }
     }
 }

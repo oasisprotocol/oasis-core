@@ -8,22 +8,19 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
+ekiden-core = { path = "../core/common", version = "0.1.0-alpha.2" }
 ekiden-consensus-api = { path = "./api", version = "0.1.0-alpha.2" }
 abci = { git = "https://github.com/ekiden/tendermint-abci" }
 clap = "2.29.1"
 futures = "0.1"
-grpc = "0.2.1"
 hex = "0.3.1"
-hyper = "0.11"
 protobuf = "1.4.2"
-tls-api = "0.1.12"
-tokio-core = "0.1"
 tokio-proto = "0.1"
+grpcio = "0.2.2"
 
 [build-dependencies]
 ekiden-tools = { path = "../tools", version = "0.1.0-alpha.2" }
-protoc-rust = "1.4"
-protoc-rust-grpc = "0.2.1"
+protoc-grpcio = "0.1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.build-dependencies]
 rand = "0.4.2"

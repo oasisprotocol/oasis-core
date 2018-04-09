@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing
+      - image: ekiden/testing:0.1.0-alpha.3
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -63,18 +63,32 @@ jobs:
       # Start tendermint node.
       - run: tendermint init
       - run:
-          command: tendermint node --consensus.create_empty_blocks=false --rpc.laddr tcp://0.0.0.0:46666 --rpc.grpc_laddr tcp://0.0.0.0:46657
+          command: |
+            tendermint node \
+              --consensus.create_empty_blocks=false \
+              --rpc.laddr tcp://0.0.0.0:46666 \
+              --rpc.grpc_laddr tcp://0.0.0.0:46657
           background: true
       # Start key manager compute node.
       - run:
-          command: ./target/debug/ekiden-compute target/contract/ekiden-key-manager.so -p 9003 --disable-key-manager --no-persist-identity
+          command: |
+            ./target/debug/ekiden-compute \
+              -p 9003 \
+              --disable-key-manager \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              target/contract/ekiden-key-manager.so
           background: true
       # Start token compute node.
       - run:
-          command: ./target/debug/ekiden-compute target/contract/token.so --no-persist-identity
+          command: |
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              target/contract/token.so
           background: true
       # Start token client.
-      - run: ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+      - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
 workflows:
   version: 2

@@ -1,16 +1,13 @@
 extern crate abci;
 extern crate futures;
-extern crate grpc;
-extern crate hyper;
+extern crate grpcio;
 extern crate protobuf;
-extern crate tls_api;
-extern crate tokio_core;
 extern crate tokio_proto;
 
 extern crate ekiden_consensus_api;
+extern crate ekiden_core;
 
 mod ekidenmint;
-mod errors;
 mod tendermint;
 pub mod generated;
 mod rpc;
@@ -25,10 +22,11 @@ use std::time;
 use abci::server::{AbciProto, AbciService};
 use tokio_proto::TcpServer;
 
-use ekiden_consensus_api::ConsensusServer;
-use errors::Error;
+use ekiden_consensus_api::create_consensus;
+use ekiden_core::error::Result;
+
 use generated::tendermint::ResponseBroadcastTx;
-use rpc::ConsensusServerImpl;
+use rpc::ConsensusService;
 use state::State;
 use tendermint::TendermintProxy;
 
@@ -42,7 +40,7 @@ pub struct Config {
     pub artificial_delay: u64,
 }
 
-pub fn run(config: &Config) -> Result<(), Box<Error>> {
+pub fn run(config: &Config) -> Result<()> {
     // Create a shared State object and ekidenmint
     let state = Arc::new(Mutex::new(State::new()));
     let delay = time::Duration::from_millis(config.artificial_delay);
@@ -51,14 +49,14 @@ pub fn run(config: &Config) -> Result<(), Box<Error>> {
     let (sender, receiver) = mpsc::channel();
 
     // Start the Ekiden consensus gRPC server.
-    let mut rpc_server = grpc::ServerBuilder::new_plain();
-    rpc_server.http.set_port(config.grpc_port);
-    rpc_server.http.set_cpu_pool_threads(1);
-    rpc_server.add_service(ConsensusServer::new_service_def(ConsensusServerImpl::new(
-        Arc::clone(&state),
-        sender,
-    )));
-    let _server = rpc_server.build().expect("rpc_server");
+    let service = create_consensus(ConsensusService::new(state.clone(), sender));
+
+    let grpc_environment = Arc::new(grpcio::EnvBuilder::new().build());
+    let mut rpc_server = grpcio::ServerBuilder::new(grpc_environment)
+        .register_service(service)
+        .bind("0.0.0.0", config.grpc_port)
+        .build()?;
+    rpc_server.start();
 
     // Short circuit Tendermint if `-x` is enabled
     if config.no_tendermint {
@@ -89,14 +87,4 @@ pub fn run(config: &Config) -> Result<(), Box<Error>> {
         })
     });
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    //use super::generated::consensus;
-
-    #[test]
-    fn empty() {
-        assert_eq!(8, 8)
-    }
 }
