@@ -1,15 +1,15 @@
 [package]
 name = "ekiden-rpc-client"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden RPC client"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.2" }
-ekiden-enclave-common = { path = "../../enclave/common", version = "0.1.0-alpha.2" }
-ekiden-rpc-common = { path = "../common", version = "0.1.0-alpha.2" }
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+ekiden-enclave-common = { path = "../../enclave/common", version = "0.1.0-alpha.3" }
+ekiden-rpc-common = { path = "../common", version = "0.1.0-alpha.3" }
 protobuf = "1.4.3"
 sodalite = "0.3.0"
 
@@ -17,7 +17,7 @@ sodalite = "0.3.0"
 futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-ekiden-compute-api = { path = "../../compute/api", version = "0.1.0-alpha.2" }
+ekiden-compute-api = { path = "../../compute/api", version = "0.1.0-alpha.3" }
 byteorder = "1.2.1"
 futures = "0.1"
 grpcio = "0.2.2"

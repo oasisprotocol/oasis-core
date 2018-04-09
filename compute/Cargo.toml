@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-compute"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden compute node"
 keywords = ["ekiden"]
@@ -12,11 +12,11 @@ no_cache = []
 no_diffs = []
 
 [dependencies]
-ekiden-core = { path = "../core/common", version = "0.1.0-alpha.2" }
-ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.2" }
-ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.2" }
-ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.2" }
-ekiden-consensus-api = { path = "../consensus/api", version = "0.1.0-alpha.2" }
+ekiden-core = { path = "../core/common", version = "0.1.0-alpha.3" }
+ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.3" }
+ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.3" }
+ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.3" }
+ekiden-consensus-api = { path = "../consensus/api", version = "0.1.0-alpha.3" }
 protobuf = "1.4.2"
 futures = "0.1"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden1" }
@@ -31,5 +31,5 @@ tokio-core = "0.1"
 grpcio = "0.2.2"
 
 [build-dependencies]
-ekiden-tools = { path = "../tools", version = "0.1.0-alpha.2" }
-ekiden-edl = { path = "../core/edl", version = "0.1.0-alpha.2" }
+ekiden-tools = { path = "../tools", version = "0.1.0-alpha.3" }
+ekiden-edl = { path = "../core/edl", version = "0.1.0-alpha.3" }

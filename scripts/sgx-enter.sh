@@ -6,7 +6,7 @@ WORK_DIR=$( git rev-parse --show-toplevel )
 # Name of the ekiden container.
 EKIDEN_CONTAINER_NAME=${EKIDEN_CONTAINER_NAME:-$(basename ${WORK_DIR})}
 
-ekiden_image=${EKIDEN_DOCKER_IMAGE:-ekiden/development:0.1.0-alpha.0}
+ekiden_image=${EKIDEN_DOCKER_IMAGE:-ekiden/development:0.1.0-alpha.3}
 ekiden_shell=${EKIDEN_DOCKER_SHELL:-bash}
 
 # Setting the environment variable EKIDEN_DOCKER_DETACH_KEYS to
