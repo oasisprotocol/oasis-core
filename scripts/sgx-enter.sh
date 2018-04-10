@@ -23,9 +23,12 @@ which docker >/dev/null || {
   exit 1
 }
 
+# https://forums.docker.com/t/how-to-filter-docker-ps-by-exact-name/2880/7
+container_filter='name=^/'"$EKIDEN_CONTAINER_NAME"'$'
+
 # Start SGX Rust Docker container.
-if [ ! "$(docker ps -q -f name=${EKIDEN_CONTAINER_NAME})" ]; then
-  if [ "$(docker ps -aq -f name=${EKIDEN_CONTAINER_NAME})" ]; then
+if [ ! "$(docker ps -q -f "$container_filter")" ]; then
+  if [ "$(docker ps -aq -f "$container_filter")" ]; then
     docker start ${EKIDEN_CONTAINER_NAME}
     docker exec -i -t ${DETACH} ${EKIDEN_CONTAINER_NAME} /usr/bin/env $ekiden_shell
   else
