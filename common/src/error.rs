@@ -6,7 +6,7 @@ use std::{error, fmt, result};
 pub type Result<T> = result::Result<T, Error>;
 
 /// Error type for use in Ekiden crates.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Error {
     /// Error message.
     pub message: String,
