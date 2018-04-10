@@ -90,11 +90,25 @@ jobs:
       # Start token client.
       - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
+  deploy:
+    docker:
+      - image: ekiden/development:0.1.0-alpha.3
+    steps:
+      # Set up
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - checkout
+
+      # Build deployment image.
+      - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh
+
 workflows:
   version: 2
   build:
     jobs:
       - build
+      - deploy
 experimental:
   notify:
     branches:
