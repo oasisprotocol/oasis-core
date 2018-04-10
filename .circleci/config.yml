@@ -108,7 +108,11 @@ workflows:
   build:
     jobs:
       - build
-      - deploy
+      - deploy:
+          filters:
+            branches:
+              # TODO: change this to master before merging
+              only: pro-wh/feature/cd
 experimental:
   notify:
     branches:
