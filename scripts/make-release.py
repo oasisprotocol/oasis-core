@@ -238,10 +238,10 @@ if __name__ == '__main__':
     if args.bump_docker_images:
         print('=== Building and tagging Docker images...')
         bump_docker_version(root_dir, args.version, 'docker/testing')
-        bump_docker_version(root_dir, args.version, 'docker/deployment', dockerfile='Dockerfile.build')
         ci_update_image(root_dir, 'ekiden/testing', args.version)
         script_update_version(root_dir, 'sgx-enter.sh', args.version)
         script_update_version(root_dir, 'sgx-enter-hw.sh', args.version)
+        script_update_version(root_dir, '../docker/deployment/build-images.sh', args.version)
 
         docker_build(root_dir, args.version, 'docker/development', 'ekiden/development')
         docker_build(root_dir, args.version, 'docker/testing', 'ekiden/development')
@@ -249,7 +249,7 @@ if __name__ == '__main__':
         docker_push('ekiden/testing', args.version)
 
     # Add modified files and commit version bump.
-    print("=== Commiting version bump...")
+    print("=== Committing version bump...")
     commit(args.version, sign=args.sign)
 
     # Create tag.
