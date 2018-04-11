@@ -27,7 +27,4 @@ pub mod hash;
 pub mod signature;
 
 #[macro_use]
-pub mod hex_encoded;
-
-#[macro_use]
 pub mod profiling;

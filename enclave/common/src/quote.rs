@@ -1,15 +1,13 @@
 //! A portable system for parsing and verifying enclave identity proofs.
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::ops::Deref;
-use std::str::FromStr;
 
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use serde_json;
 
+use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::hex_encoded_struct;
 
 use super::api::IdentityProof;
 
@@ -19,7 +17,7 @@ pub const QUOTE_CONTEXT_LEN: usize = 8;
 pub type QuoteContext = [u8; QUOTE_CONTEXT_LEN];
 
 // MRENCLAVE.
-hex_encoded_struct!(MrEnclave, MRENCLAVE_LEN, 32);
+pub type MrEnclave = H256;
 
 /// Decoded report body.
 #[derive(Default, Debug)]
