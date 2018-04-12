@@ -1,0 +1,121 @@
+# `copper` is chosen as a random word for use as a key for labels that
+# aren't naturally structured as key-value pairs.
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: ekiden-token-consensus
+spec:
+  ports:
+    - name: consensus-grpc
+      port: 9003
+  selector:
+    copper: ekiden-token-consensus
+  # type: ClusterIP
+---
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: ekiden-token-consensus
+spec:
+  selector:
+    matchLabels:
+      copper: ekiden-token-consensus
+  # replicas: 1
+  template:
+    metadata:
+      labels:
+        copper: ekiden-token-consensus
+    spec:
+      containers:
+        - name: ekiden-consensus
+          image: docker.io/oasislabs/testnet:latest
+          command:
+            - ekiden-consensus
+          args:
+            - --no-tendermint
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ekiden-token-key-manager
+spec:
+  ports:
+    - name: contract-grpc
+      port: 9002
+  selector:
+    copper: ekiden-token-key-manager
+  # type: ClusterIP
+---
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: ekiden-token-key-manager
+spec:
+  selector:
+    matchLabels:
+      copper: ekiden-token-key-manager
+  # replicas: 1
+  template:
+    metadata:
+      labels:
+        copper: ekiden-token-key-manager
+    spec:
+      containers:
+        - name: ekiden-compute
+          image: docker.io/oasislabs/testnet:latest
+          command:
+            - ekiden-compute
+          args:
+            - --port
+            - "9002"
+            - --disable-key-manager
+            - --no-persist-identity
+            - --max-batch-size
+            - "1"
+            - ekiden/lib/ekiden-key-manager.so
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ekiden-token
+spec:
+  ports:
+    - name: contract-grpc
+      port: 9001
+  selector:
+    copper: ekiden-token
+  # Change this to make the network public.
+  # type: ClusterIP
+---
+# Should we go stateful and save the identity?
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: ekiden-token
+spec:
+  selector:
+    matchLabels:
+      copper: ekiden-token
+  # replicas: 1
+  template:
+    metadata:
+      labels:
+        copper: ekiden-token
+    spec:
+      containers:
+        - name: ekiden-compute
+          image: docker.io/oasislabs/testnet:latest
+          command:
+            - ekiden-compute
+          args:
+            - --no-persist-identity
+            - --consensus-host
+            - $(EKIDEN_TOKEN_CONSENSUS_SERVICE_HOST)
+            - --consensus-port
+            - $(EKIDEN_TOKEN_CONSENSUS_SERVICE_PORT_CONSENSUS_GRPC)
+            - --key-manager-host
+            - $(EKIDEN_TOKEN_KEY_MANAGER_SERVICE_HOST)
+            - --key-manager-port
+            - $(EKIDEN_TOKEN_KEY_MANAGER_SERVICE_PORT_CONTRACT_GRPC)
+            - ekiden/lib/token.so
