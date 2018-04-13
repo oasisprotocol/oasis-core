@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
+use chrono::prelude::*;
 use pem_iterator::body::Single;
 use pem_iterator::boundary::{BoundaryParser, BoundaryType, LabelMatcher};
 use percent_encoding;
@@ -190,7 +191,20 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
         _ => return Err(Error::new("Failed to parse AV report body")),
     };
 
-    // TODO: Check timestamp, reject if report is too old (e.g. 1 day).
+    // Check timestamp, reject if report is too old (e.g. 1 day).
+    let timestamp = match avr_body["timestamp"].as_str() {
+        Some(timestamp) => timestamp,
+        None => {
+            return Err(Error::new("AV report body did not contain timestamp"));
+        }
+    };
+    let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
+        Ok(timestamp) => timestamp.timestamp(),
+        _ => return Err(Error::new("Failed to parse AV report timestamp")),
+    };
+    if (now_unix - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
+        return Err(Error::new("AV report timestamp differs by more than 1 day"));
+    }
 
     match avr_body["isvEnclaveQuoteStatus"].as_str() {
         Some(status) => match status {

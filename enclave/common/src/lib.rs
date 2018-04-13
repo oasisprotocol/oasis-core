@@ -4,6 +4,7 @@ extern crate sgx_types;
 
 extern crate base64;
 extern crate byteorder;
+extern crate chrono;
 extern crate pem_iterator;
 extern crate percent_encoding;
 extern crate protobuf;
