@@ -14,6 +14,9 @@ ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
 protobuf = "1.4.3"
 serde_json = { git = "https://github.com/ekiden/json" }
 sodalite = "0.3.0"
+pem-iterator = "0.2"
+percent-encoding = "1.0.1"
+webpki = { git = "https://github.com/ekiden/webpki", branch = "0.17.0-ekiden", default-features = false }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"

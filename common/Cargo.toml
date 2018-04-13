@@ -16,7 +16,7 @@ byteorder = "1"
 fixed-hash = { version = "0.2.1", default-features = false }
 etcommon-rlp = "0.2.3"
 rustc-hex = "1.0"
-ring = { version = "0.12.1", default-features = false }
+ring = { git = "https://github.com/ekiden/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
 untrusted = "0.5.1"
 bigint = { version = "4", features = ["std"] }
 
