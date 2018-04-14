@@ -2,7 +2,9 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.3
+      # %%% push in org and update before merging
+      # - image: ekiden/testing:0.1.0-alpha.3
+      - image: docker.io/wh00/ekiden-testing:latest
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -92,13 +94,16 @@ jobs:
 
   deploy:
     docker:
-      - image: ekiden/development:0.1.0-alpha.3
+      # %%% push in org and update before merging
+      # - image: ekiden/testing:0.1.0-alpha.3
+      - image: docker.io/wh00/ekiden-testing:latest
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - checkout
+      - setup_remote_docker
 
       # Build deployment image.
       - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh
