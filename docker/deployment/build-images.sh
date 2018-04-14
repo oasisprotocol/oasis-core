@@ -10,7 +10,7 @@ if [ -n "$BUILD_IMAGES_NO_ENTER" ]; then
 elif [ -z "$BUILD_IMAGES_CONTAINER" ]; then
     # Build in a fresh container.
     docker run --rm \
-        -v .:/code \
+        -v "$PWD:/code" \
         -e SGX_MODE=SIM \
         -e INTEL_SGX_SDK=/opt/sgxsdk \
         -w /code \
