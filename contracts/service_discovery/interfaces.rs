@@ -62,13 +62,24 @@ pub trait PublicToGlobalScheduler {
 
     // We need to be able to do lookups by name because applications
     // can have a graph of contracts that need to call each other, and
-    // the lack of an acyclic graph means that we cannot embed the
-    // CommunicationChannelId in the contracts' code; instead, we
+    // the lack of an acyclic graph means that we cannot e.g. embed
+    // the CommunicationChannelId in the contracts' code; instead, we
     // require that at launch, a clique of contracts be given instance
     // names that allow them to find each other.
     fn find_contract_instance(
         &mut self, name: string)
-        -> Result<(CodeId, CommunicationChannelId), Error>;
+        -> Result<Vec<(CodeId, CommunicationChannelId)>, Error>;
+
+    // This version allows the caller to provide a string name
+    // (functionality) and a vector of contract code hashes that the
+    // caller knows about and can work with.  No built-in versioning
+    // mechanism here.  The caller has to have some trusted mechanism
+    // to allow it to specify that a new code hash replaces an old
+    // one, or the named contract is really a forwarder to different
+    // implementations.
+    fn find_contract_instance(
+        &mut self, (name: string, Vec<CodeId>))
+        -> Result<Vec<(CodeId, CommunicationChannelId)>, Error>;
 }
 
 // GlobalScheduler or ReplicaCoordinator to LocalScheduler
@@ -76,8 +87,13 @@ pub trait ReplicaCoordinatorToLocalScheduler {
     fn launch_replicated_contract(
         &mut self, name: string, contract_code_id: CodeId, gas: GasToken)
         -> Result<CommunicationChannelId, Error>;
-    // CommunicationChannelId used to send remote method invocations
-    // Must be comparable.
+    // CommunicationChannelId used to send remote method invocations.
+    // In the case of a replicated contract, this channel may actually
+    // be to a proxy implemented by the coordinator which sends
+    // requests to all replicas and then checks the answers.  (Do we
+    // want the ReplicaCoordinator to be out of the way and not be a
+    // potential bottleneck?  But having it be a client library means
+    // exposing details of replication strategy.)
 }
 
 // Group communications for running replicas of a contract and doing
@@ -116,6 +132,6 @@ pub trait ReplicaCoordinatorToGlobalScheduler {
 
     // Only legitimate ReplicaCoordinators should be able to do this.
     fn punish_compute_nodes(
-        &mut self, List<CommunicationChannelId>)
+        &mut self, Vec<CommunicationChannelId>)
         -> Result<(), Error>;
 }
