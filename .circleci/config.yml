@@ -107,6 +107,10 @@ jobs:
 
       # Build deployment image.
       - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh
+      # Push deployment image.
+      - run: |
+          echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          docker push oasislabs/testnet:latest
 
 workflows:
   version: 2
