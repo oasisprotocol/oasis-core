@@ -112,11 +112,14 @@ jobs:
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
           docker push oasislabs/testnet:latest
       # Update testnet.
-      # %%% change to real command
+      # https://stackoverflow.com/a/33511811/1864688
       - run: |
+          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
-          kubectl get nodes
+          kubectl set image deployments/ekiden-token-consensus ekiden-consensus=$REPO_DIGEST
+          kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
+          kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 
 workflows:
   version: 2
