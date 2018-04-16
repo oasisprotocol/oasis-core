@@ -110,9 +110,9 @@ pub trait PublicToReplicaCoordinator {
         -> Result<CommunicationChannelId, Error>;
 
     fn find_replicated_contract_instance(
-        &mut self, name: string)
-        -> Result<(CodeId, CommunicationChannelId,
-                   min_bond_amount, num_replicas), Error>;
+        &mut self, name: string, Vec<CodeId>)
+        -> Result<Vec(CodeId, CommunicationChannelId,
+                      min_bond_amount, num_replicas), Error>;
 
 }
 
