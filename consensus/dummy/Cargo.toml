@@ -1,0 +1,11 @@
+[package]
+name = "ekiden-consensus-dummy"
+version = "0.1.0-alpha.3"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden dummy in-memory consensus backend"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+ekiden-consensus-base = { path = "../base", version = "0.1.0-alpha.3" }

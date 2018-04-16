@@ -7,6 +7,7 @@ members = [
 
     # Consensus interface.
     "consensus/base",
+    "consensus/dummy",
 
     # Storage interface.
     "storage/base",
