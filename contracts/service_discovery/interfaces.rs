@@ -27,6 +27,8 @@
 
 // Type names are suggestive. We may have existing types that work.
 
+// CommunicationChannel is IP address / port tuple or similar way to
+// contact a running contract instance.
 
 pub trait ComputeNodeToGlobalScheduler {
     // After ttl_seconds the service advertisement and bond is
@@ -53,15 +55,26 @@ pub trait PublicToGlobalScheduler {
     //
     // This runs a single contract instance and does not handle
     // replication.
-    fn launch_contract(
-        &mut self, contract_code_id: CodeId, gas: GasToken,
-        min_bond_amount)
+    fn launch_contract_instance(
+        &mut self, name: string, contract_code_id: CodeId,
+        gas: GasToken, min_bond_amount)
         -> Result<CommunicationChannelId, Error>;
+
+    // We need to be able to do lookups by name because applications
+    // can have a graph of contracts that need to call each other, and
+    // the lack of an acyclic graph means that we cannot embed the
+    // CommunicationChannelId in the contracts' code; instead, we
+    // require that at launch, a clique of contracts be given instance
+    // names that allow them to find each other.
+    fn find_contract_instance(
+        &mut self, name: string)
+        -> Result<(CodeId, CommunicationChannelId), Error>;
+}
 
 // GlobalScheduler or ReplicaCoordinator to LocalScheduler
 pub trait ReplicaCoordinatorToLocalScheduler {
     fn launch_replicated_contract(
-        &mut self, contract_code_id: CodeId, gas: GasToken)
+        &mut self, name: string, contract_code_id: CodeId, gas: GasToken)
         -> Result<CommunicationChannelId, Error>;
     // CommunicationChannelId used to send remote method invocations
     // Must be comparable.
@@ -75,11 +88,16 @@ pub trait ReplicaCoordinatorToLocalScheduler {
 
 pub trait PublicToReplicaCoordinator {
     // The gas is subdivided evenly across all num_replicas.
-    fn launch(
-        &mut self, contract_code_id: CodeId,
-        gas: GasToken, min_bond_amount, num_replicas)
+    fn launch_replicated_contract_instance(
+        &mut self, name: string, contract_code_id: CodeId,
+        gas: GasToken, min_bond_amount: Token, num_replicas: uint32)
         -> Result<CommunicationChannelId, Error>;
-    }
+
+    fn find_replicated_contract_instance(
+        &mut self, name: string)
+        -> Result<(CodeId, CommunicationChannelId,
+                   min_bond_amount, num_replicas), Error>;
+
 }
 
 // How does GlobalScheduler authenticate a ReplicaCoordinator as
@@ -100,5 +118,4 @@ pub trait ReplicaCoordinatorToGlobalScheduler {
     fn punish_compute_nodes(
         &mut self, List<CommunicationChannelId>)
         -> Result<(), Error>;
-                
 }
