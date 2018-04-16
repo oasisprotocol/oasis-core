@@ -29,11 +29,11 @@
 
 
 pub trait ComputeNodeToGlobalScheduler {
-    // After Ttl_seconds the service advertisement and bond is
+    // After ttl_seconds the service advertisement and bond is
     // automatically released.
     fn register_compute_node(
         &mut self, local_scheduler: CommunicationChannelId,
-        Ttl_seconds : uint32,  // 136 years max
+        ttl_seconds : uint32,  // 136 years max
         correctness_bond: Tokens, fee: GasTokens)
         -> Result<(), Error>;
 
@@ -92,7 +92,7 @@ pub trait ReplicaCoordinatorToGlobalScheduler {
     // ensure that the replica group has all signed, etc?
     fn register_replica_coordinator(
         &mut self, replica_coordinator: CommunicationChannelId,
-        Ttl_seconds,
+        ttl_seconds,
         correctness_bond: Tokens, fee: GasTokens)
         -> Result<(), Error>;
 
