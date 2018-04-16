@@ -39,3 +39,9 @@ RUN VER="18.03.0-ce" && \
     tar -xz -C /tmp -f /tmp/docker-$VER.tgz && \
     rm /tmp/docker-$VER.tgz && \
     mv /tmp/docker/* /usr/bin
+
+# Install kubectl for deployment.
+RUN VERSION="v1.10.0" && \
+    curl -LO https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/amd64/kubectl && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/kubectl

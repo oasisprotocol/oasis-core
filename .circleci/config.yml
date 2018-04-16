@@ -111,6 +111,12 @@ jobs:
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
           docker push oasislabs/testnet:latest
+      # Update testnet.
+      # %%% change to real command
+      - run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
+          kubectl get nodes
 
 workflows:
   version: 2
