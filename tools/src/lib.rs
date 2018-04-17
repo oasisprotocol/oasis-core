@@ -15,6 +15,8 @@ extern crate toml;
 extern crate ekiden_common;
 
 pub mod cargo;
+pub mod command_buildcontract;
+pub mod command_shell;
 pub mod contract;
 pub mod utils;
 pub use utils::*;
