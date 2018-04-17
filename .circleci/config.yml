@@ -131,6 +131,8 @@ workflows:
             branches:
               # TODO: change this to master before merging
               only: pro-wh/feature/cd
+          requires:
+            - build
 experimental:
   notify:
     branches:
