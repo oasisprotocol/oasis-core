@@ -2,9 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      # %%% push in org and update before merging
-      # - image: ekiden/testing:0.1.0-alpha.3
-      - image: docker.io/wh00/ekiden-testing:latest
+      - image: ekiden/testing:0.1.0-alpha.4
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -94,9 +92,7 @@ jobs:
 
   deploy:
     docker:
-      # %%% push in org and update before merging
-      # - image: ekiden/testing:0.1.0-alpha.3
-      - image: docker.io/wh00/ekiden-testing:latest
+      - image: ekiden/testing:0.1.0-alpha.4
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -129,8 +125,7 @@ workflows:
       - deploy:
           filters:
             branches:
-              # TODO: change this to master before merging
-              only: pro-wh/feature/cd
+              only: master
           requires:
             - build
 experimental:
