@@ -32,8 +32,8 @@ impl Enclave {
             &mut misc_attr,
         ) {
             Ok(enclave) => enclave,
-            Err(_) => {
-                return Err(Error::new("Failed to launch enclave"));
+            Err(status) => {
+                return Err(Error::new(format!("Failed to launch enclave: {}", status)));
             }
         };
 

@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.3
+      - image: ekiden/testing:0.1.0-alpha.4
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -90,11 +90,44 @@ jobs:
       # Start token client.
       - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
+  deploy:
+    docker:
+      - image: ekiden/testing:0.1.0-alpha.4
+    steps:
+      # Set up
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - checkout
+      - setup_remote_docker
+
+      # Build deployment image.
+      - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh
+      # Push deployment image.
+      - run: |
+          echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          docker push oasislabs/testnet:latest
+      # Update testnet.
+      # https://stackoverflow.com/a/33511811/1864688
+      - run: |
+          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
+          kubectl set image deployments/ekiden-token-consensus ekiden-consensus=$REPO_DIGEST
+          kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
+          kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
+
 workflows:
   version: 2
   build:
     jobs:
       - build
+      - deploy:
+          filters:
+            branches:
+              only: master
+          requires:
+            - build
 experimental:
   notify:
     branches:
