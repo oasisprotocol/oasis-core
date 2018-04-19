@@ -3,15 +3,13 @@ use sgx_types;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::ops::Deref;
-use std::str::FromStr;
 
 use base64;
 use reqwest;
 
+use ekiden_core::bytes::H128;
 use ekiden_core::enclave::api as identity_api;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::hex_encoded_struct;
 use ekiden_untrusted::enclave;
 
 /// Intel IAS API URL.
@@ -22,7 +20,7 @@ const IAS_API_URL: &'static str = "https://test-as.sgx.trustedservices.intel.com
 const IAS_ENDPOINT_REPORT: &'static str = "/attestation/sgx/v2/report";
 
 // SPID.
-hex_encoded_struct!(SPID, SPID_LEN, 16);
+pub type SPID = H128;
 
 /// IAS configuration.
 ///
@@ -72,7 +70,9 @@ impl IAS {
                 })
             }
             None => Ok(IAS {
-                spid: sgx_types::sgx_spid_t { id: [0; SPID_LEN] },
+                spid: sgx_types::sgx_spid_t {
+                    id: [0; SPID::LENGTH],
+                },
                 client: None,
             }),
         }

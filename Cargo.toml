@@ -5,6 +5,12 @@ members = [
     # Common.
     "common",
 
+    # Consensus interface.
+    "consensus/base",
+
+    # Storage interface.
+    "storage/base",
+
     # Enclave loader.
     "enclave/common",
     "enclave/untrusted",
@@ -32,7 +38,7 @@ members = [
     "compute/api",
     "compute",
 
-    # Consensus node.
+    # Consensus node (deprecated).
     "consensus/api",
     "consensus",
 
