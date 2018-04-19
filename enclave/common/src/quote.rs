@@ -172,6 +172,9 @@ pub struct IdentityAuthenticatedInfo {
 
 /// Verify attestation report.
 pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInfo> {
+    let avr_body = identity_proof.get_av_report().get_body();
+    let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
+
     // Get the current time.
     //
     // WARNING: If this is running in an enclave, this will be an OCALL, and
@@ -180,10 +183,11 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     let now_unix = now_unix.as_secs() as i64;
 
     // Verify IAS signature.
-    let avr_cert_chain = identity_proof.get_av_report().get_certificates();
-    let avr_signature = identity_proof.get_av_report().get_signature();
-    let avr_body = identity_proof.get_av_report().get_body();
-    validate_avr_signature(avr_cert_chain, avr_body, avr_signature, now_unix as u64)?;
+    if !unsafe_skip_avr_verification {
+        let avr_cert_chain = identity_proof.get_av_report().get_certificates();
+        let avr_signature = identity_proof.get_av_report().get_signature();
+        validate_avr_signature(avr_cert_chain, avr_body, avr_signature, now_unix as u64)?;
+    }
 
     // Parse AV report body.
     let avr_body: serde_json::Value = match serde_json::from_slice(avr_body) {
@@ -192,18 +196,20 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     };
 
     // Check timestamp, reject if report is too old (e.g. 1 day).
-    let timestamp = match avr_body["timestamp"].as_str() {
-        Some(timestamp) => timestamp,
-        None => {
-            return Err(Error::new("AV report body did not contain timestamp"));
+    if !unsafe_skip_avr_verification {
+        let timestamp = match avr_body["timestamp"].as_str() {
+            Some(timestamp) => timestamp,
+            None => {
+                return Err(Error::new("AV report body did not contain timestamp"));
+            }
+        };
+        let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
+            Ok(timestamp) => timestamp.timestamp(),
+            _ => return Err(Error::new("Failed to parse AV report timestamp")),
+        };
+        if (now_unix - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
+            return Err(Error::new("AV report timestamp differs by more than 1 day"));
         }
-    };
-    let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
-        Ok(timestamp) => timestamp.timestamp(),
-        _ => return Err(Error::new("Failed to parse AV report timestamp")),
-    };
-    if (now_unix - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
-        return Err(Error::new("AV report timestamp differs by more than 1 day"));
     }
 
     match avr_body["isvEnclaveQuoteStatus"].as_str() {

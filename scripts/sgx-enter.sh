@@ -37,6 +37,7 @@ if [ ! "$(docker ps -q -f "$container_filter")" ]; then
       -v ${WORK_DIR}:/code \
       -e "SGX_MODE=SIM" \
       -e "INTEL_SGX_SDK=/opt/sgxsdk" \
+      -e "EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1" \
       -w /code \
       ${DETACH} \
       "$ekiden_image" \
