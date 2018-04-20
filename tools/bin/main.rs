@@ -81,6 +81,12 @@ fn main() {
                                 .conflicts_with("git"),
                         )
                         .arg(
+                            Arg::with_name("cargo-addendum")
+                                .help("Path of a file to append to the dummy top-level Cargo.toml")
+                                .long("cargo-addendum")
+                                .takes_value(true),
+                        )
+                        .arg(
                             Arg::with_name("release")
                                 .long("release")
                                 .help("Build contract in release mode, with optimizations"),

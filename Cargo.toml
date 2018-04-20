@@ -1,4 +1,6 @@
 [workspace]
+# When you change what packages are in this repo, also change
+# scripts/testing-addendum.toml.
 members = [
     "tools",
 
@@ -13,12 +15,12 @@ members = [
     "storage/base",
     "storage/dummy",
 
-    # Enclave loader.
+    # Enclave loader (+ attestation).
     "enclave/common",
     "enclave/untrusted",
     "enclave/trusted",
 
-    # RPC (+ attestation).
+    # RPC.
     "rpc/common",
     "rpc/client",
     "rpc/untrusted",
