@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.4
+      - image: ekiden/testing:0.1.0-alpha.5
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -12,6 +12,10 @@ jobs:
       - checkout
 
       # Cargo tests. Some tests are excluded as they currently don't compile.
+      # Heuristic glob to detect what test binaries that cargo builds.
+      # If that gets too janky, try `cargo test --message-format=json`
+      # (see
+      # https://github.com/rust-lang/cargo/issues/1924#issuecomment-289770287).
       - run: |
           cargo test --all \
             --exclude ekiden-untrusted \
@@ -20,7 +24,20 @@ jobs:
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
             --exclude token \
-            -- --test-threads 1
+            --no-run
+          cd target/debug
+          mkdir ../cov
+          for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
+            mkdir ../cov/$bin
+            kcov \
+              --exclude-pattern=$HOME/.cargo,/usr/lib \
+              --verify \
+              ../cov/$bin \
+              ./$bin \
+              --test-threads 1
+          done
+      # Upload coverage info.
+      - run: codecov
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
       # compare against them.
@@ -80,7 +97,7 @@ jobs:
 
   deploy:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.4
+      - image: ekiden/testing:0.1.0-alpha.5
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
