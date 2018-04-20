@@ -1,5 +1,4 @@
 //! Tool subcommand for entering contract environment.
-extern crate base64;
 extern crate clap;
 extern crate ekiden_common;
 
@@ -91,12 +90,7 @@ fn container_default_name(project: &cargo::ProjectRoot, hardware: bool) -> Strin
         sgx = "-sgx";
     }
     let hash = s.finish();
-    format!(
-        "{}-{}{}",
-        package_name,
-        base64::encode(&format!("{}", hash)),
-        sgx
-    )
+    format!("{}-{}{}", package_name, format!("{:x}", hash), sgx)
 }
 
 /// Enter an Ekiden environment.
