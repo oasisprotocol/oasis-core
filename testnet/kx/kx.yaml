@@ -8,7 +8,7 @@ metadata:
 spec:
   ports:
     - name: consensus-grpc
-      port: 9003
+      port: 9002
   selector:
     copper: ekiden-token-consensus
   # type: ClusterIP
@@ -42,7 +42,7 @@ metadata:
 spec:
   ports:
     - name: contract-grpc
-      port: 9002
+      port: 9003
   selector:
     copper: ekiden-token-key-manager
   # type: ClusterIP
@@ -68,7 +68,7 @@ spec:
             - ekiden-compute
           args:
             - --port
-            - "9002"
+            - "9003"
             - --disable-key-manager
             - --no-persist-identity
             - --max-batch-size
