@@ -7,9 +7,11 @@ members = [
 
     # Consensus interface.
     "consensus/base",
+    "consensus/dummy",
 
     # Storage interface.
     "storage/base",
+    "storage/dummy",
 
     # Enclave loader.
     "enclave/common",
