@@ -1,0 +1,12 @@
+[package]
+name = "ekiden-storage-persistent"
+version = "0.1.0-alpha.3"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden IPFS storage backend"
+keywords = ["ekiden", "ipfs"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+ekiden-storage-base = { path = "../base", version = "0.1.0-alpha.3" }
+sled = "~0.15.0"

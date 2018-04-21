@@ -12,6 +12,7 @@ members = [
     # Storage interface.
     "storage/base",
     "storage/dummy",
+    "storage/persistent",
 
     # Enclave loader.
     "enclave/common",

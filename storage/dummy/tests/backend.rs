@@ -9,16 +9,15 @@ use ekiden_storage_dummy::DummyStorageBackend;
 #[test]
 fn test_dummy_backend() {
     let backend = DummyStorageBackend::new();
+    let key = H256::from(digest::digest(&digest::SHA512_256, "value").as_ref());
 
-    assert!(backend.get(b"namespace", b"key").wait().is_err());
+    assert!(backend.get(key).wait().is_err());
     backend
-        .insert(b"namespace", b"key", b"value")
+        .insert(b"value")
         .wait()
         .unwrap();
     assert_eq!(
-        backend.get(b"namespace", b"key").wait(),
+        backend.get(key).wait(),
         Ok(b"value".to_vec())
     );
-    backend.remove(b"namespace", b"key").wait().unwrap();
-    assert!(backend.get(b"namespace", b"key").wait().is_err());
 }
