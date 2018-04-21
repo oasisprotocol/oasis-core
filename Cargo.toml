@@ -19,8 +19,11 @@ members = [
     "consensus/dummy",
 
     # Storage interface.
+    "storage/api",
     "storage/base",
     "storage/dummy",
+    "storage/frontend",
+    "storage/persistent",
 
     # Enclave loader (+ attestation).
     "enclave/common",
