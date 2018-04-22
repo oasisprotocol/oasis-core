@@ -2,7 +2,9 @@ extern crate ekiden_common;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_dummy;
 
+use ekiden_common::bytes::H256;
 use ekiden_common::futures::Future;
+use ekiden_common::ring::digest;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
