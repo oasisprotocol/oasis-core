@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
+use ekiden_common::hash::EncodedListHash;
 use ekiden_common::serializer::{Serializable};
 use ekiden_storage_base::StorageBackend;
 
@@ -14,7 +15,7 @@ use sled::{ConfigBuilder, Tree};
 
 struct PersistentStorageBackendInner {
     storage: Tree,
-    backing: File,
+    backing: String,
 }
 
 pub struct PersistentStorageBackend {
@@ -25,12 +26,13 @@ impl PersistentStorageBackend {
   pub fn new(path: &str) -> Result<Self> {
     let config = ConfigBuilder::default()
         .path(path);
-    let path = String::from(path);
-    let backing = File::open(Path::new(&path))?;
+
+    let path = path.to_owned();
+
     Ok(Self {
         inner: Arc::new(Mutex::new(PersistentStorageBackendInner{
             storage: Tree::start(config.build()).unwrap(),
-            backing: backing,
+            backing: path,
         })),
     })
   }
@@ -68,23 +70,25 @@ impl StorageBackend for PersistentStorageBackend {
       let inner = self.inner.clone();
       let value = value.to_owned();
 
-      let key = vec![];
+      let key = value.get_encoded_hash();
 
       Box::new(future::lazy(move || {
           let inner = inner.lock().unwrap();
-          Ok(inner.storage.set(key, value)?)
+          Ok(inner.storage.set(key.to_vec(), value)?)
       }))
   }
 }
 
-/// PersistentStorageBackend's serialize for transition to other nodes.
+/// PersistentStorageBackend can write to a stream for transition to other nodes.
 impl Serializable for PersistentStorageBackend {
+    // TODO: should be a future, ideally.
     fn write_to(&self, writer: &mut Write) -> Result<usize> {
         let inner = self.inner.clone();
         let inner = inner.lock().unwrap();
         inner.storage.flush()?;
 
-        match copy(&mut inner.backing, writer) {
+        let mut backing = File::open(Path::new(&inner.backing))?;
+        match copy(&mut backing, writer) {
             Ok(n) => Ok(n as usize),
             Err(e) => Err(Error::new(e.description())),
         }
