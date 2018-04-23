@@ -2,15 +2,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_common::ring::digest;
 use ekiden_storage_base::StorageBackend;
 
 struct DummyStorageBackendInner {
     /// In-memory storage.
-    storage: HashMap<H256, Vec<u8>>,
+    storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 /// Dummy in-memory storage backend.
@@ -31,7 +29,7 @@ impl DummyStorageBackend {
 impl StorageBackend for DummyStorageBackend {
     fn get(&self, key: &[u8]) -> BoxFuture<Vec<u8>> {
         let inner = self.inner.clone();
-        let key = H256::from(key);
+        let key = key.to_vec();
 
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
@@ -43,9 +41,9 @@ impl StorageBackend for DummyStorageBackend {
         }))
     }
 
-    fn insert(&self, value: &[u8]) -> BoxFuture<()> {
+    fn insert(&self, value: &[u8], _expiry: usize) -> BoxFuture<()> {
         let inner = self.inner.clone();
-        let key = H256::from(digest::digest(&digest::SHA512_256, &value).as_ref());
+        let key = Self::to_key(&value);
         let value_owned = value.to_owned();
 
         Box::new(future::lazy(move || {

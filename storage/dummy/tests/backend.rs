@@ -2,18 +2,16 @@ extern crate ekiden_common;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_dummy;
 
-use ekiden_common::bytes::H256;
 use ekiden_common::futures::Future;
-use ekiden_common::ring::digest;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
 #[test]
 fn test_dummy_backend() {
     let backend = DummyStorageBackend::new();
-    let key = H256::from(digest::digest(&digest::SHA512_256, b"value").as_ref());
+    let key = StorageBackend::to_key(b"value");
 
     assert!(backend.get(&key).wait().is_err());
-    backend.insert(b"value").wait().unwrap();
+    backend.insert(b"value", 10).wait().unwrap();
     assert_eq!(backend.get(&key).wait(), Ok(b"value".to_vec()));
 }
