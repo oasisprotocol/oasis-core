@@ -9,7 +9,7 @@ use ekiden_storage_dummy::DummyStorageBackend;
 #[test]
 fn test_dummy_backend() {
     let backend = DummyStorageBackend::new();
-    let key = StorageBackend::to_key(b"value");
+    let key = DummyStorageBackend::to_key(b"value");
 
     assert!(backend.get(&key).wait().is_err());
     backend.insert(b"value", 10).wait().unwrap();
