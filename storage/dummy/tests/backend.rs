@@ -11,9 +11,9 @@ use ekiden_storage_dummy::DummyStorageBackend;
 #[test]
 fn test_dummy_backend() {
     let backend = DummyStorageBackend::new();
-    let key = H256::from(digest::digest(&digest::SHA512_256, "value").as_ref());
+    let key = H256::from(digest::digest(&digest::SHA512_256, b"value").as_ref());
 
-    assert!(backend.get(key).wait().is_err());
+    assert!(backend.get(&key).wait().is_err());
     backend.insert(b"value").wait().unwrap();
-    assert_eq!(backend.get(key).wait(), Ok(b"value".to_vec()));
+    assert_eq!(backend.get(&key).wait(), Ok(b"value".to_vec()));
 }
