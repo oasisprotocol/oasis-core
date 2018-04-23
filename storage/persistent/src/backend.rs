@@ -2,13 +2,13 @@
 use std::error::Error as stdError;
 use std::fs::File;
 use std::io::{copy, Read, Write};
-use std::path::{Path};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
 use ekiden_common::hash::EncodedListHash;
-use ekiden_common::serializer::{Serializable};
+use ekiden_common::serializer::Serializable;
 use ekiden_storage_base::StorageBackend;
 
 use sled::{ConfigBuilder, Tree};
@@ -19,64 +19,63 @@ struct PersistentStorageBackendInner {
 }
 
 pub struct PersistentStorageBackend {
-  inner: Arc<Mutex<PersistentStorageBackendInner>>,
+    inner: Arc<Mutex<PersistentStorageBackendInner>>,
 }
 
 impl PersistentStorageBackend {
-  pub fn new(path: &str) -> Result<Self> {
-    let config = ConfigBuilder::default()
-        .path(path);
+    pub fn new(path: &str) -> Result<Self> {
+        let config = ConfigBuilder::default().path(path);
 
-    let path = path.to_owned();
+        let path = path.to_owned();
 
-    Ok(Self {
-        inner: Arc::new(Mutex::new(PersistentStorageBackendInner{
-            storage: Tree::start(config.build()).unwrap(),
-            backing: path,
-        })),
-    })
-  }
+        Ok(Self {
+            inner: Arc::new(Mutex::new(PersistentStorageBackendInner {
+                storage: Tree::start(config.build()).unwrap(),
+                backing: path,
+            })),
+        })
+    }
 
-  // TODO: is this the right interface, or should we have knoweldge of the ID of the contract
-  // the storage backend is being created for.
-  fn read_from(instance_id: &str, reader: &mut Read) -> Result<Self> {
-      let path = Path::new(instance_id);
-      let mut file: File = File::open(path)?;
-      copy(reader, &mut file)?;
-      let path = match path.to_str() {
-          Some(p) => p,
-          None => return Err(Error::new("Instance unusable as file")),
-      };
-      PersistentStorageBackend::new(path)
-  }
+    // TODO: is this the right interface, or should we have knoweldge of the ID of the contract
+    // the storage backend is being created for.
+    fn read_from(instance_id: &str, reader: &mut Read) -> Result<Self> {
+        let path = Path::new(instance_id);
+        let mut file: File = File::open(path)?;
+        copy(reader, &mut file)?;
+        let path = match path.to_str() {
+            Some(p) => p,
+            None => return Err(Error::new("Instance unusable as file")),
+        };
+        PersistentStorageBackend::new(path)
+    }
 }
 
 /// StorageBackend defines the actual storage interface of getting and setting data.
 impl StorageBackend for PersistentStorageBackend {
-  fn get(&self, key: &[u8]) -> BoxFuture<Vec<u8>> {
-      let inner = self.inner.clone();
-      let key = key.to_owned();
+    fn get(&self, key: &[u8]) -> BoxFuture<Vec<u8>> {
+        let inner = self.inner.clone();
+        let key = key.to_owned();
 
-      Box::new(future::lazy(move || {
-          let inner = inner.lock().unwrap();
-          match inner.storage.get(&key) {
-              Ok(Some(vec)) => Ok(vec),
-              _ => Err(Error::new("no key found")),
-          }
-      }))
-  }
+        Box::new(future::lazy(move || {
+            let inner = inner.lock().unwrap();
+            match inner.storage.get(&key) {
+                Ok(Some(vec)) => Ok(vec),
+                _ => Err(Error::new("no key found")),
+            }
+        }))
+    }
 
-  fn insert(&self, value: &[u8]) -> BoxFuture<()> {
-      let inner = self.inner.clone();
-      let value = value.to_owned();
+    fn insert(&self, value: &[u8]) -> BoxFuture<()> {
+        let inner = self.inner.clone();
+        let value = value.to_owned();
 
-      let key = value.get_encoded_hash();
+        let key = value.get_encoded_hash();
 
-      Box::new(future::lazy(move || {
-          let inner = inner.lock().unwrap();
-          Ok(inner.storage.set(key.to_vec(), value)?)
-      }))
-  }
+        Box::new(future::lazy(move || {
+            let inner = inner.lock().unwrap();
+            Ok(inner.storage.set(key.to_vec(), value)?)
+        }))
+    }
 }
 
 /// PersistentStorageBackend can write to a stream for transition to other nodes.

@@ -14,12 +14,6 @@ fn test_dummy_backend() {
     let key = H256::from(digest::digest(&digest::SHA512_256, "value").as_ref());
 
     assert!(backend.get(key).wait().is_err());
-    backend
-        .insert(b"value")
-        .wait()
-        .unwrap();
-    assert_eq!(
-        backend.get(key).wait(),
-        Ok(b"value".to_vec())
-    );
+    backend.insert(b"value").wait().unwrap();
+    assert_eq!(backend.get(key).wait(), Ok(b"value".to_vec()));
 }
