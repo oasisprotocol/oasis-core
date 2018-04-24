@@ -1,6 +1,8 @@
 #![feature(test)]
 
 extern crate protobuf;
+extern crate serde;
+extern crate serde_cbor;
 extern crate sodalite;
 extern crate test;
 
@@ -11,8 +13,9 @@ extern crate ekiden_rpc_trusted;
 
 use test::Bencher;
 
-use protobuf::{Message, MessageStatic};
-use protobuf::well_known_types::Empty;
+use protobuf::Message;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use ekiden_common::error::Result;
 use ekiden_common::random;
@@ -24,6 +27,9 @@ use ekiden_rpc_common::secure_channel::{create_box, open_box, MonotonicNonceGene
 use ekiden_rpc_trusted::dispatcher::{rpc_call, Dispatcher, EnclaveMethod};
 use ekiden_rpc_trusted::request::Request;
 
+/// Dummy type for tests.
+type Dummy = u32;
+
 /// Register an empty method.
 fn register_empty_method() {
     let mut dispatcher = Dispatcher::get();
@@ -34,7 +40,7 @@ fn register_empty_method() {
             name: "benchmark_empty".to_owned(),
             client_attestation_required: false,
         },
-        |_request: &Request<Empty>| -> Result<Empty> { Ok(Empty::new()) },
+        |_request: &Request<Dummy>| -> Result<Dummy> { Ok(42) },
     ));
 }
 
@@ -67,7 +73,7 @@ fn init_secure_channel(
 
     // Dispatch channel init request.
     let request = Request::new(
-        request.write_to_bytes().unwrap(),
+        serde_cbor::to_vec(&request).unwrap(),
         api::METHOD_CHANNEL_INIT.to_owned(),
         None,
         None,
@@ -79,7 +85,7 @@ fn init_secure_channel(
     assert_eq!(response.get_code(), api::PlainClientResponse_Code::SUCCESS);
 
     let response: api::ChannelInitResponse =
-        protobuf::parse_from_bytes(response.get_payload()).unwrap();
+        serde_cbor::from_slice(response.get_payload()).unwrap();
 
     let mut nonce_generator = RandomNonceGenerator::new();
     let stpk_vec = open_box(
@@ -113,12 +119,12 @@ fn make_secure_channel_request<S, Rq, Rs>(
 ) -> Rs
 where
     S: Into<String>,
-    Rq: Message,
-    Rs: Message + MessageStatic,
+    Rq: Serialize,
+    Rs: DeserializeOwned,
 {
     let mut plain_client_request = api::PlainClientRequest::new();
     plain_client_request.set_method(method.into());
-    plain_client_request.set_payload(request.write_to_bytes().unwrap());
+    plain_client_request.set_payload(serde_cbor::to_vec(&request).unwrap());
 
     let mut crypto_box = create_box(
         &plain_client_request.write_to_bytes().unwrap(),
@@ -139,7 +145,7 @@ where
     let mut enclave_request = api::EnclaveRequest::new();
     enclave_request.mut_client_request().push(client_request);
 
-    let enclave_request = enclave_request.write_to_bytes().unwrap();
+    let enclave_request = serde_cbor::to_vec(&enclave_request).unwrap();
 
     let mut response: Vec<u8> = Vec::with_capacity(64 * 1024);
     let mut response_length = 0;
@@ -158,7 +164,7 @@ where
     }
 
     // Decrypt response.
-    let enclave_response: api::EnclaveResponse = protobuf::parse_from_bytes(&response).unwrap();
+    let enclave_response: api::EnclaveResponse = serde_cbor::from_slice(&response).unwrap();
     assert_eq!(enclave_response.get_client_response().len(), 1);
 
     let client_response = &enclave_response.get_client_response()[0];
@@ -180,7 +186,7 @@ where
         api::PlainClientResponse_Code::SUCCESS
     );
 
-    protobuf::parse_from_bytes(&plain_response.get_payload()).unwrap()
+    serde_cbor::from_slice(plain_response.get_payload()).unwrap()
 }
 
 /// Benchmark dispatch of a plain empty Protocol Buffers request.
@@ -190,7 +196,7 @@ fn benchmark_dispatch_empty_request(b: &mut Bencher) {
 
     // Prepare a dummy request.
     let request = Request::new(
-        Empty::new().write_to_bytes().unwrap(),
+        serde_cbor::to_vec(&42u32).unwrap(),
         "benchmark_empty".to_owned(),
         None,
         None,
@@ -235,25 +241,25 @@ fn benchmark_secure_channel_empty_request(b: &mut Bencher) {
     let mut shared_key: Option<sodalite::SecretboxKey> = None;
 
     // First request to initialize shared key.
-    let _response: Empty = make_secure_channel_request(
+    let _response: Dummy = make_secure_channel_request(
         &mut nonce_generator,
         &contract_public_key,
         &public_key,
         &private_key,
         &mut shared_key,
         "benchmark_empty",
-        Empty::new(),
+        42u32,
     );
 
     b.iter(|| {
-        let _response: Empty = make_secure_channel_request(
+        let _response: Dummy = make_secure_channel_request(
             &mut nonce_generator,
             &contract_public_key,
             &public_key,
             &private_key,
             &mut shared_key,
             "benchmark_empty",
-            Empty::new(),
+            42u32,
         );
     });
 }
@@ -274,14 +280,14 @@ fn benchmark_secure_channel_empty_request_no_shared_key(b: &mut Bencher) {
     b.iter(|| {
         // Use an empty shared key each time to force expensive public key ops.
         let mut shared_key: Option<sodalite::SecretboxKey> = None;
-        let _response: Empty = make_secure_channel_request(
+        let _response: Dummy = make_secure_channel_request(
             &mut nonce_generator,
             &contract_public_key,
             &public_key,
             &private_key,
             &mut shared_key,
             "benchmark_empty",
-            Empty::new(),
+            42u32,
         );
     });
 }

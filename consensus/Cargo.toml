@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-consensus"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden consensus node"
 keywords = ["ekiden"]
@@ -8,8 +8,8 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-ekiden-core = { path = "../core/common", version = "0.1.0-alpha.3" }
-ekiden-consensus-api = { path = "./api", version = "0.1.0-alpha.3" }
+ekiden-core = { path = "../core/common", version = "0.1.0-alpha.4" }
+ekiden-consensus-api = { path = "./api", version = "0.1.0-alpha.4" }
 abci = { git = "https://github.com/ekiden/tendermint-abci" }
 clap = "2.29.1"
 futures = "0.1"
@@ -19,7 +19,7 @@ tokio-proto = "0.1"
 grpcio = "0.2.2"
 
 [build-dependencies]
-ekiden-tools = { path = "../tools", version = "0.1.0-alpha.3" }
+ekiden-tools = { path = "../tools", version = "0.1.0-alpha.4" }
 protoc-grpcio = "0.1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.build-dependencies]

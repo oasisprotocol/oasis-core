@@ -7,12 +7,13 @@ use std::path::Path;
 use std::process::Command;
 
 use cc;
+use filebuffer::FileBuffer;
 use mktemp;
 use protobuf;
 use protoc_rust;
 use sgx_edl::EDL;
 
-use ekiden_common::error::{Error, Result};
+use super::error::Result;
 
 /// Arguments for protoc.
 #[derive(Debug, Default)]
@@ -245,7 +246,7 @@ pub fn protoc(args: ProtocArgs) {
             for message_type in file.get_message_type() {
                 writeln!(
                     &mut out_file,
-                    "impl_serializable_protobuf!({});",
+                    "impl_serde_for_protobuf!({});",
                     message_type.get_name()
                 ).unwrap();
             }
@@ -314,8 +315,8 @@ pub fn get_contract_identity<P: AsRef<Path>>(contract: P) -> Result<Vec<u8>> {
     const SIGSTRUCT_HEADER_2: &[u8] =
         b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
 
-    let contract_file = fs::File::open(contract)?;
-    let mut reader = io::BufReader::new(contract_file);
+    let contract_file = FileBuffer::open(contract)?;
+    let mut reader = io::Cursor::new(&contract_file);
     loop {
         // Update current offset.
         let current_offset = reader.seek(io::SeekFrom::Current(0)).unwrap();
@@ -336,7 +337,7 @@ pub fn get_contract_identity<P: AsRef<Path>>(contract: P) -> Result<Vec<u8>> {
                 break;
             }
 
-            return Err(Error::new("Failed to find SIGSTRUCT header in contract"));
+            return Err("Failed to find SIGSTRUCT header in contract".into());
         } else {
             // Structure not found at current offset, move to next offset.
             reader.seek(io::SeekFrom::Start(current_offset + 1))?;

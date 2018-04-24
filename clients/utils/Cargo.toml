@@ -1,6 +1,6 @@
 [package]
 name = "client-utils"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = [
     "Nick Hynes <nhynes@berkeley.edu>",
     "Jernej Kos <jernej@kos.mx>"

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use toml;
 
-use ekiden_common::error::{Error, Result};
+use super::error::Result;
 
 /// Abstract crate source.
 pub trait CrateSource {
@@ -119,7 +119,7 @@ impl ProjectRoot {
                 current_dir = parent;
             } else {
                 // We've reached the root.
-                return Err(Error::new("failed to discover project root"));
+                return Err("failed to discover project root".into());
             }
         }
     }
@@ -155,7 +155,7 @@ impl ProjectRoot {
                                 .iter()
                                 .any(|m| current_dir.join(m) == path)
                             {
-                                return Err(Error::new(format!(
+                                return Err(format!(
                                     "current package believes it's in a workspace when it's not: \n\
                                     current:   {}\n\
                                     workspace: {}\n\
@@ -166,7 +166,7 @@ impl ProjectRoot {
                                     current_dir.to_str().unwrap(),
                                     path.strip_prefix(current_dir).unwrap().to_str().unwrap(),
                                     manifest_path.to_str().unwrap()
-                                )));
+                                ).into());
                             }
 
                             break current_dir.to_owned();

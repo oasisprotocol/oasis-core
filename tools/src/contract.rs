@@ -1,4 +1,5 @@
 //! Ekiden contract builder.
+use std;
 use std::env;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
@@ -8,9 +9,8 @@ use std::process::Command;
 use ansi_term::Colour::Green;
 use mktemp::Temp;
 
-use ekiden_common::error::{Error, Result};
-
 use super::cargo;
+use super::error::Result;
 use super::utils::SgxMode;
 
 /// Xargo configuration file.
@@ -42,6 +42,8 @@ pub struct ContractBuilder<'a> {
     target_path: PathBuf,
     /// Source crate location.
     source: Box<cargo::CrateSource + 'a>,
+    /// Path of a file to append to the dummy top-level Cargo.toml.
+    cargo_addendum: Option<PathBuf>,
     /// Build verbosity.
     verbose: bool,
     /// Release mode.
@@ -60,6 +62,7 @@ impl<'a> ContractBuilder<'a> {
         output_path: PathBuf,
         target_path: Option<PathBuf>,
         source: Box<cargo::CrateSource + 'a>,
+        cargo_addendum: Option<PathBuf>,
     ) -> Result<Self> {
         let build_temporary_dir = Temp::new_dir()?;
         let build_path = build_temporary_dir.to_path_buf();
@@ -71,6 +74,7 @@ impl<'a> ContractBuilder<'a> {
             build_temporary_dir,
             target_path: target_path.unwrap_or(build_path.join("target")),
             source,
+            cargo_addendum,
             verbose: false,
             release: false,
             intel_sgx_sdk: match env::var("INTEL_SGX_SDK") {
@@ -184,6 +188,10 @@ impl<'a> ContractBuilder<'a> {
         writeln!(&mut cargo_toml, "[dependencies]")?;
         write!(&mut cargo_toml, "{} = ", self.crate_name)?;
         self.source.write_location(&mut cargo_toml)?;
+        if let Some(cargo_addendum_path) = self.cargo_addendum.as_ref() {
+            let mut cargo_addendum = File::open(cargo_addendum_path)?;
+            std::io::copy(&mut cargo_addendum, &mut cargo_toml)?;
+        }
         drop(cargo_toml);
 
         // Include Xargo configuration files.
@@ -223,10 +231,10 @@ impl<'a> ContractBuilder<'a> {
             .current_dir(&self.build_path)
             .status()?;
         if !xargo_status.success() {
-            return Err(Error::new(format!(
+            return Err(format!(
                 "failed to build, xargo exited with status {}!",
                 xargo_status.code().unwrap()
-            )));
+            ).into());
         }
 
         Ok(())
@@ -245,7 +253,7 @@ impl<'a> ContractBuilder<'a> {
         // Configure Intel SGX SDK path and library names.
         let intel_sgx_sdk_lib_path = match self.intel_sgx_sdk {
             Some(ref sdk) => sdk.join("lib64"),
-            None => return Err(Error::new("path to Intel SGX SDK not configured")),
+            None => return Err("path to Intel SGX SDK not configured".into()),
         };
         let (trts_library_name, service_library_name) = match self.sgx_mode {
             SgxMode::Hardware => ("sgx_trts", "sgx_tservice"),
@@ -301,10 +309,10 @@ impl<'a> ContractBuilder<'a> {
             .current_dir(&self.build_path)
             .status()?;
         if !gcc_status.success() {
-            return Err(Error::new(format!(
+            return Err(format!(
                 "failed to link, g++ exited with status {}!",
                 gcc_status.code().unwrap()
-            )));
+            ).into());
         }
 
         Ok(())
@@ -322,7 +330,7 @@ impl<'a> ContractBuilder<'a> {
 
         let signer_path = match self.intel_sgx_sdk {
             Some(ref sdk) => sdk.join("bin/x64/sgx_sign"),
-            None => return Err(Error::new("path to Intel SGX SDK not configured")),
+            None => return Err("path to Intel SGX SDK not configured".into()),
         };
 
         // Determine signing key.
@@ -354,10 +362,10 @@ impl<'a> ContractBuilder<'a> {
             .arg(&enclave_config_path)
             .status()?;
         if !signer_status.success() {
-            return Err(Error::new(format!(
+            return Err(format!(
                 "failed to sign, sgx_sign exited with status {}!",
                 signer_status.code().unwrap()
-            )));
+            ).into());
         }
 
         Ok(())

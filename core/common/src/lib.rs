@@ -1,6 +1,7 @@
 #![feature(use_extern_macros)]
 
 extern crate ekiden_common;
+extern crate ekiden_contract_common;
 extern crate ekiden_enclave_common;
 extern crate ekiden_rpc_common;
 
@@ -12,4 +13,8 @@ pub mod enclave {
 
 pub mod rpc {
     pub use ekiden_rpc_common::*;
+}
+
+pub mod contract {
+    pub use ekiden_contract_common::*;
 }

@@ -4,6 +4,8 @@ extern crate sgx_urts;
 
 #[macro_use]
 extern crate lazy_static;
+extern crate serde;
+extern crate serde_cbor;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_untrusted;

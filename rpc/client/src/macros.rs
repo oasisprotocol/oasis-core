@@ -33,23 +33,25 @@ macro_rules! create_client_rpc {
         )*
     ) => {
         mod $output_module {
+            use std::sync::Arc;
+
             use $crate::*;
-            use $crate::backend::ContractClientBackend;
+            use $crate::backend::RpcClientBackend;
 
             pub use $api_module::*;
 
-            pub struct Client<Backend: ContractClientBackend + 'static> {
-                client: ContractClient<Backend>,
+            pub struct Client<Backend: RpcClientBackend + 'static> {
+                client: RpcClient<Backend>,
             }
 
             #[allow(dead_code)]
-            impl<Backend: ContractClientBackend + 'static> Client<Backend> {
+            impl<Backend: RpcClientBackend + 'static> Client<Backend> {
                 /// Create new client instance.
-                pub fn new(backend: Backend,
+                pub fn new(backend: Arc<Backend>,
                            mr_enclave: $crate::macros::quote::MrEnclave) -> Self {
 
                     Client {
-                        client: ContractClient::new(
+                        client: RpcClient::new(
                             backend,
                             mr_enclave,
                             $client_attestation_required,

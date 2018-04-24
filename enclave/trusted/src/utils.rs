@@ -2,10 +2,10 @@
 use std::io::Cursor;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
+use serde::{Deserialize, Serialize};
+use serde_cbor;
 #[cfg(target_env = "sgx")]
 use sgx_trts::trts::rsgx_raw_is_outside_enclave;
-
-use ekiden_common::serializer::{Deserializable, Serializable};
 
 /// Deserialize request buffer from untrusted memory.
 ///
@@ -19,9 +19,9 @@ use ekiden_common::serializer::{Deserializable, Serializable};
 /// This function will panic if the source buffer is null or not in untrusted memory
 /// as this may compromise enclave security. Failing to deserialize the request
 /// buffer will also cause a panic.
-pub fn read_enclave_request<R>(src: *const u8, src_length: usize) -> R
+pub fn read_enclave_request<'a, R>(src: *const u8, src_length: usize) -> R
 where
-    R: Deserializable,
+    R: Deserialize<'a>,
 {
     if src.is_null() {
         panic!("Source buffer must not be null");
@@ -39,11 +39,10 @@ where
     }
 
     let src = unsafe { from_raw_parts(src, src_length) };
-    let mut cursor = Cursor::new(src);
-    R::read_from(&mut cursor).expect("Malformed enclave request")
+    serde_cbor::from_slice(src).expect("Malformed enclave request")
 }
 
-/// Copy serializable in trusted memory to response buffer in untrusted memory.
+/// Serialize value in trusted memory to response buffer in untrusted memory.
 ///
 /// # EDL
 ///
@@ -57,7 +56,7 @@ where
 /// untrusted memory as this may compromise enclave security.
 pub fn write_enclave_response<S>(src: &S, dst: *mut u8, dst_capacity: usize, dst_length: *mut usize)
 where
-    S: Serializable,
+    S: Serialize,
 {
     if dst.is_null() {
         panic!("Destination buffer must not be null");
@@ -74,13 +73,11 @@ where
         }
     }
 
-    // Serialize message to output buffer.
     let dst = unsafe { from_raw_parts_mut(dst, dst_capacity) };
     let mut cursor = Cursor::new(dst);
-    let length = src.write_to(&mut cursor)
-        .expect("Failed to write enclave response");
+    serde_cbor::to_writer(&mut cursor, src).expect("Failed to encode enclave response");
 
     unsafe {
-        *dst_length = length;
+        *dst_length = cursor.position() as usize;
     }
 }

@@ -28,14 +28,17 @@ fn get_state_key() -> Result<sodalite::SecretboxKey> {
 
 /// Open encrypted state box.
 pub fn decrypt_state(encrypted_state: &CryptoSecretbox) -> Result<Vec<u8>> {
-    let state_key = get_state_key()?;
     let encrypted_state_ciphertext = encrypted_state.get_ciphertext();
+    if encrypted_state_ciphertext.is_empty() {
+        return Ok(vec![]);
+    }
 
     let mut encrypted_state_nonce: sodalite::SecretboxNonce = [0; sodalite::SECRETBOX_NONCE_LEN];
     encrypted_state_nonce.copy_from_slice(encrypted_state.get_nonce());
 
     let mut state_raw_padded = vec![0; encrypted_state_ciphertext.len()];
 
+    let state_key = get_state_key()?;
     match sodalite::secretbox_open(
         &mut state_raw_padded,
         encrypted_state_ciphertext,

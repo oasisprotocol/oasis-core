@@ -1,51 +1,65 @@
+use std;
+use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::error::Error as StdError;
+use std::fmt::Write;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::{Duration, Instant};
+
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
 use protobuf;
 use protobuf::Message;
 
+use lru_cache::LruCache;
 use thread_local::ThreadLocal;
 
-use futures::Future;
-use futures::sync::oneshot;
-
-use time;
-
-use std;
-use std::borrow::Borrow;
-use std::error::Error as StdError;
-use std::fmt::Write;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, Receiver, Sender};
-
-use ekiden_compute_api::{CallContractRequest, CallContractResponse, Compute};
+use ekiden_compute_api::{CallContractRequest, CallContractResponse, Compute,
+                         WaitContractCallRequest, WaitContractCallResponse};
 use ekiden_consensus_api::{self, ConsensusClient};
+use ekiden_core::bytes::H256;
+use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
 use ekiden_core::error::{Error, Result};
+use ekiden_core::futures::Future;
+use ekiden_core::futures::sync::oneshot;
+use ekiden_core::hash::EncodedHash;
 use ekiden_core::rpc::api;
-use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc};
+use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
 use super::ias::IAS;
 use super::instrumentation;
 
-/// This struct describes a call sent to the worker thread.
-struct QueuedRequest {
-    /// This is the request from the client.
-    rpc_request: CallContractRequest,
-    /// This is a channel where the worker should send the response. The channel is only
-    /// available until it has been used for sending a response and is None afterwards.
-    response_sender: Option<oneshot::Sender<Result<CallContractResponse>>>,
+/// Result bytes.
+type BytesResult = Result<Vec<u8>>;
+/// Result bytes sender part of the channel.
+type BytesSender = oneshot::Sender<BytesResult>;
+
+/// Call batch that is being constructed.
+#[derive(Debug)]
+struct PendingBatch {
+    /// Instant when first item was queued in the batch.
+    start: Instant,
+    /// Call batch.
+    batch: CallBatch,
 }
 
-/// This struct associates a response with a request.
-struct QueuedResponse<'a> {
-    /// This is the request. Notably, it owns the channel where we
-    /// will be sending the response.
-    queued_request: &'a mut QueuedRequest,
-    /// This is the response.
-    response: Result<CallContractResponse>,
+/// Command sent to the worker thread.
+#[derive(Debug)]
+enum Command {
+    /// RPC call from a client.
+    RpcCall(Vec<u8>, BytesSender),
+    /// Contract call batch process request.
+    ContractCallBatch(CallBatch),
+    /// Contract call subscription request.
+    SubscribeCall(H256, BytesSender),
+    /// Ping worker.
+    Ping,
 }
 
 struct CachedStateInitialized {
@@ -53,7 +67,7 @@ struct CachedStateInitialized {
     height: u64,
 }
 
-struct ComputeServerWorker {
+struct Worker {
     /// Consensus client.
     consensus: Option<ConsensusClient>,
     /// Contract running in an enclave.
@@ -69,10 +83,18 @@ struct ComputeServerWorker {
     /// Maximum batch size.
     max_batch_size: usize,
     /// Maximum batch timeout.
-    max_batch_timeout: u64,
+    max_batch_timeout: Duration,
+    /// Current batch.
+    current_batch: Option<PendingBatch>,
+    /// Batch call subscriptions.
+    subscriptions_call: HashMap<H256, Vec<BytesSender>>,
+    /// Processed calls without subscriptions. We keep a LRU cache of such call results
+    /// around so that subscription requests can arrive even after the batch has been
+    /// processed.
+    missed_calls: LruCache<H256, BytesResult>,
 }
 
-impl ComputeServerWorker {
+impl Worker {
     fn new(
         contract_filename: &str,
         consensus_host: &str,
@@ -96,16 +118,19 @@ impl ComputeServerWorker {
             }
         };
 
-        ComputeServerWorker {
+        Worker {
             contract,
             identity_proof,
             cached_state: None,
             ins: instrumentation::WorkerMetrics::new(),
             max_batch_size: max_batch_size,
-            max_batch_timeout: max_batch_timeout,
+            max_batch_timeout: Duration::from_millis(max_batch_timeout),
             // Connect to consensus node
             // TODO: Use TLS client.
             consensus: consensus,
+            current_batch: None,
+            subscriptions_call: HashMap::new(),
+            missed_calls: LruCache::new(max_batch_size * 2),
         }
     }
 
@@ -170,10 +195,7 @@ impl ComputeServerWorker {
         Ok(csi.encrypted_state.clone())
     }
 
-    fn call_contract_batch_fallible<'a>(
-        &mut self,
-        request_batch: &'a mut [QueuedRequest],
-    ) -> Result<Vec<QueuedResponse<'a>>> {
+    fn call_contract_batch_fallible(&mut self, batch: &CallBatch) -> Result<OutputBatch> {
         // Get state updates from consensus
         let encrypted_state_opt = if self.consensus.is_some() {
             let _consensus_get_timer = self.ins.consensus_get_time.start_timer();
@@ -221,58 +243,20 @@ impl ComputeServerWorker {
         #[cfg(feature = "no_diffs")]
         let orig_encrypted_state_opt = None;
 
-        // Call contract with batch of requests.
-        let mut enclave_request = api::EnclaveRequest::new();
-
-        // Prepare batch of requests.
-        {
-            let client_requests = enclave_request.mut_client_request();
-            for ref queued_request in request_batch.iter() {
-                // TODO: Why doesn't enclave request contain bytes directly?
-                let client_request =
-                    protobuf::parse_from_bytes(queued_request.rpc_request.get_payload())?;
-                client_requests.push(client_request);
-            }
-        }
-
         // Add state if it is available.
         if let Some(encrypted_state) = encrypted_state_opt {
             self.contract.db_state_set(&encrypted_state)?;
         }
 
-        let enclave_request_bytes = enclave_request.write_to_bytes()?;
-        let enclave_response_bytes = {
+        let outputs = {
             let _enclave_timer = self.ins.req_time_enclave.start_timer();
-            self.contract.call_raw(enclave_request_bytes)
+            self.contract.contract_call_batch(batch)
         }?;
-
-        let enclave_response: api::EnclaveResponse =
-            protobuf::parse_from_bytes(&enclave_response_bytes)?;
-
-        // Assert equal number of responses, fail otherwise (corrupted response).
-        if enclave_response.get_client_response().len() != request_batch.len() {
-            return Err(Error::new(
-                "Corrupted response (response count != request count)",
-            ));
-        }
-
-        let mut response_batch = vec![];
-        for (index, queued_request) in request_batch.iter_mut().enumerate() {
-            let mut response = CallContractResponse::new();
-            // TODO: Why doesn't enclave response contain bytes directly?
-            response
-                .set_payload((&enclave_response.get_client_response()[index]).write_to_bytes()?);
-
-            response_batch.push(QueuedResponse {
-                queued_request,
-                response: Ok(response),
-            });
-        }
 
         // Check if any state was produced. In case no state was produced, this means that
         // no request caused a state update and thus no state update is required.
         let encrypted_state = self.contract.db_state_get()?;
-        if !encrypted_state.is_empty() {
+        if self.consensus.is_some() && !encrypted_state.is_empty() {
             let _consensus_set_timer = self.ins.consensus_set_time.start_timer();
             match orig_encrypted_state_opt {
                 Some(orig_encrypted_state) => {
@@ -297,86 +281,186 @@ impl ComputeServerWorker {
             }
         }
 
-        Ok(response_batch)
+        Ok(outputs)
     }
 
-    fn call_contract_batch(&mut self, mut request_batch: Vec<QueuedRequest>) {
-        // Contains a batch-wide error if one has occurred.
-        let batch_error: Option<Error>;
-
+    /// Handle RPC call.
+    fn handle_rpc_call(&self, request: Vec<u8>) -> BytesResult {
+        // Call contract.
+        let mut enclave_request = api::EnclaveRequest::new();
         {
-            match self.call_contract_batch_fallible(&mut request_batch) {
-                Ok(response_batch) => {
-                    // No batch-wide errors. Send out per-call responses.
-                    for queued_response in response_batch {
-                        let sender = queued_response
-                            .queued_request
-                            .response_sender
-                            .take()
-                            .unwrap();
-                        sender.send(queued_response.response).unwrap();
+            let client_requests = enclave_request.mut_client_request();
+            // TODO: Why doesn't enclave request contain bytes directly?
+            let client_request = protobuf::parse_from_bytes(&request)?;
+            client_requests.push(client_request);
+        }
+
+        let enclave_response = {
+            let _enclave_timer = self.ins.req_time_enclave.start_timer();
+            self.contract.call(enclave_request)
+        }?;
+
+        match enclave_response.get_client_response().first() {
+            Some(enclave_response) => Ok(enclave_response.write_to_bytes()?),
+            None => Err(Error::new("no response to rpc call")),
+        }
+    }
+
+    /// Handle contract call batch.
+    fn handle_contract_batch(&mut self, batch: CallBatch) {
+        let outputs = self.call_contract_batch_fallible(&batch);
+
+        match outputs {
+            Ok(mut outputs) => {
+                // No errors, send per-call outputs.
+                for (output, call) in outputs.drain(..).zip(batch.iter()) {
+                    let call_id = call.get_encoded_hash();
+                    if let Some(senders) = self.subscriptions_call.remove(&call_id) {
+                        for sender in senders {
+                            // Explicitly ignore send errors as the receiver may have gone.
+                            drop(sender.send(Ok(output.clone())));
+                        }
                     }
 
-                    return;
+                    self.missed_calls.insert(call_id, Ok(output));
                 }
-                Err(error) => {
-                    // Batch-wide error has occurred. We cannot handle the error here as we
-                    // must first drop the mutable request_batch reference.
-                    eprintln!("compute: batch-wide error {:?}", error);
+            }
+            Err(error) => {
+                // Batch-wide error has occurred.
+                eprintln!("batch-wide error: {:?}", error);
 
-                    batch_error = Some(error);
+                for call in batch.iter() {
+                    let call_id = call.get_encoded_hash();
+                    if let Some(senders) = self.subscriptions_call.remove(&call_id) {
+                        for sender in senders {
+                            // Explicitly ignore send errors as the receiver may have gone.
+                            drop(sender.send(Err(error.clone())));
+                        }
+                    }
+
+                    self.missed_calls.insert(call_id, Err(error.clone()));
                 }
             }
         }
+    }
 
-        // Send batch-wide error to all clients.
-        let batch_error = batch_error.as_ref().unwrap();
-        for mut queued_request in request_batch {
-            let sender = queued_request.response_sender.take().unwrap();
-            sender.send(Err(batch_error.clone())).unwrap();
+    /// Check if the most recent RPC call produced any contract calls and queue them
+    /// in the current call batch.
+    fn queue_contract_batch(&mut self) {
+        // Check if the most recent RPC call produced any contract calls.
+        let mut batch = self.contract.contract_take_batch().unwrap();
+        if batch.is_empty() {
+            return;
         }
+
+        if let Some(ref mut current_batch) = self.current_batch {
+            // Append to current batch.
+            current_batch.batch.append(&mut batch);
+        } else {
+            // Start new batch.
+            self.current_batch = Some(PendingBatch {
+                start: Instant::now(),
+                batch,
+            });
+        }
+    }
+
+    /// Check if we need to send the current batch for processing.
+    ///
+    /// The batch is then sent for processing if either:
+    /// * Number of calls it contains reaches `max_batch_size`.
+    /// * More than `max_batch_timeout` time elapsed since batch was created.
+    fn check_and_send_contract_batch(&mut self, command_sender: &Sender<Command>) {
+        let should_process = if let Some(ref current_batch) = self.current_batch {
+            current_batch.batch.len() >= self.max_batch_size
+                || current_batch.start.elapsed() >= self.max_batch_timeout
+        } else {
+            false
+        };
+
+        if should_process {
+            // Unwrap is safe as if the batch was none, we should not enter this block.
+            let current_batch = self.current_batch.take().unwrap();
+            command_sender
+                .send(Command::ContractCallBatch(current_batch.batch))
+                .unwrap();
+        }
+    }
+
+    /// Remove any subscribers where the receiver part has been dropped.
+    fn clean_subscribers(&mut self) {
+        self.subscriptions_call.retain(|_call_id, senders| {
+            // Only retain non-canceled senders.
+            senders.retain(|sender| !sender.is_canceled());
+            // Only retain call ids for which there are subscriptions.
+            !senders.is_empty()
+        });
     }
 
     /// Process requests from a receiver until the channel closes.
-    fn work(&mut self, request_receiver: Receiver<QueuedRequest>) {
+    fn work(&mut self, command_sender: Sender<Command>, command_receiver: Receiver<Command>) {
+        // Ping processing thread every max_batch_timeout.
+        let command_sender_clone = command_sender.clone();
+        let max_batch_timeout = self.max_batch_timeout;
+        std::thread::spawn(move || {
+            while command_sender_clone.send(Command::Ping).is_ok() {
+                std::thread::sleep(max_batch_timeout);
+            }
+        });
+
         // Block for the next call.
-        while let Ok(queued_request) = request_receiver.recv() {
-            self.ins.reqs_batches_started.inc();
-            let _batch_timer = self.ins.req_time_batch.start_timer();
+        while let Ok(command) = command_receiver.recv() {
+            match command {
+                Command::RpcCall(request, sender) => {
+                    // Process (stateless) RPC call.
+                    let result = self.handle_rpc_call(request);
+                    sender.send(result).unwrap();
 
-            let mut request_batch = Vec::new();
-            request_batch.push(queued_request);
-
-            // Queue up requests up to MAX_BATCH_SIZE, but for at most MAX_BATCH_TIMEOUT.
-            let batch_start = time::precise_time_ns();
-            while request_batch.len() < self.max_batch_size
-                && time::precise_time_ns() - batch_start < self.max_batch_timeout
-            {
-                while request_batch.len() < self.max_batch_size {
-                    if let Ok(queued_request) = request_receiver.try_recv() {
-                        request_batch.push(queued_request);
-                    } else {
-                        break;
-                    }
+                    // Check if RPC call produced a batch of requests.
+                    self.queue_contract_batch();
                 }
-
-                // Yield thread for 10 ms while we wait.
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                Command::ContractCallBatch(batch) => {
+                    // Process batch of contract calls.
+                    self.handle_contract_batch(batch);
+                }
+                Command::SubscribeCall(call_id, sender) => {
+                    self.subscribe_contract_batch(call_id, sender);
+                }
+                Command::Ping => {}
             }
 
-            // Process the requests.
-            self.call_contract_batch(request_batch);
+            self.check_and_send_contract_batch(&command_sender);
+            self.clean_subscribers();
+        }
+    }
+
+    /// Subscribe to a specific call being processed in a batch.
+    fn subscribe_contract_batch(&mut self, call_id: H256, sender: BytesSender) {
+        // First check if there are any hits under missed calls. In this case emit
+        // the result immediately.
+        if let Some(result) = self.missed_calls.get_mut(&call_id) {
+            sender.send(result.clone()).unwrap();
+            return;
+        }
+
+        match self.subscriptions_call.entry(call_id) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().push(sender);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(vec![sender]);
+            }
         }
     }
 }
 
 struct ComputeServiceInner {
-    /// Channel for submitting requests to the worker. This is only used to
+    /// Channel for submitting commands to the worker. This is only used to
     /// initialize a thread-local clone of the sender handle, so that there
     /// is no need for locking during request processing.
-    request_sender: Mutex<Sender<QueuedRequest>>,
-    /// Thread-local channel for submitting requests to the worker.
-    tl_request_sender: ThreadLocal<Sender<QueuedRequest>>,
+    command_sender: Mutex<Sender<Command>>,
+    /// Thread-local channel for submitting commands to the worker.
+    tl_command_sender: ThreadLocal<Sender<Command>>,
     /// Instrumentation objects.
     ins: instrumentation::HandlerMetrics,
 }
@@ -401,10 +485,12 @@ impl ComputeService {
         let consensus_host_owned = String::from(consensus_host);
         let saved_identity_path_owned = saved_identity_path.map(|p| p.to_owned());
 
-        let (request_sender, request_receiver) = channel();
-        // move request_receiver
+        // Worker command channel.
+        let (command_sender, command_receiver) = channel();
+        let command_sender_clone = command_sender.clone();
+
         std::thread::spawn(move || {
-            ComputeServerWorker::new(
+            Worker::new(
                 &contract_filename_owned,
                 &consensus_host_owned,
                 consensus_port,
@@ -412,24 +498,24 @@ impl ComputeService {
                 max_batch_timeout,
                 &ias,
                 saved_identity_path_owned.as_ref().map(|p| p.borrow()),
-            ).work(request_receiver);
+            ).work(command_sender_clone, command_receiver);
         });
 
         ComputeService {
             inner: Arc::new(ComputeServiceInner {
-                request_sender: Mutex::new(request_sender),
-                tl_request_sender: ThreadLocal::new(),
+                command_sender: Mutex::new(command_sender),
+                tl_command_sender: ThreadLocal::new(),
                 ins: instrumentation::HandlerMetrics::new(),
             }),
         }
     }
 
-    /// Get thread-local request sender.
-    fn get_request_sender(&self) -> &Sender<QueuedRequest> {
-        self.inner.tl_request_sender.get_or(|| {
+    /// Get thread-local command sender.
+    fn get_command_sender(&self) -> &Sender<Command> {
+        self.inner.tl_command_sender.get_or(|| {
             // Only take the lock when we need to clone the sender for a new thread.
-            let request_sender = self.inner.request_sender.lock().unwrap();
-            Box::new(request_sender.clone())
+            let command_sender = self.inner.command_sender.lock().unwrap();
+            Box::new(command_sender.clone())
         })
     }
 }
@@ -438,25 +524,74 @@ impl Compute for ComputeService {
     fn call_contract(
         &self,
         ctx: grpcio::RpcContext,
-        rpc_request: CallContractRequest,
+        mut rpc_request: CallContractRequest,
         sink: grpcio::UnarySink<CallContractResponse>,
     ) {
         // Instrumentation.
         self.inner.ins.reqs_received.inc();
         let _client_timer = self.inner.ins.req_time_client.start_timer();
 
-        // Send request to worker thread.
+        // Send command to worker thread.
         let (response_sender, response_receiver) = oneshot::channel();
-        self.get_request_sender()
-            .send(QueuedRequest {
-                rpc_request,
-                response_sender: Some(response_sender),
-            })
+        self.get_command_sender()
+            .send(Command::RpcCall(
+                rpc_request.take_payload(),
+                response_sender,
+            ))
             .unwrap();
 
         // Prepare response future.
         let f = response_receiver.then(|result| match result {
-            Ok(Ok(response)) => sink.success(response),
+            Ok(Ok(response)) => {
+                let mut rpc_response = CallContractResponse::new();
+                rpc_response.set_payload(response);
+
+                sink.success(rpc_response)
+            }
+            Ok(Err(error)) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Internal,
+                Some(error.description().to_owned()),
+            )),
+            Err(error) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Internal,
+                Some(error.description().to_owned()),
+            )),
+        });
+        ctx.spawn(f.map_err(|_error| ()));
+    }
+
+    fn wait_contract_call(
+        &self,
+        ctx: grpcio::RpcContext,
+        request: WaitContractCallRequest,
+        sink: grpcio::UnarySink<WaitContractCallResponse>,
+    ) {
+        let call_id = request.get_call_id();
+        if call_id.len() != H256::LENGTH {
+            ctx.spawn(
+                sink.fail(RpcStatus::new(RpcStatusCode::InvalidArgument, None))
+                    .map_err(|_error| ()),
+            );
+            return;
+        }
+
+        // Send command to worker thread.
+        let (response_sender, response_receiver) = oneshot::channel();
+        self.get_command_sender()
+            .send(Command::SubscribeCall(
+                H256::from(request.get_call_id()),
+                response_sender,
+            ))
+            .unwrap();
+
+        // Prepare response future.
+        let f = response_receiver.then(|result| match result {
+            Ok(Ok(response)) => {
+                let mut rpc_response = WaitContractCallResponse::new();
+                rpc_response.set_output(response);
+
+                sink.success(rpc_response)
+            }
             Ok(Err(error)) => sink.fail(RpcStatus::new(
                 RpcStatusCode::Internal,
                 Some(error.description().to_owned()),

@@ -1,5 +1,6 @@
 #![feature(use_extern_macros)]
 
+extern crate ekiden_contract_trusted;
 extern crate ekiden_db_trusted;
 extern crate ekiden_enclave_trusted;
 extern crate ekiden_key_manager_client;
@@ -15,6 +16,10 @@ pub mod rpc {
 
 pub mod db {
     pub use ekiden_db_trusted::*;
+}
+
+pub mod contract {
+    pub use ekiden_contract_trusted::*;
 }
 
 pub mod key_manager {

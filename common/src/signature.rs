@@ -1,20 +1,23 @@
 //! Signature interface.
+use serde::Serialize;
+use serde_cbor;
 use std;
-use std::fmt::Debug;
+use std::convert::TryFrom;
 
 use super::bytes::{B256, B512, B64, H256};
 use super::error::{Error, Result};
 use super::ring::{digest, signature};
-use super::rlp::{self, Decodable, DecoderError, Encodable, RlpStream, UntrustedRlp};
 use super::untrusted;
+
+use ekiden_common_api as api;
 
 /// Signer interface.
 pub trait Signer {
     /// Sign given 256-bit digest.
     fn sign(&self, data: &H256) -> B512;
 
-    /// Get hash of the signing public key.
-    fn get_public_key_id(&self) -> H256;
+    /// Get the signing public key.
+    fn get_public_key(&self) -> B256;
 
     /// Attest to given 256-bit digest.
     fn attest(&self, data: &H256) -> Option<Vec<u8>>;
@@ -24,6 +27,31 @@ pub trait Signer {
 pub trait Verifier {
     /// Verify signature and optional attestation.
     fn verify(&self, data: &H256, signature: &B512, attestation: Option<&Vec<u8>>) -> bool;
+}
+
+/// Null signer/verifier which does no signing and says everything is verified.
+///
+/// **This should only be used in tests.**
+pub struct NullSignerVerifier;
+
+impl Signer for NullSignerVerifier {
+    fn sign(&self, _data: &H256) -> B512 {
+        B512::zero()
+    }
+
+    fn get_public_key(&self) -> B256 {
+        B256::zero()
+    }
+
+    fn attest(&self, _data: &H256) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+impl Verifier for NullSignerVerifier {
+    fn verify(&self, _data: &H256, _signature: &B512, _attestation: Option<&Vec<u8>>) -> bool {
+        true
+    }
 }
 
 /// In memory signer.
@@ -44,8 +72,8 @@ impl Signer for InMemorySigner {
         B512::from(self.key_pair.sign(data).as_ref())
     }
 
-    fn get_public_key_id(&self) -> H256 {
-        H256::from(digest::digest(&digest::SHA512_256, &self.key_pair.public_key_bytes()).as_ref())
+    fn get_public_key(&self) -> B256 {
+        B256::from(self.key_pair.public_key_bytes())
     }
 
     fn attest(&self, _data: &H256) -> Option<Vec<u8>> {
@@ -54,18 +82,18 @@ impl Signer for InMemorySigner {
 }
 
 /// Public key verifier.
-pub struct PublicKeyVerifier {
+pub struct PublicKeyVerifier<'a> {
     /// Public key.
-    public_key: B256,
+    public_key: &'a B256,
 }
 
-impl PublicKeyVerifier {
-    pub fn new(public_key: B256) -> Self {
+impl<'a> PublicKeyVerifier<'a> {
+    pub fn new(public_key: &'a B256) -> Self {
         Self { public_key }
     }
 }
 
-impl Verifier for PublicKeyVerifier {
+impl<'a> Verifier for PublicKeyVerifier<'a> {
     fn verify(&self, data: &H256, signature: &B512, attestation: Option<&Vec<u8>>) -> bool {
         // TODO: Verify attestation.
         match attestation {
@@ -75,7 +103,7 @@ impl Verifier for PublicKeyVerifier {
 
         signature::verify(
             &signature::ED25519,
-            untrusted::Input::from(&self.public_key),
+            untrusted::Input::from(self.public_key),
             untrusted::Input::from(&data),
             untrusted::Input::from(&signature),
         ).is_ok()
@@ -83,10 +111,10 @@ impl Verifier for PublicKeyVerifier {
 }
 
 /// Signature from a committee node.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signature {
-    /// Hash of the public key that made the signature.
-    pub public_key_id: H256,
+    /// Public key that made the signature.
+    pub public_key: B256,
     /// Ed25519 signature.
     pub signature: B512,
     /// Optional attestation verification report in case the contract is being executed
@@ -109,7 +137,7 @@ impl Signature {
         let digest = Self::digest(context, value);
 
         Signature {
-            public_key_id: signer.get_public_key_id(),
+            public_key: signer.get_public_key(),
             signature: signer.sign(&digest),
             attestation: signer.attest(&digest),
         }
@@ -119,75 +147,98 @@ impl Signature {
     ///
     /// Note that you need to ensure that the attestation is actually present if
     /// attestation is required.
-    pub fn verify(&self, verifier: &Verifier, context: &B64, value: &[u8]) -> bool {
+    pub fn verify(&self, context: &B64, value: &[u8]) -> bool {
         let digest = Self::digest(context, value);
+        let verifier = PublicKeyVerifier::new(&self.public_key);
 
         verifier.verify(&digest, &self.signature, self.attestation.as_ref())
     }
 }
 
-impl Encodable for Signature {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(3);
-        stream.append(&self.public_key_id);
-        stream.append(&self.signature);
-        stream.append(&self.attestation);
+impl TryFrom<api::Signature> for Signature {
+    type Error = super::error::Error;
+    //TODO: attestation.
+    fn try_from(a: api::Signature) -> std::result::Result<Self, self::Error> {
+        let pk = a.get_pubkey();
+        let sig = a.get_signature();
+        if pk.len() != 32 || sig.len() != 64 {
+            return Err(Error::new("corrupted signature"));
+        }
+
+        let mut out = Signature {
+            public_key: B256::zero(),
+            signature: B512::zero(),
+            attestation: None,
+        };
+        out.public_key.copy_from_slice(&pk);
+        out.signature.copy_from_slice(&sig);
+        Ok(out)
     }
 }
 
-impl Decodable for Signature {
-    fn decode(rlp: &UntrustedRlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self {
-            public_key_id: rlp.val_at(0)?,
-            signature: rlp.val_at(1)?,
-            attestation: rlp.val_at(2)?,
-        })
+impl Into<api::Signature> for Signature {
+    // TODO: attestation.
+    fn into(self) -> api::Signature {
+        let mut s = api::Signature::new();
+        s.set_pubkey(self.public_key.to_vec());
+        s.set_signature(self.signature.to_vec());
+        s
     }
 }
 
 /// Signature from a committee node.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Signed<T: Clone + Debug + PartialEq + Eq + Encodable + Decodable> {
+#[derive(Serialize, Deserialize)]
+pub struct Signed<T> {
     /// Signed value.
     value: T,
     /// Signature.
     pub signature: Signature,
 }
 
-impl<T: Clone + Debug + PartialEq + Eq + Encodable + Decodable> Signed<T> {
+impl<T> Signed<T> {
     /// Sign a new value.
-    pub fn sign(signer: &Signer, context: &B64, value: T) -> Self {
-        let signature = Signature::sign(signer, context, &rlp::encode(&value));
+    pub fn sign(signer: &Signer, context: &B64, value: T) -> Self
+    where
+        T: Serialize,
+    {
+        let signature = Signature::sign(signer, context, &serde_cbor::to_vec(&value).unwrap());
 
         Self { value, signature }
     }
 
     /// Verify signature and return signed value.
-    pub fn open(self, verifier: &Verifier, context: &B64) -> Result<T> {
+    pub fn open(self, context: &B64) -> Result<T>
+    where
+        T: Serialize,
+    {
         // First verify signature.
         if !self.signature
-            .verify(verifier, context, &rlp::encode(&self.value))
+            .verify(context, &serde_cbor::to_vec(&self.value).unwrap())
         {
             return Err(Error::new("signature verification failed"));
         }
 
         Ok(self.value)
     }
-}
 
-impl<T: Clone + Debug + PartialEq + Eq + Encodable + Decodable> Encodable for Signed<T> {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(2);
-        stream.append(&self.value);
-        stream.append(&self.signature);
+    /// Return value without verifying signature.
+    ///
+    /// Only use this variant if you have verified the signature yourself.
+    pub fn get_value_unsafe(&self) -> &T {
+        &self.value
+    }
+
+    /// from_parts creates a Signed object from a detached signature.
+    pub fn from_parts(value: T, signature: Signature) -> Self {
+        Self { value, signature }
     }
 }
 
-impl<T: Clone + Debug + PartialEq + Eq + Encodable + Decodable> Decodable for Signed<T> {
-    fn decode(rlp: &UntrustedRlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self {
-            value: rlp.val_at(0)?,
-            signature: rlp.val_at(1)?,
-        })
+impl<T: Clone> Clone for Signed<T> {
+    fn clone(&self) -> Self {
+        Signed {
+            value: self.value.clone(),
+            signature: self.signature.clone(),
+        }
     }
 }

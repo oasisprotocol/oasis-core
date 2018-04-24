@@ -8,6 +8,7 @@ extern crate chrono;
 extern crate pem_iterator;
 extern crate percent_encoding;
 extern crate protobuf;
+extern crate serde;
 extern crate serde_json;
 extern crate sodalite;
 extern crate webpki;

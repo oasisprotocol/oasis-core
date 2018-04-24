@@ -2,7 +2,9 @@
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 
-use ekiden_common::serializer::{Deserializable, Serializable};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_cbor;
 
 use super::super::{Database, DatabaseHandle};
 
@@ -23,7 +25,7 @@ pub struct MapDescriptor<K, V> {
 
 impl<T> ScalarDescriptor<T>
 where
-    T: Serializable + Deserializable,
+    T: Serialize + DeserializeOwned,
 {
     /// Create new scalar descriptor.
     pub fn new(namespace: &'static str, name: &'static str) -> Self {
@@ -36,11 +38,7 @@ where
 
     /// Derive the key for storing this field in the underlying database.
     fn get_key(&self) -> Vec<u8> {
-        let mut key = vec![];
-        self.namespace.write_to(&mut key).unwrap();
-        self.name.write_to(&mut key).unwrap();
-
-        key
+        serde_cbor::to_vec(&(&self.namespace, &self.name)).unwrap()
     }
 
     /// Insert a value for this field.
@@ -50,20 +48,20 @@ where
     /// If the database did have this key present, the value is updated, and the old value is
     /// returned.
     ///
-    /// The value may be any borrowed form of the descriptor's value type, but [`Serializable`]
+    /// The value may be any borrowed form of the descriptor's value type, but [`Serialize`]
     /// on the borrowed form must match those for the value type.
     ///
     /// [`None`]: std::option::Option
-    /// [`Serializable`]: ekiden_common::serializer::Serializable
+    /// [`Serialize`]: serde::Serialize
     pub fn insert<Q>(&self, value: &Q) -> Option<T>
     where
         T: Borrow<Q>,
-        Q: ?Sized + Serializable,
+        Q: ?Sized + Serialize,
     {
         let mut db = DatabaseHandle::instance();
-        let value = Serializable::write(value.borrow()).expect("Failed to serialize state");
+        let value = serde_cbor::to_vec(&(value.borrow())).unwrap();
         match db.insert(&self.get_key(), &value) {
-            Some(value) => Some(Deserializable::read(&value).expect("Corrupted state")),
+            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -72,7 +70,7 @@ where
     pub fn get(&self) -> Option<T> {
         let db = DatabaseHandle::instance();
         match db.get(&self.get_key()) {
-            Some(value) => Some(Deserializable::read(&value).expect("Corrupted state")),
+            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -82,7 +80,7 @@ where
     pub fn remove(&self) -> Option<T> {
         let mut db = DatabaseHandle::instance();
         match db.remove(&self.get_key()) {
-            Some(value) => Some(Deserializable::read(&value).expect("Corrupted state")),
+            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -96,8 +94,8 @@ where
 
 impl<K, V> MapDescriptor<K, V>
 where
-    K: Serializable,
-    V: Serializable + Deserializable,
+    K: Serialize,
+    V: Serialize + DeserializeOwned,
 {
     /// Create new map descriptor.
     pub fn new(namespace: &'static str, name: &'static str) -> Self {
@@ -111,21 +109,16 @@ where
 
     /// Derive the key for storing this field in the underlying database.
     ///
-    /// The key may be any borrowed form of the descriptor's key type, but [`Serializable`]
+    /// The key may be any borrowed form of the descriptor's key type, but [`Serialize`]
     /// on the borrowed form must match those for the key type.
     ///
-    /// [`Serializable`]: ekiden_common::serializer::Serializable
+    /// [`Serialize`]: serde::Serialize
     fn get_key_for_subkey<Q>(&self, subkey: &Q) -> Vec<u8>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Serializable,
+        Q: ?Sized + Serialize,
     {
-        let mut key = vec![];
-        self.namespace.write_to(&mut key).unwrap();
-        self.name.write_to(&mut key).unwrap();
-        subkey.write_to(&mut key).unwrap();
-
-        key
+        serde_cbor::to_vec(&(&self.namespace, &self.name, subkey)).unwrap()
     }
 
     /// Insert a value for this field.
@@ -135,43 +128,43 @@ where
     /// If the database did have this key present, the value is updated, and the old value is
     /// returned.
     ///
-    /// The key may be any borrowed form of the descriptor's key type, but [`Serializable`]
+    /// The key may be any borrowed form of the descriptor's key type, but [`Serialize`]
     /// on the borrowed form must match those for the key type.
     ///
-    /// The value may be any borrowed form of the descriptor's value type, but [`Serializable`]
+    /// The value may be any borrowed form of the descriptor's value type, but [`Serialize`]
     /// on the borrowed form must match those for the value type.
     ///
     /// [`None`]: std::option::Option
-    /// [`Serializable`]: ekiden_common::serializer::Serializable
+    /// [`Serialize`]: serde::Serialize
     pub fn insert<Q, P>(&self, key: &Q, value: &P) -> Option<V>
     where
         K: Borrow<Q>,
         V: Borrow<P>,
-        Q: ?Sized + Serializable,
-        P: ?Sized + Serializable,
+        Q: ?Sized + Serialize,
+        P: ?Sized + Serialize,
     {
         let mut db = DatabaseHandle::instance();
-        let value = Serializable::write(value.borrow()).expect("Failed to serialize value");
+        let value = serde_cbor::to_vec(&(value.borrow())).unwrap();
         match db.insert(&self.get_key_for_subkey(key), &value) {
-            Some(value) => Some(Deserializable::read(&value).expect("Corrupted state")),
+            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
             None => None,
         }
     }
 
     /// Fetch a value for this field.
     ///
-    /// The key may be any borrowed form of the descriptor's key type, but [`Serializable`]
+    /// The key may be any borrowed form of the descriptor's key type, but [`Serialize`]
     /// on the borrowed form must match those for the key type.
     ///
-    /// [`Serializable`]: ekiden_common::serializer::Serializable
+    /// [`Serialize`]: serde::Serialize
     pub fn get<Q>(&self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Serializable,
+        Q: ?Sized + Serialize,
     {
         let db = DatabaseHandle::instance();
         match db.get(&self.get_key_for_subkey(key)) {
-            Some(value) => Some(Deserializable::read(&value).expect("Corrupted state")),
+            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -179,32 +172,32 @@ where
     /// Remove a value for this field, returning the value at the key if the key was previously
     /// in the database.
     ///
-    /// The key may be any borrowed form of the descriptor's key type, but [`Serializable`]
+    /// The key may be any borrowed form of the descriptor's key type, but [`Serialize`]
     /// on the borrowed form must match those for the key type.
     ///
-    /// [`Serializable`]: ekiden_common::serializer::Serializable
+    /// [`Serialize`]: serde::Serialize
     pub fn remove<Q>(&self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Serializable,
+        Q: ?Sized + Serialize,
     {
         let mut db = DatabaseHandle::instance();
         match db.remove(&self.get_key_for_subkey(key)) {
-            Some(value) => Some(Deserializable::read(&value).expect("Corrupted state")),
+            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
             None => None,
         }
     }
 
     /// Check if a field is present in the underlying database.
     ///
-    /// The key may be any borrowed form of the descriptor's key type, but [`Serializable`]
+    /// The key may be any borrowed form of the descriptor's key type, but [`Serialize`]
     /// on the borrowed form must match those for the key type.
     ///
-    /// [`Serializable`]: ekiden_common::serializer::Serializable
+    /// [`Serialize`]: serde::Serialize
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + Serializable,
+        Q: ?Sized + Serialize,
     {
         let db = DatabaseHandle::instance();
         db.contains_key(&self.get_key_for_subkey(key))
