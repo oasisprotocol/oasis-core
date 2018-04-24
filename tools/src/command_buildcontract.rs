@@ -65,6 +65,12 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                 )))
                 }
             };
+            if args.is_present("output") {
+                return Err(Error::new(
+                    "The --output option is not used when implicitly \
+                     building the current project directory.",
+                ));
+            }
 
             ContractBuilder::new(
                 package.name.clone(),
