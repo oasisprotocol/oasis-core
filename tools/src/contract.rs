@@ -1,4 +1,5 @@
 //! Ekiden contract builder.
+use std;
 use std::env;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
@@ -42,6 +43,8 @@ pub struct ContractBuilder<'a> {
     target_path: PathBuf,
     /// Source crate location.
     source: Box<cargo::CrateSource + 'a>,
+    /// Path of a file to append to the dummy top-level Cargo.toml.
+    cargo_addendum: Option<PathBuf>,
     /// Build verbosity.
     verbose: bool,
     /// Release mode.
@@ -60,6 +63,7 @@ impl<'a> ContractBuilder<'a> {
         output_path: PathBuf,
         target_path: Option<PathBuf>,
         source: Box<cargo::CrateSource + 'a>,
+        cargo_addendum: Option<PathBuf>,
     ) -> Result<Self> {
         let build_temporary_dir = Temp::new_dir()?;
         let build_path = build_temporary_dir.to_path_buf();
@@ -71,6 +75,7 @@ impl<'a> ContractBuilder<'a> {
             build_temporary_dir,
             target_path: target_path.unwrap_or(build_path.join("target")),
             source,
+            cargo_addendum,
             verbose: false,
             release: false,
             intel_sgx_sdk: match env::var("INTEL_SGX_SDK") {
@@ -184,6 +189,10 @@ impl<'a> ContractBuilder<'a> {
         writeln!(&mut cargo_toml, "[dependencies]")?;
         write!(&mut cargo_toml, "{} = ", self.crate_name)?;
         self.source.write_location(&mut cargo_toml)?;
+        if let Some(cargo_addendum_path) = self.cargo_addendum.as_ref() {
+            let mut cargo_addendum = File::open(cargo_addendum_path)?;
+            std::io::copy(&mut cargo_addendum, &mut cargo_toml)?;
+        }
         drop(cargo_toml);
 
         // Include Xargo configuration files.
