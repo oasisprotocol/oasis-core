@@ -195,6 +195,10 @@ impl ProjectRoot {
         self.path.clone()
     }
 
+    pub fn get_workspace_path(&self) -> PathBuf {
+        self.workspace_path.clone()
+    }
+
     /// Get project config path (Cargo.toml).
     pub fn get_config_path(&self) -> PathBuf {
         self.path.join("Cargo.toml")
