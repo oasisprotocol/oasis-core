@@ -1,0 +1,27 @@
+[patch."https://github.com/oasislabs/ekiden"]
+ekiden-tools = { path = "/root/project/tools" }
+ekiden-common = { path = "/root/project/common" }
+ekiden-consensus-base = { path = "/root/project/consensus/base" }
+ekiden-consensus-dummy = { path = "/root/project/consensus/dummy" }
+ekiden-storage-base = { path = "/root/project/storage/base" }
+ekiden-storage-dummy = { path = "/root/project/storage/dummy" }
+ekiden-enclave-common = { path = "/root/project/enclave/common" }
+ekiden-enclave-untrusted = { path = "/root/project/enclave/untrusted" }
+ekiden-enclave-trusted = { path = "/root/project/enclave/trusted" }
+ekiden-rpc-common = { path = "/root/project/rpc/common" }
+ekiden-rpc-client = { path = "/root/project/rpc/client" }
+ekiden-rpc-untrusted = { path = "/root/project/rpc/untrusted" }
+ekiden-rpc-trusted = { path = "/root/project/rpc/trusted" }
+ekiden-rpc-edl = { path = "/root/project/rpc/edl" }
+ekiden-db-untrusted = { path = "/root/project/db/untrusted" }
+ekiden-db-trusted = { path = "/root/project/db/trusted" }
+ekiden-db-edl = { path = "/root/project/db/edl" }
+ekiden-core = { path = "/root/project/core/common" }
+ekiden-untrusted = { path = "/root/project/core/untrusted" }
+ekiden-trusted = { path = "/root/project/core/trusted" }
+ekiden-edl = { path = "/root/project/core/edl" }
+ekiden-compute-api = { path = "/root/project/compute/api" }
+ekiden-compute = { path = "/root/project/compute" }
+ekiden-consensus-api = { path = "/root/project/consensus/api" }
+ekiden-consensus = { path = "/root/project/consensus" }
+ekiden-key-manager = { path = "/root/project/contracts/key-manager" }

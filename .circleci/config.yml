@@ -40,16 +40,27 @@ jobs:
 
       # Install ekiden-tools.
       - run: cargo install --force --path tools ekiden-tools
+
+      # Check out a contract for testing.
+      - run: git clone https://github.com/oasislabs/contract-token ../ext-contracts/token
       # Build key manager contract.
-      - run:
-          command: cargo ekiden build-contract
-          working_directory: contracts/key-manager
+      - run: >-
+          cargo ekiden build-contract
+          --path contracts/key-manager
+          --output ../ext-contracts/token/target/contract
+          ekiden-key-manager
       # Build token contract.
       - run:
-          command: cargo ekiden build-contract --output-identity
-          working_directory: contracts/token
-      # Run token contract tests.
-      - run: cargo test -p token
+          working_directory: ../ext-contracts/token
+          command: >-
+            cargo ekiden build-contract
+            --cargo-addendum ../../project/scripts/testing-addendum.toml
+            --output-identity
+      # Build token client.
+      - run:
+          working_directory: ../ext-contracts/token/examples/client
+          command: cargo build
+
       # Ensure everything is built. This needs to be after the key manager contract is built.
       - run: cargo build
       # Check style. This needs to be after everything is built.
@@ -78,7 +89,7 @@ jobs:
               --disable-key-manager \
               --no-persist-identity \
               --max-batch-size 1 \
-              target/contract/ekiden-key-manager.so
+              ../ext-contracts/token/target/contract/ekiden-key-manager.so
           background: true
       # Start token compute node.
       - run:
@@ -86,10 +97,10 @@ jobs:
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
-              target/contract/token.so
+              ../ext-contracts/token/target/contract/token.so
           background: true
       # Start token client.
-      - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+      - run: sleep 10; ../ext-contracts/token/examples/client/target/debug/token-client --mr-enclave $(cat ../ext-contracts/token/target/contract/token.mrenclave)
 
   deploy:
     docker:
