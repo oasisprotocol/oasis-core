@@ -13,12 +13,12 @@ members = [
     "storage/base",
     "storage/dummy",
 
-    # Enclave loader.
+    # Enclave loader (+ attestation).
     "enclave/common",
     "enclave/untrusted",
     "enclave/trusted",
 
-    # RPC (+ attestation).
+    # RPC.
     "rpc/common",
     "rpc/client",
     "rpc/untrusted",
