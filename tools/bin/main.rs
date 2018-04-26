@@ -117,6 +117,12 @@ fn main() {
                             Arg::with_name("output-identity")
                                 .help("Should a contract identity file be generated")
                                 .long("output-identity"),
+                        )
+                        .arg(
+                            Arg::with_name("target-dir")
+                                .help("Custom location to cache build artifacts")
+                                .long("target-dir")
+                                .takes_value(true),
                         ),
                 )
                 .subcommand(

@@ -26,7 +26,10 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                 None => env::current_dir()?,
             },
             // Target directory.
-            None,
+            match args.value_of("target-dir") {
+                Some(dir) => Some(Path::new(dir).canonicalize()?),
+                None => None,
+            },
             // Contract crate source.
             {
                 if let Some(version) = args.value_of("version") {
@@ -64,7 +67,10 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
             ContractBuilder::new(
                 package.name.clone(),
                 project.get_target_path().join("contract"),
-                Some(project.get_target_path()),
+                match args.value_of("target-dir") {
+                    Some(dir) => Some(Path::new(dir).canonicalize()?),
+                    None => Some(project.get_target_path()),
+                },
                 Box::new(cargo::PathSource {
                     path: project.get_path(),
                 }),
