@@ -5,6 +5,9 @@ members = [
     # Common.
     "common",
 
+    # Random beacon.
+    "beacon/base",
+
     # Consensus interface.
     "consensus/base",
     "consensus/dummy",
