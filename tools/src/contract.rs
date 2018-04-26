@@ -9,9 +9,8 @@ use std::process::Command;
 use ansi_term::Colour::Green;
 use mktemp::Temp;
 
-use ekiden_common::error::{Error, Result};
-
 use super::cargo;
+use super::error::Result;
 use super::utils::SgxMode;
 
 /// Xargo configuration file.
@@ -232,10 +231,10 @@ impl<'a> ContractBuilder<'a> {
             .current_dir(&self.build_path)
             .status()?;
         if !xargo_status.success() {
-            return Err(Error::new(format!(
+            return Err(format!(
                 "failed to build, xargo exited with status {}!",
                 xargo_status.code().unwrap()
-            )));
+            ).into());
         }
 
         Ok(())
@@ -254,7 +253,7 @@ impl<'a> ContractBuilder<'a> {
         // Configure Intel SGX SDK path and library names.
         let intel_sgx_sdk_lib_path = match self.intel_sgx_sdk {
             Some(ref sdk) => sdk.join("lib64"),
-            None => return Err(Error::new("path to Intel SGX SDK not configured")),
+            None => return Err("path to Intel SGX SDK not configured".into()),
         };
         let (trts_library_name, service_library_name) = match self.sgx_mode {
             SgxMode::Hardware => ("sgx_trts", "sgx_tservice"),
@@ -310,10 +309,10 @@ impl<'a> ContractBuilder<'a> {
             .current_dir(&self.build_path)
             .status()?;
         if !gcc_status.success() {
-            return Err(Error::new(format!(
+            return Err(format!(
                 "failed to link, g++ exited with status {}!",
                 gcc_status.code().unwrap()
-            )));
+            ).into());
         }
 
         Ok(())
@@ -331,7 +330,7 @@ impl<'a> ContractBuilder<'a> {
 
         let signer_path = match self.intel_sgx_sdk {
             Some(ref sdk) => sdk.join("bin/x64/sgx_sign"),
-            None => return Err(Error::new("path to Intel SGX SDK not configured")),
+            None => return Err("path to Intel SGX SDK not configured".into()),
         };
 
         // Determine signing key.
@@ -363,10 +362,10 @@ impl<'a> ContractBuilder<'a> {
             .arg(&enclave_config_path)
             .status()?;
         if !signer_status.success() {
-            return Err(Error::new(format!(
+            return Err(format!(
                 "failed to sign, sgx_sign exited with status {}!",
                 signer_status.code().unwrap()
-            )));
+            ).into());
         }
 
         Ok(())

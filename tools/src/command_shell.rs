@@ -1,6 +1,5 @@
 //! Tool subcommand for entering contract environment.
 extern crate clap;
-extern crate ekiden_common;
 
 use self::clap::ArgMatches;
 
@@ -9,13 +8,12 @@ use std::hash::{Hash, Hasher};
 use std::process::{Child, Command};
 
 use super::cargo;
-
-use ekiden_common::error::{Error, Result};
+use super::error::Result;
 
 /// Determine if a given docker image is available.
 fn docker_has(args: Vec<&str>) -> Result<()> {
     match Command::new("docker").args(args).output()?.stdout.len() {
-        0 => Err(Error::new("No result")),
+        0 => Err("no result".into()),
         _ => Ok(()),
     }
 }
@@ -109,7 +107,7 @@ pub fn shell(args: &ArgMatches) -> Result<()> {
 
     // Make sure docker exists.
     if let Err(_err) = Command::new("docker").arg("version").output() {
-        return Err(Error::new("Please install Docker to use Ekiden shell"));
+        return Err("please install Docker to use Ekiden shell".into());
     }
 
     // Enter running environment.

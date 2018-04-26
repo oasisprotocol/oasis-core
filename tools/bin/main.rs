@@ -3,14 +3,12 @@ extern crate ansi_term;
 extern crate clap;
 extern crate mktemp;
 
-extern crate ekiden_common;
 extern crate ekiden_tools;
 
 use ansi_term::Colour::Red;
 use clap::{App, Arg, SubCommand};
 use std::process::exit;
 
-use ekiden_common::error::Error;
 use ekiden_tools::command_buildcontract::build_contract;
 use ekiden_tools::command_shell::{cleanup_shell, shell};
 
@@ -125,6 +123,12 @@ fn main() {
                             Arg::with_name("output-identity")
                                 .help("Should a contract identity file be generated")
                                 .long("output-identity"),
+                        )
+                        .arg(
+                            Arg::with_name("target-dir")
+                                .help("Custom location to cache build artifacts")
+                                .long("target-dir")
+                                .takes_value(true),
                         ),
                 )
                 .subcommand(
@@ -188,7 +192,7 @@ fn main() {
             ("build-contract", Some(build_args)) => build_contract(build_args),
             ("shell", Some(shell_args)) => shell(shell_args),
             ("clean", Some(clean_args)) => cleanup_shell(clean_args),
-            _ => Err(Error::new("No Command Specified")),
+            _ => Err("no command specified".into()),
         };
         match result {
             Ok(_) => {}
