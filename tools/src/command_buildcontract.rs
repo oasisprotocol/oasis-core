@@ -1,22 +1,22 @@
 //! Tool subcommand for building contracts.
 extern crate clap;
-extern crate ekiden_common;
 
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use self::clap::ArgMatches;
 
 use super::cargo;
 use super::contract::ContractBuilder;
-use utils::{get_contract_identity, SgxMode};
+use super::error::Result;
 
-use ekiden_common::error::{Error, Result};
+use utils::{get_contract_identity, SgxMode};
 
 /// Build an Ekiden contract.
 pub fn build_contract(args: &ArgMatches) -> Result<()> {
+    let cargo_addendum = args.value_of("cargo-addendum").map(|s| PathBuf::from(s));
     let mut builder = match args.value_of("contract-crate") {
         Some(crate_name) => ContractBuilder::new(
             // Crate name.
@@ -27,7 +27,10 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                 None => env::current_dir()?,
             },
             // Target directory.
-            None,
+            match args.value_of("target-dir") {
+                Some(dir) => Some(Path::new(dir).canonicalize()?),
+                None => None,
+            },
             // Contract crate source.
             {
                 if let Some(version) = args.value_of("version") {
@@ -44,11 +47,10 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                         path: Path::new(path).canonicalize()?,
                     })
                 } else {
-                    return Err(Error::new(
-                        "Need to specify one of --version, --git or --path!",
-                    ));
+                    return Err("need to specify one of --version, --git or --path!".into());
                 }
             },
+            cargo_addendum,
         )?,
         None => {
             // Invoke contract-build in the current project directory.
@@ -56,21 +58,30 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
             let package = match project.get_package() {
                 Some(package) => package,
                 None => {
-                    return Err(Error::new(format!(
+                    return Err(format!(
                     "manifest path `{}` is a virtual manifest, but this command requires running \
                      against an actual package in this workspace",
                     project.get_config_path().to_str().unwrap()
-                )))
+                ).into())
                 }
             };
+            if args.is_present("output") {
+                return Err("The --output option is not used when implicitly \
+                            building the current project directory."
+                    .into());
+            }
 
             ContractBuilder::new(
                 package.name.clone(),
                 project.get_target_path().join("contract"),
-                Some(project.get_target_path()),
+                match args.value_of("target-dir") {
+                    Some(dir) => Some(Path::new(dir).canonicalize()?),
+                    None => Some(project.get_target_path()),
+                },
                 Box::new(cargo::PathSource {
                     path: project.get_path(),
                 }),
+                cargo_addendum,
             )?
         }
     };
