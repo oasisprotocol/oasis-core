@@ -43,7 +43,7 @@ impl StorageBackend for DummyStorageBackend {
 
     fn insert(&self, value: &[u8], _expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
-        let key = Self::to_key(&value);
+        let key = Self::hash_key(&value);
         let value_owned = value.to_owned();
 
         Box::new(future::lazy(move || {
