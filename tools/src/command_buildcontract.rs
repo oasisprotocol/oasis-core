@@ -1,6 +1,5 @@
 //! Tool subcommand for building contracts.
 extern crate clap;
-extern crate ekiden_common;
 
 use std::env;
 use std::fs::File;
@@ -11,9 +10,9 @@ use self::clap::ArgMatches;
 
 use super::cargo;
 use super::contract::ContractBuilder;
-use utils::{get_contract_identity, SgxMode};
+use super::error::Result;
 
-use ekiden_common::error::{Error, Result};
+use utils::{get_contract_identity, SgxMode};
 
 /// Build an Ekiden contract.
 pub fn build_contract(args: &ArgMatches) -> Result<()> {
@@ -44,9 +43,7 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                         path: Path::new(path).canonicalize()?,
                     })
                 } else {
-                    return Err(Error::new(
-                        "Need to specify one of --version, --git or --path!",
-                    ));
+                    return Err("need to specify one of --version, --git or --path!".into());
                 }
             },
         )?,
@@ -56,11 +53,11 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
             let package = match project.get_package() {
                 Some(package) => package,
                 None => {
-                    return Err(Error::new(format!(
+                    return Err(format!(
                     "manifest path `{}` is a virtual manifest, but this command requires running \
                      against an actual package in this workspace",
                     project.get_config_path().to_str().unwrap()
-                )))
+                ).into())
                 }
             };
 
