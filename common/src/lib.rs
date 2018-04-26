@@ -8,6 +8,7 @@ extern crate sgx_trts;
 
 extern crate bigint;
 extern crate byteorder;
+extern crate chrono;
 extern crate core;
 extern crate fixed_hash;
 extern crate protobuf;
@@ -25,6 +26,7 @@ pub mod serializer;
 pub mod uint;
 pub mod hash;
 pub mod signature;
+pub mod epochtime;
 
 #[macro_use]
 pub mod profiling;
