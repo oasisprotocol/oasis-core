@@ -4,7 +4,7 @@ extern crate clap;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use self::clap::ArgMatches;
 
@@ -16,6 +16,7 @@ use utils::{get_contract_identity, SgxMode};
 
 /// Build an Ekiden contract.
 pub fn build_contract(args: &ArgMatches) -> Result<()> {
+    let cargo_addendum = args.value_of("cargo-addendum").map(|s| PathBuf::from(s));
     let mut builder = match args.value_of("contract-crate") {
         Some(crate_name) => ContractBuilder::new(
             // Crate name.
@@ -49,6 +50,7 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                     return Err("need to specify one of --version, --git or --path!".into());
                 }
             },
+            cargo_addendum,
         )?,
         None => {
             // Invoke contract-build in the current project directory.
@@ -74,6 +76,7 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                 Box::new(cargo::PathSource {
                     path: project.get_path(),
                 }),
+                cargo_addendum,
             )?
         }
     };
