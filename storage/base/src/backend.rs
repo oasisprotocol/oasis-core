@@ -10,11 +10,10 @@ pub trait StorageBackend {
 
     /// Store a specific value into storage. It can be later retrieved by its hash.
     /// expiry
-    fn insert(&self, value: &[u8], expiry: usize) -> BoxFuture<()>;
+    fn insert(&self, value: &[u8], expiry: u64) -> BoxFuture<()>;
 
     // The hash algorithm used to generate a key from a value.
-    fn to_key(value: &[u8]) -> Vec<u8> {
-        let key = H256::from(digest::digest(&digest::SHA512_256, &value).as_ref());
-        key.to_vec()
+    fn hash_key(value: &[u8]) -> H256 {
+        H256::from(digest::digest(&digest::SHA512_256, &value).as_ref())
     }
 }

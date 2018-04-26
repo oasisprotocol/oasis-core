@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
 use ekiden_common::rlp::{self, Rlp};
@@ -16,7 +17,7 @@ use tar::{Archive, Builder};
 struct PersistentStorageBackendInner {
     storage: Tree,
     backing: String,
-    current_epoch: usize,
+    current_epoch: u64,
 }
 
 pub struct PersistentStorageBackend {
@@ -67,11 +68,11 @@ impl StorageBackend for PersistentStorageBackend {
         }))
     }
 
-    fn insert(&self, value: &[u8], expiry: usize) -> BoxFuture<()> {
+    fn insert(&self, value: &[u8], expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let value = value.to_owned();
 
-        let mut key = Self::to_key(&value);
+        let key = Self::hash_key(&value);
         let expiry = expiry.to_owned();
 
         Box::new(future::lazy(move || {
@@ -83,11 +84,11 @@ impl StorageBackend for PersistentStorageBackend {
                 Ok(Some(val)) => {
                     let list = Rlp::new(&val);
                     assert!(list.is_list());
-                    let mut list: Vec<u8> = list.as_list();
-                    list.append(&mut key);
+                    let mut list: Vec<H256> = list.as_list();
+                    list.append(&mut vec![key]);
                     rlp::encode_list(&list).into_vec()
                 }
-                _ => rlp::encode_list::<Vec<u8>, _>(vec![key.clone()].as_slice()).into_vec(),
+                _ => rlp::encode_list(&vec![key.clone()]).into_vec(),
             };
             inner.storage.set(expiry_key, expiry_value)?;
 

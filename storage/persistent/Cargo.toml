@@ -9,5 +9,6 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
 ekiden-storage-base = { path = "../base", version = "0.1.0-alpha.3" }
+mktemp = "~0.3.1"
 sled = "~0.15.0"
 tar = "~0.4.0"
