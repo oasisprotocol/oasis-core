@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 use cc;
+use filebuffer::FileBuffer;
 use mktemp;
 use protobuf;
 use protoc_rust;
@@ -314,8 +315,8 @@ pub fn get_contract_identity<P: AsRef<Path>>(contract: P) -> Result<Vec<u8>> {
     const SIGSTRUCT_HEADER_2: &[u8] =
         b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
 
-    let contract_file = fs::File::open(contract)?;
-    let mut reader = io::BufReader::new(contract_file);
+    let contract_file = FileBuffer::open(contract)?;
+    let mut reader = io::Cursor::new(&contract_file);
     loop {
         // Update current offset.
         let current_offset = reader.seek(io::SeekFrom::Current(0)).unwrap();
