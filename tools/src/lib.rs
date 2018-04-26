@@ -2,6 +2,7 @@
 
 extern crate ansi_term;
 extern crate cc;
+extern crate error_chain;
 extern crate mktemp;
 extern crate protobuf;
 extern crate protoc;
@@ -12,12 +13,11 @@ extern crate serde_derive;
 extern crate sgx_edl;
 extern crate toml;
 
-extern crate ekiden_common;
-
 pub mod cargo;
 pub mod command_buildcontract;
 pub mod command_shell;
 pub mod contract;
+pub mod error;
 pub mod utils;
 pub use utils::*;
 

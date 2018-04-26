@@ -25,9 +25,12 @@ To start the SGX development container:
 ```bash
 $ cargo ekiden shell
 ```
-(If you have not installed ekiden tools yet, you can use the all-in-one command
-`cargo run -p ekiden-tools ekiden shell`)
 
+If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
+```bash
+$ rustup install nightly
+$ cargo +nightly install --force --path tools ekiden-tools
+```
 
 All the following commands should be run in the container and not on
 the host.  The actual prompt from the bash shell running in the

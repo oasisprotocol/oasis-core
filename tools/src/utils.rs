@@ -12,7 +12,7 @@ use protobuf;
 use protoc_rust;
 use sgx_edl::EDL;
 
-use ekiden_common::error::{Error, Result};
+use super::error::Result;
 
 /// Arguments for protoc.
 #[derive(Debug, Default)]
@@ -336,7 +336,7 @@ pub fn get_contract_identity<P: AsRef<Path>>(contract: P) -> Result<Vec<u8>> {
                 break;
             }
 
-            return Err(Error::new("Failed to find SIGSTRUCT header in contract"));
+            return Err("Failed to find SIGSTRUCT header in contract".into());
         } else {
             // Structure not found at current offset, move to next offset.
             reader.seek(io::SeekFrom::Start(current_offset + 1))?;
