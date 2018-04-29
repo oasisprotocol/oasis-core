@@ -34,6 +34,13 @@ members = [
     "db/trusted",
     "db/edl",
 
+    # Contract invocation.
+    "contract/common",
+    "contract/client",
+    "contract/untrusted",
+    "contract/trusted",
+    "contract/edl",
+
     # Core.
     "core/common",
     "core/untrusted",

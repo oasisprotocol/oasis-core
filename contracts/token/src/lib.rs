@@ -14,18 +14,18 @@ use token_api::{with_api, CreateRequest, CreateResponse, GetBalanceRequest, GetB
 use token_contract::TokenContract;
 
 use ekiden_core::error::Result;
+use ekiden_trusted::contract::create_contract;
 use ekiden_trusted::enclave::enclave_init;
 use ekiden_trusted::key_manager::use_key_manager_contract;
-use ekiden_trusted::rpc::create_enclave_rpc;
 
 enclave_init!();
 
 // Configure the key manager contract to use.
 use_key_manager_contract!("generated/key-manager.identity");
 
-// Create enclave RPC handlers.
+// Create enclave contract interface.
 with_api! {
-    create_enclave_rpc!(api);
+    create_contract!(api);
 }
 
 pub fn create(request: &CreateRequest) -> Result<CreateResponse> {

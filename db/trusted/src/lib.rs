@@ -6,6 +6,8 @@ extern crate bzip2;
 #[macro_use]
 extern crate lazy_static;
 extern crate protobuf;
+extern crate serde;
+extern crate serde_cbor;
 extern crate sodalite;
 
 #[macro_use]

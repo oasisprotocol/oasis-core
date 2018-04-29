@@ -11,8 +11,8 @@ sgx-simulation = []
 
 [dependencies]
 protobuf = "1.4.3"
-sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden1" }
-sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden1" }
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
+sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
 ekiden-enclave-common = { path = "../common", version = "0.1.0-alpha.3" }
 

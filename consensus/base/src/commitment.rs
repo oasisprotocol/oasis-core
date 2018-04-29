@@ -1,11 +1,12 @@
 //! Commitment type.
-use std;
 use std::fmt::Debug;
+
+use serde::Serialize;
+use serde_cbor;
 
 use ekiden_common::bytes::{B256, B64, H256};
 use ekiden_common::ring::digest;
-use ekiden_common::rlp::{self, Decodable, DecoderError, Encodable, RlpStream, UntrustedRlp};
-use ekiden_common::signature::{Signature, Signer, Verifier};
+use ekiden_common::signature::{Signature, Signer};
 
 /// Signature context used for commitments.
 const COMMITMENT_SIGNATURE_CONTEXT: B64 = B64(*b"EkCommit");
@@ -16,7 +17,7 @@ const REVEAL_SIGNATURE_CONTEXT: B64 = B64(*b"EkReveal");
 ///
 /// A commitment is a signature over a specific piece of data using the
 /// `COMMITMENT_SIGNATURE_CONTEXT` context.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Commitment {
     /// Hash of the encoded value being committed to and a nonce.
     pub digest: H256,
@@ -36,26 +37,9 @@ impl Commitment {
     }
 
     /// Verify that the commitment has a valid signature.
-    pub fn verify(&self, verifier: &Verifier) -> bool {
+    pub fn verify(&self) -> bool {
         self.signature
-            .verify(verifier, &COMMITMENT_SIGNATURE_CONTEXT, &self.digest)
-    }
-}
-
-impl Encodable for Commitment {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(3);
-        stream.append(&self.digest);
-        stream.append(&self.signature);
-    }
-}
-
-impl Decodable for Commitment {
-    fn decode(rlp: &UntrustedRlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self {
-            digest: rlp.val_at(0)?,
-            signature: rlp.val_at(1)?,
-        })
+            .verify(&COMMITMENT_SIGNATURE_CONTEXT, &self.digest)
     }
 }
 
@@ -63,7 +47,7 @@ impl Decodable for Commitment {
 ///
 /// A reveal of a value previously committed to. The signature on the reveal
 /// is made using the `REVEAL_SIGNATURE_CONTEXT` context.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reveal<T: Commitable> {
     /// Revealed value.
     pub value: T,
@@ -86,22 +70,26 @@ impl<T: Commitable> Reveal<T> {
     }
 
     /// Verify that the reveal has a valid signature.
-    pub fn verify(&self, verifier: &Verifier) -> bool {
+    pub fn verify(&self) -> bool {
         let digest = self.value.get_commitment_digest(&self.nonce);
 
-        self.signature
-            .verify(verifier, &REVEAL_SIGNATURE_CONTEXT, &digest)
+        self.signature.verify(&REVEAL_SIGNATURE_CONTEXT, &digest)
     }
 
     /// Verify that the reveal matches commitment.
-    pub fn verify_commitment(&self, verifier: &Verifier, commitment: &Commitment) -> bool {
+    pub fn verify_commitment(&self, commitment: &Commitment) -> bool {
+        // Verify that both signatures were made using the same public key.
+        if self.signature.public_key != commitment.signature.public_key {
+            return false;
+        }
+
         // Verify reveal signature.
-        if !self.verify(verifier) {
+        if !self.verify() {
             return false;
         }
 
         // Verify commitment signature.
-        if !commitment.verify(verifier) {
+        if !commitment.verify() {
             return false;
         }
 
@@ -112,9 +100,9 @@ impl<T: Commitable> Reveal<T> {
     }
 
     /// Verify that the reveal matches value.
-    pub fn verify_value(&self, verifier: &Verifier, value: &T) -> bool {
+    pub fn verify_value(&self, value: &T) -> bool {
         // Verify reveal signature.
-        if !self.verify(verifier) {
+        if !self.verify() {
             return false;
         }
 
@@ -126,32 +114,12 @@ impl<T: Commitable> Reveal<T> {
     }
 }
 
-impl<T: Commitable> Encodable for Reveal<T> {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(3);
-        stream.append(&self.value);
-        stream.append(&self.nonce);
-        stream.append(&self.signature);
-    }
-}
-
-impl<T: Commitable> Decodable for Reveal<T> {
-    fn decode(rlp: &UntrustedRlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self {
-            value: rlp.val_at(0)?,
-            nonce: rlp.val_at(1)?,
-            signature: rlp.val_at(2)?,
-        })
-    }
-}
-
 /// A type that a commitment can be generated for.
-pub trait Commitable
-    : Sized + Clone + Debug + PartialEq + Eq + Encodable + Decodable {
+pub trait Commitable: Sized + Clone + Debug + PartialEq + Eq + Serialize {
     /// Return hash over nonce and commitment value.
     fn get_commitment_digest(&self, nonce: &B256) -> H256 {
         let mut ctx = digest::Context::new(&digest::SHA512_256);
-        ctx.update(&rlp::encode(self));
+        ctx.update(&serde_cbor::to_vec(self).unwrap());
         ctx.update(&nonce);
         H256::from(ctx.finish().as_ref())
     }

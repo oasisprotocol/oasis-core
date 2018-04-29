@@ -56,12 +56,12 @@ macro_rules! default_backend {
                 })
                 .collect();
 
-            ekiden_rpc_client::backend::Web3ContractClientBackend::new_pool(
+            ekiden_rpc_client::backend::Web3RpcClientBackend::new_pool(
                 grpc_environment,
                 &nodes
             ).unwrap()
         } else {
-            ekiden_rpc_client::backend::Web3ContractClientBackend::new(
+            ekiden_rpc_client::backend::Web3RpcClientBackend::new(
                 grpc_environment,
                 $args.value_of("host").unwrap(),
                 value_t!($args, "port", u16).unwrap_or(9001)
@@ -72,22 +72,23 @@ macro_rules! default_backend {
 
 #[macro_export]
 macro_rules! contract_client {
-    ($contract:ident, $args:ident, $backend:ident) => {
+    ($signer:ident, $contract:ident, $args:ident, $backend:ident) => {
         $contract::Client::new(
-            $backend,
-            value_t!($args, "mr-enclave", ekiden_core::enclave::quote::MrEnclave).unwrap_or_else(|e| e.exit())
+            ::std::sync::Arc::new($backend),
+            value_t!($args, "mr-enclave", ekiden_core::enclave::quote::MrEnclave).unwrap_or_else(|e| e.exit()),
+            &$signer,
         )
     };
-    ($contract:ident, $args:ident) => {
+    ($signer:ident, $contract:ident, $args:ident) => {
         {
             let backend = default_backend!($args);
-            contract_client!($contract, $args, backend)
+            contract_client!($signer, $contract, $args, backend)
         }
     };
-    ($contract:ident) => {
+    ($signer:ident, $contract:ident) => {
         {
             let args = default_app!().get_matches();
-            contract_client!($contract, args)
+            contract_client!($signer, $contract, args)
         }
     };
 }
@@ -95,7 +96,7 @@ macro_rules! contract_client {
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_client {
-    ($contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+    ($signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
         let args = std::sync::Arc::new(
             default_app!()
                 .arg(Arg::with_name("benchmark-threads")
@@ -116,7 +117,7 @@ macro_rules! benchmark_client {
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
             move || {
                 let args = args.clone();
-                contract_client!($contract, args)
+                contract_client!($signer, $contract, args)
             }
         );
 

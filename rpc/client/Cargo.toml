@@ -12,6 +12,8 @@ ekiden-enclave-common = { path = "../../enclave/common", version = "0.1.0-alpha.
 ekiden-rpc-common = { path = "../common", version = "0.1.0-alpha.3" }
 protobuf = "1.4.3"
 sodalite = "0.3.0"
+serde = "1.0"
+serde_cbor = "0.8.2"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
 futures-sgx = { git = "https://github.com/ekiden/futures-rs" }

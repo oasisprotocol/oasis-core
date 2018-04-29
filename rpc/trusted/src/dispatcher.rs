@@ -7,9 +7,12 @@ use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
 
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_cbor;
+
 use ekiden_common::error::Result;
 use ekiden_common::profile_block;
-use ekiden_common::serializer::{Deserializable, Serializable};
 use ekiden_enclave_trusted::utils::{read_enclave_request, write_enclave_response};
 use ekiden_rpc_common::api;
 use ekiden_rpc_common::reflection::ApiMethodDescriptor;
@@ -55,10 +58,11 @@ struct ApiMethodHandlerDispatchImpl<Request, Response> {
     handler: Box<ApiMethodHandler<Request, Response> + Sync + Send>,
 }
 
-impl<Request, Response> ApiMethodHandlerDispatch for ApiMethodHandlerDispatchImpl<Request, Response>
+impl<'a, Request, Response> ApiMethodHandlerDispatch
+    for ApiMethodHandlerDispatchImpl<Request, Response>
 where
-    Request: Deserializable + Send + 'static,
-    Response: Serializable + Send + 'static,
+    Request: DeserializeOwned + Send + 'static,
+    Response: Serialize + Send + 'static,
 {
     /// Dispatches the given raw request.
     fn dispatch(&self, request: &request::Request<Vec<u8>>) -> response::Response {
@@ -73,7 +77,7 @@ where
         }
 
         // Deserialize request.
-        let request_message = match Deserializable::read(&request) {
+        let request_message = match serde_cbor::from_slice(request) {
             Ok(message) => request.copy_metadata_to(message),
             _ => {
                 return response::Response::error(
@@ -97,7 +101,7 @@ where
         };
 
         // Serialize response.
-        let response = match Response::write(&response) {
+        let response = match serde_cbor::to_vec(&response) {
             Ok(response) => response,
             _ => {
                 return response::Response::error(
@@ -123,8 +127,8 @@ impl EnclaveMethod {
     /// Create a new enclave method descriptor.
     pub fn new<Request, Response, Handler>(method: ApiMethodDescriptor, handler: Handler) -> Self
     where
-        Request: Deserializable + Send + 'static,
-        Response: Serializable + Send + 'static,
+        Request: DeserializeOwned + Send + 'static,
+        Response: Serialize + Send + 'static,
         Handler: ApiMethodHandler<Request, Response> + Sync + Send + 'static,
     {
         EnclaveMethod {

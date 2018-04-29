@@ -8,3 +8,6 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+serde = "1.0"
+serde_derive = "1.0"
+serde_cbor = "0.8.2"

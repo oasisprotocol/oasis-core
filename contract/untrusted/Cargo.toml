@@ -1,0 +1,22 @@
+[package]
+name = "ekiden-contract-untrusted"
+version = "0.1.0-alpha.3"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Ekiden contract interface (untrusted part)"
+keywords = ["ekiden"]
+repository = "https://github.com/ekiden/ekiden"
+
+[features]
+sgx-simulation = []
+
+[dependencies]
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
+sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+ekiden-contract-common = { path = "../common", version = "0.1.0-alpha.3" }
+ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.3" }
+serde = "1.0"
+serde_cbor = "0.8.2"
+
+[build-dependencies]
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.3" }

@@ -1,15 +1,9 @@
-use ekiden_core::rpc::rpc_api;
+use ekiden_core::contract::contract_api;
 
-rpc_api! {
-    metadata {
-        name = token;
-        version = "0.1.0";
-        client_attestation_required = false;
-    }
+contract_api! {
+    pub fn create(CreateRequest) -> CreateResponse;
 
-    rpc create(CreateRequest) -> CreateResponse;
+    pub fn transfer(TransferRequest) -> TransferResponse;
 
-    rpc transfer(TransferRequest) -> TransferResponse;
-
-    rpc get_balance(GetBalanceRequest) -> GetBalanceResponse;
+    pub fn get_balance(GetBalanceRequest) -> GetBalanceResponse;
 }
