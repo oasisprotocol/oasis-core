@@ -3,6 +3,7 @@
 extern crate ansi_term;
 extern crate cc;
 extern crate error_chain;
+extern crate filebuffer;
 extern crate mktemp;
 extern crate protobuf;
 extern crate protoc;

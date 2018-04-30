@@ -10,6 +10,10 @@ members = [
     "beacon/base",
     "beacon/dummy",
 
+    # Random beacon.
+    "beacon/base",
+    "beacon/dummy",
+
     # Consensus interface.
     "consensus/base",
     "consensus/dummy",

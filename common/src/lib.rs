@@ -28,11 +28,11 @@ pub mod error;
 pub mod futures;
 pub mod hash;
 pub mod node;
-pub mod random;
 #[macro_use]
 pub mod profiling;
 #[macro_use]
 pub mod protobuf;
+pub mod random;
 pub mod signature;
 #[macro_use]
 pub mod uint;
