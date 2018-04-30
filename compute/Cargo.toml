@@ -12,7 +12,7 @@ ekiden-core = { path = "../core/common", version = "0.1.0-alpha.4" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.4" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.4" }
 ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.4" }
-# TODO: Remove ekiden-consensus-api depndency once we use the new consensus API.
+# TODO: Remove ekiden-consensus-api depndency once we use the new storage API.
 ekiden-consensus-api = { path = "../consensus/api", version = "0.1.0-alpha.4" }
 ekiden-consensus-base = { path = "../consensus/base", version = "0.1.0-alpha.4" }
 ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.1.0-alpha.4" }
@@ -27,6 +27,9 @@ hyper = "0.11"
 tokio-core = "0.1"
 grpcio = "0.2.2"
 lru-cache = "0.1.1"
+log = "0.4"
+pretty_env_logger = "0.2"
+futures-timer = "0.1.1"
 
 [build-dependencies]
 ekiden-tools = { path = "../tools", version = "0.1.0-alpha.4" }

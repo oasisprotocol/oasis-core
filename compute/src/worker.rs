@@ -1,33 +1,30 @@
-use std;
 use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fmt::Write;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
-use std::time::{Duration, Instant};
 
 use grpcio;
-use lru_cache::LruCache;
 use protobuf;
 use protobuf::Message;
+use thread_local::ThreadLocal;
 
 use ekiden_consensus_api::{self, ConsensusClient};
+use ekiden_consensus_base::Block;
 use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
-use ekiden_core::hash::EncodedHash;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 use ekiden_untrusted::rpc::router::RpcRouter;
 
+use super::consensus::ConsensusFrontend;
 use super::handlers;
 use super::ias::IAS;
 use super::instrumentation;
@@ -37,28 +34,28 @@ pub type BytesResult = Result<Vec<u8>>;
 /// Result bytes sender part of the channel.
 pub type BytesSender = oneshot::Sender<BytesResult>;
 
-/// Call batch that is being constructed.
+/// Computed batch.
 #[derive(Debug)]
-pub struct PendingBatch {
-    /// Instant when first item was queued in the batch.
-    start: Instant,
-    /// Call batch.
-    batch: CallBatch,
+pub struct ComputedBatch {
+    /// Block this batch was computed against.
+    pub block: Block,
+    /// Batch of contract calls.
+    pub calls: CallBatch,
+    /// Batch of contract outputs.
+    pub outputs: OutputBatch,
+    /// New state root hash.
+    pub new_state_root: H256,
 }
 
 /// Command sent to the worker thread.
-#[derive(Debug)]
-pub enum Command {
+enum Command {
     /// RPC call from a client.
-    RpcCall(Vec<u8>, BytesSender),
+    RpcCall(Vec<u8>, BytesSender, Arc<ConsensusFrontend>),
     /// Contract call batch process request.
-    ContractCallBatch(CallBatch),
-    /// Contract call subscription request.
-    SubscribeCall(H256, BytesSender),
-    /// Ping worker.
-    Ping,
+    ContractCallBatch(CallBatch, Block, oneshot::Sender<Result<ComputedBatch>>),
 }
 
+// TODO: Remove once we start using the new storage backend.
 struct CachedStateInitialized {
     encrypted_state: Vec<u8>,
     height: u64,
@@ -66,6 +63,7 @@ struct CachedStateInitialized {
 
 struct WorkerInner {
     /// Consensus client.
+    // TODO: Remove once we start using the new storage backend.
     consensus: Option<ConsensusClient>,
     /// Contract running in an enclave.
     contract: Enclave,
@@ -74,21 +72,10 @@ struct WorkerInner {
     identity_proof: IdentityProof,
     /// Cached state reconstituted from checkpoint and diffs. None if
     /// cache or state is uninitialized.
+    // TODO: Remove once we start using the new storage backend.
     cached_state: Option<CachedStateInitialized>,
     /// Instrumentation objects.
     ins: instrumentation::WorkerMetrics,
-    /// Maximum batch size.
-    max_batch_size: usize,
-    /// Maximum batch timeout.
-    max_batch_timeout: Duration,
-    /// Current batch.
-    current_batch: Option<PendingBatch>,
-    /// Batch call subscriptions.
-    subscriptions_call: HashMap<H256, Vec<BytesSender>>,
-    /// Processed calls without subscriptions. We keep a LRU cache of such call results
-    /// around so that subscription requests can arrive even after the batch has been
-    /// processed.
-    missed_calls: LruCache<H256, BytesResult>,
 }
 
 impl WorkerInner {
@@ -97,6 +84,7 @@ impl WorkerInner {
             Self::create_contract(&config.contract_filename, ias, config.saved_identity_path);
 
         // Construct consensus client.
+        // TODO: Remove once we start using the new storage backend.
         let consensus = match config.consensus_host.as_ref() {
             "none" => None,
             consensus_host => {
@@ -110,14 +98,11 @@ impl WorkerInner {
         Self {
             contract,
             identity_proof,
+            // TODO: Remove once we start using the new storage backend.
             cached_state: None,
             ins: instrumentation::WorkerMetrics::new(),
-            max_batch_size: config.max_batch_size,
-            max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
-            consensus: consensus,
-            current_batch: None,
-            subscriptions_call: HashMap::new(),
-            missed_calls: LruCache::new(config.max_batch_size * 2),
+            // TODO: Remove once we start using the new storage backend.
+            consensus,
         }
     }
 
@@ -145,11 +130,12 @@ impl WorkerInner {
             write!(&mut mr_enclave, "{:02x}", byte).unwrap();
         }
 
-        println!("Loaded contract with MRENCLAVE: {}", mr_enclave);
+        info!("Loaded contract with MRENCLAVE: {}", mr_enclave);
 
         (contract, identity_proof)
     }
 
+    // TODO: Remove once we start using the new storage backend.
     #[cfg(not(feature = "no_cache"))]
     fn get_cached_state_height(&self) -> Option<u64> {
         match self.cached_state.as_ref() {
@@ -158,6 +144,7 @@ impl WorkerInner {
         }
     }
 
+    // TODO: Remove once we start using the new storage backend.
     fn set_cached_state(&mut self, checkpoint: &ekiden_consensus_api::Checkpoint) -> Result<()> {
         self.cached_state = Some(CachedStateInitialized {
             encrypted_state: checkpoint.get_payload().to_vec(),
@@ -166,6 +153,7 @@ impl WorkerInner {
         Ok(())
     }
 
+    // TODO: Remove once we start using the new storage backend.
     fn advance_cached_state(&mut self, diffs: &[Vec<u8>]) -> Result<Vec<u8>> {
         #[cfg(feature = "no_diffs")]
         assert!(
@@ -187,6 +175,7 @@ impl WorkerInner {
 
     fn call_contract_batch_fallible(&mut self, batch: &CallBatch) -> Result<OutputBatch> {
         // Get state updates from consensus
+        // TODO: Remove once we start using the new storage backend.
         let encrypted_state_opt = if self.consensus.is_some() {
             let _consensus_get_timer = self.ins.consensus_get_time.start_timer();
 
@@ -228,6 +217,7 @@ impl WorkerInner {
             None
         };
 
+        // TODO: Remove once we start using the new storage backend.
         #[cfg(not(feature = "no_diffs"))]
         let orig_encrypted_state_opt = encrypted_state_opt.clone();
         #[cfg(feature = "no_diffs")]
@@ -243,6 +233,7 @@ impl WorkerInner {
             self.contract.contract_call_batch(batch)
         }?;
 
+        // TODO: Remove once we start using the new storage backend.
         // Check if any state was produced. In case no state was produced, this means that
         // no request caused a state update and thus no state update is required.
         let encrypted_state = self.contract.db_state_get()?;
@@ -297,148 +288,74 @@ impl WorkerInner {
     }
 
     /// Handle contract call batch.
-    fn handle_contract_batch(&mut self, batch: CallBatch) {
-        let outputs = self.call_contract_batch_fallible(&batch);
+    fn handle_contract_batch(
+        &mut self,
+        calls: CallBatch,
+        block: Block,
+        sender: oneshot::Sender<Result<ComputedBatch>>,
+    ) {
+        // TODO: Use block to get the state root hash for storage.
+        let outputs = self.call_contract_batch_fallible(&calls);
 
         match outputs {
-            Ok(mut outputs) => {
-                // No errors, send per-call outputs.
-                for (output, call) in outputs.drain(..).zip(batch.iter()) {
-                    let call_id = call.get_encoded_hash();
-                    if let Some(senders) = self.subscriptions_call.remove(&call_id) {
-                        for sender in senders {
-                            // Explicitly ignore send errors as the receiver may have gone.
-                            drop(sender.send(Ok(output.clone())));
-                        }
-                    }
-
-                    self.missed_calls.insert(call_id, Ok(output));
-                }
+            Ok(outputs) => {
+                // No errors, hand over the batch to consensus.
+                // TODO: Use actual state root hash.
+                let new_state_root = H256::zero();
+                sender
+                    .send(Ok(ComputedBatch {
+                        block,
+                        calls,
+                        outputs,
+                        new_state_root,
+                    }))
+                    .unwrap();
             }
             Err(error) => {
                 // Batch-wide error has occurred.
-                eprintln!("batch-wide error: {:?}", error);
-
-                for call in batch.iter() {
-                    let call_id = call.get_encoded_hash();
-                    if let Some(senders) = self.subscriptions_call.remove(&call_id) {
-                        for sender in senders {
-                            // Explicitly ignore send errors as the receiver may have gone.
-                            drop(sender.send(Err(error.clone())));
-                        }
-                    }
-
-                    self.missed_calls.insert(call_id, Err(error.clone()));
-                }
+                error!("Batch-wide error: {:?}", error);
+                sender.send(Err(error)).unwrap();
             }
         }
     }
 
     /// Check if the most recent RPC call produced any contract calls and queue them
     /// in the current call batch.
-    fn queue_contract_batch(&mut self) {
+    fn check_and_append_contract_batch(&self, consensus_frontend: Arc<ConsensusFrontend>) {
         // Check if the most recent RPC call produced any contract calls.
-        let mut batch = self.contract.contract_take_batch().unwrap();
-        if batch.is_empty() {
-            return;
+        match self.contract.contract_take_batch() {
+            Ok(batch) => {
+                // We got a batch of calls, send it to consensus frontend for batching.
+                if !batch.is_empty() {
+                    consensus_frontend.append_batch(batch);
+                }
+            }
+            Err(error) => {
+                error!(
+                    "Failed to take contract batch from contract: {}",
+                    error.message
+                );
+            }
         }
-
-        if let Some(ref mut current_batch) = self.current_batch {
-            // Append to current batch.
-            current_batch.batch.append(&mut batch);
-        } else {
-            // Start new batch.
-            self.current_batch = Some(PendingBatch {
-                start: Instant::now(),
-                batch,
-            });
-        }
-    }
-
-    /// Check if we need to send the current batch for processing.
-    ///
-    /// The batch is then sent for processing if either:
-    /// * Number of calls it contains reaches `max_batch_size`.
-    /// * More than `max_batch_timeout` time elapsed since batch was created.
-    fn check_and_send_contract_batch(&mut self, command_sender: &Sender<Command>) {
-        let should_process = if let Some(ref current_batch) = self.current_batch {
-            current_batch.batch.len() >= self.max_batch_size
-                || current_batch.start.elapsed() >= self.max_batch_timeout
-        } else {
-            false
-        };
-
-        if should_process {
-            // Unwrap is safe as if the batch was none, we should not enter this block.
-            let current_batch = self.current_batch.take().unwrap();
-            command_sender
-                .send(Command::ContractCallBatch(current_batch.batch))
-                .unwrap();
-        }
-    }
-
-    /// Remove any subscribers where the receiver part has been dropped.
-    fn clean_subscribers(&mut self) {
-        self.subscriptions_call.retain(|_call_id, senders| {
-            // Only retain non-canceled senders.
-            senders.retain(|sender| !sender.is_canceled());
-            // Only retain call ids for which there are subscriptions.
-            !senders.is_empty()
-        });
     }
 
     /// Process requests from a receiver until the channel closes.
-    fn work(&mut self, command_sender: Sender<Command>, command_receiver: Receiver<Command>) {
-        // Ping processing thread every max_batch_timeout.
-        let command_sender_clone = command_sender.clone();
-        let max_batch_timeout = self.max_batch_timeout;
-        std::thread::spawn(move || {
-            while command_sender_clone.send(Command::Ping).is_ok() {
-                std::thread::sleep(max_batch_timeout);
-            }
-        });
-
+    fn work(&mut self, command_receiver: Receiver<Command>) {
         // Block for the next call.
         while let Ok(command) = command_receiver.recv() {
             match command {
-                Command::RpcCall(request, sender) => {
+                Command::RpcCall(request, sender, consensus_frontend) => {
                     // Process (stateless) RPC call.
                     let result = self.handle_rpc_call(request);
                     sender.send(result).unwrap();
 
                     // Check if RPC call produced a batch of requests.
-                    self.queue_contract_batch();
+                    self.check_and_append_contract_batch(consensus_frontend);
                 }
-                Command::ContractCallBatch(batch) => {
+                Command::ContractCallBatch(calls, block, sender) => {
                     // Process batch of contract calls.
-                    self.handle_contract_batch(batch);
+                    self.handle_contract_batch(calls, block, sender);
                 }
-                Command::SubscribeCall(call_id, sender) => {
-                    self.subscribe_contract_batch(call_id, sender);
-                }
-                Command::Ping => {}
-            }
-
-            self.check_and_send_contract_batch(&command_sender);
-            self.clean_subscribers();
-        }
-    }
-
-    /// Subscribe to a specific call being processed in a batch.
-    fn subscribe_contract_batch(&mut self, call_id: H256, sender: BytesSender) {
-        // First check if there are any hits under missed calls. In this case emit
-        // the result immediately.
-        if let Some(result) = self.missed_calls.get_mut(&call_id) {
-            sender.send(result.clone()).unwrap();
-            return;
-        }
-
-        match self.subscriptions_call.entry(call_id) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().push(sender);
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(vec![sender]);
             }
         }
     }
@@ -459,13 +376,11 @@ pub struct WorkerConfiguration {
     /// Contract binary filename.
     pub contract_filename: String,
     /// Consensus host.
+    // TODO: Remove once we start using the new storage backend.
     pub consensus_host: String,
     /// Consensus port.
+    // TODO: Remove once we start using the new storage backend.
     pub consensus_port: u16,
-    /// Max batch size.
-    pub max_batch_size: usize,
-    /// Max batch timeout.
-    pub max_batch_timeout: u64,
     /// Optional saved identity path.
     pub saved_identity_path: Option<PathBuf>,
     /// Key manager configuration.
@@ -476,6 +391,9 @@ pub struct WorkerConfiguration {
 pub struct Worker {
     /// Channel for submitting commands to the worker.
     command_sender: Mutex<Sender<Command>>,
+    /// Thread-local clone of the command sender which is required to avoid locking the
+    /// mutex each time we need to send a command.
+    tl_command_sender: ThreadLocal<Sender<Command>>,
 }
 
 impl Worker {
@@ -500,23 +418,56 @@ impl Worker {
             }
         }
 
-        // Worker command channel.
-        let (command_sender, command_receiver) = channel();
-        let command_sender_clone = command_sender.clone();
-
         // Spawn inner worker in a separate thread.
+        let (command_sender, command_receiver) = channel();
         thread::spawn(move || {
-            WorkerInner::new(config, ias).work(command_sender_clone, command_receiver);
+            WorkerInner::new(config, ias).work(command_receiver);
         });
 
         Self {
             command_sender: Mutex::new(command_sender),
+            tl_command_sender: ThreadLocal::new(),
         }
     }
 
     /// Get new clone of command sender for communicating with the worker.
-    pub fn get_command_sender(&self) -> Sender<Command> {
-        let command_sender = self.command_sender.lock().unwrap();
-        command_sender.clone()
+    fn get_command_sender(&self) -> &Sender<Command> {
+        self.tl_command_sender.get_or(|| {
+            let command_sender = self.command_sender.lock().unwrap();
+            Box::new(command_sender.clone())
+        })
+    }
+
+    /// Queue an RPC call with the worker.
+    ///
+    /// Returns a receiver that will be used to deliver the response.
+    pub fn rpc_call(
+        &self,
+        request: Vec<u8>,
+        consensus_frontend: Arc<ConsensusFrontend>,
+    ) -> oneshot::Receiver<BytesResult> {
+        let (response_sender, response_receiver) = oneshot::channel();
+        self.get_command_sender()
+            .send(Command::RpcCall(
+                request,
+                response_sender,
+                consensus_frontend,
+            ))
+            .unwrap();
+
+        response_receiver
+    }
+
+    pub fn contract_call_batch(
+        &self,
+        calls: CallBatch,
+        block: Block,
+    ) -> oneshot::Receiver<Result<ComputedBatch>> {
+        let (response_sender, response_receiver) = oneshot::channel();
+        self.get_command_sender()
+            .send(Command::ContractCallBatch(calls, block, response_sender))
+            .unwrap();
+
+        response_receiver
     }
 }

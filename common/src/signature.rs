@@ -209,7 +209,7 @@ impl Into<api::Signature> for Signature {
 }
 
 /// Signature from a committee node.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Signed<T> {
     /// Signed value.
     value: T,

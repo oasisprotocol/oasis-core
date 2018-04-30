@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Stream};
-use ekiden_common::futures::sync::mpsc;
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
+use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::signature::Signed;
 use ekiden_common::uint::U256;
 use ekiden_consensus_base::*;
@@ -162,16 +162,19 @@ impl Round {
     fn try_finalize(&mut self) -> Result<FinalizationResult> {
         // Check if all nodes sent commitments.
         if self.commitments.len() != self.computation_group.len() {
+            info!("Still waiting for other round participants to commit");
             return Ok(FinalizationResult::StillWaiting);
         }
 
         if self.state == State::WaitingCommitments {
+            info!("Commitments received, now waiting for reveals");
             self.state = State::WaitingRevealsAndBlock;
             return Ok(FinalizationResult::NotifyReveals);
         }
 
         // Check if all nodes sent reveals.
         if self.reveals.len() != self.computation_group.len() {
+            info!("Still waiting for other round participants to reveal");
             return Ok(FinalizationResult::StillWaiting);
         }
 
@@ -182,6 +185,7 @@ impl Round {
         };
 
         // Everything is ready, try to finalize round.
+        info!("Attempting to finalize round");
         for node_id in self.computation_group.keys() {
             let reveal = self.reveals.get(node_id).unwrap();
             let commitment = self.commitments.get(node_id).unwrap();
@@ -213,43 +217,64 @@ impl Round {
 
         // TODO: Check if storage backend contains correct state root.
 
+        info!("Round has been finalized");
         Ok(FinalizationResult::Finalized(block))
     }
 }
 
+#[derive(Debug)]
+enum Command {
+    Commit(Commitment, oneshot::Sender<Result<()>>),
+    Reveal(Reveal<Header>, oneshot::Sender<Result<()>>),
+    Submit(Signed<Block>, oneshot::Sender<Result<()>>),
+}
+
 struct DummyConsensusBackendInner {
     /// In-memory blockchain.
-    blocks: Vec<Block>,
+    blocks: Mutex<Vec<Block>>,
     /// Current round.
-    round: Round,
+    round: Mutex<Round>,
     /// Block subscribers.
-    block_subscribers: Vec<mpsc::UnboundedSender<Block>>,
+    block_subscribers: Mutex<Vec<mpsc::UnboundedSender<Block>>>,
     /// Event subscribers.
-    event_subscribers: Vec<mpsc::UnboundedSender<Event>>,
+    event_subscribers: Mutex<Vec<mpsc::UnboundedSender<Event>>>,
+    /// Shutdown signal sender (until used).
+    shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
+    /// Shutdown signal receiver (until initialized).
+    shutdown_receiver: Mutex<Option<oneshot::Receiver<()>>>,
+    /// Command sender.
+    command_sender: mpsc::UnboundedSender<Command>,
+    /// Command receiver (until initialized).
+    command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
 }
 
 impl DummyConsensusBackendInner {
     /// Notify subscribers of a new block.
-    fn notify_block(&mut self, block: &Block) {
-        self.block_subscribers
-            .retain(|ref s| s.unbounded_send(block.clone()).is_ok());
+    fn notify_block(&self, block: &Block) {
+        let mut block_subscribers = self.block_subscribers.lock().unwrap();
+        block_subscribers.retain(|ref s| s.unbounded_send(block.clone()).is_ok());
     }
 
     /// Notify subscribers of a new event.
-    fn notify_event(&mut self, event: &Event) {
-        self.event_subscribers
-            .retain(|ref s| s.unbounded_send(event.clone()).is_ok());
+    fn notify_event(&self, event: &Event) {
+        let mut event_subscribers = self.event_subscribers.lock().unwrap();
+        event_subscribers.retain(|ref s| s.unbounded_send(event.clone()).is_ok());
     }
 
     /// Attempt to finalize the current round.
-    fn try_finalize(&mut self) {
-        let result = self.round.try_finalize();
+    fn try_finalize(&self) {
+        let mut round = self.round.lock().unwrap();
+        let result = round.try_finalize();
 
         match result {
             Ok(FinalizationResult::Finalized(block)) => {
                 // Round has been finalized, block is ready.
-                self.blocks.push(block.clone());
-                self.round.reset(Some(block.clone()));
+                {
+                    let mut blocks = self.blocks.lock().unwrap();
+                    blocks.push(block.clone());
+                }
+
+                round.reset(Some(block.clone()));
                 self.notify_block(&block);
             }
             Ok(FinalizationResult::StillWaiting) => {
@@ -261,7 +286,9 @@ impl DummyConsensusBackendInner {
             }
             Err(error) => {
                 // Round has failed.
-                self.round.reset(None);
+                error!("Round has failed: {:?}", error);
+
+                round.reset(None);
                 self.notify_event(&Event::RoundFailed(error));
             }
         }
@@ -273,20 +300,33 @@ impl DummyConsensusBackendInner {
 /// **This backend should only be used to test implementations that use the consensus
 /// interface but it only simulates a consensus backend.***
 pub struct DummyConsensusBackend {
-    inner: Arc<Mutex<DummyConsensusBackendInner>>,
+    inner: Arc<DummyConsensusBackendInner>,
 }
 
 impl DummyConsensusBackend {
+    /// Create new dummy consensus backend.
     pub fn new(computation_group: Vec<CommitteeNode>) -> Self {
+        info!(
+            "Creating dummy consensus backend with {} member(s) in computation group",
+            computation_group.len()
+        );
         let genesis_block = Self::get_genesis_block(computation_group);
 
+        // Create channels.
+        let (command_sender, command_receiver) = mpsc::unbounded();
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
         Self {
-            inner: Arc::new(Mutex::new(DummyConsensusBackendInner {
-                blocks: vec![genesis_block.clone()],
-                round: Round::new(genesis_block),
-                block_subscribers: vec![],
-                event_subscribers: vec![],
-            })),
+            inner: Arc::new(DummyConsensusBackendInner {
+                blocks: Mutex::new(vec![genesis_block.clone()]),
+                round: Mutex::new(Round::new(genesis_block)),
+                block_subscribers: Mutex::new(vec![]),
+                event_subscribers: Mutex::new(vec![]),
+                shutdown_sender: Mutex::new(Some(shutdown_sender)),
+                shutdown_receiver: Mutex::new(Some(shutdown_receiver)),
+                command_sender,
+                command_receiver: Mutex::new(Some(command_receiver)),
+            }),
         }
     }
 
@@ -310,67 +350,122 @@ impl DummyConsensusBackend {
         block.update();
         block
     }
+
+    /// Send a command to the backend task.
+    fn send_command(
+        &self,
+        command: Command,
+        receiver: oneshot::Receiver<Result<()>>,
+    ) -> BoxFuture<()> {
+        if let Err(_) = self.inner.command_sender.unbounded_send(command) {
+            return Box::new(future::err(Error::new("command channel closed")));
+        }
+
+        Box::new(receiver.then(|result| match result {
+            Ok(result) => result,
+            Err(_) => Err(Error::new("response channel closed")),
+        }))
+    }
 }
 
 impl ConsensusBackend for DummyConsensusBackend {
-    fn get_blocks(&self) -> BoxStream<Block> {
-        let mut inner = self.inner.lock().unwrap();
+    fn start(&self, executor: &mut Executor) {
+        info!("Starting dummy consensus backend");
 
-        let (sender, receiver) = mpsc::unbounded();
-        match inner.blocks.last() {
-            Some(block) => sender.unbounded_send(block.clone()).unwrap(),
-            None => {}
+        // Create command processing channel.
+        let command_receiver = self.inner
+            .command_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .expect("start already called");
+        let command_processor: BoxFuture<()> = {
+            let shared_inner = self.inner.clone();
+
+            Box::new(
+                command_receiver
+                    .map_err(|_| Error::new("command channel closed"))
+                    .for_each(move |command| -> BoxFuture<()> {
+                        let (sender, result) = {
+                            let mut round = shared_inner.round.lock().unwrap();
+
+                            match command {
+                                Command::Commit(commitment, sender) => {
+                                    (sender, round.add_commitment(commitment))
+                                }
+                                Command::Reveal(reveal, sender) => {
+                                    (sender, round.add_reveal(reveal))
+                                }
+                                Command::Submit(block, sender) => (sender, round.add_submit(block)),
+                            }
+                        };
+
+                        shared_inner.try_finalize();
+                        drop(sender.send(result));
+
+                        Box::new(future::ok(()))
+                    }),
+            )
+        };
+
+        // Create shutdown signal handler.
+        let shutdown_receiver = self.inner
+            .shutdown_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .expect("start already called");
+        let shutdown = Box::new(shutdown_receiver.then(|_| Err(Error::new("shutdown"))));
+
+        executor.spawn(Box::new(
+            future::join_all(vec![command_processor, shutdown]).then(|_| future::ok(())),
+        ));
+    }
+
+    fn shutdown(&self) {
+        info!("Shutting down dummy consensus backend");
+
+        if let Some(shutdown_sender) = self.inner.shutdown_sender.lock().unwrap().take() {
+            drop(shutdown_sender.send(()));
         }
-        inner.block_subscribers.push(sender);
+    }
+
+    fn get_blocks(&self) -> BoxStream<Block> {
+        let (sender, receiver) = mpsc::unbounded();
+        {
+            let blocks = self.inner.blocks.lock().unwrap();
+            match blocks.last() {
+                Some(block) => drop(sender.unbounded_send(block.clone())),
+                None => {}
+            }
+        }
+
+        let mut block_subscribers = self.inner.block_subscribers.lock().unwrap();
+        block_subscribers.push(sender);
 
         Box::new(receiver.map_err(|_| Error::new("channel closed")))
     }
 
     fn get_events(&self) -> BoxStream<Event> {
-        let mut inner = self.inner.lock().unwrap();
-
         let (sender, receiver) = mpsc::unbounded();
-        inner.event_subscribers.push(sender);
+        let mut event_subscribers = self.inner.event_subscribers.lock().unwrap();
+        event_subscribers.push(sender);
 
         Box::new(receiver.map_err(|_| Error::new("channel closed")))
     }
 
     fn commit(&self, commitment: Commitment) -> BoxFuture<()> {
-        let inner = self.inner.clone();
-
-        Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
-
-            inner.round.add_commitment(commitment)?;
-            inner.try_finalize();
-
-            Ok(())
-        }))
+        let (sender, receiver) = oneshot::channel();
+        self.send_command(Command::Commit(commitment, sender), receiver)
     }
 
     fn reveal(&self, reveal: Reveal<Header>) -> BoxFuture<()> {
-        let inner = self.inner.clone();
-
-        Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
-
-            inner.round.add_reveal(reveal)?;
-            inner.try_finalize();
-
-            Ok(())
-        }))
+        let (sender, receiver) = oneshot::channel();
+        self.send_command(Command::Reveal(reveal, sender), receiver)
     }
 
     fn submit(&self, block: Signed<Block>) -> BoxFuture<()> {
-        let inner = self.inner.clone();
-
-        Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
-
-            inner.round.add_submit(block)?;
-            inner.try_finalize();
-
-            Ok(())
-        }))
+        let (sender, receiver) = oneshot::channel();
+        self.send_command(Command::Submit(block, sender), receiver)
     }
 }

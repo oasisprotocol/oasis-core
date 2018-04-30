@@ -3,6 +3,7 @@
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added.
 * Make contract client sharable between threads.
+* Use new consensus interface in the compute node.
 
 # 0.1.0-alpha.4
 

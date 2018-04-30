@@ -3,15 +3,17 @@
 extern crate sgx_types;
 
 extern crate base64;
+extern crate futures_timer;
 extern crate grpcio;
+extern crate hyper;
+#[macro_use]
+extern crate log;
 extern crate lru_cache;
+#[macro_use]
+extern crate prometheus;
 extern crate protobuf;
 extern crate reqwest;
 extern crate thread_local;
-
-extern crate hyper;
-#[macro_use]
-extern crate prometheus;
 
 extern crate ekiden_compute_api;
 extern crate ekiden_consensus_api;
@@ -26,17 +28,32 @@ mod handlers;
 mod server;
 mod worker;
 mod node;
+mod consensus;
+
+// Everything above should be moved into a library, while everything below should be in the binary.
 
 #[macro_use]
 extern crate clap;
+extern crate pretty_env_logger;
 
 extern crate ekiden_consensus_dummy;
 
+use std::fs::File;
+use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::Arc;
 use std::thread;
 
 use clap::{App, Arg};
+use log::LevelFilter;
 
+use ekiden_consensus_base::{CommitteeNode, Role};
+use ekiden_core::ring::rand::SystemRandom;
+use ekiden_core::ring::signature::Ed25519KeyPair;
+use ekiden_core::signature::{InMemorySigner, Signer};
+use ekiden_core::untrusted;
+
+use self::consensus::ConsensusConfiguration;
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
@@ -92,12 +109,6 @@ fn main() {
                 .default_value("9003"),
         )
         .arg(
-            Arg::with_name("consensus-backend")
-                .long("consensus-backend")
-                .takes_value(true)
-                .default_value("dummy")
-        )
-        .arg(
             Arg::with_name("consensus-host")
                 .long("consensus-host")
                 .takes_value(true)
@@ -113,15 +124,15 @@ fn main() {
         .arg(
             Arg::with_name("grpc-threads")
                 .long("grpc-threads")
-                .help("Number of threads to use in the GRPC server's HTTP server. Multiple threads only allow requests to be batched up. Requests will not be processed concurrently.")
-                .default_value("1")
+                .help("Number of threads to use for the event loop.")
+                .default_value("4")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("metrics-addr")
                 .long("metrics-addr")
                 .help("A SocketAddr (as a string) from which to serve metrics to Prometheus.")
-                .takes_value(true)
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("max-batch-size")
@@ -147,19 +158,79 @@ fn main() {
         .arg(
             Arg::with_name("no-persist-identity")
                 .long("no-persist-identity")
-                .help("Do not persist enclave identity (useful for contract development)")
+                .help("Do not persist enclave identity (useful for contract development)"),
+        )
+        .arg(
+            Arg::with_name("key-pair")
+                .long("key-pair")
+                .help("Path to key pair for this compute node (if not set, a new key pair will be generated)")
+                .takes_value(true)
         )
         .get_matches();
 
+    // Initialize logger.
+    pretty_env_logger::formatted_builder()
+        .unwrap()
+        .filter(None, LevelFilter::Trace)
+        .init();
+
+    // Setup key pair.
+    let mut key_pair = if let Some(filename) = matches.value_of("key-pair") {
+        // Load key pair from existing file.
+        if let Ok(mut file) = File::open(filename) {
+            let mut key_pair = vec![];
+            file.read_to_end(&mut key_pair).unwrap();
+            info!("Loaded node key pair from {}", filename);
+
+            Some(key_pair)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if key_pair.is_none() {
+        // Generate new key pair.
+        info!("Generating new key pair");
+        let rng = SystemRandom::new();
+        let new_key_pair = Ed25519KeyPair::generate_pkcs8(&rng).unwrap().to_vec();
+
+        if let Some(filename) = matches.value_of("key-pair") {
+            // Persist key pair to file.
+            let mut file = File::create(filename).expect("unable to create key pair file");
+            file.write(&new_key_pair).unwrap();
+        }
+
+        key_pair = Some(new_key_pair);
+    }
+
+    let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&key_pair.unwrap())).unwrap();
+    let signer = Arc::new(InMemorySigner::new(key_pair));
+
+    info!("Using public key {:?}", signer.get_public_key());
+
     // Setup consensus backend.
+    // TODO: Get backend configuration from command line or configuration file.
     // TODO: Change dummy backend to get computation group from another backend.
-    let consensus_backend = Box::new(ekiden_consensus_dummy::DummyConsensusBackend::new(vec![]));
+    let consensus_backend = Arc::new(ekiden_consensus_dummy::DummyConsensusBackend::new(vec![
+        CommitteeNode {
+            role: Role::Leader,
+            public_key: signer.get_public_key(),
+        },
+    ]));
 
     // Setup compute node.
     let mut node = ComputeNode::new(ComputeNodeConfiguration {
-        grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or(1),
+        grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or_else(|e| e.exit()),
         port: value_t!(matches, "port", u16).unwrap_or(9001),
-        consensus_backend,
+        // Consensus configuration.
+        consensus: ConsensusConfiguration {
+            backend: consensus_backend,
+            signer: signer,
+            max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
+            max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
+        },
         // IAS configuration.
         ias: if matches.is_present("ias-spid") {
             Some(IASConfiguration {
@@ -167,7 +238,7 @@ fn main() {
                 pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
             })
         } else {
-            eprintln!("WARNING: IAS is not configured, validation will always return an error.");
+            warn!("IAS is not configured, validation will always return an error.");
 
             None
         },
@@ -185,8 +256,7 @@ fn main() {
                 consensus_host: matches.value_of("consensus-host").unwrap().to_owned(),
                 // TODO: Remove this after we switch to new storage backend.
                 consensus_port: value_t!(matches, "consensus-port", u16).unwrap_or(9002),
-                max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
-                max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
+
                 saved_identity_path: if matches.is_present("no-persist-identity") {
                     None
                 } else {
