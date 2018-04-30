@@ -11,18 +11,21 @@ extern crate byteorder;
 extern crate chrono;
 extern crate core;
 extern crate fixed_hash;
-extern crate protobuf;
 pub extern crate ring;
-pub extern crate rlp;
 extern crate rustc_hex;
+extern crate serde;
+extern crate serde_cbor;
+#[macro_use]
+extern crate serde_derive;
 pub extern crate untrusted;
 
 pub mod error;
 pub mod futures;
 pub mod bytes;
+#[macro_use]
+pub mod protobuf;
 pub mod random;
 #[macro_use]
-pub mod serializer;
 pub mod uint;
 pub mod hash;
 pub mod signature;

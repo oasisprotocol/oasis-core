@@ -246,7 +246,7 @@ pub fn protoc(args: ProtocArgs) {
             for message_type in file.get_message_type() {
                 writeln!(
                     &mut out_file,
-                    "impl_serializable_protobuf!({});",
+                    "impl_serde_for_protobuf!({});",
                     message_type.get_name()
                 ).unwrap();
             }

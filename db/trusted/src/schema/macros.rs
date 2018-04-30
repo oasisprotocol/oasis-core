@@ -4,16 +4,16 @@
 /// field type. A [`ScalarDescriptor`] is generated for each scalar field and a
 /// [`MapDescriptor`] is generated for each `Map<K, V>` field.
 ///
-/// Any type that implements the [`Serializable`] and [`Deserializable`] traits can
-/// be used in the schema struct as a value (either as a scalar field or in a map).
+/// Any type that implements the [`Serialize`] and [`Deserialize`] traits can be
+/// used in the schema struct as a value (either as a scalar field or in a map).
 ///
-/// Any type that implements the [`Serializable`] trait can be used in the schema
+/// Any type that implements the [`Serialize`] trait can be used in the schema
 /// struct as a key in mappings.
 ///
 /// [`ScalarDescriptor`]: super::descriptor::ScalarDescriptor
 /// [`MapDescriptor`]: super::descriptor::MapDescriptor
-/// [`Serializable`]: ekiden_common::serializer::Serializable
-/// [`Deserializable`]: ekiden_common::serializer::Deserializable
+/// [`Serialize`]: serde::Serialize
+/// [`Deserialize`]: serde::Deserialize
 ///
 /// # Examples
 ///

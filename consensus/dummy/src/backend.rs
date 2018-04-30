@@ -6,7 +6,6 @@ use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Stream};
 use ekiden_common::futures::sync::mpsc;
-use ekiden_common::ring::digest;
 use ekiden_common::signature::Signed;
 use ekiden_common::uint::U256;
 use ekiden_consensus_base::*;
@@ -29,11 +28,11 @@ enum FinalizationResult {
 /// State needed for managing a protocol round.
 struct Round {
     /// Computation group, mapped by public key hashes.
-    computation_group: HashMap<H256, CommitteeNode>,
+    computation_group: HashMap<B256, CommitteeNode>,
     /// Commitments from computation group nodes.
-    commitments: HashMap<H256, Commitment>,
+    commitments: HashMap<B256, Commitment>,
     /// Reveals from computation group nodes.
-    reveals: HashMap<H256, Reveal<Header>>,
+    reveals: HashMap<B256, Reveal<Header>>,
     /// Current block.
     current_block: Block,
     /// Next block.
@@ -48,10 +47,7 @@ impl Round {
         // Index computation group members by their public key hash.
         let mut computation_group_map = HashMap::new();
         for node in &block.computation_group {
-            computation_group_map.insert(
-                H256::from(digest::digest(&digest::SHA512_256, &node.public_key).as_ref()),
-                node.clone(),
-            );
+            computation_group_map.insert(node.public_key.clone(), node.clone());
         }
 
         Self {
@@ -82,13 +78,12 @@ impl Round {
         }
 
         // Ensure commitment is from a valid compute node.
-        let node_id = commitment.signature.public_key_id.clone();
-        let node = match self.computation_group.get(&node_id) {
-            Some(node) => node,
-            None => return Err(Error::new("node not part of computation group")),
+        let node_id = commitment.signature.public_key.clone();
+        if !self.computation_group.contains_key(&node_id) {
+            return Err(Error::new("node not part of computation group"));
         };
 
-        if !commitment.verify(&node.get_verifier()) {
+        if !commitment.verify() {
             return Err(Error::new("commitment has invalid signature"));
         }
 
@@ -109,13 +104,12 @@ impl Round {
         }
 
         // Ensure commitment is from a valid compute node.
-        let node_id = reveal.signature.public_key_id.clone();
-        let node = match self.computation_group.get(&node_id) {
-            Some(node) => node,
-            None => return Err(Error::new("node not part of computation group")),
+        let node_id = reveal.signature.public_key.clone();
+        if !self.computation_group.contains_key(&node_id) {
+            return Err(Error::new("node not part of computation group"));
         };
 
-        if !reveal.verify(&node.get_verifier()) {
+        if !reveal.verify() {
             return Err(Error::new("reveal has invalid signature"));
         }
 
@@ -141,7 +135,7 @@ impl Round {
         }
 
         // Ensure commitment is from a valid compute node and that the node is a leader.
-        let node_id = block.signature.public_key_id.clone();
+        let node_id = block.signature.public_key.clone();
         let node = match self.computation_group.get(&node_id) {
             Some(node) => node,
             None => return Err(Error::new("node not part of computation group")),
@@ -152,7 +146,7 @@ impl Round {
         }
 
         // Ensure block has a valid signature.
-        let block = block.open(&node.get_verifier(), &BLOCK_SUBMIT_SIGNATURE_CONTEXT)?;
+        let block = block.open(&BLOCK_SUBMIT_SIGNATURE_CONTEXT)?;
 
         // Ensure node did not already submit a block.
         if self.next_block.is_some() {
@@ -188,18 +182,18 @@ impl Round {
         };
 
         // Everything is ready, try to finalize round.
-        for (node_id, node) in &self.computation_group {
+        for node_id in self.computation_group.keys() {
             let reveal = self.reveals.get(node_id).unwrap();
             let commitment = self.commitments.get(node_id).unwrap();
 
-            if !reveal.verify_commitment(&node.get_verifier(), &commitment) {
+            if !reveal.verify_commitment(&commitment) {
                 return Err(Error::new(format!(
                     "commitment from node {} does not match reveal",
                     node_id
                 )));
             }
 
-            if !reveal.verify_value(&node.get_verifier(), &block.header) {
+            if !reveal.verify_value(&block.header) {
                 return Err(Error::new(format!(
                     "reveal from node {} does not match block",
                     node_id

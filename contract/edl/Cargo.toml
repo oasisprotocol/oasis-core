@@ -1,0 +1,10 @@
+[package]
+name = "ekiden-contract-edl"
+version = "0.1.0-alpha.3"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Ekiden contract EDL"
+keywords = ["ekiden"]
+repository = "https://github.com/ekiden/ekiden"
+
+[dependencies]
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.3" }

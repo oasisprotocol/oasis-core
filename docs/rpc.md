@@ -23,8 +23,8 @@ There are a few different things in here:
 
 An RPC method definition looks similar to a Rust function definition and is composed from the following parts:
 * Method name (e.g., `hello_world`) which defines how the method will be called.
-* Request type (e.g., `HelloWorldRequest`) which defines the Rust type containing the request message. Currently, this must be a Protocol Buffers message type.
-* Response type (e.g., `HelloWorldResponse`) which defines the Rust type containing the response message. Currently, this must be a Protocol Buffers message type.
+* Request type (e.g., `HelloWorldRequest`) which defines the Rust type containing the request message. This can be any type implementing Serde's `Deserialize` trait.
+* Response type (e.g., `HelloWorldResponse`) which defines the Rust type containing the response message. This can be any type implementing Serde's `Serialize` trait.
 
 This same API definition can be used to generate both enclaves and clients. This is achieved by making the `rpc_api` generate in its place another macro called `with_api` which can be used from both enclaves and clients.
 
@@ -70,25 +70,20 @@ with_api! {
 This will create the client and necessary types inside a module named `dummy` (first argument to `create_client_rpc` macro).
 We can use this to create clients that talk to an Ekiden Compute node over gRPC:
 ```rust
-use ekiden_rpc_client::backend::Web3ContractClientBackend;
+use std::sync::Arc;
 
-// Create reactor (event loop) in a separate thread.
-// TODO: Can this be simplified, it looks ugly?
-let (tx, rx) = std::sync::mpsc::channel();
-std::thread::spawn(move || {
-    let mut reactor = tokio_core::reactor::Core::new().unwrap();
-    tx.send(reactor.remote()).unwrap();
-    reactor.run(futures::empty::<(), ()>()).unwrap();
-});
+use ekiden_rpc_client::backend::Web3RpcClientBackend;
+use grpcio;
 
-let remote = rx.recv().unwrap();
+// Create gRPC event loop.
+let grpc_environment = Arc::new(grpcio::EnvBuilder::new().build());
 
 let client = dummy::Client::new(
-    Web3ContractClientBackend::new(
-        remote,
+    Arc::new(Web3RpcClientBackend::new(
+        grpc_environment,
         "hostname",
         9001,
-    ).unwrap(),
+    ).unwrap()),
     MrEnclave([0; 32]),  // This needs to be an actual MRENCLAVE.
 );
 

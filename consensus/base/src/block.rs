@@ -1,7 +1,6 @@
 //! Block type.
 use ekiden_common::bytes::H256;
-use ekiden_common::hash::{EncodedHash, EncodedListHash};
-use ekiden_common::rlp::{Decodable, DecoderError, Encodable, RlpStream, UntrustedRlp};
+use ekiden_common::hash::EncodedHash;
 use ekiden_common::uint::U256;
 
 use super::commitment::Commitment;
@@ -10,7 +9,7 @@ use super::header::Header;
 use super::transaction::Transaction;
 
 /// Block.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Block {
     /// Block header.
     pub header: Header,
@@ -65,32 +64,11 @@ impl Block {
     }
 }
 
-impl Encodable for Block {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(4);
-        stream.append(&self.header);
-        stream.append_list(&self.computation_group);
-        stream.append_list(&self.transactions);
-        stream.append_list(&self.commitments);
-    }
-}
-
-impl Decodable for Block {
-    fn decode(rlp: &UntrustedRlp) -> Result<Self, DecoderError> {
-        Ok(Self {
-            header: rlp.val_at(0)?,
-            computation_group: rlp.list_at(1)?,
-            transactions: rlp.list_at(2)?,
-            commitments: rlp.list_at(3)?,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use ekiden_common::bytes::B256;
     use ekiden_common::ring::signature::Ed25519KeyPair;
-    use ekiden_common::signature::{InMemorySigner, PublicKeyVerifier};
+    use ekiden_common::signature::InMemorySigner;
     use ekiden_common::untrusted;
 
     use super::*;
@@ -102,20 +80,18 @@ mod tests {
         let nonce = B256::zero();
         let key_pair =
             Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-        let public_key = B256::from(key_pair.public_key_bytes());
         let signer = InMemorySigner::new(key_pair);
-        let verifier = PublicKeyVerifier::new(public_key);
 
         let header = block.header.clone();
 
         // Test commitment.
         let commitment = Commitment::new(&signer, &nonce, &header);
-        assert!(commitment.verify(&verifier));
+        assert!(commitment.verify());
 
         // Test reveal.
         let reveal = Reveal::new(&signer, &nonce, &header);
-        assert!(reveal.verify(&verifier));
-        assert!(reveal.verify_commitment(&verifier, &commitment));
-        assert!(reveal.verify_value(&verifier, &header));
+        assert!(reveal.verify());
+        assert!(reveal.verify_commitment(&commitment));
+        assert!(reveal.verify_value(&header));
     }
 }

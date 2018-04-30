@@ -76,5 +76,7 @@ pub extern "C" fn db_state_get(state: *mut u8, state_capacity: usize, state_leng
         .expect("Error exporting state");
 
     // Copy back response.
-    write_enclave_response(&result, state, state_capacity, state_length);
+    if !result.get_ciphertext().is_empty() {
+        write_enclave_response(&result, state, state_capacity, state_length);
+    }
 }

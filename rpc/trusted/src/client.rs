@@ -2,10 +2,11 @@
 
 use futures::future::{self, Future};
 
+use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_enclave_trusted::identity;
 use ekiden_rpc_client::ClientFuture;
-use ekiden_rpc_client::backend::{ContractClientBackend, ContractClientCredentials};
+use ekiden_rpc_client::backend::{RpcClientBackend, RpcClientCredentials};
 use ekiden_rpc_common::api;
 use ekiden_rpc_common::client::ClientEndpoint;
 
@@ -15,19 +16,19 @@ use super::untrusted;
 ///
 /// It relays contract calls via an OCALL to the untrusted world which may then
 /// dispatch the calls to other compute nodes.
-pub struct OcallContractClientBackend {
+pub struct OcallRpcClientBackend {
     /// Endpoint that the client is connecting to.
     endpoint: ClientEndpoint,
 }
 
-impl OcallContractClientBackend {
+impl OcallRpcClientBackend {
     /// Construct new OCALL contract client backend.
     pub fn new(endpoint: ClientEndpoint) -> Result<Self> {
-        Ok(OcallContractClientBackend { endpoint: endpoint })
+        Ok(OcallRpcClientBackend { endpoint: endpoint })
     }
 }
 
-impl ContractClientBackend for OcallContractClientBackend {
+impl RpcClientBackend for OcallRpcClientBackend {
     /// Spawn future using an executor.
     fn spawn<F: Future + Send + 'static>(&self, _future: F) {
         panic!("Attempted to spawn future using OCALL backend");
@@ -57,9 +58,14 @@ impl ContractClientBackend for OcallContractClientBackend {
         }))
     }
 
+    /// Wait for given contract call outputs to become available.
+    fn wait_contract_call(&self, _call_id: H256) -> ClientFuture<Vec<u8>> {
+        unimplemented!();
+    }
+
     /// Get credentials.
-    fn get_credentials(&self) -> Option<ContractClientCredentials> {
-        Some(ContractClientCredentials {
+    fn get_credentials(&self) -> Option<RpcClientCredentials> {
+        Some(RpcClientCredentials {
             long_term_private_key: identity::get_identity().rpc_key_e_priv,
             identity_proof: identity::get_proof(),
         })

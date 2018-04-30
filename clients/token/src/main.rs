@@ -8,6 +8,7 @@ extern crate rand;
 
 #[macro_use]
 extern crate client_utils;
+extern crate ekiden_contract_client;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
 
@@ -17,17 +18,21 @@ use clap::{App, Arg};
 use futures::future::Future;
 use rand::{thread_rng, Rng};
 
-use ekiden_rpc_client::create_client_rpc;
+use ekiden_contract_client::create_contract_client;
+use ekiden_core::bytes::B256;
+use ekiden_core::ring::signature::Ed25519KeyPair;
+use ekiden_core::signature::InMemorySigner;
+use ekiden_core::untrusted;
 use token_api::with_api;
 
 with_api! {
-    create_client_rpc!(token, token_api, api);
+    create_contract_client!(token, token_api, api);
 }
 
 /// Initializes the token scenario.
 fn init<Backend>(client: &mut token::Client<Backend>, _runs: usize, _threads: usize)
 where
-    Backend: ekiden_rpc_client::backend::ContractClientBackend,
+    Backend: ekiden_rpc_client::backend::RpcClientBackend,
 {
     // Create new token contract.
     let mut request = token::CreateRequest::new();
@@ -58,7 +63,7 @@ fn create_address() -> String {
 /// Runs the token scenario.
 fn scenario<Backend>(client: &mut token::Client<Backend>)
 where
-    Backend: ekiden_rpc_client::backend::ContractClientBackend,
+    Backend: ekiden_rpc_client::backend::RpcClientBackend,
 {
     // Generate random addresses.
     let destination = create_address();
@@ -101,7 +106,7 @@ where
 /// Finalize the token scenario.
 fn finalize<Backend>(client: &mut token::Client<Backend>, runs: usize, threads: usize)
 where
-    Backend: ekiden_rpc_client::backend::ContractClientBackend,
+    Backend: ekiden_rpc_client::backend::RpcClientBackend,
 {
     // Check final balance.
     let response = client
@@ -118,15 +123,24 @@ where
     );
 }
 
+/// Generate client key pair.
+fn create_key_pair() -> InMemorySigner {
+    let key_pair =
+        Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
+    InMemorySigner::new(key_pair)
+}
+
 #[cfg(feature = "benchmark")]
 fn main() {
-    let results = benchmark_client!(token, init, scenario, finalize);
+    let signer = create_key_pair();
+    let results = benchmark_client!(signer, token, init, scenario, finalize);
     results.show();
 }
 
 #[cfg(not(feature = "benchmark"))]
 fn main() {
-    let mut client = contract_client!(token);
+    let signer = create_key_pair();
+    let mut client = contract_client!(signer, token);
     init(&mut client, 1, 1);
     scenario(&mut client);
     finalize(&mut client, 1, 1);

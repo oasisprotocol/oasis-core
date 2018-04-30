@@ -11,20 +11,20 @@ stage = 1
 [dependencies.std]
 features = ["stdio", "untrusted_time"]
 git = "https://github.com/ekiden/rust-sgx-sdk"
-tag = "v0.9.7-ekiden1"
+tag = "v0.9.7-ekiden2"
 stage = 2
 
 [dependencies.xargo_sgx_rand]
 git = "https://github.com/ekiden/rust-sgx-sdk"
-tag = "v0.9.7-ekiden1"
+tag = "v0.9.7-ekiden2"
 stage = 3
 
 [dependencies.xargo_sgx_serialize]
 git = "https://github.com/ekiden/rust-sgx-sdk"
-tag = "v0.9.7-ekiden1"
+tag = "v0.9.7-ekiden2"
 stage = 3
 
 [dependencies.xargo_sgx_tunittest]
 git = "https://github.com/ekiden/rust-sgx-sdk"
-tag = "v0.9.7-ekiden1"
+tag = "v0.9.7-ekiden2"
 stage = 3

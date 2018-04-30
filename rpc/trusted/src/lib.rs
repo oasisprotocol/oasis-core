@@ -12,6 +12,8 @@ extern crate futures;
 #[macro_use]
 extern crate lazy_static;
 extern crate protobuf;
+extern crate serde;
+extern crate serde_cbor;
 extern crate sodalite;
 
 extern crate ekiden_common;

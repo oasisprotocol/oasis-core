@@ -8,12 +8,13 @@ use futures::future::{self, Future};
 use protobuf;
 use protobuf::Message;
 
+use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_rpc_common::api;
 
-use ekiden_compute_api::{CallContractRequest, ComputeClient};
+use ekiden_compute_api::{CallContractRequest, ComputeClient, WaitContractCallRequest};
 
-use super::{ContractClientBackend, ContractClientCredentials};
+use super::{RpcClientBackend, RpcClientCredentials};
 use super::super::future::ClientFuture;
 
 /// Address of a compute node.
@@ -69,19 +70,20 @@ impl ComputeNodes {
     }
 
     /// Call the first available compute node.
-    fn call_available_node(
-        &self,
-        client_request: Vec<u8>,
-        max_retries: usize,
-    ) -> ClientFuture<Vec<u8>> {
-        let mut rpc_request = CallContractRequest::new();
-        rpc_request.set_payload(client_request);
-
+    fn call_available_node<F, Rs>(&self, method: F, max_retries: usize) -> ClientFuture<Rs>
+    where
+        F: Fn(&ComputeClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        Rs: Send + Sync + 'static,
+    {
         let shared_nodes = self.nodes.clone();
 
         let try_times = future::loop_fn(
             max_retries,
-            move |retries| -> ClientFuture<future::Loop<Vec<u8>, usize>> {
+            move |retries| -> ClientFuture<future::Loop<Rs, usize>> {
                 // Abort when we have reached the given number of retries.
                 if retries == 0 {
                     return Box::new(future::err(Error::new(
@@ -90,12 +92,12 @@ impl ComputeNodes {
                 }
 
                 let cloned_nodes = shared_nodes.clone();
-                let rpc_request = rpc_request.clone();
+                let method = method.clone();
 
                 // Try to find an active node on each iteration.
                 let try_node = future::loop_fn(
                     (),
-                    move |_| -> ClientFuture<future::Loop<Vec<u8>, ()>> {
+                    move |_| -> ClientFuture<future::Loop<Rs, ()>> {
                         let nodes = cloned_nodes.lock().unwrap();
 
                         // Find the first non-failed node and use it to send a request.
@@ -104,12 +106,10 @@ impl ComputeNodes {
                                 // Found a non-failed node.
                                 let cloned_nodes = cloned_nodes.clone();
 
-                                return match node.client.call_contract_async(&rpc_request) {
+                                return match method(&node.client) {
                                     Ok(call) => Box::new(call.then(move |result| {
                                         match result {
-                                            Ok(mut response) => {
-                                                Ok(future::Loop::Break(response.take_payload()))
-                                            }
+                                            Ok(response) => Ok(future::Loop::Break(response)),
                                             Err(_) => {
                                                 let mut nodes = cloned_nodes.lock().unwrap();
                                                 // Since we never remove or reorder nodes, we can be sure that this
@@ -156,7 +156,7 @@ impl ComputeNodes {
 }
 
 /// gRPC client backend.
-pub struct Web3ContractClientBackend {
+pub struct Web3RpcClientBackend {
     /// Concurrency environment for gRPC communication.
     environment: Arc<grpcio::Environment>,
     /// Completion queue for executing futures. This is an instance of Client because
@@ -166,7 +166,7 @@ pub struct Web3ContractClientBackend {
     nodes: ComputeNodes,
 }
 
-impl Web3ContractClientBackend {
+impl Web3RpcClientBackend {
     /// Construct new Web3 contract client backend.
     pub fn new(environment: Arc<grpcio::Environment>, host: &str, port: u16) -> Result<Self> {
         Self::new_pool(
@@ -185,7 +185,7 @@ impl Web3ContractClientBackend {
         environment: Arc<grpcio::Environment>,
         nodes: &[ComputeNodeAddress],
     ) -> Result<Self> {
-        Ok(Web3ContractClientBackend {
+        Ok(Web3RpcClientBackend {
             // Create a dummy channel, needed for executing futures. This is required because
             // the API for doing this directly using an Executor is not exposed.
             completion_queue: grpcio::Client::new(
@@ -202,12 +202,20 @@ impl Web3ContractClientBackend {
     }
 
     /// Perform a raw contract call via gRPC.
-    fn call_available_node(&self, client_request: Vec<u8>) -> ClientFuture<Vec<u8>> {
-        self.nodes.call_available_node(client_request, 3)
+    fn call_available_node<F, Rs>(&self, method: F) -> ClientFuture<Rs>
+    where
+        F: Fn(&ComputeClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        Rs: Send + Sync + 'static,
+    {
+        self.nodes.call_available_node(method, 3)
     }
 }
 
-impl ContractClientBackend for Web3ContractClientBackend {
+impl RpcClientBackend for Web3RpcClientBackend {
     /// Spawn future using an executor.
     fn spawn<F: Future<Item = (), Error = ()> + Send + 'static>(&self, future: F) {
         self.completion_queue.spawn(future)
@@ -229,11 +237,27 @@ impl ContractClientBackend for Web3ContractClientBackend {
 
     /// Call contract with raw data.
     fn call_raw(&self, client_request: Vec<u8>) -> ClientFuture<Vec<u8>> {
-        self.call_available_node(client_request)
+        let mut rpc_request = CallContractRequest::new();
+        rpc_request.set_payload(client_request);
+
+        Box::new(
+            self.call_available_node(move |client| client.call_contract_async(&rpc_request))
+                .map(|mut response| response.take_payload()),
+        )
+    }
+
+    /// Wait for given contract call outputs to become available.
+    fn wait_contract_call(&self, call_id: H256) -> ClientFuture<Vec<u8>> {
+        let mut rpc_request = WaitContractCallRequest::new();
+        rpc_request.set_call_id(call_id.to_vec());
+
+        Box::new(self.call_available_node(move |client| {
+            client.wait_contract_call_async(&rpc_request)
+        }).map(|mut response| response.take_output()))
     }
 
     /// Get credentials.
-    fn get_credentials(&self) -> Option<ContractClientCredentials> {
+    fn get_credentials(&self) -> Option<RpcClientCredentials> {
         None
     }
 }

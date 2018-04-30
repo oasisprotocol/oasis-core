@@ -1,5 +1,6 @@
 extern crate byteorder;
 extern crate protobuf;
+extern crate serde;
 extern crate sodalite;
 
 #[macro_use]

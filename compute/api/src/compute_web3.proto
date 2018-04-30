@@ -3,8 +3,11 @@ syntax = "proto3";
 package compute_web3;
 
 service Compute {
-    // Contract interface.
+    // RPC interface.
     rpc CallContract (CallContractRequest) returns (CallContractResponse) {}
+
+    // Wait for given contract request to be processed.
+    rpc WaitContractCall (WaitContractCallRequest) returns (WaitContractCallResponse) {}
 }
 
 message CallContractRequest {
@@ -16,4 +19,15 @@ message CallContractRequest {
 message CallContractResponse {
     // Raw contract dependent response payload (Protocol Buffers serialized).
     bytes payload = 1;
+}
+
+message WaitContractCallRequest {
+    // Identifier of the contract call to wait for. The identifier is the hash
+    // of the contract call.
+    bytes call_id = 1;
+}
+
+message WaitContractCallResponse {
+    // Contract call output.
+    bytes output = 1;
 }

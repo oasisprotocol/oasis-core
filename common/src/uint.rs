@@ -2,7 +2,7 @@
 use std::ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub};
 
 use bigint::uint;
-use rlp::{Decodable, DecoderError, Encodable, RlpStream, UntrustedRlp};
+use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 /// Implement binary operator for uint type wrapper.
 macro_rules! impl_op_for_wrapper {
@@ -83,34 +83,42 @@ macro_rules! wrap_uint_type {
     }
 }
 
-/// Implement `Encodable` trait for given uint type.
-macro_rules! impl_encodable_for_uint {
+/// Implement `Serialize` trait for given uint type.
+macro_rules! impl_serialize_for_uint {
     ($name: ident, $size: expr) => {
-        impl Encodable for $name {
-            fn rlp_append(&self, s: &mut RlpStream) {
+        impl Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where S: Serializer
+            {
                 let leading_empty_bytes = $size - (self.bits() + 7) / 8;
                 let mut buffer = [0u8; $size];
                 self.to_big_endian(&mut buffer);
-                s.encoder().encode_value(&buffer[leading_empty_bytes..]);
+                buffer[leading_empty_bytes..].serialize(serializer)
             }
         }
     }
 }
 
-/// Implement `Decodable` trait for given uint type.
-macro_rules! impl_decodable_for_uint {
+/// Implement `Deserialize` trait for given uint type.
+macro_rules! impl_deserialize_for_uint {
     ($name: ident, $size: expr) => {
-        impl Decodable for $name {
-            fn decode(rlp: &UntrustedRlp) -> Result<Self, DecoderError> {
-                rlp.decoder().decode_value(|bytes| {
-                    if !bytes.is_empty() && bytes[0] == 0 {
-                        Err(DecoderError::RlpInvalidIndirection)
-                    } else if bytes.len() <= $size {
-                        Ok($name::from(bytes))
-                    } else {
-                        Err(DecoderError::RlpIsTooBig)
-                    }
-                })
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let buffer: Vec<u8> = Deserialize::deserialize(deserializer)?;
+                if !buffer.is_empty() && buffer[0] == 0 {
+                    // Leading empty bytes should be stripped.
+                    return Err(serde::de::Error::custom("incorrect uint encoding"));
+                } else if buffer.len() > $size {
+                    return Err(serde::de::Error::custom("incorrect uint size"));
+                }
+
+                let mut buffer_with_leading = [0u8; $size];
+                buffer_with_leading[$size - buffer.len()..].copy_from_slice(&buffer);
+
+                Ok($name::from(buffer_with_leading))
             }
         }
     }
@@ -120,8 +128,40 @@ macro_rules! impl_decodable_for_uint {
 wrap_uint_type!(U128);
 wrap_uint_type!(U256);
 
-impl_encodable_for_uint!(U128, 16);
-impl_encodable_for_uint!(U256, 32);
+impl_serialize_for_uint!(U128, 16);
+impl_serialize_for_uint!(U256, 32);
 
-impl_decodable_for_uint!(U128, 16);
-impl_decodable_for_uint!(U256, 32);
+impl_deserialize_for_uint!(U128, 16);
+impl_deserialize_for_uint!(U256, 32);
+
+#[cfg(test)]
+mod test {
+    use serde_cbor;
+
+    use super::*;
+
+    macro_rules! define_serde_test {
+        ($method:ident, $name:ident) => {
+            #[test]
+            fn $method() {
+                let value = $name::from(0);
+                let value_encoded = serde_cbor::to_vec(&value).unwrap();
+                let value_decoded: $name = serde_cbor::from_slice(&value_encoded).unwrap();
+                assert_eq!(value_decoded, value);
+
+                let value = $name::from(1);
+                let value_encoded = serde_cbor::to_vec(&value).unwrap();
+                let value_decoded: $name = serde_cbor::from_slice(&value_encoded).unwrap();
+                assert_eq!(value_decoded, value);
+
+                let value = $name::from(1_234_567);
+                let value_encoded = serde_cbor::to_vec(&value).unwrap();
+                let value_decoded: $name = serde_cbor::from_slice(&value_encoded).unwrap();
+                assert_eq!(value_decoded, value);
+            }
+        }
+    }
+
+    define_serde_test!(test_serde_u128, U128);
+    define_serde_test!(test_serde_u256, U256);
+}
