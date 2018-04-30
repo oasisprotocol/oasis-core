@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.0-alpha.4
 
 * **BACKWARD INCOMPATIBLE:** All RPC calls are now stateless with no access to storage. Only
   the new async contract calls are stateful.
