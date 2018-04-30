@@ -1,9 +1,10 @@
 use std;
 
-use futures;
 use hyper;
 use prometheus;
 use prometheus::Encoder;
+
+use ekiden_core::futures;
 
 /// Worker thread metrics.
 pub struct WorkerMetrics {

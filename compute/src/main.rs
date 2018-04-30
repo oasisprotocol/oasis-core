@@ -3,12 +3,11 @@
 extern crate sgx_types;
 
 extern crate base64;
-extern crate futures;
 extern crate grpcio;
+extern crate lru_cache;
 extern crate protobuf;
 extern crate reqwest;
 extern crate thread_local;
-extern crate time;
 
 #[macro_use]
 extern crate clap;

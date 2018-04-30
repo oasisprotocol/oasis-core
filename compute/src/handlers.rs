@@ -1,16 +1,15 @@
 //! Handlers for the endpoints available to be called from inside the enclave,
 //! which are registered using RpcRouter.
-
-use futures::Future;
 use grpcio;
 
 use std::sync::Arc;
 
 use ekiden_core::error::{Error, Result};
+use ekiden_core::futures::Future;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_untrusted::rpc::router::Handler;
 
-use ekiden_rpc_client::backend::{ContractClientBackend, Web3ContractClientBackend};
+use ekiden_rpc_client::backend::{RpcClientBackend, Web3RpcClientBackend};
 
 /// Generic contract endpoint.
 ///
@@ -21,7 +20,7 @@ pub struct ContractForwarder {
     /// Client endpoint identifier.
     endpoint: ClientEndpoint,
     /// Client backend.
-    client: Web3ContractClientBackend,
+    client: Web3RpcClientBackend,
 }
 
 impl ContractForwarder {
@@ -33,7 +32,7 @@ impl ContractForwarder {
     ) -> Self {
         ContractForwarder {
             endpoint: endpoint,
-            client: Web3ContractClientBackend::new(environment, &host, port).unwrap(),
+            client: Web3RpcClientBackend::new(environment, &host, port).unwrap(),
         }
     }
 }

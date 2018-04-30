@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
+use std::sync::Arc;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
@@ -12,7 +13,7 @@ use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_key_manager_api::with_api;
 use ekiden_rpc_client::{create_client_rpc, FutureExtra};
 use ekiden_rpc_common::client::ClientEndpoint;
-use ekiden_rpc_trusted::client::OcallContractClientBackend;
+use ekiden_rpc_trusted::client::OcallRpcClientBackend;
 
 // Create API client for the key manager.
 with_api! {
@@ -24,7 +25,7 @@ pub struct KeyManager {
     /// Key manager contract MRENCLAVE.
     mr_enclave: Option<MrEnclave>,
     /// Internal API client.
-    client: Option<key_manager::Client<OcallContractClientBackend>>,
+    client: Option<key_manager::Client<OcallRpcClientBackend>>,
     /// Local key cache.
     cache: HashMap<String, Vec<u8>>,
 }
@@ -63,12 +64,12 @@ impl KeyManager {
             return Ok(());
         }
 
-        let backend = match OcallContractClientBackend::new(ClientEndpoint::KeyManager) {
+        let backend = match OcallRpcClientBackend::new(ClientEndpoint::KeyManager) {
             Ok(backend) => backend,
             _ => return Err(Error::new("Failed to create key manager client backend")),
         };
 
-        let client = key_manager::Client::new(backend, mr_enclave);
+        let client = key_manager::Client::new(Arc::new(backend), mr_enclave);
         self.client.get_or_insert(client);
 
         Ok(())

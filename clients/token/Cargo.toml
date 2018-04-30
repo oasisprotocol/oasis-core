@@ -1,6 +1,6 @@
 [package]
 name = "token-client"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = [
     "Jernej Kos <jernej@kos.mx>"
 ]
@@ -12,6 +12,7 @@ benchmark = ["client-utils/benchmark"]
 [dependencies]
 client-utils = { path = "../utils" }
 ekiden-core = { path = "../../core/common" }
+ekiden-contract-client = { path = "../../contract/client" }
 ekiden-rpc-client = { path = "../../rpc/client" }
 token-api = { path = "../../contracts/token/api" }
 clap = "2.29.1"

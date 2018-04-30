@@ -32,3 +32,16 @@ RUN wget https://s3-us-west-2.amazonaws.com/tendermint/binaries/tendermint/v${TM
 # Leave $DATA_ROOT in the ephemeral filesystem so that we start tests with a clean state.
 
 # Don't expose services from testing instance.
+
+# Install Docker client for building testnet images.
+RUN VER="18.03.0-ce" && \
+    curl -L -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$VER.tgz && \
+    tar -xz -C /tmp -f /tmp/docker-$VER.tgz && \
+    rm /tmp/docker-$VER.tgz && \
+    mv /tmp/docker/* /usr/bin
+
+# Install kubectl for deployment.
+RUN VERSION="v1.10.0" && \
+    curl -LO https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/amd64/kubectl && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/kubectl

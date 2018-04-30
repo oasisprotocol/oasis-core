@@ -3,117 +3,14 @@ extern crate ansi_term;
 extern crate clap;
 extern crate mktemp;
 
-extern crate ekiden_common;
 extern crate ekiden_tools;
 
-use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
+use ansi_term::Colour::Red;
+use clap::{App, Arg, SubCommand};
 use std::process::exit;
 
-use ansi_term::Colour::Red;
-use clap::{App, Arg, ArgMatches, SubCommand};
-
-use ekiden_common::error::{Error, Result};
-use ekiden_tools::{cargo, get_contract_identity};
-use ekiden_tools::contract::ContractBuilder;
-use ekiden_tools::utils::SgxMode;
-
-/// Build an Ekiden contract.
-fn build_contract(args: &ArgMatches) -> Result<()> {
-    let mut builder = match args.value_of("contract-crate") {
-        Some(crate_name) => ContractBuilder::new(
-            // Crate name.
-            crate_name.to_owned(),
-            // Output directory.
-            match args.value_of("output") {
-                Some(ref output) => Path::new(output).to_path_buf(),
-                None => env::current_dir()?,
-            },
-            // Target directory.
-            None,
-            // Contract crate source.
-            {
-                if let Some(version) = args.value_of("version") {
-                    Box::new(cargo::VersionSource { version: version })
-                } else if let Some(git) = args.value_of("git") {
-                    Box::new(cargo::GitSource {
-                        repository: git,
-                        branch: args.value_of("branch"),
-                        tag: args.value_of("tag"),
-                        rev: args.value_of("rev"),
-                    })
-                } else if let Some(path) = args.value_of("path") {
-                    Box::new(cargo::PathSource {
-                        path: Path::new(path).canonicalize()?,
-                    })
-                } else {
-                    return Err(Error::new(
-                        "Need to specify one of --version, --git or --path!",
-                    ));
-                }
-            },
-        )?,
-        None => {
-            // Invoke contract-build in the current project directory.
-            let project = cargo::ProjectRoot::discover()?;
-            let package = match project.get_package() {
-                Some(package) => package,
-                None => {
-                    return Err(Error::new(format!(
-                    "manifest path `{}` is a virtual manifest, but this command requires running \
-                     against an actual package in this workspace",
-                    project.get_config_path().to_str().unwrap()
-                )))
-                }
-            };
-
-            ContractBuilder::new(
-                package.name.clone(),
-                project.get_target_path().join("contract"),
-                Some(project.get_target_path()),
-                Box::new(cargo::PathSource {
-                    path: project.get_path(),
-                }),
-            )?
-        }
-    };
-
-    // Configure builder.
-    builder
-        .verbose(true)
-        .release(args.is_present("release"))
-        .intel_sgx_sdk(Path::new(args.value_of("intel-sgx-sdk").unwrap()))
-        .sgx_mode(match args.value_of("sgx-mode") {
-            Some("HW") => SgxMode::Hardware,
-            _ => SgxMode::Simulation,
-        })
-        .signing_key(args.value_of("sign-key"));
-
-    // Build contract.
-    builder.build()?;
-
-    // Output enclave identity when required.
-    if args.is_present("output-identity") {
-        let identity = get_contract_identity(
-            builder
-                .get_output_path()
-                .join(format!("{}.so", builder.get_crate_name())),
-        )?;
-
-        // Hex encode identity.
-        let identity_file_path = builder
-            .get_output_path()
-            .join(format!("{}.mrenclave", builder.get_crate_name()));
-        let mut identity_file = File::create(&identity_file_path)?;
-        for byte in &identity {
-            write!(&mut identity_file, "{:02x}", byte)?;
-        }
-    }
-
-    Ok(())
-}
+use ekiden_tools::command_buildcontract::build_contract;
+use ekiden_tools::command_shell::{cleanup_shell, shell};
 
 fn main() {
     let matches = App::new("cargo")
@@ -182,6 +79,12 @@ fn main() {
                                 .conflicts_with("git"),
                         )
                         .arg(
+                            Arg::with_name("cargo-addendum")
+                                .help("Path of a file to append to the dummy top-level Cargo.toml")
+                                .long("cargo-addendum")
+                                .takes_value(true),
+                        )
+                        .arg(
                             Arg::with_name("release")
                                 .long("release")
                                 .help("Build contract in release mode, with optimizations"),
@@ -220,22 +123,82 @@ fn main() {
                             Arg::with_name("output-identity")
                                 .help("Should a contract identity file be generated")
                                 .long("output-identity"),
+                        )
+                        .arg(
+                            Arg::with_name("target-dir")
+                                .help("Custom location to cache build artifacts")
+                                .long("target-dir")
+                                .takes_value(true),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("shell")
+                        .about("Enter an Ekiden development environment")
+                        .arg(
+                            Arg::with_name("docker-shell")
+                                .help("Shell to run within the docker environment")
+                                .long("docker-shell")
+                                .env("EKIDEN_DOCKER_SHELL")
+                                .default_value("bash"),
+                        )
+                        .arg(
+                            Arg::with_name("docker-image")
+                                .help("Ekiden environment version to use")
+                                .long("docker-image")
+                                .env("EKIDEN_DOCKER_IMAGE")
+                                .default_value("ekiden/development:0.1.0-alpha.3"),
+                        )
+                        .arg(
+                            Arg::with_name("docker-name")
+                                .help("Name for the docker environment")
+                                .long("docker-name")
+                                .takes_value(true)
+                                .env("EKIDEN_DOCKER_NAME"),
+                        )
+                        .arg(
+                            Arg::with_name("hardware")
+                                .help("Enter a hardware backed rather than simulated environment")
+                                .long("hw"),
+                        )
+                        .arg(
+                            Arg::with_name("detach-keys")
+                                .help("escape keys for exiting the Ekiden environment")
+                                .long("detatch-keys")
+                                .env("EKIDEN_DOCKER_DETACH_KEYS")
+                                .default_value("ctrl-p,ctrl-q"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("clean")
+                        .about("Remove an Ekiden development environment")
+                        .arg(
+                            Arg::with_name("docker-name")
+                                .help("Ekiden environment to remove")
+                                .long("docker-name")
+                                .takes_value(true)
+                                .env("EKIDEN_DOCKER_NAME"),
+                        )
+                        .arg(
+                            Arg::with_name("hardware")
+                                .help("Enter a hardware backed rather than simulated environment")
+                                .long("hw"),
                         ),
                 ),
         )
         .get_matches();
 
     if let Some(ref ekiden_matches) = matches.subcommand_matches("ekiden") {
-        // Build contract.
-        if let Some(ref build_contract_matches) =
-            ekiden_matches.subcommand_matches("build-contract")
-        {
-            match build_contract(build_contract_matches) {
-                Ok(()) => {}
-                Err(error) => {
-                    println!("{} {}", Red.bold().paint("error:"), error);
-                    exit(128);
-                }
+        let result = match ekiden_matches.subcommand() {
+            ("build-contract", Some(build_args)) => build_contract(build_args),
+            ("shell", Some(shell_args)) => shell(shell_args),
+            ("clean", Some(clean_args)) => cleanup_shell(clean_args),
+            _ => Err("no command specified".into()),
+        };
+        match result {
+            Ok(_) => {}
+            Err(error) => {
+                println!("{} {}", Red.bold().paint("error:"), error);
+                exit(128);
             }
         }
     }

@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-enclave-common"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = [
     "Raymond Cheng <me@raymondcheng.net>",
     "Jernej Kos <jernej@kos.mx>"
@@ -10,14 +10,19 @@ build = "build.rs"
 [dependencies]
 base64 = "0.9.0"
 byteorder = "1.2.1"
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+chrono = "0.4.2"
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 protobuf = "1.4.3"
-serde_json = { git = "https://github.com/ekiden/json" }
 sodalite = "0.3.0"
+pem-iterator = "0.2"
+percent-encoding = "1.0.1"
+webpki = { git = "https://github.com/ekiden/webpki", branch = "0.17.0-ekiden", default-features = false }
+serde = "1.0"
+serde_json = "1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"
-sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden1" }
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.3" }
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }

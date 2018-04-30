@@ -11,7 +11,9 @@ use futures::future::{self, Future};
 use futures::sync::{mpsc, oneshot};
 
 use protobuf;
-use protobuf::{Message, MessageStatic};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_cbor;
 
 use ekiden_common::error::Error;
 #[cfg(not(target_env = "sgx"))]
@@ -19,7 +21,7 @@ use ekiden_common::error::Result;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_rpc_common::api;
 
-use super::backend::ContractClientBackend;
+use super::backend::RpcClientBackend;
 use super::future::ClientFuture;
 #[cfg(target_env = "sgx")]
 use super::future::FutureExtra;
@@ -37,9 +39,9 @@ enum Command {
 }
 
 /// Contract client context used for async calls.
-struct ContractClientContext<Backend: ContractClientBackend + 'static> {
+struct RpcClientContext<Backend: RpcClientBackend + 'static> {
     /// Backend handling network communication.
-    backend: Backend,
+    backend: Arc<Backend>,
     /// Contract MRENCLAVE.
     mr_enclave: MrEnclave,
     /// Secure channel context.
@@ -62,7 +64,7 @@ where
     }))
 }
 
-impl<Backend: ContractClientBackend + 'static> ContractClientContext<Backend> {
+impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     /// Process commands sent via the command channel.
     ///
     /// This method returns a future, which keeps processing all commands received
@@ -77,7 +79,7 @@ impl<Backend: ContractClientBackend + 'static> ContractClientContext<Backend> {
         request_rx: mpsc::UnboundedReceiver<Command>,
     ) -> ClientFuture<()> {
         // Process all requests in order. The stream processing ends when the sender
-        // handle (request_tx) in ContractClient is dropped.
+        // handle (request_tx) in RpcClient is dropped.
         let result = request_rx
             .map_err(|_| Error::new("Command channel closed"))
             .for_each(move |command| -> ClientFuture<()> {
@@ -218,26 +220,20 @@ impl<Backend: ContractClientBackend + 'static> ContractClientContext<Backend> {
     /// Call a contract method.
     fn call<Rq, Rs>(context: Arc<Mutex<Self>>, method: &str, request: Rq) -> ClientFuture<Rs>
     where
-        Rq: Message,
-        Rs: Message + MessageStatic,
+        Rq: Serialize,
+        Rs: DeserializeOwned + Send + 'static,
     {
         // Create a request.
         let mut plain_request = api::PlainClientRequest::new();
         plain_request.set_method(method.to_owned());
-        plain_request.set_payload(match request.write_to_bytes() {
-            Ok(payload) => payload,
-            _ => return Box::new(future::err(Error::new("Failed to serialize request"))),
-        });
+        match serde_cbor::to_vec(&request) {
+            Ok(payload) => plain_request.set_payload(payload),
+            Err(_) => return Box::new(future::err(Error::new("payload serialize failed"))),
+        }
 
         // Make the raw call and then deserialize the response.
-        let result = Self::call_raw(context, plain_request).and_then(|plain_response| {
-            let response: Rs = match protobuf::parse_from_bytes(&plain_response) {
-                Ok(response) => response,
-                Err(error) => return Err(Error::from(error)),
-            };
-
-            Ok(response)
-        });
+        let result = Self::call_raw(context, plain_request)
+            .and_then(|plain_response| Ok(serde_cbor::from_slice(&plain_response)?));
 
         Box::new(result)
     }
@@ -389,24 +385,24 @@ impl<Backend: ContractClientBackend + 'static> ContractClientContext<Backend> {
 }
 
 /// Contract client.
-pub struct ContractClient<Backend: ContractClientBackend + 'static> {
+pub struct RpcClient<Backend: RpcClientBackend + 'static> {
     /// Actual client context that can be shared between threads.
-    context: Arc<Mutex<ContractClientContext<Backend>>>,
+    context: Arc<Mutex<RpcClientContext<Backend>>>,
     /// Channel for processing requests.
     #[cfg(not(target_env = "sgx"))]
     request_tx: mpsc::UnboundedSender<Command>,
 }
 
-impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
+impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     /// Constructs a new contract client.
     /// The client API macro calls this.
-    pub fn new(backend: Backend, mr_enclave: MrEnclave, client_authentication: bool) -> Self {
+    pub fn new(backend: Arc<Backend>, mr_enclave: MrEnclave, client_authentication: bool) -> Self {
         // Create request processing channel.
         #[cfg(not(target_env = "sgx"))]
         let (request_tx, request_rx) = mpsc::unbounded();
 
-        let client = ContractClient {
-            context: Arc::new(Mutex::new(ContractClientContext {
+        let client = RpcClient {
+            context: Arc::new(Mutex::new(RpcClientContext {
                 backend: backend,
                 mr_enclave: mr_enclave,
                 secure_channel: SecureChannelContext::default(),
@@ -420,7 +416,7 @@ impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
         {
             // Spawn a task for processing requests.
             let request_processor =
-                ContractClientContext::process_commands(client.context.clone(), request_rx);
+                RpcClientContext::process_commands(client.context.clone(), request_rx);
 
             let context = client.context.lock().unwrap();
             context
@@ -435,28 +431,28 @@ impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
     #[cfg(target_env = "sgx")]
     pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> ClientFuture<Rs>
     where
-        Rq: Message,
-        Rs: Message + MessageStatic,
+        Rq: Serialize,
+        Rs: DeserializeOwned + Send + 'static,
     {
-        ContractClientContext::call(self.context.clone(), &method, request)
+        RpcClientContext::call(self.context.clone(), &method, request)
     }
 
     /// Call a contract method.
     #[cfg(not(target_env = "sgx"))]
     pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> ClientFuture<Rs>
     where
-        Rq: Message,
-        Rs: Message + MessageStatic,
+        Rq: Serialize,
+        Rs: DeserializeOwned + Send + 'static,
     {
         let (call_tx, call_rx) = oneshot::channel();
 
         // Create a request.
         let mut plain_request = api::PlainClientRequest::new();
         plain_request.set_method(method.to_owned());
-        plain_request.set_payload(match request.write_to_bytes() {
-            Ok(payload) => payload,
-            _ => return Box::new(future::err(Error::new("Failed to serialize request"))),
-        });
+        match serde_cbor::to_vec(&request) {
+            Ok(payload) => plain_request.set_payload(payload),
+            Err(_) => return Box::new(future::err(Error::new("payload serialize failed"))),
+        }
 
         if let Err(_) = self.request_tx
             .unbounded_send(Command::Call(plain_request, call_tx))
@@ -468,14 +464,7 @@ impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
         let result = call_rx
             .map_err(|_| Error::new("Command channel closed"))
             .and_then(|result| match result {
-                Ok(plain_response) => {
-                    let response: Rs = match protobuf::parse_from_bytes(&plain_response) {
-                        Ok(response) => response,
-                        Err(error) => return Err(Error::from(error)),
-                    };
-
-                    Ok(response)
-                }
+                Ok(plain_response) => Ok(serde_cbor::from_slice(&plain_response)?),
                 Err(error) => Err(error),
             });
 
@@ -488,7 +477,7 @@ impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
     /// when making the first request.
     #[cfg(target_env = "sgx")]
     pub fn init_secure_channel(&self) -> ClientFuture<()> {
-        ContractClientContext::init_secure_channel(self.context.clone())
+        RpcClientContext::init_secure_channel(self.context.clone())
     }
 
     /// Initialize a secure channel with the contract.
@@ -519,7 +508,7 @@ impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
     /// a blocking fashion when the client is dropped.
     #[cfg(target_env = "sgx")]
     pub fn close_secure_channel(&self) -> ClientFuture<()> {
-        ContractClientContext::close_secure_channel(self.context.clone())
+        RpcClientContext::close_secure_channel(self.context.clone())
     }
 
     /// Close secure channel.
@@ -545,7 +534,7 @@ impl<Backend: ContractClientBackend + 'static> ContractClient<Backend> {
     }
 }
 
-impl<Backend: ContractClientBackend + 'static> Drop for ContractClient<Backend> {
+impl<Backend: RpcClientBackend + 'static> Drop for RpcClient<Backend> {
     /// Close secure channel when going out of scope.
     fn drop(&mut self) {
         self.close_secure_channel().wait().unwrap_or(());

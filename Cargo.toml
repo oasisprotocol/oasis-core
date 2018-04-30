@@ -4,13 +4,30 @@ members = [
 
     # Common.
     "common",
+    "common/api",
 
-    # Enclave loader.
+    # Random beacon.
+    "beacon/base",
+    "beacon/dummy",
+
+    # Random beacon.
+    "beacon/base",
+    "beacon/dummy",
+
+    # Consensus interface.
+    "consensus/base",
+    "consensus/dummy",
+
+    # Storage interface.
+    "storage/base",
+    "storage/dummy",
+
+    # Enclave loader (+ attestation).
     "enclave/common",
     "enclave/untrusted",
     "enclave/trusted",
 
-    # RPC (+ attestation).
+    # RPC.
     "rpc/common",
     "rpc/client",
     "rpc/untrusted",
@@ -22,6 +39,13 @@ members = [
     "db/trusted",
     "db/edl",
 
+    # Contract invocation.
+    "contract/common",
+    "contract/client",
+    "contract/untrusted",
+    "contract/trusted",
+    "contract/edl",
+
     # Core.
     "core/common",
     "core/untrusted",
@@ -32,7 +56,7 @@ members = [
     "compute/api",
     "compute",
 
-    # Consensus node.
+    # Consensus node (deprecated).
     "consensus/api",
     "consensus",
 
@@ -42,4 +66,9 @@ members = [
 
     # Clients.
     "clients/token",
+
+    # Registry.
+    "registry/api",
+    "registry/base",
+    "registry/dummy",
 ]

@@ -1,0 +1,13 @@
+[package]
+name = "ekiden-contract-common"
+version = "0.1.0-alpha.4"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Ekiden common contract functionality"
+keywords = ["ekiden"]
+repository = "https://github.com/ekiden/ekiden"
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
+serde = "1.0"
+serde_derive = "1.0"
+serde_cbor = "0.8.2"
