@@ -1,10 +1,10 @@
 [package]
 name = "ekiden-beacon-base"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden random beacon interface traits"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.3" }
+ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }

@@ -1,10 +1,10 @@
 [package]
 name = "ekiden-rpc-edl"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden RPC EDL"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.3" }
+ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }

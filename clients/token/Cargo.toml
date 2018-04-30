@@ -1,6 +1,6 @@
 [package]
 name = "token-client"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 authors = [
     "Jernej Kos <jernej@kos.mx>"
 ]
