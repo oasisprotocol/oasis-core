@@ -9,14 +9,13 @@ extern crate protobuf;
 extern crate reqwest;
 extern crate thread_local;
 
-#[macro_use]
-extern crate clap;
 extern crate hyper;
 #[macro_use]
 extern crate prometheus;
 
 extern crate ekiden_compute_api;
 extern crate ekiden_consensus_api;
+extern crate ekiden_consensus_base;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
 extern crate ekiden_untrusted;
@@ -25,17 +24,22 @@ mod ias;
 mod instrumentation;
 mod handlers;
 mod server;
+mod worker;
+mod node;
+
+#[macro_use]
+extern crate clap;
+
+extern crate ekiden_consensus_dummy;
 
 use std::path::Path;
-use std::sync::Arc;
 use std::thread;
 
-use ekiden_compute_api::create_compute;
-use ekiden_core::rpc::client::ClientEndpoint;
-use ekiden_untrusted::rpc::router::RpcRouter;
-
 use clap::{App, Arg};
-use server::ComputeService;
+
+use self::ias::{IASConfiguration, SPID};
+use self::node::{ComputeNode, ComputeNodeConfiguration};
+use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
 
 fn main() {
     let matches = App::new("Ekiden Compute Node")
@@ -86,6 +90,12 @@ fn main() {
                 .long("key-manager-port")
                 .takes_value(true)
                 .default_value("9003"),
+        )
+        .arg(
+            Arg::with_name("consensus-backend")
+                .long("consensus-backend")
+                .takes_value(true)
+                .default_value("dummy")
         )
         .arg(
             Arg::with_name("consensus-host")
@@ -141,70 +151,65 @@ fn main() {
         )
         .get_matches();
 
-    // Create gRPC event loops.
-    let num_threads = value_t!(matches, "grpc-threads", usize).unwrap();
-    let grpc_environment = Arc::new(grpcio::Environment::new(num_threads));
+    // Setup consensus backend.
+    // TODO: Change dummy backend to get computation group from another backend.
+    let consensus_backend = Box::new(ekiden_consensus_dummy::DummyConsensusBackend::new(vec![]));
 
-    // Setup IAS.
-    let ias = ias::IAS::new(if matches.is_present("ias-spid") {
-        Some(ias::IASConfiguration {
-            spid: value_t!(matches, "ias-spid", ias::SPID).unwrap_or_else(|e| e.exit()),
-            pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
-        })
-    } else {
-        eprintln!("WARNING: IAS is not configured, validation will always return an error.");
-
-        None
-    }).unwrap();
-
-    // Setup enclave RPC routing.
-    {
-        let mut router = RpcRouter::get_mut();
-
-        // Key manager endpoint.
-        if !matches.is_present("disable-key-manager") {
-            router.add_handler(handlers::ContractForwarder::new(
-                ClientEndpoint::KeyManager,
-                grpc_environment.clone(),
-                matches.value_of("key-manager-host").unwrap().to_string(),
-                value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
-            ));
-        }
-    }
-
-    // Start the gRPC server.
-    let contract_filename = matches.value_of("contract").unwrap();
-    if !Path::new(contract_filename).exists() {
-        panic!(format!("Could not find contract: {}", contract_filename))
-    }
-
-    let service = create_compute(ComputeService::new(
-        &contract_filename,
-        matches.value_of("consensus-host").unwrap(),
-        value_t!(matches, "consensus-port", u16).unwrap_or(9002),
-        value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
-        value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000) * 1_000_000,
-        ias,
-        if matches.is_present("no-persist-identity") {
-            None
+    // Setup compute node.
+    let mut node = ComputeNode::new(ComputeNodeConfiguration {
+        grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or(1),
+        port: value_t!(matches, "port", u16).unwrap_or(9001),
+        consensus_backend,
+        // IAS configuration.
+        ias: if matches.is_present("ias-spid") {
+            Some(IASConfiguration {
+                spid: value_t!(matches, "ias-spid", SPID).unwrap_or_else(|e| e.exit()),
+                pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
+            })
         } else {
-            Some(Path::new(
-                matches.value_of("identity-file").unwrap_or("identity.pb"),
-            ))
+            eprintln!("WARNING: IAS is not configured, validation will always return an error.");
+
+            None
         },
-    ));
+        // Worker configuration.
+        worker: {
+            // Check if passed contract exists.
+            let contract_filename = matches.value_of("contract").unwrap();
+            if !Path::new(contract_filename).exists() {
+                panic!(format!("Could not find contract: {}", contract_filename))
+            }
 
-    let port = value_t!(matches, "port", u16).unwrap_or(9001);
-    let mut server = grpcio::ServerBuilder::new(grpc_environment)
-        .register_service(service)
-        .bind("0.0.0.0", port)
-        .build()
-        .expect("Failed to build gRPC server for compute node");
-    server.start();
+            WorkerConfiguration {
+                contract_filename: contract_filename.to_owned(),
+                // TODO: Remove this after we switch to new storage backend.
+                consensus_host: matches.value_of("consensus-host").unwrap().to_owned(),
+                // TODO: Remove this after we switch to new storage backend.
+                consensus_port: value_t!(matches, "consensus-port", u16).unwrap_or(9002),
+                max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
+                max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
+                saved_identity_path: if matches.is_present("no-persist-identity") {
+                    None
+                } else {
+                    Some(
+                        Path::new(matches.value_of("identity-file").unwrap_or("identity.pb"))
+                            .to_owned(),
+                    )
+                },
+                // Key manager configuration.
+                key_manager: if !matches.is_present("disable-key-manager") {
+                    Some(KeyManagerConfiguration {
+                        host: matches.value_of("key-manager-host").unwrap().to_owned(),
+                        port: value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
+                    })
+                } else {
+                    None
+                },
+            }
+        },
+    }).expect("failed to initialize compute node");
 
-    for &(ref host, port) in server.bind_addrs() {
-        println!("Compute node listening on {}:{}", host, port);
-    }
+    // Start compute node.
+    node.start();
 
     // Start the Prometheus metrics endpoint.
     if let Ok(metrics_addr) = value_t!(matches, "metrics-addr", std::net::SocketAddr) {
