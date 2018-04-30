@@ -1,11 +1,15 @@
 //! Signature interface.
 use serde::Serialize;
 use serde_cbor;
+use std;
+use std::convert::TryFrom;
 
 use super::bytes::{B256, B512, B64, H256};
 use super::error::{Error, Result};
 use super::ring::{digest, signature};
 use super::untrusted;
+
+use ekiden_common_api as api;
 
 /// Signer interface.
 pub trait Signer {
@@ -151,6 +155,37 @@ impl Signature {
     }
 }
 
+impl TryFrom<api::Signature> for Signature {
+    type Error = super::error::Error;
+    //TODO: attestation.
+    fn try_from(a: api::Signature) -> std::result::Result<Self, self::Error> {
+        let pk = a.get_pubkey();
+        let sig = a.get_signature();
+        if pk.len() != 32 || sig.len() != 64 {
+            return Err(Error::new("corrupted signature"));
+        }
+
+        let mut out = Signature {
+            public_key: B256::zero(),
+            signature: B512::zero(),
+            attestation: None,
+        };
+        out.public_key.copy_from_slice(&pk);
+        out.signature.copy_from_slice(&sig);
+        Ok(out)
+    }
+}
+
+impl Into<api::Signature> for Signature {
+    // TODO: attestation.
+    fn into(self) -> api::Signature {
+        let mut s = api::Signature::new();
+        s.set_pubkey(self.public_key.to_vec());
+        s.set_signature(self.signature.to_vec());
+        s
+    }
+}
+
 /// Signature from a committee node.
 #[derive(Serialize, Deserialize)]
 pub struct Signed<T> {
@@ -191,6 +226,11 @@ impl<T> Signed<T> {
     /// Only use this variant if you have verified the signature yourself.
     pub fn get_value_unsafe(&self) -> &T {
         &self.value
+    }
+
+    /// from_parts creates a Signed object from a detached signature.
+    pub fn from_parts(value: T, signature: Signature) -> Self {
+        Self { value, signature }
     }
 }
 

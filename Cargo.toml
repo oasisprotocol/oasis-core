@@ -4,6 +4,11 @@ members = [
 
     # Common.
     "common",
+    "common/api",
+
+    # Random beacon.
+    "beacon/base",
+    "beacon/dummy",
 
     # Random beacon.
     "beacon/base",
@@ -61,4 +66,9 @@ members = [
 
     # Clients.
     "clients/token",
+
+    # Registry.
+    "registry/api",
+    "registry/base",
+    "registry/dummy",
 ]

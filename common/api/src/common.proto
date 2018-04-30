@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// Common message definitions across services.
+
+package common;
+
+message Address {
+    enum Transport {
+        TCPv4 = 0; // TCP IPv4
+        TCPv6 = 1; // TCP IPv6
+    }
+    Transport transport = 1;
+    bytes address = 2;
+    uint32 port = 3;
+}
+
+message Entity {
+    bytes id = 1;
+}
+
+message Node {
+    bytes id = 1;
+    bytes entity_id = 2;
+    uint64 expiration = 3;
+    repeated Address addresses = 4;
+    // TODO: stake should be formalized in common or consensus.
+    bytes stake = 5;
+}
+
+message Signature {
+    bytes pubkey = 1;
+    bytes signature = 2;
+}

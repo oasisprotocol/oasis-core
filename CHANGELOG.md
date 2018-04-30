@@ -1,3 +1,7 @@
+# Unreleased
+* gRPC message types and conversion convention established.
+* Registry interface / centralized implementation added.
+
 # 0.1.0-alpha.4
 
 * **BACKWARD INCOMPATIBLE:** All RPC calls are now stateless with no access to storage. Only

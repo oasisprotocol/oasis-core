@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+package registry;
+
+service Registry {
+    rpc RegisterEntity (RegisterRequest) returns (RegisterResponse) {}
+    rpc DeregisterEntity (DeregisterRequest) returns (DeregisterResponse) {}
+    rpc GetEntity (EntityRequest) returns (EntityResponse) {}
+    rpc GetEntities (EntitiesRequest) returns (EntitiesResponse) {}
+    rpc RegisterNode (RegisterNodeRequest) returns (RegisterNodeResponse) {}
+    rpc GetNode (NodeRequest) returns (NodeResponse) {}
+    rpc GetNodes (NodesRequest) returns (NodesResponse) {}
+    rpc GetNodesForEntity (EntityNodesRequest) returns (EntityNodesResponse) {}
+}
+
+message RegisterRequest {
+    common.Entity entity = 1;
+    common.Signature signature = 2;
+}
+
+message RegisterResponse {
+}
+
+message DeregisterRequest {
+    bytes id = 1;
+    common.Signature signature = 2;
+}
+
+message DeregisterResponse {
+}
+
+message EntityRequest {
+    bytes id = 1;
+}
+
+message EntityResponse {
+    common.Entity entity = 1;
+}
+
+message EntitiesRequest {
+}
+
+message EntitiesResponse {
+    repeated common.Entity entity = 1;
+}
+
+message RegisterNodeRequest {
+    common.Node node = 1;
+    common.Signature signature = 2;
+}
+
+message RegisterNodeResponse {
+}
+
+message NodeRequest {
+    bytes id = 1;
+}
+
+message NodeResponse {
+    common.Node node = 1;
+}
+
+message NodesRequest {
+}
+
+message NodesResponse {
+    repeated common.Node node = 1;
+}
+
+message EntityNodesRequest {
+    bytes id = 1;
+}
+
+message EntityNodesResponse {
+    repeated common.Node node = 1;
+}
