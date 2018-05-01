@@ -15,21 +15,25 @@ use ekiden_rpc_client::RpcClient;
 use ekiden_rpc_client::backend::RpcClientBackend;
 
 /// Contract client.
-pub struct ContractClient<'a, Backend: RpcClientBackend + 'static> {
+pub struct ContractClient<Backend: RpcClientBackend + 'static> {
     /// RPC backend.
     backend: Arc<Backend>,
     /// Underlying RPC client.
     rpc: RpcClient<Backend>,
     /// Signer used for signing contract calls.
-    signer: &'a Signer,
+    signer: Arc<Signer + Send + Sync>,
 }
 
-impl<'a, Backend> ContractClient<'a, Backend>
+impl<Backend> ContractClient<Backend>
 where
     Backend: RpcClientBackend + 'static,
 {
     /// Create new client instance.
-    pub fn new(backend: Arc<Backend>, mr_enclave: MrEnclave, signer: &'a Signer) -> Self {
+    pub fn new(
+        backend: Arc<Backend>,
+        mr_enclave: MrEnclave,
+        signer: Arc<Signer + Send + Sync>,
+    ) -> Self {
         ContractClient {
             backend: backend.clone(),
             rpc: RpcClient::new(backend, mr_enclave, false),
@@ -44,7 +48,7 @@ where
         O: DeserializeOwned + Send + 'static,
     {
         let backend = self.backend.clone();
-        let call = SignedContractCall::sign(self.signer, method, arguments);
+        let call = SignedContractCall::sign(&self.signer, method, arguments);
 
         Box::new(
             self.rpc

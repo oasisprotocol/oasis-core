@@ -76,7 +76,7 @@ macro_rules! contract_client {
         $contract::Client::new(
             ::std::sync::Arc::new($backend),
             value_t!($args, "mr-enclave", ekiden_core::enclave::quote::MrEnclave).unwrap_or_else(|e| e.exit()),
-            &$signer,
+            $signer,
         )
     };
     ($signer:ident, $contract:ident, $args:ident) => {
