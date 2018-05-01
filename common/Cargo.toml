@@ -26,7 +26,6 @@ serde_cbor = "0.8.2"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
 futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
-sgx_rand = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2"}
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"
