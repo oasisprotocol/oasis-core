@@ -1,6 +1,8 @@
 # Unreleased
+
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added.
+* Make contract client sharable between threads.
 
 # 0.1.0-alpha.4
 

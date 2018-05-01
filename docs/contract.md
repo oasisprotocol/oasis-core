@@ -105,7 +105,7 @@ use ekiden_rpc_client::backend::Web3RpcClientBackend;
 use grpcio;
 
 // TODO: Use actual signer.
-let signer = NullSignerVerifier;
+let signer = Arc::new(NullSignerVerifier);
 
 // Create gRPC event loop.
 let grpc_environment = Arc::new(grpcio::EnvBuilder::new().build());
@@ -117,7 +117,7 @@ let client = dummy::Client::new(
         9001,
     ).unwrap()),
     MrEnclave([0; 32]),  // This needs to be an actual MRENCLAVE.
-    &signer,
+    signer,
 );
 
 let response = client.hello_world(&42).wait().unwrap();

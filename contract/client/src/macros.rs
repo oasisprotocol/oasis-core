@@ -38,16 +38,16 @@ macro_rules! create_contract_client {
 
             pub use $api_module::*;
 
-            pub struct Client<'a, Backend: RpcClientBackend + 'static> {
-                client: ContractClient<'a, Backend>,
+            pub struct Client<Backend: RpcClientBackend + 'static> {
+                client: ContractClient<Backend>,
             }
 
             #[allow(dead_code)]
-            impl<'a, Backend: RpcClientBackend + 'static> Client<'a, Backend> {
+            impl<Backend: RpcClientBackend + 'static> Client<Backend> {
                 /// Create new client instance.
                 pub fn new(backend: Arc<Backend>,
                            mr_enclave: MrEnclave,
-                           signer: &'a Signer) -> Self {
+                           signer: Arc<Signer + Send + Sync>) -> Self {
 
                     Client {
                         client: ContractClient::new(

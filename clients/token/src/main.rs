@@ -14,6 +14,8 @@ extern crate ekiden_rpc_client;
 
 extern crate token_api;
 
+use std::sync::Arc;
+
 use clap::{App, Arg};
 use futures::future::Future;
 use rand::{thread_rng, Rng};
@@ -124,10 +126,10 @@ where
 }
 
 /// Generate client key pair.
-fn create_key_pair() -> InMemorySigner {
+fn create_key_pair() -> Arc<InMemorySigner> {
     let key_pair =
         Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-    InMemorySigner::new(key_pair)
+    Arc::new(InMemorySigner::new(key_pair))
 }
 
 #[cfg(feature = "benchmark")]

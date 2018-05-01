@@ -1,4 +1,6 @@
 //! Signature interface.
+use std::sync::Arc;
+
 use serde::Serialize;
 use serde_cbor;
 use std;
@@ -23,10 +25,30 @@ pub trait Signer {
     fn attest(&self, data: &H256) -> Option<Vec<u8>>;
 }
 
+impl<T: ?Sized + Signer> Signer for Arc<T> {
+    fn sign(&self, data: &H256) -> B512 {
+        Signer::sign(&**self, data)
+    }
+
+    fn get_public_key(&self) -> B256 {
+        Signer::get_public_key(&**self)
+    }
+
+    fn attest(&self, data: &H256) -> Option<Vec<u8>> {
+        Signer::attest(&**self, data)
+    }
+}
+
 /// Verifier interface.
 pub trait Verifier {
     /// Verify signature and optional attestation.
     fn verify(&self, data: &H256, signature: &B512, attestation: Option<&Vec<u8>>) -> bool;
+}
+
+impl<T: ?Sized + Verifier> Verifier for Arc<T> {
+    fn verify(&self, data: &H256, signature: &B512, attestation: Option<&Vec<u8>>) -> bool {
+        Verifier::verify(&**self, data, signature, attestation)
+    }
 }
 
 /// Null signer/verifier which does no signing and says everything is verified.
