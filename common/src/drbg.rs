@@ -1,4 +1,13 @@
 //! Deterministic Random Bit Generator.
+use std::io::Cursor;
+
+use byteorder::{LittleEndian, ReadBytesExt};
+
+#[cfg(not(target_env = "sgx"))]
+use rand::Rng;
+#[cfg(target_env = "sgx")]
+use sgx_rand::Rng;
+
 use super::error::{Error, Result};
 use super::ring::{digest, hmac};
 
@@ -13,6 +22,7 @@ pub const MAX_BYTES_PER_REQUEST: usize = 1 << 16; // 2^19 bits.
 const RESEED_INTERVAL: u64 = 1 << 48;
 
 const OUT_LEN: usize = 512 / 8;
+const RNG_BUFFER_SIZE: usize = OUT_LEN / 4; // 32 bit integers.
 
 /// HMAC_DRBG instance (See: NIST SP 800-90A R1), using SHA-512.
 ///
@@ -184,6 +194,55 @@ impl HmacDrbg {
     }
 }
 
+/// HMAC_DRBG backed rand::Rng implementation.
+///
+/// DO NOT USE THIS TO GENERATE CRYPTOGRAPHIC KEY MATERIAL.
+pub struct HmacDrbgRng {
+    drbg: HmacDrbg,
+    buffer: Vec<u32>,
+    offset: usize,
+}
+
+impl HmacDrbgRng {
+    /// Create a new HMAC_DRBG backed rand::Rng instance.
+    ///
+    /// The entropy_input must be [MIN_LENGTH, MAX_LENGTH] bytes long.
+    /// The personalization_string must be [0, MAX_LENGTH] bytes long.
+    pub fn new(entropy_input: &[u8], personalization_string: &[u8]) -> Result<Self> {
+        let drbg = HmacDrbg::new(entropy_input, personalization_string)?;
+
+        Ok(HmacDrbgRng {
+            drbg: drbg,
+            buffer: vec![0; RNG_BUFFER_SIZE],
+            offset: RNG_BUFFER_SIZE,
+        })
+    }
+}
+
+impl Rng for HmacDrbgRng {
+    fn next_u32(&mut self) -> u32 {
+        if self.offset == RNG_BUFFER_SIZE {
+            // Refill the buffer.
+            //
+            // Note: In practical terms this will *never* fail due to needing
+            // a reseed, as each of the 2^48 allowed requests generates 16
+            // u32s.
+            let buf = self.drbg.generate(OUT_LEN, None).unwrap();
+            let mut rdr = Cursor::new(buf);
+            for i in &mut self.buffer {
+                *i = rdr.read_u32::<LittleEndian>().unwrap();
+            }
+            self.offset = 0;
+        }
+
+        let returned_u32 = self.buffer[self.offset];
+        self.buffer[self.offset] = 0; // Purge from buffer.
+        self.offset = self.offset + 1;
+
+        returned_u32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate rustc_hex;
@@ -230,7 +289,6 @@ mod tests {
     //
     // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/drbg/drbgtestvectors.zip
     // drbgvectors_no_reseed.zip (CAVS 14.3 - Tue Apr 02 15:42:24 2013)
-
     #[test]
     fn test_hmac_drbg_nist_cavp() {
         // The JSON file contains the test cases with the following parameters,
@@ -294,4 +352,33 @@ mod tests {
         }
     }
 
+    // Test the rand::Rng interface.
+    #[test]
+    fn test_hmac_drbg_rng() {
+        let entropy_input = "Reaching out to embrace the random".as_bytes();
+        let personalization_string = "Reaching out to embrace whatever may come".as_bytes();
+
+        let mut rng = HmacDrbgRng::new(entropy_input, personalization_string).unwrap();
+        let mut drbg = HmacDrbg::new(entropy_input, personalization_string).unwrap();
+
+        // Sample at least 2 HmacDrbg::generate() calls worth of output.
+        let mut buf = Vec::with_capacity(2 * OUT_LEN);
+        buf.extend_from_slice(&drbg.generate(OUT_LEN, None).unwrap());
+        buf.extend_from_slice(&drbg.generate(OUT_LEN, None).unwrap());
+        let mut rdr = Cursor::new(buf);
+
+        // Ensure the rand::Rng instance produces the same output as the
+        // sample from the HmacDrbg (interpreted as little endian u32s).
+        for _ in 0..RNG_BUFFER_SIZE * 2 {
+            let expected = rdr.read_u32::<LittleEndian>().unwrap();
+            assert_eq!(rng.next_u32(), expected);
+        }
+
+        // Check to see if the rand crate broke backwards compatibility.
+        let mut rng = HmacDrbgRng::new(entropy_input, personalization_string).unwrap();
+        let mut v = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let v_expected = [5, 9, 3, 0, 6, 8, 1, 2, 7, 4]; // rand = "0.4.2"
+        rng.shuffle(&mut v);
+        assert_eq!(v, v_expected);
+    }
 }

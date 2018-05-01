@@ -4,9 +4,12 @@
 extern crate rand;
 
 #[cfg(target_env = "sgx")]
+extern crate sgx_rand;
+#[cfg(target_env = "sgx")]
 extern crate sgx_trts;
 
 extern crate bigint;
+extern crate byteorder;
 extern crate chrono;
 extern crate core;
 extern crate fixed_hash;
