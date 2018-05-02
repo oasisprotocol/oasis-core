@@ -25,6 +25,7 @@ extern crate ekiden_common_api;
 
 pub mod address;
 pub mod bytes;
+pub mod contract;
 pub mod drbg;
 pub mod entity;
 pub mod epochtime;

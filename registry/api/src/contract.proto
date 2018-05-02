@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+package registry;
+
+service ContractRegistry {
+    rpc RegisterContract (RegisterContractRequest) returns (RegisterContractResponse) {}
+    rpc GetContract (ContractRequest) returns (ContractResponse) {}
+    rpc GetContracts (ContractsRequest) returns (ContractsResponse) {}
+}
+
+message RegisterContractRequest {
+    common.Contract contract = 1;
+}
+
+message RegisterContractResponse {
+}
+
+message ContractRequest {
+    bytes id = 1;
+}
+
+message ContractResponse {
+    common.Contract contract = 1;
+}
+
+message ContractsRequest {
+}
+
+message ContractsResponse {
+    repeated common.Contract contract = 1;
+}
