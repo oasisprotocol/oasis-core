@@ -31,3 +31,27 @@ message Signature {
     bytes pubkey = 1;
     bytes signature = 2;
 }
+
+message Contract {
+    bytes id = 1;
+    bytes store_id = 2;
+    bytes code = 3;
+
+    uint64 minimum_bond = 4;
+    enum Mode {
+        Deterministic = 0;
+        Nondeterministic = 1;
+    }
+    Mode mode = 5;
+
+    enum Features {
+        SGX = 0;
+    }
+    repeated Features features = 6;
+
+    uint64 advertisement_rate = 7;
+
+    uint64 replica_group_size = 8;
+
+    uint64 storage_group_size = 9;
+}
