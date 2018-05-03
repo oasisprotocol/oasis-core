@@ -5,23 +5,23 @@ use ekiden_registry_api as api;
 use grpcio::{RpcContext, RpcStatus, UnarySink};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 
-use super::backend::RegistryBackend;
+use super::entity_backend::EntityRegistryBackend;
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
 use ekiden_common::node::Node;
 use ekiden_common::signature::{Signature, Signed};
 
-pub struct RegistryService<T>
+pub struct EntityRegistryService<T>
 where
-    T: RegistryBackend,
+    T: EntityRegistryBackend,
 {
     inner: T,
 }
 
-impl<T> RegistryService<T>
+impl<T> EntityRegistryService<T>
 where
-    T: RegistryBackend,
+    T: EntityRegistryBackend,
 {
     pub fn new(backend: T) -> Self {
         Self { inner: backend }
@@ -37,9 +37,9 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::Registry for RegistryService<T>
+impl<T> api::EntityRegistry for EntityRegistryService<T>
 where
-    T: RegistryBackend,
+    T: EntityRegistryBackend,
 {
     fn register_entity(
         &self,

@@ -10,24 +10,24 @@ use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_registry_base::*;
 
-struct DummyRegistryBackendInner {
+struct DummyEntityRegistryBackendInner {
     /// state.
     entities: HashMap<B256, Entity>,
     nodes: HashMap<B256, HashMap<B256, Node>>,
     nodeents: HashMap<B256, B256>,
 }
 
-/// A dummy registry backend.
+/// A dummy entity registry backend.
 ///
 /// **This backend should only be used for tests. it is centralized and unsafe.***
-pub struct DummyRegistryBackend {
-    inner: Arc<Mutex<DummyRegistryBackendInner>>,
+pub struct DummyEntityRegistryBackend {
+    inner: Arc<Mutex<DummyEntityRegistryBackendInner>>,
 }
 
-impl DummyRegistryBackend {
+impl DummyEntityRegistryBackend {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(DummyRegistryBackendInner {
+            inner: Arc::new(Mutex::new(DummyEntityRegistryBackendInner {
                 entities: HashMap::new(),
                 nodes: HashMap::new(),
                 nodeents: HashMap::new(),
@@ -36,7 +36,7 @@ impl DummyRegistryBackend {
     }
 }
 
-impl RegistryBackend for DummyRegistryBackend {
+impl EntityRegistryBackend for DummyEntityRegistryBackend {
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {

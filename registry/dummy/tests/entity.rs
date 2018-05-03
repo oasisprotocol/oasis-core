@@ -13,11 +13,11 @@ use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signature, Signed};
 use ekiden_common::untrusted;
 use ekiden_registry_base::*;
-use ekiden_registry_dummy::DummyRegistryBackend;
+use ekiden_registry_dummy::DummyEntityRegistryBackend;
 
 #[test]
-fn test_dummy_backend() {
-    let backend = Arc::new(DummyRegistryBackend::new());
+fn test_dummy_entity_backend() {
+    let backend = Arc::new(DummyEntityRegistryBackend::new());
 
     let mut tasks: Vec<BoxFuture<()>> = Vec::new();
 

@@ -3,6 +3,8 @@ extern crate ekiden_common;
 extern crate ekiden_registry_base;
 extern crate serde_cbor;
 
-mod backend;
+mod entity;
+mod contract;
 
-pub use backend::DummyRegistryBackend;
+pub use contract::DummyContractRegistryBackend;
+pub use entity::DummyEntityRegistryBackend;

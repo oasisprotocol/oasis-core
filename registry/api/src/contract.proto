@@ -7,11 +7,12 @@ package registry;
 service ContractRegistry {
     rpc RegisterContract (RegisterContractRequest) returns (RegisterContractResponse) {}
     rpc GetContract (ContractRequest) returns (ContractResponse) {}
-    rpc GetContracts (ContractsRequest) returns (ContractsResponse) {}
+    rpc GetContracts (ContractsRequest) returns (stream ContractsResponse) {}
 }
 
 message RegisterContractRequest {
     common.Contract contract = 1;
+    common.Signature signature = 2;
 }
 
 message RegisterContractResponse {
