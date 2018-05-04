@@ -7,6 +7,8 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use base64;
+use byteorder;
+use byteorder::ByteOrder;
 use reqwest;
 
 use ekiden_core::enclave::api as identity_api;
@@ -16,6 +18,10 @@ use ekiden_untrusted::enclave;
 
 /// Intel IAS API URL.
 const IAS_API_URL: &'static str = "https://test-as.sgx.trustedservices.intel.com";
+/// Intel IAS Retrieve SigRL endpoint.
+///
+/// See [https://software.intel.com/sites/default/files/managed/7e/3b/ias-api-spec.pdf].
+const IAS_ENDPOINT_SIGRL: &'static str = "/attestation/sgx/v2/sigrl";
 /// Intel IAS report endpoint.
 ///
 /// See [https://software.intel.com/sites/default/files/managed/7e/3b/ias-api-spec.pdf].
@@ -34,6 +40,8 @@ pub struct IASConfiguration {
     pub spid: SPID,
     /// PKCS#12 archive containing the identity for authenticating to IAS.
     pub pkcs12_archive: String,
+    /// Quote signature policy.
+    pub quote_type: sgx_types::sgx_quote_sign_type_t,
 }
 
 /// IAS (Intel Attestation Service) interface.
@@ -43,6 +51,8 @@ pub struct IAS {
     spid: sgx_types::sgx_spid_t,
     /// Client used for IAS requests.
     client: Option<reqwest::Client>,
+    /// Quote signature policy.
+    quote_type: sgx_types::sgx_quote_sign_type_t,
 }
 
 impl IAS {
@@ -69,11 +79,13 @@ impl IAS {
                             _ => return Err(Error::new("Failed to create IAS client")),
                         }
                     },
+                    quote_type: config.quote_type,
                 })
             }
             None => Ok(IAS {
                 spid: sgx_types::sgx_spid_t { id: [0; SPID_LEN] },
                 client: None,
+                quote_type: sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE,
             }),
         }
     }
@@ -93,8 +105,26 @@ impl IAS {
 
         match client.post(&endpoint).json(&data).send() {
             Ok(response) => Ok(response),
-            _ => return Err(Error::new("Request to IAS failed")),
+            Err(e) => {
+                return Err(Error::new(format!(
+                    "Request to IAS failed. RequestBuilder::send {}",
+                    e
+                )))
+            }
         }
+    }
+
+    pub fn sigrl_fallible(&self, gid: &sgx_types::sgx_epid_group_id_t) -> Result<Vec<u8>> {
+        let gid_u32 = byteorder::LittleEndian::read_u32(gid);
+        let endpoint = format!("{}{}/{:08x}", IAS_API_URL, IAS_ENDPOINT_SIGRL, gid_u32);
+        let client = self.client
+            .as_ref()
+            .ok_or(Error::new("IAS is not configured"))?;
+
+        let mut response = client.get(&endpoint).send()?.error_for_status()?;
+        let sigrl_b64 = response.text()?;
+        let sigrl = base64::decode(&sigrl_b64)?;
+        Ok(sigrl)
     }
 
     /// Make authenticated web request to IAS report endpoint.
@@ -106,7 +136,7 @@ impl IAS {
                 // TODO: Generate other mock fields.
                 format!(
                     "{{\"isvEnclaveQuoteStatus\": \"OK\", \"isvEnclaveQuoteBody\": \"{}\"}}",
-                    base64::encode(&quote)
+                    base64::encode(quote)
                 ).into_bytes(),
             );
 
@@ -114,12 +144,15 @@ impl IAS {
         }
 
         let mut request = HashMap::new();
-        request.insert("isvEnclaveQuote", base64::encode(&quote));
-        request.insert("nonce", base64::encode(&nonce));
+        request.insert("isvEnclaveQuote", base64::encode(quote));
+        request.insert("nonce", base64::encode(nonce));
 
         let mut response = self.make_request(IAS_ENDPOINT_REPORT, &request)?;
         if !response.status().is_success() {
-            return Err(Error::new("Request to IAS failed"));
+            return Err(Error::new(format!(
+                "Request to IAS failed. status {}",
+                response.status()
+            )));
         }
 
         let mut av_report = identity_api::AvReport::new();
@@ -153,11 +186,11 @@ impl enclave::identity::IAS for IAS {
     }
 
     fn get_quote_type(&self) -> sgx_types::sgx_quote_sign_type_t {
-        sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE
+        self.quote_type
     }
 
-    fn sigrl(&self, _gid: &sgx_types::sgx_epid_group_id_t) -> Vec<u8> {
-        unimplemented!()
+    fn sigrl(&self, gid: &sgx_types::sgx_epid_group_id_t) -> Vec<u8> {
+        self.sigrl_fallible(gid).expect("IAS::sigrl_fallible")
     }
 
     fn report(&self, quote: &[u8]) -> identity_api::AvReport {

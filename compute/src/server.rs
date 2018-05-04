@@ -122,7 +122,7 @@ impl ComputeServerWorker {
             .expect("EnclaveIdentity::identity_init");
 
         // Show contract MRENCLAVE in hex format.
-        let iai = quote::verify(&identity_proof).expect("Enclave identity proof invalid");
+        let iai = quote::verify(&identity_proof).expect(&format!("Enclave identity proof invalid. You can delete the saved identity ({}) to generate new one", saved_identity_path));
         let mut mr_enclave = String::new();
         for &byte in &iai.mr_enclave[..] {
             write!(&mut mr_enclave, "{:02x}", byte).unwrap();

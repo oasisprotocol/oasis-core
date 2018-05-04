@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
+use hex;
 use serde_json;
 
 use ekiden_common::error::{Error, Result};
@@ -20,6 +21,44 @@ pub type QuoteContext = [u8; QUOTE_CONTEXT_LEN];
 
 // MRENCLAVE.
 hex_encoded_struct!(MrEnclave, MRENCLAVE_LEN, 32);
+
+pub fn open_av_report(av_report: &super::api::AvReport) -> Result<serde_json::Value> {
+    // TODO: Verify IAS signature.
+
+    // Parse AV report body.
+    let avr_body = match serde_json::from_slice(av_report.get_body()) {
+        Ok(avr_body) => avr_body,
+        _ => return Err(Error::new("Failed to parse AV report body")),
+    };
+
+    Ok(avr_body)
+}
+
+pub fn get_quote_body_raw(avr_body: &serde_json::Value) -> Result<Vec<u8>> {
+    let quote_body = match avr_body["isvEnclaveQuoteBody"].as_str() {
+        Some(quote_body) => quote_body,
+        None => {
+            return Err(Error::new(
+                "AV report body did not contain isvEnclaveQuoteBody",
+            ))
+        }
+    };
+
+    let quote_body = match base64::decode(&quote_body) {
+        Ok(quote_body) => quote_body,
+        _ => return Err(Error::new("Failed to parse quote")),
+    };
+
+    Ok(quote_body)
+}
+
+pub fn get_platform_info_tlv(avr_body: &serde_json::Value) -> Result<Option<Vec<u8>>> {
+    if let Some(platform_info_hex) = avr_body["platformInfoBlob"].as_str() {
+        Ok(Some(hex::decode(platform_info_hex)?))
+    } else {
+        Ok(None)
+    }
+}
 
 /// Decoded report body.
 #[derive(Default, Debug)]
@@ -91,14 +130,7 @@ pub struct IdentityAuthenticatedInfo {
 
 /// Verify attestation report.
 pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInfo> {
-    // TODO: Verify IAS signature.
-
-    // Parse AV report body.
-    let avr_body = identity_proof.get_av_report().get_body();
-    let avr_body: serde_json::Value = match serde_json::from_slice(avr_body) {
-        Ok(avr_body) => avr_body,
-        _ => return Err(Error::new("Failed to parse AV report body")),
-    };
+    let avr_body = open_av_report(identity_proof.get_av_report())?;
 
     // TODO: Check timestamp, reject if report is too old (e.g. 1 day).
 
@@ -116,19 +148,7 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
         }
     };
 
-    let quote_body = match avr_body["isvEnclaveQuoteBody"].as_str() {
-        Some(quote_body) => quote_body,
-        None => {
-            return Err(Error::new(
-                "AV report body did not contain isvEnclaveQuoteBody",
-            ))
-        }
-    };
-
-    let quote_body = match base64::decode(&quote_body) {
-        Ok(quote_body) => quote_body,
-        _ => return Err(Error::new("Failed to parse quote")),
-    };
+    let quote_body = get_quote_body_raw(&avr_body)?;
 
     let quote_body = match QuoteBody::decode(&quote_body) {
         Ok(quote_body) => quote_body,

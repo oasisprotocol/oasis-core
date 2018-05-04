@@ -4,6 +4,7 @@ extern crate sgx_types;
 
 extern crate base64;
 extern crate byteorder;
+extern crate hex;
 extern crate protobuf;
 extern crate serde_json;
 extern crate sodalite;
