@@ -12,7 +12,8 @@ DEPENDENCIES = re.compile(r'^(?:dependencies|build-dependencies|target\..+?\.dep
 INTERNAL_CRATES = re.compile(r'ekiden-.*')
 DOCKER_FROM = re.compile(r'FROM (.+?)(:.+)?$')
 CI_IMAGE = re.compile(r'(\s*-\s*image:\s*)(.+?)$')
-DEV_IMAGE = re.compile(r'(ekiden/development:).+(})')
+DOCKER_IMAGE = re.compile(r'(ekiden/development:).+(})')
+DEV_IMAGE = re.compile(r'(ekiden/development:).+(")')
 
 # Message used for version bump commits.
 VERSION_BUMP_MESSAGE = "Bump version to {version}"
@@ -187,7 +188,7 @@ def ci_update_image(root_dir, image, tag):
         ci_file.write(''.join(output))
 
 
-def script_update_version(root_dir, script, tag):
+def script_update_version(root_dir, script, template, tag):
     """Update image used in sgx-enter script."""
     filename = os.path.join(root_dir, 'scripts', script)
 
@@ -196,7 +197,7 @@ def script_update_version(root_dir, script, tag):
 
     output = []
     for line in lines:
-        line = DEV_IMAGE.sub(r'\g<1>{}\g<2>'.format(tag), line)
+        line = template.sub(r'\g<1>{}\g<2>'.format(tag), line)
 
         output.append(line)
 
@@ -239,9 +240,8 @@ if __name__ == '__main__':
         print('=== Building and tagging Docker images...')
         bump_docker_version(root_dir, args.version, 'docker/testing')
         ci_update_image(root_dir, 'ekiden/testing', args.version)
-        script_update_version(root_dir, 'sgx-enter.sh', args.version)
-        script_update_version(root_dir, 'sgx-enter-hw.sh', args.version)
-        script_update_version(root_dir, '../docker/deployment/build-images.sh', args.version)
+        script_update_version(root_dir, '../tools/bin/main.rs', DEV_IMAGE, args.version)
+        script_update_version(root_dir, '../docker/deployment/build-images.sh', DOCKER_IMAGE, args.version)
 
         docker_build(root_dir, args.version, 'docker/development', 'ekiden/development')
         docker_build(root_dir, args.version, 'docker/testing', 'ekiden/development')
