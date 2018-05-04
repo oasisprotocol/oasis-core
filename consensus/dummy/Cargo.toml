@@ -9,3 +9,4 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-consensus-base = { path = "../base", version = "0.1.0-alpha.4" }
+log = "0.4"

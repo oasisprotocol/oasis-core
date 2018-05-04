@@ -27,6 +27,7 @@ pub type SPID = H128;
 /// The `spid` is a valid SPID obtained from Intel, while `pkcs12_archive`
 /// is the path to the PKCS#12 archive (certificate and private key), which
 /// will be used to authenticate to IAS.
+#[derive(Clone, Debug)]
 pub struct IASConfiguration {
     /// SPID assigned by Intel.
     pub spid: SPID,
