@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-ekiden_image=${EKIDEN_DOCKER_IMAGE:-ekiden/development:0.1.0-alpha.3}
+ekiden_image=${EKIDEN_DOCKER_IMAGE:-ekiden/development:0.1.0-alpha.4}
 base_dir=$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )
 build_sgx_mode=${BUILD_IMAGES_SGX_MODE:-SIM}
 
