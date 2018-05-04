@@ -30,6 +30,7 @@ futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"
 futures = "0.1"
+futures-cpupool = "0.1"
 
 [dev-dependencies]
 serde_json = { git = "https://github.com/ekiden/json" }
