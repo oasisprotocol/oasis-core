@@ -4,6 +4,8 @@
 * Registry interface / centralized implementation added.
 * Make contract client sharable between threads.
 * Use new consensus interface in the compute node.
+* Add common `StreamSubscribers<T>` structure for easier handling of various subscriptions
+  to streams of items.
 * Bugfix: Release script updates shell environment.
 
 # 0.1.0-alpha.4

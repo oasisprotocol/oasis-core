@@ -7,6 +7,7 @@ use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::signature::Signed;
+use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_common::uint::U256;
 use ekiden_consensus_base::*;
 
@@ -235,9 +236,9 @@ struct DummyConsensusBackendInner {
     /// Current round.
     round: Mutex<Round>,
     /// Block subscribers.
-    block_subscribers: Mutex<Vec<mpsc::UnboundedSender<Block>>>,
+    block_subscribers: StreamSubscribers<Block>,
     /// Event subscribers.
-    event_subscribers: Mutex<Vec<mpsc::UnboundedSender<Event>>>,
+    event_subscribers: StreamSubscribers<Event>,
     /// Shutdown signal sender (until used).
     shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
     /// Shutdown signal receiver (until initialized).
@@ -249,18 +250,6 @@ struct DummyConsensusBackendInner {
 }
 
 impl DummyConsensusBackendInner {
-    /// Notify subscribers of a new block.
-    fn notify_block(&self, block: &Block) {
-        let mut block_subscribers = self.block_subscribers.lock().unwrap();
-        block_subscribers.retain(|ref s| s.unbounded_send(block.clone()).is_ok());
-    }
-
-    /// Notify subscribers of a new event.
-    fn notify_event(&self, event: &Event) {
-        let mut event_subscribers = self.event_subscribers.lock().unwrap();
-        event_subscribers.retain(|ref s| s.unbounded_send(event.clone()).is_ok());
-    }
-
     /// Attempt to finalize the current round.
     fn try_finalize(&self) {
         let mut round = self.round.lock().unwrap();
@@ -275,21 +264,21 @@ impl DummyConsensusBackendInner {
                 }
 
                 round.reset(Some(block.clone()));
-                self.notify_block(&block);
+                self.block_subscribers.notify(&block);
             }
             Ok(FinalizationResult::StillWaiting) => {
                 // Still waiting for some round participants.
             }
             Ok(FinalizationResult::NotifyReveals) => {
                 // Notify round participants that they should reveal.
-                self.notify_event(&Event::CommitmentsReceived);
+                self.event_subscribers.notify(&Event::CommitmentsReceived);
             }
             Err(error) => {
                 // Round has failed.
                 error!("Round has failed: {:?}", error);
 
                 round.reset(None);
-                self.notify_event(&Event::RoundFailed(error));
+                self.event_subscribers.notify(&Event::RoundFailed(error));
             }
         }
     }
@@ -320,8 +309,8 @@ impl DummyConsensusBackend {
             inner: Arc::new(DummyConsensusBackendInner {
                 blocks: Mutex::new(vec![genesis_block.clone()]),
                 round: Mutex::new(Round::new(genesis_block)),
-                block_subscribers: Mutex::new(vec![]),
-                event_subscribers: Mutex::new(vec![]),
+                block_subscribers: StreamSubscribers::new(),
+                event_subscribers: StreamSubscribers::new(),
                 shutdown_sender: Mutex::new(Some(shutdown_sender)),
                 shutdown_receiver: Mutex::new(Some(shutdown_receiver)),
                 command_sender,
@@ -431,7 +420,7 @@ impl ConsensusBackend for DummyConsensusBackend {
     }
 
     fn get_blocks(&self) -> BoxStream<Block> {
-        let (sender, receiver) = mpsc::unbounded();
+        let (sender, receiver) = self.inner.block_subscribers.subscribe();
         {
             let blocks = self.inner.blocks.lock().unwrap();
             match blocks.last() {
@@ -440,18 +429,11 @@ impl ConsensusBackend for DummyConsensusBackend {
             }
         }
 
-        let mut block_subscribers = self.inner.block_subscribers.lock().unwrap();
-        block_subscribers.push(sender);
-
-        Box::new(receiver.map_err(|_| Error::new("channel closed")))
+        receiver
     }
 
     fn get_events(&self) -> BoxStream<Event> {
-        let (sender, receiver) = mpsc::unbounded();
-        let mut event_subscribers = self.inner.event_subscribers.lock().unwrap();
-        event_subscribers.push(sender);
-
-        Box::new(receiver.map_err(|_| Error::new("channel closed")))
+        self.inner.event_subscribers.subscribe().1
     }
 
     fn commit(&self, commitment: Commitment) -> BoxFuture<()> {
