@@ -2,6 +2,7 @@
 
 ekiden_image=${EKIDEN_DOCKER_IMAGE:-ekiden/development:0.1.0-alpha.3}
 base_dir=$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )
+build_sgx_mode=${BUILD_IMAGES_SGX_MODE:-SIM}
 
 cd ${base_dir}
 
@@ -11,7 +12,7 @@ elif [ -z "$BUILD_IMAGES_CONTAINER" ]; then
     # Build in a fresh container.
     docker run --rm \
         -v "$PWD:/code" \
-        -e SGX_MODE=SIM \
+        -e "SGX_MODE=$build_sgx_mode" \
         -e INTEL_SGX_SDK=/opt/sgxsdk \
         -e EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1 \
         -w /code \
