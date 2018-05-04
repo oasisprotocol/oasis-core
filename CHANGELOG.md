@@ -1,7 +1,7 @@
 # Unreleased
 
 * gRPC message types and conversion convention established.
-* Registry interface / centralized implementation added.
+* Registry interface / centralized implementation added. (For entities and contracts)
 * Epoch interface / implementation added.
 * Random beacon interface / unsafe implementation added.
 * Make contract client sharable between threads.

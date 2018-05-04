@@ -4,7 +4,7 @@ import "common/api/src/common.proto";
 
 package registry;
 
-service Registry {
+service EntityRegistry {
     rpc RegisterEntity (RegisterRequest) returns (RegisterResponse) {}
     rpc DeregisterEntity (DeregisterRequest) returns (DeregisterResponse) {}
     rpc GetEntity (EntityRequest) returns (EntityResponse) {}

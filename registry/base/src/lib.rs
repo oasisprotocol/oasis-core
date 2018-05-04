@@ -7,8 +7,12 @@ extern crate ekiden_registry_api;
 extern crate grpcio;
 extern crate protobuf;
 
-pub mod backend;
-pub mod registry_service;
+pub mod contract_backend;
+pub mod contract_service;
+pub mod entity_backend;
+pub mod entity_service;
 
-pub use backend::*;
-pub use registry_service::*;
+pub use contract_backend::*;
+pub use contract_service::*;
+pub use entity_backend::*;
+pub use entity_service::*;

@@ -8,7 +8,7 @@ use ekiden_common::epochtime::{EpochTime, TimeSource};
 use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_core::error::{Error, Result};
 use ekiden_core::node::Node;
-use ekiden_registry_base::RegistryBackend;
+use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::*;
 
 #[cfg(not(target_env = "sgx"))]
@@ -21,7 +21,7 @@ const RNG_CONTEXT_STORAGE: &'static [u8] = b"EkS-Dummy-Storage";
 
 struct DummySchedulerBackendInner {
     beacon: Arc<RandomBeacon>,
-    registry: Arc<RegistryBackend>,
+    registry: Arc<EntityRegistryBackend>,
     time_source: Arc<TimeSource>,
 }
 
@@ -89,7 +89,7 @@ pub struct DummySchedulerBackend {
 impl DummySchedulerBackend {
     pub fn new(
         beacon: Arc<RandomBeacon>,
-        registry: Arc<RegistryBackend>,
+        registry: Arc<EntityRegistryBackend>,
         time_source: Arc<TimeSource>,
     ) -> Self {
         Self {
@@ -157,7 +157,7 @@ mod tests {
     use self::ekiden_beacon_dummy::InsecureDummyRandomBeacon;
     use self::ekiden_registry_base::{REGISTER_ENTITY_SIGNATURE_CONTEXT,
                                      REGISTER_NODE_SIGNATURE_CONTEXT};
-    use self::ekiden_registry_dummy::DummyRegistryBackend;
+    use self::ekiden_registry_dummy::DummyEntityRegistryBackend;
     use self::serde_cbor::to_vec;
     use super::*;
     use ekiden_common::bytes::B256;
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn test_dummy_scheduler_integration() {
         let beacon = Arc::new(InsecureDummyRandomBeacon {});
-        let registry = Arc::new(DummyRegistryBackend::new());
+        let registry = Arc::new(DummyEntityRegistryBackend::new());
         let time_source = Arc::new(SystemTimeSource {});
         let scheduler =
             DummySchedulerBackend::new(beacon.clone(), registry.clone(), time_source.clone());
