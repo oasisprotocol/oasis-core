@@ -12,7 +12,7 @@ use ekiden_common::bytes::{B256, H256};
 use ekiden_common::epochtime::TimeSource;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_storage_base::{StorageBackend, hash_storage_key};
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 pub const PERSISTENT_STORAGE_BASE_PATH: &str = "storage_base";
 

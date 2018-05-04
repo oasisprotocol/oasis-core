@@ -4,7 +4,7 @@ use ekiden_common::futures::BoxFuture;
 use ekiden_common::ring::digest;
 
 /// Storage backend implementing the Ekiden storage interface.
-pub trait StorageBackend {
+pub trait StorageBackend: Sync + Send {
     /// Fetch the value for a specific immutable key.
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>>;
 

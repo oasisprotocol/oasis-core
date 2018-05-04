@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_storage_base::{StorageBackend, hash_storage_key};
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 struct DummyStorageBackendInner {
     /// In-memory storage.

@@ -10,6 +10,7 @@
   to streams of items.
 * Bugfix: Release script updates shell environment.
 * Scheduler interface / centralized implementation added.
+* Use new storage interface in the compute node.
 
 # 0.1.0-alpha.4
 
