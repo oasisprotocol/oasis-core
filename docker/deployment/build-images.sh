@@ -13,6 +13,7 @@ elif [ -z "$BUILD_IMAGES_CONTAINER" ]; then
         -v "$PWD:/code" \
         -e SGX_MODE=SIM \
         -e INTEL_SGX_SDK=/opt/sgxsdk \
+        -e EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1 \
         -w /code \
         "$ekiden_image" \
         /code/docker/deployment/build-images-inner.sh
