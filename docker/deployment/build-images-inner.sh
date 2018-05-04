@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 # Our development image sets up the PATH in .bashrc. Source that.
 PS1='\$'
