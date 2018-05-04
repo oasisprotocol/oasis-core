@@ -71,4 +71,8 @@ members = [
     "registry/api",
     "registry/base",
     "registry/dummy",
+
+    # Scheduler.
+    "scheduler/base",
+    "scheduler/dummy",
 ]

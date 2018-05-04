@@ -15,7 +15,7 @@ pub const DEREGISTER_ENTITY_SIGNATURE_CONTEXT: B64 = B64(*b"EkEDeReg");
 pub const REGISTER_NODE_SIGNATURE_CONTEXT: B64 = B64(*b"EkNodReg");
 
 /// Registry backend implementing the Ekiden registry interface.
-pub trait RegistryBackend {
+pub trait RegistryBackend: Send + Sync {
     /// Register and or update an entity with the registry.
     ///
     /// The signature should be made using `REGISTER_ENTITY_SIGNATURE_CONTEXT`

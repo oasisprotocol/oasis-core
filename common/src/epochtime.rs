@@ -13,7 +13,7 @@ pub const EKIDEN_EPOCH: u64 = 1514764800; // 2018-01-01T00:00:00+00:00
 pub const EPOCH_INTERVAL: u64 = 86400; // 1 day
 
 /// A time source that provides epoch time.
-pub trait TimeSource {
+pub trait TimeSource: Send + Sync {
     /// Returns a tuple consisting of the current epoch, and the number of
     /// seconds since the begining of the current epoch.
     fn get_epoch(&self) -> Result<(EpochTime, u64)>;
@@ -24,9 +24,7 @@ pub trait TimeSource {
 }
 
 /// A system time based TimeSource.
-pub struct SystemTimeSource {
-    // Stateless.
-}
+pub struct SystemTimeSource;
 
 impl TimeSource for SystemTimeSource {
     fn get_epoch(&self) -> Result<(EpochTime, u64)> {
