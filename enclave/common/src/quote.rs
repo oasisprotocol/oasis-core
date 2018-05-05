@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
+use hex;
 use pem_iterator::body::Single;
 use pem_iterator::boundary::{BoundaryParser, BoundaryType, LabelMatcher};
 use percent_encoding;
@@ -102,6 +103,51 @@ static IAS_SIG_ALGS: &'static [&'static webpki::SignatureAlgorithm] =
     &[&webpki::RSA_PKCS1_2048_8192_SHA256];
 const PEM_CERTIFICATE_LABEL: &str = "CERTIFICATE";
 
+pub fn open_av_report(av_report: &super::api::AvReport, skip_verify: bool, unix_time: u64) -> Result<serde_json::Value> {
+    let avr_body = av_report.get_body();
+
+    // Verify IAS signature.
+    if !skip_verify {
+        let avr_cert_chain = av_report.get_certificates();
+        let avr_signature = av_report.get_signature();
+        validate_avr_signature(avr_cert_chain, avr_body, avr_signature, unix_time)?;
+    }
+
+    // Parse AV report body.
+    let avr_body = match serde_json::from_slice(avr_body) {
+        Ok(avr_body) => avr_body,
+        _ => return Err(Error::new("Failed to parse AV report body")),
+    };
+
+    Ok(avr_body)
+}
+
+pub fn get_quote_body_raw(avr_body: &serde_json::Value) -> Result<Vec<u8>> {
+    let quote_body = match avr_body["isvEnclaveQuoteBody"].as_str() {
+        Some(quote_body) => quote_body,
+        None => {
+            return Err(Error::new(
+                "AV report body did not contain isvEnclaveQuoteBody",
+            ))
+        }
+    };
+
+    let quote_body = match base64::decode(&quote_body) {
+        Ok(quote_body) => quote_body,
+        _ => return Err(Error::new("Failed to parse quote")),
+    };
+
+    Ok(quote_body)
+}
+
+pub fn get_platform_info_tlv(avr_body: &serde_json::Value) -> Result<Option<Vec<u8>>> {
+    if let Some(platform_info_hex) = avr_body["platformInfoBlob"].as_str() {
+        Ok(Some(hex::decode(platform_info_hex)?))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Decoded report body.
 #[derive(Default, Debug)]
 struct ReportBody {
@@ -172,7 +218,6 @@ pub struct IdentityAuthenticatedInfo {
 
 /// Verify attestation report.
 pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInfo> {
-    let avr_body = identity_proof.get_av_report().get_body();
     let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
 
     // Get the current time.
@@ -182,18 +227,7 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     let now_unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
     let now_unix = now_unix.as_secs() as i64;
 
-    // Verify IAS signature.
-    if !unsafe_skip_avr_verification {
-        let avr_cert_chain = identity_proof.get_av_report().get_certificates();
-        let avr_signature = identity_proof.get_av_report().get_signature();
-        validate_avr_signature(avr_cert_chain, avr_body, avr_signature, now_unix as u64)?;
-    }
-
-    // Parse AV report body.
-    let avr_body: serde_json::Value = match serde_json::from_slice(avr_body) {
-        Ok(avr_body) => avr_body,
-        _ => return Err(Error::new("Failed to parse AV report body")),
-    };
+    let avr_body = open_av_report(identity_proof.get_av_report(), unsafe_skip_avr_verification, now_unix as u64)?;
 
     // Check timestamp, reject if report is too old (e.g. 1 day).
     if !unsafe_skip_avr_verification {
@@ -226,19 +260,7 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
         }
     };
 
-    let quote_body = match avr_body["isvEnclaveQuoteBody"].as_str() {
-        Some(quote_body) => quote_body,
-        None => {
-            return Err(Error::new(
-                "AV report body did not contain isvEnclaveQuoteBody",
-            ))
-        }
-    };
-
-    let quote_body = match base64::decode(&quote_body) {
-        Ok(quote_body) => quote_body,
-        _ => return Err(Error::new("Failed to parse quote")),
-    };
+    let quote_body = get_quote_body_raw(&avr_body)?;
 
     let quote_body = match QuoteBody::decode(&quote_body) {
         Ok(quote_body) => quote_body,

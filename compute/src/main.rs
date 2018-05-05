@@ -3,6 +3,7 @@
 extern crate sgx_types;
 
 extern crate base64;
+extern crate byteorder;
 extern crate futures_timer;
 extern crate grpcio;
 extern crate hyper;
@@ -87,13 +88,22 @@ fn main() {
                 .value_name("SPID")
                 .help("IAS SPID in hex format")
                 .takes_value(true)
-                .requires("ias-pkcs12"),
+                .requires("ias-pkcs12")
+                .requires("ias-quote-type"),
         )
         .arg(
             Arg::with_name("ias-pkcs12")
                 .long("ias-pkcs12")
                 .help("Path to IAS client certificate and private key PKCS#12 archive")
                 .takes_value(true)
+                .requires("ias-spid"),
+        )
+        .arg(
+            Arg::with_name("ias-quote-type")
+                .long("ias-quote-type")
+                .help("Quote signature policy")
+                .takes_value(true)
+                .possible_values(&["unlinkable", "linkable"])
                 .requires("ias-spid"),
         )
         .arg(
@@ -236,6 +246,11 @@ fn main() {
             Some(IASConfiguration {
                 spid: value_t!(matches, "ias-spid", SPID).unwrap_or_else(|e| e.exit()),
                 pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
+                quote_type: match matches.value_of("ias-quote-type").unwrap() {
+                    "unlinkable" => sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE,
+                    "linkable" => sgx_types::sgx_quote_sign_type_t::SGX_LINKABLE_SIGNATURE,
+                    _ => panic!("Invalid ias-quote-type"),
+                },
             })
         } else {
             warn!("IAS is not configured, validation will always return an error.");

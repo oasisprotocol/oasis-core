@@ -1,5 +1,6 @@
 use std;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use sgx_types;
 
@@ -7,7 +8,7 @@ use protobuf;
 use protobuf::Message;
 
 use ekiden_common::error::{Error, Result};
-use ekiden_enclave_common::api;
+use ekiden_enclave_common::{api, quote};
 
 use super::enclave::Enclave;
 
@@ -51,6 +52,15 @@ union QuoteBuffer {
 }
 
 const PUBLIC_IDENTITY_CAPACITY: usize = 1024;
+
+/// Returns a raw pointer to a slice's buffer or NULL for empty slices.
+/// Some SGX functions just need pointers to be this way.
+fn as_ptr_or_null<T>(v: &[T]) -> *const T {
+    match v.len() {
+        0 => std::ptr::null(),
+        _ => v.as_ptr(),
+    }
+}
 
 impl EnclaveIdentity for Enclave {
     /// Restore a saved identity, creating one and saving it if we don't already have one. Returns
@@ -126,8 +136,7 @@ impl EnclaveIdentity for Enclave {
             }
 
             // Retrieve signature revocation list.
-            // TODO: implement and enable sigrl
-            // let sig_rl: Vec<u8> = ias.sigrl(&gid);
+            let sig_rl: Vec<u8> = ias.sigrl(&gid);
 
             // Create a new identity.
             let mut sealed_identity_buf: SealedDataBuffer = unsafe { std::mem::zeroed() };
@@ -184,11 +193,8 @@ impl EnclaveIdentity for Enclave {
             let mut quote_size = 0;
             let result = unsafe {
                 sgx_types::sgx_calc_quote_size(
-                    // TODO: implement and enable sigrl
-                    std::ptr::null(),
-                    0,
-                    // sig_rl.as_ptr(),
-                    // sig_rl.len() as u32,
+                    as_ptr_or_null(&sig_rl),
+                    sig_rl.len() as u32,
                     &mut quote_size,
                 )
             };
@@ -202,18 +208,14 @@ impl EnclaveIdentity for Enclave {
                 )));
             }
             let mut quote_buf: QuoteBuffer = unsafe { std::mem::zeroed() };
-            let nonce = unsafe { std::mem::zeroed() };
             let result = unsafe {
                 sgx_types::sgx_get_quote(
                     &report,
                     ias.get_quote_type(),
                     ias.get_spid(),
-                    nonce,
-                    // TODO: implement and enable sigrl
                     std::ptr::null(),
-                    0,
-                    // sig_rl.as_ptr(),
-                    // sig_rl.len() as u32,
+                    as_ptr_or_null(&sig_rl),
+                    sig_rl.len() as u32,
                     std::ptr::null_mut(),
                     &mut quote_buf.quote,
                     quote_size,
@@ -225,6 +227,58 @@ impl EnclaveIdentity for Enclave {
 
             // Verify attestation evidence.
             let av_report = ias.report(unsafe { &quote_buf.buffer[..quote_size as usize] });
+
+            // Do a cursory check of the AV report.
+            let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
+            let now_unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
+            let now_unix = now_unix.as_secs();
+            let avr_body = quote::open_av_report(&av_report, unsafe_skip_avr_verification, now_unix)?;
+            let avr_quote_body = quote::get_quote_body_raw(&avr_body)?;
+            if avr_quote_body.len() > quote_size as usize {
+                return Err(Error::new(format!(
+                    "AV report quote body ({} bytes) is longer than quote ({} bytes)",
+                    avr_quote_body.len(),
+                    quote_size
+                )));
+            }
+            if avr_quote_body != unsafe { &quote_buf.buffer[..avr_quote_body.len()] } {
+                return Err(Error::new("AV report quote body does not match quote"));
+            }
+
+            // Forward platform info.
+            if let Some(platform_info_tlv) = quote::get_platform_info_tlv(&avr_body)? {
+                let mut platform_info: sgx_types::sgx_platform_info_t =
+                    unsafe { std::mem::zeroed() };
+                // https://software.intel.com/sites/default/files/managed/7e/3b/ias-api-spec.pdf
+                // Section 4.2.4.1
+                // There's a 4-byte header that we don't need.
+                platform_info
+                    .platform_info
+                    .copy_from_slice(&platform_info_tlv[4..]);
+                let mut update_info = unsafe { std::mem::zeroed() };
+                let result = unsafe {
+                    sgx_types::sgx_report_attestation_status(
+                        &platform_info,
+                        1, // ISV does not trust the enclave
+                        &mut update_info,
+                    )
+                };
+                if result == sgx_types::sgx_status_t::SGX_ERROR_UPDATE_NEEDED {
+                    return Err(Error::new(format!(
+                        "sgx_report_attestation_status: {}, update_info ucodeUpdate={} csmeFwUpdate={} pswUpdate={}",
+                        result,
+                        unsafe { &update_info.ucodeUpdate },
+                        unsafe { &update_info.csmeFwUpdate },
+                        unsafe { &update_info.pswUpdate }
+                    )));
+                } else if result != sgx_types::sgx_status_t::SGX_SUCCESS {
+                    return Err(Error::new(format!(
+                        "sgx_report_attestation_status: {}",
+                        result
+                    )));
+                }
+                return Err(Error::new("AV report has platform info blob"));
+            }
 
             //
             saved_identity.set_av_report(av_report);
