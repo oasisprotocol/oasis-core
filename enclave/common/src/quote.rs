@@ -118,10 +118,27 @@ pub fn open_av_report(
     }
 
     // Parse AV report body.
-    let avr_body = match serde_json::from_slice(avr_body) {
+    let avr_body: serde_json::Value = match serde_json::from_slice(avr_body) {
         Ok(avr_body) => avr_body,
         _ => return Err(Error::new("Failed to parse AV report body")),
     };
+
+    // Check timestamp, reject if report is too old (e.g. 1 day).
+    if !skip_verify {
+        let timestamp = match avr_body["timestamp"].as_str() {
+            Some(timestamp) => timestamp,
+            None => {
+                return Err(Error::new("AV report body did not contain timestamp"));
+            }
+        };
+        let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
+            Ok(timestamp) => timestamp.timestamp(),
+            _ => return Err(Error::new("Failed to parse AV report timestamp")),
+        };
+        if (unix_time as i64 - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
+            return Err(Error::new("AV report timestamp differs by more than 1 day"));
+        }
+    }
 
     Ok(avr_body)
 }
@@ -229,30 +246,13 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     // WARNING: If this is running in an enclave, this will be an OCALL, and
     // entirely reliant on the responder to provide the correct time.
     let now_unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
-    let now_unix = now_unix.as_secs() as i64;
+    let now_unix = now_unix.as_secs();
 
     let avr_body = open_av_report(
         identity_proof.get_av_report(),
         unsafe_skip_avr_verification,
-        now_unix as u64,
+        now_unix,
     )?;
-
-    // Check timestamp, reject if report is too old (e.g. 1 day).
-    if !unsafe_skip_avr_verification {
-        let timestamp = match avr_body["timestamp"].as_str() {
-            Some(timestamp) => timestamp,
-            None => {
-                return Err(Error::new("AV report body did not contain timestamp"));
-            }
-        };
-        let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
-            Ok(timestamp) => timestamp.timestamp(),
-            _ => return Err(Error::new("Failed to parse AV report timestamp")),
-        };
-        if (now_unix - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
-            return Err(Error::new("AV report timestamp differs by more than 1 day"));
-        }
-    }
 
     match avr_body["isvEnclaveQuoteStatus"].as_str() {
         Some(status) => match status {
