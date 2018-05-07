@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package storage;
+
+service Storage {
+    rpc Get(GetRequest) returns (GetResponse) {}
+    rpc Insert(InsertRequest) returns (InsertResponse) {}
+}
+
+message GetRequest {
+    bytes id = 1;
+}
+
+message GetResponse {
+    bytes data = 1;
+}
+
+message InsertRequest {
+    bytes data = 1;
+    uint64 expiry = 2;
+}
+
+message InsertResponse {
+}

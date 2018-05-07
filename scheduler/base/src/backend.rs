@@ -19,6 +19,7 @@ pub struct CommitteeNode {
 }
 
 /// The functionality a committee exists to provide.
+#[derive(PartialEq)]
 pub enum CommitteeType {
     Compute,
     Storage,
@@ -33,7 +34,7 @@ pub struct Committee {
 }
 
 /// Scheduler backend implementing the Ekiden scheduler interface.
-pub trait Scheduler {
+pub trait Scheduler: Send + Sync {
     /// Return a vector of the committees for a given contract invocation,
     /// for the current epoch.
     fn get_committees(&self, contract: Arc<Contract>) -> BoxFuture<Vec<Committee>>;

@@ -24,7 +24,10 @@ pub trait TimeSource: Send + Sync {
 }
 
 /// A system time based TimeSource.
-pub struct SystemTimeSource;
+#[derive(Clone, Debug)]
+pub struct SystemTimeSource {
+    // Stateless.
+}
 
 impl TimeSource for SystemTimeSource {
     fn get_epoch(&self) -> Result<(EpochTime, u64)> {

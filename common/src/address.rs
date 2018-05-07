@@ -1,5 +1,6 @@
 //! Address defintion and helpers.
 use std::convert::TryFrom;
+use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use error::Error;
@@ -9,6 +10,12 @@ use ekiden_common_api as api;
 /// Address represents a public location that can be used to connect to an entity in ekiden.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Address(SocketAddr);
+
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl TryFrom<api::Address> for Address {
     /// try_from Converts a protobuf `common::api::Address` into an address.

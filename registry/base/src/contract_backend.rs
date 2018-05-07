@@ -8,7 +8,7 @@ use ekiden_common::signature::Signed;
 pub const REGISTER_CONTRACT_SIGNATURE_CONTEXT: B64 = B64(*b"EkConReg");
 
 /// Registry backend implementing the Ekiden contract registry.
-pub trait ContractRegistryBackend {
+pub trait ContractRegistryBackend: Send + Sync {
     // Register a contract in the registry.
     // TODO: who is the contract signed by? currently itself.
     fn register_contract(&self, contract: Signed<Contract>) -> BoxFuture<()>;

@@ -1,5 +1,9 @@
 //! Node Interface.
 use std::convert::TryFrom;
+use std::sync::Arc;
+
+#[cfg(not(target_env = "sgx"))]
+use grpcio;
 
 use address::Address;
 use bytes::B256;
@@ -59,5 +63,16 @@ impl Into<api::Node> for Node {
         n.set_addresses(self.addresses.iter().map(|a| a.to_owned().into()).collect());
         n.set_stake(self.stake.clone());
         n
+    }
+}
+
+#[cfg(not(target_env = "sgx"))]
+impl Node {
+    pub fn connect(self, env: Arc<grpcio::Environment>) -> grpcio::Channel {
+        let builder = grpcio::ChannelBuilder::new(env.clone());
+        // TODO: try all addresses
+        let address = self.addresses[0];
+        // TODO: node identity pub-keys should be used to construct a cert to allow secure_connect.
+        builder.connect(&format!("{}", address))
     }
 }

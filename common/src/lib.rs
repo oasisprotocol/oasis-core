@@ -1,6 +1,9 @@
 #![feature(use_extern_macros, try_from)]
 
 #[cfg(not(target_env = "sgx"))]
+extern crate grpcio;
+
+#[cfg(not(target_env = "sgx"))]
 extern crate rand;
 
 #[cfg(target_env = "sgx")]

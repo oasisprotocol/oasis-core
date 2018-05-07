@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_common::hash::EncodedHash;
 use ekiden_storage_base::StorageBackend;
 
 struct DummyStorageBackendInner {
@@ -26,53 +25,33 @@ impl DummyStorageBackend {
             })),
         }
     }
-
-    /// Hash namespace and key.
-    fn get_namespaced_key(namespace: &[u8], key: &[u8]) -> H256 {
-        vec![namespace, key].get_encoded_hash()
-    }
 }
 
 impl StorageBackend for DummyStorageBackend {
-    fn get(&self, namespace: &[u8], key: &[u8]) -> BoxFuture<Vec<u8>> {
+    fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
         let inner = self.inner.clone();
-        let raw_key = Self::get_namespaced_key(namespace, key);
 
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
 
-            match inner.storage.get(&raw_key) {
+            match inner.storage.get(&key) {
                 Some(value) => Ok(value.clone()),
                 None => Err(Error::new("key not found")),
             }
         }))
     }
 
-    fn insert(&self, namespace: &[u8], key: &[u8], value: &[u8]) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
-        let raw_key = Self::get_namespaced_key(namespace, key);
+        let key = Self::hash_key(&value);
         let value_owned = value.to_owned();
 
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
 
-            inner.storage.insert(raw_key, value_owned);
+            inner.storage.insert(key, value_owned);
 
             Ok(())
-        }))
-    }
-
-    fn remove(&self, namespace: &[u8], key: &[u8]) -> BoxFuture<()> {
-        let inner = self.inner.clone();
-        let raw_key = Self::get_namespaced_key(namespace, key);
-
-        Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
-
-            match inner.storage.remove(&raw_key) {
-                Some(_) => Ok(()),
-                None => Err(Error::new("key not found")),
-            }
         }))
     }
 }
