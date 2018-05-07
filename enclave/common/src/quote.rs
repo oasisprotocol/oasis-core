@@ -133,7 +133,13 @@ pub fn open_av_report(
         };
         let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
             Ok(timestamp) => timestamp.timestamp(),
-            _ => return Err(Error::new("Failed to parse AV report timestamp")),
+            Err(e) => {
+                return Err(Error::new(format!(
+                    "Failed to parse AV report timestamp {}: {}",
+                    timestamp,
+                    e
+                )))
+            }
         };
         if (unix_time as i64 - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
             return Err(Error::new("AV report timestamp differs by more than 1 day"));
