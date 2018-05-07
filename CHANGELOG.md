@@ -13,6 +13,8 @@
 * Scheduler interface / centralized implementation added.
 * Use new storage interface in the compute node.
 * Bugfix: AVR timestamp parsing should now be correct.
+* Add `common::epochtime::TimeSourceNotifier` to enable event driven epoch time.
+* Add `common::epochtime::MockTimeSource` to simplify testing.
 
 # 0.1.0-alpha.4
 
