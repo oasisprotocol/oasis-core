@@ -5,9 +5,10 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture};
+use ekiden_common::futures::{future, BoxFuture, BoxStream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
+use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_registry_base::*;
 
 struct DummyEntityRegistryBackendInner {
@@ -22,6 +23,9 @@ struct DummyEntityRegistryBackendInner {
 /// **This backend should only be used for tests. it is centralized and unsafe.***
 pub struct DummyEntityRegistryBackend {
     inner: Arc<Mutex<DummyEntityRegistryBackendInner>>,
+    /// Event subscribers.
+    entity_subscribers: Arc<StreamSubscribers<RegistryEvent<Entity>>>,
+    node_subscribers: Arc<StreamSubscribers<RegistryEvent<Node>>>,
 }
 
 impl DummyEntityRegistryBackend {
@@ -32,6 +36,8 @@ impl DummyEntityRegistryBackend {
                 nodes: HashMap::new(),
                 nodeents: HashMap::new(),
             })),
+            entity_subscribers: Arc::new(StreamSubscribers::new()),
+            node_subscribers: Arc::new(StreamSubscribers::new()),
         }
     }
 }
@@ -39,6 +45,7 @@ impl DummyEntityRegistryBackend {
 impl EntityRegistryBackend for DummyEntityRegistryBackend {
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let inner = self.inner.clone();
+        let entity_subscribers = self.entity_subscribers.clone();
         Box::new(future::lazy(move || {
             if entity.signature.public_key != entity.get_value_unsafe().id {
                 return Err(Error::new("Wrong signature."));
@@ -48,12 +55,17 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
             inner.entities.insert(entity.id, entity.clone());
             inner.nodes.insert(entity.id, HashMap::new());
 
+            let notification = RegistryEvent::Registered(entity);
+            entity_subscribers.notify(&notification);
+
             Ok(())
         }))
     }
 
     fn deregister_entity(&self, id: Signed<B256>) -> BoxFuture<()> {
         let inner = self.inner.clone();
+        let entity_subscribers = self.entity_subscribers.clone();
+        let node_subscribers = self.node_subscribers.clone();
         Box::new(future::lazy(move || {
             if id.signature.public_key != *id.get_value_unsafe() {
                 return Err(Error::new("Wrong signature."));
@@ -62,9 +74,25 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
 
             let mut inner = inner.lock().unwrap();
 
-            inner.entities.remove(&id);
-            inner.nodes.remove(&id);
-            // TODO: keep nodeents in sync.
+            let entity = inner.entities.remove(&id);
+            let registered_nodes = inner.nodes.remove(&id);
+
+            match registered_nodes {
+                Some(nodes) => for node in nodes.values() {
+                    inner.nodeents.remove(&node.id);
+                    let notification = RegistryEvent::Deregistered(node.to_owned());
+                    node_subscribers.notify(&notification);
+                },
+                None => (),
+            };
+
+            match entity {
+                Some(e) => {
+                    let notification = RegistryEvent::Deregistered(e);
+                    entity_subscribers.notify(&notification);
+                }
+                None => (),
+            };
 
             Ok(())
         }))
@@ -90,8 +118,13 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
         }))
     }
 
+    fn watch_entities(&self) -> BoxStream<RegistryEvent<Entity>> {
+        self.entity_subscribers.subscribe().1
+    }
+
     fn register_node(&self, node: Signed<Node>) -> BoxFuture<()> {
         let inner = self.inner.clone();
+        let node_subscribers = self.node_subscribers.clone();
         Box::new(future::lazy(move || {
             if node.get_value_unsafe().entity_id != node.signature.public_key {
                 return Err(Error::new("Wrong signature."));
@@ -112,6 +145,10 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
                 None => Err(Error::new("No such entity.")),
             }?;
             inner.nodeents.insert(node.id, node.entity_id);
+
+            let notification = RegistryEvent::Registered(node);
+            node_subscribers.notify(&notification);
+
             Ok(())
         }))
     }
@@ -157,5 +194,9 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
                 None => Err(Error::new("Entity not found.")),
             }
         }))
+    }
+
+    fn watch_nodes(&self) -> BoxStream<RegistryEvent<Node>> {
+        self.node_subscribers.subscribe().1
     }
 }

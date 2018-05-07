@@ -1,7 +1,7 @@
 //! Registry backend interface.
 use ekiden_common::bytes::{B256, B64};
 use ekiden_common::entity::Entity;
-use ekiden_common::futures::BoxFuture;
+use ekiden_common::futures::{BoxFuture, BoxStream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 
@@ -13,6 +13,13 @@ pub const DEREGISTER_ENTITY_SIGNATURE_CONTEXT: B64 = B64(*b"EkEDeReg");
 
 /// Signature context used for entity registration
 pub const REGISTER_NODE_SIGNATURE_CONTEXT: B64 = B64(*b"EkNodReg");
+
+/// Event subscription to registration and deregistration of entities and nodes.
+#[derive(Clone, Copy)]
+pub enum RegistryEvent<T> {
+    Registered(T),
+    Deregistered(T),
+}
 
 /// Registry backend implementing the Ekiden registry interface.
 pub trait EntityRegistryBackend: Send + Sync {
@@ -32,6 +39,9 @@ pub trait EntityRegistryBackend: Send + Sync {
     /// Get a list of all registered entities.
     fn get_entities(&self) -> BoxFuture<Vec<Entity>>;
 
+    /// Watch for changes in entity registration.
+    fn watch_entities(&self) -> BoxStream<RegistryEvent<Entity>>;
+
     /// Register and or update a node with the registry.
     ///
     /// The signature should be made using `REGISTER_NODE_SIGNATURE_CONTEXT`
@@ -45,4 +55,7 @@ pub trait EntityRegistryBackend: Send + Sync {
 
     /// Get a list of nodes registered to an entity id.
     fn get_nodes_for_entity(&self, id: B256) -> BoxFuture<Vec<Node>>;
+
+    /// Watch for changes in node registration.
+    fn watch_nodes(&self) -> BoxStream<RegistryEvent<Node>>;
 }
