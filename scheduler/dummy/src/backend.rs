@@ -163,7 +163,7 @@ mod tests {
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
     use ekiden_common::entity::Entity;
-    use ekiden_common::epochtime::SystemTimeSource;
+    use ekiden_common::epochtime::{MockTimeSource, TimeSourceNotifier};
     use ekiden_common::node::Node;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
@@ -172,9 +172,10 @@ mod tests {
 
     #[test]
     fn test_dummy_scheduler_integration() {
-        let beacon = Arc::new(InsecureDummyRandomBeacon {});
+        let time_source = Arc::new(MockTimeSource::new());
+        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+        let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let registry = Arc::new(DummyEntityRegistryBackend::new());
-        let time_source = Arc::new(SystemTimeSource {});
         let scheduler =
             DummySchedulerBackend::new(beacon.clone(), registry.clone(), time_source.clone());
 
@@ -236,7 +237,7 @@ mod tests {
         for com in committees {
             // Ensure that the committee is for the correct contract and epoch.
             assert_eq!(com.contract, contract);
-            assert_eq!(com.valid_for, now); // May race.
+            assert_eq!(com.valid_for, now);
 
             // Ensure that only 1 of each committee is returned, and that the
             // expected number of nodes are present.
