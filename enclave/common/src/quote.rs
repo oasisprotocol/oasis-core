@@ -103,7 +103,11 @@ static IAS_SIG_ALGS: &'static [&'static webpki::SignatureAlgorithm] =
     &[&webpki::RSA_PKCS1_2048_8192_SHA256];
 const PEM_CERTIFICATE_LABEL: &str = "CERTIFICATE";
 
-pub fn open_av_report(av_report: &super::api::AvReport, skip_verify: bool, unix_time: u64) -> Result<serde_json::Value> {
+pub fn open_av_report(
+    av_report: &super::api::AvReport,
+    skip_verify: bool,
+    unix_time: u64,
+) -> Result<serde_json::Value> {
     let avr_body = av_report.get_body();
 
     // Verify IAS signature.
@@ -227,7 +231,11 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     let now_unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
     let now_unix = now_unix.as_secs() as i64;
 
-    let avr_body = open_av_report(identity_proof.get_av_report(), unsafe_skip_avr_verification, now_unix as u64)?;
+    let avr_body = open_av_report(
+        identity_proof.get_av_report(),
+        unsafe_skip_avr_verification,
+        now_unix as u64,
+    )?;
 
     // Check timestamp, reject if report is too old (e.g. 1 day).
     if !unsafe_skip_avr_verification {

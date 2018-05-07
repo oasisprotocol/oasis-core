@@ -229,10 +229,12 @@ impl EnclaveIdentity for Enclave {
             let av_report = ias.report(unsafe { &quote_buf.buffer[..quote_size as usize] });
 
             // Do a cursory check of the AV report.
-            let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
+            let unsafe_skip_avr_verification =
+                option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
             let now_unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
             let now_unix = now_unix.as_secs();
-            let avr_body = quote::open_av_report(&av_report, unsafe_skip_avr_verification, now_unix)?;
+            let avr_body =
+                quote::open_av_report(&av_report, unsafe_skip_avr_verification, now_unix)?;
             let avr_quote_body = quote::get_quote_body_raw(&avr_body)?;
             if avr_quote_body.len() > quote_size as usize {
                 return Err(Error::new(format!(
