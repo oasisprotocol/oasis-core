@@ -1,5 +1,6 @@
 # Unreleased
 
+* **BACKWARD INCOMPATIBLE:** Remove old consensus node.
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added. (For entities and contracts)
 * Epoch interface / implementation added.
