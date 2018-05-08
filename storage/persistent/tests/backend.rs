@@ -9,7 +9,7 @@ use std::fs;
 use ekiden_common::bytes::B256;
 use ekiden_common::epochtime::SystemTimeSource;
 use ekiden_common::futures::Future;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_persistent::PersistentStorageBackend;
 
 #[test]
@@ -19,7 +19,7 @@ fn test_persistent_backend() {
         PersistentStorageBackend::new(contract_id, Box::new(SystemTimeSource {}), HashMap::new());
     assert!(!backend.is_err());
     let backend = backend.unwrap();
-    let key = PersistentStorageBackend::hash_key(b"value");
+    let key = hash_storage_key(b"value");
 
     assert!(backend.get(key).wait().is_err());
     backend.insert(b"value".to_vec(), 10).wait().unwrap();

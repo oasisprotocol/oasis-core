@@ -41,6 +41,7 @@ impl StorageBackend for StorageClient {
         let mut req = api::InsertRequest::new();
         req.set_data(value);
         req.set_expiry(expiry);
+
         match self.0.insert_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),
             Err(e) => Box::new(future::err(Error::new(e.description()))),
