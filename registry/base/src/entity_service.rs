@@ -1,11 +1,11 @@
 use std::convert::{Into, TryFrom};
 
-use ekiden_common::futures::{BoxFuture, Future};
+use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_registry_api as api;
-use grpcio::{RpcContext, RpcStatus, UnarySink};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 
-use super::entity_backend::EntityRegistryBackend;
+use super::entity_backend::{EntityRegistryBackend, RegistryEvent};
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
@@ -152,6 +152,31 @@ where
         }).map_err(|_e| ()));
     }
 
+    fn watch_entities(
+        &self,
+        ctx: RpcContext,
+        _req: api::WatchEntityRequest,
+        sink: ServerStreamingSink<api::WatchEntityResponse>,
+    ) {
+        let f = self.inner
+            .watch_entities()
+            .map(|res| -> (api::WatchEntityResponse, WriteFlags) {
+                let mut r = api::WatchEntityResponse::new();
+                match res {
+                    RegistryEvent::Registered(entity) => {
+                        r.set_entity(entity.into());
+                        r.set_event_type(api::WatchEntityResponse_ChangeType::REGISTERED);
+                    }
+                    RegistryEvent::Deregistered(entity) => {
+                        r.set_entity(entity.into());
+                        r.set_event_type(api::WatchEntityResponse_ChangeType::DEREGISTERED);
+                    }
+                };
+                (r, WriteFlags::default())
+            });
+        ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
+    }
+
     fn register_node(
         &self,
         ctx: RpcContext,
@@ -259,5 +284,30 @@ where
             Ok(ret) => sink.success(ret),
             Err(e) => invalid!(sink, Internal, e),
         }).map_err(|_e| ()));
+    }
+
+    fn watch_nodes(
+        &self,
+        ctx: RpcContext,
+        _req: api::WatchNodeRequest,
+        sink: ServerStreamingSink<api::WatchNodeResponse>,
+    ) {
+        let f = self.inner
+            .watch_nodes()
+            .map(|res| -> (api::WatchNodeResponse, WriteFlags) {
+                let mut r = api::WatchNodeResponse::new();
+                match res {
+                    RegistryEvent::Registered(node) => {
+                        r.set_node(node.into());
+                        r.set_event_type(api::WatchNodeResponse_ChangeType::REGISTERED);
+                    }
+                    RegistryEvent::Deregistered(node) => {
+                        r.set_node(node.into());
+                        r.set_event_type(api::WatchNodeResponse_ChangeType::DEREGISTERED);
+                    }
+                };
+                (r, WriteFlags::default())
+            });
+        ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
     }
 }

@@ -9,10 +9,12 @@ service EntityRegistry {
     rpc DeregisterEntity (DeregisterRequest) returns (DeregisterResponse) {}
     rpc GetEntity (EntityRequest) returns (EntityResponse) {}
     rpc GetEntities (EntitiesRequest) returns (EntitiesResponse) {}
+    rpc WatchEntities (WatchEntityRequest) returns (stream WatchEntityResponse) {}
     rpc RegisterNode (RegisterNodeRequest) returns (RegisterNodeResponse) {}
     rpc GetNode (NodeRequest) returns (NodeResponse) {}
     rpc GetNodes (NodesRequest) returns (NodesResponse) {}
     rpc GetNodesForEntity (EntityNodesRequest) returns (EntityNodesResponse) {}
+    rpc WatchNodes (WatchNodeRequest) returns (stream WatchNodeResponse) {}
 }
 
 message RegisterRequest {
@@ -46,6 +48,18 @@ message EntitiesResponse {
     repeated common.Entity entity = 1;
 }
 
+message WatchEntityRequest {
+}
+
+message WatchEntityResponse {
+    enum ChangeType {
+      REGISTERED = 0;
+      DEREGISTERED = 1;
+    }
+    ChangeType event_type = 1;
+    common.Entity entity = 2;
+}
+
 message RegisterNodeRequest {
     common.Node node = 1;
     common.Signature signature = 2;
@@ -75,4 +89,16 @@ message EntityNodesRequest {
 
 message EntityNodesResponse {
     repeated common.Node node = 1;
+}
+
+message WatchNodeRequest {
+}
+
+message WatchNodeResponse {
+    enum ChangeType {
+      REGISTERED = 0;
+      DEREGISTERED = 1;
+    }
+    ChangeType event_type = 1;
+    common.Node node = 2;
 }
