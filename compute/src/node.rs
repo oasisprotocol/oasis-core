@@ -9,14 +9,14 @@ use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
-use ekiden_core::epochtime::SystemTimeSource;
+use ekiden_core::epochtime::{SystemTimeSource, TimeSourceNotifier};
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
 use ekiden_core::node::Node;
 use ekiden_core::signature::Signed;
 use ekiden_registry_base::{EntityRegistryBackend, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
-use ekiden_registry_dummy::DummyEntityRegistryBackend;
+use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
@@ -87,13 +87,17 @@ impl ComputeNode {
 
         // Create scheduler.
         // TODO: Base on configuration.
-        let beacon = Arc::new(InsecureDummyRandomBeacon);
-        let registry = Arc::new(DummyEntityRegistryBackend::new());
         let time_source = Arc::new(SystemTimeSource {});
+        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+
+        let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let scheduler = Arc::new(DummySchedulerBackend::new(
             beacon,
-            registry.clone(),
-            time_source,
+            contract_registry.clone(),
+            entity_registry.clone(),
+            time_notifier,
         ));
 
         // Create contract.
@@ -115,7 +119,10 @@ impl ComputeNode {
             &REGISTER_ENTITY_SIGNATURE_CONTEXT,
             Entity { id: entity_pk },
         );
-        registry.register_entity(signed_entity).wait().unwrap();
+        entity_registry
+            .register_entity(signed_entity)
+            .wait()
+            .unwrap();
 
         // Register node with the registry.
         // TODO: Handle this properly, do not start any other services before registration is done.
@@ -133,7 +140,7 @@ impl ComputeNode {
             node,
         );
         info!("Registering compute node with the registry");
-        registry.register_node(signed_node).wait().unwrap();
+        entity_registry.register_node(signed_node).wait().unwrap();
         info!("Compute node registration done");
 
         // Create storage backend.

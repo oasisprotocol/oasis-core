@@ -16,6 +16,7 @@
 * Add `common::epochtime::TimeSourceNotifier` to enable event driven epoch time.
 * Add `common::epochtime::MockTimeSource` to simplify testing.
 * Extend `beacon::base::RandomBeacon` to enable event driven beacons.
+* Extend `scheduler::base::Scheduler` to enable event driven scheduling.
 
 # 0.1.0-alpha.4
 
