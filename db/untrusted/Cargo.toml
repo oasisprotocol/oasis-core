@@ -13,6 +13,8 @@ sgx-simulation = []
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.4" }
+ekiden-storage-base = { path = "../../storage/base", version = "0.1.0-alpha.4" }
+log = "0.4"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }

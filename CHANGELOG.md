@@ -1,5 +1,6 @@
 # Unreleased
 
+* **BACKWARD INCOMPATIBLE:** Remove old consensus node.
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added. (For entities and contracts)
 * Epoch interface / implementation added.
@@ -10,6 +11,7 @@
   to streams of items.
 * Bugfix: Release script updates shell environment.
 * Scheduler interface / centralized implementation added.
+* Use new storage interface in the compute node.
 
 # 0.1.0-alpha.4
 

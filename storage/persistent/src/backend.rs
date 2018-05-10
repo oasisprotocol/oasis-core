@@ -12,7 +12,7 @@ use ekiden_common::bytes::{B256, H256};
 use ekiden_common::epochtime::TimeSource;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 pub const PERSISTENT_STORAGE_BASE_PATH: &str = "storage_base";
 
@@ -71,10 +71,7 @@ impl StorageBackend for PersistentStorageBackend {
 
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
-        let value = value.to_owned();
-
-        let key = Self::hash_key(&value);
-        let expiry = expiry.to_owned();
+        let key = hash_storage_key(&value);
 
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
@@ -92,7 +89,9 @@ impl StorageBackend for PersistentStorageBackend {
             };
             inner.storage.set(expiry_key, expiry_value.unwrap())?;
 
-            Ok(inner.storage.set(key.to_vec(), value)?)
+            inner.storage.set(key.to_vec(), value)?;
+
+            Ok(())
         }))
     }
 }

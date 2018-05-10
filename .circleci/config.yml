@@ -19,7 +19,6 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
-            --exclude ekiden-consensus \
             --exclude token \
             -- --test-threads 1
 
@@ -58,19 +57,6 @@ jobs:
 
       # Contract end-to-end tests.
 
-      # Start the consensus node.
-      - run:
-          command: ./target/debug/ekiden-consensus
-          background: true
-      # Start tendermint node.
-      - run: tendermint init
-      - run:
-          command: |
-            tendermint node \
-              --consensus.create_empty_blocks=false \
-              --rpc.laddr tcp://0.0.0.0:46666 \
-              --rpc.grpc_laddr tcp://0.0.0.0:46657
-          background: true
       # Start key manager compute node.
       - run:
           command: |
@@ -115,7 +101,6 @@ jobs:
           REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
-          kubectl set image deployments/ekiden-token-consensus ekiden-consensus=$REPO_DIGEST
           kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 

@@ -54,7 +54,7 @@ impl Default for PendingBatch {
 
 struct ConsensusFrontendInner {
     /// Consensus backend.
-    backend: Arc<ConsensusBackend + Send + Sync>,
+    backend: Arc<ConsensusBackend>,
     /// Signer for the compute node.
     signer: Arc<Signer + Send + Sync>,
     /// Worker that can process batches.
@@ -82,8 +82,6 @@ struct ConsensusFrontendInner {
 /// Consensus frontend configuration.
 #[derive(Clone)]
 pub struct ConsensusConfiguration {
-    /// Consensus backend.
-    pub backend: Arc<ConsensusBackend + Send + Sync>,
     /// Signer for the compute node.
     pub signer: Arc<Signer + Send + Sync>,
     /// Maximum batch size.
@@ -99,12 +97,16 @@ pub struct ConsensusFrontend {
 
 impl ConsensusFrontend {
     /// Create a new consensus frontend.
-    pub fn new(config: ConsensusConfiguration, worker: Arc<Worker>) -> Self {
+    pub fn new(
+        config: ConsensusConfiguration,
+        worker: Arc<Worker>,
+        backend: Arc<ConsensusBackend>,
+    ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
         Self {
             inner: Arc::new(ConsensusFrontendInner {
-                backend: config.backend,
+                backend,
                 signer: config.signer,
                 worker,
                 command_sender,

@@ -4,7 +4,19 @@ The Ekiden database serves as a persistent state store for contracts.
 
 ## Interfaces
 
-Only the trusted API exposed to contracts should be considered relatively stable. **How state is serialized and stored outside the contract and the EDL interface is currently an unstable implementation detail which will change in future versions.**
+### Enclave edge interfaces
+
+These are not high-fidelity method signatures.
+For example, outputs may be pointer arguments instead of return values.
+
+* ECALL `db_set_root_hash(root_hash)`
+  Notify the enclave what the latest state is as identified by its root hash. The enclave may then use the root hash to access additional data items via the designated OCALLs.
+* ECALL `db_get_root_hash() -> root_hash`
+  Ask the enclave what the new root hash is.
+* OCALL `untrusted_db_get(key) -> value`
+  Request the storage interface to get the specified key.
+* OCALL `untrusted_db_insert(value, expiry)`
+  Request the storage interface to insert the specified value with the given expiry iterval.
 
 ### Trusted API exposed to contracts
 

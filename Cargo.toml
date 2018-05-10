@@ -59,10 +59,6 @@ members = [
     "compute/api",
     "compute",
 
-    # Consensus node (deprecated).
-    "consensus/api",
-    "consensus",
-
     # Core contracts.
     "contracts/key-manager",
     "contracts/token",

@@ -12,10 +12,10 @@ ekiden-core = { path = "../core/common", version = "0.1.0-alpha.4" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.4" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.4" }
 ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.4" }
-# TODO: Remove ekiden-consensus-api depndency once we use the new storage API.
-ekiden-consensus-api = { path = "../consensus/api", version = "0.1.0-alpha.4" }
 ekiden-consensus-base = { path = "../consensus/base", version = "0.1.0-alpha.4" }
 ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.1.0-alpha.4" }
+ekiden-storage-base = { path = "../storage/base", version = "0.1.0-alpha.4" }
+ekiden-storage-dummy = { path = "../storage/dummy", version = "0.1.0-alpha.4" }
 protobuf = "1.4.2"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
 thread_local = "0.3.5"

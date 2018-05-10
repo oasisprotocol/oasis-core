@@ -1,19 +1,27 @@
 //! Low-level key-value database interface.
 use std::collections::HashMap;
+#[cfg(target_env = "sgx")]
+use std::sync::{Arc, SgxMutex as Mutex, SgxMutexGuard as MutexGuard};
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
-#[cfg(target_env = "sgx")]
-use std::sync::SgxMutex as Mutex;
-#[cfg(target_env = "sgx")]
-use std::sync::SgxMutexGuard as MutexGuard;
 
-use protobuf::{self, Message};
+#[cfg(target_env = "sgx")]
+use serde_cbor;
 
+use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
+#[cfg(target_env = "sgx")]
+use ekiden_common::futures::FutureExt;
+#[cfg(target_env = "sgx")]
+use ekiden_key_manager_client::KeyManager;
+#[cfg(target_env = "sgx")]
+use ekiden_storage_base::StorageMapper;
 
 use super::Database;
-use super::crypto;
-use super::generated::database::{CryptoSecretbox, State, State_KeyValue};
+#[cfg(target_env = "sgx")]
+use super::aead::AeadStorageMapper;
+#[cfg(target_env = "sgx")]
+use super::untrusted::UntrustedStorageBackend;
 
 /// Database handle.
 ///
@@ -21,6 +29,9 @@ use super::generated::database::{CryptoSecretbox, State, State_KeyValue};
 ///
 /// [`Database`]: super::Database
 pub struct DatabaseHandle {
+    /// Storage backend.
+    #[cfg(target_env = "sgx")]
+    backend: AeadStorageMapper,
     /// Current database state.
     state: HashMap<Vec<u8>, Vec<u8>>,
     /// Dirtyness flag.
@@ -36,6 +47,14 @@ impl DatabaseHandle {
     /// Construct new database interface.
     fn new() -> Self {
         DatabaseHandle {
+            #[cfg(target_env = "sgx")]
+            backend: AeadStorageMapper::new(
+                Arc::new(UntrustedStorageBackend::new()),
+                KeyManager::get()
+                    .unwrap()
+                    .get_or_create_key("state", AeadStorageMapper::key_len())
+                    .unwrap(),
+            ),
             state: HashMap::new(),
             dirty: false,
         }
@@ -49,43 +68,40 @@ impl DatabaseHandle {
         DB.lock().unwrap()
     }
 
-    /// Import database.
-    pub(crate) fn import(&mut self, state: &CryptoSecretbox) -> Result<()> {
-        let mut state: State = protobuf::parse_from_bytes(&crypto::decrypt_state(&state)?)?;
-
-        self.state.clear();
-        for kv in state.take_state().iter_mut() {
-            self.state.insert(kv.take_key(), kv.take_value());
+    /// Set the root hash of the database state.
+    #[cfg(target_env = "sgx")]
+    pub(crate) fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
+        // TODO: Do not store a single blob.
+        if let Ok(state) = self.backend.get(root_hash).wait() {
+            self.state = serde_cbor::from_slice(&state)?;
         }
-
         self.dirty = false;
 
         Ok(())
     }
 
-    /// Export database.
-    ///
-    /// If nothing was modified since the last import, this method will return an
-    /// uninitialized CryptoSecretbox.
-    pub(crate) fn export(&mut self) -> Result<CryptoSecretbox> {
-        if !self.dirty {
-            // Database has not changed, we don't need to export anything.
-            return Ok(CryptoSecretbox::new());
-        }
+    /// Set the root hash of the database state.
+    #[cfg(not(target_env = "sgx"))]
+    pub(crate) fn set_root_hash(&mut self, _root_hash: H256) -> Result<()> {
+        self.state.clear();
+        self.dirty = false;
 
-        let mut state = State::new();
-        {
-            let items = state.mut_state();
-            for (key, value) in &self.state {
-                let mut item = State_KeyValue::new();
-                item.set_key(key.clone());
-                item.set_value(value.clone());
+        Ok(())
+    }
 
-                items.push(item);
-            }
-        }
+    /// Return the root hash of the database state.
+    #[cfg(target_env = "sgx")]
+    pub(crate) fn get_root_hash(&mut self) -> Result<H256> {
+        // TODO: Do not store a single blob.
+        let state = serde_cbor::to_vec(&self.state)?;
+        // TODO: Handle state expiry.
+        Ok(self.backend.insert(state, 7).wait()?)
+    }
 
-        Ok(crypto::encrypt_state(state.write_to_bytes()?)?)
+    /// Return the root hash of the database state.
+    #[cfg(not(target_env = "sgx"))]
+    pub(crate) fn get_root_hash(&mut self) -> Result<H256> {
+        Ok(H256::zero())
     }
 }
 

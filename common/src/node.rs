@@ -1,5 +1,6 @@
-//! Node Interface.
+//! Node interface.
 use std::convert::TryFrom;
+#[cfg(not(target_env = "sgx"))]
 use std::sync::Arc;
 
 #[cfg(not(target_env = "sgx"))]

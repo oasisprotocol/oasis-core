@@ -4,9 +4,11 @@ use std::sync::Arc;
 use grpcio;
 
 use ekiden_compute_api::create_compute;
-use ekiden_consensus_base::ConsensusBackend;
+use ekiden_consensus_base::{CommitteeNode, ConsensusBackend, Role};
+use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
+use ekiden_storage_dummy::DummyStorageBackend;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::ias::{IASConfiguration, IAS};
@@ -32,6 +34,10 @@ impl Executor for GrpcExecutor {
     }
 }
 
+/// Storage configuration.
+// TODO: Add backend configuration.
+pub struct StorageConfiguration;
+
 /// Compute node configuration.
 pub struct ComputeNodeConfiguration {
     /// Number of gRPC threads.
@@ -40,6 +46,8 @@ pub struct ComputeNodeConfiguration {
     pub port: u16,
     /// Consensus configuration.
     pub consensus: ConsensusConfiguration,
+    /// Storage configuration.
+    pub storage: StorageConfiguration,
     /// IAS configuration.
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
@@ -49,7 +57,7 @@ pub struct ComputeNodeConfiguration {
 /// Compute node.
 pub struct ComputeNode {
     /// Consensus backend.
-    consensus_backend: Arc<ConsensusBackend + Send + Sync>,
+    consensus_backend: Arc<ConsensusBackend>,
     /// Consensus frontend.
     consensus_frontend: Arc<ConsensusFrontend>,
     /// gRPC server.
@@ -67,12 +75,34 @@ impl ComputeNode {
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias).unwrap());
 
+        // Create consensus backend.
+        // TODO: Base on configuration.
+        // TODO: Change dummy backend to get computation group from another backend.
+        let consensus_backend = Arc::new(DummyConsensusBackend::new(vec![
+            CommitteeNode {
+                role: Role::Leader,
+                public_key: config.consensus.signer.get_public_key(),
+            },
+        ]));
+
+        // Create storage backend.
+        // TODO: Base on configuration.
+        let storage_backend = Arc::new(DummyStorageBackend::new());
+
         // Create worker.
-        let worker = Arc::new(Worker::new(config.worker, grpc_environment.clone(), ias));
+        let worker = Arc::new(Worker::new(
+            config.worker,
+            grpc_environment.clone(),
+            ias,
+            storage_backend,
+        ));
 
         // Create consensus frontend.
-        let consensus_backend = config.consensus.backend.clone();
-        let consensus_frontend = Arc::new(ConsensusFrontend::new(config.consensus, worker.clone()));
+        let consensus_frontend = Arc::new(ConsensusFrontend::new(
+            config.consensus,
+            worker.clone(),
+            consensus_backend.clone(),
+        ));
 
         // Create compute node gRPC server.
         let service = create_compute(ComputeService::new(worker, consensus_frontend.clone()));

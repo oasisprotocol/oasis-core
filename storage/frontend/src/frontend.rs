@@ -140,8 +140,6 @@ impl StorageFrontend {
 
 impl StorageBackend for StorageFrontend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
-        let key = key.to_owned();
-
         Box::new(
             self.get_storage(self.inner.retries)
                 .and_then(move |s| s.get(key)),
@@ -149,9 +147,6 @@ impl StorageBackend for StorageFrontend {
     }
 
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
-        let expiry = expiry.to_owned();
-        let value = value.to_owned();
-
         Box::new(
             self.get_storage(self.inner.retries)
                 .and_then(move |s| s.insert(value, expiry)),
