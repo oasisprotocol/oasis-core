@@ -20,9 +20,22 @@ macro_rules! impl_op_for_wrapper {
 
 /// Wrap given bigint::uint type so we can implement external traits on it.
 macro_rules! wrap_uint_type {
-    ($name: ident) => {
+    ($name: ident, $size: expr) => {
         #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
         pub struct $name(pub uint::$name);
+
+        impl $name {
+            pub fn to_vec(&self) -> Vec<u8> {
+                let mut vec = Vec::new();
+                vec.resize($size, 0);
+                &self.0.to_little_endian(vec.deref_mut());
+                vec
+            }
+
+            pub fn from_little_endian(slice: &[u8]) -> Self {
+                $name(uint::$name::from_little_endian(slice))
+            }
+        }
 
         impl Deref for $name {
             type Target = uint::$name;
@@ -125,8 +138,8 @@ macro_rules! impl_deserialize_for_uint {
 }
 
 // Define wrapper types so we can implement traits on them.
-wrap_uint_type!(U128);
-wrap_uint_type!(U256);
+wrap_uint_type!(U128, 16);
+wrap_uint_type!(U256, 32);
 
 impl_serialize_for_uint!(U128, 16);
 impl_serialize_for_uint!(U256, 32);

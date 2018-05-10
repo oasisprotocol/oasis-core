@@ -15,6 +15,7 @@ members = [
     "beacon/dummy",
 
     # Consensus interface.
+    "consensus/api",
     "consensus/base",
     "consensus/dummy",
 
