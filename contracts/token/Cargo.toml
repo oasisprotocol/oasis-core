@@ -10,7 +10,7 @@ default = []
 [dependencies]
 ekiden-core = { path = "../../core/common" }
 ekiden-trusted = { path = "../../core/trusted" }
-protobuf = "1.4.3"
+protobuf = "~1.4"
 token-api = { path = "./api" }
 
 [build-dependencies]

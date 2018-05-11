@@ -11,6 +11,7 @@ pub mod contract_backend;
 pub mod contract_service;
 pub mod entity_backend;
 pub mod entity_service;
+pub mod test;
 
 pub use contract_backend::*;
 pub use contract_service::*;

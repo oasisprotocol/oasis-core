@@ -10,7 +10,7 @@ repository = "https://github.com/ekiden/ekiden"
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-enclave-common = { path = "../../enclave/common", version = "0.1.0-alpha.4" }
 ekiden-rpc-common = { path = "../common", version = "0.1.0-alpha.4" }
-protobuf = "1.4.3"
+protobuf = "~1.4"
 sodalite = "0.3.0"
 serde = "1.0"
 serde_cbor = "0.8.2"

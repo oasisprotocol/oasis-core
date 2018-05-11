@@ -11,4 +11,4 @@ ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-registry-api = { path = "../api", version = "0.1.0-alpha.4" }
 byteorder = "1"
 grpcio = "0.2.2"
-protobuf = "1.4"
+protobuf = "~1.4"

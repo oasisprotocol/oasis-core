@@ -7,25 +7,32 @@ use ekiden_common::epochtime::EpochTime;
 use ekiden_common::futures::BoxFuture;
 
 /// The role a given Node plays in a committee.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
+    /// Worker node.
     Worker,
+    /// Group leader.
     Leader,
 }
 
 /// A node participating in a committee.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommitteeNode {
+    /// Node role.
     pub role: Role,
+    /// Node public key.
     pub public_key: B256,
 }
 
 /// The functionality a committee exists to provide.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum CommitteeType {
     Compute,
     Storage,
 }
 
 /// A per-contract (per-contract instance) committee instance.
+#[derive(Debug, PartialEq)]
 pub struct Committee {
     pub kind: CommitteeType,
     pub members: Vec<CommitteeNode>,

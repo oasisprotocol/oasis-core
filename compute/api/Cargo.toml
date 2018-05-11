@@ -8,7 +8,7 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-protobuf = "1.4.2"
+protobuf = "~1.4"
 grpcio = "0.2.2"
 futures = "0.1"
 

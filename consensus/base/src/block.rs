@@ -2,9 +2,9 @@
 use ekiden_common::bytes::H256;
 use ekiden_common::hash::EncodedHash;
 use ekiden_common::uint::U256;
+use ekiden_scheduler_base::CommitteeNode;
 
 use super::commitment::Commitment;
-use super::committee::CommitteeNode;
 use super::header::Header;
 use super::transaction::Transaction;
 
