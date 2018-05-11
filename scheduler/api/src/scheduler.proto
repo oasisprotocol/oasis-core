@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package scheduler;
+
+message CommitteeNode {
+  bytes public_key = 1;
+  enum Role {
+    WORKER = 0;
+    LEADER = 1;
+  }
+  Role role = 2;
+}

@@ -1,10 +1,15 @@
+#![feature(try_from)]
+
 //! Ekiden consensus interface.
+extern crate grpcio;
+extern crate protobuf;
 extern crate serde;
 extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
 
 extern crate ekiden_common;
+extern crate ekiden_consensus_api;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
 
@@ -12,12 +17,14 @@ pub mod backend;
 pub mod block;
 pub mod commitment;
 pub mod header;
+pub mod service;
 pub mod transaction;
 
 pub use backend::*;
 pub use block::*;
 pub use commitment::*;
 pub use header::*;
+pub use service::*;
 pub use transaction::*;
 
 pub mod test;

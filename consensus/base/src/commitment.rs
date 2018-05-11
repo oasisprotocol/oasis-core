@@ -1,10 +1,14 @@
 //! Commitment type.
+use std::convert::TryFrom;
 use std::fmt::Debug;
 
 use serde::Serialize;
 use serde_cbor;
 
+use ekiden_consensus_api as api;
+
 use ekiden_common::bytes::{B256, B64, H256};
+use ekiden_common::error::Error;
 use ekiden_common::ring::digest;
 use ekiden_common::signature::{Signature, Signer};
 
@@ -40,6 +44,29 @@ impl Commitment {
     pub fn verify(&self) -> bool {
         self.signature
             .verify(&COMMITMENT_SIGNATURE_CONTEXT, &self.digest)
+    }
+}
+
+impl TryFrom<api::Commitment> for Commitment {
+    /// try_from Converts a protobuf commitment into a commitment.
+    type Error = Error;
+    fn try_from(a: api::Commitment) -> Result<Self, Error> {
+        let sig = Signature::try_from(a.get_signature().to_owned())?;
+        let digest = a.get_digest();
+        Ok(Commitment {
+            digest: H256::from(digest),
+            signature: sig,
+        })
+    }
+}
+
+impl Into<api::Commitment> for Commitment {
+    /// into Converts a block into a protobuf `consensus::api::Block` representation.
+    fn into(self) -> api::Commitment {
+        let mut c = api::Commitment::new();
+        c.set_digest(self.digest.to_vec());
+        c.set_signature(self.signature.into());
+        c
     }
 }
 

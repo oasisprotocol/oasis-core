@@ -1,10 +1,13 @@
 //! Scheduler interface.
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::epochtime::EpochTime;
+use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
+use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,6 +25,33 @@ pub struct CommitteeNode {
     pub role: Role,
     /// Node public key.
     pub public_key: B256,
+}
+
+impl TryFrom<api::CommitteeNode> for CommitteeNode {
+    /// try_from Converts a protobuf block into a block.
+    type Error = Error;
+    fn try_from(a: api::CommitteeNode) -> Result<Self, self::Error> {
+        Ok(CommitteeNode {
+            role: match a.get_role() {
+                api::CommitteeNode_Role::WORKER => Role::Worker,
+                api::CommitteeNode_Role::LEADER => Role::Leader,
+            },
+            public_key: B256::from(a.get_public_key()),
+        })
+    }
+}
+
+impl Into<api::CommitteeNode> for CommitteeNode {
+    /// into Converts a block into a protobuf `consensus::api::Block` representation.
+    fn into(self) -> api::CommitteeNode {
+        let mut c = api::CommitteeNode::new();
+        match self.role {
+            Role::Worker => c.set_role(api::CommitteeNode_Role::WORKER),
+            Role::Leader => c.set_role(api::CommitteeNode_Role::LEADER),
+        };
+        c.set_public_key(self.public_key.to_vec());
+        c
+    }
 }
 
 /// The functionality a committee exists to provide.

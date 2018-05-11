@@ -1,8 +1,15 @@
 //! Block type.
+use std::convert::TryFrom;
+
+use protobuf::repeated::RepeatedField;
+
 use ekiden_common::bytes::H256;
+use ekiden_common::error::Error;
 use ekiden_common::hash::EncodedHash;
 use ekiden_common::uint::U256;
 use ekiden_scheduler_base::CommitteeNode;
+
+use ekiden_consensus_api as api;
 
 use super::commitment::Commitment;
 use super::header::Header;
@@ -61,6 +68,61 @@ impl Block {
         self.computation_group.get_encoded_hash() == self.header.group_hash
             && self.transactions.get_encoded_hash() == self.header.transaction_hash
             && self.commitments.get_encoded_hash() == self.header.commitments_hash
+    }
+}
+
+impl TryFrom<api::Block> for Block {
+    /// try_from Converts a protobuf block into a block.
+    type Error = Error;
+    fn try_from(a: api::Block) -> Result<Self, self::Error> {
+        let header = Header::try_from(a.get_header().to_owned())?;
+        let mut computation = Vec::new();
+        for item in a.get_computation_group().iter() {
+            computation.push(CommitteeNode::try_from(item.to_owned())?);
+        }
+
+        let mut txns = Vec::new();
+        for item in a.get_transactions().iter() {
+            txns.push(Transaction::try_from(item.to_owned())?);
+        }
+
+        let mut commits = Vec::new();
+        for item in a.get_commitments().iter() {
+            commits.push(Commitment::try_from(item.to_owned())?);
+        }
+        Ok(Block {
+            header: header,
+            computation_group: computation,
+            transactions: txns,
+            commitments: commits,
+        })
+    }
+}
+
+impl Into<api::Block> for Block {
+    /// into Converts a block into a protobuf `consensus::api::Block` representation.
+    fn into(self) -> api::Block {
+        let mut b = api::Block::new();
+        b.set_header(self.header.into());
+
+        let mut groups = Vec::new();
+        for item in self.computation_group {
+            groups.push(item.into());
+        }
+        b.set_computation_group(RepeatedField::from_vec(groups));
+
+        let mut txns = Vec::new();
+        for item in self.transactions {
+            txns.push(item.into());
+        }
+        b.set_transactions(RepeatedField::from_vec(txns));
+
+        let mut commits = Vec::new();
+        for item in self.commitments {
+            commits.push(item.into());
+        }
+        b.set_commitments(RepeatedField::from_vec(commits));
+        b
     }
 }
 

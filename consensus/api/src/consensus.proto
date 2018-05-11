@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+import "scheduler/api/src/scheduler.proto";
+
+package consensus;
+
+service Consensus {
+  rpc GetLatestBlock (LatestBlockRequest) returns (LatestBlockResponse) {}
+  rpc GetBlocks (BlockRequest) returns (stream BlockResponse) {}
+  rpc GetEvents (EventRequest) returns (stream EventResponse) {}
+  rpc Commit (CommitRequest) returns (CommitResponse) {}
+  rpc Reveal (RevealRequest) returns (RevealResponse) {}
+  rpc Submit (SubmitRequest) returns (SubmitResponse) {}
+}
+
+message Block {
+  Header header = 1;
+  repeated scheduler.CommitteeNode computation_group = 2;
+  repeated Transaction transactions = 3;
+  repeated Commitment commitments = 4;
+}
+
+message Transaction {
+  bytes input = 1;
+  bytes output_hash = 2;
+}
+
+message Commitment {
+  bytes digest = 1;
+  common.Signature signature = 2;
+}
+
+message Header {
+  uint32 version = 1;
+  bytes namespace = 2;
+  bytes round = 3;
+  bytes previous_hash = 4;
+  bytes group_hash = 5;
+  bytes transaction_hash = 6;
+  bytes state_root = 7;
+  bytes commitments_hash = 8;
+}
+
+message LatestBlockRequest {
+}
+
+message LatestBlockResponse {
+  Block block = 1;
+}
+
+message BlockRequest {
+}
+
+message BlockResponse {
+  Block block = 1;
+}
+
+message EventRequest {
+}
+
+message EventResponse {
+  enum Event {
+    COMMITMENTSRECEIVED = 0;
+    ROUNDFAILED = 1;
+  }
+  Event event = 1;
+}
+
+message CommitRequest {
+  Commitment commitment = 1;
+}
+
+message CommitResponse {
+}
+
+message RevealRequest {
+  Header header = 1;
+  bytes nonce = 2;
+  common.Signature signature = 3;
+}
+
+message RevealResponse {
+}
+
+message SubmitRequest {
+  Block block = 1;
+  common.Signature signature = 2;
+}
+
+message SubmitResponse {
+}
