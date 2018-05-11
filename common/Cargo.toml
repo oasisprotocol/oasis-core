@@ -12,7 +12,7 @@ profiling = []
 
 [dependencies]
 ekiden-common-api = { path = "./api", version = "0.1.0-alpha.4" }
-protobuf = "1.4.3"
+protobuf = "~1.4"
 byteorder = "1.2.1"
 fixed-hash = { version = "0.2.1", default-features = false }
 rustc-hex = "1.0"

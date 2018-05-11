@@ -10,7 +10,7 @@ authors = [
 sgx-simulation = []
 
 [dependencies]
-protobuf = "1.4.3"
+protobuf = "~1.4"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
 sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
