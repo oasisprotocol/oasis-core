@@ -17,6 +17,7 @@ extern crate ekiden_common;
 extern crate ekiden_enclave_common;
 
 pub mod crypto;
+pub mod enclave;
 pub mod identity;
 pub mod utils;
 
