@@ -6,7 +6,7 @@ fn main() {
     // Must be done first to create src/generated directory
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
-        &["common"],
+        &["common", "scheduler"],
         &["consensus", "consensus_grpc"],
     );
 
@@ -17,6 +17,10 @@ fn main() {
     println!(
         "cargo:rerun-if-changed={}",
         "../../common/api/src/common.proto"
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../scheduler/api/src/scheduler.proto"
     );
     println!("cargo:rerun-if-changed={}", "src/consensus.proto");
 }

@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "common/api/src/common.proto";
+import "scheduler/api/src/scheduler.proto";
 
 package consensus;
 
@@ -15,18 +16,9 @@ service Consensus {
 
 message Block {
   Header header = 1;
-  repeated CommitteeNode computation_group = 2;
+  repeated scheduler.CommitteeNode computation_group = 2;
   repeated Transaction transactions = 3;
   repeated Commitment commitments = 4;
-}
-
-message CommitteeNode {
-  bytes public_key = 1;
-  enum Role {
-    WORKER = 0;
-    LEADER = 1;
-  }
-  Role role = 2;
 }
 
 message Transaction {

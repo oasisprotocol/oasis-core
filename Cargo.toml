@@ -17,8 +17,8 @@ members = [
     # Consensus interface.
     "consensus/api",
     "consensus/base",
+    "consensus/client",
     "consensus/dummy",
-    "consensus/frontend",
 
     # Storage interface.
     "storage/api",
@@ -74,6 +74,7 @@ members = [
     "registry/dummy",
 
     # Scheduler.
+    "scheduler/api",
     "scheduler/base",
     "scheduler/dummy",
 ]
