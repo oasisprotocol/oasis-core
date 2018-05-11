@@ -18,6 +18,7 @@
 * Extend `beacon::base::RandomBeacon` to enable event driven beacons.
 * Extend `scheduler::base::Scheduler` to enable event driven scheduling.
 * Add `common::futures::GrpcExecutor`.
+* Leader now forwards batches to workers in compute replica group.
 
 # 0.1.0-alpha.4
 

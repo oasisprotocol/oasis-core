@@ -1,4 +1,6 @@
 #![feature(use_extern_macros)]
+#![feature(clone_closures)]
+#![feature(try_from)]
 
 extern crate sgx_types;
 
@@ -15,6 +17,7 @@ extern crate protobuf;
 extern crate reqwest;
 extern crate thread_local;
 
+extern crate ekiden_beacon_base;
 extern crate ekiden_compute_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
@@ -27,10 +30,11 @@ extern crate ekiden_untrusted;
 mod ias;
 mod instrumentation;
 mod handlers;
-mod server;
+mod services;
 mod worker;
 mod node;
 mod consensus;
+mod group;
 
 // Everything above should be moved into a library, while everything below should be in the binary.
 

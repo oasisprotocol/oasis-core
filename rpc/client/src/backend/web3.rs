@@ -12,7 +12,7 @@ use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_rpc_common::api;
 
-use ekiden_compute_api::{CallContractRequest, ComputeClient, WaitContractCallRequest};
+use ekiden_compute_api::{CallContractRequest, WaitContractCallRequest, Web3Client};
 
 use super::{RpcClientBackend, RpcClientCredentials};
 use super::super::future::ClientFuture;
@@ -27,7 +27,7 @@ pub struct ComputeNodeAddress {
 
 struct ComputeNode {
     /// gRPC client for the given node.
-    client: ComputeClient,
+    client: Web3Client,
     /// Failed flag.
     failed: bool,
 }
@@ -58,7 +58,7 @@ impl ComputeNodes {
     ) -> Result<()> {
         let channel = grpcio::ChannelBuilder::new(environment)
             .connect(&format!("{}:{}", address.host, address.port));
-        let client = ComputeClient::new(channel);
+        let client = Web3Client::new(channel);
 
         let mut nodes = self.nodes.lock().unwrap();
         nodes.push(ComputeNode {
@@ -72,7 +72,7 @@ impl ComputeNodes {
     /// Call the first available compute node.
     fn call_available_node<F, Rs>(&self, method: F, max_retries: usize) -> ClientFuture<Rs>
     where
-        F: Fn(&ComputeClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
+        F: Fn(&Web3Client) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
             + Clone
             + Send
             + Sync
@@ -204,7 +204,7 @@ impl Web3RpcClientBackend {
     /// Perform a raw contract call via gRPC.
     fn call_available_node<F, Rs>(&self, method: F) -> ClientFuture<Rs>
     where
-        F: Fn(&ComputeClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
+        F: Fn(&Web3Client) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
             + Clone
             + Send
             + Sync

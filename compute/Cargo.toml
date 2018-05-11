@@ -18,6 +18,7 @@ ekiden-storage-base = { path = "../storage/base", version = "0.1.0-alpha.4" }
 ekiden-storage-dummy = { path = "../storage/dummy", version = "0.1.0-alpha.4" }
 ekiden-scheduler-base = { path = "../scheduler/base", version = "0.1.0-alpha.4" }
 ekiden-scheduler-dummy = { path = "../scheduler/dummy", version = "0.1.0-alpha.4" }
+ekiden-beacon-base = { path = "../beacon/base", version = "0.1.0-alpha.4" }
 ekiden-beacon-dummy = { path = "../beacon/dummy", version = "0.1.0-alpha.4" }
 ekiden-registry-base = { path = "../registry/base", version = "0.1.0-alpha.4" }
 ekiden-registry-dummy = { path = "../registry/dummy", version = "0.1.0-alpha.4" }

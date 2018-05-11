@@ -1,15 +1,33 @@
 //! Address defintion and helpers.
+use std;
 use std::convert::TryFrom;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-use error::Error;
+#[cfg(not(target_env = "sgx"))]
+use get_if_addrs::get_if_addrs;
+
+use super::error::Error;
+#[cfg(not(target_env = "sgx"))]
+use super::error::Result;
 
 use ekiden_common_api as api;
 
 /// Address represents a public location that can be used to connect to an entity in ekiden.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Address(SocketAddr);
+
+impl Address {
+    /// Generate a list of addresses for the local node and a given port.
+    #[cfg(not(target_env = "sgx"))]
+    pub fn for_local_port(port: u16) -> Result<Vec<Self>> {
+        Ok(get_if_addrs()?
+            .iter()
+            .filter(|interface| !interface.is_loopback())
+            .map(|interface| Address(SocketAddr::new(interface.ip(), port)))
+            .collect())
+    }
+}
 
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -20,7 +38,7 @@ impl fmt::Display for Address {
 impl TryFrom<api::Address> for Address {
     /// try_from Converts a protobuf `common::api::Address` into an address.
     type Error = super::error::Error;
-    fn try_from(a: api::Address) -> Result<Self, Error> {
+    fn try_from(a: api::Address) -> std::result::Result<Self, Error> {
         let ip = a.get_address();
         let addr = match a.get_transport() {
             api::Address_Transport::TCPv4 => {
