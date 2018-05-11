@@ -13,13 +13,13 @@ use std::sync::Arc;
 
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::contract::Contract;
-use ekiden_common::epochtime::SystemTimeSource;
+use ekiden_common::epochtime::{SystemTimeSource, TimeSourceNotifier};
 use ekiden_common::futures::{cpupool, future, Future, Stream};
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_base::test::generate_simulated_nodes;
 use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_registry_base::test::populate_entity_registry;
-use ekiden_registry_dummy::DummyEntityRegistryBackend;
+use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
@@ -28,13 +28,17 @@ fn test_dummy_backend_two_rounds() {
     // Number of simulated nodes to create.
     const NODE_COUNT: usize = 3;
 
-    let beacon = Arc::new(InsecureDummyRandomBeacon);
-    let registry = Arc::new(DummyEntityRegistryBackend::new());
     let time_source = Arc::new(SystemTimeSource {});
+    let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+
+    let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
+    let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+    let contract_registry = Arc::new(DummyContractRegistryBackend::new());
     let scheduler = Arc::new(DummySchedulerBackend::new(
         beacon.clone(),
-        registry.clone(),
-        time_source.clone(),
+        contract_registry.clone(),
+        entity_registry.clone(),
+        time_notifier.clone(),
     ));
     let storage = Arc::new(DummyStorageBackend::new());
     let contract = {
@@ -48,7 +52,7 @@ fn test_dummy_backend_two_rounds() {
     // Generate simulated nodes and populate registry with them.
     let nodes = Arc::new(generate_simulated_nodes(NODE_COUNT, storage.clone()));
     populate_entity_registry(
-        registry.clone(),
+        entity_registry.clone(),
         nodes.iter().map(|node| node.get_public_key()).collect(),
     );
 

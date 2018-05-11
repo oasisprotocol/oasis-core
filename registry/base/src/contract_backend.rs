@@ -17,5 +17,6 @@ pub trait ContractRegistryBackend: Send + Sync {
     fn get_contract(&self, id: B256) -> BoxFuture<Contract>;
 
     // Subscribe to updates of newly registered contracts in the registry.
+    // Upon subscription, all contracts will be sent immediately.
     fn get_contracts(&self) -> BoxStream<Contract>;
 }

@@ -63,6 +63,18 @@ impl ContractRegistryBackend for DummyContractRegistryBackend {
     }
 
     fn get_contracts(&self) -> BoxStream<Contract> {
-        self.inner.subscribers.subscribe().1
+        // Feed every single currently valid contract, to catch up the
+        // subscriber to current time.
+        let inner = self.inner.clone();
+        let contracts = inner.contracts.lock().unwrap();
+
+        // Subscribe with the lock held to avoid sending duplicate
+        // notifications due a concurrent registration.
+        let (send, recv) = self.inner.subscribers.subscribe();
+        for contract in contracts.values() {
+            send.unbounded_send(contract.clone()).unwrap();
+        }
+
+        recv
     }
 }

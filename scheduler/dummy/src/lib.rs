@@ -5,6 +5,9 @@ extern crate ekiden_core;
 extern crate ekiden_registry_base;
 extern crate ekiden_scheduler_base;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(not(target_env = "sgx"))]
 extern crate rand;
 
