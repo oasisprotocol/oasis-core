@@ -16,5 +16,6 @@ pub mod rpc {
 }
 
 pub mod contract {
+    pub use ekiden_common::contract::*;
     pub use ekiden_contract_common::*;
 }

@@ -3,11 +3,21 @@ use std::sync::Arc;
 
 use grpcio;
 
+use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_compute_api::create_compute;
-use ekiden_consensus_base::{CommitteeNode, ConsensusBackend, Role};
+use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_dummy::DummyConsensusBackend;
+use ekiden_core::contract::Contract;
+use ekiden_core::entity::Entity;
+use ekiden_core::epochtime::SystemTimeSource;
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
+use ekiden_core::node::Node;
+use ekiden_core::signature::Signed;
+use ekiden_registry_base::{EntityRegistryBackend, REGISTER_ENTITY_SIGNATURE_CONTEXT,
+                           REGISTER_NODE_SIGNATURE_CONTEXT};
+use ekiden_registry_dummy::DummyEntityRegistryBackend;
+use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
@@ -75,19 +85,68 @@ impl ComputeNode {
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias).unwrap());
 
-        // Create consensus backend.
+        // Create scheduler.
         // TODO: Base on configuration.
-        // TODO: Change dummy backend to get computation group from another backend.
-        let consensus_backend = Arc::new(DummyConsensusBackend::new(vec![
-            CommitteeNode {
-                role: Role::Leader,
-                public_key: config.consensus.signer.get_public_key(),
-            },
-        ]));
+        let beacon = Arc::new(InsecureDummyRandomBeacon);
+        let registry = Arc::new(DummyEntityRegistryBackend::new());
+        let time_source = Arc::new(SystemTimeSource {});
+        let scheduler = Arc::new(DummySchedulerBackend::new(
+            beacon,
+            registry.clone(),
+            time_source,
+        ));
+
+        // Create contract.
+        // TODO: Get this from somewhere.
+        let contract = {
+            let mut contract = Contract::default();
+            contract.replica_group_size = 1;
+            contract.storage_group_size = 1;
+
+            Arc::new(contract)
+        };
+
+        // Register entity with the registry.
+        // TODO: This should probably be done independently?
+        // TODO: We currently use the node key pair as the entity key pair.
+        let entity_pk = config.consensus.signer.get_public_key();
+        let signed_entity = Signed::sign(
+            &config.consensus.signer,
+            &REGISTER_ENTITY_SIGNATURE_CONTEXT,
+            Entity { id: entity_pk },
+        );
+        registry.register_entity(signed_entity).wait().unwrap();
+
+        // Register node with the registry.
+        // TODO: Handle this properly, do not start any other services before registration is done.
+        let node = Node {
+            id: config.consensus.signer.get_public_key(),
+            entity_id: entity_pk,
+            expiration: 0xffffffffffffffff,
+            addresses: vec![],
+            stake: vec![],
+        };
+
+        let signed_node = Signed::sign(
+            &config.consensus.signer,
+            &REGISTER_NODE_SIGNATURE_CONTEXT,
+            node,
+        );
+        info!("Registering compute node with the registry");
+        registry.register_node(signed_node).wait().unwrap();
+        info!("Compute node registration done");
 
         // Create storage backend.
         // TODO: Base on configuration.
         let storage_backend = Arc::new(DummyStorageBackend::new());
+
+        // Create consensus backend.
+        // TODO: Base on configuration.
+        let consensus_backend = Arc::new(DummyConsensusBackend::new(
+            contract,
+            scheduler,
+            storage_backend.clone(),
+        ));
 
         // Create worker.
         let worker = Arc::new(Worker::new(

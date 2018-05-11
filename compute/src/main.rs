@@ -18,7 +18,9 @@ extern crate thread_local;
 extern crate ekiden_compute_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
+extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;
+extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
 extern crate ekiden_untrusted;
 
@@ -36,7 +38,10 @@ mod consensus;
 extern crate clap;
 extern crate pretty_env_logger;
 
+extern crate ekiden_beacon_dummy;
 extern crate ekiden_consensus_dummy;
+extern crate ekiden_registry_dummy;
+extern crate ekiden_scheduler_dummy;
 extern crate ekiden_storage_dummy;
 
 use std::fs::File;
