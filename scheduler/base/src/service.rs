@@ -6,11 +6,11 @@ use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_scheduler_api as api;
-use protobuf::RepeatedField;
 use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use protobuf::RepeatedField;
 
-use super::backend::{Scheduler,Committee};
+use super::backend::{Committee, Scheduler};
 
 pub struct SchedulerService<T>
 where
@@ -52,8 +52,8 @@ where
             // or should we fill in the rest of the contract from registry here?
             let mut contract = Contract::default();
             contract.id = B256::from_slice(req.get_contract_id());
-             Ok(self.inner.get_committees(Arc::new(contract)))
-         };
+            Ok(self.inner.get_committees(Arc::new(contract)))
+        };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(committees) => {
