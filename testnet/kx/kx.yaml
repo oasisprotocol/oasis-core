@@ -4,40 +4,6 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: ekiden-token-consensus
-spec:
-  ports:
-    - name: consensus-grpc
-      port: 9002
-  selector:
-    copper: ekiden-token-consensus
-  # type: ClusterIP
----
-kind: Deployment
-apiVersion: extensions/v1beta1
-metadata:
-  name: ekiden-token-consensus
-spec:
-  selector:
-    matchLabels:
-      copper: ekiden-token-consensus
-  # replicas: 1
-  template:
-    metadata:
-      labels:
-        copper: ekiden-token-consensus
-    spec:
-      containers:
-        - name: ekiden-consensus
-          image: docker.io/oasislabs/testnet:latest
-          command:
-            - ekiden-consensus
-          args:
-            - --no-tendermint
----
-kind: Service
-apiVersion: v1
-metadata:
   name: ekiden-token-key-manager
 spec:
   ports:
