@@ -29,6 +29,12 @@ pub trait TimeSource: Send + Sync {
     fn get_epoch_at(&self, at: &DateTime<Utc>) -> Result<(EpochTime, u64)>;
 }
 
+/// A subscription for learning of new epochs.
+pub trait TimeSourceNotifier: Send + Sync {
+    /// Receive a stream of messages alerting the transition to new epochs as they occur.
+    fn watch_epochs(&self) -> BoxStream<EpochTime>;
+}
+
 fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
     let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);
     let at = at.signed_duration_since(epoch_base).num_seconds();
@@ -110,13 +116,13 @@ impl MockTimeSourceInner {
 }
 
 /// A TimeSource based epoch transition event source.
-pub struct TimeSourceNotifier {
+pub struct LocalTimeSourceNotifier {
     inner: Arc<Mutex<TimeSourceNotifierInner>>,
     subscribers: StreamSubscribers<EpochTime>,
     time_source: Arc<TimeSource>,
 }
 
-impl TimeSourceNotifier {
+impl LocalTimeSourceNotifier {
     /// Create a new TimeSourceNotifier.
     pub fn new(time_source: Arc<TimeSource>) -> Self {
         Self {
@@ -131,22 +137,6 @@ impl TimeSourceNotifier {
     /// Return a reference to the underlying time source.
     pub fn time_source(&self) -> Arc<TimeSource> {
         self.time_source.clone()
-    }
-
-    /// Subscribe to updates of epoch transitions.  Upon subscription, the
-    /// current epoch will be sent immediately.
-    pub fn watch_epochs(&self) -> BoxStream<EpochTime> {
-        let inner = self.inner.lock().unwrap();
-        let (send, recv) = self.subscribers.subscribe();
-
-        // Iff the notifications for the current epoch went out already,
-        // send the current epoch to the subscriber.
-        let now = self.time_source.get_epoch().unwrap().1;
-        if now == inner.last_notify {
-            send.unbounded_send(now).unwrap();
-        }
-
-        recv
     }
 
     /// Notify subscribers of an epoch transition.  The owner of the object
@@ -176,6 +166,24 @@ impl TimeSourceNotifier {
         };
         self.subscribers.notify(&(now?));
         Ok(())
+    }
+}
+
+impl TimeSourceNotifier for LocalTimeSourceNotifier {
+    /// Subscribe to updates of epoch transitions.  Upon subscription, the
+    /// current epoch will be sent immediately.
+    fn watch_epochs(&self) -> BoxStream<EpochTime> {
+        let inner = self.inner.lock().unwrap();
+        let (send, recv) = self.subscribers.subscribe();
+
+        // Iff the notifications for the current epoch went out already,
+        // send the current epoch to the subscriber.
+        let now = self.time_source.get_epoch().unwrap().1;
+        if now == inner.last_notify {
+            send.unbounded_send(now).unwrap();
+        }
+
+        recv
     }
 }
 
