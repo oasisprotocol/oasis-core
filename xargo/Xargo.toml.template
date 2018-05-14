@@ -9,7 +9,7 @@ git = "https://github.com/rust-lang-nursery/compiler-builtins"
 stage = 1
 
 [dependencies.std]
-features = ["stdio", "untrusted_time"]
+features = ["backtrace", "stdio", "untrusted_time"]
 git = "https://github.com/ekiden/rust-sgx-sdk"
 tag = "v0.9.7-ekiden2"
 stage = 2
