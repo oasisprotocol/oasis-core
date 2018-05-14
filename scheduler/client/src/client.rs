@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use grpcio::{Channel, Environment};
 
-use ekiden_common::contract::Contract;
+use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::node::Node;
@@ -30,9 +30,9 @@ impl Scheduler for SchedulerClient {
         // TODO: refactor / remove
     }
 
-    fn get_committees(&self, contract: Arc<Contract>) -> BoxFuture<Vec<Committee>> {
+    fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
         let mut req = api::CommitteeRequest::new();
-        req.set_contract_id(contract.id.to_vec());
+        req.set_contract_id(contract_id.to_vec());
         match self.0.get_committees_async(&req) {
             Ok(f) => Box::new(f.map(|r| {
                 let mut committees = Vec::new();

@@ -117,9 +117,9 @@ pub trait Scheduler: Send + Sync {
     /// Start the async event source associated with the scheduler.
     fn start(&self, executor: &mut Executor);
 
-    /// Return a vector of the committees for a given contract invocation,
+    /// Return a vector of the committees for a given contract ID,
     /// for the current epoch.
-    fn get_committees(&self, contract: Arc<Contract>) -> BoxFuture<Vec<Committee>>;
+    fn get_committees(&self, contract: B256) -> BoxFuture<Vec<Committee>>;
 
     /// Subscribe to all comittee generation updates.  Upon subscription
     /// all committees for the current epoch will be send immediately.

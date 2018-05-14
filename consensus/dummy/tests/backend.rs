@@ -12,16 +12,23 @@ extern crate serde_cbor;
 use std::sync::Arc;
 
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
+use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::epochtime::{SystemTimeSource, TimeSourceNotifier};
 use ekiden_common::futures::{cpupool, future, Future, Stream};
+use ekiden_common::ring::signature::Ed25519KeyPair;
+use ekiden_common::signature::{InMemorySigner, Signature, Signed};
+use ekiden_common::untrusted;
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_base::test::generate_simulated_nodes;
 use ekiden_consensus_dummy::DummyConsensusBackend;
+use ekiden_registry_base::{ContractRegistryBackend, REGISTER_CONTRACT_SIGNATURE_CONTEXT};
 use ekiden_registry_base::test::populate_entity_registry;
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
+
+use serde_cbor::to_vec;
 
 #[test]
 fn test_dummy_backend_two_rounds() {
@@ -34,6 +41,32 @@ fn test_dummy_backend_two_rounds() {
     let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
     let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
     let contract_registry = Arc::new(DummyContractRegistryBackend::new());
+    let contract_sk =
+        Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
+    let contract = Contract {
+        id: B256::from(contract_sk.public_key_bytes()),
+        store_id: B256::random(),
+        code: vec![],
+        minimum_bond: 0,
+        mode_nondeterministic: false,
+        features_sgx: false,
+        advertisement_rate: 0,
+        replica_group_size: NODE_COUNT as u64,
+        storage_group_size: NODE_COUNT as u64,
+    };
+    let contract_signer = InMemorySigner::new(contract_sk);
+    let contract_sig = Signature::sign(
+        &contract_signer,
+        &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
+        &to_vec(&contract).unwrap(),
+    );
+    let signed_contract = Signed::from_parts(contract.clone(), contract_sig);
+    contract_registry
+        .register_contract(signed_contract)
+        .wait()
+        .unwrap();
+    let contract = Arc::new(contract);
+
     let scheduler = Arc::new(DummySchedulerBackend::new(
         beacon.clone(),
         contract_registry.clone(),
@@ -41,13 +74,6 @@ fn test_dummy_backend_two_rounds() {
         time_notifier.clone(),
     ));
     let storage = Arc::new(DummyStorageBackend::new());
-    let contract = {
-        let mut contract = Contract::default();
-        contract.replica_group_size = NODE_COUNT as u64;
-        contract.storage_group_size = NODE_COUNT as u64;
-
-        Arc::new(contract)
-    };
 
     // Generate simulated nodes and populate registry with them.
     let nodes = Arc::new(generate_simulated_nodes(NODE_COUNT, storage.clone()));
