@@ -30,6 +30,9 @@ spec:
       containers:
         - name: ekiden-compute
           image: docker.io/oasislabs/testnet:latest
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /opt/intel/sgxsdk/lib64
           command:
             - ekiden-compute
           args:
@@ -72,6 +75,9 @@ spec:
       containers:
         - name: ekiden-compute
           image: docker.io/oasislabs/testnet:latest
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /opt/intel/sgxsdk/lib64
           command:
             - ekiden-compute
           args:
