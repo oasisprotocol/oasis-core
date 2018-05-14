@@ -10,5 +10,12 @@ build = "build.rs"
 [dependencies]
 protobuf = "~1.4"
 
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+grpcio = "0.2.2"
+futures = "0.1"
+
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
+
+[target.'cfg(not(target_env = "sgx"))'.build-dependencies]
+protoc-grpcio = "0.1.0"

@@ -74,12 +74,7 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
         let inner = self.inner.lock().unwrap();
         let (send, recv) = inner.subscribers.subscribe();
 
-        // Iff the notifications for the current epoch went out already,
-        // send the current epoch/beacon to the subscriber.
-        let now = inner.time_notifier.time_source().get_epoch().unwrap().1;
-        if now == inner.last_notify {
-            send.unbounded_send((now, inner.cached_beacon)).unwrap();
-        }
+        send.unbounded_send((inner.last_notify, inner.cached_beacon)).unwrap();
 
         recv
     }
@@ -112,7 +107,7 @@ mod tests {
 
     use self::rustc_hex::ToHex;
     use super::*;
-    use ekiden_common::epochtime::{MockTimeSource, EPOCH_INTERVAL};
+    use ekiden_common::epochtime::{LocalTimeSourceNotifier, MockTimeSource, EPOCH_INTERVAL};
     use ekiden_common::futures::{cpupool, Future};
 
     #[test]
@@ -124,7 +119,7 @@ mod tests {
         const FAR_FUTURE: u64 = 0xcafebabedeadbeef;
 
         let time_source = Arc::new(MockTimeSource::new());
-        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let beacon = InsecureDummyRandomBeacon::new(time_notifier.clone());
 
         // Trivial known answer tests, generated with a Go implementation of
