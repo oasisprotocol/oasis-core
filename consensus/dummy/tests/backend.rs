@@ -7,8 +7,6 @@ extern crate ekiden_registry_dummy;
 extern crate ekiden_scheduler_dummy;
 extern crate ekiden_storage_dummy;
 
-extern crate serde_cbor;
-
 use std::sync::Arc;
 
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
@@ -17,7 +15,7 @@ use ekiden_common::contract::Contract;
 use ekiden_common::epochtime::{SystemTimeSource, TimeSourceNotifier};
 use ekiden_common::futures::{cpupool, future, Future, Stream};
 use ekiden_common::ring::signature::Ed25519KeyPair;
-use ekiden_common::signature::{InMemorySigner, Signature, Signed};
+use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_base::test::generate_simulated_nodes;
@@ -27,8 +25,6 @@ use ekiden_registry_base::test::populate_entity_registry;
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
-
-use serde_cbor::to_vec;
 
 #[test]
 fn test_dummy_backend_two_rounds() {
@@ -55,12 +51,12 @@ fn test_dummy_backend_two_rounds() {
         storage_group_size: NODE_COUNT as u64,
     };
     let contract_signer = InMemorySigner::new(contract_sk);
-    let contract_sig = Signature::sign(
+    let signed_contract = Signed::sign(
         &contract_signer,
         &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
-        &to_vec(&contract).unwrap(),
+        contract.clone(),
     );
-    let signed_contract = Signed::from_parts(contract.clone(), contract_sig);
+
     contract_registry
         .register_contract(signed_contract)
         .wait()

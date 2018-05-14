@@ -36,8 +36,14 @@ impl Enclave {
                 return Err(Error::new(format!("Failed to launch enclave: {}", status)));
             }
         };
+        let enclave = Enclave { enclave: enclave };
 
-        Ok(Enclave { enclave: enclave })
+        let result = unsafe { super::ecall_proxy::enclave_late_init(enclave.get_id()) };
+        if result != sgx_status_t::SGX_SUCCESS {
+            return Err(Error::new(format!("enclave_late_init: {}", result)));
+        }
+
+        Ok(enclave)
     }
 
     /// Return enclave identifier.
