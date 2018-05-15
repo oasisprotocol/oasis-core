@@ -76,5 +76,6 @@ members = [
     # Scheduler.
     "scheduler/api",
     "scheduler/base",
+    "scheduler/client",
     "scheduler/dummy",
 ]

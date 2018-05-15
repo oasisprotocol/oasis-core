@@ -347,63 +347,59 @@ impl DummyConsensusBackend {
     }
 
     fn get_round(inner: Arc<Inner>) -> BoxFuture<Arc<Mutex<Round>>> {
-        Box::new(
-            inner
-                .scheduler
-                .get_committees(inner.contract.clone())
-                .and_then(move |mut committees| {
-                    // Get the computation committee.
-                    let committee = committees
-                        .drain(..)
-                        .filter(|c| c.kind == CommitteeType::Compute)
-                        .next();
-                    if let Some(committee) = committee {
-                        let block = {
-                            let blocks = inner.blocks.lock().unwrap();
-                            blocks.last().unwrap().clone()
-                        };
+        Box::new(inner.scheduler.get_committees(inner.contract.id).and_then(
+            move |mut committees| {
+                // Get the computation committee.
+                let committee = committees
+                    .drain(..)
+                    .filter(|c| c.kind == CommitteeType::Compute)
+                    .next();
+                if let Some(committee) = committee {
+                    let block = {
+                        let blocks = inner.blocks.lock().unwrap();
+                        blocks.last().unwrap().clone()
+                    };
 
-                        // Check if we already have a round and if the round is for the same committee/block.
-                        let existing_round = {
-                            let round = inner.round.lock().unwrap();
-                            match *round {
-                                Some(ref shared_round) => {
-                                    let round = shared_round.lock().unwrap();
+                    // Check if we already have a round and if the round is for the same committee/block.
+                    let existing_round = {
+                        let round = inner.round.lock().unwrap();
+                        match *round {
+                            Some(ref shared_round) => {
+                                let round = shared_round.lock().unwrap();
 
-                                    if round.current_block == block && round.committee == committee
-                                    {
-                                        // Existing round is the same.
-                                        Some(shared_round.clone())
-                                    } else {
-                                        // New round needed as either block or committee has changed.
-                                        None
-                                    }
+                                if round.current_block == block && round.committee == committee {
+                                    // Existing round is the same.
+                                    Some(shared_round.clone())
+                                } else {
+                                    // New round needed as either block or committee has changed.
+                                    None
                                 }
-                                None => None,
                             }
-                        };
-
-                        match existing_round {
-                            Some(round) => Ok(round),
-                            None => {
-                                let new_round = Arc::new(Mutex::new(Round::new(
-                                    inner.storage.clone(),
-                                    committee,
-                                    block,
-                                )));
-                                let mut round = inner.round.lock().unwrap();
-                                *round = Some(new_round.clone());
-
-                                Ok(new_round)
-                            }
+                            None => None,
                         }
-                    } else {
-                        // No compute committee, this is an error.
-                        error!("No compute committee received for current round");
-                        panic!("scheduler gave us no compute committee");
+                    };
+
+                    match existing_round {
+                        Some(round) => Ok(round),
+                        None => {
+                            let new_round = Arc::new(Mutex::new(Round::new(
+                                inner.storage.clone(),
+                                committee,
+                                block,
+                            )));
+                            let mut round = inner.round.lock().unwrap();
+                            *round = Some(new_round.clone());
+
+                            Ok(new_round)
+                        }
                     }
-                }),
-        )
+                } else {
+                    // No compute committee, this is an error.
+                    error!("No compute committee received for current round");
+                    panic!("scheduler gave us no compute committee");
+                }
+            },
+        ))
     }
 
     /// Attempt to finalize the current round.
