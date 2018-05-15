@@ -15,16 +15,16 @@ EOF
 fi
 
 # Build all Ekiden binaries and resources.
-cargo install --force --path tools ekiden-tools
-(cd contracts/key-manager && cargo ekiden build-contract --release)
-(cd contracts/token && cargo ekiden build-contract --release)
-(cd compute && cargo build --release)
+cargo install --force --path tools --debug ekiden-tools
+(cd contracts/key-manager && cargo ekiden build-contract)
+(cd contracts/token && cargo ekiden build-contract)
+(cd compute && cargo build)
 
 # Package all binaries and resources.
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
 ln target/contract/ekiden-key-manager.so target/docker-deployment/context/lib
 ln target/contract/token.so target/docker-deployment/context/lib
-ln target/release/ekiden-compute target/docker-deployment/context/bin
+ln target/debug/ekiden-compute target/docker-deployment/context/bin
 ln docker/deployment/Dockerfile.runtime target/docker-deployment/context/Dockerfile
 tar cvzhf target/docker-deployment/context.tar.gz -C target/docker-deployment/context .
 rm -rf target/docker-deployment/context
