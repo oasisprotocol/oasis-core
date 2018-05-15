@@ -10,8 +10,8 @@ repository = "https://github.com/ekiden/ekiden"
 sgx-simulation = []
 
 [dependencies]
-sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
-sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden" }
+sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden" }
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-contract-common = { path = "../common", version = "0.1.0-alpha.4" }
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.4" }
