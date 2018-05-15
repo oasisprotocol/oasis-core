@@ -14,7 +14,8 @@ use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
 use ekiden_core::node::Node;
 use ekiden_core::signature::Signed;
-use ekiden_registry_base::{EntityRegistryBackend, REGISTER_ENTITY_SIGNATURE_CONTEXT,
+use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
+                           REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
@@ -107,8 +108,19 @@ impl ComputeNode {
             contract.replica_group_size = 1;
             contract.storage_group_size = 1;
 
-            Arc::new(contract)
+            contract
         };
+        let signed_contract = Signed::sign(
+            &config.consensus.signer,
+            &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
+            contract.clone(),
+        );
+        contract_registry
+            .register_contract(signed_contract)
+            .wait()
+            .unwrap();
+
+        let contract = Arc::new(contract);
 
         // Register entity with the registry.
         // TODO: This should probably be done independently?

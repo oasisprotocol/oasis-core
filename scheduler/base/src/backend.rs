@@ -1,6 +1,9 @@
 //! Scheduler interface.
 use std::convert::TryFrom;
+use std::ops::Deref;
 use std::sync::Arc;
+
+use protobuf::repeated::RepeatedField;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
@@ -70,14 +73,53 @@ pub struct Committee {
     pub valid_for: EpochTime,
 }
 
+impl TryFrom<api::Committee> for Committee {
+    /// try_from Converts a protobuf block into a block.
+    type Error = Error;
+    fn try_from(a: api::Committee) -> Result<Self, self::Error> {
+        let mut members = Vec::new();
+        for member in a.get_members().iter() {
+            members.push(CommitteeNode::try_from(member.to_owned())?);
+        }
+        Ok(Committee {
+            kind: match a.get_kind() {
+                api::Committee_Kind::COMPUTE => CommitteeType::Compute,
+                api::Committee_Kind::STORAGE => CommitteeType::Storage,
+            },
+            members: members,
+            contract: Arc::new(Contract::try_from(a.get_contract().to_owned())?),
+            valid_for: a.get_valid_for(),
+        })
+    }
+}
+
+impl Into<api::Committee> for Committee {
+    /// into Converts a block into a protobuf `consensus::api::Block` representation.
+    fn into(self) -> api::Committee {
+        let mut c = api::Committee::new();
+        match self.kind {
+            CommitteeType::Compute => c.set_kind(api::Committee_Kind::COMPUTE),
+            CommitteeType::Storage => c.set_kind(api::Committee_Kind::STORAGE),
+        };
+        let mut members = Vec::new();
+        for member in self.members.iter() {
+            members.push(member.to_owned().into());
+        }
+        c.set_members(RepeatedField::from_vec(members));
+        c.set_contract(self.contract.deref().to_owned().into());
+        c.set_valid_for(self.valid_for);
+        c
+    }
+}
+
 /// Scheduler backend implementing the Ekiden scheduler interface.
 pub trait Scheduler: Send + Sync {
     /// Start the async event source associated with the scheduler.
     fn start(&self, executor: &mut Executor);
 
-    /// Return a vector of the committees for a given contract invocation,
+    /// Return a vector of the committees for a given contract ID,
     /// for the current epoch.
-    fn get_committees(&self, contract: Arc<Contract>) -> BoxFuture<Vec<Committee>>;
+    fn get_committees(&self, contract: B256) -> BoxFuture<Vec<Committee>>;
 
     /// Subscribe to all comittee generation updates.  Upon subscription
     /// all committees for the current epoch will be send immediately.

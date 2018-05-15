@@ -9,7 +9,7 @@ build = "build.rs"
 
 [dependencies]
 ekiden-common-api = { path = "../../common/api", version = "0.1.0-alpha.4" }
-protobuf = "1.4.2"
+protobuf = "~1.4"
 grpcio = "0.2.2"
 futures = "0.1"
 

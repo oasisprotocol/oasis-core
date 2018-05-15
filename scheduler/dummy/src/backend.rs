@@ -201,15 +201,11 @@ impl DummySchedulerBackendInner {
         self.beacon_cache.contains_key(&epoch) && self.entity_cache.contains_key(&epoch)
     }
 
-    fn get_committees(
-        &self,
-        contract: Arc<Contract>,
-        epoch: EpochTime,
-    ) -> BoxFuture<Vec<Committee>> {
+    fn get_committees(&self, contract_id: B256, epoch: EpochTime) -> BoxFuture<Vec<Committee>> {
         // Attempt to service this from the internal cache.
         match self.committee_cache.get(&epoch) {
             Some(committees) => {
-                match committees.get(&contract.id) {
+                match committees.get(&contract_id) {
                     Some(committees) => return Box::new(future::ok(committees.clone())),
                     None => {}
                 };
@@ -226,11 +222,13 @@ impl DummySchedulerBackendInner {
             // TODO: entity_registry.get_nodes() should probably take an
             // EpochTime since this absolutely depends on a stable/globally
             // consistent node list.
-            self.beacon
-                .get_beacon(epoch)
-                .join(self.entity_registry.get_nodes())
+            self.beacon.get_beacon(epoch).join3(
+                self.entity_registry.get_nodes(),
+                self.contract_registry.get_contract(contract_id),
+            )
         };
-        let result = get_metadata.and_then(move |(entropy, nodes)| {
+        let result = get_metadata.and_then(move |(entropy, nodes, contract)| {
+            let contract = Arc::new(contract);
             let compute = match make_committee_impl(
                 contract.clone(),
                 &nodes,
@@ -333,7 +331,7 @@ impl Scheduler for DummySchedulerBackend {
         })
     }
 
-    fn get_committees(&self, contract: Arc<Contract>) -> BoxFuture<Vec<Committee>> {
+    fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
         let inner = self.inner.lock().unwrap();
 
         let epoch = match inner.time_notifier.time_source().get_epoch() {
@@ -341,7 +339,7 @@ impl Scheduler for DummySchedulerBackend {
             Err(err) => return Box::new(future::err(err)),
         };
 
-        inner.get_committees(contract.clone(), epoch)
+        inner.get_committees(contract_id, epoch)
     }
 
     fn watch_committees(&self) -> BoxStream<Committee> {
@@ -499,7 +497,10 @@ mod tests {
         // WARNING: If the inner get_committees() routine ever changes
         // to return a future that waits on the notifications internally
         // this will hang indefinately.
-        let committees = scheduler.get_committees(contract.clone()).wait().unwrap();
+        let committees = scheduler
+            .get_committees(contract.id.clone())
+            .wait()
+            .unwrap();
         must_validate_committees(contract.clone(), &nodes, committees, 0);
 
         // Subscribe to the scheduler.
@@ -514,7 +515,10 @@ mod tests {
         must_validate_committees(contract.clone(), &nodes, committees, 0);
 
         // Test single scheduling a contract (cache hit).
-        let committees = scheduler.get_committees(contract.clone()).wait().unwrap();
+        let committees = scheduler
+            .get_committees(contract.id.clone())
+            .wait()
+            .unwrap();
         must_validate_committees(contract.clone(), &nodes, committees, 0);
     }
 
