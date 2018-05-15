@@ -10,8 +10,8 @@ service Stake {
   rpc AllocateEscrow (AllocateEscrowRequest) returns (AllocateEscrowResponse) {}
   rpc ListActiveEscrows (ListActiveEscrowsRequest)
     returns (ListActiveEscrowsResponse) {}
-  rpc VerifyEscrow (VerifyEscrowRequest)
-    returns (VerifyEscrowResponse) {}
+  rpc FetchEscrowById (FetchEscrowByIdRequest)
+    returns (FetchEscrowByIdResponse) {}
   rpc TakeAndReleaseEscrow (TakeAndReleaseEscrowRequest)
     returns (TakeAndReleaseEscrowResponse) {}
 }
@@ -55,8 +55,8 @@ message DepositStakeResponse {
   // Other than some internal error (out of memory? out of gas for
   // processing the request?) which should be handled by the Rust/grpc
   // framework, the only possible reason for failure is integer
-  // overflow.
-  uint32 failure_code = 1;
+  // overflow.  Handled via Err(...) which propagates through the
+  // grpc layer.
 }
 
 // If ReleaseStakeRequest.amount_requested <= caller.amount -
@@ -72,10 +72,20 @@ message ReleaseStakeRequest {
 }
 
 message ReleaseStakeResponse {
-  uint32 failure_code = 1;
-  uint64 amount_returned = 2;  // $$
+  uint64 amount_returned = 1;  // $$
 }
 
+// *TODO*: do escrows expire?  If the entity to which the escrow was
+// made via AllocateEscrow disappears, would all funds escrowed to it
+// also disappear?  If escrow includes a time limit, then we need some
+// security guarantees about the validity of time, so that an attacker
+// could not trick the stake escrow service to expire an escrow
+// earlier than it should.  (Multisig time service ought to work,
+// since setting the clock back via replaying old messages doesn't
+// help the attacker in this situation.  Releasing escrowed funds a
+// little later than we should is just another denial-of-service
+// attack.)
+//
 // If caller.stake - caller.escrowed >= AllocateEscrowRequest.escrow_amount
 // then
 //   uuid = generate_id()
@@ -93,7 +103,7 @@ message AllocateEscrowRequest {
   // The set-aside values are split apart from the total
   // bond remaining, and |entity| can do the following operations:
   //
-  // - VerifyEscrow (escrow_id, escrow_amount) tuple is valid.
+  // - FetchEscrowById (escrow_id, entity, escrow_amount) tuple is valid.
   // - TakeAndReleaseEscrow (escrow_id, n)  n <= amount, amount-n is released.
   //   (To release entire escrow, use n=0.)
   common.Entity entity = 1;
@@ -101,10 +111,8 @@ message AllocateEscrowRequest {
 }
 
 message AllocateEscrowResponse {
-  // Failure reasons:
-  // -  insufficient funds.
-  uint32 failure_code = 1;
-  bytes id = 2;  // Should be uuid, so no two the same.
+  // Failure reasons: Err(InsufficientFunds).
+  bytes id = 1;  // Should be uuid, so no two the same.
 }
 // The returned escrow id is an identifier and not an authenticator,
 // and instead of a randomly chosen uuid (i.e., version 4, with 122
@@ -117,6 +125,8 @@ message EscrowData {
   uint64 amount = 3;
 }
 
+// This is useful for the msg.sender to know what escrows are still
+// outstanding.
 message ListActiveEscrowsRequest {
 }
 
@@ -124,14 +134,17 @@ message ListActiveEscrowsResponse {
   repeated EscrowData escrows = 1;
 }
 
-message VerifyEscrowRequest {
-  EscrowData escrow = 1;
+// Rather than sending the entity and amount information, we just
+// allow querying by the escrow id.  The caller (library) can verify
+// that entity address matches and that the amount that was set aside
+// is sufficent.
+message FetchEscrowByIdRequest {
+  bytes id = 1;
 }
 
-message VerifyEscrowResponse {
-  uint32 failure_code = 1;
-  // 0 means Ok(()), other values mean Err(NoSuchId),
-  // Err(EntityMismatch), Err(AmountMismatch)
+message FetchEscrowByIdResponse {
+  // Possible errors: Err(NoSuchId)
+  EscrowData escrow = 1;
 }
 
 message TakeAndReleaseEscrowRequest {
@@ -140,8 +153,6 @@ message TakeAndReleaseEscrowRequest {
 }
 
 message TakeAndReleaseEscrowResponse {
-  uint32 failure_code = 1;
-  // 0 means Ok(amount), other values mean
-  // Err(NoSuchId), Err(InsufficentEscrow)
-  uint64 amount = 2;  // $$
+  // Possible failures: Err(NoSuchId), Err(InsufficentFunds)
+  uint64 amount = 1;  // $$
 }
