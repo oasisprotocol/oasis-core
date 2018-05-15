@@ -1,3 +1,4 @@
+#[cfg(target_env = "sgx")]
 use std;
 
 /// ECALL, see edl
