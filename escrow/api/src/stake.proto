@@ -16,7 +16,7 @@ service Stake {
     returns (TakeAndReleaseEscrowResponse) {}
 }
 
-// Message fields annotated with /* $$ */ is where conceptually
+// Message fields annotated with $$ is where conceptually
 // cryptocurrency tokens are transferred.
 
 // Per-caller state:
@@ -36,7 +36,14 @@ service Stake {
 
 message DepositStakeRequest {
   // Deposit an additional |amount| into the caller's bond/escrow account
-  uint64 amount = 1;  /* $$ */
+  uint64 amount = 1;  // $$
+  common.Entity msg_sender = 2;
+  // This corresponds to msg.sender in Solidity; it should be an
+  // address, which could be the SHA1 hash of a public key (external
+  // address) or a contract address (blockchain address) [addresses
+  // are 160 bit values].  In the context of grpc, this would be
+  // RpcContext's auth_context()'s GetPeerIdentity(), which probably
+  // would come from the identity in a JWT.
 }
 // Post: caller.amount <= caller.amount'  (new amount is at least previous)
 // If caller.amount + DepositStakeRequest.amount <= MAX_UINT64,
@@ -46,8 +53,9 @@ message DepositStakeRequest {
 
 message DepositStakeResponse {
   // Other than some internal error (out of memory? out of gas for
-  // processing the request?), the only possible reason for failure is
-  // integer overflow.  That would be amazing....
+  // processing the request?) which should be handled by the Rust/grpc
+  // framework, the only possible reason for failure is integer
+  // overflow.
   uint32 failure_code = 1;
 }
 
@@ -65,7 +73,7 @@ message ReleaseStakeRequest {
 
 message ReleaseStakeResponse {
   uint32 failure_code = 1;
-  uint64 amount_returned = 2;  /* $$ */
+  uint64 amount_returned = 2;  // $$
 }
 
 // If caller.stake - caller.escrowed >= AllocateEscrowRequest.escrow_amount
@@ -135,5 +143,5 @@ message TakeAndReleaseEscrowResponse {
   uint32 failure_code = 1;
   // 0 means Ok(amount), other values mean
   // Err(NoSuchId), Err(InsufficentEscrow)
-  uint64 amount = 2;  /* $$ */
+  uint64 amount = 2;  // $$
 }

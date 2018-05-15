@@ -12,7 +12,7 @@ fn main() {
 
     // Root set to the core ekiden root so that common/api is in scope.
     protoc_grpcio::compile_grpc_protos(
-        &["entity.proto", "contract.proto"],
+        &["stake.proto"],
         &["src", "../../"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
