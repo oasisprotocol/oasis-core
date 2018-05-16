@@ -6,9 +6,10 @@ use grpcio::{Channel, Environment, RpcContext, RpcStatus, ServerStreamingSink, U
              WriteFlags};
 use grpcio::RpcStatusCode::InvalidArgument;
 
-use epochtime::{EpochTime, LocalTimeSourceNotifier, TimeSource, TimeSourceNotifier};
-use error::Error;
-use futures::{future, stream, BoxStream, Future, Stream};
+use super::{EpochTime, TimeSource, TimeSourceNotifier};
+use super::local::LocalTimeSourceNotifier;
+use super::super::error::Error;
+use futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use node::Node;
 
 use ekiden_common_api as api;
@@ -27,7 +28,6 @@ impl EpochTimeService {
     }
 }
 
-#[macro_export]
 macro_rules! invalid {
     ($sink:ident,$code:ident,$e:expr) => {
         $sink.fail(RpcStatus::new(
@@ -92,6 +92,18 @@ impl TimeSourceClient {
 }
 
 impl TimeSourceNotifier for TimeSourceClient {
+    fn get_epoch(&self) -> BoxFuture<EpochTime> {
+        let req = api::EpochRequest::new();
+
+        match self.0.get_epoch_async(&req) {
+            Ok(f) => Box::new(f.then(|result| match result {
+                Ok(r) => Ok(r.get_current_epoch()),
+                Err(e) => Err(Error::new(e.description())),
+            })),
+            Err(e) => Box::new(future::err(Error::new(e.description()))),
+        }
+    }
+
     fn watch_epochs(&self) -> BoxStream<EpochTime> {
         let req = api::WatchEpochRequest::new();
 

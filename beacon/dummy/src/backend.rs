@@ -71,12 +71,32 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
     }
 
     fn watch_beacons(&self) -> BoxStream<(EpochTime, B256)> {
-        let inner = self.inner.lock().unwrap();
-        let (send, recv) = inner.subscribers.subscribe();
+        let (streamrecv, initialpoll) = {
+            let locked_inner = self.inner.lock().unwrap();
+            let (send, recv) = locked_inner.subscribers.subscribe();
 
-        send.unbounded_send((inner.last_notify, inner.cached_beacon)).unwrap();
+            // explicit fetch of current epoch to catch up the new subscriber.
+            let inner = self.inner.clone();
+            let pre_notify_time = locked_inner.last_notify;
 
-        recv
+            (
+                recv,
+                locked_inner
+                    .time_notifier
+                    .get_epoch()
+                    .and_then(move |epoch| {
+                        let inner = inner.lock().unwrap();
+                        if epoch == pre_notify_time {
+                            send.unbounded_send((epoch, inner.cached_beacon)).unwrap();
+                        }
+                        future::ok(())
+                    }),
+            )
+        };
+        // TODO: should this be given to an executor?
+        let _r = initialpoll.wait();
+
+        streamrecv
     }
 }
 
@@ -107,7 +127,8 @@ mod tests {
 
     use self::rustc_hex::ToHex;
     use super::*;
-    use ekiden_common::epochtime::{LocalTimeSourceNotifier, MockTimeSource, EPOCH_INTERVAL};
+    use ekiden_common::epochtime::EPOCH_INTERVAL;
+    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use ekiden_common::futures::{cpupool, Future};
 
     #[test]

@@ -32,9 +32,6 @@ pub mod contract;
 pub mod drbg;
 pub mod entity;
 pub mod epochtime;
-#[cfg(not(target_env = "sgx"))]
-#[macro_use]
-pub mod epochtimeservice;
 pub mod error;
 pub mod futures;
 pub mod hash;

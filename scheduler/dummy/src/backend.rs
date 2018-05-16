@@ -334,12 +334,18 @@ impl Scheduler for DummySchedulerBackend {
     fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
         let inner = self.inner.lock().unwrap();
 
-        let epoch = match inner.time_notifier.time_source().get_epoch() {
-            Ok((epoch, _)) => epoch,
-            Err(err) => return Box::new(future::err(err)),
-        };
-
-        inner.get_committees(contract_id, epoch)
+        if inner.current_epoch != EKIDEN_EPOCH_INVALID {
+            inner.get_committees(contract_id, epoch)
+        } else {
+            let inner = self.inner.clone();
+            inner.time_notifier.get_epoch().then(move |r| match r {
+                Ok((epoch, _)) => {
+                    let inner = inner.lock().unwrap();
+                    inner.get_committees(contract_id, epoch)
+                }
+                Err(err) => return Box::new(future::err(err)),
+            })
+        }
     }
 
     fn watch_committees(&self) -> BoxStream<Committee> {
@@ -432,7 +438,8 @@ mod tests {
     use super::*;
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
-    use ekiden_common::epochtime::{MockTimeSource, TimeSourceNotifier, EPOCH_INTERVAL};
+    use ekiden_common::epochtime::{TimeSourceNotifier, EPOCH_INTERVAL};
+    use ekiden_common::epochtime::local::MockTimeSource;
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
