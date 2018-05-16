@@ -332,19 +332,21 @@ impl Scheduler for DummySchedulerBackend {
     }
 
     fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
-        let inner = self.inner.lock().unwrap();
+        let locked_inner = self.inner.lock().unwrap();
 
-        if inner.current_epoch != EKIDEN_EPOCH_INVALID {
-            inner.get_committees(contract_id, epoch)
+        if locked_inner.current_epoch != EKIDEN_EPOCH_INVALID {
+            locked_inner.get_committees(contract_id, locked_inner.current_epoch)
         } else {
             let inner = self.inner.clone();
-            inner.time_notifier.get_epoch().then(move |r| match r {
-                Ok((epoch, _)) => {
-                    let inner = inner.lock().unwrap();
-                    inner.get_committees(contract_id, epoch)
-                }
-                Err(err) => return Box::new(future::err(err)),
-            })
+            Box::new(
+                locked_inner
+                    .time_notifier
+                    .get_epoch()
+                    .and_then(move |epoch| {
+                        let inner = inner.lock().unwrap();
+                        inner.get_committees(contract_id, epoch)
+                    }),
+            )
         }
     }
 
@@ -438,8 +440,8 @@ mod tests {
     use super::*;
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
-    use ekiden_common::epochtime::{TimeSourceNotifier, EPOCH_INTERVAL};
-    use ekiden_common::epochtime::local::MockTimeSource;
+    use ekiden_common::epochtime::EPOCH_INTERVAL;
+    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
@@ -449,7 +451,7 @@ mod tests {
     #[test]
     fn test_dummy_scheduler_integration() {
         let time_source = Arc::new(MockTimeSource::new());
-        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
