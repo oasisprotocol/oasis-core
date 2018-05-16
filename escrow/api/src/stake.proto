@@ -5,9 +5,14 @@ import "common/api/src/common.proto";
 package escrow;
 
 service Stake {
-  rpc DepositStake (DepositStakeRequest) returns (DepositStakeResponse) {}
-  rpc ReleaseStake (ReleaseStakeRequest) returns (ReleaseStakeResponse) {}
-  rpc AllocateEscrow (AllocateEscrowRequest) returns (AllocateEscrowResponse) {}
+  rpc DepositStake (DepositStakeRequest)
+    returns (DepositStakeResponse) {}
+  rpc GetStakeStatus (GetStakeStatusRequest)
+    returns (GetStakeStatusResponse) {}
+  rpc WithdrawStake (WithdrawStakeRequest)
+    returns (WithdrawStakeResponse) {}
+  rpc AllocateEscrow (AllocateEscrowRequest)
+    returns (AllocateEscrowResponse) {}
   rpc ListActiveEscrows (ListActiveEscrowsRequest)
     returns (ListActiveEscrowsResponse) {}
   rpc FetchEscrowById (FetchEscrowByIdRequest)
@@ -35,9 +40,9 @@ service Stake {
 // \sum_{\forall (uuid, escrow) in escrow_map} escrow.second = escrowed
 
 message DepositStakeRequest {
+  common.Entity msg_sender = 1;
   // Deposit an additional |amount| into the caller's bond/escrow account
-  uint64 amount = 1;  // $$
-  common.Entity msg_sender = 2;
+  uint64 amount = 2;  // $$
   // This corresponds to msg.sender in Solidity; it should be an
   // address, which could be the SHA1 hash of a public key (external
   // address) or a contract address (blockchain address) [addresses
@@ -59,19 +64,30 @@ message DepositStakeResponse {
   // grpc layer.
 }
 
-// If ReleaseStakeRequest.amount_requested <= caller.amount -
+message GetStakeStatusRequest {
+  common.Entity msg_sender = 1;
+}
+
+message GetStakeStatusResponse {
+  uint64 total_stake = 1;
+  uint64 escrowed_stake = 2;
+}
+// Available stake for withdrawal is total_stake - escrowed_stake.
+
+// If WithdrawStakeRequest.amount_requested <= caller.amount -
 // caller.escrowed then
-//   caller.amount' = caller.amount - ReleaseStakeRequested.amount_requested
-//   amount_returned = ReleaseStakeRequest.amount_requested
+//   caller.amount' = caller.amount - WithdrawStakeRequested.amount_requested
+//   amount_returned = WithdrawStakeRequest.amount_requested
 //   failure_code = 0 (OK(()));
 // otherwise
 //   caller state unchanged
-//   failure_code = Err(InsufficientStakeAvailable)
-message ReleaseStakeRequest {
-  uint64 amount_requested = 1;
+//   failure_code = Err(InsufficientFunds)
+message WithdrawStakeRequest {
+  common.Entity msg_sender = 1;
+  uint64 amount_requested = 2;
 }
 
-message ReleaseStakeResponse {
+message WithdrawStakeResponse {
   uint64 amount_returned = 1;  // $$
 }
 
@@ -96,6 +112,7 @@ message ReleaseStakeResponse {
 //   caller state unchanged
 //   failure_code = Err(WouldOverflow)
 message AllocateEscrowRequest {
+  common.Entity msg_sender = 1;
   // Set aside from the caller's deposited bond for use with
   // transactions with |entity| the |escrow_amount|, with an
   // |escrow_id| uuid returned.
@@ -106,8 +123,8 @@ message AllocateEscrowRequest {
   // - FetchEscrowById (escrow_id, entity, escrow_amount) tuple is valid.
   // - TakeAndReleaseEscrow (escrow_id, n)  n <= amount, amount-n is released.
   //   (To release entire escrow, use n=0.)
-  common.Entity entity = 1;
-  uint64 escrow_amount = 2;
+  common.Entity entity = 2;
+  uint64 escrow_amount = 3;
 }
 
 message AllocateEscrowResponse {
@@ -128,6 +145,7 @@ message EscrowData {
 // This is useful for the msg.sender to know what escrows are still
 // outstanding.
 message ListActiveEscrowsRequest {
+  common.Entity msg_sender = 1;
 }
 
 message ListActiveEscrowsResponse {
@@ -143,16 +161,18 @@ message FetchEscrowByIdRequest {
 }
 
 message FetchEscrowByIdResponse {
-  // Possible errors: Err(NoSuchId)
+  // Possible errors: Err(NoSuchEscrowId)
   EscrowData escrow = 1;
 }
 
+// msg_sender should have an account, or one will be created for it.
 message TakeAndReleaseEscrowRequest {
-  bytes id = 1;
-  uint64 amount = 2;
+  common.Entity msg_sender = 1;
+  bytes id = 2;
+  uint64 amount = 3;
 }
 
 message TakeAndReleaseEscrowResponse {
-  // Possible failures: Err(NoSuchId), Err(InsufficentFunds)
+  // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
   uint64 amount = 1;  // $$
 }
