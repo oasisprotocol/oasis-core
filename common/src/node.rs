@@ -28,42 +28,42 @@ pub struct Node {
 }
 
 impl TryFrom<api::Node> for Node {
-    /// try_from Converts a protobuf `common::api::Node` into a node.
     type Error = super::error::Error;
-    fn try_from(a: api::Node) -> Result<Self, Error> {
-        let id = a.get_id();
-        let id = B256::from_slice(&id);
 
-        let eid = a.get_entity_id();
-        let eid = B256::from_slice(&eid);
+    /// Convert a protobuf `common::api::Node` into a node.
+    fn try_from(mut node: api::Node) -> Result<Self, Error> {
+        let mut addresses = node.take_addresses().into_vec();
+        let addresses: Result<_, _> = addresses
+            .drain(..)
+            .map(|address| Address::try_from(address))
+            .collect();
+        let addresses = addresses?;
 
-        let mut addresses = a.get_addresses()
-            .into_iter()
-            .map(|addr| Address::try_from(addr.to_owned()));
-        if addresses.any(|a| a.is_err()) {
-            Err(Error::new("Bad Address"))
-        } else {
-            Ok(Node {
-                id: id,
-                entity_id: eid,
-                expiration: a.expiration,
-                addresses: addresses.map(|a| a.unwrap()).collect(),
-                stake: a.get_stake().to_vec(),
-            })
-        }
+        Ok(Node {
+            id: B256::from_slice(node.get_id()),
+            entity_id: B256::from_slice(node.get_entity_id()),
+            expiration: node.expiration,
+            addresses: addresses,
+            stake: node.get_stake().to_vec(),
+        })
     }
 }
 
 impl Into<api::Node> for Node {
-    /// into Converts a node into a protobuf `common::api::Node` representation.
-    fn into(self) -> api::Node {
-        let mut n = api::Node::new();
-        n.set_id(self.id.to_vec());
-        n.set_entity_id(self.entity_id.to_vec());
-        n.set_expiration(self.expiration);
-        n.set_addresses(self.addresses.iter().map(|a| a.to_owned().into()).collect());
-        n.set_stake(self.stake.clone());
-        n
+    /// Convert a node into a protobuf `common::api::Node` representation.
+    fn into(mut self) -> api::Node {
+        let mut node = api::Node::new();
+        node.set_id(self.id.to_vec());
+        node.set_entity_id(self.entity_id.to_vec());
+        node.set_expiration(self.expiration);
+        node.set_addresses(
+            self.addresses
+                .drain(..)
+                .map(|address| address.into())
+                .collect(),
+        );
+        node.set_stake(self.stake.clone());
+        node
     }
 }
 
@@ -75,5 +75,31 @@ impl Node {
         let address = self.addresses[0];
         // TODO: node identity pub-keys should be used to construct a cert to allow secure_connect.
         builder.connect(&format!("{}", address))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_node_conversion() {
+        // Default node.
+        let original = Node::default();
+        let intermediate: api::Node = original.clone().into();
+        let converted = Node::try_from(intermediate).unwrap();
+        assert_eq!(original, converted);
+
+        // Non-default node with some data.
+        let mut original = Node::default();
+        original.id = B256::random();
+        original.entity_id = B256::random();
+        original.expiration = 1_000_000_000;
+        original.addresses = Address::for_local_port(42).unwrap();
+        original.stake = vec![42; 10];
+
+        let intermediate: api::Node = original.clone().into();
+        let converted = Node::try_from(intermediate).unwrap();
+        assert_eq!(original, converted);
     }
 }
