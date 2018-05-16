@@ -1,3 +1,5 @@
+use std::env;
+
 extern crate ekiden_tools;
 extern crate protoc_grpcio;
 
@@ -6,10 +8,13 @@ extern crate protoc_grpcio;
 fn main() {
     // Generate module file.
     // Must be done first to create src/generated directory
-    #[cfg(target_env = "sgx")]
-    ekiden_tools::generate_mod("src/generated", &["common"]);
-    #[cfg(not(target_env = "sgx"))]
-    ekiden_tools::generate_mod("src/generated", &["common", "common_grpc"]);
+    let target = env::var("TARGET").unwrap();
+
+    if target.contains("sgx") {
+        ekiden_tools::generate_mod("src/generated", &["common"]);
+    } else {
+        ekiden_tools::generate_mod("src/generated", &["common", "common_grpc"]);
+    }
 
     protoc_grpcio::compile_grpc_protos(&["common.proto"], &["src"], "src/generated")
         .expect("failed to compile gRPC definitions");
