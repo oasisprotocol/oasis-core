@@ -24,6 +24,11 @@ service Stake {
 // Message fields annotated with $$ is where conceptually
 // cryptocurrency tokens are transferred.
 
+// The RPCs should go over a secured channel so that authentication
+// for msg_sender is provided, message authenticity and freshness is
+// guaranteed, with message confidentiality being optional.
+
+
 // Per-caller state:
 //  uint64 amount:  total stake amount
 //  uint64 escrowed:  amount of stake in escrow
@@ -169,10 +174,10 @@ message FetchEscrowByIdResponse {
 message TakeAndReleaseEscrowRequest {
   common.Entity msg_sender = 1;
   bytes id = 2;
-  uint64 amount = 3;
+  uint64 amount_requested = 3;
 }
 
 message TakeAndReleaseEscrowResponse {
   // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
-  uint64 amount = 1;  // $$
+  uint64 amount_returned = 1;  // $$
 }
