@@ -1,4 +1,5 @@
 use std::convert::Into;
+use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
@@ -10,18 +11,13 @@ use protobuf::RepeatedField;
 
 use super::backend::{Committee, Scheduler};
 
-pub struct SchedulerService<T>
-where
-    T: Scheduler,
-{
-    inner: T,
+#[derive(Clone)]
+pub struct SchedulerService {
+    inner: Arc<Scheduler>,
 }
 
-impl<T> SchedulerService<T>
-where
-    T: Scheduler,
-{
-    pub fn new(backend: T) -> Self {
+impl SchedulerService {
+    pub fn new(backend: Arc<Scheduler>) -> Self {
         Self { inner: backend }
     }
 }
@@ -35,10 +31,7 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::Scheduler for SchedulerService<T>
-where
-    T: Scheduler,
-{
+impl api::Scheduler for SchedulerService {
     fn get_committees(
         &self,
         ctx: RpcContext,
