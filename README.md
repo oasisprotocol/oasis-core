@@ -22,12 +22,12 @@ The easiest way to build SGX code is to use the provided scripts, which run a Do
 container with all the included tools.
 
 To start the SGX development container:
-```bash
+```
 $ cargo ekiden shell
 ```
 
 If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
-```bash
+```
 $ rustup install nightly
 $ cargo +nightly install --force --path tools
 ```
