@@ -9,7 +9,7 @@ use ekiden_core::bytes::B64;
 use ekiden_core::contract::Contract;
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, Stream};
+use ekiden_core::futures::{future, BoxFuture, Executor, Future, IntoFuture, Stream, StreamExt};
 use ekiden_core::futures::sync::mpsc;
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
@@ -88,22 +88,23 @@ impl ComputationGroup {
             let inner = self.inner.clone();
             let contract_id = self.inner.contract.id;
 
-            Box::new(
-                self.inner
-                    .scheduler
-                    .watch_committees()
-                    .filter(|committee| committee.kind == CommitteeType::Compute)
-                    .filter(move |committee| committee.contract.id == contract_id)
-                    .for_each(move |committees| {
+            self.inner
+                .scheduler
+                .watch_committees()
+                .filter(|committee| committee.kind == CommitteeType::Compute)
+                .filter(move |committee| committee.contract.id == contract_id)
+                .for_each_log_errors(
+                    module_path!(),
+                    "Unexpected error while processing committee updates",
+                    move |committees| {
                         // Update node group with new nodes.
                         inner
                             .command_sender
-                            .unbounded_send(Command::UpdateCommittee(committees.members))?;
-
-                        Ok(())
-                    })
-                    .then(|_| future::ok(())),
-            )
+                            .unbounded_send(Command::UpdateCommittee(committees.members))
+                            .map_err(|error| Error::from(error))
+                            .into_future()
+                    },
+                )
         });
 
         // Receive commands.
@@ -116,17 +117,18 @@ impl ComputationGroup {
         executor.spawn({
             let inner = self.inner.clone();
 
-            Box::new(
-                command_receiver
-                    .map_err(|_| Error::new("command channel closed"))
-                    .for_each(move |command| match command {
+            command_receiver
+                .map_err(|_| Error::new("command channel closed"))
+                .for_each_log_errors(
+                    module_path!(),
+                    "Unexpected error while processing group commands",
+                    move |command| match command {
                         Command::Submit(calls) => Self::handle_submit(inner.clone(), calls),
                         Command::UpdateCommittee(members) => {
                             Self::handle_update_committee(inner.clone(), members)
                         }
-                    })
-                    .then(|_| future::ok(())),
-            )
+                    },
+                )
         });
     }
 
@@ -151,6 +153,13 @@ impl ComputationGroup {
             return Box::new(future::ok(()));
         }
 
+        // Check if we are the leader.
+        if members.iter().any(|node| {
+            node.public_key == inner.signer.get_public_key() && node.role == Role::Leader
+        }) {
+            info!("We are now the computation group leader");
+        }
+
         // Resolve nodes via the entity registry.
         // TODO: Support group fetch to avoid multiple requests to registry or make scheduler return nodes.
         let nodes: Vec<BoxFuture<Node>> = members
@@ -168,6 +177,8 @@ impl ComputationGroup {
                         let client = ComputationGroupClient::new(channel);
                         inner.node_group.add_node(client);
                     }
+
+                    trace!("New committee: {:?}", members);
 
                     // Update current committee.
                     {
@@ -251,5 +262,13 @@ impl ComputationGroup {
         };
 
         Ok((calls.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
+    }
+
+    /// Check if the local node is a leader of the computation group.
+    pub fn is_leader(&self) -> bool {
+        let committee = self.inner.committee.lock().unwrap();
+        committee.iter().any(|node| {
+            node.public_key == self.inner.signer.get_public_key() && node.role == Role::Leader
+        })
     }
 }

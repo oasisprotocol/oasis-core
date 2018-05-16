@@ -3,26 +3,23 @@ use std::sync::Arc;
 
 use grpcio;
 
-use ekiden_beacon_base::RandomBeacon;
-use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_compute_api;
 use ekiden_consensus_base::ConsensusBackend;
-use ekiden_consensus_dummy::DummyConsensusBackend;
+use ekiden_consensus_client::ConsensusClient;
 use ekiden_core::address::Address;
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
-use ekiden_core::epochtime::{MockTimeSource, TimeSourceNotifier};
 use ekiden_core::error::Result;
-use ekiden_core::futures::{Executor, Future};
+use ekiden_core::futures::{Future, GrpcExecutor};
 use ekiden_core::node::Node;
 use ekiden_core::signature::Signed;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
-use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
+use ekiden_registry_client::{ContractRegistryClient, EntityRegistryClient};
 use ekiden_scheduler_base::Scheduler;
-use ekiden_scheduler_dummy::DummySchedulerBackend;
-use ekiden_storage_dummy::DummyStorageBackend;
+use ekiden_scheduler_client::SchedulerClient;
+use ekiden_storage_frontend::StorageClient;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::group::ComputationGroup;
@@ -30,25 +27,6 @@ use super::ias::{IASConfiguration, IAS};
 use super::services::computation_group::ComputationGroupService;
 use super::services::web3::Web3Service;
 use super::worker::{Worker, WorkerConfiguration};
-
-/// Executor that uses the gRPC environment for execution.
-struct GrpcExecutor(grpcio::Client);
-
-impl GrpcExecutor {
-    fn new(environment: Arc<grpcio::Environment>) -> Self {
-        GrpcExecutor(
-            // Create a dummy channel, needed for executing futures. This is required because
-            // the API for doing this directly using an Executor is not exposed.
-            grpcio::Client::new(grpcio::ChannelBuilder::new(environment).connect("")),
-        )
-    }
-}
-
-impl Executor for GrpcExecutor {
-    fn spawn(&mut self, f: Box<Future<Item = (), Error = ()> + Send>) {
-        self.0.spawn(f);
-    }
-}
 
 /// Storage configuration.
 // TODO: Add backend configuration.
@@ -60,6 +38,15 @@ pub struct ComputeNodeConfiguration {
     pub grpc_threads: usize,
     /// gRPC server port.
     pub port: u16,
+    /// Shared dummy node host.
+    // TODO: Remove this once we handle backend configuration properly.
+    pub dummy_host: String,
+    /// Shared dummy node port.
+    // TODO: Remove this once we handle backend configuration properly.
+    pub dummy_port: u16,
+    /// Number of compute replicas.
+    // TODO: Remove this once we have independent contract registration.
+    pub compute_replicas: u64,
     /// Consensus configuration.
     pub consensus: ConsensusConfiguration,
     /// Storage configuration.
@@ -74,8 +61,6 @@ pub struct ComputeNodeConfiguration {
 pub struct ComputeNode {
     /// Scheduler.
     scheduler: Arc<Scheduler>,
-    /// Random beacon.
-    beacon: Arc<RandomBeacon>,
     /// Consensus backend.
     consensus_backend: Arc<ConsensusBackend>,
     /// Consensus frontend.
@@ -99,19 +84,19 @@ impl ComputeNode {
 
         // Create scheduler.
         // TODO: Base on configuration.
-        let time_source = Arc::new(MockTimeSource::new());
-        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
-        time_notifier.notify_subscribers().unwrap();
+        let channel = grpcio::ChannelBuilder::new(grpc_environment.clone())
+            .connect(&format!("{}:{}", config.dummy_host, config.dummy_port));
+        let contract_registry = Arc::new(ContractRegistryClient::new(channel.clone()));
+        let entity_registry = Arc::new(EntityRegistryClient::new(channel.clone()));
+        let scheduler = Arc::new(SchedulerClient::new(channel.clone()));
 
-        let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
-        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let scheduler = Arc::new(DummySchedulerBackend::new(
-            beacon.clone(),
-            contract_registry.clone(),
-            entity_registry.clone(),
-            time_notifier,
-        ));
+        // Create storage backend.
+        // TODO: Base on configuration.
+        let storage_backend = Arc::new(StorageClient::new(channel.clone()));
+
+        // Create consensus backend.
+        // TODO: Base on configuration.
+        let consensus_backend = Arc::new(ConsensusClient::new(channel.clone()));
 
         // Create contract.
         // TODO: Get this from somewhere.
@@ -119,7 +104,7 @@ impl ComputeNode {
         // TODO: We currently use the node key pair as the entity key pair.
         let contract = {
             let mut contract = Contract::default();
-            contract.replica_group_size = 1;
+            contract.replica_group_size = config.compute_replicas;
             contract.storage_group_size = 1;
 
             contract
@@ -129,10 +114,13 @@ impl ComputeNode {
             &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
             contract.clone(),
         );
-        contract_registry
-            .register_contract(signed_contract)
-            .wait()
-            .unwrap();
+        // XXX: Needed to avoid registering the key manager compute node for now.
+        if config.worker.key_manager.is_some() {
+            contract_registry
+                .register_contract(signed_contract)
+                .wait()
+                .unwrap();
+        }
 
         let contract = Arc::new(contract);
 
@@ -145,10 +133,13 @@ impl ComputeNode {
             &REGISTER_ENTITY_SIGNATURE_CONTEXT,
             Entity { id: entity_pk },
         );
-        entity_registry
-            .register_entity(signed_entity)
-            .wait()
-            .unwrap();
+        // XXX: Needed to avoid registering the key manager compute node for now.
+        if config.worker.key_manager.is_some() {
+            entity_registry
+                .register_entity(signed_entity)
+                .wait()
+                .unwrap();
+        }
 
         // Register node with the registry.
         // TODO: Handle this properly, do not start any other services before registration is done.
@@ -167,21 +158,12 @@ impl ComputeNode {
             &REGISTER_NODE_SIGNATURE_CONTEXT,
             node,
         );
-        info!("Registering compute node with the registry");
-        entity_registry.register_node(signed_node).wait().unwrap();
-        info!("Compute node registration done");
-
-        // Create storage backend.
-        // TODO: Base on configuration.
-        let storage_backend = Arc::new(DummyStorageBackend::new());
-
-        // Create consensus backend.
-        // TODO: Base on configuration.
-        let consensus_backend = Arc::new(DummyConsensusBackend::new(
-            contract.clone(),
-            scheduler.clone(),
-            storage_backend.clone(),
-        ));
+        // XXX: Needed to avoid registering the key manager compute node for now.
+        if config.worker.key_manager.is_some() {
+            info!("Registering compute node with the registry");
+            entity_registry.register_node(signed_node).wait().unwrap();
+            info!("Compute node registration done");
+        }
 
         // Create worker.
         let worker = Arc::new(Worker::new(
@@ -222,7 +204,6 @@ impl ComputeNode {
 
         Ok(Self {
             scheduler,
-            beacon,
             consensus_backend,
             consensus_frontend,
             computation_group,
@@ -233,9 +214,6 @@ impl ComputeNode {
 
     /// Start compute node.
     pub fn start(&mut self) {
-        // Start random beacon tasks.
-        self.beacon.start(&mut self.executor);
-
         // Start scheduler tasks.
         self.scheduler.start(&mut self.executor);
 

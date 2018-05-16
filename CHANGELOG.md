@@ -1,6 +1,7 @@
 # Unreleased
 
 * **BACKWARD INCOMPATIBLE:** Remove old consensus node.
+* **BACKWARD INCOMPATIBLE:** Compute node now requires the shared dummy node.
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added. (For entities and contracts)
 * Epoch interface / implementation added.
@@ -19,6 +20,8 @@
 * Extend `scheduler::base::Scheduler` to enable event driven scheduling.
 * Add `common::futures::GrpcExecutor`.
 * Leader now forwards batches to workers in compute replica group.
+* Add `into_box`, `log_errors_and_discard` to `FutureExt` trait and `for_each_log_errors`
+  to StreamExt trait to simplify stream processing.
 
 # 0.1.0-alpha.4
 

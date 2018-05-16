@@ -14,7 +14,7 @@ use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal, 
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, Stream};
+use ekiden_core::futures::{future, BoxFuture, Executor, Future, Stream, StreamExt};
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::hash::EncodedHash;
 use ekiden_core::signature::{Signed, Signer};
@@ -136,19 +136,13 @@ impl ConsensusFrontend {
         executor.spawn({
             let inner = self.inner.clone();
 
-            Box::new(
-                self.inner
-                    .backend
-                    .get_events()
-                    .for_each(move |event| match event {
-                        Event::CommitmentsReceived => {
-                            Self::handle_commitments_received(inner.clone())
-                        }
-                        Event::RoundFailed(error) => {
-                            Self::handle_round_failed(inner.clone(), error)
-                        }
-                    })
-                    .then(|_| future::ok(())),
+            self.inner.backend.get_events().for_each_log_errors(
+                module_path!(),
+                "Unexpected error while processing consensus events",
+                move |event| match event {
+                    Event::CommitmentsReceived => Self::handle_commitments_received(inner.clone()),
+                    Event::RoundFailed(error) => Self::handle_round_failed(inner.clone(), error),
+                },
             )
         });
 
@@ -156,12 +150,10 @@ impl ConsensusFrontend {
         executor.spawn({
             let inner = self.inner.clone();
 
-            Box::new(
-                self.inner
-                    .backend
-                    .get_blocks()
-                    .for_each(move |block| Self::handle_block(inner.clone(), block))
-                    .then(|_| future::ok(())),
+            self.inner.backend.get_blocks().for_each_log_errors(
+                module_path!(),
+                "Unexpected error while processing consensus blocks",
+                move |block| Self::handle_block(inner.clone(), block).then(|_| future::ok(())),
             )
         });
 
@@ -175,34 +167,36 @@ impl ConsensusFrontend {
         executor.spawn({
             let inner = self.inner.clone();
 
-            Box::new(
-                command_receiver
-                    .map_err(|_| Error::new("command channel closed"))
-                    .for_each(move |command| match command {
+            command_receiver
+                .map_err(|_| Error::new("command channel closed"))
+                .for_each_log_errors(
+                    module_path!(),
+                    "Unexpected error while processing consensus commands",
+                    move |command| match command {
                         Command::AppendBatch(calls) => {
                             Self::handle_append_batch(inner.clone(), calls)
                         }
                         Command::ProcessRemoteBatch(calls, committee) => {
                             Self::process_batch(inner.clone(), calls, committee)
                         }
-                    })
-                    .then(|_| future::ok(())),
-            )
+                    },
+                )
         });
 
         // Periodically check for batches.
         executor.spawn({
             let inner = self.inner.clone();
 
-            Box::new(
-                Interval::new(self.inner.max_batch_timeout)
-                    .map_err(|error| Error::from(error))
-                    .for_each(move |_| {
+            Interval::new(self.inner.max_batch_timeout)
+                .map_err(|error| Error::from(error))
+                .for_each_log_errors(
+                    module_path!(),
+                    "Unexpected error while firing batch interval timer",
+                    move |_| {
                         // Check if batch is ready to be sent for processing.
                         Self::check_and_process_current_batch(inner.clone())
-                    })
-                    .then(|_| future::ok(())),
-            )
+                    },
+                )
         });
     }
 
@@ -213,6 +207,12 @@ impl ConsensusFrontend {
     ) -> BoxFuture<()> {
         // Ignore empty batches.
         if calls.is_empty() {
+            return Box::new(future::ok(()));
+        }
+
+        // If we are not a leader, do not append to batch.
+        if !inner.computation_group.is_leader() {
+            warn!("Ignoring append to batch as we are not the computation group leader");
             return Box::new(future::ok(()));
         }
 

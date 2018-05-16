@@ -13,15 +13,15 @@ ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.4" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.4" }
 ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.4" }
 ekiden-consensus-base = { path = "../consensus/base", version = "0.1.0-alpha.4" }
-ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.1.0-alpha.4" }
+ekiden-consensus-client = { path = "../consensus/client", version = "0.1.0-alpha.4" }
 ekiden-storage-base = { path = "../storage/base", version = "0.1.0-alpha.4" }
-ekiden-storage-dummy = { path = "../storage/dummy", version = "0.1.0-alpha.4" }
+ekiden-storage-frontend = { path = "../storage/frontend", version = "0.1.0-alpha.4" }
 ekiden-scheduler-base = { path = "../scheduler/base", version = "0.1.0-alpha.4" }
-ekiden-scheduler-dummy = { path = "../scheduler/dummy", version = "0.1.0-alpha.4" }
+ekiden-scheduler-client = { path = "../scheduler/client", version = "0.1.0-alpha.4" }
 ekiden-beacon-base = { path = "../beacon/base", version = "0.1.0-alpha.4" }
 ekiden-beacon-dummy = { path = "../beacon/dummy", version = "0.1.0-alpha.4" }
 ekiden-registry-base = { path = "../registry/base", version = "0.1.0-alpha.4" }
-ekiden-registry-dummy = { path = "../registry/dummy", version = "0.1.0-alpha.4" }
+ekiden-registry-client = { path = "../registry/client", version = "0.1.0-alpha.4" }
 protobuf = "~1.4"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 thread_local = "0.3.5"

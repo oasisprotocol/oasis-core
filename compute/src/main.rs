@@ -42,11 +42,10 @@ mod group;
 extern crate clap;
 extern crate pretty_env_logger;
 
-extern crate ekiden_beacon_dummy;
-extern crate ekiden_consensus_dummy;
-extern crate ekiden_registry_dummy;
-extern crate ekiden_scheduler_dummy;
-extern crate ekiden_storage_dummy;
+extern crate ekiden_consensus_client;
+extern crate ekiden_registry_client;
+extern crate ekiden_scheduler_client;
+extern crate ekiden_storage_frontend;
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -117,17 +116,29 @@ fn main() {
                 .takes_value(true)
                 .default_value("9003"),
         )
+        // TODO: Remove this once we handle backend configuration properly.
         .arg(
-            Arg::with_name("consensus-host")
-                .long("consensus-host")
+            Arg::with_name("dummy-host")
+                .long("dummy-host")
+                .help("Shared dummy node host")
                 .takes_value(true)
                 .default_value("127.0.0.1"),
         )
+        // TODO: Remove this once we handle backend configuration properly.
         .arg(
-            Arg::with_name("consensus-port")
-                .long("consensus-port")
+            Arg::with_name("dummy-port")
+                .long("dummy-port")
+                .help("Shared dummy node port")
                 .takes_value(true)
-                .default_value("9002"),
+                .default_value("42261"),
+        )
+        // TODO: Remove this once we have independent contract registration.
+        .arg(
+            Arg::with_name("compute-replicas")
+                .long("compute-replicas")
+                .help("Number of replicas in the computation group")
+                .takes_value(true)
+                .default_value("1"),
         )
         .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
         .arg(
@@ -223,6 +234,12 @@ fn main() {
     let mut node = ComputeNode::new(ComputeNodeConfiguration {
         grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or_else(|e| e.exit()),
         port: value_t!(matches, "port", u16).unwrap_or(9001),
+        // TODO: Remove this once we handle backend configuration properly.
+        dummy_host: matches.value_of("dummy-host").unwrap().to_string(),
+        // TODO: Remove this once we handle backend configuration properly.
+        dummy_port: value_t!(matches, "dummy-port", u16).unwrap_or_else(|e| e.exit()),
+        // TODO: Remove this once we have independent contract registration.
+        compute_replicas: value_t!(matches, "compute-replicas", u64).unwrap_or_else(|e| e.exit()),
         // Consensus configuration.
         consensus: ConsensusConfiguration {
             signer: signer,
