@@ -9,7 +9,7 @@ use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
-use ekiden_core::epochtime::local::{LocalTimeSourceNotifier,SystemTimeSource};
+use ekiden_core::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
 use ekiden_core::node::Node;
