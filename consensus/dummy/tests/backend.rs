@@ -12,8 +12,7 @@ use std::sync::Arc;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
-use ekiden_common::epochtime::TimeSourceNotifier;
-use ekiden_common::epochtime::local::SystemTimeSource;
+use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_common::futures::{cpupool, future, Future, Stream};
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
@@ -33,7 +32,7 @@ fn test_dummy_backend_two_rounds() {
     const NODE_COUNT: usize = 3;
 
     let time_source = Arc::new(SystemTimeSource {});
-    let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+    let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
     let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
     let entity_registry = Arc::new(DummyEntityRegistryBackend::new());

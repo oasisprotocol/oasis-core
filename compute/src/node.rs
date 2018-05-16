@@ -9,8 +9,7 @@ use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
-use ekiden_core::epochtime::TimeSourceNotifier;
-use ekiden_core::epochtime::local::SystemTimeSource;
+use ekiden_core::epochtime::local::{LocalTimeSourceNotifier,SystemTimeSource};
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
 use ekiden_core::node::Node;
@@ -90,7 +89,7 @@ impl ComputeNode {
         // Create scheduler.
         // TODO: Base on configuration.
         let time_source = Arc::new(SystemTimeSource {});
-        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
         let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
