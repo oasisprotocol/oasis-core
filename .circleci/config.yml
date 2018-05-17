@@ -77,7 +77,7 @@ jobs:
       # Start dummy node.
       - run:
           command: |
-            ./target/debug/ekiden-node-dummy --time-source mock --mock-epoch-interval 60
+            ./target/debug/ekiden-node-dummy --time-source mockrpc
           background: true
       # Start key manager compute node.
       - run:
@@ -92,14 +92,50 @@ jobs:
       # Start token compute nodes.
       - run:
           command: |
+            # Ensure this node starts first (for deterministic elections).
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
-              --compute-replicas 1 \
+              --compute-replicas 3 \
+              --port 10001 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            # Ensure this node starts second (for deterministic elections).
+            sleep 5
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10002 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            # Ensure this node starts third (for deterministic elections).
+            sleep 10
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10003 \
               target/contract/token.so
           background: true
       # Start token client.
-      - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+      - run: |
+          # Sleep so everything gets ready.
+          sleep 20
+
+          # Advance epoch to elect a new committee.
+          ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
+
+          # Sleep some more.
+          sleep 5
+
+          # Run the client. Note that we know which compute node will be elected as leader since the
+          # dummy random beacon is entirely deterministic.
+          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave) --port 10002
 
   deploy:
     docker:

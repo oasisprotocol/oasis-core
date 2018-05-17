@@ -67,6 +67,11 @@ You need to run multiple Ekiden services, so it is recommended to run each of th
 separate container shell, attached to the same container. The following examples use the
 token contract, but the process is the same for any contract.
 
+To start the shared dummy node:
+```
+# ./target/debug/ekiden-node-dummy --time-source mockrpc
+```
+
 To start the compute node for the key manager contract:
 ```
 # cargo run -p ekiden-compute -- \
@@ -81,6 +86,11 @@ To start the compute node for the token contract:
 # cargo run -p ekiden-compute -- \
     --no-persist-identity \
     target/contract/token.so
+```
+
+After starting the nodes, to manually advance the epoch in the shared dummy node:
+```
+# ./target/debug/ekiden-node-dummy-controller set-epoch 1
 ```
 
 The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.
