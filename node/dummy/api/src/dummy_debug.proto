@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package dummy_debug;
+
+service DummyDebug {
+    // Manually set the epoch and notify subscribers.
+    rpc SetEpoch (SetEpochRequest) returns (SetEpochResponse) {}
+}
+
+message SetEpochRequest {
+    // The new epoch.
+    uint64 epoch = 1;
+}
+
+message SetEpochResponse {}

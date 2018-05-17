@@ -115,22 +115,26 @@ impl LocalTimeSourceNotifier {
     /// is responsible for driving notifications, perhaps by calling this
     /// routine from a timer or something.
     pub fn notify_subscribers(&self) -> Result<()> {
-        const NOTIFY_SLACK: u64 = 5; // 5 seconds of slack.
-
         // Update the state, release the lock, then notify.
         let now: Result<EpochTime> = {
             let mut inner = self.inner.lock()?;
 
-            let (now, till) = self.time_source.get_epoch()?;
+            let (now, _) = self.time_source.get_epoch()?;
 
-            // Ensure that the epoch is increasing.
-            if inner.last_notify != EKIDEN_EPOCH_INVALID && inner.last_notify >= now {
-                return Err(Error::new("Epoch did not advance between notify calls"));
-            }
+            // Iff at least one notification has been sent, do some sanity
+            // checking to ensure a linear passage of time.  The first
+            // notification is exempt so this can play nice with the "send
+            // current epoch on subscribe" semantics.
+            if inner.last_notify != EKIDEN_EPOCH_INVALID {
+                // Ensure that the epoch is increasing.
+                if inner.last_notify >= now {
+                    return Err(Error::new("Epoch did not advance between notify calls"));
+                }
 
-            // Ensure that it is approximately the start of the epoch.
-            if till < EPOCH_INTERVAL - NOTIFY_SLACK {
-                return Err(Error::new("Not called at approximate start of epoch"));
+                // This used to assert that the notify call happened around
+                // the epoch transition based on the "till" value, but
+                // the "correct" value here is dependent on the epoch
+                // duration, which is not guaranteed to be EPOCH_INTERVAL.
             }
 
             inner.last_notify = now;

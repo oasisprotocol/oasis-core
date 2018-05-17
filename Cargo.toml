@@ -78,4 +78,8 @@ members = [
     "scheduler/base",
     "scheduler/client",
     "scheduler/dummy",
+
+    # Dummy shared backend node.
+    "node/dummy",
+    "node/dummy/api",
 ]

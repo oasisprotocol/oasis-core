@@ -1,4 +1,4 @@
-FROM docker.io/ekiden/development:0.1.0-alpha.3
+FROM docker.io/ekiden/development:0.1.0-alpha.4
 
 # This is the release of tendermint to pull in.
 ENV TM_VERSION 0.13.0
@@ -22,7 +22,10 @@ RUN mkdir -p $DATA_ROOT && \
 # jq and curl used for extracting `pub_key` from private validator while
 # deploying tendermint with Kubernetes. It is nice to have bash so the users
 # could execute bash commands.
-RUN apt-get install -y jq
+# Install dependencies for kcov <https://github.com/SimonKagstrom/kcov/blob/master/INSTALL.md>.
+RUN apt-get install -y \
+    jq \
+    binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
 
 RUN wget https://s3-us-west-2.amazonaws.com/tendermint/binaries/tendermint/v${TM_VERSION}/tendermint_${TM_VERSION}_linux_amd64.zip && \
     echo "${TM_SHA256SUM}  tendermint_${TM_VERSION}_linux_amd64.zip" | sha256sum -c && \
@@ -45,3 +48,20 @@ RUN VERSION="v1.10.0" && \
     curl -LO https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/amd64/kubectl && \
     chmod +x kubectl && \
     mv kubectl /usr/local/bin/kubectl
+
+# Install kcov for coverage.
+RUN VERSION="35" && \
+    wget -O /tmp/kcov-v$VERSION.tar.gz https://github.com/SimonKagstrom/kcov/archive/v$VERSION.tar.gz && \
+    tar -xf /tmp/kcov-v$VERSION.tar.gz -C /tmp && \
+    mkdir /tmp/kcov-$VERSION/build && \
+    cd /tmp/kcov-$VERSION/build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    make && \
+    make install && \
+    cd ../.. && \
+    rm -r kcov-v$VERSION.tar.gz kcov-$VERSION
+
+# Install codecov for coverage.
+RUN wget -O codecov https://codecov.io/bash && \
+    chmod +x codecov && \
+    mv codecov /usr/local/bin
