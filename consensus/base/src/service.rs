@@ -1,4 +1,5 @@
 use std::convert::{Into, TryFrom};
+use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
@@ -13,18 +14,13 @@ use block::Block;
 use commitment::{Commitment, Reveal};
 use header::Header;
 
-pub struct ConsensusService<T>
-where
-    T: ConsensusBackend,
-{
-    inner: T,
+#[derive(Clone)]
+pub struct ConsensusService {
+    inner: Arc<ConsensusBackend>,
 }
 
-impl<T> ConsensusService<T>
-where
-    T: ConsensusBackend,
-{
-    pub fn new(backend: T) -> Self {
+impl ConsensusService {
+    pub fn new(backend: Arc<ConsensusBackend>) -> Self {
         Self { inner: backend }
     }
 }
@@ -38,10 +34,7 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::Consensus for ConsensusService<T>
-where
-    T: ConsensusBackend,
-{
+impl api::Consensus for ConsensusService {
     fn get_latest_block(
         &self,
         ctx: RpcContext,

@@ -1,4 +1,5 @@
 use std::convert::{Into, TryFrom};
+use std::sync::Arc;
 
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_registry_api as api;
@@ -12,18 +13,13 @@ use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
 use ekiden_common::signature::{Signature, Signed};
 
-pub struct ContractRegistryService<T>
-where
-    T: ContractRegistryBackend,
-{
-    inner: T,
+#[derive(Clone)]
+pub struct ContractRegistryService {
+    inner: Arc<ContractRegistryBackend>,
 }
 
-impl<T> ContractRegistryService<T>
-where
-    T: ContractRegistryBackend,
-{
-    pub fn new(backend: T) -> Self {
+impl ContractRegistryService {
+    pub fn new(backend: Arc<ContractRegistryBackend>) -> Self {
         Self { inner: backend }
     }
 }
@@ -37,10 +33,7 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::ContractRegistry for ContractRegistryService<T>
-where
-    T: ContractRegistryBackend,
-{
+impl api::ContractRegistry for ContractRegistryService {
     fn register_contract(
         &self,
         ctx: RpcContext,
