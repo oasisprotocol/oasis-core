@@ -11,6 +11,7 @@ default = []
 profiling = []
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-common-api = { path = "./api", version = "0.1.0-alpha.4" }
 protobuf = "~1.4"
 byteorder = "1.2.1"

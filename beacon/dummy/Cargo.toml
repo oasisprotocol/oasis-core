@@ -8,6 +8,7 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 byteorder = "1.2.1"
+cargo-cult = "0.1.0"
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-beacon-base = { path = "../base", version = "0.1.0-alpha.4" }
 

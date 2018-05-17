@@ -7,6 +7,7 @@ keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.4" }
 ekiden-rpc-untrusted = { path = "../../rpc/untrusted", version = "0.1.0-alpha.4" }
 ekiden-db-untrusted = { path = "../../db/untrusted", version = "0.1.0-alpha.4" }

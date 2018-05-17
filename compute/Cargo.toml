@@ -8,6 +8,7 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-core = { path = "../core/common", version = "0.1.0-alpha.4" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.4" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.4" }

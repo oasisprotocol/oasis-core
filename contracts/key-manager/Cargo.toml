@@ -11,6 +11,7 @@ build = "build.rs"
 default = []
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-core = { path = "../../core/common", version = "0.1.0-alpha.4" }
 ekiden-trusted = { path = "../../core/trusted", version = "0.1.0-alpha.4" }
 ekiden-key-manager-api = { path = "./api", version = "0.1.0-alpha.4" }
