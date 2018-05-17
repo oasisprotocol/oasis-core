@@ -20,6 +20,7 @@ use ekiden_common::epochtime::{MockTimeSource, SystemTimeSource};
 use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration, TimeSourceImpl};
 
 const TIME_SOURCE_MOCK: &'static str = "mock";
+const TIME_SOURCE_MOCK_RPC: &'static str = "mockrpc";
 const TIME_SOURCE_SYSTEM: &'static str = "system";
 
 fn main() {
@@ -48,7 +49,7 @@ fn main() {
                 .long("time-source")
                 .help("Epoch Time implementation.")
                 .default_value(TIME_SOURCE_SYSTEM)
-                .possible_values(&[TIME_SOURCE_MOCK, TIME_SOURCE_SYSTEM])
+                .possible_values(&[TIME_SOURCE_MOCK, TIME_SOURCE_MOCK_RPC, TIME_SOURCE_SYSTEM])
                 .takes_value(true)
                 .display_order(3),
         )
@@ -57,7 +58,10 @@ fn main() {
                 .long("mock-epoch-interval")
                 .help("Mock time epoch interval in seconds.")
                 .default_value("600")
-                .required_if("time-source", TIME_SOURCE_MOCK)
+                .required_ifs(&[
+                    ("time-source", TIME_SOURCE_MOCK),
+                    ("time-source", TIME_SOURCE_MOCK_RPC),
+                ])
                 .takes_value(true)
                 .display_order(4),
         )
@@ -71,12 +75,15 @@ fn main() {
 
     // Setup the backends and gRPC service.
     trace!("Initializing backends/gRPC service.");
+    let mock_epoch_interval = value_t!(matches, "mock-epoch-interval", u64).unwrap_or(600);
     let time_source_impl = match matches.value_of("time-source").unwrap() {
         TIME_SOURCE_MOCK => {
             let ts = Arc::new(MockTimeSource::new());
-            let epoch_interval = value_t!(matches, "mock-epoch-interval", u64).unwrap_or(600);
-            assert!(epoch_interval > 0);
-            TimeSourceImpl::Mock((ts, epoch_interval))
+            TimeSourceImpl::Mock((ts, mock_epoch_interval))
+        }
+        TIME_SOURCE_MOCK_RPC => {
+            let ts = Arc::new(MockTimeSource::new());
+            TimeSourceImpl::MockRPC((ts, mock_epoch_interval))
         }
         TIME_SOURCE_SYSTEM => TimeSourceImpl::System(Arc::new(SystemTimeSource {})),
         _ => panic!("Invalid time source specified."),

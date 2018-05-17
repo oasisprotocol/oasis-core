@@ -13,6 +13,7 @@ use ekiden_core::bytes::B256;
 use ekiden_core::epochtime::{MockTimeSource, SystemTimeSource, TimeSource, TimeSourceNotifier,
                              EPOCH_INTERVAL};
 use ekiden_core::error::{Error, Result};
+use ekiden_node_dummy_api::create_dummy_debug;
 use ekiden_registry_api::{create_contract_registry, create_entity_registry};
 use ekiden_registry_base::{ContractRegistryBackend, ContractRegistryService,
                            EntityRegistryBackend, EntityRegistryService};
@@ -27,10 +28,15 @@ use ekiden_storage_dummy::DummyStorageBackend;
 use futures_timer::{Interval, TimerHandle};
 use grpcio::{Environment, Server, ServerBuilder};
 
+use super::service::DebugService;
+
 /// EpochTime TimeSource backend.
 pub enum TimeSourceImpl {
     /// Mock (configurable interval) epochs.
     Mock((Arc<MockTimeSource>, u64)),
+
+    /// Mock (service pumped) epochs.
+    MockRPC((Arc<MockTimeSource>, u64)),
 
     /// System (RTC based) epochs.
     System(Arc<SystemTimeSource>),
@@ -61,7 +67,7 @@ pub struct DummyBackend {
     /// Consensus.
     pub consensus: Arc<ConsensusBackend>,
 
-    time_source: TimeSourceImpl,
+    time_source: Arc<TimeSourceImpl>,
     grpc_environment: Arc<Environment>,
     grpc_server: Server,
 }
@@ -74,8 +80,10 @@ impl DummyBackend {
     ) -> Result<Self> {
         let time_source: Arc<TimeSource> = match time_source_impl {
             TimeSourceImpl::Mock((ref ts, _)) => ts.clone(),
+            TimeSourceImpl::MockRPC((ref ts, _)) => ts.clone(),
             TimeSourceImpl::System(ref ts) => ts.clone(),
         };
+        let time_source_impl = Arc::new(time_source_impl);
 
         let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
 
@@ -130,6 +138,10 @@ impl DummyBackend {
         let scheduler_service = create_scheduler(SchedulerService::new(scheduler.clone()));
         let storage_service = create_storage(StorageService::new(storage.clone()));
         let consensus_service = create_consensus(ConsensusService::new(consensus.clone()));
+        let debug_service = create_dummy_debug(DebugService::new(
+            time_source_impl.clone(),
+            time_notifier.clone(),
+        ));
 
         let server = server_builder
             .bind("0.0.0.0", config.port)
@@ -138,6 +150,7 @@ impl DummyBackend {
             .register_service(scheduler_service)
             .register_service(storage_service)
             .register_service(consensus_service)
+            .register_service(debug_service)
             .build()?;
 
         Ok(Self {
@@ -163,7 +176,7 @@ impl DummyBackend {
         self.consensus.start(&mut executor);
 
         // Start the timer that drives the clock.
-        match self.time_source {
+        match *self.time_source {
             TimeSourceImpl::Mock((ref ts, epoch_interval)) => {
                 // Start the mock epoch at 0.
                 ts.set_mock_time(0, epoch_interval).unwrap();
@@ -188,6 +201,15 @@ impl DummyBackend {
                             .then(|_| future::ok(())),
                     )
                 });
+            }
+            TimeSourceImpl::MockRPC((ref ts, epoch_interval)) => {
+                // Start the mock epoch at 0.
+                ts.set_mock_time(0, epoch_interval).unwrap();
+
+                let (now, till) = ts.get_epoch().unwrap();
+                trace!("MockTimeRPC: Epoch: {} Till: {} (-> Wait)", now, till);
+
+                // No timer, the entire operation is RPC dependent.
             }
             TimeSourceImpl::System(ref ts) => {
                 let (now, till) = ts.get_epoch().unwrap();

@@ -81,4 +81,5 @@ members = [
 
     # Dummy shared backend node.
     "node/dummy",
+    "node/dummy/api",
 ]

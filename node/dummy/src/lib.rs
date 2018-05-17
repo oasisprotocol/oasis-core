@@ -23,4 +23,7 @@ extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
 
+extern crate ekiden_node_dummy_api;
+
 pub mod backend;
+pub mod service;
