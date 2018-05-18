@@ -89,7 +89,9 @@ impl DummySchedulerBackendInner {
             "Node list already present for epoch: {}",
             epoch
         );
-        let nodes = self.entity_registry.get_nodes().wait().unwrap();
+        let mut nodes = self.entity_registry.get_nodes().wait().unwrap();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+
         self.entity_cache.insert(epoch, nodes);
     }
 
