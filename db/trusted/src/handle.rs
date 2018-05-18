@@ -1,5 +1,5 @@
 //! Low-level key-value database interface.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 #[cfg(target_env = "sgx")]
 use std::sync::{Arc, SgxMutex as Mutex, SgxMutexGuard as MutexGuard};
 #[cfg(not(target_env = "sgx"))]
@@ -33,7 +33,7 @@ pub struct DatabaseHandle {
     #[cfg(target_env = "sgx")]
     backend: AeadStorageMapper,
     /// Current database state.
-    state: HashMap<Vec<u8>, Vec<u8>>,
+    state: BTreeMap<Vec<u8>, Vec<u8>>,
     /// Dirtyness flag.
     dirty: bool,
 }
@@ -46,16 +46,19 @@ lazy_static! {
 impl DatabaseHandle {
     /// Construct new database interface.
     fn new() -> Self {
+        #[cfg(target_env = "sgx")]
+        let mut key_manager = KeyManager::get().unwrap();
+
         DatabaseHandle {
             #[cfg(target_env = "sgx")]
             backend: AeadStorageMapper::new(
                 Arc::new(UntrustedStorageBackend::new()),
-                KeyManager::get()
-                    .unwrap()
-                    .get_or_create_key("state", AeadStorageMapper::key_len())
+                key_manager
+                    .get_or_create_key("state.key", AeadStorageMapper::key_len())
                     .unwrap(),
+                key_manager.get_or_create_key("state.nonce", 64).unwrap(),
             ),
-            state: HashMap::new(),
+            state: BTreeMap::new(),
             dirty: false,
         }
     }

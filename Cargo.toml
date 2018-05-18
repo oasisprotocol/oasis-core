@@ -71,6 +71,7 @@ members = [
     # Registry.
     "registry/api",
     "registry/base",
+    "registry/client",
     "registry/dummy",
 
     # Scheduler.

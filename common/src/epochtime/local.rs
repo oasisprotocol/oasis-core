@@ -163,6 +163,7 @@ impl TimeSourceNotifier for LocalTimeSourceNotifier {
         // send the current epoch to the subscriber.
         let now = self.time_source.get_epoch().unwrap().1;
         if now == inner.last_notify {
+            trace!("watch_epochs(): Catch up: Epoch: {}", now);
             send.unbounded_send(now).unwrap();
         }
 

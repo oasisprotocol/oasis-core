@@ -89,11 +89,20 @@ impl DummySchedulerBackendInner {
             "Node list already present for epoch: {}",
             epoch
         );
-        let nodes = self.entity_registry.get_nodes().wait().unwrap();
+        let mut nodes = self.entity_registry.get_nodes().wait().unwrap();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+
+        trace!(
+            "on_epoch_transition(): Epoch: {} ({} nodes)",
+            epoch,
+            nodes.len()
+        );
         self.entity_cache.insert(epoch, nodes);
     }
 
     fn on_contract(&mut self, contract: Contract) {
+        trace!("on_contract(): {:?}", contract.id);
+
         // Add the contract to the cache.
         let contract_id = contract.id;
         match self.contract_cache.get(&contract_id) {
@@ -154,6 +163,13 @@ impl DummySchedulerBackendInner {
             make_committee_impl(contract, &nodes, CommitteeType::Storage, &entropy, epoch)?;
         committee_cache.insert(contract_id, vec![compute.clone(), storage.clone()]);
 
+        trace!(
+            "do_election(): Contract: {} Compute: {:?} Storage: {:?}",
+            contract_id,
+            compute,
+            storage
+        );
+
         // Notify.
         self.subscribers.notify(&compute);
         self.subscribers.notify(&storage);
@@ -166,6 +182,11 @@ impl DummySchedulerBackendInner {
         if !self.can_elect() {
             return;
         }
+
+        trace!(
+            "maybe_mass_elect(): Mass electing for Epoch: {}",
+            self.current_epoch
+        );
 
         // Mass elect the new committees.
         let contracts: Vec<_> = self.contract_cache
@@ -363,6 +384,11 @@ impl Scheduler for DummySchedulerBackend {
                     return recv;
                 }
             };
+            trace!(
+                "watch_committees(): Catch up: Epoch: {} ({} committees)",
+                inner.current_epoch,
+                committees.len()
+            );
             for contract_committees in committees.values() {
                 for committee in contract_committees {
                     send.unbounded_send(committee.clone()).unwrap();

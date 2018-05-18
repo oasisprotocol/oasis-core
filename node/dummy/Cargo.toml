@@ -29,3 +29,12 @@ grpcio = "0.2.2"
 log = "0.4"
 pretty_env_logger = "0.2"
 futures-timer = "0.1.1"
+ansi_term = "0.11"
+
+[[bin]]
+name = "ekiden-node-dummy"
+path = "src/main.rs"
+
+[[bin]]
+name = "ekiden-node-dummy-controller"
+path = "src/bin/controller.rs"

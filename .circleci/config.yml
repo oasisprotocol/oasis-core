@@ -74,6 +74,11 @@ jobs:
 
       # Contract end-to-end tests.
 
+      # Start dummy node.
+      - run:
+          command: |
+            ./target/debug/ekiden-node-dummy --time-source mockrpc
+          background: true
       # Start key manager compute node.
       - run:
           command: |
@@ -84,16 +89,49 @@ jobs:
               --max-batch-size 1 \
               target/contract/ekiden-key-manager.so
           background: true
-      # Start token compute node.
+      # Start token compute nodes.
       - run:
           command: |
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10001 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            sleep 1
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10002 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            sleep 2
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10003 \
               target/contract/token.so
           background: true
       # Start token client.
-      - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+      - run: |
+          # Sleep so everything gets ready.
+          sleep 10
+
+          # Advance epoch to elect a new committee.
+          ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
+
+          # Sleep some more.
+          sleep 5
+
+          # Run the client.
+          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
   deploy:
     docker:
