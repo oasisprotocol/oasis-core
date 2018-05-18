@@ -13,16 +13,22 @@ use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_stake_base::*;
 
+use ekiden_stake_base::{AmountType, AMOUNT_MAX};
+
+static NO_ACCOUNT: String = "No account".to_string();
+static WOULD_OVERFLOW: String = "Would overflow".to_string();
+static INSUFFICIENT_FUNDS: String = "Insufficient funds".to_string();
+
 struct DummyStakeEscrowInfo {
     owner: Entity,
-    amount: u64,  // see max_value() below
-    escrowed: u64,
+    amount: AmountType,  // see max_value() below
+    escrowed: AmountType,
 }
 
 struct EscrowAccount<'a> {
     owner: &'a DummyStakeEscrowInfo,
     target: &'a DummyStakeEscrowInfo,
-    amount: u64,
+    amount: AmountType,
 }
 
 // We use 32-digits so it can be converted to a B256 easily (do we
@@ -89,10 +95,6 @@ pub struct DummyStakeEscrowBackend<'a> {
     // might be new escrow accounts created?
 }
 
-enum StakeEscrowError {
-    WouldOverflow,
-}
-
 impl<'a> DummyStakeEscrowBackendInner<'a> {
     pub fn new() -> Self {
         Self {
@@ -102,20 +104,87 @@ impl<'a> DummyStakeEscrowBackendInner<'a> {
         }
     }
 
-    pub fn desposit_stake(&mut self, user: Entity, additional_stake: u64)
-                          -> Result<(), StakeEscrowError> {
-        let entry = self.stakes.entry(user.id).or_insert(
+    pub fn desposit_stake(&mut self,
+                          user: Entity,
+                          additional_stake: AmountType)
+                          -> Result<(), String> {
+        let entry = self.stakes.entry(user.id.clone()).or_insert_with(||
             DummyStakeEscrowInfo {
                 owner: user.clone(),
                 amount: 0,
                 escrowed: 0,
             });
-        // typeof entry.amount would be nice.
-        // if decltype(entry.amount)::max_value() - entry.amount < additional_stake {
-        if <u64>::max_value() - entry.amount < additional_stake {
-            return Err(StakeEscrowError::WouldOverflow);
+        if AMOUNT_MAX - entry.amount < additional_stake {
+            return Err(WOULD_OVERFLOW);
         }
         entry.amount += additional_stake;
         Ok(())
     }
+
+    pub fn get_stake_status(&self,
+                            msg_sender: Entity)
+        -> Result<(AmountType, AmountType), String> {
+        match self.stakes.get(&msg_sender.id) {
+            Some(e) =>
+                Ok((e.amount, e.escrowed)),
+            None =>
+                Err(NO_ACCOUNT)
+        }
+    }
+
+    pub fn withdraw_stake(&mut self,
+                          msg_sender: Entity,
+                          amount: AmountType) -> Result<AmountType, String> {
+        match self.stakes.get(&msg_sender.id) {
+            None => Err(NO_ACCOUNT),
+            Some(mut e) => {
+                if e.amount - e.escrowed >= amount {
+                    e.amount -= amount;
+                    Ok(amount)
+                } else {
+                    Err(INSUFFICIENT_FUNDS)
+                }
+            }
+        }
+    }
 }
+
+impl<'a> StakeEscrowBackend for DummyStakeEscrowBackend<'a> {
+    fn deposit_stake(&self, msg_sender: Entity, amount: AmountType)
+                     -> BoxFuture<()> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            inner.deposit_stake(msg_sender, amount)
+        }))
+    }
+
+    fn get_stake_status(&self, msg_sender: Entity)
+                        -> BoxFuture<(AmountType, AmountType)> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            (0,0)  // FIXME
+        }))
+    }
+    
+    fn withdraw_stake(&self, msg_sender: Entity, amount_requested: AmountType)
+        -> BoxFuture<AmountType> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            (0)  // FIXME
+        }))
+    }
+
+    fn allocate_escrow(&self, msg_sender: Entity,
+                       entity: Entity, escrow_amount: AmountType)
+                       -> BoxFuture<B256> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let id = inner.next_account_id.to_b256();
+            inner.next_account_id.incr_mut();
+            id
+        }))
+    }
+}
+
+static TEST: StakeEscrowService<DummyStakeEscrowBackendInner> =
+    StakeEscrowService::new(DummyStakeEscrowBackendInner::new());

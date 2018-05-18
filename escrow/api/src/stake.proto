@@ -42,6 +42,9 @@ service Stake {
 // authenticity and freshness is guaranteed, with message
 // confidentiality being optional.
 
+// uint64 types used for stake quantities in this API.  This must
+// match the definition of AmountType in the base backend trait
+// definition.
 
 // Per-caller state:
 //  uint64 amount:  total stake amount
