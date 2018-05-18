@@ -7,7 +7,6 @@ use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 
 use super::stake_backend::StakeEscrowBackend;
 use ekiden_common::bytes::B256;
-use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
 
 pub struct StakeEscrowService<T>
@@ -46,8 +45,9 @@ where
         sink: UnarySink<api::DepositStakeResponse>,
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
-            let s = Entity::try_from(req.get_msg_sender().clone())?;
+            let s = B256::from_slice(req.get_msg_sender());
             let a = req.get_amount();
+            // TODO: Ensure we have the full size identifiers
             Ok(self.inner.deposit_stake(s, a))
         };
         let f = match f() {
@@ -73,7 +73,7 @@ where
         sink: UnarySink<api::GetStakeStatusResponse>,
     ) {
         let f = move || -> Result<BoxFuture<(u64, u64)>, Error> {
-            let s = Entity::try_from(req.get_msg_sender().clone())?;
+            let s = B256::from_slice(req.get_msg_sender());
             Ok(self.inner.get_stake_status(s))
         };
         let f = match f() {
@@ -104,7 +104,7 @@ where
         sink: UnarySink<api::WithdrawStakeResponse>,
     ) {
         let f = move || -> Result<BoxFuture<(u64)>, Error> {
-            let s = Entity::try_from(req.get_msg_sender().clone())?;
+            let s = B256::from_slice(req.get_msg_sender());
             let a = req.get_amount_requested();
             Ok(self.inner.withdraw_stake(s, a))
         };
@@ -135,16 +135,16 @@ where
         sink: UnarySink<api::AllocateEscrowResponse>,
     ) {
         let f = move || -> Result<BoxFuture<B256>, Error> {
-            let s = Entity::try_from(req.get_msg_sender().clone())?;
-            let e = Entity::try_from(req.get_entity().clone())?;
+            let s = B256::from_slice(req.get_msg_sender());
+            let t = B256::from_slice(req.get_target());
             let a = req.get_escrow_amount();
-            Ok(self.inner.allocate_escrow(s, e, a))
+            Ok(self.inner.allocate_escrow(s, t, a))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(id) => {
                     let mut r = api::AllocateEscrowResponse::new();
-                    r.set_id(id.to_vec());
+                    r.set_escrow_id(id.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -167,7 +167,7 @@ where
         sink: UnarySink<api::ListActiveEscrowsResponse>,
     ) {
         let f = move || -> Result<BoxFuture<(Vec<api::EscrowData>)>, Error> {
-            let s = Entity::try_from(req.get_msg_sender().clone())?;
+            let s = B256::from_slice(req.get_msg_sender());
             Ok(self.inner.list_active_escrows(s))
         };
         let f = match f() {
@@ -197,7 +197,7 @@ where
         sink: UnarySink<api::FetchEscrowByIdResponse>,
     ) {
         let f = move || -> Result<BoxFuture<api::EscrowData>, Error> {
-            let i = B256::from_slice(req.get_id());
+            let i = B256::from_slice(req.get_escrow_id());
             Ok(self.inner.fetch_escrow_by_id(i))
         };
         let f = match f() {
@@ -227,16 +227,16 @@ where
         sink: UnarySink<api::TakeAndReleaseEscrowResponse>,
     ) {
         let f = move || -> Result<BoxFuture<u64>, Error> {
-            let s = Entity::try_from(req.get_msg_sender().clone())?;
-            let i = B256::from_slice(req.get_id());
+            let s = B256::from_slice(req.get_msg_sender());
+            let i = B256::from_slice(req.get_escrow_id());
             let a = req.get_amount_requested();
             Ok(self.inner.take_and_release_escrow(s, i, a))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok(amount_returned) => {
+                Ok(amount_taken) => {
                     let mut r = api::TakeAndReleaseEscrowResponse::new();
-                    r.set_amount_returned(amount_returned);
+                    r.set_amount_taken(amount_taken);
                     Ok(r)
                 }
                 Err(e) => Err(e),
