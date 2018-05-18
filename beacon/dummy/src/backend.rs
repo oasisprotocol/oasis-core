@@ -15,7 +15,7 @@ const DUMMY_BEACON_CONTEXT: &'static [u8] = b"EkB-Dumm";
 /// Commands for communicating synchronization requests to the beacon
 enum Command {
     /// Notify a sender of an initial epoch if needed.
-    Catchup((mpsc::UnboundedSender<(EpochTime, B256)>,EpochTime))
+    Catchup((mpsc::UnboundedSender<(EpochTime, B256)>, EpochTime)),
 }
 
 /// Dummy RandomBeacon implementation.
@@ -91,24 +91,22 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
                 .for_each_log_errors(
                     module_path!(),
                     "Unexpected error catching up beacon subscriber",
-                    move |command| match command{
+                    move |command| match command {
                         Command::Catchup((sender, pre_notify_time)) => {
                             let inner = inner.clone();
-                            notifier
-                                .get_epoch()
-                                .and_then(move |epoch| {
-                                    let notification = inner.last_notify.lock().unwrap();
-                                    if epoch == pre_notify_time {
-                                        trace!(
-                                            "command from watch_beacons(): Catch up: Epoch: {} Beacon: {:?}",
-                                            epoch,
-                                            notification.1
-                                        );
-                                        sender.unbounded_send((epoch, notification.1)).unwrap();
-                                    }
-                                    future::ok(())
-                                })
-                        },
+                            notifier.get_epoch().and_then(move |epoch| {
+                                let notification = inner.last_notify.lock().unwrap();
+                                if epoch == pre_notify_time {
+                                    trace!(
+                                        "Command::Catchup(): Catch up: Epoch: {} Beacon: {:?}",
+                                        epoch,
+                                        notification.1
+                                    );
+                                    sender.unbounded_send((epoch, notification.1)).unwrap();
+                                }
+                                future::ok(())
+                            })
+                        }
                     },
                 )
         });
@@ -125,7 +123,10 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
         let inner = self.inner.clone();
         let notify = inner.last_notify.lock().unwrap();
         let pre_notify_time = notify.0;
-        self.inner.command_sender.unbounded_send(Command::Catchup((send, pre_notify_time))).unwrap();
+        self.inner
+            .command_sender
+            .unbounded_send(Command::Catchup((send, pre_notify_time)))
+            .unwrap();
 
         recv
     }
@@ -138,7 +139,7 @@ struct InsecureDummyRandomBeaconInner {
     /// Command receiver (until initialized).
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
     time_notifier: Arc<TimeSourceNotifier>,
-    last_notify: Mutex<(EpochTime,B256)>,
+    last_notify: Mutex<(EpochTime, B256)>,
 }
 
 impl InsecureDummyRandomBeaconInner {

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
-use ekiden_common::epochtime::TimeSourceNotifier;
+use ekiden_common::epochtime::local::LocalTimeSourceNotifier;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_node_dummy_api::{DummyDebug, SetEpochRequest, SetEpochResponse};
@@ -13,7 +13,7 @@ use super::backend::TimeSourceImpl;
 
 struct DebugServiceInner {
     time_source: Arc<TimeSourceImpl>,
-    time_notifier: Arc<TimeSourceNotifier>,
+    time_notifier: Arc<LocalTimeSourceNotifier>,
 }
 
 #[derive(Clone)]
@@ -23,7 +23,10 @@ pub struct DebugService {
 
 impl DebugService {
     /// Create new debug server instance.
-    pub fn new(time_source: Arc<TimeSourceImpl>, time_notifier: Arc<TimeSourceNotifier>) -> Self {
+    pub fn new(
+        time_source: Arc<TimeSourceImpl>,
+        time_notifier: Arc<LocalTimeSourceNotifier>,
+    ) -> Self {
         DebugService {
             inner: Arc::new(DebugServiceInner {
                 time_source,

@@ -16,7 +16,7 @@ use std::thread;
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_common::epochtime::{MockTimeSource, SystemTimeSource};
+use ekiden_common::epochtime::local::{MockTimeSource, SystemTimeSource};
 use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration, TimeSourceImpl};
 
 const TIME_SOURCE_MOCK: &'static str = "mock";

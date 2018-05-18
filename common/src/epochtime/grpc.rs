@@ -14,16 +14,17 @@ use node::Node;
 
 use ekiden_common_api as api;
 
+#[derive(Clone)]
 pub struct EpochTimeService {
     inner: Arc<TimeSource>,
-    notifier: LocalTimeSourceNotifier,
+    notifier: Arc<LocalTimeSourceNotifier>,
 }
 
 impl EpochTimeService {
     pub fn new(backend: Arc<TimeSource>) -> Self {
         Self {
             inner: backend.clone(),
-            notifier: LocalTimeSourceNotifier::new(backend.clone()),
+            notifier: Arc::new(LocalTimeSourceNotifier::new(backend.clone())),
         }
     }
 }
