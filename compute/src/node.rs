@@ -3,10 +3,23 @@ use std::sync::Arc;
 
 use grpcio;
 
+use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_compute_api::create_compute;
 use ekiden_consensus_base::ConsensusBackend;
+use ekiden_consensus_dummy::DummyConsensusBackend;
+use ekiden_core::contract::Contract;
+use ekiden_core::entity::Entity;
+use ekiden_core::epochtime::{SystemTimeSource, TimeSourceNotifier};
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Executor, Future};
+use ekiden_core::node::Node;
+use ekiden_core::signature::Signed;
+use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
+                           REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
+                           REGISTER_NODE_SIGNATURE_CONTEXT};
+use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
+use ekiden_scheduler_dummy::DummySchedulerBackend;
+use ekiden_storage_dummy::DummyStorageBackend;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::ias::{IASConfiguration, IAS};
@@ -32,6 +45,10 @@ impl Executor for GrpcExecutor {
     }
 }
 
+/// Storage configuration.
+// TODO: Add backend configuration.
+pub struct StorageConfiguration;
+
 /// Compute node configuration.
 pub struct ComputeNodeConfiguration {
     /// Number of gRPC threads.
@@ -40,6 +57,8 @@ pub struct ComputeNodeConfiguration {
     pub port: u16,
     /// Consensus configuration.
     pub consensus: ConsensusConfiguration,
+    /// Storage configuration.
+    pub storage: StorageConfiguration,
     /// IAS configuration.
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
@@ -49,7 +68,7 @@ pub struct ComputeNodeConfiguration {
 /// Compute node.
 pub struct ComputeNode {
     /// Consensus backend.
-    consensus_backend: Arc<ConsensusBackend + Send + Sync>,
+    consensus_backend: Arc<ConsensusBackend>,
     /// Consensus frontend.
     consensus_frontend: Arc<ConsensusFrontend>,
     /// gRPC server.
@@ -67,12 +86,101 @@ impl ComputeNode {
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias).unwrap());
 
+        // Create scheduler.
+        // TODO: Base on configuration.
+        let time_source = Arc::new(SystemTimeSource {});
+        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+
+        let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
+        let scheduler = Arc::new(DummySchedulerBackend::new(
+            beacon,
+            contract_registry.clone(),
+            entity_registry.clone(),
+            time_notifier,
+        ));
+
+        // Create contract.
+        // TODO: Get this from somewhere.
+        let contract = {
+            let mut contract = Contract::default();
+            contract.replica_group_size = 1;
+            contract.storage_group_size = 1;
+
+            contract
+        };
+        let signed_contract = Signed::sign(
+            &config.consensus.signer,
+            &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
+            contract.clone(),
+        );
+        contract_registry
+            .register_contract(signed_contract)
+            .wait()
+            .unwrap();
+
+        let contract = Arc::new(contract);
+
+        // Register entity with the registry.
+        // TODO: This should probably be done independently?
+        // TODO: We currently use the node key pair as the entity key pair.
+        let entity_pk = config.consensus.signer.get_public_key();
+        let signed_entity = Signed::sign(
+            &config.consensus.signer,
+            &REGISTER_ENTITY_SIGNATURE_CONTEXT,
+            Entity { id: entity_pk },
+        );
+        entity_registry
+            .register_entity(signed_entity)
+            .wait()
+            .unwrap();
+
+        // Register node with the registry.
+        // TODO: Handle this properly, do not start any other services before registration is done.
+        let node = Node {
+            id: config.consensus.signer.get_public_key(),
+            entity_id: entity_pk,
+            expiration: 0xffffffffffffffff,
+            addresses: vec![],
+            stake: vec![],
+        };
+
+        let signed_node = Signed::sign(
+            &config.consensus.signer,
+            &REGISTER_NODE_SIGNATURE_CONTEXT,
+            node,
+        );
+        info!("Registering compute node with the registry");
+        entity_registry.register_node(signed_node).wait().unwrap();
+        info!("Compute node registration done");
+
+        // Create storage backend.
+        // TODO: Base on configuration.
+        let storage_backend = Arc::new(DummyStorageBackend::new());
+
+        // Create consensus backend.
+        // TODO: Base on configuration.
+        let consensus_backend = Arc::new(DummyConsensusBackend::new(
+            contract,
+            scheduler,
+            storage_backend.clone(),
+        ));
+
         // Create worker.
-        let worker = Arc::new(Worker::new(config.worker, grpc_environment.clone(), ias));
+        let worker = Arc::new(Worker::new(
+            config.worker,
+            grpc_environment.clone(),
+            ias,
+            storage_backend,
+        ));
 
         // Create consensus frontend.
-        let consensus_backend = config.consensus.backend.clone();
-        let consensus_frontend = Arc::new(ConsensusFrontend::new(config.consensus, worker.clone()));
+        let consensus_frontend = Arc::new(ConsensusFrontend::new(
+            config.consensus,
+            worker.clone(),
+            consensus_backend.clone(),
+        ));
 
         // Create compute node gRPC server.
         let service = create_compute(ComputeService::new(worker, consensus_frontend.clone()));

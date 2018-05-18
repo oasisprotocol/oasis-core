@@ -8,6 +8,7 @@ use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 use super::*;
 
@@ -27,10 +28,11 @@ pub struct SimulatedComputationBatch {
 
 impl SimulatedComputationBatch {
     /// Create new simulated computation batch.
-    pub fn new(child: Block) -> Self {
+    pub fn new(child: Block, output: &[u8]) -> Self {
         let mut block = Block::new_parent_of(&child);
         // We currently just assume that the computation group is fixed.
         block.computation_group = child.computation_group;
+        block.header.state_root = hash_storage_key(output);
         block.update();
 
         // TODO: Include some simulated transactions.
@@ -43,10 +45,12 @@ impl SimulatedComputationBatch {
 }
 
 struct SimulatedNodeInner {
-    /// Public part of the simulated node.
-    public: CommitteeNode,
+    /// Storage backend.
+    storage: Arc<StorageBackend>,
     /// Signer for the simulated node.
     signer: InMemorySigner,
+    /// Public key for the simulated node.
+    public_key: B256,
     /// Shutdown channel.
     shutdown_channel: Option<oneshot::Sender<()>>,
     /// Command channel.
@@ -62,7 +66,7 @@ pub struct SimulatedNode {
 
 impl SimulatedNode {
     /// Create new simulated node.
-    pub fn new(role: Role) -> Self {
+    pub fn new(storage: Arc<StorageBackend>) -> Self {
         let key_pair =
             Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
         let public_key = B256::from(key_pair.public_key_bytes());
@@ -70,8 +74,9 @@ impl SimulatedNode {
 
         Self {
             inner: Arc::new(Mutex::new(SimulatedNodeInner {
-                public: CommitteeNode { role, public_key },
+                storage,
                 signer,
+                public_key,
                 command_channel: None,
                 computation: None,
                 shutdown_channel: None,
@@ -79,10 +84,10 @@ impl SimulatedNode {
         }
     }
 
-    /// Get public descriptor for this node.
-    pub fn get_public(&self) -> CommitteeNode {
+    /// Get public key for this node.
+    pub fn get_public_key(&self) -> B256 {
         let inner = self.inner.lock().unwrap();
-        inner.public.clone()
+        inner.public_key.clone()
     }
 
     /// Start simulated node.
@@ -124,26 +129,23 @@ impl SimulatedNode {
                                 let result = backend.reveal(reveal);
 
                                 // Leader also submits block.
-                                if inner.public.role == Role::Leader {
-                                    let backend = backend.clone();
-                                    let shared_inner = shared_inner.clone();
+                                // TODO: Only the leader should submit a block.
+                                let backend = backend.clone();
+                                let shared_inner = shared_inner.clone();
 
-                                    Box::new(result.and_then(move |_| {
-                                        let inner = shared_inner.lock().unwrap();
+                                Box::new(result.and_then(move |_| {
+                                    let inner = shared_inner.lock().unwrap();
 
-                                        // Sign block.
-                                        let block = Signed::sign(
-                                            &inner.signer,
-                                            &BLOCK_SUBMIT_SIGNATURE_CONTEXT,
-                                            computation.block,
-                                        );
+                                    // Sign block.
+                                    let block = Signed::sign(
+                                        &inner.signer,
+                                        &BLOCK_SUBMIT_SIGNATURE_CONTEXT,
+                                        computation.block,
+                                    );
 
-                                        // Submit block.
-                                        backend.submit(block)
-                                    }))
-                                } else {
-                                    Box::new(result)
-                                }
+                                    // Submit block.
+                                    Box::new(backend.submit(block).then(|_| Ok(())))
+                                }))
                             }
                             Event::RoundFailed(error) => {
                                 // Round has failed, so the test should abort.
@@ -174,8 +176,10 @@ impl SimulatedNode {
                                 Box::new(latest_block.and_then(move |block| {
                                     let mut inner = shared_inner.lock().unwrap();
 
-                                    // Start new computation.
-                                    let computation = SimulatedComputationBatch::new(block);
+                                    // Start new computation with some dummy output state.
+                                    let output = vec![42u8; 16];
+                                    let computation =
+                                        SimulatedComputationBatch::new(block, &output);
 
                                     // Generate commitment.
                                     let commitment = Commitment::new(
@@ -188,8 +192,11 @@ impl SimulatedNode {
                                     assert!(inner.computation.is_none());
                                     inner.computation.get_or_insert(computation);
 
-                                    // Commit.
-                                    backend.commit(commitment)
+                                    // Insert dummy result to storage and commit.
+                                    inner
+                                        .storage
+                                        .insert(output, 7)
+                                        .and_then(move |_| backend.commit(commitment))
                                 }))
                             }
                         }
@@ -228,13 +235,9 @@ impl SimulatedNode {
     }
 }
 
-/// Create a new simulated computation group of the given size.
-pub fn create_computation_group(computation_group_size: usize) -> Vec<SimulatedNode> {
-    let mut result = vec![];
-    result.push(SimulatedNode::new(Role::Leader));
-    for _ in 0..computation_group_size - 1 {
-        result.push(SimulatedNode::new(Role::Worker));
-    }
-
-    result
+/// Generate the specified number of simulated compute nodes.
+pub fn generate_simulated_nodes(count: usize, storage: Arc<StorageBackend>) -> Vec<SimulatedNode> {
+    (0..count)
+        .map(|_| SimulatedNode::new(storage.clone()))
+        .collect()
 }

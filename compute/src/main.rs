@@ -16,10 +16,12 @@ extern crate reqwest;
 extern crate thread_local;
 
 extern crate ekiden_compute_api;
-extern crate ekiden_consensus_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
+extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;
+extern crate ekiden_scheduler_base;
+extern crate ekiden_storage_base;
 extern crate ekiden_untrusted;
 
 mod ias;
@@ -36,7 +38,11 @@ mod consensus;
 extern crate clap;
 extern crate pretty_env_logger;
 
+extern crate ekiden_beacon_dummy;
 extern crate ekiden_consensus_dummy;
+extern crate ekiden_registry_dummy;
+extern crate ekiden_scheduler_dummy;
+extern crate ekiden_storage_dummy;
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -47,7 +53,6 @@ use std::thread;
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_consensus_base::{CommitteeNode, Role};
 use ekiden_core::ring::rand::SystemRandom;
 use ekiden_core::ring::signature::Ed25519KeyPair;
 use ekiden_core::signature::{InMemorySigner, Signer};
@@ -55,7 +60,7 @@ use ekiden_core::untrusted;
 
 use self::consensus::ConsensusConfiguration;
 use self::ias::{IASConfiguration, SPID};
-use self::node::{ComputeNode, ComputeNodeConfiguration};
+use self::node::{ComputeNode, ComputeNodeConfiguration, StorageConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
 
 fn main() {
@@ -210,27 +215,18 @@ fn main() {
 
     info!("Using public key {:?}", signer.get_public_key());
 
-    // Setup consensus backend.
-    // TODO: Get backend configuration from command line or configuration file.
-    // TODO: Change dummy backend to get computation group from another backend.
-    let consensus_backend = Arc::new(ekiden_consensus_dummy::DummyConsensusBackend::new(vec![
-        CommitteeNode {
-            role: Role::Leader,
-            public_key: signer.get_public_key(),
-        },
-    ]));
-
     // Setup compute node.
     let mut node = ComputeNode::new(ComputeNodeConfiguration {
         grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or_else(|e| e.exit()),
         port: value_t!(matches, "port", u16).unwrap_or(9001),
         // Consensus configuration.
         consensus: ConsensusConfiguration {
-            backend: consensus_backend,
             signer: signer,
             max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
             max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
         },
+        // Storage configuration.
+        storage: StorageConfiguration {},
         // IAS configuration.
         ias: if matches.is_present("ias-spid") {
             Some(IASConfiguration {
@@ -252,11 +248,6 @@ fn main() {
 
             WorkerConfiguration {
                 contract_filename: contract_filename.to_owned(),
-                // TODO: Remove this after we switch to new storage backend.
-                consensus_host: matches.value_of("consensus-host").unwrap().to_owned(),
-                // TODO: Remove this after we switch to new storage backend.
-                consensus_port: value_t!(matches, "consensus-port", u16).unwrap_or(9002),
-
                 saved_identity_path: if matches.is_present("no-persist-identity") {
                     None
                 } else {

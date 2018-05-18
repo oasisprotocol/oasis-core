@@ -11,7 +11,6 @@ use protobuf;
 use protobuf::Message;
 use thread_local::ThreadLocal;
 
-use ekiden_consensus_api::{self, ConsensusClient};
 use ekiden_consensus_base::Block;
 use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
@@ -21,6 +20,7 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
+use ekiden_storage_base::StorageBackend;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 use ekiden_untrusted::rpc::router::RpcRouter;
 
@@ -55,54 +55,28 @@ enum Command {
     ContractCallBatch(CallBatch, Block, oneshot::Sender<Result<ComputedBatch>>),
 }
 
-// TODO: Remove once we start using the new storage backend.
-struct CachedStateInitialized {
-    encrypted_state: Vec<u8>,
-    height: u64,
-}
-
 struct WorkerInner {
-    /// Consensus client.
-    // TODO: Remove once we start using the new storage backend.
-    consensus: Option<ConsensusClient>,
     /// Contract running in an enclave.
     contract: Enclave,
+    /// Storage backend.
+    storage: Arc<StorageBackend>,
     /// Enclave identity proof.
     #[allow(dead_code)]
     identity_proof: IdentityProof,
-    /// Cached state reconstituted from checkpoint and diffs. None if
-    /// cache or state is uninitialized.
-    // TODO: Remove once we start using the new storage backend.
-    cached_state: Option<CachedStateInitialized>,
     /// Instrumentation objects.
     ins: instrumentation::WorkerMetrics,
 }
 
 impl WorkerInner {
-    fn new(config: WorkerConfiguration, ias: Arc<IAS>) -> Self {
+    fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
         let (contract, identity_proof) =
             Self::create_contract(&config.contract_filename, ias, config.saved_identity_path);
 
-        // Construct consensus client.
-        // TODO: Remove once we start using the new storage backend.
-        let consensus = match config.consensus_host.as_ref() {
-            "none" => None,
-            consensus_host => {
-                let env = Arc::new(grpcio::EnvBuilder::new().build());
-                let channel = grpcio::ChannelBuilder::new(env)
-                    .connect(&format!("{}:{}", consensus_host, config.consensus_port));
-                Some(ConsensusClient::new(channel))
-            }
-        };
-
         Self {
             contract,
+            storage,
             identity_proof,
-            // TODO: Remove once we start using the new storage backend.
-            cached_state: None,
             ins: instrumentation::WorkerMetrics::new(),
-            // TODO: Remove once we start using the new storage backend.
-            consensus,
         }
     }
 
@@ -135,138 +109,27 @@ impl WorkerInner {
         (contract, identity_proof)
     }
 
-    // TODO: Remove once we start using the new storage backend.
-    #[cfg(not(feature = "no_cache"))]
-    fn get_cached_state_height(&self) -> Option<u64> {
-        match self.cached_state.as_ref() {
-            Some(csi) => Some(csi.height),
-            None => None,
-        }
-    }
+    fn call_contract_batch_fallible(
+        &mut self,
+        batch: &CallBatch,
+        root_hash: &H256,
+    ) -> Result<(OutputBatch, H256)> {
+        // Run in storage context.
+        let (new_state_root, outputs) =
+            self.contract
+                .with_storage(self.storage.clone(), root_hash, || {
+                    // Execute batch.
+                    let _enclave_timer = self.ins.req_time_enclave.start_timer();
+                    self.contract.contract_call_batch(batch)
+                })?;
 
-    // TODO: Remove once we start using the new storage backend.
-    fn set_cached_state(&mut self, checkpoint: &ekiden_consensus_api::Checkpoint) -> Result<()> {
-        self.cached_state = Some(CachedStateInitialized {
-            encrypted_state: checkpoint.get_payload().to_vec(),
-            height: checkpoint.get_height(),
-        });
-        Ok(())
-    }
-
-    // TODO: Remove once we start using the new storage backend.
-    fn advance_cached_state(&mut self, diffs: &[Vec<u8>]) -> Result<Vec<u8>> {
-        #[cfg(feature = "no_diffs")]
-        assert!(
-            diffs.is_empty(),
-            "attempted to apply diffs in a no_diffs build"
-        );
-
-        let csi = self.cached_state.as_mut().ok_or(Error::new(
-            "advance_cached_state called with uninitialized cached state",
-        ))?;
-
-        for diff in diffs {
-            csi.encrypted_state = self.contract.db_state_apply(&csi.encrypted_state, &diff)?;
-            csi.height += 1;
-        }
-
-        Ok(csi.encrypted_state.clone())
-    }
-
-    fn call_contract_batch_fallible(&mut self, batch: &CallBatch) -> Result<OutputBatch> {
-        // Get state updates from consensus
-        // TODO: Remove once we start using the new storage backend.
-        let encrypted_state_opt = if self.consensus.is_some() {
-            let _consensus_get_timer = self.ins.consensus_get_time.start_timer();
-
-            #[cfg(not(feature = "no_cache"))]
-            let cached_state_height = self.get_cached_state_height();
-            #[cfg(feature = "no_cache")]
-            let cached_state_height = None;
-
-            match cached_state_height {
-                Some(height) => {
-                    let consensus_response = self.consensus.as_ref().unwrap().get_diffs(&{
-                        let mut consensus_request = ekiden_consensus_api::GetDiffsRequest::new();
-                        consensus_request.set_since_height(height);
-                        consensus_request
-                    })?;
-                    if consensus_response.has_checkpoint() {
-                        self.set_cached_state(consensus_response.get_checkpoint())?;
-                    }
-                    Some(self.advance_cached_state(consensus_response.get_diffs())?)
-                }
-                None => {
-                    if let Ok(consensus_response) = self.consensus
-                        .as_ref()
-                        .unwrap()
-                        .get(&ekiden_consensus_api::GetRequest::new())
-                    {
-                        self.set_cached_state(consensus_response.get_checkpoint())?;
-                        Some(self.advance_cached_state(consensus_response.get_diffs())?)
-                    } else {
-                        // We should bail if there was an error other
-                        // than the state not being initialized. But
-                        // don't go fixing this. There's another
-                        // resolution planned in #95.
-                        None
-                    }
-                }
-            }
-        } else {
-            None
-        };
-
-        // TODO: Remove once we start using the new storage backend.
-        #[cfg(not(feature = "no_diffs"))]
-        let orig_encrypted_state_opt = encrypted_state_opt.clone();
-        #[cfg(feature = "no_diffs")]
-        let orig_encrypted_state_opt = None;
-
-        // Add state if it is available.
-        if let Some(encrypted_state) = encrypted_state_opt {
-            self.contract.db_state_set(&encrypted_state)?;
-        }
-
-        let outputs = {
-            let _enclave_timer = self.ins.req_time_enclave.start_timer();
-            self.contract.contract_call_batch(batch)
-        }?;
-
-        // TODO: Remove once we start using the new storage backend.
-        // Check if any state was produced. In case no state was produced, this means that
-        // no request caused a state update and thus no state update is required.
-        let encrypted_state = self.contract.db_state_get()?;
-        if self.consensus.is_some() && !encrypted_state.is_empty() {
-            let _consensus_set_timer = self.ins.consensus_set_time.start_timer();
-            match orig_encrypted_state_opt {
-                Some(orig_encrypted_state) => {
-                    let diff_res = self.contract
-                        .db_state_diff(&orig_encrypted_state, &encrypted_state)?;
-
-                    self.consensus.as_ref().unwrap().add_diff(&{
-                        let mut add_diff_req = ekiden_consensus_api::AddDiffRequest::new();
-                        add_diff_req.set_payload(diff_res);
-                        add_diff_req
-                    })?;
-                }
-                None => {
-                    let mut consensus_replace_request = ekiden_consensus_api::ReplaceRequest::new();
-                    consensus_replace_request.set_payload(encrypted_state);
-
-                    self.consensus
-                        .as_ref()
-                        .unwrap()
-                        .replace(&consensus_replace_request)?;
-                }
-            }
-        }
-
-        Ok(outputs)
+        Ok((outputs?, new_state_root))
     }
 
     /// Handle RPC call.
     fn handle_rpc_call(&self, request: Vec<u8>) -> BytesResult {
+        // TODO: Notify enclave that it is stateless so it can clear storage cache.
+
         // Call contract.
         let mut enclave_request = api::EnclaveRequest::new();
         {
@@ -294,14 +157,11 @@ impl WorkerInner {
         block: Block,
         sender: oneshot::Sender<Result<ComputedBatch>>,
     ) {
-        // TODO: Use block to get the state root hash for storage.
-        let outputs = self.call_contract_batch_fallible(&calls);
+        let result = self.call_contract_batch_fallible(&calls, &block.header.state_root);
 
-        match outputs {
-            Ok(outputs) => {
+        match result {
+            Ok((outputs, new_state_root)) => {
                 // No errors, hand over the batch to consensus.
-                // TODO: Use actual state root hash.
-                let new_state_root = H256::zero();
                 sender
                     .send(Ok(ComputedBatch {
                         block,
@@ -375,12 +235,6 @@ pub struct KeyManagerConfiguration {
 pub struct WorkerConfiguration {
     /// Contract binary filename.
     pub contract_filename: String,
-    /// Consensus host.
-    // TODO: Remove once we start using the new storage backend.
-    pub consensus_host: String,
-    /// Consensus port.
-    // TODO: Remove once we start using the new storage backend.
-    pub consensus_port: u16,
     /// Optional saved identity path.
     pub saved_identity_path: Option<PathBuf>,
     /// Key manager configuration.
@@ -402,8 +256,10 @@ impl Worker {
         config: WorkerConfiguration,
         grpc_environment: Arc<grpcio::Environment>,
         ias: Arc<IAS>,
+        storage: Arc<StorageBackend>,
     ) -> Self {
         // Setup enclave RPC routing.
+        // TODO: This sets up the routing globally, we should set it up the same as storage.
         {
             let mut router = RpcRouter::get_mut();
 
@@ -421,7 +277,7 @@ impl Worker {
         // Spawn inner worker in a separate thread.
         let (command_sender, command_receiver) = channel();
         thread::spawn(move || {
-            WorkerInner::new(config, ias).work(command_receiver);
+            WorkerInner::new(config, ias, storage).work(command_receiver);
         });
 
         Self {

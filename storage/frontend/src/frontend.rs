@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 use grpcio::Environment;
 
 use ekiden_common::bytes::{B256, H256};
-use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::node::Node;
@@ -65,12 +64,9 @@ impl StorageFrontend {
         scheduler: Arc<Scheduler>,
         env: Arc<Environment>,
     ) -> BoxFuture<Vec<Arc<StorageClient>>> {
-        // TODO: either here, or in the scheduler, the committee size for this contract id is needed.
-        let mut contract = Contract::default();
-        contract.id = cid;
         Box::new(
             scheduler
-                .get_committees(Arc::new(contract))
+                .get_committees(cid)
                 .and_then(move |committee: Vec<Committee>| -> BoxFuture<Node> {
                     let committee = committee
                         .iter()
@@ -140,8 +136,6 @@ impl StorageFrontend {
 
 impl StorageBackend for StorageFrontend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
-        let key = key.to_owned();
-
         Box::new(
             self.get_storage(self.inner.retries)
                 .and_then(move |s| s.get(key)),
@@ -149,9 +143,6 @@ impl StorageBackend for StorageFrontend {
     }
 
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
-        let expiry = expiry.to_owned();
-        let value = value.to_owned();
-
         Box::new(
             self.get_storage(self.inner.retries)
                 .and_then(move |s| s.insert(value, expiry)),

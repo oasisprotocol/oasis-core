@@ -9,10 +9,10 @@ authors = [
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-enclave-common = { path = "../common", version = "0.1.0-alpha.4" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
-protobuf = "1.4.3"
+protobuf = "~1.4"
 sodalite = "0.3.0"
 serde = "1.0"
 serde_cbor = "0.8.2"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.7-ekiden2" }
+sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }

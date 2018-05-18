@@ -1,0 +1,8 @@
+enclave {
+    trusted {
+        /**
+         * Run late initialization steps (i.e., after SgxEnclave::init).
+         */
+        public void enclave_late_init();
+    };
+};

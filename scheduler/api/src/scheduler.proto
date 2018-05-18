@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+package scheduler;
+
+service Scheduler {
+  rpc GetCommittees (CommitteeRequest) returns (CommitteeResponse) {}
+  rpc WatchCommittees (WatchRequest) returns (stream WatchResponse) {}
+}
+
+message CommitteeNode {
+  bytes public_key = 1;
+  enum Role {
+    WORKER = 0;
+    LEADER = 1;
+  }
+  Role role = 2;
+}
+
+message Committee {
+  enum Kind {
+    COMPUTE = 0;
+    STORAGE = 1;
+  }
+  Kind kind = 1;
+  repeated CommitteeNode members = 2;
+  common.Contract contract = 3;
+  uint64 valid_for = 4;
+}
+
+message CommitteeRequest {
+  bytes contract_id = 1;
+}
+
+message CommitteeResponse {
+  repeated Committee committee = 1;
+}
+
+message WatchRequest {
+}
+
+message WatchResponse {
+  Committee committee = 1;
+}

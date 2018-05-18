@@ -1,26 +1,29 @@
 #![feature(core_intrinsics)]
 #![feature(use_extern_macros)]
 
-extern crate bsdiff;
-extern crate bzip2;
+#[cfg(target_env = "sgx")]
+extern crate sgx_trts;
+#[cfg(target_env = "sgx")]
+extern crate sgx_types;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate protobuf;
 extern crate serde;
 extern crate serde_cbor;
-extern crate sodalite;
-
 #[macro_use]
+extern crate serde_derive;
+
 extern crate ekiden_common;
 extern crate ekiden_enclave_trusted;
 extern crate ekiden_key_manager_client;
+extern crate ekiden_storage_base;
 
-mod generated;
-
-mod crypto;
-mod diffs;
+pub mod aead;
 #[doc(hidden)]
 pub mod ecalls;
+#[cfg(target_env = "sgx")]
+pub mod untrusted;
 
 pub mod handle;
 pub use handle::DatabaseHandle;

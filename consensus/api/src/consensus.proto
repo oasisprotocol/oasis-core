@@ -1,54 +1,92 @@
 syntax = "proto3";
 
+import "common/api/src/common.proto";
+import "scheduler/api/src/scheduler.proto";
+
 package consensus;
 
-message StoredTx {
-    oneof stored {
-        bytes replace = 1;
-        bytes diff = 2;
-        bytes checkpoint = 3;
-    }
-}
-
 service Consensus {
-    rpc Get (GetRequest) returns (GetResponse) {}
-    rpc GetDiffs (GetDiffsRequest) returns (GetDiffsResponse) {}
-    rpc Replace (ReplaceRequest) returns (ReplaceResponse) {}
-    rpc AddDiff (AddDiffRequest) returns (AddDiffResponse) {}
+  rpc GetLatestBlock (LatestBlockRequest) returns (LatestBlockResponse) {}
+  rpc GetBlocks (BlockRequest) returns (stream BlockResponse) {}
+  rpc GetEvents (EventRequest) returns (stream EventResponse) {}
+  rpc Commit (CommitRequest) returns (CommitResponse) {}
+  rpc Reveal (RevealRequest) returns (RevealResponse) {}
+  rpc Submit (SubmitRequest) returns (SubmitResponse) {}
 }
 
-message Checkpoint {
-    bytes payload = 1;
-    uint64 height = 2;
+message Block {
+  Header header = 1;
+  repeated scheduler.CommitteeNode computation_group = 2;
+  repeated Transaction transactions = 3;
+  repeated Commitment commitments = 4;
 }
 
-message GetRequest {
+message Transaction {
+  bytes input = 1;
+  bytes output_hash = 2;
 }
 
-message GetResponse {
-    Checkpoint checkpoint = 1;
-    repeated bytes diffs = 2;
+message Commitment {
+  bytes digest = 1;
+  common.Signature signature = 2;
 }
 
-message GetDiffsRequest {
-    uint64 since_height = 1;
+message Header {
+  uint32 version = 1;
+  bytes namespace = 2;
+  bytes round = 3;
+  bytes previous_hash = 4;
+  bytes group_hash = 5;
+  bytes transaction_hash = 6;
+  bytes state_root = 7;
+  bytes commitments_hash = 8;
 }
 
-message GetDiffsResponse {
-    Checkpoint checkpoint = 1;
-    repeated bytes diffs = 2;
+message LatestBlockRequest {
 }
 
-message ReplaceRequest {
-    bytes payload = 1;
+message LatestBlockResponse {
+  Block block = 1;
 }
 
-message ReplaceResponse {
+message BlockRequest {
 }
 
-message AddDiffRequest {
-    bytes payload = 1;
+message BlockResponse {
+  Block block = 1;
 }
 
-message AddDiffResponse {
+message EventRequest {
+}
+
+message EventResponse {
+  enum Event {
+    COMMITMENTSRECEIVED = 0;
+    ROUNDFAILED = 1;
+  }
+  Event event = 1;
+}
+
+message CommitRequest {
+  Commitment commitment = 1;
+}
+
+message CommitResponse {
+}
+
+message RevealRequest {
+  Header header = 1;
+  bytes nonce = 2;
+  common.Signature signature = 3;
+}
+
+message RevealResponse {
+}
+
+message SubmitRequest {
+  Block block = 1;
+  common.Signature signature = 2;
+}
+
+message SubmitResponse {
 }

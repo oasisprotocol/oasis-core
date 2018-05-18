@@ -21,7 +21,7 @@ pub enum Event {
 }
 
 /// Consensus backend implementing the Ekiden consensus interface.
-pub trait ConsensusBackend {
+pub trait ConsensusBackend: Sync + Send {
     /// Start consensus backend.
     fn start(&self, executor: &mut Executor);
 

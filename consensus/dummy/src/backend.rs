@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
+use ekiden_common::contract::Contract;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::futures::sync::{mpsc, oneshot};
@@ -10,6 +11,8 @@ use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_common::uint::U256;
 use ekiden_consensus_base::*;
+use ekiden_scheduler_base::{Committee, CommitteeNode, CommitteeType, Role, Scheduler};
+use ekiden_storage_base::StorageBackend;
 
 /// Round state.
 #[derive(Eq, PartialEq)]
@@ -28,6 +31,10 @@ enum FinalizationResult {
 
 /// State needed for managing a protocol round.
 struct Round {
+    /// Storage backend.
+    storage: Arc<StorageBackend>,
+    /// Computation committee.
+    committee: Committee,
     /// Computation group, mapped by public key hashes.
     computation_group: HashMap<B256, CommitteeNode>,
     /// Commitments from computation group nodes.
@@ -44,15 +51,17 @@ struct Round {
 
 impl Round {
     /// Create new round descriptor.
-    fn new(block: Block) -> Self {
+    fn new(storage: Arc<StorageBackend>, committee: Committee, block: Block) -> Self {
         // Index computation group members by their public key hash.
-        let mut computation_group_map = HashMap::new();
-        for node in &block.computation_group {
-            computation_group_map.insert(node.public_key.clone(), node.clone());
+        let mut computation_group = HashMap::new();
+        for node in &committee.members {
+            computation_group.insert(node.public_key.clone(), node.clone());
         }
 
         Self {
-            computation_group: computation_group_map,
+            storage,
+            committee,
+            computation_group,
             commitments: HashMap::new(),
             reveals: HashMap::new(),
             current_block: block,
@@ -62,12 +71,9 @@ impl Round {
     }
 
     /// Reset round.
-    fn reset(&mut self, block: Option<Block>) {
+    fn reset(&mut self) {
         self.commitments.clear();
         self.reveals.clear();
-        if let Some(block) = block {
-            self.current_block = block;
-        }
         self.next_block = None;
         self.state = State::WaitingCommitments;
     }
@@ -160,29 +166,29 @@ impl Round {
     }
 
     /// Try to finalize the round.
-    fn try_finalize(&mut self) -> Result<FinalizationResult> {
+    fn try_finalize(&mut self) -> BoxFuture<FinalizationResult> {
         // Check if all nodes sent commitments.
         if self.commitments.len() != self.computation_group.len() {
             info!("Still waiting for other round participants to commit");
-            return Ok(FinalizationResult::StillWaiting);
+            return Box::new(future::ok(FinalizationResult::StillWaiting));
         }
 
         if self.state == State::WaitingCommitments {
             info!("Commitments received, now waiting for reveals");
             self.state = State::WaitingRevealsAndBlock;
-            return Ok(FinalizationResult::NotifyReveals);
+            return Box::new(future::ok(FinalizationResult::NotifyReveals));
         }
 
         // Check if all nodes sent reveals.
         if self.reveals.len() != self.computation_group.len() {
             info!("Still waiting for other round participants to reveal");
-            return Ok(FinalizationResult::StillWaiting);
+            return Box::new(future::ok(FinalizationResult::StillWaiting));
         }
 
         // Check if leader sent the block.
         let block = match self.next_block.take() {
             Some(block) => block,
-            None => return Ok(FinalizationResult::StillWaiting),
+            None => return Box::new(future::ok(FinalizationResult::StillWaiting)),
         };
 
         // Everything is ready, try to finalize round.
@@ -192,34 +198,45 @@ impl Round {
             let commitment = self.commitments.get(node_id).unwrap();
 
             if !reveal.verify_commitment(&commitment) {
-                return Err(Error::new(format!(
+                return Box::new(future::err(Error::new(format!(
                     "commitment from node {} does not match reveal",
                     node_id
-                )));
+                ))));
             }
 
             if !reveal.verify_value(&block.header) {
-                return Err(Error::new(format!(
+                return Box::new(future::err(Error::new(format!(
                     "reveal from node {} does not match block",
                     node_id
-                )));
+                ))));
             }
         }
 
         // Check if block was internally consistent.
         if !block.is_internally_consistent() {
-            return Err(Error::new("submitted block is not internally consistent"));
+            return Box::new(future::err(Error::new(
+                "submitted block is not internally consistent",
+            )));
         }
 
         // Check if block is based on the previous block.
         if !block.header.is_parent_of(&self.current_block.header) {
-            return Err(Error::new("submitted block is not based on previous block"));
+            return Box::new(future::err(Error::new(
+                "submitted block is not based on previous block",
+            )));
         }
 
-        // TODO: Check if storage backend contains correct state root.
-
-        info!("Round has been finalized");
-        Ok(FinalizationResult::Finalized(block))
+        // Check if storage backend contains correct state root.
+        // TODO: Currently we just check a single key, we would need to check against a log.
+        Box::new(
+            self.storage
+                .get(block.header.state_root)
+                .and_then(move |_| {
+                    info!("Round has been finalized");
+                    Ok(FinalizationResult::Finalized(block))
+                })
+                .map_err(|_error| Error::new("state root not found in storage")),
+        )
     }
 }
 
@@ -230,11 +247,18 @@ enum Command {
     Submit(Signed<Block>, oneshot::Sender<Result<()>>),
 }
 
-struct DummyConsensusBackendInner {
+struct Inner {
+    /// Contract.
+    contract: Arc<Contract>,
+    /// Scheduler.
+    scheduler: Arc<Scheduler>,
+    /// Storage backend.
+    storage: Arc<StorageBackend>,
     /// In-memory blockchain.
     blocks: Mutex<Vec<Block>>,
     /// Current round.
-    round: Mutex<Round>,
+    round: Mutex<Option<Arc<Mutex<Round>>>>,
+    //round: Arc<Mutex<Round>>,
     /// Block subscribers.
     block_subscribers: StreamSubscribers<Block>,
     /// Event subscribers.
@@ -249,66 +273,32 @@ struct DummyConsensusBackendInner {
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
 }
 
-impl DummyConsensusBackendInner {
-    /// Attempt to finalize the current round.
-    fn try_finalize(&self) {
-        let mut round = self.round.lock().unwrap();
-        let result = round.try_finalize();
-
-        match result {
-            Ok(FinalizationResult::Finalized(block)) => {
-                // Round has been finalized, block is ready.
-                {
-                    let mut blocks = self.blocks.lock().unwrap();
-                    blocks.push(block.clone());
-                }
-
-                round.reset(Some(block.clone()));
-                self.block_subscribers.notify(&block);
-            }
-            Ok(FinalizationResult::StillWaiting) => {
-                // Still waiting for some round participants.
-            }
-            Ok(FinalizationResult::NotifyReveals) => {
-                // Notify round participants that they should reveal.
-                self.event_subscribers.notify(&Event::CommitmentsReceived);
-            }
-            Err(error) => {
-                // Round has failed.
-                error!("Round has failed: {:?}", error);
-
-                round.reset(None);
-                self.event_subscribers.notify(&Event::RoundFailed(error));
-            }
-        }
-    }
-}
-
 /// A dummy consensus backend which simulates consensus in memory.
 ///
 /// **This backend should only be used to test implementations that use the consensus
 /// interface but it only simulates a consensus backend.***
 pub struct DummyConsensusBackend {
-    inner: Arc<DummyConsensusBackendInner>,
+    inner: Arc<Inner>,
 }
 
 impl DummyConsensusBackend {
     /// Create new dummy consensus backend.
-    pub fn new(computation_group: Vec<CommitteeNode>) -> Self {
-        info!(
-            "Creating dummy consensus backend with {} member(s) in computation group",
-            computation_group.len()
-        );
-        let genesis_block = Self::get_genesis_block(computation_group);
-
+    pub fn new(
+        contract: Arc<Contract>,
+        scheduler: Arc<Scheduler>,
+        storage: Arc<StorageBackend>,
+    ) -> Self {
         // Create channels.
         let (command_sender, command_receiver) = mpsc::unbounded();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         Self {
-            inner: Arc::new(DummyConsensusBackendInner {
-                blocks: Mutex::new(vec![genesis_block.clone()]),
-                round: Mutex::new(Round::new(genesis_block)),
+            inner: Arc::new(Inner {
+                contract,
+                scheduler,
+                storage,
+                blocks: Mutex::new(vec![Self::get_genesis_block()]),
+                round: Mutex::new(None),
                 block_subscribers: StreamSubscribers::new(),
                 event_subscribers: StreamSubscribers::new(),
                 shutdown_sender: Mutex::new(Some(shutdown_sender)),
@@ -319,7 +309,7 @@ impl DummyConsensusBackend {
         }
     }
 
-    fn get_genesis_block(computation_group: Vec<CommitteeNode>) -> Block {
+    fn get_genesis_block() -> Block {
         let mut block = Block {
             header: Header {
                 version: 0,
@@ -331,7 +321,7 @@ impl DummyConsensusBackend {
                 state_root: H256::zero(),
                 commitments_hash: H256::zero(),
             },
-            computation_group,
+            computation_group: vec![],
             transactions: vec![],
             commitments: vec![],
         };
@@ -355,6 +345,103 @@ impl DummyConsensusBackend {
             Err(_) => Err(Error::new("response channel closed")),
         }))
     }
+
+    fn get_round(inner: Arc<Inner>) -> BoxFuture<Arc<Mutex<Round>>> {
+        Box::new(inner.scheduler.get_committees(inner.contract.id).and_then(
+            move |mut committees| {
+                // Get the computation committee.
+                let committee = committees
+                    .drain(..)
+                    .filter(|c| c.kind == CommitteeType::Compute)
+                    .next();
+                if let Some(committee) = committee {
+                    let block = {
+                        let blocks = inner.blocks.lock().unwrap();
+                        blocks.last().unwrap().clone()
+                    };
+
+                    // Check if we already have a round and if the round is for the same committee/block.
+                    let existing_round = {
+                        let round = inner.round.lock().unwrap();
+                        match *round {
+                            Some(ref shared_round) => {
+                                let round = shared_round.lock().unwrap();
+
+                                if round.current_block == block && round.committee == committee {
+                                    // Existing round is the same.
+                                    Some(shared_round.clone())
+                                } else {
+                                    // New round needed as either block or committee has changed.
+                                    None
+                                }
+                            }
+                            None => None,
+                        }
+                    };
+
+                    match existing_round {
+                        Some(round) => Ok(round),
+                        None => {
+                            let new_round = Arc::new(Mutex::new(Round::new(
+                                inner.storage.clone(),
+                                committee,
+                                block,
+                            )));
+                            let mut round = inner.round.lock().unwrap();
+                            *round = Some(new_round.clone());
+
+                            Ok(new_round)
+                        }
+                    }
+                } else {
+                    // No compute committee, this is an error.
+                    error!("No compute committee received for current round");
+                    panic!("scheduler gave us no compute committee");
+                }
+            },
+        ))
+    }
+
+    /// Attempt to finalize the current round.
+    fn try_finalize(inner: Arc<Inner>, round: Arc<Mutex<Round>>) -> BoxFuture<()> {
+        let round_clone = round.clone();
+        let mut round_guard = round_clone.lock().unwrap();
+        let inner = inner.clone();
+
+        Box::new(round_guard.try_finalize().then(move |result| {
+            match result {
+                Ok(FinalizationResult::Finalized(block)) => {
+                    // Round has been finalized, block is ready.
+                    {
+                        let mut blocks = inner.blocks.lock().unwrap();
+                        blocks.push(block.clone());
+                    }
+
+                    inner.block_subscribers.notify(&block);
+                }
+                Ok(FinalizationResult::StillWaiting) => {
+                    // Still waiting for some round participants.
+                }
+                Ok(FinalizationResult::NotifyReveals) => {
+                    // Notify round participants that they should reveal.
+                    inner.event_subscribers.notify(&Event::CommitmentsReceived);
+                }
+                Err(error) => {
+                    // Round has failed.
+                    error!("Round has failed: {:?}", error);
+
+                    {
+                        let mut round = round.lock().unwrap();
+                        round.reset();
+                    }
+
+                    inner.event_subscribers.notify(&Event::RoundFailed(error));
+                }
+            }
+
+            Ok(())
+        }))
+    }
 }
 
 impl ConsensusBackend for DummyConsensusBackend {
@@ -375,24 +462,47 @@ impl ConsensusBackend for DummyConsensusBackend {
                 command_receiver
                     .map_err(|_| Error::new("command channel closed"))
                     .for_each(move |command| -> BoxFuture<()> {
-                        let (sender, result) = {
-                            let mut round = shared_inner.round.lock().unwrap();
+                        // Process command.
+                        let shared_inner = shared_inner.clone();
 
-                            match command {
-                                Command::Commit(commitment, sender) => {
-                                    (sender, round.add_commitment(commitment))
-                                }
-                                Command::Reveal(reveal, sender) => {
-                                    (sender, round.add_reveal(reveal))
-                                }
-                                Command::Submit(block, sender) => (sender, round.add_submit(block)),
-                            }
-                        };
+                        Box::new(
+                            Self::get_round(shared_inner.clone())
+                                .and_then(move |round| {
+                                    // Process command.
+                                    let (sender, result) = {
+                                        let mut round = round.lock().unwrap();
+                                        match command {
+                                            Command::Commit(commitment, sender) => {
+                                                (sender, round.add_commitment(commitment))
+                                            }
+                                            Command::Reveal(reveal, sender) => {
+                                                (sender, round.add_reveal(reveal))
+                                            }
+                                            Command::Submit(block, sender) => {
+                                                (sender, round.add_submit(block))
+                                            }
+                                        }
+                                    };
 
-                        shared_inner.try_finalize();
-                        drop(sender.send(result));
+                                    // Try to finalize the round.
+                                    Box::new(
+                                        Self::try_finalize(shared_inner.clone(), round).and_then(
+                                            move |_| {
+                                                drop(sender.send(result));
 
-                        Box::new(future::ok(()))
+                                                Ok(())
+                                            },
+                                        ),
+                                    )
+                                })
+                                .or_else(|error| {
+                                    error!("Failed to get round: {}", error.message);
+                                    panic!("failed to get round: {}", error.message);
+
+                                    #[allow(unreachable_code)]
+                                    Ok(())
+                                }),
+                        )
                     }),
             )
         };

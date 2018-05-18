@@ -22,31 +22,31 @@ The easiest way to build SGX code is to use the provided scripts, which run a Do
 container with all the included tools.
 
 To start the SGX development container:
-```bash
+```
 $ cargo ekiden shell
 ```
 
 If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
-```bash
+```
 $ rustup install nightly
-$ cargo +nightly install --force --path tools ekiden-tools
+$ cargo +nightly install --force --path tools
 ```
 
 All the following commands should be run in the container and not on
 the host.  The actual prompt from the bash shell running in the
-container will look like `root@xxxx:/code#' where `xxxx` is the docker
+container will look like `root@xxxx:/code#` where `xxxx` is the docker
 container id; in the text below, we will just use `#`.
 
 ## Building core contracts
 
 For building contracts we have our own Cargo extension which should be installed:
-```bash
-# cargo install --force --path tools ekiden-tools
+```
+# cargo install --force --path tools
 ```
 
 The following examples use the key manager and token contracts, but the process is the
 same for any contract. To build the key manager (required by all other contracts):
-```bash
+```
 # cd contracts/key-manager
 # cargo ekiden build-contract
 ```
@@ -54,7 +54,7 @@ same for any contract. To build the key manager (required by all other contracts
 The built contract will be stored under `target/contract/ekiden-key-manager.so`.
 
 To build the token contract:
-```bash
+```
 # cd contracts/token
 # cargo ekiden build-contract
 ```
@@ -67,15 +67,8 @@ You need to run multiple Ekiden services, so it is recommended to run each of th
 separate container shell, attached to the same container. The following examples use the
 token contract, but the process is the same for any contract.
 
-To start the dummy consensus node:
-```bash
-# cargo run -p ekiden-consensus -- -x
-```
-
-The `-x` flag tells the consensus node to not depend on Tendermint.
-
 To start the compute node for the key manager contract:
-```bash
+```
 # cargo run -p ekiden-compute -- \
     -p 9003 \
     --disable-key-manager \
@@ -84,7 +77,7 @@ To start the compute node for the key manager contract:
 ```
 
 To start the compute node for the token contract:
-```bash
+```
 # cargo run -p ekiden-compute -- \
     --no-persist-identity \
     target/contract/token.so
@@ -95,18 +88,17 @@ The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `900
 Development notes:
 
 * If you are developing a contract and changing things, be sure to either use the `--no-persist-identity` flag or remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`). Otherwise the compute node will fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
-* Also, when the contract hash changes, the contract will be unable to decrypt any old state as the key manager will give it fresh keys. So be sure to also clear (if you are using a Tendermint node) and restart the consensus node.
 
 ## Running tests and benchmarks
 
 To run all tests (some should be skipped due to compile errors):
-```bash
+```
 # cargo test --all \
     --exclude ekiden-untrusted \
     --exclude ekiden-enclave-untrusted \
     --exclude ekiden-rpc-untrusted \
     --exclude ekiden-db-untrusted \
-    --exclude ekiden-consensus \
+    --exclude ekiden-contract-untrusted \
     -- --test-threads 1
 ```
 
@@ -114,7 +106,7 @@ To run all tests (some should be skipped due to compile errors):
 
 We welcome anyone to fork and submit a pull request! Please make sure to run `rustfmt` before submitting.
 
-```bash
+```
 # cargo fmt
 ```
 
@@ -125,7 +117,7 @@ We welcome anyone to fork and submit a pull request! Please make sure to run `ru
 - `rpc`: RPC functionality for use in enclaves
 - `db`: Database functionality for use in enclaves
 - `compute`: Ekiden compute node
-- `consensus`: Ekiden consensus node
+- `consensus`: Ekiden consensus interface and backends
 - `contracts`: Core contracts (`key-manager`, `token`)
 - `tools`: Build tools
 - `scripts`: Bash scripts for development

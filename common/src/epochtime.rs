@@ -1,7 +1,10 @@
 //! Epoch time interface.
+use std::sync::{Arc, Mutex};
 
 use super::error::{Error, Result};
+use super::futures::BoxStream;
 use chrono::{DateTime, TimeZone, Utc};
+use subscribers::StreamSubscribers;
 
 /// The number of intervals (epochs) since a fixed instant in time (epoch date).
 pub type EpochTime = u64;
@@ -11,6 +14,9 @@ pub const EKIDEN_EPOCH: u64 = 1514764800; // 2018-01-01T00:00:00+00:00
 
 /// The epoch interval in seconds.
 pub const EPOCH_INTERVAL: u64 = 86400; // 1 day
+
+/// The placeholder invalid epoch.
+pub const EKIDEN_EPOCH_INVALID: u64 = 0xffffffffffffffff; // ~50 quadrillion years away.
 
 /// A time source that provides epoch time.
 pub trait TimeSource: Send + Sync {
@@ -23,11 +29,20 @@ pub trait TimeSource: Send + Sync {
     fn get_epoch_at(&self, at: &DateTime<Utc>) -> Result<(EpochTime, u64)>;
 }
 
+fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
+    let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);
+    let at = at.signed_duration_since(epoch_base).num_seconds();
+    if at < 0 {
+        return Err(Error::new("Current system time predates EKIDEN_EPOCH"));
+    }
+    let epoch = (at as u64) / EPOCH_INTERVAL;
+    let since = (at as u64) % EPOCH_INTERVAL;
+    Ok((epoch, since))
+}
+
 /// A system time based TimeSource.
 #[derive(Clone, Debug)]
-pub struct SystemTimeSource {
-    // Stateless.
-}
+pub struct SystemTimeSource;
 
 impl TimeSource for SystemTimeSource {
     fn get_epoch(&self) -> Result<(EpochTime, u64)> {
@@ -36,15 +51,140 @@ impl TimeSource for SystemTimeSource {
     }
 
     fn get_epoch_at(&self, at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
-        let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);
-        let at = at.signed_duration_since(epoch_base).num_seconds();
-        if at < 0 {
-            return Err(Error::new("Current system time predates EKIDEN_EPOCH"));
-        }
-        let epoch = (at as u64) / EPOCH_INTERVAL;
-        let since = (at as u64) % EPOCH_INTERVAL;
-        Ok((epoch, since))
+        get_epoch_at_generic(at)
     }
+}
+
+/// A mock TimeSource.
+pub struct MockTimeSource {
+    inner: Arc<Mutex<MockTimeSourceInner>>,
+}
+
+impl MockTimeSource {
+    /// Create a new MockTimeSource at the start of epoch 0.
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(MockTimeSourceInner { epoch: 0, till: 0 })),
+        }
+    }
+
+    /// Set the mock epoch, and offset based off a UTC DateTime.
+    pub fn set_mock_time_utc(&self, at: &DateTime<Utc>) -> Result<()> {
+        let (epoch, till) = get_epoch_at_generic(at)?;
+        let mut inner = self.inner.lock()?;
+        inner.set_mock_time_impl(epoch, till)
+    }
+
+    /// Set the mock epoch and offset.
+    pub fn set_mock_time(&self, epoch: EpochTime, till: u64) -> Result<()> {
+        let mut inner = self.inner.lock()?;
+        inner.set_mock_time_impl(epoch, till)
+    }
+}
+
+impl TimeSource for MockTimeSource {
+    fn get_epoch(&self) -> Result<(EpochTime, u64)> {
+        let inner = self.inner.lock()?;
+        Ok((inner.epoch, inner.till))
+    }
+
+    fn get_epoch_at(&self, at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
+        get_epoch_at_generic(at)
+    }
+}
+
+struct MockTimeSourceInner {
+    epoch: EpochTime,
+    till: u64,
+}
+
+impl MockTimeSourceInner {
+    pub fn set_mock_time_impl(&mut self, epoch: EpochTime, till: u64) -> Result<()> {
+        if till > EPOCH_INTERVAL {
+            return Err(Error::new("Till value out of range"));
+        }
+        self.epoch = epoch;
+        self.till = till;
+        Ok(())
+    }
+}
+
+/// A TimeSource based epoch transition event source.
+pub struct TimeSourceNotifier {
+    inner: Arc<Mutex<TimeSourceNotifierInner>>,
+    subscribers: StreamSubscribers<EpochTime>,
+    time_source: Arc<TimeSource>,
+}
+
+impl TimeSourceNotifier {
+    /// Create a new TimeSourceNotifier.
+    pub fn new(time_source: Arc<TimeSource>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(TimeSourceNotifierInner {
+                last_notify: EKIDEN_EPOCH_INVALID,
+            })),
+            subscribers: StreamSubscribers::new(),
+            time_source: time_source,
+        }
+    }
+
+    /// Return a reference to the underlying time source.
+    pub fn time_source(&self) -> Arc<TimeSource> {
+        self.time_source.clone()
+    }
+
+    /// Subscribe to updates of epoch transitions.  Upon subscription, the
+    /// current epoch will be sent immediately.
+    pub fn watch_epochs(&self) -> BoxStream<EpochTime> {
+        let inner = self.inner.lock().unwrap();
+        let (send, recv) = self.subscribers.subscribe();
+
+        // Iff the notifications for the current epoch went out already,
+        // send the current epoch to the subscriber.
+        let now = self.time_source.get_epoch().unwrap().1;
+        if now == inner.last_notify {
+            send.unbounded_send(now).unwrap();
+        }
+
+        recv
+    }
+
+    /// Notify subscribers of an epoch transition.  The owner of the object
+    /// is responsible for driving notifications, perhaps by calling this
+    /// routine from a timer or something.
+    pub fn notify_subscribers(&self) -> Result<()> {
+        // Update the state, release the lock, then notify.
+        let now: Result<EpochTime> = {
+            let mut inner = self.inner.lock()?;
+
+            let (now, _) = self.time_source.get_epoch()?;
+
+            // Iff at least one notification has been sent, do some sanity
+            // checking to ensure a linear passage of time.  The first
+            // notification is exempt so this can play nice with the "send
+            // current epoch on subscribe" semantics.
+            if inner.last_notify != EKIDEN_EPOCH_INVALID {
+                // Ensure that the epoch is increasing.
+                if inner.last_notify >= now {
+                    return Err(Error::new("Epoch did not advance between notify calls"));
+                }
+
+                // This used to assert that the notify call happened around
+                // the epoch transition based on the "till" value, but
+                // the "correct" value here is dependent on the epoch
+                // duration, which is not guaranteed to be EPOCH_INTERVAL.
+            }
+
+            inner.last_notify = now;
+            Ok(now)
+        };
+        self.subscribers.notify(&(now?));
+        Ok(())
+    }
+}
+
+struct TimeSourceNotifierInner {
+    last_notify: EpochTime,
 }
 
 #[cfg(test)]

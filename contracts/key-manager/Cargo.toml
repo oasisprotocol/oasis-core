@@ -15,7 +15,7 @@ ekiden-core = { path = "../../core/common", version = "0.1.0-alpha.4" }
 ekiden-trusted = { path = "../../core/trusted", version = "0.1.0-alpha.4" }
 ekiden-key-manager-api = { path = "./api", version = "0.1.0-alpha.4" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
-protobuf = "1.4.3"
+protobuf = "~1.4"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }

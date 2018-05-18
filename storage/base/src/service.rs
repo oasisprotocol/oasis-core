@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_storage_api as api;
 use grpcio::{RpcContext, RpcStatus, UnarySink};
@@ -7,18 +9,13 @@ use super::backend::StorageBackend;
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 
-pub struct StorageService<T>
-where
-    T: StorageBackend,
-{
-    inner: T,
+#[derive(Clone)]
+pub struct StorageService {
+    inner: Arc<StorageBackend>,
 }
 
-impl<T> StorageService<T>
-where
-    T: StorageBackend,
-{
-    pub fn new(backend: T) -> Self {
+impl StorageService {
+    pub fn new(backend: Arc<StorageBackend>) -> Self {
         Self { inner: backend }
     }
 }
@@ -32,10 +29,7 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::Storage for StorageService<T>
-where
-    T: StorageBackend,
-{
+impl api::Storage for StorageService {
     fn get(&self, ctx: RpcContext, req: api::GetRequest, sink: UnarySink<api::GetResponse>) {
         let f = move || -> Result<BoxFuture<Vec<u8>>, Error> {
             let k = H256::from(req.get_id().clone());

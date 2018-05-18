@@ -1,34 +1,35 @@
 enclave {
     trusted {
-        public void db_state_diff(
-            [user_check] const uint8_t *old,
-            size_t old_length,
-            [user_check] const uint8_t *new,
-            size_t new_length,
-            [user_check] uint8_t *diff,
-            size_t diff_capacity,
-            [out] size_t *diff_length
+        // Configure transfer buffer for OCALLs. This is required as the OCALL arguments are
+        // allocated on the untrusted stack which greatly limits their size. The configured
+        // buffer lives in untrusted memory.
+        public void db_set_transfer_buffer(
+            [user_check] uint8_t *buffer,
+            size_t buffer_capacity
         );
 
-        public void db_state_apply(
-            [user_check] const uint8_t *old,
-            size_t old_length,
-            [user_check] const uint8_t *diff,
-            size_t diff_length,
-            [user_check] uint8_t *new,
-            size_t new_capacity,
-            [out] size_t *new_length
+        public void db_set_root_hash(
+            [in] uint8_t root_hash[32]
         );
 
-        public void db_state_set(
-            [user_check] const uint8_t *state,
-            size_t state_length
+        public void db_get_root_hash(
+            [out] uint8_t root_hash[32]
+        );
+    };
+
+    untrusted {
+        void untrusted_db_get(
+            [in] uint8_t key[32],
+            // Value itself transfered via the transfer buffer.
+            [out] size_t *value_length,
+            [out] uint8_t *result
         );
 
-        public void db_state_get(
-            [user_check] uint8_t *state,
-            size_t state_capacity,
-            [out] size_t *state_length
+        void untrusted_db_insert(
+            // Value itself transfered via the transfer buffer.
+            size_t value_length,
+            uint64_t expiry,
+            [out] uint8_t *result
         );
     };
 };

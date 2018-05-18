@@ -1,5 +1,6 @@
 # Unreleased
 
+* **BACKWARD INCOMPATIBLE:** Remove old consensus node.
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added. (For entities and contracts)
 * Epoch interface / implementation added.
@@ -10,6 +11,13 @@
   to streams of items.
 * Bugfix: Release script updates shell environment.
 * Scheduler interface / centralized implementation added.
+* Use new storage interface in the compute node.
+* Bugfix: AVR timestamp parsing should now be correct.
+* Add `common::epochtime::TimeSourceNotifier` to enable event driven epoch time.
+* Add `common::epochtime::MockTimeSource` to simplify testing.
+* Extend `beacon::base::RandomBeacon` to enable event driven beacons.
+* Extend `scheduler::base::Scheduler` to enable event driven scheduling.
+* Add `common::futures::GrpcExecutor`.
 
 # 0.1.0-alpha.4
 

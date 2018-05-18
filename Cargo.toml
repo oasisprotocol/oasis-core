@@ -15,7 +15,9 @@ members = [
     "beacon/dummy",
 
     # Consensus interface.
+    "consensus/api",
     "consensus/base",
+    "consensus/client",
     "consensus/dummy",
 
     # Storage interface.
@@ -59,10 +61,6 @@ members = [
     "compute/api",
     "compute",
 
-    # Consensus node (deprecated).
-    "consensus/api",
-    "consensus",
-
     # Core contracts.
     "contracts/key-manager",
     "contracts/token",
@@ -76,6 +74,12 @@ members = [
     "registry/dummy",
 
     # Scheduler.
+    "scheduler/api",
     "scheduler/base",
+    "scheduler/client",
     "scheduler/dummy",
+
+    # Dummy shared backend node.
+    "node/dummy",
+    "node/dummy/api",
 ]

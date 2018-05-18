@@ -8,7 +8,7 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-protobuf = "1.4.2"
+protobuf = "~1.4"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }

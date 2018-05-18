@@ -1,4 +1,5 @@
 use std::convert::{Into, TryFrom};
+use std::sync::Arc;
 
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_registry_api as api;
@@ -12,18 +13,13 @@ use ekiden_common::error::Error;
 use ekiden_common::node::Node;
 use ekiden_common::signature::{Signature, Signed};
 
-pub struct EntityRegistryService<T>
-where
-    T: EntityRegistryBackend,
-{
-    inner: T,
+#[derive(Clone)]
+pub struct EntityRegistryService {
+    inner: Arc<EntityRegistryBackend>,
 }
 
-impl<T> EntityRegistryService<T>
-where
-    T: EntityRegistryBackend,
-{
-    pub fn new(backend: T) -> Self {
+impl EntityRegistryService {
+    pub fn new(backend: Arc<EntityRegistryBackend>) -> Self {
         Self { inner: backend }
     }
 }
@@ -37,10 +33,7 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::EntityRegistry for EntityRegistryService<T>
-where
-    T: EntityRegistryBackend,
-{
+impl api::EntityRegistry for EntityRegistryService {
     fn register_entity(
         &self,
         ctx: RpcContext,

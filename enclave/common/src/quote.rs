@@ -101,6 +101,7 @@ static IAS_ANCHORS: [webpki::TrustAnchor<'static>; 1] = [
 static IAS_SIG_ALGS: &'static [&'static webpki::SignatureAlgorithm] =
     &[&webpki::RSA_PKCS1_2048_8192_SHA256];
 const PEM_CERTIFICATE_LABEL: &str = "CERTIFICATE";
+const IAS_TS_FMT: &str = "%FT%T%.6f";
 
 /// Decoded report body.
 #[derive(Default, Debug)]
@@ -203,10 +204,7 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
                 return Err(Error::new("AV report body did not contain timestamp"));
             }
         };
-        let timestamp_unix = match DateTime::parse_from_rfc3339(&timestamp) {
-            Ok(timestamp) => timestamp.timestamp(),
-            _ => return Err(Error::new("Failed to parse AV report timestamp")),
-        };
+        let timestamp_unix = parse_avr_timestamp(&timestamp)?;
         if (now_unix - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
             return Err(Error::new("AV report timestamp differs by more than 1 day"));
         }
@@ -259,6 +257,14 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
         identity: super::identity::unpack_public_identity(public_identity),
         mr_enclave: quote_body.report_body.mr_enclave,
     })
+}
+
+fn parse_avr_timestamp(timestamp: &str) -> Result<i64> {
+    let timestamp_unix = match Utc.datetime_from_str(&timestamp, IAS_TS_FMT) {
+        Ok(timestamp) => timestamp.timestamp(),
+        _ => return Err(Error::new("Failed to parse AV report timestamp")),
+    };
+    Ok(timestamp_unix)
 }
 
 fn validate_avr_signature(
@@ -412,5 +418,9 @@ mod tests {
         let bad_sig = base64::encode(bad_sig);
         let result = validate_avr_signature(IAS_CERT_CHAIN, MSG, bad_sig.as_bytes(), SIG_AT);
         assert!(result.is_err());
+
+        // Test timestamp validation while we're at it.
+        let timestamp = parse_avr_timestamp("2018-03-30T22:02:26.123456").unwrap();
+        assert_eq!(timestamp, SIG_AT as i64);
     }
 }
