@@ -12,13 +12,19 @@ use ekiden_common::subscribers::StreamSubscribers;
 
 const DUMMY_BEACON_CONTEXT: &'static [u8] = b"EkB-Dumm";
 
+/// Commands for communicating synchronization requests to the beacon
+enum Command {
+    /// Notify a sender of an initial epoch if needed.
+    Catchup((mpsc::UnboundedSender<(EpochTime, B256)>,EpochTime))
+}
+
 /// Dummy RandomBeacon implementation.
 ///
 /// WARNING: As the name suggests, this implementation is intended for testing
 /// purposes and is INSECURE due to the returned values being entirely
 /// deterministic.
 pub struct InsecureDummyRandomBeacon {
-    inner: Arc<Mutex<InsecureDummyRandomBeaconInner>>,
+    inner: Arc<InsecureDummyRandomBeaconInner>,
 }
 
 impl InsecureDummyRandomBeacon {
@@ -27,14 +33,13 @@ impl InsecureDummyRandomBeacon {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
         Self {
-            inner: Arc::new(Mutex::new(InsecureDummyRandomBeaconInner {
+            inner: Arc::new(InsecureDummyRandomBeaconInner {
                 subscribers: StreamSubscribers::new(),
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
                 time_notifier: time_notifier,
-                last_notify: EKIDEN_EPOCH_INVALID,
-                cached_beacon: B256::zero(),
-            })),
+                last_notify: Mutex::new((EKIDEN_EPOCH_INVALID, B256::zero())),
+            }),
         }
     }
 }
@@ -44,80 +49,83 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
         // Subscribe to the time source.
         executor.spawn({
             let shared_inner = self.inner.clone();
-            let inner = self.inner.lock().unwrap();
 
             Box::new(
-                inner
+                self.inner
                     .time_notifier
                     .watch_epochs()
                     .for_each(move |now| {
-                        let mut inner = shared_inner.lock().unwrap();
+                        let mut notification = shared_inner.last_notify.lock().unwrap();
 
                         // Acquire the beacon value for the new epoch.
-                        let beacon = inner.get_beacon_impl(now);
+                        let beacon = shared_inner.get_beacon_impl(now);
 
                         // Cache the epoch/beacon that was last batch notified.
-                        inner.last_notify = now;
-                        inner.cached_beacon = beacon;
+                        notification.0 = now;
+                        notification.1 = beacon;
 
                         trace!("Epoch: {} Beacon: {:?}", now, beacon);
 
                         // Batch notify to all current subscribers.
                         let to_send = (now, beacon);
-                        inner.subscribers.notify(&to_send);
+                        shared_inner.subscribers.notify(&to_send);
 
                         Ok(())
                     })
                     .then(|_| future::ok(())),
             )
         });
+        let inner = self.inner.clone();
 
-        let command_receiver = self.inner.clone().lock().unwrap()
-            .command_receiver
-            .lock()
-            .unwrap()
-            .take()
-            .expect("start already called");
         executor.spawn({
+            let command_receiver = inner
+                .command_receiver
+                .lock()
+                .unwrap()
+                .take()
+                .expect("start already called");
+            let notifier = inner.time_notifier.clone();
+
             command_receiver
                 .map_err(|_| Error::new("command channel closed"))
                 .for_each_log_errors(
                     module_path!(),
                     "Unexpected error catching up beacon subscriber",
-                    move |(sender, pre_notify_time)| {
-                        let inner = self.inner.clone();
-                        let locked_inner = inner.lock().unwrap();
-
-                        locked_inner.time_notifier
-                            .get_epoch()
-                            .and_then(move |epoch| {
-                                let inner = inner.lock().unwrap();
-                                if epoch == pre_notify_time {
-                                    trace!(
-                                        "command from watch_beacons(): Catch up: Epoch: {} Beacon: {:?}",
-                                        epoch,
-                                        inner.cached_beacon
-                                    );
-                                    sender.unbounded_send((epoch, inner.cached_beacon)).unwrap();
-                                }
-                            })
+                    move |command| match command{
+                        Command::Catchup((sender, pre_notify_time)) => {
+                            let inner = inner.clone();
+                            notifier
+                                .get_epoch()
+                                .and_then(move |epoch| {
+                                    let notification = inner.last_notify.lock().unwrap();
+                                    if epoch == pre_notify_time {
+                                        trace!(
+                                            "command from watch_beacons(): Catch up: Epoch: {} Beacon: {:?}",
+                                            epoch,
+                                            notification.1
+                                        );
+                                        sender.unbounded_send((epoch, notification.1)).unwrap();
+                                    }
+                                    future::ok(())
+                                })
+                        },
                     },
                 )
         });
     }
 
     fn get_beacon(&self, epoch: EpochTime) -> BoxFuture<B256> {
-        let inner = self.inner.lock().unwrap();
-        Box::new(future::ok(inner.get_beacon_impl(epoch)))
+        Box::new(future::ok(self.inner.get_beacon_impl(epoch)))
     }
 
     fn watch_beacons(&self) -> BoxStream<(EpochTime, B256)> {
-        let locked_inner = self.inner.lock().unwrap();
-        let (send, recv) = locked_inner.subscribers.subscribe();
+        let (send, recv) = self.inner.subscribers.subscribe();
 
         // add the task for maybe catching up the new subscriber to the queue.
-        let pre_notify_time = locked_inner.last_notify;
-        locked_inner.command_sender.unbounded_send((send, pre_notify_time)).unwrap();
+        let inner = self.inner.clone();
+        let notify = inner.last_notify.lock().unwrap();
+        let pre_notify_time = notify.0;
+        self.inner.command_sender.unbounded_send(Command::Catchup((send, pre_notify_time))).unwrap();
 
         recv
     }
@@ -126,12 +134,11 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
 struct InsecureDummyRandomBeaconInner {
     subscribers: StreamSubscribers<(EpochTime, B256)>,
     /// Command sender.
-    command_sender: mpsc::UnboundedSender<(mpsc::UnboundedSender<(EpochTime, B256)>,EpochTime)>,
+    command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
-    command_receiver: Mutex<Option<mpsc::UnboundedReceiver<(mpsc::UnboundedSender<(EpochTime, B256)>,EpochTime)>>>,
+    command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
     time_notifier: Arc<TimeSourceNotifier>,
-    last_notify: EpochTime,
-    cached_beacon: B256,
+    last_notify: Mutex<(EpochTime,B256)>,
 }
 
 impl InsecureDummyRandomBeaconInner {
