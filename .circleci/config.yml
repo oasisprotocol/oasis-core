@@ -92,7 +92,6 @@ jobs:
       # Start token compute nodes.
       - run:
           command: |
-            # Ensure this node starts first (for deterministic elections).
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
@@ -102,8 +101,7 @@ jobs:
           background: true
       - run:
           command: |
-            # Ensure this node starts second (for deterministic elections).
-            sleep 5
+            sleep 1
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
@@ -113,8 +111,7 @@ jobs:
           background: true
       - run:
           command: |
-            # Ensure this node starts third (for deterministic elections).
-            sleep 10
+            sleep 2
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
@@ -125,7 +122,7 @@ jobs:
       # Start token client.
       - run: |
           # Sleep so everything gets ready.
-          sleep 20
+          sleep 10
 
           # Advance epoch to elect a new committee.
           ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
@@ -133,9 +130,8 @@ jobs:
           # Sleep some more.
           sleep 5
 
-          # Run the client. Note that we know which compute node will be elected as leader since the
-          # dummy random beacon is entirely deterministic.
-          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave) --port 10002
+          # Run the client.
+          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
   deploy:
     docker:

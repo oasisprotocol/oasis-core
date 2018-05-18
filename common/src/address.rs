@@ -27,6 +27,16 @@ impl Address {
             .map(|interface| Address(SocketAddr::new(interface.ip(), port)))
             .collect())
     }
+
+    /// Port associated with this address.
+    pub fn port(&self) -> u16 {
+        self.0.port()
+    }
+
+    // IP associated with this address.
+    pub fn ip(&self) -> IpAddr {
+        self.0.ip()
+    }
 }
 
 impl fmt::Display for Address {

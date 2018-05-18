@@ -22,6 +22,7 @@
 * Leader now forwards batches to workers in compute replica group.
 * Add `into_box`, `log_errors_and_discard` to `FutureExt` trait and `for_each_log_errors`
   to StreamExt trait to simplify stream processing.
+* Clients using `client-utils` now automatically discover the compute replica group leader.
 
 # 0.1.0-alpha.4
 
