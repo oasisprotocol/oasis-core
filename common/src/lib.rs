@@ -16,6 +16,8 @@ extern crate byteorder;
 extern crate chrono;
 extern crate core;
 extern crate fixed_hash;
+#[macro_use]
+extern crate log;
 pub extern crate ring;
 extern crate rustc_hex;
 extern crate serde;

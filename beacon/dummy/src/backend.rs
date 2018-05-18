@@ -54,6 +54,8 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
                         inner.last_notify = now;
                         inner.cached_beacon = beacon;
 
+                        trace!("Epoch: {} Beacon: {:?}", now, beacon);
+
                         // Batch notify to all current subscribers.
                         let to_send = (now, beacon);
                         inner.subscribers.notify(&to_send);
@@ -78,6 +80,11 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
         // send the current epoch/beacon to the subscriber.
         let now = inner.time_notifier.time_source().get_epoch().unwrap().1;
         if now == inner.last_notify {
+            trace!(
+                "watch_beacons(): Catch up: Epoch: {} Beacon: {:?}",
+                now,
+                inner.cached_beacon
+            );
             send.unbounded_send((now, inner.cached_beacon)).unwrap();
         }
 
