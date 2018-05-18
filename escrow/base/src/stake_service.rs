@@ -47,7 +47,6 @@ where
         let f = move || -> Result<BoxFuture<()>, Error> {
             let s = B256::from_slice(req.get_msg_sender());
             let a = req.get_amount();
-            // TODO: Ensure we have the full size identifiers
             Ok(self.inner.deposit_stake(s, a))
         };
         let f = match f() {
