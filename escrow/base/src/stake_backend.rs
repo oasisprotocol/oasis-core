@@ -6,7 +6,7 @@ use ekiden_common::futures::BoxFuture;
 use ekiden_stake_api as api;
 
 /// Stake escrow backend implementing the Ekiden stake escrow interface.
-pub trait EntityStakeBackend: Send + Sync {
+pub trait StakeEscrowBackend: Send + Sync {
     /// Stake 
     fn deposit_stake(&self, msg_sender: Entity, amount: u64)
                      -> BoxFuture<()>;

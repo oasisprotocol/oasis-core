@@ -81,4 +81,5 @@ members = [
     # Stake escrow.
     "escrow/api",
     "escrow/base",
+    "escrow/dummy",
 ]

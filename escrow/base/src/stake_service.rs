@@ -5,21 +5,21 @@ use ekiden_stake_api as api;
 use grpcio::{RpcContext, RpcStatus, UnarySink};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 
-use super::stake_backend::EntityStakeBackend;
+use super::stake_backend::StakeEscrowBackend;
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
 
-pub struct EntityStakeService<T>
+pub struct StakeEscrowService<T>
 where
-    T: EntityStakeBackend,
+    T: StakeEscrowBackend,
 {
     inner: T,
 }
 
-impl<T> EntityStakeService<T>
+impl<T> StakeEscrowService<T>
 where
-    T: EntityStakeBackend,
+    T: StakeEscrowBackend,
 {
     pub fn new(backend: T) -> Self {
         Self { inner: backend }
@@ -35,9 +35,9 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::Stake for EntityStakeService<T>
+impl<T> api::Stake for StakeEscrowService<T>
 where
-    T: EntityStakeBackend,
+    T: StakeEscrowBackend,
 {
     fn deposit_stake(
         &self,

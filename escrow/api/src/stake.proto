@@ -2,6 +2,18 @@ syntax = "proto3";
 
 import "common/api/src/common.proto";
 
+// This is the escrow service.  Entities deposit stake, and can create
+// escrow accounts for which the service acts as the escrow account
+// holder to enforce the (simple) escrow scenario: the ``target'' of
+// the escrow account and the stakeholder has some contract
+// (unspecified), and the target will, at the end of the contract,
+// release some, none, or all of the escrowed amount back to the
+// stakeholder, with the difference going to the target.  The
+// assumption is that the stakeholder will not create an escrow
+// account for a target unless the stakeholder knows (via code
+// auditing) that the target will not take the escrowed coins
+// arbitrarily.
+
 package escrow;
 
 service Stake {
@@ -25,8 +37,10 @@ service Stake {
 // cryptocurrency tokens are transferred.
 
 // The RPCs should go over a secured channel so that authentication
-// for msg_sender is provided, message authenticity and freshness is
-// guaranteed, with message confidentiality being optional.
+// for msg_sender is provided (out-of-band in the communication
+// security layer, so the explicit field can be removed), message
+// authenticity and freshness is guaranteed, with message
+// confidentiality being optional.
 
 
 // Per-caller state:
@@ -69,6 +83,9 @@ message DepositStakeResponse {
   // grpc layer.
 }
 
+// The authenticated caller can get their own stake information.  For
+// now, we do not expect it to be useful/desirable to query for other
+// entity's stake availability etc, though that could change.
 message GetStakeStatusRequest {
   common.Entity msg_sender = 1;
 }
@@ -79,6 +96,9 @@ message GetStakeStatusResponse {
 }
 // Available stake for withdrawal is total_stake - escrowed_stake.
 
+// The authenticated caller can withdrawl up to the available stake for
+// withdrawal.
+//
 // If WithdrawStakeRequest.amount_requested <= caller.amount -
 // caller.escrowed then
 //   caller.amount' = caller.amount - WithdrawStakeRequested.amount_requested
@@ -96,16 +116,23 @@ message WithdrawStakeResponse {
   uint64 amount_returned = 1;  // $$
 }
 
+// The authenticated caller takes some portion of their available
+// stake and create an escrow for use with a named target entity.  If
+// the target entity decides that the caller has not met their
+// obligation in a transaction, the target may take this escrow
+// amount; on the other hand, if all is well, the target may release
+// it back to the caller.
+//
 // *TODO*: do escrows expire?  If the entity to which the escrow was
-// made via AllocateEscrow disappears, would all funds escrowed to it
-// also disappear?  If escrow includes a time limit, then we need some
-// security guarantees about the validity of time, so that an attacker
-// could not trick the stake escrow service to expire an escrow
-// earlier than it should.  (Multisig time service ought to work,
-// since setting the clock back via replaying old messages doesn't
-// help the attacker in this situation.  Releasing escrowed funds a
-// little later than we should is just another denial-of-service
-// attack.)
+// made via AllocateEscrow disappears (becomes inaccessible), would
+// all funds escrowed to it also disappear (also become inaccessible)?
+// If escrow includes a time limit, then we need some security
+// guarantees about the validity of time, so that an attacker could
+// not trick the stake escrow service to expire an escrow earlier than
+// it should.  (Multisig time service ought to work, since setting the
+// clock back via replaying old messages doesn't help the attacker in
+// this situation.  Releasing escrowed funds a little later than we
+// should is just another denial-of-service attack.)
 //
 // If caller.stake - caller.escrowed >= AllocateEscrowRequest.escrow_amount
 // then
@@ -160,7 +187,8 @@ message ListActiveEscrowsResponse {
 // Rather than sending the entity and amount information, we just
 // allow querying by the escrow id.  The caller (library) can verify
 // that entity address matches and that the amount that was set aside
-// is sufficent.
+// is sufficent.  TODO: do we want to allow this only by the
+// stakeholder/owner of the escrow account or the escrow target?
 message FetchEscrowByIdRequest {
   bytes id = 1;
 }
@@ -169,6 +197,10 @@ message FetchEscrowByIdResponse {
   // Possible errors: Err(NoSuchEscrowId)
   EscrowData escrow = 1;
 }
+
+// The authenticated caller indicates that he transactions for which
+// the escrow was created is done.  If the escrow account owner has
+// met their obligations
 
 // msg_sender should have an account, or one will be created for it.
 message TakeAndReleaseEscrowRequest {
