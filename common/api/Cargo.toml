@@ -8,6 +8,7 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
+cargo-cult = "0.1.0"
 protobuf = "~1.4"
 
 [build-dependencies]

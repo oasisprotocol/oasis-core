@@ -7,6 +7,7 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-beacon-base = { path = "../../beacon/base", version = "0.1.0-alpha.4" }
 ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.1.0-alpha.4" }
 ekiden-core = { path = "../../core/common", version = "0.1.0-alpha.4" }

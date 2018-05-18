@@ -8,6 +8,7 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-core = { path = "../../../core/common", version = "0.1.0-alpha.4" }
 protobuf = "~1.4"
 serde = "1.0"

@@ -10,6 +10,7 @@ default = []
 benchmark = ["client-utils/benchmark"]
 
 [dependencies]
+cargo-cult = "0.1.0"
 client-utils = { path = "../utils" }
 ekiden-core = { path = "../../core/common" }
 ekiden-contract-client = { path = "../../contract/client" }

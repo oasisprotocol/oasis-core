@@ -7,6 +7,7 @@ keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-common = { path = "../../../common", version = "0.1.0-alpha.4" }
 ekiden-enclave-common = { path = "../../../enclave/common", version = "0.1.0-alpha.4" }
 ekiden-rpc-client = { path = "../../../rpc/client", version = "0.1.0-alpha.4" }

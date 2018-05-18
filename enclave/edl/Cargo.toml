@@ -3,4 +3,5 @@ name = "ekiden-enclave-edl"
 version = "0.1.0-alpha.4"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }

@@ -10,6 +10,7 @@ authors = [
 sgx-simulation = []
 
 [dependencies]
+cargo-cult = "0.1.0"
 protobuf = "~1.4"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1", features = ["global_init"] }

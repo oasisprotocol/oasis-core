@@ -8,6 +8,7 @@ build = "build.rs"
 default = []
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-core = { path = "../../core/common" }
 ekiden-trusted = { path = "../../core/trusted" }
 protobuf = "~1.4"

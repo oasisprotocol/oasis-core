@@ -10,6 +10,7 @@ repository = "https://github.com/ekiden/ekiden"
 sgx-simulation = []
 
 [dependencies]
+cargo-cult = "0.1.0"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 protobuf = "~1.4"

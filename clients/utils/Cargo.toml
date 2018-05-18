@@ -10,6 +10,7 @@ authors = [
 benchmark = ["threadpool", "time", "histogram"]
 
 [dependencies]
+cargo-cult = "0.1.0"
 threadpool = { version = "1.7.1", optional = true }
 time = { version = "0.1", optional = true }
 histogram = { version = "0.6.8", optional = true }

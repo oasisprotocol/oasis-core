@@ -7,6 +7,7 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
+cargo-cult = "0.1.0"
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.1.0-alpha.4" }
 ekiden-storage-api = { path = "../api", version = "0.1.0-alpha.4" }
