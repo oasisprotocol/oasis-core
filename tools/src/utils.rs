@@ -11,6 +11,7 @@ use filebuffer::FileBuffer;
 use mktemp;
 use protobuf;
 use protoc_rust;
+use regex::bytes::Regex;
 use sgx_edl::EDL;
 
 use super::error::Result;
@@ -310,46 +311,28 @@ pub fn generate_mod_with_imports(output_dir: &str, imports: &[&str], modules: &[
 /// Extract contract identity from a compiled contract.
 pub fn get_contract_identity<P: AsRef<Path>>(contract: P) -> Result<Vec<u8>> {
     // Sigstruct headers in bundled enclave.
-    const SIGSTRUCT_HEADER_1: &[u8] =
-        b"\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00";
-    const SIGSTRUCT_HEADER_2: &[u8] =
-        b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
+    let sigstruct_header_1 = Regex::new(
+        r"(?-u)\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00",
+    ).unwrap();
+    let sigstruct_header_2 = b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
 
     let contract_file = FileBuffer::open(contract)?;
-    let mut reader = io::Cursor::new(&contract_file);
-    loop {
-        // Update current offset.
-        let current_offset = reader.seek(io::SeekFrom::Current(0)).unwrap();
+    let header_1_offset = match sigstruct_header_1.find(&contract_file) {
+        Some(re_match) => re_match.end(),
+        None => return Err("Failed to find SIGSTRUCT header 1 in contract".into()),
+    };
 
-        // Read the buffer.
-        let mut buffer = vec![0; SIGSTRUCT_HEADER_1.len()];
-        reader.read_exact(&mut buffer)?;
-
-        if buffer == SIGSTRUCT_HEADER_1 {
-            // Skip 8 bytes and expect to find the second header there.
-            reader.seek(io::SeekFrom::Current(8))?;
-
-            let mut buffer = vec![0u8; SIGSTRUCT_HEADER_2.len()];
-            reader.read_exact(&mut buffer)?;
-
-            if buffer == SIGSTRUCT_HEADER_2 {
-                // Found SIGSTRUCT header at current offset.
-                break;
-            }
-
-            return Err("Failed to find SIGSTRUCT header in contract".into());
-        } else {
-            // Structure not found at current offset, move to next offset.
-            reader.seek(io::SeekFrom::Start(current_offset + 1))?;
-        }
+    // Skip 8 bytes and expect to find the second header there.
+    let header_2_offset = header_1_offset + 8;
+    if &contract_file[header_2_offset..header_2_offset + sigstruct_header_2.len()]
+        != sigstruct_header_2
+    {
+        return Err("Failed to find SIGSTRUCT header 2 in contract".into());
     }
 
     // Read ENCLAVEHASH field at offset 920 from second header (32 bytes).
-    let mut mr_enclave = vec![0u8; 32];
-    reader.seek(io::SeekFrom::Current(920)).unwrap();
-    reader.read_exact(&mut mr_enclave)?;
-
-    Ok(mr_enclave)
+    let hash_offset = header_2_offset + sigstruct_header_2.len() + 920;
+    Ok(contract_file[hash_offset..hash_offset + 32].to_vec())
 }
 
 /// Extract contract identity from a compiled contract and write it to an output file.
