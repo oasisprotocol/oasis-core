@@ -10,6 +10,7 @@ repository = "https://github.com/oasislabs/ekiden"
 byteorder = "1.2.1"
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
 ekiden-beacon-base = { path = "../base", version = "0.1.0-alpha.4" }
+log = "0.4"
 
 [dev-dependencies]
 rustc-hex = "1.0"
