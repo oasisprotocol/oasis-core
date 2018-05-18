@@ -8,5 +8,6 @@ extern crate time;
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
 
+#[doc(hidden)]
 #[macro_use]
-mod macros;
+pub mod macros;

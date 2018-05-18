@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+package computation_group;
+
+service ComputationGroup {
+    // Submit a batch to a worker in the same computation group.
+    rpc SubmitBatch (SubmitBatchRequest) returns (SubmitBatchResponse) {}
+}
+
+message SubmitBatchRequest {
+    repeated bytes batch = 1;
+    common.Signature signature = 2;
+}
+
+message SubmitBatchResponse {
+}

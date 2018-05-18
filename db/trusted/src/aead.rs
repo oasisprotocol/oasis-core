@@ -4,8 +4,7 @@ use std::sync::Arc;
 use serde_cbor;
 
 use ekiden_common::error::Result;
-use ekiden_common::random;
-use ekiden_common::ring::aead;
+use ekiden_common::ring::{aead, digest};
 use ekiden_storage_base::{StorageBackend, StorageMapper};
 
 /// Structure used to store encrypted data.
@@ -25,15 +24,18 @@ pub struct AeadStorageMapper {
     opening_key: Arc<aead::OpeningKey>,
     /// State sealing key.
     sealing_key: Arc<aead::SealingKey>,
+    /// Nonce.
+    nonce: Vec<u8>,
 }
 
 impl AeadStorageMapper {
     /// Create new AEAD storage mapper.
-    pub fn new(parent: Arc<StorageMapper>, key: Vec<u8>) -> Self {
+    pub fn new(parent: Arc<StorageMapper>, key: Vec<u8>, nonce: Vec<u8>) -> Self {
         Self {
             parent,
             opening_key: Arc::new(aead::OpeningKey::new(&aead::CHACHA20_POLY1305, &key).unwrap()),
             sealing_key: Arc::new(aead::SealingKey::new(&aead::CHACHA20_POLY1305, &key).unwrap()),
+            nonce,
         }
     }
 
@@ -64,6 +66,7 @@ impl StorageMapper for AeadStorageMapper {
 
     fn map_insert(&self) -> Box<Fn(Vec<u8>) -> Result<Vec<u8>> + Send + Sync> {
         let sealing_key = self.sealing_key.clone();
+        let nonce = self.nonce.clone();
 
         Box::new(move |value| {
             let mut value = AeadBox {
@@ -71,8 +74,14 @@ impl StorageMapper for AeadStorageMapper {
                 data: value,
             };
 
+            // Generate nonce.
+            // TODO: Use a proper MRAE scheme (e.g., AES-GCM-SIV).
+            let mut ctx = digest::Context::new(&digest::SHA512_256);
+            ctx.update(&nonce);
+            ctx.update(&value.data);
+            value.nonce.clone_from_slice(&ctx.finish().as_ref()[..12]);
+
             // Seal data.
-            random::get_random_bytes(&mut value.nonce)?;
             let tag_len = sealing_key.algorithm().tag_len();
             let data_len = value.data.len();
             value.data.resize(data_len + tag_len, 0);
