@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
-use ekiden_common::contract::Contract;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
@@ -242,27 +241,24 @@ impl Round {
 
 #[derive(Debug)]
 enum Command {
-    Commit(Commitment, oneshot::Sender<Result<()>>),
-    Reveal(Reveal<Header>, oneshot::Sender<Result<()>>),
-    Submit(Signed<Block>, oneshot::Sender<Result<()>>),
+    Commit(B256, Commitment, oneshot::Sender<Result<()>>),
+    Reveal(B256, Reveal<Header>, oneshot::Sender<Result<()>>),
+    Submit(B256, Signed<Block>, oneshot::Sender<Result<()>>),
 }
 
 struct Inner {
-    /// Contract.
-    contract: Arc<Contract>,
     /// Scheduler.
     scheduler: Arc<Scheduler>,
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// In-memory blockchain.
-    blocks: Mutex<Vec<Block>>,
-    /// Current round.
-    round: Mutex<Option<Arc<Mutex<Round>>>>,
-    //round: Arc<Mutex<Round>>,
+    blocks: Mutex<HashMap<B256, Vec<Block>>>,
+    /// Current rounds.
+    rounds: Mutex<HashMap<B256, Arc<Mutex<Round>>>>,
     /// Block subscribers.
     block_subscribers: StreamSubscribers<Block>,
     /// Event subscribers.
-    event_subscribers: StreamSubscribers<Event>,
+    event_subscribers: StreamSubscribers<(B256, Event)>,
     /// Shutdown signal sender (until used).
     shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
     /// Shutdown signal receiver (until initialized).
@@ -283,22 +279,17 @@ pub struct DummyConsensusBackend {
 
 impl DummyConsensusBackend {
     /// Create new dummy consensus backend.
-    pub fn new(
-        contract: Arc<Contract>,
-        scheduler: Arc<Scheduler>,
-        storage: Arc<StorageBackend>,
-    ) -> Self {
+    pub fn new(scheduler: Arc<Scheduler>, storage: Arc<StorageBackend>) -> Self {
         // Create channels.
         let (command_sender, command_receiver) = mpsc::unbounded();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         Self {
             inner: Arc::new(Inner {
-                contract,
                 scheduler,
                 storage,
-                blocks: Mutex::new(vec![Self::get_genesis_block()]),
-                round: Mutex::new(None),
+                blocks: Mutex::new(HashMap::new()),
+                rounds: Mutex::new(HashMap::new()),
                 block_subscribers: StreamSubscribers::new(),
                 event_subscribers: StreamSubscribers::new(),
                 shutdown_sender: Mutex::new(Some(shutdown_sender)),
@@ -309,11 +300,11 @@ impl DummyConsensusBackend {
         }
     }
 
-    fn get_genesis_block() -> Block {
+    fn get_genesis_block(contract_id: B256) -> Block {
         let mut block = Block {
             header: Header {
                 version: 0,
-                namespace: B256::zero(),
+                namespace: contract_id,
                 round: U256::from(0),
                 previous_hash: H256::zero(),
                 group_hash: H256::zero(),
@@ -346,60 +337,75 @@ impl DummyConsensusBackend {
         }))
     }
 
-    fn get_round(inner: Arc<Inner>) -> BoxFuture<Arc<Mutex<Round>>> {
-        Box::new(inner.scheduler.get_committees(inner.contract.id).and_then(
-            move |mut committees| {
-                // Get the computation committee.
-                let committee = committees
-                    .drain(..)
-                    .filter(|c| c.kind == CommitteeType::Compute)
-                    .next();
-                if let Some(committee) = committee {
-                    let block = {
-                        let blocks = inner.blocks.lock().unwrap();
-                        blocks.last().unwrap().clone()
-                    };
+    /// Get or create round for specified contract.
+    fn get_round(inner: Arc<Inner>, contract_id: B256) -> BoxFuture<Arc<Mutex<Round>>> {
+        Box::new(
+            inner
+                .scheduler
+                .get_committees(contract_id)
+                .and_then(move |mut committees| {
+                    // Get the computation committee.
+                    let committee = committees
+                        .drain(..)
+                        .filter(|c| c.kind == CommitteeType::Compute)
+                        .next();
+                    if let Some(committee) = committee {
+                        let block = {
+                            let mut blocks = inner.blocks.lock().unwrap();
 
-                    // Check if we already have a round and if the round is for the same committee/block.
-                    let existing_round = {
-                        let round = inner.round.lock().unwrap();
-                        match *round {
-                            Some(ref shared_round) => {
-                                let round = shared_round.lock().unwrap();
+                            if blocks.contains_key(&contract_id) {
+                                // Get last block.
+                                let blocks = blocks.get(&contract_id).unwrap();
+                                blocks.last().unwrap().clone()
+                            } else {
+                                // No blockchain yet for this contract. Create a new one.
+                                let block = Self::get_genesis_block(contract_id);
+                                blocks.insert(contract_id.clone(), vec![block.clone()]);
 
-                                if round.current_block == block && round.committee == committee {
-                                    // Existing round is the same.
-                                    Some(shared_round.clone())
-                                } else {
-                                    // New round needed as either block or committee has changed.
-                                    None
-                                }
+                                block
                             }
-                            None => None,
-                        }
-                    };
+                        };
 
-                    match existing_round {
-                        Some(round) => Ok(round),
-                        None => {
-                            let new_round = Arc::new(Mutex::new(Round::new(
-                                inner.storage.clone(),
-                                committee,
-                                block,
-                            )));
-                            let mut round = inner.round.lock().unwrap();
-                            *round = Some(new_round.clone());
+                        // Check if we already have a round and if the round is for the same committee/block.
+                        let mut rounds = inner.rounds.lock().unwrap();
 
-                            Ok(new_round)
+                        let existing_round = if rounds.contains_key(&contract_id) {
+                            // Round already exists for this contract.
+                            let shared_round = rounds.get(&contract_id).unwrap();
+                            let round = shared_round.lock().unwrap();
+
+                            if round.current_block == block && round.committee == committee {
+                                // Existing round is the same.
+                                Some(shared_round.clone())
+                            } else {
+                                // New round needed as either block or committee has changed.
+                                None
+                            }
+                        } else {
+                            // No round exists for this contract.
+                            None
+                        };
+
+                        match existing_round {
+                            Some(round) => Ok(round),
+                            None => {
+                                let new_round = Arc::new(Mutex::new(Round::new(
+                                    inner.storage.clone(),
+                                    committee,
+                                    block,
+                                )));
+                                rounds.insert(contract_id.clone(), new_round.clone());
+
+                                Ok(new_round)
+                            }
                         }
+                    } else {
+                        // No compute committee, this is an error.
+                        error!("No compute committee received for current round");
+                        panic!("scheduler gave us no compute committee");
                     }
-                } else {
-                    // No compute committee, this is an error.
-                    error!("No compute committee received for current round");
-                    panic!("scheduler gave us no compute committee");
-                }
-            },
-        ))
+                }),
+        )
     }
 
     /// Attempt to finalize the current round.
@@ -407,6 +413,7 @@ impl DummyConsensusBackend {
         let round_clone = round.clone();
         let mut round_guard = round_clone.lock().unwrap();
         let inner = inner.clone();
+        let contract_id = round_guard.current_block.header.namespace.clone();
 
         Box::new(round_guard.try_finalize().then(move |result| {
             match result {
@@ -414,7 +421,8 @@ impl DummyConsensusBackend {
                     // Round has been finalized, block is ready.
                     {
                         let mut blocks = inner.blocks.lock().unwrap();
-                        blocks.push(block.clone());
+                        let mut blockchain = blocks.get_mut(&contract_id).unwrap();
+                        blockchain.push(block.clone());
                     }
 
                     inner.block_subscribers.notify(&block);
@@ -424,7 +432,9 @@ impl DummyConsensusBackend {
                 }
                 Ok(FinalizationResult::NotifyReveals) => {
                     // Notify round participants that they should reveal.
-                    inner.event_subscribers.notify(&Event::CommitmentsReceived);
+                    inner
+                        .event_subscribers
+                        .notify(&(contract_id.clone(), Event::CommitmentsReceived));
                 }
                 Err(error) => {
                     // Round has failed.
@@ -435,7 +445,9 @@ impl DummyConsensusBackend {
                         round.reset();
                     }
 
-                    inner.event_subscribers.notify(&Event::RoundFailed(error));
+                    inner
+                        .event_subscribers
+                        .notify(&(contract_id.clone(), Event::RoundFailed(error)));
                 }
             }
 
@@ -465,20 +477,26 @@ impl ConsensusBackend for DummyConsensusBackend {
                         // Process command.
                         let shared_inner = shared_inner.clone();
 
+                        let contract_id = match command {
+                            Command::Commit(contract_id, _, _) => contract_id,
+                            Command::Reveal(contract_id, _, _) => contract_id,
+                            Command::Submit(contract_id, _, _) => contract_id,
+                        };
+
                         Box::new(
-                            Self::get_round(shared_inner.clone())
+                            Self::get_round(shared_inner.clone(), contract_id)
                                 .and_then(move |round| {
-                                    // Process command.
+                                    // Actually process command.
                                     let (sender, result) = {
                                         let mut round = round.lock().unwrap();
                                         match command {
-                                            Command::Commit(commitment, sender) => {
+                                            Command::Commit(_, commitment, sender) => {
                                                 (sender, round.add_commitment(commitment))
                                             }
-                                            Command::Reveal(reveal, sender) => {
+                                            Command::Reveal(_, reveal, sender) => {
                                                 (sender, round.add_reveal(reveal))
                                             }
-                                            Command::Submit(block, sender) => {
+                                            Command::Submit(_, block, sender) => {
                                                 (sender, round.add_submit(block))
                                             }
                                         }
@@ -529,35 +547,51 @@ impl ConsensusBackend for DummyConsensusBackend {
         }
     }
 
-    fn get_blocks(&self) -> BoxStream<Block> {
+    fn get_blocks(&self, contract_id: B256) -> BoxStream<Block> {
         let (sender, receiver) = self.inner.block_subscribers.subscribe();
         {
-            let blocks = self.inner.blocks.lock().unwrap();
-            match blocks.last() {
-                Some(block) => drop(sender.unbounded_send(block.clone())),
-                None => {}
-            }
+            let mut blocks = self.inner.blocks.lock().unwrap();
+            let block = if blocks.contains_key(&contract_id) {
+                let blockchain = blocks.get(&contract_id).unwrap();
+                blockchain.last().expect("empty blockchain").clone()
+            } else {
+                // No blockchain yet for this contract. Create a new one.
+                let block = Self::get_genesis_block(contract_id);
+                blocks.insert(contract_id.clone(), vec![block.clone()]);
+
+                block
+            };
+
+            drop(sender.unbounded_send(block));
         }
 
         receiver
+            .filter(move |block| block.header.namespace == contract_id)
+            .into_box()
     }
 
-    fn get_events(&self) -> BoxStream<Event> {
-        self.inner.event_subscribers.subscribe().1
+    fn get_events(&self, contract_id: B256) -> BoxStream<Event> {
+        self.inner
+            .event_subscribers
+            .subscribe()
+            .1
+            .filter(move |&(cid, _)| cid == contract_id)
+            .map(|(_, event)| event)
+            .into_box()
     }
 
-    fn commit(&self, commitment: Commitment) -> BoxFuture<()> {
+    fn commit(&self, contract_id: B256, commitment: Commitment) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
-        self.send_command(Command::Commit(commitment, sender), receiver)
+        self.send_command(Command::Commit(contract_id, commitment, sender), receiver)
     }
 
-    fn reveal(&self, reveal: Reveal<Header>) -> BoxFuture<()> {
+    fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
-        self.send_command(Command::Reveal(reveal, sender), receiver)
+        self.send_command(Command::Reveal(contract_id, reveal, sender), receiver)
     }
 
-    fn submit(&self, block: Signed<Block>) -> BoxFuture<()> {
+    fn submit(&self, contract_id: B256, block: Signed<Block>) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
-        self.send_command(Command::Submit(block, sender), receiver)
+        self.send_command(Command::Submit(contract_id, block, sender), receiver)
     }
 }
