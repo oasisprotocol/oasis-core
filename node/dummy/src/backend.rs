@@ -31,7 +31,7 @@ use super::service::DebugService;
 /// EpochTime TimeSource backend.
 pub enum TimeSourceImpl {
     /// Mock (configurable interval) epochs.
-    Mock((Arc<MockTimeSource>, u64)),
+    Mock((Arc<MockTimeSource>, u64, bool)),
 
     /// Mock (service pumped) epochs.
     MockRPC((Arc<MockTimeSource>, u64)),
@@ -77,7 +77,7 @@ impl DummyBackend {
         time_source_impl: TimeSourceImpl,
     ) -> Result<Self> {
         let time_source: Arc<TimeSource> = match time_source_impl {
-            TimeSourceImpl::Mock((ref ts, _)) => ts.clone(),
+            TimeSourceImpl::Mock((ref ts, _, _)) => ts.clone(),
             TimeSourceImpl::MockRPC((ref ts, _)) => ts.clone(),
             TimeSourceImpl::System(ref ts) => ts.clone(),
         };
@@ -154,30 +154,33 @@ impl DummyBackend {
 
         // Start the timer that drives the clock.
         match *self.time_source {
-            TimeSourceImpl::Mock((ref ts, epoch_interval)) => {
+            TimeSourceImpl::Mock((ref ts, epoch_interval, wait_on_rpc)) => {
                 // Start the mock epoch at 0.
                 ts.set_mock_time(0, epoch_interval).unwrap();
 
                 let (now, till) = ts.get_epoch().unwrap();
-                trace!("MockTime: Epoch: {} Till: {}", now, till);
+                if wait_on_rpc {
+                    trace!("MockTime: Epoch: {} Till: {} (-> Wait)", now, till);
+                } else {
+                    trace!("MockTime: Epoch: {} Till: {}", now, till);
+                    let dur = Duration::from_secs(epoch_interval);
+                    executor.spawn({
+                        let time_source = ts.clone();
+                        let time_notifier = self.time_notifier.clone();
 
-                let dur = Duration::from_secs(epoch_interval);
-                executor.spawn({
-                    let time_source = ts.clone();
-                    let time_notifier = self.time_notifier.clone();
-
-                    Box::new(
-                        Interval::new(dur)
-                            .map_err(|error| Error::from(error))
-                            .for_each(move |_| {
-                                let (now, till) = time_source.get_epoch().unwrap();
-                                trace!("MockTime: Epoch: {} Till: {}", now + 1, till);
-                                time_source.set_mock_time(now + 1, till)?;
-                                time_notifier.notify_subscribers()
-                            })
-                            .then(|_| future::ok(())),
-                    )
-                });
+                        Box::new(
+                            Interval::new(dur)
+                                .map_err(|error| Error::from(error))
+                                .for_each(move |_| {
+                                    let (now, till) = time_source.get_epoch().unwrap();
+                                    trace!("MockTime: Epoch: {} Till: {}", now + 1, till);
+                                    time_source.set_mock_time(now + 1, till)?;
+                                    time_notifier.notify_subscribers()
+                                })
+                                .then(|_| future::ok(())),
+                        )
+                    });
+                }
             }
             TimeSourceImpl::MockRPC((ref ts, epoch_interval)) => {
                 // Start the mock epoch at 0.

@@ -65,6 +65,13 @@ fn main() {
                 .takes_value(true)
                 .display_order(4),
         )
+        .arg(
+            Arg::with_name("time-rpc-wait")
+                .long("time-rpc-wait")
+                .help("Wait on an RPC call before starting MockTime timer.")
+                .requires_if("time-source", TIME_SOURCE_MOCK)
+                .display_order(1),
+        )
         .get_matches();
 
     // Initialize logger.
@@ -79,7 +86,8 @@ fn main() {
     let time_source_impl = match matches.value_of("time-source").unwrap() {
         TIME_SOURCE_MOCK => {
             let ts = Arc::new(MockTimeSource::new());
-            TimeSourceImpl::Mock((ts, mock_epoch_interval))
+            let should_wait = matches.is_present("time-rpc-wait");
+            TimeSourceImpl::Mock((ts, mock_epoch_interval, should_wait))
         }
         TIME_SOURCE_MOCK_RPC => {
             let ts = Arc::new(MockTimeSource::new());
