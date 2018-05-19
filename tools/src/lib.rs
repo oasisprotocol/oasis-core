@@ -8,6 +8,7 @@ extern crate mktemp;
 extern crate protobuf;
 extern crate protoc;
 extern crate protoc_rust;
+extern crate regex;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;

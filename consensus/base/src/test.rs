@@ -45,6 +45,8 @@ impl SimulatedComputationBatch {
 }
 
 struct SimulatedNodeInner {
+    /// Contract identifier.
+    contract_id: B256,
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Signer for the simulated node.
@@ -66,7 +68,7 @@ pub struct SimulatedNode {
 
 impl SimulatedNode {
     /// Create new simulated node.
-    pub fn new(storage: Arc<StorageBackend>) -> Self {
+    pub fn new(storage: Arc<StorageBackend>, contract_id: B256) -> Self {
         let key_pair =
             Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
         let public_key = B256::from(key_pair.public_key_bytes());
@@ -74,6 +76,7 @@ impl SimulatedNode {
 
         Self {
             inner: Arc::new(Mutex::new(SimulatedNodeInner {
+                contract_id,
                 storage,
                 signer,
                 public_key,
@@ -98,11 +101,13 @@ impl SimulatedNode {
         // Create a channel for external commands. This is currently required because
         // there is no service discovery backend which we could subscribe to.
         let (sender, receiver) = mpsc::unbounded();
-        {
+        let contract_id = {
             let mut inner = self.inner.lock().unwrap();
             assert!(inner.command_channel.is_none());
             inner.command_channel.get_or_insert(sender);
-        }
+
+            inner.contract_id.clone()
+        };
 
         // Subscribe to new events.
         let event_processor: BoxFuture<()> = {
@@ -111,7 +116,7 @@ impl SimulatedNode {
 
             Box::new(
                 backend
-                    .get_events()
+                    .get_events(contract_id)
                     .for_each(move |event| -> BoxFuture<()> {
                         let mut inner = shared_inner.lock().unwrap();
 
@@ -126,7 +131,7 @@ impl SimulatedNode {
                                 );
 
                                 // Send reveal.
-                                let result = backend.reveal(reveal);
+                                let result = backend.reveal(inner.contract_id, reveal);
 
                                 // Leader also submits block.
                                 // TODO: Only the leader should submit a block.
@@ -144,7 +149,9 @@ impl SimulatedNode {
                                     );
 
                                     // Submit block.
-                                    Box::new(backend.submit(block).then(|_| Ok(())))
+                                    Box::new(
+                                        backend.submit(inner.contract_id, block).then(|_| Ok(())),
+                                    )
                                 }))
                             }
                             Event::RoundFailed(error) => {
@@ -160,6 +167,7 @@ impl SimulatedNode {
         let command_processor: BoxFuture<()> = {
             let shared_inner = self.inner.clone();
             let backend = backend.clone();
+            let contract_id = contract_id.clone();
 
             Box::new(
                 receiver
@@ -168,10 +176,11 @@ impl SimulatedNode {
                         match command {
                             Command::Compute => {
                                 // Fetch latest block.
-                                let latest_block = backend.get_latest_block();
+                                let latest_block = backend.get_latest_block(contract_id);
 
                                 let shared_inner = shared_inner.clone();
                                 let backend = backend.clone();
+                                let contract_id = contract_id.clone();
 
                                 Box::new(latest_block.and_then(move |block| {
                                     let mut inner = shared_inner.lock().unwrap();
@@ -196,7 +205,7 @@ impl SimulatedNode {
                                     inner
                                         .storage
                                         .insert(output, 7)
-                                        .and_then(move |_| backend.commit(commitment))
+                                        .and_then(move |_| backend.commit(contract_id, commitment))
                                 }))
                             }
                         }
@@ -236,8 +245,12 @@ impl SimulatedNode {
 }
 
 /// Generate the specified number of simulated compute nodes.
-pub fn generate_simulated_nodes(count: usize, storage: Arc<StorageBackend>) -> Vec<SimulatedNode> {
+pub fn generate_simulated_nodes(
+    count: usize,
+    storage: Arc<StorageBackend>,
+    contract_id: B256,
+) -> Vec<SimulatedNode> {
     (0..count)
-        .map(|_| SimulatedNode::new(storage.clone()))
+        .map(|_| SimulatedNode::new(storage.clone(), contract_id))
         .collect()
 }

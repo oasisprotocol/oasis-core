@@ -4,13 +4,11 @@ use std::time::{Duration, Instant};
 
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
-use ekiden_common::contract::Contract;
 use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
 use ekiden_common_api::create_time_source;
 use ekiden_consensus_api::create_consensus;
 use ekiden_consensus_base::{ConsensusBackend, ConsensusService};
 use ekiden_consensus_dummy::DummyConsensusBackend;
-use ekiden_core::bytes::B256;
 use ekiden_core::epochtime::{TimeSource, EPOCH_INTERVAL};
 use ekiden_core::epochtime::grpc::EpochTimeService;
 use ekiden_core::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource, SystemTimeSource};
@@ -35,7 +33,7 @@ use super::service::DebugService;
 /// EpochTime TimeSource backend.
 pub enum TimeSourceImpl {
     /// Mock (configurable interval) epochs.
-    Mock((Arc<MockTimeSource>, u64)),
+    Mock((Arc<MockTimeSource>, u64, bool)),
 
     /// Mock (service pumped) epochs.
     MockRPC((Arc<MockTimeSource>, u64)),
@@ -81,7 +79,7 @@ impl DummyBackend {
         time_source_impl: TimeSourceImpl,
     ) -> Result<Self> {
         let time_source: Arc<TimeSource> = match time_source_impl {
-            TimeSourceImpl::Mock((ref ts, _)) => ts.clone(),
+            TimeSourceImpl::Mock((ref ts, _, _)) => ts.clone(),
             TimeSourceImpl::MockRPC((ref ts, _)) => ts.clone(),
             TimeSourceImpl::System(ref ts) => ts.clone(),
         };
@@ -101,28 +99,7 @@ impl DummyBackend {
 
         let storage = Arc::new(DummyStorageBackend::new());
 
-        // HACK HACK HACK HACK
-        //
-        // Terrible things will happen if more than one contract (or a
-        // contract with a non-zero id?) is used with the dummy node until
-        // this is changed.
-        //
-        // The moment the consensus code is reworked to support multiple
-        // contracts with a single ConsensusBackend, this hack should be
-        // removed.
-        let dummy_contract = Contract {
-            id: B256::zero(),
-            store_id: B256::zero(),
-            code: vec![],
-            minimum_bond: 0,
-            mode_nondeterministic: false,
-            features_sgx: false,
-            advertisement_rate: 0,
-            replica_group_size: 0,
-            storage_group_size: 0,
-        };
         let consensus = Arc::new(DummyConsensusBackend::new(
-            Arc::new(dummy_contract),
             scheduler.clone(),
             storage.clone(),
         ));
@@ -180,30 +157,33 @@ impl DummyBackend {
 
         // Start the timer that drives the clock.
         match *self.time_source {
-            TimeSourceImpl::Mock((ref ts, epoch_interval)) => {
+            TimeSourceImpl::Mock((ref ts, epoch_interval, wait_on_rpc)) => {
                 // Start the mock epoch at 0.
                 ts.set_mock_time(0, epoch_interval).unwrap();
 
                 let (now, till) = ts.get_epoch().unwrap();
-                trace!("MockTime: Epoch: {} Till: {}", now, till);
+                if wait_on_rpc {
+                    trace!("MockTime: Epoch: {} Till: {} (-> Wait)", now, till);
+                } else {
+                    trace!("MockTime: Epoch: {} Till: {}", now, till);
+                    let dur = Duration::from_secs(epoch_interval);
+                    executor.spawn({
+                        let time_source = ts.clone();
+                        let time_notifier = self.time_notifier.clone();
 
-                let dur = Duration::from_secs(epoch_interval);
-                executor.spawn({
-                    let time_source = ts.clone();
-                    let time_notifier = self.time_notifier.clone();
-
-                    Box::new(
-                        Interval::new(dur)
-                            .map_err(|error| Error::from(error))
-                            .for_each(move |_| {
-                                let (now, till) = time_source.get_epoch().unwrap();
-                                trace!("MockTime: Epoch: {} Till: {}", now + 1, till);
-                                time_source.set_mock_time(now + 1, till)?;
-                                time_notifier.notify_subscribers()
-                            })
-                            .then(|_| future::ok(())),
-                    )
-                });
+                        Box::new(
+                            Interval::new(dur)
+                                .map_err(|error| Error::from(error))
+                                .for_each(move |_| {
+                                    let (now, till) = time_source.get_epoch().unwrap();
+                                    trace!("MockTime: Epoch: {} Till: {}", now + 1, till);
+                                    time_source.set_mock_time(now + 1, till)?;
+                                    time_notifier.notify_subscribers()
+                                })
+                                .then(|_| future::ok(())),
+                        )
+                    });
+                }
             }
             TimeSourceImpl::MockRPC((ref ts, epoch_interval)) => {
                 // Start the mock epoch at 0.

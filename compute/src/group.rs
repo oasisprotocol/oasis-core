@@ -5,8 +5,7 @@ use grpcio;
 use protobuf::RepeatedField;
 
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
-use ekiden_core::bytes::B64;
-use ekiden_core::contract::Contract;
+use ekiden_core::bytes::{B256, B64};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::{future, BoxFuture, Executor, Future, IntoFuture, Stream, StreamExt};
@@ -29,8 +28,8 @@ enum Command {
 }
 
 struct Inner {
-    /// Contract the computation group is for.
-    contract: Arc<Contract>,
+    /// Contract identifier the computation group is for.
+    contract_id: B256,
     /// Scheduler.
     scheduler: Arc<Scheduler>,
     /// Entity registry.
@@ -56,7 +55,7 @@ pub struct ComputationGroup {
 
 impl ComputationGroup {
     pub fn new(
-        contract: Arc<Contract>,
+        contract_id: B256,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
         signer: Arc<Signer + Send + Sync>,
@@ -66,7 +65,7 @@ impl ComputationGroup {
 
         Self {
             inner: Arc::new(Inner {
-                contract,
+                contract_id,
                 scheduler,
                 entity_registry,
                 node_group: NodeGroup::new(),
@@ -86,7 +85,7 @@ impl ComputationGroup {
         // Subscribe to computation group formations for given contract and update nodes.
         executor.spawn({
             let inner = self.inner.clone();
-            let contract_id = self.inner.contract.id;
+            let contract_id = self.inner.contract_id;
 
             self.inner
                 .scheduler
