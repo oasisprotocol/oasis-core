@@ -61,7 +61,6 @@ fn test_dummy_backend_two_rounds() {
         .register_contract(signed_contract)
         .wait()
         .unwrap();
-    let contract = Arc::new(contract);
 
     let scheduler = Arc::new(DummySchedulerBackend::new(
         beacon.clone(),
@@ -72,7 +71,11 @@ fn test_dummy_backend_two_rounds() {
     let storage = Arc::new(DummyStorageBackend::new());
 
     // Generate simulated nodes and populate registry with them.
-    let nodes = Arc::new(generate_simulated_nodes(NODE_COUNT, storage.clone()));
+    let nodes = Arc::new(generate_simulated_nodes(
+        NODE_COUNT,
+        storage.clone(),
+        contract.id,
+    ));
     populate_entity_registry(
         entity_registry.clone(),
         nodes.iter().map(|node| node.get_public_key()).collect(),
@@ -81,7 +84,7 @@ fn test_dummy_backend_two_rounds() {
     let nodes = Arc::new(nodes);
 
     // Create dummy consensus backend.
-    let backend = Arc::new(DummyConsensusBackend::new(contract, scheduler, storage));
+    let backend = Arc::new(DummyConsensusBackend::new(scheduler, storage));
 
     let mut pool = cpupool::CpuPool::new(4);
 
@@ -98,31 +101,34 @@ fn test_dummy_backend_two_rounds() {
     }
 
     // Stop when a new block is seen on the chain.
-    let wait_rounds = backend.get_blocks().take(3).for_each(move |block| {
-        assert!(block.is_internally_consistent());
+    let wait_rounds = backend
+        .get_blocks(contract.id)
+        .take(3)
+        .for_each(move |block| {
+            assert!(block.is_internally_consistent());
 
-        match block.header.round.as_u32() {
-            0 => {}
-            1 => {
-                // First round has completed, dispatch a new round of work.
-                for ref node in nodes.iter() {
-                    node.compute();
+            match block.header.round.as_u32() {
+                0 => {}
+                1 => {
+                    // First round has completed, dispatch a new round of work.
+                    for ref node in nodes.iter() {
+                        node.compute();
+                    }
                 }
-            }
-            2 => {
-                // Second round has completed, request all nodes to shutdown.
-                for ref node in nodes.iter() {
-                    node.shutdown();
+                2 => {
+                    // Second round has completed, request all nodes to shutdown.
+                    for ref node in nodes.iter() {
+                        node.shutdown();
+                    }
+
+                    let backend = backend.clone();
+                    backend.shutdown();
                 }
-
-                let backend = backend.clone();
-                backend.shutdown();
+                round => panic!("incorrect round number: {}", round),
             }
-            round => panic!("incorrect round number: {}", round),
-        }
 
-        Ok(())
-    });
+            Ok(())
+        });
 
     tasks.push(Box::new(wait_rounds));
 

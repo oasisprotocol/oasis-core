@@ -7,6 +7,7 @@ use ekiden_compute_api;
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_client::ConsensusClient;
 use ekiden_core::address::Address;
+use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
 use ekiden_core::error::Result;
@@ -20,6 +21,7 @@ use ekiden_registry_client::{ContractRegistryClient, EntityRegistryClient};
 use ekiden_scheduler_base::Scheduler;
 use ekiden_scheduler_client::SchedulerClient;
 use ekiden_storage_frontend::StorageClient;
+use ekiden_tools::get_contract_identity;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::group::ComputationGroup;
@@ -80,7 +82,7 @@ impl ComputeNode {
         let grpc_environment = Arc::new(grpcio::Environment::new(config.grpc_threads));
 
         // Create IAS.
-        let ias = Arc::new(IAS::new(config.ias).unwrap());
+        let ias = Arc::new(IAS::new(config.ias)?);
 
         // Create scheduler.
         // TODO: Base on configuration.
@@ -102,8 +104,12 @@ impl ComputeNode {
         // TODO: Get this from somewhere.
         // TODO: This should probably be done independently?
         // TODO: We currently use the node key pair as the entity key pair.
+        let contract_id =
+            B256::from(get_contract_identity(config.worker.contract_filename.clone())?.as_slice());
+        info!("Running compute node for contract {:?}", contract_id);
         let contract = {
             let mut contract = Contract::default();
+            contract.id = contract_id;
             contract.replica_group_size = config.compute_replicas;
             contract.storage_group_size = 1;
 
@@ -116,13 +122,8 @@ impl ComputeNode {
         );
         // XXX: Needed to avoid registering the key manager compute node for now.
         if config.worker.key_manager.is_some() {
-            contract_registry
-                .register_contract(signed_contract)
-                .wait()
-                .unwrap();
+            contract_registry.register_contract(signed_contract).wait()?;
         }
-
-        let contract = Arc::new(contract);
 
         // Register entity with the registry.
         // TODO: This should probably be done independently?
@@ -135,10 +136,7 @@ impl ComputeNode {
         );
         // XXX: Needed to avoid registering the key manager compute node for now.
         if config.worker.key_manager.is_some() {
-            entity_registry
-                .register_entity(signed_entity)
-                .wait()
-                .unwrap();
+            entity_registry.register_entity(signed_entity).wait()?;
         }
 
         // Register node with the registry.
@@ -147,7 +145,7 @@ impl ComputeNode {
             id: config.consensus.signer.get_public_key(),
             entity_id: entity_pk,
             expiration: 0xffffffffffffffff,
-            addresses: Address::for_local_port(config.port).unwrap(),
+            addresses: Address::for_local_port(config.port)?,
             stake: vec![],
         };
 
@@ -161,7 +159,7 @@ impl ComputeNode {
         // XXX: Needed to avoid registering the key manager compute node for now.
         if config.worker.key_manager.is_some() {
             info!("Registering compute node with the registry");
-            entity_registry.register_node(signed_node).wait().unwrap();
+            entity_registry.register_node(signed_node).wait()?;
             info!("Compute node registration done");
         }
 
@@ -175,7 +173,7 @@ impl ComputeNode {
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
-            contract,
+            contract_id,
             scheduler.clone(),
             entity_registry.clone(),
             config.consensus.signer.clone(),
@@ -185,6 +183,7 @@ impl ComputeNode {
         // Create consensus frontend.
         let consensus_frontend = Arc::new(ConsensusFrontend::new(
             config.consensus,
+            contract_id,
             worker.clone(),
             computation_group.clone(),
             consensus_backend.clone(),

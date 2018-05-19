@@ -4,12 +4,10 @@ use std::time::{Duration, Instant};
 
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
-use ekiden_common::contract::Contract;
 use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
 use ekiden_consensus_api::create_consensus;
 use ekiden_consensus_base::{ConsensusBackend, ConsensusService};
 use ekiden_consensus_dummy::DummyConsensusBackend;
-use ekiden_core::bytes::B256;
 use ekiden_core::epochtime::{MockTimeSource, SystemTimeSource, TimeSource, TimeSourceNotifier,
                              EPOCH_INTERVAL};
 use ekiden_core::error::{Error, Result};
@@ -99,28 +97,7 @@ impl DummyBackend {
 
         let storage = Arc::new(DummyStorageBackend::new());
 
-        // HACK HACK HACK HACK
-        //
-        // Terrible things will happen if more than one contract (or a
-        // contract with a non-zero id?) is used with the dummy node until
-        // this is changed.
-        //
-        // The moment the consensus code is reworked to support multiple
-        // contracts with a single ConsensusBackend, this hack should be
-        // removed.
-        let dummy_contract = Contract {
-            id: B256::zero(),
-            store_id: B256::zero(),
-            code: vec![],
-            minimum_bond: 0,
-            mode_nondeterministic: false,
-            features_sgx: false,
-            advertisement_rate: 0,
-            replica_group_size: 0,
-            storage_group_size: 0,
-        };
         let consensus = Arc::new(DummyConsensusBackend::new(
-            Arc::new(dummy_contract),
             scheduler.clone(),
             storage.clone(),
         ));

@@ -22,6 +22,7 @@ ekiden-beacon-base = { path = "../beacon/base", version = "0.1.0-alpha.4" }
 ekiden-beacon-dummy = { path = "../beacon/dummy", version = "0.1.0-alpha.4" }
 ekiden-registry-base = { path = "../registry/base", version = "0.1.0-alpha.4" }
 ekiden-registry-client = { path = "../registry/client", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../tools", version = "0.1.0-alpha.4" }
 protobuf = "~1.4"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 thread_local = "0.3.5"

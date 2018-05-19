@@ -6,5 +6,6 @@ error_chain!{
         Io(::std::io::Error);
         TomlSerialize(super::toml::ser::Error);
         TomlDeserialize(super::toml::de::Error);
+        Regex(super::regex::Error);
     }
 }

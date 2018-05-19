@@ -14,7 +14,7 @@ use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal, 
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, Stream, StreamExt};
+use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::hash::EncodedHash;
 use ekiden_core::signature::{Signed, Signer};
@@ -56,7 +56,9 @@ impl Default for PendingBatch {
     }
 }
 
-struct ConsensusFrontendInner {
+struct Inner {
+    /// Contract identifier this consensus frontend is for.
+    contract_id: B256,
     /// Consensus backend.
     backend: Arc<ConsensusBackend>,
     /// Signer for the compute node.
@@ -98,13 +100,14 @@ pub struct ConsensusConfiguration {
 
 /// Compute node consensus frontend.
 pub struct ConsensusFrontend {
-    inner: Arc<ConsensusFrontendInner>,
+    inner: Arc<Inner>,
 }
 
 impl ConsensusFrontend {
     /// Create a new consensus frontend.
     pub fn new(
         config: ConsensusConfiguration,
+        contract_id: B256,
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
@@ -112,7 +115,8 @@ impl ConsensusFrontend {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
         Self {
-            inner: Arc::new(ConsensusFrontendInner {
+            inner: Arc::new(Inner {
+                contract_id,
                 backend,
                 signer: config.signer,
                 worker,
@@ -136,25 +140,35 @@ impl ConsensusFrontend {
         executor.spawn({
             let inner = self.inner.clone();
 
-            self.inner.backend.get_events().for_each_log_errors(
-                module_path!(),
-                "Unexpected error while processing consensus events",
-                move |event| match event {
-                    Event::CommitmentsReceived => Self::handle_commitments_received(inner.clone()),
-                    Event::RoundFailed(error) => Self::handle_round_failed(inner.clone(), error),
-                },
-            )
+            self.inner
+                .backend
+                .get_events(self.inner.contract_id)
+                .for_each_log_errors(
+                    module_path!(),
+                    "Unexpected error while processing consensus events",
+                    move |event| match event {
+                        Event::CommitmentsReceived => {
+                            Self::handle_commitments_received(inner.clone())
+                        }
+                        Event::RoundFailed(error) => {
+                            Self::handle_round_failed(inner.clone(), error)
+                        }
+                    },
+                )
         });
 
         // Subscribe to consensus blocks.
         executor.spawn({
             let inner = self.inner.clone();
 
-            self.inner.backend.get_blocks().for_each_log_errors(
-                module_path!(),
-                "Unexpected error while processing consensus blocks",
-                move |block| Self::handle_block(inner.clone(), block).then(|_| future::ok(())),
-            )
+            self.inner
+                .backend
+                .get_blocks(self.inner.contract_id)
+                .for_each_log_errors(
+                    module_path!(),
+                    "Unexpected error while processing consensus blocks",
+                    move |block| Self::handle_block(inner.clone(), block),
+                )
         });
 
         // Receive proposed batches from worker.
@@ -201,10 +215,7 @@ impl ConsensusFrontend {
     }
 
     /// Handle append batch command.
-    fn handle_append_batch(
-        inner: Arc<ConsensusFrontendInner>,
-        mut calls: CallBatch,
-    ) -> BoxFuture<()> {
+    fn handle_append_batch(inner: Arc<Inner>, mut calls: CallBatch) -> BoxFuture<()> {
         // Ignore empty batches.
         if calls.is_empty() {
             return Box::new(future::ok(()));
@@ -228,7 +239,7 @@ impl ConsensusFrontend {
     }
 
     /// Handle commitments received event from consensus backend.
-    fn handle_commitments_received(inner: Arc<ConsensusFrontendInner>) -> BoxFuture<()> {
+    fn handle_commitments_received(inner: Arc<Inner>) -> BoxFuture<()> {
         // Ensure we have proposed a block in the current round.
         let proposed_block_guard = inner.proposed_block.lock().unwrap();
         if proposed_block_guard.is_none() {
@@ -238,7 +249,7 @@ impl ConsensusFrontend {
 
         let proposed_block = proposed_block_guard.as_ref().unwrap();
 
-        info!("Submitting reveal and block");
+        info!("Submitting reveal");
 
         // Generate and submit reveal.
         let reveal = Reveal::new(
@@ -246,21 +257,30 @@ impl ConsensusFrontend {
             &proposed_block.nonce,
             &proposed_block.block.header,
         );
-        let result = inner.backend.reveal(reveal);
+        let result = inner.backend.reveal(inner.contract_id, reveal);
 
         // If we are a leader, also submit the block.
-        // TODO: Only submit block if we are a leader.
-        let block = proposed_block.block.clone();
-        let inner = inner.clone();
-        Box::new(result.and_then(move |_| {
-            // Sign and submit block.
-            let signed_block = Signed::sign(&inner.signer, &BLOCK_SUBMIT_SIGNATURE_CONTEXT, block);
-            inner.backend.submit(signed_block)
-        }))
+        if inner.computation_group.is_leader() {
+            let block = proposed_block.block.clone();
+            let inner = inner.clone();
+
+            result
+                .and_then(move |_| {
+                    info!("Submitting block");
+
+                    // Sign and submit block.
+                    let signed_block =
+                        Signed::sign(&inner.signer, &BLOCK_SUBMIT_SIGNATURE_CONTEXT, block);
+                    inner.backend.submit(inner.contract_id, signed_block)
+                })
+                .into_box()
+        } else {
+            result
+        }
     }
 
     /// Handle round failed event from consensus backend.
-    fn handle_round_failed(inner: Arc<ConsensusFrontendInner>, error: Error) -> BoxFuture<()> {
+    fn handle_round_failed(inner: Arc<Inner>, error: Error) -> BoxFuture<()> {
         error!("Round has failed: {:?}", error);
 
         // TODO: Should we move all failed calls back into the current batch?
@@ -281,7 +301,7 @@ impl ConsensusFrontend {
     }
 
     /// Handle new block from consensus backend.
-    fn handle_block(inner: Arc<ConsensusFrontendInner>, block: Block) -> BoxFuture<()> {
+    fn handle_block(inner: Arc<Inner>, block: Block) -> BoxFuture<()> {
         info!(
             "Received new block at round {:?} from consensus backend",
             block.header.round
@@ -334,7 +354,7 @@ impl ConsensusFrontend {
     /// * Number of calls it contains reaches `max_batch_size`.
     /// * More than `max_batch_timeout` time elapsed since batch was created.
     /// * No other batch is currently processing.
-    fn check_and_process_current_batch(inner: Arc<ConsensusFrontendInner>) -> BoxFuture<()> {
+    fn check_and_process_current_batch(inner: Arc<Inner>) -> BoxFuture<()> {
         // First check if a batch is already being processed.
         if inner.batch_processing.load(SeqCst) {
             return Box::new(future::ok(()));
@@ -370,7 +390,7 @@ impl ConsensusFrontend {
 
     /// Process given batch locally and propose it when done.
     fn process_batch(
-        inner: Arc<ConsensusFrontendInner>,
+        inner: Arc<Inner>,
         calls: CallBatch,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
@@ -378,20 +398,25 @@ impl ConsensusFrontend {
         inner.batch_processing.store(true, SeqCst);
 
         // Fetch the latest block and request the worker to process the batch.
-        Box::new(inner.backend.get_latest_block().and_then(move |block| {
-            // Send block and channel to worker.
-            let process_batch = inner.worker.contract_call_batch(calls, block);
+        Box::new(
+            inner
+                .backend
+                .get_latest_block(inner.contract_id)
+                .and_then(move |block| {
+                    // Send block and channel to worker.
+                    let process_batch = inner.worker.contract_call_batch(calls, block);
 
-            // After the batch is processed, propose the batch.
-            process_batch
-                .map_err(|_| Error::new("channel closed"))
-                .and_then(move |result| Self::propose_batch(inner, result, committee))
-        }))
+                    // After the batch is processed, propose the batch.
+                    process_batch
+                        .map_err(|_| Error::new("channel closed"))
+                        .and_then(move |result| Self::propose_batch(inner, result, committee))
+                }),
+        )
     }
 
     /// Propose a batch to consensus backend.
     fn propose_batch(
-        inner: Arc<ConsensusFrontendInner>,
+        inner: Arc<Inner>,
         computed_batch: Result<ComputedBatch>,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
@@ -456,7 +481,7 @@ impl ConsensusFrontend {
         }
 
         // Commit to block.
-        inner.backend.commit(commitment)
+        inner.backend.commit(inner.contract_id, commitment)
     }
 
     /// Append contract calls to current batch for eventual processing.
