@@ -5,11 +5,13 @@ use std::time::{Duration, Instant};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
+use ekiden_common_api::create_time_source;
 use ekiden_consensus_api::create_consensus;
 use ekiden_consensus_base::{ConsensusBackend, ConsensusService};
 use ekiden_consensus_dummy::DummyConsensusBackend;
-use ekiden_core::epochtime::{MockTimeSource, SystemTimeSource, TimeSource, TimeSourceNotifier,
-                             EPOCH_INTERVAL};
+use ekiden_core::epochtime::{TimeSource, EPOCH_INTERVAL};
+use ekiden_core::epochtime::grpc::EpochTimeService;
+use ekiden_core::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource, SystemTimeSource};
 use ekiden_core::error::{Error, Result};
 use ekiden_node_dummy_api::create_dummy_debug;
 use ekiden_registry_api::{create_contract_registry, create_entity_registry};
@@ -51,7 +53,7 @@ pub struct DummyBackendConfiguration {
 /// Random Beacon, Consensus, Registry and Storage backends.
 pub struct DummyBackend {
     /// Time source notifier.
-    pub time_notifier: Arc<TimeSourceNotifier>,
+    pub time_notifier: Arc<LocalTimeSourceNotifier>,
     /// Random beacon.
     pub random_beacon: Arc<RandomBeacon>,
     /// Contract registry.
@@ -83,7 +85,7 @@ impl DummyBackend {
         };
         let time_source_impl = Arc::new(time_source_impl);
 
-        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
         let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
@@ -106,8 +108,8 @@ impl DummyBackend {
         let server_builder = ServerBuilder::new(grpc_environment.clone());
 
         // TODO:
-        //  * Time (#217)
         //  * Random (Not done yet?)
+        let time_service = create_time_source(EpochTimeService::new(time_source.clone()));
         let contract_service =
             create_contract_registry(ContractRegistryService::new(contract_registry.clone()));
         let entity_service =
@@ -122,6 +124,7 @@ impl DummyBackend {
 
         let server = server_builder
             .bind("0.0.0.0", config.port)
+            .register_service(time_service)
             .register_service(contract_service)
             .register_service(entity_service)
             .register_service(scheduler_service)

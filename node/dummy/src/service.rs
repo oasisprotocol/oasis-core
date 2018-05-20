@@ -6,7 +6,8 @@ use grpcio;
 use grpcio::RpcStatus;
 use grpcio::RpcStatusCode::{Internal, Unimplemented};
 
-use ekiden_common::epochtime::{EpochTime, MockTimeSource, TimeSource, TimeSourceNotifier};
+use ekiden_common::epochtime::{EpochTime, TimeSource};
+use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::{future, Future, Stream};
 use ekiden_node_dummy_api::{DummyDebug, SetEpochRequest, SetEpochResponse};
@@ -17,7 +18,7 @@ use super::backend::TimeSourceImpl;
 
 struct DebugServiceInner {
     time_source: Arc<TimeSourceImpl>,
-    time_notifier: Arc<TimeSourceNotifier>,
+    time_notifier: Arc<LocalTimeSourceNotifier>,
     mock_time_started: Mutex<bool>,
 }
 
@@ -37,7 +38,10 @@ macro_rules! invalid {
 
 impl DebugService {
     /// Create new debug server instance.
-    pub fn new(time_source: Arc<TimeSourceImpl>, time_notifier: Arc<TimeSourceNotifier>) -> Self {
+    pub fn new(
+        time_source: Arc<TimeSourceImpl>,
+        time_notifier: Arc<LocalTimeSourceNotifier>,
+    ) -> Self {
         DebugService {
             inner: Arc::new(DebugServiceInner {
                 time_source,
