@@ -70,8 +70,8 @@ macro_rules! default_backend {
         let entity_registry = EntityRegistryClient::new(channel.clone());
 
         // Get computation group leader node.
-        // TODO: Base contract id on MRENCLAVE.
-        let committees = scheduler.get_committees(B256::zero())
+        let contract_id = value_t!($args, "mr-enclave", B256).unwrap_or_else(|e| e.exit());
+        let committees = scheduler.get_committees(contract_id)
             .wait()
             .expect("failed to fetch committees from scheduler");
         let committee = committees

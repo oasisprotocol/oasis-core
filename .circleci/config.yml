@@ -157,6 +157,7 @@ jobs:
           REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
+          kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 

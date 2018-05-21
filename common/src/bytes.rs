@@ -8,7 +8,9 @@ use std::str::FromStr;
 use fixed_hash::*;
 use rustc_hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde::de::{Error, SeqAccess, Visitor};
+use serde::de::{self, SeqAccess, Visitor};
+
+use super::error::Error;
 
 macro_rules! define_bytes_type {
     ($from: ident, $size: expr) => {
@@ -29,6 +31,15 @@ macro_rules! define_bytes_type {
             /// Assign self have a cryptographically random value.
             pub fn randomize(&mut self) {
                 $crate::random::get_random_bytes(&mut self.0).unwrap()
+            }
+
+            /// Try to convert from a slice.
+            // TODO: Currently this cannot implement the TryFrom trait as it already implements From.
+            pub fn try_from<'a>(s: &'a [u8]) -> Result<$from, Error> {
+                if s.len() != $from::len() {
+                    return Err(Error::new("Invalid size"))
+                }
+                Ok($from::from(s))
             }
         }
 
@@ -109,7 +120,7 @@ macro_rules! impl_deserialize_for_bytes {
                         let mut arr = [T::default(); $size];
                         for i in 0..$size {
                             arr[i] = seq.next_element()?
-                                .ok_or_else(|| Error::invalid_length(i, &self))?;
+                                .ok_or_else(|| de::Error::invalid_length(i, &self))?;
                         }
                         Ok(arr)
                     }
