@@ -79,7 +79,7 @@ members = [
     "scheduler/dummy",
 
     # Stake escrow.
-    "escrow/api",
-    "escrow/base",
-    "escrow/dummy",
+    "stake/api",
+    "stake/base",
+    "stake/dummy",
 ]
