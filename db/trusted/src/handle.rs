@@ -1,9 +1,7 @@
 //! Low-level key-value database interface.
 use std::collections::BTreeMap;
-#[cfg(target_env = "sgx")]
-use std::sync::{Arc, SgxMutex as Mutex, SgxMutexGuard as MutexGuard};
-#[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
+use std::sync::Arc;
 
 #[cfg(target_env = "sgx")]
 use serde_cbor;
@@ -14,8 +12,9 @@ use ekiden_common::error::Result;
 use ekiden_common::futures::FutureExt;
 #[cfg(target_env = "sgx")]
 use ekiden_key_manager_client::KeyManager;
-#[cfg(target_env = "sgx")]
 use ekiden_storage_base::StorageMapper;
+#[cfg(not(target_env = "sgx"))]
+use ekiden_storage_dummy::DummyStorageBackend;
 
 use super::Database;
 #[cfg(target_env = "sgx")]
@@ -30,8 +29,7 @@ use super::untrusted::UntrustedStorageBackend;
 /// [`Database`]: super::Database
 pub struct DatabaseHandle {
     /// Storage backend.
-    #[cfg(target_env = "sgx")]
-    backend: AeadStorageMapper,
+    backend: Arc<StorageMapper>,
     /// Current database state.
     state: BTreeMap<Vec<u8>, Vec<u8>>,
     /// Dirtyness flag.
@@ -51,13 +49,15 @@ impl DatabaseHandle {
 
         DatabaseHandle {
             #[cfg(target_env = "sgx")]
-            backend: AeadStorageMapper::new(
+            backend: Arc::new(AeadStorageMapper::new(
                 Arc::new(UntrustedStorageBackend::new()),
                 key_manager
                     .get_or_create_key("state.key", AeadStorageMapper::key_len())
                     .unwrap(),
                 key_manager.get_or_create_key("state.nonce", 64).unwrap(),
-            ),
+            )),
+            #[cfg(not(target_env = "sgx"))]
+            backend: Arc::new(DummyStorageBackend::new()),
             state: BTreeMap::new(),
             dirty: false,
         }

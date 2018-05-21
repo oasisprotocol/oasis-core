@@ -8,7 +8,7 @@ use sgx_types::*;
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 /// OCALLs defined by the Ekiden enclave specification.
 extern "C" {
@@ -56,7 +56,13 @@ impl StorageBackend for UntrustedStorageBackend {
                 .as_ref()
                 .expect("transfer buffer not configured");
 
-            Ok(buffer[..value_length].to_vec())
+            // Check that the hash matches the key.
+            let data = buffer[..value_length].to_vec();
+            if hash_storage_key(&data) != key {
+                return Err(Error::new("incorrect value returned from storage"));
+            }
+
+            Ok(data)
         }))
     }
 
