@@ -1,4 +1,5 @@
 //! Compute node.
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use grpcio;
@@ -57,6 +58,8 @@ pub struct ComputeNodeConfiguration {
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
     pub worker: WorkerConfiguration,
+    /// Registration address/port override(s).
+    pub register_addrs: Option<Vec<SocketAddr>>,
 }
 
 /// Compute node.
@@ -145,11 +148,20 @@ impl ComputeNode {
             id: config.consensus.signer.get_public_key(),
             entity_id: entity_pk,
             expiration: 0xffffffffffffffff,
-            addresses: Address::for_local_port(config.port)?,
+            addresses: match config.register_addrs {
+                Some(addrs) => {
+                    let mut addr_vec = vec![];
+                    for addr in addrs {
+                        addr_vec.push(Address(addr.clone()));
+                    }
+                    addr_vec
+                }
+                None => Address::for_local_port(config.port)?,
+            },
             stake: vec![],
         };
 
-        info!("Discovered compute node addresses: {:?}", node.addresses);
+        info!("Registering compute node addresses: {:?}", node.addresses);
 
         let signed_node = Signed::sign(
             &config.consensus.signer,

@@ -15,7 +15,7 @@ use ekiden_common_api as api;
 
 /// Address represents a public location that can be used to connect to an entity in ekiden.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Address(SocketAddr);
+pub struct Address(pub SocketAddr);
 
 impl Address {
     /// Generate a list of addresses for the local node and a given port.
