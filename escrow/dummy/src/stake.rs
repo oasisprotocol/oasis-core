@@ -189,7 +189,20 @@ impl DummyStakeEscrowBackendInner {
 
     pub fn list_active_escrows(&self, msg_sender: B256)
                                -> Result<Vec<api::EscrowData>, Error> {
-        Err(Error::new(NOT_IMPLEMENTED))
+        let mut results: Vec<api::EscrowData> = Vec::new();
+        match self.stakes.get(&msg_sender) {
+            None => Ok(results),
+            Some(a) => {
+                if a.escrowed == 0 {
+                    return Ok(results)
+                }
+                
+                // The DummyStakeEscrowInfo should have a containing
+                // with all the escrow accounts owned by the
+                // stakeholder.
+                Err(Error::new(NOT_IMPLEMENTED))
+            }
+        }
     }
 
     pub fn fetch_escrow_by_id(&self, escrow_id: B256)

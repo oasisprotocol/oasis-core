@@ -6,8 +6,7 @@ use ekiden_stake_api as api;
 
 // No numeric_limits<decltype(entry.amount)>::max_value() equivalent yet
 pub type AmountType = u64;
-// static AMOUNT_MAX : AmountType = <u64>::max_value();
-pub static AMOUNT_MAX: AmountType = !(0 as AmountType);
+pub static AMOUNT_MAX: AmountType = AmountType::max_value();
 
 pub struct StakeStatus {
     pub total_stake: AmountType,  // Total stake deposited...

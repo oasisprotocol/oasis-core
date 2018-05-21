@@ -10,6 +10,10 @@ use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 
+// Error strings
+static BAD_PROTO_SENDER: &str = "Protobuf parsing error: msg_sender";
+static BAD_PROTO_TARGET: &str = "Protobuf parsing error: target";
+
 pub struct StakeEscrowService<T>
 where
     T: StakeEscrowBackend,
@@ -46,9 +50,13 @@ where
         sink: UnarySink<api::DepositStakeResponse>,
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
-            let s = B256::from_slice(req.get_msg_sender());
-            let a = req.get_amount();
-            Ok(self.inner.deposit_stake(s, a))
+            match B256::try_from(req.get_msg_sender()) {
+                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Ok(s) => {
+                    let a = req.get_amount();
+                    Ok(self.inner.deposit_stake(s, a))
+                }
+            }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -73,8 +81,10 @@ where
         sink: UnarySink<api::GetStakeStatusResponse>,
     ) {
         let f = move || -> Result<BoxFuture<StakeStatus>, Error> {
-            let s = B256::from_slice(req.get_msg_sender());
-            Ok(self.inner.get_stake_status(s))
+            match B256::try_from(req.get_msg_sender()) {
+                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Ok(s) => Ok(self.inner.get_stake_status(s))
+            }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -104,9 +114,11 @@ where
         sink: UnarySink<api::WithdrawStakeResponse>,
     ) {
         let f = move || -> Result<BoxFuture<(u64)>, Error> {
-            let s = B256::from_slice(req.get_msg_sender());
-            let a = req.get_amount_requested();
-            Ok(self.inner.withdraw_stake(s, a))
+            match B256::try_from(req.get_msg_sender()) {
+                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Ok(s) =>
+                    Ok(self.inner.withdraw_stake(s, req.get_amount_requested()))
+            }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -135,10 +147,13 @@ where
         sink: UnarySink<api::AllocateEscrowResponse>,
     ) {
         let f = move || -> Result<BoxFuture<B256>, Error> {
-            let s = B256::from_slice(req.get_msg_sender());
-            let t = B256::from_slice(req.get_target());
-            let a = req.get_escrow_amount();
-            Ok(self.inner.allocate_escrow(s, t, a))
+            match B256::try_from(req.get_msg_sender()) {
+                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Ok(s) => match B256::try_from(req.get_target()) {
+                    Err(e) => Err(Error::new(BAD_PROTO_TARGET)),
+                    Ok(t) => {
+                        let a = req.get_escrow_amount();
+                        Ok(self.inner.allocate_escrow(s, t, a))}}}
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -167,8 +182,10 @@ where
         sink: UnarySink<api::ListActiveEscrowsResponse>,
     ) {
         let f = move || -> Result<BoxFuture<(Vec<api::EscrowData>)>, Error> {
-            let s = B256::from_slice(req.get_msg_sender());
-            Ok(self.inner.list_active_escrows(s))
+            match B256::try_from(req.get_msg_sender()) {
+                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Ok(s) =>
+                    Ok(self.inner.list_active_escrows(s))}
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -227,10 +244,12 @@ where
         sink: UnarySink<api::TakeAndReleaseEscrowResponse>,
     ) {
         let f = move || -> Result<BoxFuture<u64>, Error> {
-            let s = B256::from_slice(req.get_msg_sender());
-            let i = B256::from_slice(req.get_escrow_id());
-            let a = req.get_amount_requested();
-            Ok(self.inner.take_and_release_escrow(s, i, a))
+            match B256::try_from(req.get_msg_sender()) {
+                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Ok(s) => {
+                    let i = B256::from_slice(req.get_escrow_id());
+                    let a = req.get_amount_requested();
+                    Ok(self.inner.take_and_release_escrow(s, i, a))}}
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
