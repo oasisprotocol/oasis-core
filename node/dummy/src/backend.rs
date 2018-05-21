@@ -2,7 +2,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ekiden_beacon_base::RandomBeacon;
+use ekiden_beacon_api::create_beacon;
+use ekiden_beacon_base::{BeaconService, RandomBeacon};
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
 use ekiden_common_api::create_time_source;
@@ -107,9 +108,8 @@ impl DummyBackend {
         let grpc_environment = Arc::new(Environment::new(config.grpc_threads));
         let server_builder = ServerBuilder::new(grpc_environment.clone());
 
-        // TODO:
-        //  * Random (Not done yet?)
         let time_service = create_time_source(EpochTimeService::new(time_source.clone()));
+        let beacon_service = create_beacon(BeaconService::new(random_beacon.clone()));
         let contract_service =
             create_contract_registry(ContractRegistryService::new(contract_registry.clone()));
         let entity_service =
@@ -125,6 +125,7 @@ impl DummyBackend {
         let server = server_builder
             .bind("0.0.0.0", config.port)
             .register_service(time_service)
+            .register_service(beacon_service)
             .register_service(contract_service)
             .register_service(entity_service)
             .register_service(scheduler_service)
