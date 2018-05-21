@@ -11,6 +11,7 @@ extern crate ekiden_registry_dummy;
 extern crate ekiden_scheduler_dummy;
 extern crate ekiden_storage_dummy;
 
+extern crate ekiden_beacon_api;
 extern crate ekiden_beacon_base;
 extern crate ekiden_common;
 extern crate ekiden_common_api;
