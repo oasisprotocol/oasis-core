@@ -11,23 +11,32 @@ use ekiden_common::futures::{future, BoxFuture, BoxStream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
+
+use ekiden_stake_api as api;
+use ekiden_stake_base::{AmountType, AMOUNT_MAX};
 use ekiden_stake_base::*;
 
-use ekiden_stake_base::{AmountType, AMOUNT_MAX};
+// We put all error strings from which we construct Error::new(...)
+// here, so that we should not have a typographical error (e.g., "No
+// Account") in one of several error paths, leading to error handlers
+// that try to do string comparisons misfiring.  Ideally we could have
+// per-module enums or something like that, and have the errors
+// propagate through gRPC...
+static NO_ACCOUNT: &str = "No account";
+static WOULD_OVERFLOW: &str = "Would overflow";
+static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
+static NOT_IMPLEMENTED: &str = "NOT IMPLEMENTED";  // temporary
 
-static NO_ACCOUNT: String = "No account".to_string();
-static WOULD_OVERFLOW: String = "Would overflow".to_string();
-static INSUFFICIENT_FUNDS: String = "Insufficient funds".to_string();
-
+// Invariant: 0 <= escrowed <= amount <= AMOUNT_MAX.
 struct DummyStakeEscrowInfo {
-    owner: Entity,
+    owner: B256,
     amount: AmountType,  // see max_value() below
     escrowed: AmountType,
 }
 
-struct EscrowAccount<'a> {
-    owner: &'a DummyStakeEscrowInfo,
-    target: &'a DummyStakeEscrowInfo,
+struct EscrowAccount {
+    owner: B256,  // &DummyStakeEscrowInfo
+    target: B256,  // &DummyStakeEscrowInfo
     amount: AmountType,
 }
 
@@ -48,7 +57,7 @@ impl LittleEndianCounter32 {
         Self { digits: [0; 32] }
     }
 
-    pub fn inc_mut(&mut self) {
+    pub fn incr_mut(&mut self) {
         let mut ix = 0;
         while ix < size_of_val(&self.digits) {
             if { self.digits[ix] += 1; self.digits[ix] != 0 } {
@@ -79,23 +88,17 @@ impl LittleEndianCounter32 {
     }
 }
 
-struct DummyStakeEscrowBackendInner<'a> {
-    // Per-entity state.  Use Entity's id field as hash key.
+struct DummyStakeEscrowBackendInner {
+    // Per-entity state.
     stakes: HashMap<B256, DummyStakeEscrowInfo>,
-    escrow_map: HashMap<B256, EscrowAccount<'a>>,
+    escrow_map: HashMap<B256, EscrowAccount>,
     // lifetime of EscrowAccount entries cannot exceed that of the
     // StakeEscrowInfo entries inside of the stakes HashMap.
 
     next_account_id: LittleEndianCounter32,
 }
 
-pub struct DummyStakeEscrowBackend<'a> {
-    inner: Arc<Mutex<DummyStakeEscrowBackendInner<'a>>>,
-    // Do we need to have subscribers? Who needs to know when there
-    // might be new escrow accounts created?
-}
-
-impl<'a> DummyStakeEscrowBackendInner<'a> {
+impl DummyStakeEscrowBackendInner {
     pub fn new() -> Self {
         Self {
             stakes: HashMap::new(),
@@ -104,87 +107,192 @@ impl<'a> DummyStakeEscrowBackendInner<'a> {
         }
     }
 
-    pub fn desposit_stake(&mut self,
-                          user: Entity,
-                          additional_stake: AmountType)
-                          -> Result<(), String> {
-        let entry = self.stakes.entry(user.id.clone()).or_insert_with(||
+    pub fn deposit_stake(&mut self,
+                         msg_sender: B256,
+                         additional_stake: AmountType)
+                         -> Result<(), Error> {
+        let entry = self.stakes.entry(msg_sender).or_insert_with(||
             DummyStakeEscrowInfo {
-                owner: user.clone(),
+                owner: msg_sender,
                 amount: 0,
                 escrowed: 0,
             });
         if AMOUNT_MAX - entry.amount < additional_stake {
-            return Err(WOULD_OVERFLOW);
+            return Err(Error::new(WOULD_OVERFLOW));
         }
         entry.amount += additional_stake;
         Ok(())
     }
 
     pub fn get_stake_status(&self,
-                            msg_sender: Entity)
-        -> Result<(AmountType, AmountType), String> {
-        match self.stakes.get(&msg_sender.id) {
-            Some(e) =>
-                Ok((e.amount, e.escrowed)),
-            None =>
-                Err(NO_ACCOUNT)
+                            msg_sender: B256)
+        -> Option<StakeStatus> {
+        match self.stakes.get(&msg_sender) {
+            None => None,
+            Some(stake_ref) => Some(
+                StakeStatus { 
+                    total_stake: stake_ref.amount,
+                    escrowed: stake_ref.escrowed,
+                })
         }
     }
 
     pub fn withdraw_stake(&mut self,
-                          msg_sender: Entity,
-                          amount: AmountType) -> Result<AmountType, String> {
-        match self.stakes.get(&msg_sender.id) {
-            None => Err(NO_ACCOUNT),
-            Some(mut e) => {
-                if e.amount - e.escrowed >= amount {
-                    e.amount -= amount;
-                    Ok(amount)
+                          msg_sender: B256,
+                          amount_requested: AmountType)
+                          -> Result<AmountType, Error> {
+        match self.stakes.get_mut(&msg_sender) {
+            None => Err(Error::new(NO_ACCOUNT)),
+            Some(e) => {
+                if e.amount - e.escrowed >= amount_requested {
+                    e.amount -= amount_requested;
+                    Ok(amount_requested)
                 } else {
-                    Err(INSUFFICIENT_FUNDS)
+                    Err(Error::new(INSUFFICIENT_FUNDS))
                 }
             }
         }
     }
+
+    pub fn allocate_escrow(&mut self,
+                           msg_sender: B256,
+                           target: B256,
+                           escrow_amount: AmountType)
+                           -> Result<B256, Error> {
+        // verify if sufficient funds
+        match self.stakes.get_mut(&msg_sender) {
+            None => Err(Error::new(NO_ACCOUNT)),
+            Some(e) => {
+                if e.amount - e.escrowed < escrow_amount {
+                    Err(Error::new(INSUFFICIENT_FUNDS))
+                } else {
+                    // e.amount - e.escrowed >= escrow_amount
+                    // ==> e.amount >= e.escrowed + escrow_amount
+                    // and since 
+                    // 0 <= e.escrowed <= e.amount <= AMOUNT_MAX
+                    // e.escrowed + escrow_amount <= AMOUNT_MAX (no overflow)
+                    e.amount -= escrow_amount;
+                    e.escrowed += escrow_amount;
+                    let id = self.next_account_id.to_b256();
+                    let entry = EscrowAccount {
+                        owner: msg_sender.clone(),
+                        target: target,
+                        amount: escrow_amount,
+                    };
+                    self.escrow_map.insert(id.clone(), entry);
+                    self.next_account_id.incr_mut();
+                    Ok(id)
+                }
+            }
+        }
+    }
+
+    pub fn list_active_escrows(&self, msg_sender: B256)
+                               -> Result<Vec<api::EscrowData>, Error> {
+        Err(Error::new(NOT_IMPLEMENTED))
+    }
+
+    pub fn fetch_escrow_by_id(&self, escrow_id: B256)
+                              -> Result<api::EscrowData, Error> {
+        Err(Error::new(NOT_IMPLEMENTED))
+    }
+
+    pub fn take_and_release_escrow(&self, msg_sender: B256,
+                                   escrow_id: B256,
+                                   amount_requested: AmountType)
+                                   -> Result<AmountType, Error> {
+        Err(Error::new(NOT_IMPLEMENTED))
+    }
 }
 
-impl<'a> StakeEscrowBackend for DummyStakeEscrowBackend<'a> {
-    fn deposit_stake(&self, msg_sender: Entity, amount: AmountType)
+pub struct DummyStakeEscrowBackend {
+    inner: Arc<Mutex<DummyStakeEscrowBackendInner>>,
+    // Do we need to have subscribers? Who needs to know when there
+    // might be new escrow accounts created?
+}
+
+impl DummyStakeEscrowBackend {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(DummyStakeEscrowBackendInner::new())),
+        }
+    }
+}
+
+impl StakeEscrowBackend for DummyStakeEscrowBackend {
+    fn deposit_stake(&self, msg_sender: B256, amount: AmountType)
                      -> BoxFuture<()> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
             inner.deposit_stake(msg_sender, amount)
         }))
     }
 
-    fn get_stake_status(&self, msg_sender: Entity)
-                        -> BoxFuture<(AmountType, AmountType)> {
+    fn get_stake_status(&self, msg_sender: B256)
+                        -> BoxFuture<StakeStatus> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            (0,0)  // FIXME
+            let mut inner = inner.lock().unwrap();
+            Ok(StakeStatus { total_stake: 0, escrowed: 0 })
         }))
     }
     
-    fn withdraw_stake(&self, msg_sender: Entity, amount_requested: AmountType)
+    fn withdraw_stake(&self, msg_sender: B256, amount_requested: AmountType)
         -> BoxFuture<AmountType> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            (0)  // FIXME
+            let mut inner = inner.lock().unwrap();
+            Ok(0 as AmountType) // FIXME
         }))
     }
 
-    fn allocate_escrow(&self, msg_sender: Entity,
-                       entity: Entity, escrow_amount: AmountType)
+    fn allocate_escrow(&self, msg_sender: B256,
+                       target: B256, escrow_amount: AmountType)
                        -> BoxFuture<B256> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let id = inner.next_account_id.to_b256();
-            inner.next_account_id.incr_mut();
-            id
+            let mut inner = inner.lock().unwrap();
+            inner.allocate_escrow(msg_sender, target, escrow_amount)
+        }))
+    }
+
+    fn list_active_escrows(&self, msg_sender: B256)
+                          -> BoxFuture<Vec<api::EscrowData>> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
+            inner.list_active_escrows(msg_sender)
+        }))
+    }
+
+    fn fetch_escrow_by_id(&self, escrow_id: B256)
+                          -> BoxFuture<api::EscrowData> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
+            inner.fetch_escrow_by_id(escrow_id)
+        }))
+    }
+
+    fn take_and_release_escrow(&self, msg_sender: B256,
+                               escrow_id: B256, amount_requested: AmountType)
+                               -> BoxFuture<AmountType> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
+            inner.take_and_release_escrow(msg_sender, escrow_id, 
+                                          amount_requested)
         }))
     }
 }
 
-static TEST: StakeEscrowService<DummyStakeEscrowBackendInner> =
-    StakeEscrowService::new(DummyStakeEscrowBackendInner::new());
+// temporarily here to force instantiation to (hopefully?) get more
+// compiler error messages.
+
+pub fn exercise_types() {
+    let test: StakeEscrowService<DummyStakeEscrowBackend> =
+        StakeEscrowService::new(DummyStakeEscrowBackend::new());
+    ()
+}
+

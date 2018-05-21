@@ -6,6 +6,7 @@ use grpcio::{RpcContext, RpcStatus, UnarySink};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 
 use super::stake_backend::StakeEscrowBackend;
+use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 
@@ -71,16 +72,16 @@ where
         req: api::GetStakeStatusRequest,
         sink: UnarySink<api::GetStakeStatusResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<(u64, u64)>, Error> {
+        let f = move || -> Result<BoxFuture<StakeStatus>, Error> {
             let s = B256::from_slice(req.get_msg_sender());
             Ok(self.inner.get_stake_status(s))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok((total_stake, escrowed_stake)) => {
+                Ok(status) => {
                     let mut r = api::GetStakeStatusResponse::new();
-                    r.set_total_stake(total_stake);
-                    r.set_escrowed_stake(escrowed_stake);
+                    r.set_total_stake(status.total_stake);
+                    r.set_escrowed_stake(status.escrowed);
                     Ok(r)
                 }
                 Err(e) => Err(e),

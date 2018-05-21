@@ -1,6 +1,6 @@
 //! Stake escrow backend interface.
 use ekiden_common::bytes::B256;
-use ekiden_common::futures::BoxFuture;
+use ekiden_common::futures::{BoxFuture, Future};
 
 use ekiden_stake_api as api;
 
@@ -9,13 +9,18 @@ pub type AmountType = u64;
 // static AMOUNT_MAX : AmountType = <u64>::max_value();
 pub static AMOUNT_MAX: AmountType = !(0 as AmountType);
 
+pub struct StakeStatus {
+    pub total_stake: AmountType,  // Total stake deposited...
+    pub escrowed: AmountType,  // ... of which this much is tied up in escrow.
+}
+
 /// Stake escrow backend implementing the Ekiden stake escrow interface.
 pub trait StakeEscrowBackend: Send + Sync {
     /// Stake 
     fn deposit_stake(&self, msg_sender: B256, amount: AmountType)
                      -> BoxFuture<()>;
     fn get_stake_status(&self, msg_sender: B256)
-                        -> BoxFuture<(AmountType, AmountType)>;
+                        -> BoxFuture<StakeStatus>;
     fn withdraw_stake(&self, msg_sender: B256, amount_requested: AmountType)
                       -> BoxFuture<AmountType>;
     fn allocate_escrow(&self, msg_sender: B256,
@@ -23,9 +28,9 @@ pub trait StakeEscrowBackend: Send + Sync {
                        -> BoxFuture<B256>;
     fn list_active_escrows(&self, msg_sender: B256)
                            -> BoxFuture<Vec<api::EscrowData>>;
-    fn fetch_escrow_by_id(&self, id: B256)
+    fn fetch_escrow_by_id(&self, escrow_id: B256)
                           -> BoxFuture<api::EscrowData>;
     fn take_and_release_escrow(&self, msg_sender: B256,
-                               id: B256, amount_requested: AmountType)
+                               escrow_id: B256, amount_requested: AmountType)
                                -> BoxFuture<AmountType>;
 }
