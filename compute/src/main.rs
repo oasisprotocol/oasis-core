@@ -50,6 +50,7 @@ extern crate ekiden_storage_frontend;
 
 use std::fs::File;
 use std::io::{Read, Write};
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
@@ -66,6 +67,14 @@ use self::consensus::ConsensusConfiguration;
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, StorageConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
+
+/// Validate an IP address + port string.
+fn validate_addr_port(v: String) -> Result<(), String> {
+    match v.parse::<SocketAddr>() {
+        Ok(_) => return Ok(()),
+        Err(err) => return Err(err.to_string()),
+    }
+}
 
 fn main() {
     let matches = App::new("Ekiden Compute Node")
@@ -187,6 +196,14 @@ fn main() {
                 .help("Path to key pair for this compute node (if not set, a new key pair will be generated)")
                 .takes_value(true)
         )
+        .arg(
+            Arg::with_name("register-addr")
+                .long("register-addr")
+                .help("Address/port(s) to use when registering this compute node (if not set, all non-loopback local interfaces will be used).")
+                .takes_value(true)
+                .multiple(true)
+                .validator(validate_addr_port)
+        )
         .get_matches();
 
     // Initialize logger.
@@ -288,6 +305,11 @@ fn main() {
                     None
                 },
             }
+        },
+        register_addrs: if matches.is_present("register-addr") {
+            Some(values_t_or_exit!(matches, "register-addr", SocketAddr))
+        } else {
+            None
         },
     }).expect("failed to initialize compute node");
 
