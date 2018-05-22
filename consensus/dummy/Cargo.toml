@@ -14,6 +14,7 @@ ekiden-storage-base = { path = "../../storage/base", version = "0.1.0-alpha.4" }
 log = "0.4"
 
 [dev-dependencies]
+ekiden-beacon-base = { path = "../../beacon/base", version = "0.1.0-alpha.4" }
 ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.1.0-alpha.4" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.1.0-alpha.4" }
 ekiden-registry-dummy = { path = "../../registry/dummy", version = "0.1.0-alpha.4" }
