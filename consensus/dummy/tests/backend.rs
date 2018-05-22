@@ -1,18 +1,22 @@
+extern crate ekiden_beacon_base;
 extern crate ekiden_beacon_dummy;
 extern crate ekiden_common;
 extern crate ekiden_consensus_base;
 extern crate ekiden_consensus_dummy;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_dummy;
+extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_dummy;
 extern crate ekiden_storage_dummy;
 
 use std::sync::Arc;
 
+use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
-use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
+use ekiden_common::epochtime::EPOCH_INTERVAL;
+use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_common::futures::{cpupool, future, Future, Stream};
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
@@ -23,6 +27,7 @@ use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_registry_base::{ContractRegistryBackend, REGISTER_CONTRACT_SIGNATURE_CONTEXT};
 use ekiden_registry_base::test::populate_entity_registry;
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
+use ekiden_scheduler_base::Scheduler;
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
@@ -31,7 +36,7 @@ fn test_dummy_backend_two_rounds() {
     // Number of simulated nodes to create.
     const NODE_COUNT: usize = 3;
 
-    let time_source = Arc::new(SystemTimeSource {});
+    let time_source = Arc::new(MockTimeSource::new());
     let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
     let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
@@ -84,12 +89,18 @@ fn test_dummy_backend_two_rounds() {
     let nodes = Arc::new(nodes);
 
     // Create dummy consensus backend.
-    let backend = Arc::new(DummyConsensusBackend::new(scheduler, storage));
+    let backend = Arc::new(DummyConsensusBackend::new(scheduler.clone(), storage));
 
     let mut pool = cpupool::CpuPool::new(4);
 
-    // Start backend.
+    // Start backends.
+    beacon.start(&mut pool);
+    scheduler.start(&mut pool);
     backend.start(&mut pool);
+
+    // Pump the time source.
+    time_source.set_mock_time(0, EPOCH_INTERVAL).unwrap();
+    time_notifier.notify_subscribers().unwrap();
 
     // Start all nodes.
     let mut tasks = vec![];
