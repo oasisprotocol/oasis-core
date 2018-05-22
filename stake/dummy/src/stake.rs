@@ -369,7 +369,17 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
-            inner.fetch_escrow_by_id(escrow_id)
+            let escrow_account = match inner.fetch_escrow_by_id(escrow_id) {
+                Err(e) => {
+                    return Err(e);
+                }
+                Ok(ea) => ea,
+            };
+            let mut ed: api::EscrowData = api::EscrowData::new();
+            ed.set_escrow_id(escrow_account.id.to_vec());
+            ed.set_entity(escrow_account.target.to_vec());
+            ed.set_amount(escrow_account.amount);
+            Ok(ed)
         }))
     }
 
