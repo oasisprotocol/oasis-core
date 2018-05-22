@@ -83,7 +83,7 @@ where
         let f = move || -> Result<BoxFuture<StakeStatus>, Error> {
             match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
-                Ok(s) => Ok(self.inner.get_stake_status(s))
+                Ok(s) => Ok(self.inner.get_stake_status(s)),
             }
         };
         let f = match f() {
@@ -116,8 +116,7 @@ where
         let f = move || -> Result<BoxFuture<(u64)>, Error> {
             match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
-                Ok(s) =>
-                    Ok(self.inner.withdraw_stake(s, req.get_amount_requested()))
+                Ok(s) => Ok(self.inner.withdraw_stake(s, req.get_amount_requested())),
             }
         };
         let f = match f() {
@@ -153,7 +152,10 @@ where
                     Err(_e) => Err(Error::new(BAD_PROTO_TARGET)),
                     Ok(t) => {
                         let a = req.get_escrow_amount();
-                        Ok(self.inner.allocate_escrow(s, t, a))}}}
+                        Ok(self.inner.allocate_escrow(s, t, a))
+                    }
+                },
+            }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -184,8 +186,8 @@ where
         let f = move || -> Result<BoxFuture<(Vec<api::EscrowData>)>, Error> {
             match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
-                Ok(s) =>
-                    Ok(self.inner.list_active_escrows(s))}
+                Ok(s) => Ok(self.inner.list_active_escrows(s)),
+            }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -249,7 +251,9 @@ where
                 Ok(s) => {
                     let i = B256::from_slice(req.get_escrow_id());
                     let a = req.get_amount_requested();
-                    Ok(self.inner.take_and_release_escrow(s, i, a))}}
+                    Ok(self.inner.take_and_release_escrow(s, i, a))
+                }
+            }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
