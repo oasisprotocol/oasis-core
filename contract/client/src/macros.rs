@@ -61,7 +61,7 @@ macro_rules! create_contract_client {
                 // Generate methods.
                 $(
                     pub fn $method_name(
-                        &mut self,
+                        &self,
                         arguments: $request_type
                     ) -> BoxFuture<$response_type> {
                         self.client.call(stringify!($method_name), arguments)
