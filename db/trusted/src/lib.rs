@@ -16,13 +16,10 @@ extern crate serde_derive;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_trusted;
-#[cfg(target_env = "sgx")]
-extern crate ekiden_key_manager_client;
 extern crate ekiden_storage_base;
 #[cfg(not(target_env = "sgx"))]
 extern crate ekiden_storage_dummy;
 
-pub mod aead;
 #[doc(hidden)]
 pub mod ecalls;
 #[cfg(target_env = "sgx")]

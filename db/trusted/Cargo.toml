@@ -17,9 +17,6 @@ serde = "1.0"
 serde_cbor = "0.8.2"
 serde_derive = "1.0"
 
-[target.'cfg(target_env = "sgx")'.dependencies]
-ekiden-key-manager-client = { path = "../../contracts/key-manager/client", version = "0.1.0-alpha.4" }
-
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.1.0-alpha.4" }
 

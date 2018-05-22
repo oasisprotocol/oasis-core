@@ -10,15 +10,11 @@ use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 #[cfg(target_env = "sgx")]
 use ekiden_common::futures::FutureExt;
-#[cfg(target_env = "sgx")]
-use ekiden_key_manager_client::KeyManager;
 use ekiden_storage_base::StorageMapper;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_storage_dummy::DummyStorageBackend;
 
 use super::Database;
-#[cfg(target_env = "sgx")]
-use super::aead::AeadStorageMapper;
 #[cfg(target_env = "sgx")]
 use super::untrusted::UntrustedStorageBackend;
 
@@ -44,18 +40,9 @@ lazy_static! {
 impl DatabaseHandle {
     /// Construct new database interface.
     fn new() -> Self {
-        #[cfg(target_env = "sgx")]
-        let mut key_manager = KeyManager::get().unwrap();
-
         DatabaseHandle {
             #[cfg(target_env = "sgx")]
-            backend: Arc::new(AeadStorageMapper::new(
-                Arc::new(UntrustedStorageBackend::new()),
-                key_manager
-                    .get_or_create_key("state.key", AeadStorageMapper::key_len())
-                    .unwrap(),
-                key_manager.get_or_create_key("state.nonce", 64).unwrap(),
-            )),
+            backend: Arc::new(UntrustedStorageBackend::new()),
             #[cfg(not(target_env = "sgx"))]
             backend: Arc::new(DummyStorageBackend::new()),
             state: BTreeMap::new(),
