@@ -104,10 +104,11 @@ impl EscrowAccount {
     }
 }
 
-// We use 32-digits so it can be converted to a B256 easily (do we
-// want to use a B256 for escrow account numbers?)  This is also a hot
-// spot that prevents simple parallelization by sharding the
-// stake/escrow service, since we could simply shard by the
+// We use 32-bytes / 64 hex digits so it can be converted to a B256
+// easily (do we want to use a B256 for escrow account numbers?)
+// Using a counter, however, creates a contention hot spot that
+// prevents simple parallelization by sharding the stake/escrow
+// service, since we could otherwise simply dispatch to shards by the
 // stakeholder's public key and partition the escrow account numbers
 // by the number of shards, or have large blocks of escrow account
 // numbers handed out to shards by a central server.
@@ -271,7 +272,7 @@ impl DummyStakeEscrowBackendInner {
         }
     }
 
-    pub fn fetch_escrow_by_id(&self, escrow_id: B256) -> Result<api::EscrowData, Error> {
+    pub fn fetch_escrow_by_id(&self, escrow_id: B256) -> Result<EscrowAccount, Error> {
         Err(Error::new(NOT_IMPLEMENTED))
     }
 
