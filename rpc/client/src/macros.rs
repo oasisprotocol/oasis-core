@@ -78,7 +78,7 @@ macro_rules! create_client_rpc {
                 // Generate methods.
                 $(
                     pub fn $method_name(
-                        &mut self,
+                        &self,
                         request: $request_type
                     ) -> ClientFuture<$response_type> {
                         self.client.call(stringify!($method_name), request)
