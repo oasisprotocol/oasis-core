@@ -13,6 +13,7 @@
 * Add support for dependency injection.
 * Bugfix: `epochtime::LocalTimeSourceNotifier::watch_epochs()` will now
   correctly broadcast the current epoch if it is available.
+* The initial Ethereum smart contract based Random Beacon has been added.
 
 # 0.1.0
 
