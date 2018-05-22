@@ -14,7 +14,6 @@ profiling = []
 ekiden-common-api = { path = "./api", version = "0.1.0-alpha.4" }
 protobuf = "~1.4"
 byteorder = "1.2.1"
-fixed-hash = { version = "0.2.1", default-features = false }
 rustc-hex = "1.0"
 ring = { git = "https://github.com/ekiden/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
 untrusted = "0.5.1"

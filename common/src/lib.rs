@@ -15,7 +15,6 @@ extern crate bigint;
 extern crate byteorder;
 extern crate chrono;
 extern crate core;
-extern crate fixed_hash;
 #[cfg(not(target_env = "sgx"))]
 extern crate get_if_addrs;
 #[macro_use]
