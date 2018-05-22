@@ -6,12 +6,8 @@ use std::process::abort;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::B256;
-use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, BoxStream};
-use ekiden_common::node::Node;
-use ekiden_common::signature::Signed;
-use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_common::futures::{future, BoxFuture};
 
 use ekiden_stake_api as api;
 use ekiden_stake_base::*;
@@ -41,9 +37,11 @@ static NOT_IMPLEMENTED: &str = "NOT IMPLEMENTED"; // temporary
 
 // Invariant: 0 <= escrowed <= amount <= AMOUNT_MAX.
 struct DummyStakeEscrowInfo {
-    amount: AmountType, // see max_value() below
-    escrowed: AmountType,
+    amount: AmountType,   // see max_value() below
+    escrowed: AmountType, // sum_{a \in accounts} escrow_map[a].amount
     accounts: HashSet<B256>, // account id, keys for escrow_map below
+                          // \forall a \in accounts: escrow_map[a].owner is stakeholder (key
+                          // to this instance in stakes below)
 }
 
 impl DummyStakeEscrowInfo {
@@ -188,10 +186,10 @@ impl DummyStakeEscrowBackendInner {
         Ok(())
     }
 
-    pub fn get_stake_status(&self, msg_sender: B256) -> Option<StakeStatus> {
+    pub fn get_stake_status(&self, msg_sender: B256) -> Result<StakeStatus, Error> {
         match self.stakes.get(&msg_sender) {
-            None => None,
-            Some(stake_ref) => Some(StakeStatus {
+            None => Err(Error::new(NO_STAKE_ACCOUNT)),
+            Some(stake_ref) => Ok(StakeStatus {
                 total_stake: stake_ref.amount,
                 escrowed: stake_ref.escrowed,
             }),
@@ -319,10 +317,14 @@ impl DummyStakeEscrowBackendInner {
             info.accounts.remove(&escrow_id);
         } // terminate self.escrow_map mutable borrow via `account`
         self.escrow_map.remove(&escrow_id);
-        // amount available' = info.amount' - info.escrowed'
+        // amount_available' = info.amount' - info.escrowed'
         //                   = info.amount - amount_requested - (info.escrowed - account.amount)
         //                   = info.amount - info.escrowed + (account.amount - amount_requested)
-        // \sum_{a \in info.accounts'} a.amount = \sum{a \in info.accounts} a.amount - account.amount
+        //                   = amount_avaiable + (account.amount - amount_requested)
+        // info.escrowed' = info.escrowed - account.amount.
+        //                = \sum_{a \in info.accounts} escrow_map[a].amount - account.amount
+        //                = \sum_{a \in info.accounts'} escrow_map[a].amount
+        // ∴ invariants maintained.
 
         Ok(amount_requested)
     }
@@ -355,10 +357,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
-            Ok(StakeStatus {
-                total_stake: 0,
-                escrowed: 0,
-            })
+            inner.get_stake_status(msg_sender)
         }))
     }
 
@@ -370,7 +369,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
-            Ok(0 as AmountType) // FIXME
+            inner.withdraw_stake(msg_sender, amount_requested)
         }))
     }
 
