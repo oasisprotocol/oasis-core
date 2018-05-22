@@ -28,7 +28,7 @@ pub mod untrusted;
 pub mod handle;
 pub use handle::DatabaseHandle;
 
-mod patricia_trie;
+pub mod patricia_trie;
 #[macro_use]
 pub mod schema;
 

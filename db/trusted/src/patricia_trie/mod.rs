@@ -3,4 +3,4 @@ pub mod nibble;
 pub mod node;
 pub mod trie;
 
-pub use self::trie::PatriciaTree;
+pub use self::trie::PatriciaTrie;

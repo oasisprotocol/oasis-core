@@ -12,12 +12,12 @@ use super::nibble::NibbleVec;
 use super::node::{Node, NodePointer};
 
 /// A merkle patricia tree backed by storage.
-pub struct PatriciaTree {
+pub struct PatriciaTrie {
     /// Storage.
     storage: Arc<StorageMapper>,
 }
 
-impl PatriciaTree {
+impl PatriciaTrie {
     // TODO: Handle storage expiry.
     const STORAGE_EXPIRY_TIME: u64 = u64::max_value();
 
@@ -104,7 +104,7 @@ impl PatriciaTree {
                 self.storage
                     .insert(
                         serde_cbor::to_vec(&node).unwrap(),
-                        PatriciaTree::STORAGE_EXPIRY_TIME,
+                        PatriciaTrie::STORAGE_EXPIRY_TIME,
                     )
                     .wait()
                     .expect("failed to insert to storage"),
@@ -330,7 +330,7 @@ impl PatriciaTree {
                 self.storage
                     .insert(
                         serde_cbor::to_vec(&node).unwrap(),
-                        PatriciaTree::STORAGE_EXPIRY_TIME,
+                        PatriciaTrie::STORAGE_EXPIRY_TIME,
                     )
                     .wait()
                     .expect("failed to insert to storage")
@@ -518,7 +518,7 @@ impl PatriciaTree {
                     self.storage
                         .insert(
                             serde_cbor::to_vec(&node).unwrap(),
-                            PatriciaTree::STORAGE_EXPIRY_TIME,
+                            PatriciaTrie::STORAGE_EXPIRY_TIME,
                         )
                         .wait()
                         .expect("failed to insert to storage"),
@@ -539,7 +539,7 @@ mod test {
     #[test]
     fn test_basic_ops() {
         let storage = Arc::new(DummyStorageBackend::new());
-        let tree = PatriciaTree::new(storage);
+        let tree = PatriciaTrie::new(storage);
 
         assert_eq!(tree.get(None, b"foo"), None);
         let new_root = tree.insert(None, b"foo", b"bar");
