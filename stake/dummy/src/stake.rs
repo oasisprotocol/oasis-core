@@ -1,6 +1,6 @@
 //! Ekiden dummy stake backend.
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem::size_of_val;
 use std::process::abort;
 use std::sync::{Arc, Mutex};
@@ -25,9 +25,11 @@ use ekiden_stake_base::{AmountType, AMOUNT_MAX};
 // propagate through gRPC...
 
 static INTERNAL_ERROR: &str = "INTERNAL ERROR: Invariance violation";
-static NO_ACCOUNT: &str = "No account";
+static NO_STAKE_ACCOUNT: &str = "No such stake account";
+static NO_ESCROW_ACCOUNT: &str = "No such escrow account";
 static WOULD_OVERFLOW: &str = "Would overflow";
 static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
+static REQUEST_EXCEEDS_ESCROWED: &str = "Request exceeds escrowed funds";
 static NOT_IMPLEMENTED: &str = "NOT IMPLEMENTED"; // temporary
 
 // It would be nice if DummyStakeEscrowInfo contained its owner ID so
@@ -41,7 +43,7 @@ static NOT_IMPLEMENTED: &str = "NOT IMPLEMENTED"; // temporary
 struct DummyStakeEscrowInfo {
     amount: AmountType, // see max_value() below
     escrowed: AmountType,
-    accounts: Vec<B256>, // account id, keys for escrow_map below
+    accounts: HashSet<B256>, // account id, keys for escrow_map below
 }
 
 impl DummyStakeEscrowInfo {
@@ -49,7 +51,7 @@ impl DummyStakeEscrowInfo {
         Self {
             amount: 0,
             escrowed: 0,
-            accounts: Vec::new(),
+            accounts: HashSet::new(),
         }
     }
 }
@@ -202,7 +204,7 @@ impl DummyStakeEscrowBackendInner {
         amount_requested: AmountType,
     ) -> Result<AmountType, Error> {
         match self.stakes.get_mut(&msg_sender) {
-            None => Err(Error::new(NO_ACCOUNT)),
+            None => Err(Error::new(NO_STAKE_ACCOUNT)),
             Some(e) => {
                 if e.amount - e.escrowed >= amount_requested {
                     e.amount -= amount_requested;
@@ -222,7 +224,7 @@ impl DummyStakeEscrowBackendInner {
     ) -> Result<B256, Error> {
         // verify if sufficient funds
         match self.stakes.get_mut(&msg_sender) {
-            None => Err(Error::new(NO_ACCOUNT)),
+            None => Err(Error::new(NO_STAKE_ACCOUNT)),
             Some(e) => {
                 if e.amount - e.escrowed < escrow_amount {
                     Err(Error::new(INSUFFICIENT_FUNDS))
@@ -238,7 +240,7 @@ impl DummyStakeEscrowBackendInner {
                     let entry =
                         EscrowAccount::new(id.clone(), msg_sender.clone(), target, escrow_amount);
                     self.escrow_map.insert(id.clone(), entry);
-                    e.accounts.push(id.clone());
+                    e.accounts.insert(id.clone());
                     self.next_account_id.incr_mut();
                     Ok(id)
                 }
@@ -273,16 +275,56 @@ impl DummyStakeEscrowBackendInner {
     }
 
     pub fn fetch_escrow_by_id(&self, escrow_id: B256) -> Result<EscrowAccount, Error> {
-        Err(Error::new(NOT_IMPLEMENTED))
+        match self.escrow_map.get(&escrow_id) {
+            None => Err(Error::new(NO_ESCROW_ACCOUNT)),
+            Some(e) => Ok((*e).clone()),
+        }
     }
 
     pub fn take_and_release_escrow(
-        &self,
+        &mut self,
         msg_sender: B256,
         escrow_id: B256,
         amount_requested: AmountType,
     ) -> Result<AmountType, Error> {
-        Err(Error::new(NOT_IMPLEMENTED))
+        let info = match self.stakes.get_mut(&msg_sender) {
+            None => return Err(Error::new(NO_STAKE_ACCOUNT)),
+            Some(stake_info) => stake_info,
+        };
+        {
+            let account = match self.escrow_map.get_mut(&escrow_id) {
+                None => return Err(Error::new(NO_ESCROW_ACCOUNT)),
+                Some(escrow_account) => escrow_account,
+            };
+            if !(info.accounts.contains(&escrow_id)) {
+                return Err(Error::new(INTERNAL_ERROR));
+            }
+            if amount_requested > account.amount {
+                return Err(Error::new(REQUEST_EXCEEDS_ESCROWED));
+            };
+            // post: amount_requested <= account.amount
+
+            // check some invariants
+            if !(account.amount <= info.escrowed) {
+                return Err(Error::new(INTERNAL_ERROR));
+            }
+            // single escrow account value cannot exceed total escrowed
+            if !(info.escrowed <= info.amount) {
+                return Err(Error::new(INTERNAL_ERROR));
+            }
+            // total tied up in escrow cannot exceed stake
+
+            info.amount -= amount_requested;
+            info.escrowed -= account.amount;
+            info.accounts.remove(&escrow_id);
+        } // terminate self.escrow_map mutable borrow via `account`
+        self.escrow_map.remove(&escrow_id);
+        // amount available' = info.amount' - info.escrowed'
+        //                   = info.amount - amount_requested - (info.escrowed - account.amount)
+        //                   = info.amount - info.escrowed + (account.amount - amount_requested)
+        // \sum_{a \in info.accounts'} a.amount = \sum{a \in info.accounts} a.amount - account.amount
+
+        Ok(amount_requested)
     }
 }
 

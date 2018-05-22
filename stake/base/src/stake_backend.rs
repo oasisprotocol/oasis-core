@@ -4,8 +4,13 @@ use ekiden_common::futures::{BoxFuture, Future};
 
 use ekiden_stake_api as api;
 
-// No numeric_limits<decltype(entry.amount)>::max_value() equivalent yet
 pub type AmountType = u64;
+// Dependent code can use either AmountType::max_value() directly or
+// use the AMOUNT_MAX constant; unfortunately, since this is a type
+// alias, we don't seem to be able to have the compiler forbid direct
+// uses of u64::max_value(), which would be bad if/when the type alias
+// ever changes to a narrower type.  An alternative is to wrap it in a
+// struct, but that makes its use very cumbersome.
 pub static AMOUNT_MAX: AmountType = AmountType::max_value();
 
 pub struct StakeStatus {
