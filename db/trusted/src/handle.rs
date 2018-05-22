@@ -1,9 +1,6 @@
 //! Low-level key-value database interface.
-use std::collections::BTreeMap;
-#[cfg(target_env = "sgx")]
-use std::sync::{Arc, SgxMutex as Mutex, SgxMutexGuard as MutexGuard};
-#[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
+use std::sync::Arc;
 
 #[cfg(target_env = "sgx")]
 use serde_cbor;
@@ -12,14 +9,11 @@ use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 #[cfg(target_env = "sgx")]
 use ekiden_common::futures::FutureExt;
-#[cfg(target_env = "sgx")]
-use ekiden_key_manager_client::KeyManager;
-#[cfg(target_env = "sgx")]
-use ekiden_storage_base::StorageMapper;
+#[cfg(not(target_env = "sgx"))]
+use ekiden_storage_dummy::DummyStorageBackend;
 
 use super::Database;
-#[cfg(target_env = "sgx")]
-use super::aead::AeadStorageMapper;
+use super::patricia_trie::PatriciaTrie;
 #[cfg(target_env = "sgx")]
 use super::untrusted::UntrustedStorageBackend;
 
@@ -29,13 +23,10 @@ use super::untrusted::UntrustedStorageBackend;
 ///
 /// [`Database`]: super::Database
 pub struct DatabaseHandle {
-    /// Storage backend.
-    #[cfg(target_env = "sgx")]
-    backend: AeadStorageMapper,
     /// Current database state.
-    state: BTreeMap<Vec<u8>, Vec<u8>>,
-    /// Dirtyness flag.
-    dirty: bool,
+    state: PatriciaTrie,
+    /// Root hash.
+    root_hash: Option<H256>,
 }
 
 lazy_static! {
@@ -46,20 +37,12 @@ lazy_static! {
 impl DatabaseHandle {
     /// Construct new database interface.
     fn new() -> Self {
-        #[cfg(target_env = "sgx")]
-        let mut key_manager = KeyManager::get().unwrap();
-
         DatabaseHandle {
+            #[cfg(not(target_env = "sgx"))]
+            state: PatriciaTrie::new(Arc::new(DummyStorageBackend::new())),
             #[cfg(target_env = "sgx")]
-            backend: AeadStorageMapper::new(
-                Arc::new(UntrustedStorageBackend::new()),
-                key_manager
-                    .get_or_create_key("state.key", AeadStorageMapper::key_len())
-                    .unwrap(),
-                key_manager.get_or_create_key("state.nonce", 64).unwrap(),
-            ),
-            state: BTreeMap::new(),
-            dirty: false,
+            state: PatriciaTrie::new(Arc::new(UntrustedStorageBackend::new())),
+            root_hash: None,
         }
     }
 
@@ -72,65 +55,51 @@ impl DatabaseHandle {
     }
 
     /// Set the root hash of the database state.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
-        // TODO: Do not store a single blob.
-        if let Ok(state) = self.backend.get(root_hash).wait() {
-            self.state = serde_cbor::from_slice(&state)?;
+        if root_hash == H256::zero() {
+            self.root_hash = None;
+        } else {
+            self.root_hash = Some(root_hash);
         }
-        self.dirty = false;
-
-        Ok(())
-    }
-
-    /// Set the root hash of the database state.
-    #[cfg(not(target_env = "sgx"))]
-    pub(crate) fn set_root_hash(&mut self, _root_hash: H256) -> Result<()> {
-        self.state.clear();
-        self.dirty = false;
 
         Ok(())
     }
 
     /// Return the root hash of the database state.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn get_root_hash(&mut self) -> Result<H256> {
-        // TODO: Do not store a single blob.
-        let state = serde_cbor::to_vec(&self.state)?;
-        // TODO: Handle state expiry.
-        Ok(self.backend.insert(state, 7).wait()?)
-    }
-
-    /// Return the root hash of the database state.
-    #[cfg(not(target_env = "sgx"))]
-    pub(crate) fn get_root_hash(&mut self) -> Result<H256> {
-        Ok(H256::zero())
+        match self.root_hash {
+            Some(root_hash) => Ok(root_hash),
+            None => Ok(H256::zero()),
+        }
     }
 }
 
 impl Database for DatabaseHandle {
     fn contains_key(&self, key: &[u8]) -> bool {
-        self.state.contains_key(key)
+        self.get(key).is_some()
     }
 
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        self.state.get(key).cloned()
+        self.state.get(self.root_hash, key)
     }
 
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-        self.dirty = true;
-        self.state.insert(key.to_owned(), value.to_owned())
+        let previous_value = self.get(key);
+        self.root_hash = Some(self.state.insert(self.root_hash, key, value));
+
+        previous_value
     }
 
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-        self.dirty = true;
-        self.state.remove(key)
+        let previous_value = self.get(key);
+        self.root_hash = self.state.remove(self.root_hash, key);
+
+        previous_value
     }
 
     /// Clear database state.
     fn clear(&mut self) {
-        self.dirty = true;
-        self.state.clear();
+        self.root_hash = None;
     }
 }
 
@@ -146,11 +115,19 @@ mod tests {
         db.insert(b"foo", b"hello world");
         db.insert(b"bar", b"another data value");
 
+        assert!(db.contains_key(b"foo"));
+        assert!(db.contains_key(b"bar"));
         assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
         assert_eq!(db.get(b"another"), None);
 
         db.remove(b"foo");
 
+        assert!(!db.contains_key(b"foo"));
+        assert!(db.contains_key(b"bar"));
         assert_eq!(db.get(b"foo"), None);
+
+        db.clear();
+
+        assert!(!db.contains_key(b"bar"));
     }
 }
