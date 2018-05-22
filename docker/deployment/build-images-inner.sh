@@ -15,7 +15,7 @@ EOF
 fi
 
 # Build all Ekiden binaries and resources.
-cargo install --force --path tools ekiden-tools
+cargo install --force --path tools
 (cd contracts/key-manager && cargo ekiden build-contract --release)
 (cd contracts/token && cargo ekiden build-contract --release)
 (cd compute && cargo build --release)
