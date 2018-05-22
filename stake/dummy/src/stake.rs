@@ -22,22 +22,52 @@ use ekiden_stake_base::*;
 // that try to do string comparisons misfiring.  Ideally we could have
 // per-module enums or something like that, and have the errors
 // propagate through gRPC...
+
+static INTERNAL_ERROR: &str = "INTERNAL ERROR: Invariance violation";
 static NO_ACCOUNT: &str = "No account";
 static WOULD_OVERFLOW: &str = "Would overflow";
 static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
 static NOT_IMPLEMENTED: &str = "NOT IMPLEMENTED";  // temporary
 
+// It would be nice if DummyStakeEscrowInfo contained its owner ID so
+// that EscrowAccount's owner and target can be just a reference to
+// the appropriate DummyStakeEscrowInfo.  The dynamic lifetime,
+// however, is not something that Rust's lifetime annotation can
+// handle, and would require the use of Rc or Arc to essentially share
+// ownership.  For now, we just store keys rather than references.
+
 // Invariant: 0 <= escrowed <= amount <= AMOUNT_MAX.
 struct DummyStakeEscrowInfo {
-    owner: B256,
     amount: AmountType,  // see max_value() below
     escrowed: AmountType,
+    accounts: Vec<B256>,  // account id, keys for escrow_map below
 }
 
+impl DummyStakeEscrowInfo {
+    fn new() -> Self {
+        Self {
+            amount: 0,
+            escrowed: 0,
+            accounts: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone)]
 struct EscrowAccount {
     owner: B256,  // &DummyStakeEscrowInfo
     target: B256,  // &DummyStakeEscrowInfo
     amount: AmountType,
+}
+
+impl EscrowAccount {
+    fn new(owner: B256, target: B256, amount: AmountType) -> Self {
+        Self {
+            owner: owner,
+            target: target,
+            amount: amount,
+        }
+    }
 }
 
 // We use 32-digits so it can be converted to a B256 easily (do we
@@ -92,8 +122,6 @@ struct DummyStakeEscrowBackendInner {
     // Per-entity state.
     stakes: HashMap<B256, DummyStakeEscrowInfo>,
     escrow_map: HashMap<B256, EscrowAccount>,
-    // lifetime of EscrowAccount entries cannot exceed that of the
-    // StakeEscrowInfo entries inside of the stakes HashMap.
 
     next_account_id: LittleEndianCounter32,
 }
@@ -112,11 +140,7 @@ impl DummyStakeEscrowBackendInner {
                          additional_stake: AmountType)
                          -> Result<(), Error> {
         let entry = self.stakes.entry(msg_sender).or_insert_with(||
-            DummyStakeEscrowInfo {
-                owner: msg_sender,
-                amount: 0,
-                escrowed: 0,
-            });
+            DummyStakeEscrowInfo::new());
         if AMOUNT_MAX - entry.amount < additional_stake {
             return Err(Error::new(WOULD_OVERFLOW));
         }
@@ -174,12 +198,11 @@ impl DummyStakeEscrowBackendInner {
                     e.amount -= escrow_amount;
                     e.escrowed += escrow_amount;
                     let id = self.next_account_id.to_b256();
-                    let entry = EscrowAccount {
-                        owner: msg_sender.clone(),
-                        target: target,
-                        amount: escrow_amount,
-                    };
+                    let entry = EscrowAccount::new(msg_sender.clone(),
+                                                   target,
+                                                   escrow_amount);
                     self.escrow_map.insert(id.clone(), entry);
+                    e.accounts.push(id.clone());
                     self.next_account_id.incr_mut();
                     Ok(id)
                 }
@@ -188,19 +211,27 @@ impl DummyStakeEscrowBackendInner {
     }
 
     pub fn list_active_escrows(&self, msg_sender: B256)
-                               -> Result<Vec<api::EscrowData>, Error> {
-        let mut results: Vec<api::EscrowData> = Vec::new();
+                               -> Result<Vec<(B256, EscrowAccount)>, Error> {
+        let mut results: Vec<(B256, EscrowAccount)> = Vec::new();
         match self.stakes.get(&msg_sender) {
             None => Ok(results),
             Some(a) => {
                 if a.escrowed == 0 {
                     return Ok(results)
                 }
+
+                for ea_id in a.accounts.iter() {
+                    match self.escrow_map.get(&*ea_id) {
+                        None => {
+                            return Err(Error::new(INTERNAL_ERROR));
+                        },
+                        Some(e) => {
+                            results.push(((*ea_id).clone(), (*e).clone()));
+                        }
+                    }
+                }
                 
-                // The DummyStakeEscrowInfo should have a containing
-                // with all the escrow accounts owned by the
-                // stakeholder.
-                Err(Error::new(NOT_IMPLEMENTED))
+                Ok(results)
             }
         }
     }
@@ -275,7 +306,21 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
-            inner.list_active_escrows(msg_sender)
+            let mut output = Vec::new();
+            let vpairs = match inner.list_active_escrows(msg_sender) {
+                Err(e) => return Err(e),
+                Ok(v) => v,
+            };
+            output.extend(vpairs
+                          .iter()
+                          .map(|p| {
+                              let mut api_ed = api::EscrowData::new();
+                              api_ed.set_escrow_id(p.0.to_vec());
+                              api_ed.set_entity(p.1.target.to_vec());
+                              api_ed.set_amount(p.1.amount);
+                              api_ed
+                          }));
+            Ok(output)
         }))
     }
 

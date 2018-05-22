@@ -51,7 +51,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
                 Ok(s) => {
                     let a = req.get_amount();
                     Ok(self.inner.deposit_stake(s, a))
@@ -82,7 +82,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<StakeStatus>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
                 Ok(s) => Ok(self.inner.get_stake_status(s))
             }
         };
@@ -115,7 +115,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<(u64)>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
                 Ok(s) =>
                     Ok(self.inner.withdraw_stake(s, req.get_amount_requested()))
             }
@@ -148,9 +148,9 @@ where
     ) {
         let f = move || -> Result<BoxFuture<B256>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
                 Ok(s) => match B256::try_from(req.get_target()) {
-                    Err(e) => Err(Error::new(BAD_PROTO_TARGET)),
+                    Err(_e) => Err(Error::new(BAD_PROTO_TARGET)),
                     Ok(t) => {
                         let a = req.get_escrow_amount();
                         Ok(self.inner.allocate_escrow(s, t, a))}}}
@@ -183,7 +183,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<(Vec<api::EscrowData>)>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
                 Ok(s) =>
                     Ok(self.inner.list_active_escrows(s))}
         };
@@ -245,7 +245,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<u64>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
                 Ok(s) => {
                     let i = B256::from_slice(req.get_escrow_id());
                     let a = req.get_amount_requested();

@@ -174,7 +174,7 @@ message AllocateEscrowResponse {
 
 message EscrowData {
   bytes escrow_id = 1;
-  common.Entity entity = 2;
+  bytes entity = 2;
   uint64 amount = 3;
 }
 
