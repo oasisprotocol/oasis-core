@@ -26,6 +26,7 @@ members = [
     "storage/dummy",
     "storage/frontend",
     "storage/persistent",
+    "storage/lru_cache",
 
     # Enclave loader (+ attestation).
     "enclave/common",
