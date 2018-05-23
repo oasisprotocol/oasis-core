@@ -1,8 +1,9 @@
 use std::convert::{Into, TryFrom};
+use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
-use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, Future, Stream};
+use ekiden_common::error::Result;
+use ekiden_common::futures::{future, Future, Stream};
 use ekiden_common::signature::{Signature, Signed};
 use ekiden_consensus_api as api;
 use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
@@ -13,18 +14,13 @@ use block::Block;
 use commitment::{Commitment, Reveal};
 use header::Header;
 
-pub struct ConsensusService<T>
-where
-    T: ConsensusBackend,
-{
-    inner: T,
+#[derive(Clone)]
+pub struct ConsensusService {
+    inner: Arc<ConsensusBackend>,
 }
 
-impl<T> ConsensusService<T>
-where
-    T: ConsensusBackend,
-{
-    pub fn new(backend: T) -> Self {
+impl ConsensusService {
+    pub fn new(backend: Arc<ConsensusBackend>) -> Self {
         Self { inner: backend }
     }
 }
@@ -38,71 +34,92 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::Consensus for ConsensusService<T>
-where
-    T: ConsensusBackend,
-{
+impl api::Consensus for ConsensusService {
     fn get_latest_block(
         &self,
         ctx: RpcContext,
-        _req: api::LatestBlockRequest,
+        req: api::LatestBlockRequest,
         sink: UnarySink<api::LatestBlockResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<Block>, Error> { Ok(self.inner.get_latest_block()) };
+        let f = move || -> Result<_> {
+            Ok(self.inner
+                .get_latest_block(B256::try_from(req.get_contract_id())?))
+        };
         let f = match f() {
-            Ok(f) => f.then(|res| match res {
+            Ok(f) => f.then(|response| match response {
                 Ok(block) => {
-                    let mut resp = api::LatestBlockResponse::new();
-                    resp.set_block(block.into());
-                    Ok(resp)
+                    let mut pb_response = api::LatestBlockResponse::new();
+                    pb_response.set_block(block.into());
+
+                    Ok(pb_response)
                 }
-                Err(e) => Err(e),
+                Err(error) => Err(error),
             }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+            Err(error) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
+        ctx.spawn(f.then(move |response| match response {
+            Ok(response) => sink.success(response),
+            Err(error) => invalid!(sink, Internal, error),
+        }).map_err(|_error| ()));
     }
 
     fn get_blocks(
         &self,
         ctx: RpcContext,
-        _req: api::BlockRequest,
+        req: api::BlockRequest,
         sink: ServerStreamingSink<api::BlockResponse>,
     ) {
-        let f = self.inner
-            .get_blocks()
-            .map(|res| -> (api::BlockResponse, WriteFlags) {
-                let mut r = api::BlockResponse::new();
-                r.set_block(res.into());
-                (r, WriteFlags::default())
-            });
+        let f = move || -> Result<_> {
+            Ok(self.inner
+                .get_blocks(B256::try_from(req.get_contract_id())?))
+        };
+        let f = match f() {
+            Ok(f) => f.map(|response| -> (api::BlockResponse, WriteFlags) {
+                let mut pb_response = api::BlockResponse::new();
+                pb_response.set_block(response.into());
+
+                (pb_response, WriteFlags::default())
+            }),
+            Err(error) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                return;
+            }
+        };
         ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
     }
 
     fn get_events(
         &self,
         ctx: RpcContext,
-        _req: api::EventRequest,
+        req: api::EventRequest,
         sink: ServerStreamingSink<api::EventResponse>,
     ) {
-        let f = self.inner
-            .get_events()
-            .map(|res| -> (api::EventResponse, WriteFlags) {
-                let mut r = api::EventResponse::new();
-                match res {
+        let f = move || -> Result<_> {
+            Ok(self.inner
+                .get_events(B256::try_from(req.get_contract_id())?))
+        };
+        let f = match f() {
+            Ok(f) => f.map(|response| -> (api::EventResponse, WriteFlags) {
+                let mut pb_response = api::EventResponse::new();
+                match response {
                     Event::CommitmentsReceived => {
-                        r.set_event(api::EventResponse_Event::COMMITMENTSRECEIVED)
+                        pb_response.set_event(api::EventResponse_Event::COMMITMENTSRECEIVED)
                     }
-                    Event::RoundFailed(_) => r.set_event(api::EventResponse_Event::ROUNDFAILED),
+                    Event::RoundFailed(_) => {
+                        pb_response.set_event(api::EventResponse_Event::ROUNDFAILED)
+                    }
                 };
-                (r, WriteFlags::default())
-            });
+
+                (pb_response, WriteFlags::default())
+            }),
+            Err(error) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                return;
+            }
+        };
         ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
     }
 
@@ -112,24 +129,25 @@ where
         req: api::CommitRequest,
         sink: UnarySink<api::CommitResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<()>, Error> {
+        let f = move || -> Result<_> {
+            let contract_id = B256::try_from(req.get_contract_id())?;
             let commitment = Commitment::try_from(req.get_commitment().clone())?;
-            Ok(self.inner.commit(commitment))
+            Ok(self.inner.commit(contract_id, commitment))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(()) => Ok(api::CommitResponse::new()),
                 Err(e) => Err(e),
             }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+            Err(error) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
+        ctx.spawn(f.then(move |response| match response {
+            Ok(response) => sink.success(response),
+            Err(error) => invalid!(sink, Internal, error),
+        }).map_err(|_error| ()));
     }
 
     fn reveal(
@@ -138,30 +156,34 @@ where
         req: api::RevealRequest,
         sink: UnarySink<api::RevealResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<()>, Error> {
+        let f = move || -> Result<_> {
+            let contract_id = B256::try_from(req.get_contract_id())?;
             let header = Header::try_from(req.get_header().clone())?;
             let nonce = B256::from(req.get_nonce());
-            let s = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.reveal(Reveal {
-                value: header,
-                nonce: nonce,
-                signature: s,
-            }))
+            let signature = Signature::try_from(req.get_signature().clone())?;
+            Ok(self.inner.reveal(
+                contract_id,
+                Reveal {
+                    value: header,
+                    nonce: nonce,
+                    signature: signature,
+                },
+            ))
         };
         let f = match f() {
-            Ok(f) => f.then(|res| match res {
+            Ok(f) => f.then(|response| match response {
                 Ok(()) => Ok(api::RevealResponse::new()),
                 Err(e) => Err(e),
             }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+            Err(error) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
+        ctx.spawn(f.then(move |response| match response {
+            Ok(response) => sink.success(response),
+            Err(error) => invalid!(sink, Internal, error),
+        }).map_err(|_error| ()));
     }
 
     fn submit(
@@ -170,24 +192,26 @@ where
         req: api::SubmitRequest,
         sink: UnarySink<api::SubmitResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<()>, Error> {
+        let f = move || -> Result<_> {
+            let contract_id = B256::try_from(req.get_contract_id())?;
             let block = Block::try_from(req.get_block().clone())?;
-            let s = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.submit(Signed::from_parts(block, s)))
+            let signature = Signature::try_from(req.get_signature().clone())?;
+            Ok(self.inner
+                .submit(contract_id, Signed::from_parts(block, signature)))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(()) => Ok(api::SubmitResponse::new()),
-                Err(e) => Err(e),
+                Err(error) => Err(error),
             }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+            Err(error) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
+        ctx.spawn(f.then(move |response| match response {
+            Ok(response) => sink.success(response),
+            Err(error) => invalid!(sink, Internal, error),
+        }).map_err(|_error| ()));
     }
 }

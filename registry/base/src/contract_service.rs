@@ -1,29 +1,25 @@
 use std::convert::{Into, TryFrom};
+use std::sync::Arc;
 
-use ekiden_common::futures::{future, BoxFuture, Future, Stream};
-use ekiden_registry_api as api;
 use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use protobuf::RepeatedField;
 
-use super::contract_backend::ContractRegistryBackend;
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
+use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_common::signature::{Signature, Signed};
+use ekiden_registry_api as api;
 
-pub struct ContractRegistryService<T>
-where
-    T: ContractRegistryBackend,
-{
-    inner: T,
+use super::contract_backend::ContractRegistryBackend;
+
+#[derive(Clone)]
+pub struct ContractRegistryService {
+    inner: Arc<ContractRegistryBackend>,
 }
 
-impl<T> ContractRegistryService<T>
-where
-    T: ContractRegistryBackend,
-{
-    pub fn new(backend: T) -> Self {
+impl ContractRegistryService {
+    pub fn new(backend: Arc<ContractRegistryBackend>) -> Self {
         Self { inner: backend }
     }
 }
@@ -37,10 +33,7 @@ macro_rules! invalid {
     }
 }
 
-impl<T> api::ContractRegistry for ContractRegistryService<T>
-where
-    T: ContractRegistryBackend,
-{
+impl api::ContractRegistry for ContractRegistryService {
     fn register_contract(
         &self,
         ctx: RpcContext,
@@ -108,7 +101,7 @@ where
             .get_contracts()
             .map(|res| -> (api::ContractsResponse, WriteFlags) {
                 let mut r = api::ContractsResponse::new();
-                r.set_contract(RepeatedField::from_vec(vec![res.into()]));
+                r.set_contract(res.into());
                 (r, WriteFlags::default())
             });
         ctx.spawn(f.forward(sink).then(|_f| future::ok(())));

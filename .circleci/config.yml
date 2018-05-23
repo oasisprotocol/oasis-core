@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.4
+      - image: ekiden/testing:0.1.0-alpha.5
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -12,6 +12,10 @@ jobs:
       - checkout
 
       # Cargo tests. Some tests are excluded as they currently don't compile.
+      # Heuristic glob to detect what test binaries that cargo builds.
+      # If that gets too janky, try `cargo test --message-format=json`
+      # (see
+      # https://github.com/rust-lang/cargo/issues/1924#issuecomment-289770287).
       - run: |
           cargo test --all \
             --exclude ekiden-untrusted \
@@ -20,7 +24,20 @@ jobs:
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
             --exclude token \
-            -- --test-threads 1
+            --no-run
+          cd target/debug
+          mkdir ../cov
+          for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
+            mkdir ../cov/$bin
+            kcov \
+              --exclude-pattern=$HOME/.cargo,/usr/lib \
+              --verify \
+              ../cov/$bin \
+              ./$bin \
+              --test-threads 1
+          done
+      # Upload coverage info.
+      - run: codecov
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
       # compare against them.
@@ -57,6 +74,11 @@ jobs:
 
       # Contract end-to-end tests.
 
+      # Start dummy node.
+      - run:
+          command: |
+            ./target/debug/ekiden-node-dummy --time-source mockrpc
+          background: true
       # Start key manager compute node.
       - run:
           command: |
@@ -67,25 +89,59 @@ jobs:
               --max-batch-size 1 \
               target/contract/ekiden-key-manager.so
           background: true
-      # Start token compute node.
+      # Start token compute nodes.
       - run:
           command: |
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10001 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            sleep 1
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10002 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            sleep 2
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10003 \
               target/contract/token.so
           background: true
       # Start token client.
-      - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+      - run: |
+          # Sleep so everything gets ready.
+          sleep 10
+
+          # Advance epoch to elect a new committee.
+          ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
+
+          # Sleep some more.
+          sleep 5
+
+          # Run the client.
+          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
   deploy:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.4
+      - image: ekiden/testing:0.1.0-alpha.5
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
       - setup_remote_docker
 
@@ -101,6 +157,7 @@ jobs:
           REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
+          kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 

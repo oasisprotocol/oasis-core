@@ -7,4 +7,6 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
+ekiden-beacon-api = { path = "../api", version = "0.1.0-alpha.4" }
 ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
+grpcio = "0.2.2"

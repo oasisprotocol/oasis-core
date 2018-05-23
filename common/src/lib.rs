@@ -15,7 +15,10 @@ extern crate bigint;
 extern crate byteorder;
 extern crate chrono;
 extern crate core;
-extern crate fixed_hash;
+#[cfg(not(target_env = "sgx"))]
+extern crate get_if_addrs;
+#[macro_use]
+extern crate log;
 pub extern crate ring;
 extern crate rustc_hex;
 extern crate serde;
@@ -36,6 +39,8 @@ pub mod error;
 pub mod futures;
 pub mod hash;
 pub mod node;
+#[cfg(not(target_env = "sgx"))]
+pub mod node_group;
 #[macro_use]
 pub mod profiling;
 #[macro_use]

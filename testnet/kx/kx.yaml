@@ -4,36 +4,41 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: ekiden-token-consensus
+  name: ekiden-token-node-dummy
 spec:
   ports:
-    - name: consensus-grpc
-      port: 9002
+    - name: dummy-grpc
+      port: 42261
   selector:
-    copper: ekiden-token-consensus
+    copper: ekiden-token-node-dummy
   # type: ClusterIP
 ---
 kind: Deployment
 apiVersion: extensions/v1beta1
 metadata:
-  name: ekiden-token-consensus
+  name: ekiden-token-node-dummy
+  labels:
+    app: ekiden
 spec:
   selector:
     matchLabels:
-      copper: ekiden-token-consensus
+      copper: ekiden-token-node-dummy
   # replicas: 1
   template:
     metadata:
       labels:
-        copper: ekiden-token-consensus
+        copper: ekiden-token-node-dummy
     spec:
       containers:
-        - name: ekiden-consensus
+        - name: ekiden-node-dummy
           image: docker.io/oasislabs/testnet:latest
           command:
-            - ekiden-consensus
+            - ekiden-node-dummy
           args:
-            - --no-tendermint
+            - --time-source
+            - mock
+            - --mock-epoch-interval
+            - "60"
 ---
 kind: Service
 apiVersion: v1
@@ -51,6 +56,8 @@ kind: Deployment
 apiVersion: extensions/v1beta1
 metadata:
   name: ekiden-token-key-manager
+  labels:
+    app: ekiden
 spec:
   selector:
     matchLabels:
@@ -64,15 +71,24 @@ spec:
       containers:
         - name: ekiden-compute
           image: docker.io/oasislabs/testnet:latest
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /opt/intel/sgxsdk/lib64
           command:
             - ekiden-compute
           args:
             - --port
             - "9003"
+            - --dummy-host
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
+            - --dummy-port
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
             - --disable-key-manager
             - --no-persist-identity
             - --max-batch-size
             - "1"
+            - --metrics-addr
+            - "0.0.0.0:3000"
             - ekiden/lib/ekiden-key-manager.so
 ---
 kind: Service
@@ -93,6 +109,8 @@ kind: Deployment
 apiVersion: extensions/v1beta1
 metadata:
   name: ekiden-token
+  labels:
+    app: ekiden
 spec:
   selector:
     matchLabels:
@@ -106,16 +124,53 @@ spec:
       containers:
         - name: ekiden-compute
           image: docker.io/oasislabs/testnet:latest
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /opt/intel/sgxsdk/lib64
           command:
             - ekiden-compute
           args:
             - --no-persist-identity
-            - --consensus-host
-            - $(EKIDEN_TOKEN_CONSENSUS_SERVICE_HOST)
-            - --consensus-port
-            - $(EKIDEN_TOKEN_CONSENSUS_SERVICE_PORT_CONSENSUS_GRPC)
+            - --metrics-addr
+            - "0.0.0.0:3000"
+            - --dummy-host
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
+            - --dummy-port
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
             - --key-manager-host
             - $(EKIDEN_TOKEN_KEY_MANAGER_SERVICE_HOST)
             - --key-manager-port
             - $(EKIDEN_TOKEN_KEY_MANAGER_SERVICE_PORT_CONTRACT_GRPC)
             - ekiden/lib/token.so
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ekiden-dashboard
+  labels:
+    app: ekiden-dashboard
+spec:
+  selector:
+    app: ekiden
+  ports:
+    - name: metrics
+      port: 3000
+      # targetPort is set to match port [3000] automatically
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ekiden-dashboard
+  namespace: monitoring
+  labels:
+    app: ekiden-dashboard
+spec:
+  selector:
+    matchLabels:
+      app: ekiden-dashboard
+    endpoints:
+      - port: metrics
+        interval: 5s
+    namespaceSelector:
+      matchNames:
+        - default

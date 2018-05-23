@@ -71,15 +71,21 @@ members = [
     # Registry.
     "registry/api",
     "registry/base",
+    "registry/client",
     "registry/dummy",
 
     # Scheduler.
     "scheduler/api",
     "scheduler/base",
+    "scheduler/client",
     "scheduler/dummy",
 
     # Stake escrow.
     "stake/api",
     "stake/base",
     "stake/dummy",
+
+    # Dummy shared backend node.
+    "node/dummy",
+    "node/dummy/api",
 ]

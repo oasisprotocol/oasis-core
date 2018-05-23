@@ -1,6 +1,8 @@
 use sgx_types::{self, sgx_enclave_id_t, sgx_status_t};
 
 extern "C" {
+    pub fn enclave_late_init(eid: sgx_enclave_id_t) -> sgx_status_t;
+
     pub fn identity_create(
         eid: sgx_enclave_id_t,
         sealed_identity: *mut sgx_types::sgx_sealed_data_t,

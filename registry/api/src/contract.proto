@@ -30,5 +30,5 @@ message ContractsRequest {
 }
 
 message ContractsResponse {
-    repeated common.Contract contract = 1;
+    common.Contract contract = 1;
 }

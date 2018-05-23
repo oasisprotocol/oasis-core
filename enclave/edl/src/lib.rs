@@ -2,5 +2,6 @@
 extern crate ekiden_tools;
 
 define_edl! {
-    "identity.edl"
+    "enclave.edl",
+    "identity.edl",
 }

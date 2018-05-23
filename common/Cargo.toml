@@ -14,7 +14,6 @@ profiling = []
 ekiden-common-api = { path = "./api", version = "0.1.0-alpha.4" }
 protobuf = "~1.4"
 byteorder = "1.2.1"
-fixed-hash = { version = "0.2.1", default-features = false }
 rustc-hex = "1.0"
 ring = { git = "https://github.com/ekiden/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
 untrusted = "0.5.1"
@@ -23,6 +22,7 @@ chrono = "0.4.2"
 serde = "1.0"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"
+log = "0.4"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
 futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
@@ -32,6 +32,7 @@ rand = "0.4.2"
 grpcio = "0.2.2"
 futures = "0.1"
 futures-cpupool = "0.1"
+get_if_addrs = "~0.5.1"
 
 [dev-dependencies]
 serde_json = { git = "https://github.com/ekiden/json" }

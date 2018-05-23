@@ -89,11 +89,20 @@ impl DummySchedulerBackendInner {
             "Node list already present for epoch: {}",
             epoch
         );
-        let nodes = self.entity_registry.get_nodes().wait().unwrap();
+        let mut nodes = self.entity_registry.get_nodes().wait().unwrap();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+
+        trace!(
+            "on_epoch_transition(): Epoch: {} ({} nodes)",
+            epoch,
+            nodes.len()
+        );
         self.entity_cache.insert(epoch, nodes);
     }
 
     fn on_contract(&mut self, contract: Contract) {
+        trace!("on_contract(): {:?}", contract.id);
+
         // Add the contract to the cache.
         let contract_id = contract.id;
         match self.contract_cache.get(&contract_id) {
@@ -154,6 +163,13 @@ impl DummySchedulerBackendInner {
             make_committee_impl(contract, &nodes, CommitteeType::Storage, &entropy, epoch)?;
         committee_cache.insert(contract_id, vec![compute.clone(), storage.clone()]);
 
+        trace!(
+            "do_election(): Contract: {} Compute: {:?} Storage: {:?}",
+            contract_id,
+            compute,
+            storage
+        );
+
         // Notify.
         self.subscribers.notify(&compute);
         self.subscribers.notify(&storage);
@@ -166,6 +182,11 @@ impl DummySchedulerBackendInner {
         if !self.can_elect() {
             return;
         }
+
+        trace!(
+            "maybe_mass_elect(): Mass electing for Epoch: {}",
+            self.current_epoch
+        );
 
         // Mass elect the new committees.
         let contracts: Vec<_> = self.contract_cache
@@ -201,61 +222,17 @@ impl DummySchedulerBackendInner {
         self.beacon_cache.contains_key(&epoch) && self.entity_cache.contains_key(&epoch)
     }
 
-    fn get_committees(
-        &self,
-        contract: Arc<Contract>,
-        epoch: EpochTime,
-    ) -> BoxFuture<Vec<Committee>> {
+    fn get_committees(&self, contract_id: B256, epoch: EpochTime) -> BoxFuture<Vec<Committee>> {
         // Attempt to service this from the internal cache.
         match self.committee_cache.get(&epoch) {
             Some(committees) => {
-                match committees.get(&contract.id) {
+                match committees.get(&contract_id) {
                     Some(committees) => return Box::new(future::ok(committees.clone())),
-                    None => {}
+                    None => return Box::new(future::err(Error::new("No committees for contract"))),
                 };
             }
-            None => {}
+            None => return Box::new(future::err(Error::new("No committees for epoch"))),
         };
-
-        // Do this the hard way by querying the beacon/entity registry.
-        //
-        // TODO: This may be better off either returning an error, or
-        // returning a future that queries the caches when the information
-        // is available, or just flat out failing.
-        let get_metadata = {
-            // TODO: entity_registry.get_nodes() should probably take an
-            // EpochTime since this absolutely depends on a stable/globally
-            // consistent node list.
-            self.beacon
-                .get_beacon(epoch)
-                .join(self.entity_registry.get_nodes())
-        };
-        let result = get_metadata.and_then(move |(entropy, nodes)| {
-            let compute = match make_committee_impl(
-                contract.clone(),
-                &nodes,
-                CommitteeType::Compute,
-                &entropy,
-                epoch,
-            ) {
-                Ok(v) => v,
-                Err(err) => return Box::new(future::err(err)),
-            };
-
-            let storage = match make_committee_impl(
-                contract,
-                &nodes,
-                CommitteeType::Storage,
-                &entropy,
-                epoch,
-            ) {
-                Ok(v) => v,
-                Err(err) => return Box::new(future::err(err)),
-            };
-
-            Box::new(future::ok(vec![compute, storage]))
-        });
-        Box::new(result)
     }
 }
 
@@ -333,15 +310,23 @@ impl Scheduler for DummySchedulerBackend {
         })
     }
 
-    fn get_committees(&self, contract: Arc<Contract>) -> BoxFuture<Vec<Committee>> {
-        let inner = self.inner.lock().unwrap();
+    fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
+        let locked_inner = self.inner.lock().unwrap();
 
-        let epoch = match inner.time_notifier.time_source().get_epoch() {
-            Ok((epoch, _)) => epoch,
-            Err(err) => return Box::new(future::err(err)),
-        };
-
-        inner.get_committees(contract.clone(), epoch)
+        if locked_inner.current_epoch != EKIDEN_EPOCH_INVALID {
+            locked_inner.get_committees(contract_id, locked_inner.current_epoch)
+        } else {
+            let inner = self.inner.clone();
+            Box::new(
+                locked_inner
+                    .time_notifier
+                    .get_epoch()
+                    .and_then(move |epoch| {
+                        let inner = inner.lock().unwrap();
+                        inner.get_committees(contract_id, epoch)
+                    }),
+            )
+        }
     }
 
     fn watch_committees(&self) -> BoxStream<Committee> {
@@ -357,6 +342,11 @@ impl Scheduler for DummySchedulerBackend {
                     return recv;
                 }
             };
+            trace!(
+                "watch_committees(): Catch up: Epoch: {} ({} committees)",
+                inner.current_epoch,
+                committees.len()
+            );
             for contract_committees in committees.values() {
                 for committee in contract_committees {
                     send.unbounded_send(committee.clone()).unwrap();
@@ -434,7 +424,8 @@ mod tests {
     use super::*;
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
-    use ekiden_common::epochtime::{MockTimeSource, TimeSourceNotifier, EPOCH_INTERVAL};
+    use ekiden_common::epochtime::EPOCH_INTERVAL;
+    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
@@ -444,7 +435,7 @@ mod tests {
     #[test]
     fn test_dummy_scheduler_integration() {
         let time_source = Arc::new(MockTimeSource::new());
-        let time_notifier = Arc::new(TimeSourceNotifier::new(time_source.clone()));
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
@@ -494,13 +485,10 @@ mod tests {
             .unwrap();
         let contract = Arc::new(contract);
 
-        // Test single scheduling a contract (slow path, cache miss).
-        //
-        // WARNING: If the inner get_committees() routine ever changes
-        // to return a future that waits on the notifications internally
-        // this will hang indefinately.
-        let committees = scheduler.get_committees(contract.clone()).wait().unwrap();
-        must_validate_committees(contract.clone(), &nodes, committees, 0);
+        // Test single scheduling a contract.  Since the time source has not
+        // been pumped at all yet, the cache is empty, and this will fail.
+        let committees = scheduler.get_committees(contract.id.clone()).wait();
+        assert!(committees.err().is_some());
 
         // Subscribe to the scheduler.
         let get_committees = scheduler.watch_committees().take(2).collect();
@@ -514,7 +502,10 @@ mod tests {
         must_validate_committees(contract.clone(), &nodes, committees, 0);
 
         // Test single scheduling a contract (cache hit).
-        let committees = scheduler.get_committees(contract.clone()).wait().unwrap();
+        let committees = scheduler
+            .get_committees(contract.id.clone())
+            .wait()
+            .unwrap();
         must_validate_committees(contract.clone(), &nodes, committees, 0);
     }
 

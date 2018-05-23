@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package compute_web3;
+package web3;
 
-service Compute {
+service Web3 {
     // RPC interface.
     rpc CallContract (CallContractRequest) returns (CallContractResponse) {}
 
