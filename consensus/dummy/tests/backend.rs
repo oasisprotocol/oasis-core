@@ -13,11 +13,12 @@ use std::sync::Arc;
 
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
-use ekiden_common::bytes::B256;
+use ekiden_common::bytes::{B256, H256};
 use ekiden_common::contract::Contract;
 use ekiden_common::epochtime::EPOCH_INTERVAL;
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_common::futures::{cpupool, future, Future, Stream};
+use ekiden_common::hash::empty_hash;
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
@@ -108,7 +109,7 @@ fn test_dummy_backend_two_rounds() {
 
     // Send compute requests to all nodes.
     for ref node in nodes.iter() {
-        node.compute();
+        node.compute(b"hello world fake state");
     }
 
     // Stop when a new block is seen on the chain.
@@ -121,12 +122,22 @@ fn test_dummy_backend_two_rounds() {
             match block.header.round.as_u32() {
                 0 => {}
                 1 => {
+                    assert_eq!(
+                        block.header.state_root,
+                        H256::from(
+                            "0x960b1a85d1de064664429c26be6f23f40004f01f9323a6c0da0ca4d310eb69ba"
+                        )
+                    );
+
                     // First round has completed, dispatch a new round of work.
                     for ref node in nodes.iter() {
-                        node.compute();
+                        // Test with empty state.
+                        node.compute(b"");
                     }
                 }
                 2 => {
+                    assert_eq!(block.header.state_root, empty_hash());
+
                     // Second round has completed, request all nodes to shutdown.
                     for ref node in nodes.iter() {
                         node.shutdown();

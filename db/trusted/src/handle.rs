@@ -2,13 +2,9 @@
 use std::sync::{Mutex, MutexGuard};
 use std::sync::Arc;
 
-#[cfg(target_env = "sgx")]
-use serde_cbor;
-
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
-#[cfg(target_env = "sgx")]
-use ekiden_common::futures::FutureExt;
+use ekiden_common::hash::empty_hash;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_storage_dummy::DummyStorageBackend;
 
@@ -56,7 +52,7 @@ impl DatabaseHandle {
 
     /// Set the root hash of the database state.
     pub(crate) fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
-        if root_hash == H256::zero() {
+        if root_hash == empty_hash() {
             self.root_hash = None;
         } else {
             self.root_hash = Some(root_hash);
@@ -69,7 +65,7 @@ impl DatabaseHandle {
     pub(crate) fn get_root_hash(&mut self) -> Result<H256> {
         match self.root_hash {
             Some(root_hash) => Ok(root_hash),
-            None => Ok(H256::zero()),
+            None => Ok(empty_hash()),
         }
     }
 }
@@ -105,6 +101,8 @@ impl Database for DatabaseHandle {
 
 #[cfg(test)]
 mod tests {
+    use ekiden_common::hash::empty_hash;
+
     use super::{Database, DatabaseHandle};
 
     #[test]
@@ -129,5 +127,6 @@ mod tests {
         db.clear();
 
         assert!(!db.contains_key(b"bar"));
+        assert_eq!(db.get_root_hash(), Ok(empty_hash()));
     }
 }
