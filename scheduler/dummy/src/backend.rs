@@ -228,53 +228,11 @@ impl DummySchedulerBackendInner {
             Some(committees) => {
                 match committees.get(&contract_id) {
                     Some(committees) => return Box::new(future::ok(committees.clone())),
-                    None => {}
+                    None => return Box::new(future::err(Error::new("No committees for contract"))),
                 };
             }
-            None => {}
+            None => return Box::new(future::err(Error::new("No committees for epoch"))),
         };
-
-        // Do this the hard way by querying the beacon/entity registry.
-        //
-        // TODO: This may be better off either returning an error, or
-        // returning a future that queries the caches when the information
-        // is available, or just flat out failing.
-        let get_metadata = {
-            // TODO: entity_registry.get_nodes() should probably take an
-            // EpochTime since this absolutely depends on a stable/globally
-            // consistent node list.
-            self.beacon.get_beacon(epoch).join3(
-                self.entity_registry.get_nodes(),
-                self.contract_registry.get_contract(contract_id),
-            )
-        };
-        let result = get_metadata.and_then(move |(entropy, nodes, contract)| {
-            let contract = Arc::new(contract);
-            let compute = match make_committee_impl(
-                contract.clone(),
-                &nodes,
-                CommitteeType::Compute,
-                &entropy,
-                epoch,
-            ) {
-                Ok(v) => v,
-                Err(err) => return Box::new(future::err(err)),
-            };
-
-            let storage = match make_committee_impl(
-                contract,
-                &nodes,
-                CommitteeType::Storage,
-                &entropy,
-                epoch,
-            ) {
-                Ok(v) => v,
-                Err(err) => return Box::new(future::err(err)),
-            };
-
-            Box::new(future::ok(vec![compute, storage]))
-        });
-        Box::new(result)
     }
 }
 
@@ -527,16 +485,10 @@ mod tests {
             .unwrap();
         let contract = Arc::new(contract);
 
-        // Test single scheduling a contract (slow path, cache miss).
-        //
-        // WARNING: If the inner get_committees() routine ever changes
-        // to return a future that waits on the notifications internally
-        // this will hang indefinately.
-        let committees = scheduler
-            .get_committees(contract.id.clone())
-            .wait()
-            .unwrap();
-        must_validate_committees(contract.clone(), &nodes, committees, 0);
+        // Test single scheduling a contract.  Since the time source has not
+        // been pumped at all yet, the cache is empty, and this will fail.
+        let committees = scheduler.get_committees(contract.id.clone()).wait();
+        assert!(committees.err().is_some());
 
         // Subscribe to the scheduler.
         let get_committees = scheduler.watch_committees().take(2).collect();
