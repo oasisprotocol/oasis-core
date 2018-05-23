@@ -25,6 +25,7 @@
 * Clients using `client-utils` now automatically discover the compute replica group leader.
 * Change consensus interface to support multiple contracts.
 * Use Merkle Patricia tree for state storage.
+* Dockerfile includes truffle for solidity development.
 
 # 0.1.0-alpha.4
 
