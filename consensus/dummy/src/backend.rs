@@ -7,6 +7,7 @@ use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
                              StreamExt};
 use ekiden_common::futures::sync::{mpsc, oneshot};
+use ekiden_common::hash::empty_hash;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_common::uint::U256;
@@ -228,15 +229,20 @@ impl Round {
 
         // Check if storage backend contains correct state root.
         // TODO: Currently we just check a single key, we would need to check against a log.
-        Box::new(
+        if block.header.state_root != empty_hash() {
             self.storage
                 .get(block.header.state_root)
                 .and_then(move |_| {
                     info!("Round has been finalized");
                     Ok(FinalizationResult::Finalized(block))
                 })
-                .map_err(|_error| Error::new("state root not found in storage")),
-        )
+                .map_err(|_error| Error::new("state root not found in storage"))
+                .into_box()
+        } else {
+            // There is no state root which means the state is empty.
+            info!("Round has been finalized");
+            future::ok(FinalizationResult::Finalized(block)).into_box()
+        }
     }
 }
 
@@ -310,7 +316,7 @@ impl DummyConsensusBackend {
                 previous_hash: H256::zero(),
                 group_hash: H256::zero(),
                 transaction_hash: H256::zero(),
-                state_root: H256::zero(),
+                state_root: empty_hash(),
                 commitments_hash: H256::zero(),
             },
             computation_group: vec![],
