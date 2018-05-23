@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
+                             StreamExt};
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
@@ -474,53 +475,50 @@ impl ConsensusBackend for DummyConsensusBackend {
                 command_receiver
                     .map_err(|_| Error::new("command channel closed"))
                     .for_each(move |command| -> BoxFuture<()> {
-                        // Process command.
                         let shared_inner = shared_inner.clone();
 
-                        let contract_id = match command {
-                            Command::Commit(contract_id, _, _) => contract_id,
-                            Command::Reveal(contract_id, _, _) => contract_id,
-                            Command::Submit(contract_id, _, _) => contract_id,
+                        // Decode command.
+                        let (contract_id, sender, command): (
+                            _,
+                            _,
+                            Box<Fn(&mut Round) -> _ + Send>,
+                        ) = match command {
+                            Command::Commit(contract_id, commitment, sender) => (
+                                contract_id,
+                                sender,
+                                Box::new(move |round| round.add_commitment(commitment.clone())),
+                            ),
+                            Command::Reveal(contract_id, reveal, sender) => (
+                                contract_id,
+                                sender,
+                                Box::new(move |round| round.add_reveal(reveal.clone())),
+                            ),
+                            Command::Submit(contract_id, block, sender) => (
+                                contract_id,
+                                sender,
+                                Box::new(move |round| round.add_submit(block.clone())),
+                            ),
                         };
 
-                        Box::new(
-                            Self::get_round(shared_inner.clone(), contract_id)
-                                .and_then(move |round| {
-                                    // Actually process command.
-                                    let (sender, result) = {
-                                        let mut round = round.lock().unwrap();
-                                        match command {
-                                            Command::Commit(_, commitment, sender) => {
-                                                (sender, round.add_commitment(commitment))
-                                            }
-                                            Command::Reveal(_, reveal, sender) => {
-                                                (sender, round.add_reveal(reveal))
-                                            }
-                                            Command::Submit(_, block, sender) => {
-                                                (sender, round.add_submit(block))
-                                            }
-                                        }
-                                    };
+                        // Fetch the current round and process command.
+                        Self::get_round(shared_inner.clone(), contract_id)
+                            .and_then(move |round| {
+                                let result = command(&mut round.lock().unwrap());
 
-                                    // Try to finalize the round.
-                                    Box::new(
-                                        Self::try_finalize(shared_inner.clone(), round).and_then(
-                                            move |_| {
-                                                drop(sender.send(result));
+                                // Try to finalize the round.
+                                Self::try_finalize(shared_inner.clone(), round)
+                                    .and_then(move |_| Ok(result))
+                            })
+                            .then(move |result| {
+                                let result = match result {
+                                    Ok(result) => result,
+                                    Err(error) => Err(error),
+                                };
+                                drop(sender.send(result));
 
-                                                Ok(())
-                                            },
-                                        ),
-                                    )
-                                })
-                                .or_else(|error| {
-                                    error!("Failed to get round: {}", error.message);
-                                    panic!("failed to get round: {}", error.message);
-
-                                    #[allow(unreachable_code)]
-                                    Ok(())
-                                }),
-                        )
+                                Ok(())
+                            })
+                            .into_box()
                     }),
             )
         };

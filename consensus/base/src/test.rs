@@ -209,6 +209,15 @@ impl SimulatedNode {
                                 }))
                             }
                         }
+                    })
+                    .or_else(|error| {
+                        panic!(
+                            "error while processing simulated compute node command: {:?}",
+                            error
+                        );
+
+                        #[allow(unreachable_code)]
+                        Ok(())
                     }),
             )
         };

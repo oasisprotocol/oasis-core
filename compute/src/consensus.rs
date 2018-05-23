@@ -150,9 +150,10 @@ impl ConsensusFrontend {
                         Event::CommitmentsReceived => {
                             Self::handle_commitments_received(inner.clone())
                         }
-                        Event::RoundFailed(error) => {
-                            Self::handle_round_failed(inner.clone(), error)
-                        }
+                        Event::RoundFailed(error) => Self::fail_batch(
+                            inner.clone(),
+                            format!("Round failed: {}", error.message),
+                        ),
                     },
                 )
         });
@@ -257,7 +258,17 @@ impl ConsensusFrontend {
             &proposed_block.nonce,
             &proposed_block.block.header,
         );
-        let result = inner.backend.reveal(inner.contract_id, reveal);
+        let shared_inner = inner.clone();
+        let result = inner
+            .backend
+            .reveal(inner.contract_id, reveal)
+            .or_else(|error| {
+                // Failed to submit reveal, abort current batch.
+                Self::fail_batch(
+                    shared_inner,
+                    format!("Failed to reveal block: {}", error.message),
+                )
+            });
 
         // If we are a leader, also submit the block.
         if inner.computation_group.is_leader() {
@@ -265,39 +276,27 @@ impl ConsensusFrontend {
             let inner = inner.clone();
 
             result
-                .and_then(move |_| {
+                .and_then(|_| {
                     info!("Submitting block");
 
                     // Sign and submit block.
                     let signed_block =
                         Signed::sign(&inner.signer, &BLOCK_SUBMIT_SIGNATURE_CONTEXT, block);
-                    inner.backend.submit(inner.contract_id, signed_block)
+                    inner
+                        .backend
+                        .submit(inner.contract_id, signed_block)
+                        .or_else(|error| {
+                            // Failed to submit a block, abort current batch.
+                            Self::fail_batch(
+                                inner,
+                                format!("Failed to submit block: {}", error.message),
+                            )
+                        })
                 })
                 .into_box()
         } else {
-            result
+            result.into_box()
         }
-    }
-
-    /// Handle round failed event from consensus backend.
-    fn handle_round_failed(inner: Arc<Inner>, error: Error) -> BoxFuture<()> {
-        error!("Round has failed: {:?}", error);
-
-        // TODO: Should we move all failed calls back into the current batch?
-
-        // If the round has failed and we have proposed a block, be sure to clean
-        // up. Note that the transactions from the batch will still be stored in
-        // recent_outputs, but we don't emit anything if these are not persisted
-        // in a block.
-        {
-            let mut proposed_block = inner.proposed_block.lock().unwrap();
-            drop(proposed_block.take());
-        }
-
-        // Clear batch processing flag.
-        inner.batch_processing.store(false, SeqCst);
-
-        Box::new(future::ok(()))
     }
 
     /// Handle new block from consensus backend.
@@ -398,20 +397,46 @@ impl ConsensusFrontend {
         inner.batch_processing.store(true, SeqCst);
 
         // Fetch the latest block and request the worker to process the batch.
+        let shared_inner = inner.clone();
         Box::new(
             inner
                 .backend
                 .get_latest_block(inner.contract_id)
-                .and_then(move |block| {
+                .and_then(|block| {
                     // Send block and channel to worker.
                     let process_batch = inner.worker.contract_call_batch(calls, block);
 
                     // After the batch is processed, propose the batch.
                     process_batch
                         .map_err(|_| Error::new("channel closed"))
-                        .and_then(move |result| Self::propose_batch(inner, result, committee))
+                        .and_then(|result| Self::propose_batch(inner, result, committee))
+                })
+                .or_else(|error| {
+                    // Failed to get latest block, abort current batch.
+                    Self::fail_batch(
+                        shared_inner,
+                        format!("Failed to process batch: {}", error.message),
+                    )
                 }),
         )
+    }
+
+    /// Fail processing of current batch.
+    ///
+    /// This method should be called on any failures related to the currently proposed
+    /// batch in order to allow new batches to be processed.
+    fn fail_batch(inner: Arc<Inner>, reason: String) -> BoxFuture<()> {
+        error!("{}", reason);
+
+        // TODO: Should we move all failed calls back into the current batch?
+
+        // Clear proposed block if any.
+        drop(inner.proposed_block.lock().unwrap().take());
+
+        // Clear batch processing flag.
+        inner.batch_processing.store(false, SeqCst);
+
+        future::ok(()).into_box()
     }
 
     /// Propose a batch to consensus backend.
@@ -424,12 +449,10 @@ impl ConsensusFrontend {
         let mut computed_batch = match computed_batch {
             Ok(computed_batch) => computed_batch,
             Err(error) => {
-                error!("Failed to process batch: {}", error.message);
-                // TODO: Should we move all failed calls back into the current batch?
-
-                // Clear batch processing flag.
-                inner.batch_processing.store(false, SeqCst);
-                return Box::new(future::ok(()));
+                return Self::fail_batch(
+                    inner,
+                    format!("Failed to compute batch: {}", error.message),
+                );
             }
         };
 
@@ -481,7 +504,14 @@ impl ConsensusFrontend {
         }
 
         // Commit to block.
-        inner.backend.commit(inner.contract_id, commitment)
+        inner
+            .backend
+            .commit(inner.contract_id, commitment)
+            .or_else(|error| {
+                // Failed to commit a block, abort current batch.
+                Self::fail_batch(inner, format!("Failed to propose block: {}", error.message))
+            })
+            .into_box()
     }
 
     /// Append contract calls to current batch for eventual processing.
