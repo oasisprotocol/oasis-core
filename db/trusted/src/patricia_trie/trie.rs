@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde_cbor;
 
 use ekiden_common::bytes::H256;
+#[cfg(not(target_env = "sgx"))]
 use ekiden_common::futures::Future;
 #[cfg(target_env = "sgx")]
 use ekiden_common::futures::FutureExt;
