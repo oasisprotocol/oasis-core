@@ -7,6 +7,7 @@ use ekiden_common::error::Result;
 use ekiden_common::hash::empty_hash;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_storage_dummy::DummyStorageBackend;
+use ekiden_storage_lru::LruCacheStorageBackend;
 
 use super::Database;
 use super::patricia_trie::PatriciaTrie;
@@ -31,13 +32,21 @@ lazy_static! {
 }
 
 impl DatabaseHandle {
+    /// Size of the in-memory storage cache (number of entries).
+    const STORAGE_CACHE_SIZE: usize = 1024;
+
     /// Construct new database interface.
     fn new() -> Self {
+        #[cfg(not(target_env = "sgx"))]
+        let backend = Arc::new(DummyStorageBackend::new());
+        #[cfg(target_env = "sgx")]
+        let backend = Arc::new(UntrustedStorageBackend::new());
+
         DatabaseHandle {
-            #[cfg(not(target_env = "sgx"))]
-            state: PatriciaTrie::new(Arc::new(DummyStorageBackend::new())),
-            #[cfg(target_env = "sgx")]
-            state: PatriciaTrie::new(Arc::new(UntrustedStorageBackend::new())),
+            state: PatriciaTrie::new(Arc::new(LruCacheStorageBackend::new(
+                backend,
+                Self::STORAGE_CACHE_SIZE,
+            ))),
             root_hash: None,
         }
     }
