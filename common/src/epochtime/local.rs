@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use super::*;
 use super::super::error::{Error, Result};
 use super::super::futures::{future, BoxFuture, BoxStream};
 use super::super::subscribers::StreamSubscribers;
+use super::*;
 
 use chrono::{DateTime, TimeZone, Utc};
 

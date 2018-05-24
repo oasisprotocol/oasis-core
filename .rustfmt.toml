@@ -1,4 +1,4 @@
-required_version = "0.3.6"
+required_version = "0.6.1"
 unstable_features = false
 max_width = 100
 hard_tabs = false
@@ -16,11 +16,7 @@ fn_single_line = false
 where_single_line = false
 imports_indent = "Visual"
 imports_layout = "Mixed"
-reorder_extern_crates = true
-reorder_extern_crates_in_group = true
 reorder_imports = true
-reorder_imports_in_group = true
-reorder_imported_names = true
 binop_separator = "Front"
 type_punctuation_density = "Wide"
 space_before_colon = false

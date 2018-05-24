@@ -7,7 +7,7 @@ fn main() {
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
         &["common"],
-        &["entity", "entity_grpc", "contract", "contract_grpc"],
+        &["contract", "contract_grpc", "entity", "entity_grpc"],
     );
 
     // Root set to the core ekiden root so that common/api is in scope.

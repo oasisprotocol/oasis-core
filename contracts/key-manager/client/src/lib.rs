@@ -37,5 +37,5 @@ macro_rules! use_key_manager_contract {
                 KeyManager::get().unwrap().set_contract(H256(*include_bytes!($identity)));
             }
         }
-    }
+    };
 }

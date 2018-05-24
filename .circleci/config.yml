@@ -1,3 +1,4 @@
+
 version: 2
 jobs:
   build:
@@ -28,16 +29,19 @@ jobs:
           cd target/debug
           mkdir ../cov
           for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
-            mkdir ../cov/$bin
-            kcov \
-              --exclude-pattern=$HOME/.cargo,/usr/lib \
-              --verify \
-              ../cov/$bin \
-              ./$bin \
-              --test-threads 1
+            ./$bin --test-threads 1
           done
+          # XXX(willscott): coverage disabled due breakage on upgrade to 18.04
+          #  mkdir ../cov/$bin
+          #  kcov \
+          #    --exclude-pattern=$HOME/.cargo,/usr/lib \
+          #    --verify \
+          #    ../cov/$bin \
+          #    ./$bin \
+          #    --test-threads 1
+          #done
       # Upload coverage info.
-      - run: codecov
+      #- run: codecov
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
       # compare against them.
@@ -56,11 +60,7 @@ jobs:
           destination: benchmarks
 
       # Install ekiden-tools.
-      - run: cargo install --force --path tools ekiden-tools
-      # Build key manager contract.
-      - run:
-          command: cargo ekiden build-contract
-          working_directory: contracts/key-manager
+      - run: cargo install --force --path tools
       # Build token contract.
       - run:
           command: cargo ekiden build-contract --output-identity
@@ -70,7 +70,7 @@ jobs:
       # Ensure everything is built. This needs to be after the key manager contract is built.
       - run: cargo build
       # Check style. This needs to be after everything is built.
-      - run: cargo fmt -- --write-mode=diff
+      - run: cargo fmt -- --write-mode=check
 
       # Contract end-to-end tests.
 
@@ -79,19 +79,10 @@ jobs:
           command: |
             ./target/debug/ekiden-node-dummy --time-source mockrpc
           background: true
-      # Start key manager compute node.
-      - run:
-          command: |
-            ./target/debug/ekiden-compute \
-              -p 9003 \
-              --disable-key-manager \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              target/contract/ekiden-key-manager.so
-          background: true
       # Start token compute nodes.
       - run:
           command: |
+            sleep 1
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
@@ -101,7 +92,7 @@ jobs:
           background: true
       - run:
           command: |
-            sleep 1
+            sleep 2
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
@@ -111,7 +102,7 @@ jobs:
           background: true
       - run:
           command: |
-            sleep 2
+            sleep 3
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
@@ -158,7 +149,6 @@ jobs:
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
-          kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 
 workflows:

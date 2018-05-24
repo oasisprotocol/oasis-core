@@ -4,12 +4,12 @@ use protobuf::Message;
 use sodalite;
 
 use std::collections::HashMap;
-#[cfg(not(target_env = "sgx"))]
-use std::sync::{Mutex, MutexGuard};
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
+#[cfg(not(target_env = "sgx"))]
+use std::sync::{Mutex, MutexGuard};
 
 use ekiden_common::error::{Error, Result};
 use ekiden_common::random;

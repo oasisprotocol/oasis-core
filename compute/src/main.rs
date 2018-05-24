@@ -28,14 +28,14 @@ extern crate ekiden_storage_base;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
-mod ias;
-mod instrumentation;
-mod handlers;
-mod services;
-mod worker;
-mod node;
 mod consensus;
 mod group;
+mod handlers;
+mod ias;
+mod instrumentation;
+mod node;
+mod services;
+mod worker;
 
 // Everything above should be moved into a library, while everything below should be in the binary.
 
@@ -204,6 +204,12 @@ fn main() {
                 .multiple(true)
                 .validator(validate_addr_port)
         )
+        .arg(
+            Arg::with_name("forwarded-rpc-timeout")
+                .long("forwarded-rpc-timeout")
+                .help("Time limit in seconds for forwarded gRPC calls. If an RPC takes longer than this, we treat it as failed.")
+                .takes_value(true)
+        )
         .get_matches();
 
     // Initialize logger.
@@ -294,6 +300,14 @@ fn main() {
                         Path::new(matches.value_of("identity-file").unwrap_or("identity.pb"))
                             .to_owned(),
                     )
+                },
+                forwarded_rpc_timeout: if matches.is_present("rpc-timeout") {
+                    Some(std::time::Duration::new(
+                        value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
+                        0,
+                    ))
+                } else {
+                    None
                 },
                 // Key manager configuration.
                 key_manager: if !matches.is_present("disable-key-manager") {

@@ -1,5 +1,6 @@
 //! gRPC client backend.
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use grpcio;
 
@@ -14,8 +15,8 @@ use ekiden_rpc_common::api;
 
 use ekiden_compute_api::{CallContractRequest, WaitContractCallRequest, Web3Client};
 
-use super::{RpcClientBackend, RpcClientCredentials};
 use super::super::future::ClientFuture;
+use super::{RpcClientBackend, RpcClientCredentials};
 
 /// Address of a compute node.
 pub struct ComputeNodeAddress {
@@ -162,27 +163,35 @@ pub struct Web3RpcClientBackend {
     /// Completion queue for executing futures. This is an instance of Client because
     /// the grpcio API for doing this directly using an Executor is not exposed.
     completion_queue: grpcio::Client,
+    /// Time limit for gRPC calls. If a request takes longer than
+    /// this, we abort it and mark the node as failing.
+    timeout: Option<Duration>,
     /// Pool of compute nodes that the client can use.
     nodes: ComputeNodes,
 }
 
 impl Web3RpcClientBackend {
     /// Construct new Web3 contract client backend.
-    pub fn new(environment: Arc<grpcio::Environment>, host: &str, port: u16) -> Result<Self> {
+    pub fn new(
+        environment: Arc<grpcio::Environment>,
+        timeout: Option<Duration>,
+        host: &str,
+        port: u16,
+    ) -> Result<Self> {
         Self::new_pool(
             environment,
-            &[
-                ComputeNodeAddress {
-                    host: host.to_string(),
-                    port: port,
-                },
-            ],
+            timeout,
+            &[ComputeNodeAddress {
+                host: host.to_string(),
+                port: port,
+            }],
         )
     }
 
     /// Construct new Web3 contract client backend with a pool of nodes.
     pub fn new_pool(
         environment: Arc<grpcio::Environment>,
+        timeout: Option<Duration>,
         nodes: &[ComputeNodeAddress],
     ) -> Result<Self> {
         Ok(Web3RpcClientBackend {
@@ -191,6 +200,7 @@ impl Web3RpcClientBackend {
             completion_queue: grpcio::Client::new(
                 grpcio::ChannelBuilder::new(environment.clone()).connect(""),
             ),
+            timeout,
             nodes: ComputeNodes::new(environment.clone(), &nodes)?,
             environment,
         })
@@ -213,6 +223,15 @@ impl Web3RpcClientBackend {
     {
         self.nodes.call_available_node(method, 3)
     }
+}
+
+/// Create a grpcio::CallOption based on our configuration.
+fn create_call_opt(timeout: Option<Duration>) -> grpcio::CallOption {
+    let mut opts = grpcio::CallOption::default();
+    if let Some(timeout) = timeout {
+        opts = opts.timeout(timeout);
+    }
+    opts
 }
 
 impl RpcClientBackend for Web3RpcClientBackend {
@@ -239,20 +258,21 @@ impl RpcClientBackend for Web3RpcClientBackend {
     fn call_raw(&self, client_request: Vec<u8>) -> ClientFuture<Vec<u8>> {
         let mut rpc_request = CallContractRequest::new();
         rpc_request.set_payload(client_request);
+        let timeout = self.timeout;
 
-        Box::new(
-            self.call_available_node(move |client| client.call_contract_async(&rpc_request))
-                .map(|mut response| response.take_payload()),
-        )
+        Box::new(self.call_available_node(move |client| {
+            client.call_contract_async_opt(&rpc_request, create_call_opt(timeout))
+        }).map(|mut response| response.take_payload()))
     }
 
     /// Wait for given contract call outputs to become available.
     fn wait_contract_call(&self, call_id: H256) -> ClientFuture<Vec<u8>> {
         let mut rpc_request = WaitContractCallRequest::new();
         rpc_request.set_call_id(call_id.to_vec());
+        let timeout = self.timeout;
 
         Box::new(self.call_available_node(move |client| {
-            client.wait_contract_call_async(&rpc_request)
+            client.wait_contract_call_async_opt(&rpc_request, create_call_opt(timeout))
         }).map(|mut response| response.take_output()))
     }
 

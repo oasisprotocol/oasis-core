@@ -1,9 +1,9 @@
 //! Consensus frontend.
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_timer::Interval;
@@ -14,8 +14,8 @@ use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal, 
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
 use ekiden_core::futures::sync::{mpsc, oneshot};
+use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
 use ekiden_core::hash::EncodedHash;
 use ekiden_core::signature::{Signed, Signer};
 use ekiden_scheduler_base::CommitteeNode;
@@ -539,7 +539,7 @@ impl ConsensusFrontend {
     /// Subscribe to being notified when specific call is included in a block.
     pub fn subscribe_call(&self, call_id: H256) -> oneshot::Receiver<Vec<u8>> {
         let (response_sender, response_receiver) = oneshot::channel();
-        {
+        if self.inner.computation_group.is_leader() {
             let mut call_subscribers = self.inner.call_subscribers.lock().unwrap();
             match call_subscribers.entry(call_id) {
                 Entry::Occupied(mut entry) => {
@@ -549,6 +549,10 @@ impl ConsensusFrontend {
                     entry.insert(vec![response_sender]);
                 }
             }
+        } else {
+            // If we are not a leader, do not accept subscribers.
+            warn!("Denying subscribe_call as we are not the leader");
+            drop(response_sender);
         }
 
         response_receiver

@@ -32,5 +32,5 @@ pub mod secure_channel;
 #[macro_use]
 mod macros;
 
-mod untrusted;
 pub mod client;
+mod untrusted;

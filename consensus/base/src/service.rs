@@ -6,8 +6,8 @@ use ekiden_common::error::Result;
 use ekiden_common::futures::{future, Future, Stream};
 use ekiden_common::signature::{Signature, Signed};
 use ekiden_consensus_api as api;
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::{ConsensusBackend, Event};
 use block::Block;
@@ -26,12 +26,9 @@ impl ConsensusService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::Consensus for ConsensusService {

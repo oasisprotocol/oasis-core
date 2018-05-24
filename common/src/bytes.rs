@@ -14,8 +14,8 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 
 use rustc_hex;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::error::Error;
 
@@ -450,8 +450,7 @@ macro_rules! impl_deserialize_for_bytes {
                     {
                         let mut arr = [T::default(); $size];
                         for i in 0..$size {
-                            arr[i] = seq
-                                .next_element()?
+                            arr[i] = seq.next_element()?
                                 .ok_or_else(|| de::Error::invalid_length(i, &self))?;
                         }
                         Ok(arr)

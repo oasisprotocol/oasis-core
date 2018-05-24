@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::bytes::H256;
@@ -11,8 +11,8 @@ use ekiden_common::signature::Signer;
 use ekiden_contract_common::call::{ContractOutput, SignedContractCall};
 use ekiden_contract_common::protocol;
 use ekiden_enclave_common::quote::MrEnclave;
-use ekiden_rpc_client::RpcClient;
 use ekiden_rpc_client::backend::RpcClientBackend;
+use ekiden_rpc_client::RpcClient;
 
 /// Contract client.
 pub struct ContractClient<Backend: RpcClientBackend + 'static> {

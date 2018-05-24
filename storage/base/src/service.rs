@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_storage_api as api;
-use grpcio::{RpcContext, RpcStatus, UnarySink};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, UnarySink};
 
 use super::backend::StorageBackend;
 use ekiden_common::bytes::H256;
@@ -21,12 +21,9 @@ impl StorageService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::Storage for StorageService {

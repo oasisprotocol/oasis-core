@@ -16,12 +16,8 @@ use token_contract::TokenContract;
 use ekiden_core::error::Result;
 use ekiden_trusted::contract::create_contract;
 use ekiden_trusted::enclave::enclave_init;
-use ekiden_trusted::key_manager::use_key_manager_contract;
 
 enclave_init!();
-
-// Configure the key manager contract to use.
-use_key_manager_contract!("generated/key-manager.identity");
 
 // Create enclave contract interface.
 with_api! {

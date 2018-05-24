@@ -19,6 +19,7 @@ extern crate ekiden_enclave_trusted;
 extern crate ekiden_storage_base;
 #[cfg(not(target_env = "sgx"))]
 extern crate ekiden_storage_dummy;
+extern crate ekiden_storage_lru;
 
 #[doc(hidden)]
 pub mod ecalls;

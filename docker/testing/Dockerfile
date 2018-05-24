@@ -1,4 +1,4 @@
-FROM docker.io/ekiden/development:0.1.0-alpha.4
+FROM docker.io/ekiden/development:0.1.0-alpha.5
 
 # This is the release of tendermint to pull in.
 ENV TM_VERSION 0.13.0
@@ -20,11 +20,10 @@ RUN mkdir -p $DATA_ROOT && \
     chown -R tmuser:tmuser $DATA_ROOT
 
 # jq and curl used for extracting `pub_key` from private validator while
-# deploying tendermint with Kubernetes. It is nice to have bash so the users
-# could execute bash commands.
+# deploying tendermint with Kubernetes. unzip for extracting tendermint.
 # Install dependencies for kcov <https://github.com/SimonKagstrom/kcov/blob/master/INSTALL.md>.
 RUN apt-get install -y \
-    jq \
+    unzip jq \
     binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
 
 RUN wget https://s3-us-west-2.amazonaws.com/tendermint/binaries/tendermint/v${TM_VERSION}/tendermint_${TM_VERSION}_linux_amd64.zip && \

@@ -133,8 +133,8 @@ mod tests {
     use ekiden_common::signature::InMemorySigner;
     use ekiden_common::untrusted;
 
-    use super::*;
     use super::super::*;
+    use super::*;
 
     #[test]
     fn test_block_commitment() {

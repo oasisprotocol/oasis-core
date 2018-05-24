@@ -3,6 +3,7 @@
 use grpcio;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::Future;
@@ -27,12 +28,13 @@ impl ContractForwarder {
     pub fn new(
         endpoint: ClientEndpoint,
         environment: Arc<grpcio::Environment>,
+        timeout: Option<Duration>,
         host: String,
         port: u16,
     ) -> Self {
         ContractForwarder {
             endpoint: endpoint,
-            client: Web3RpcClientBackend::new(environment, &host, port).unwrap(),
+            client: Web3RpcClientBackend::new(environment, timeout, &host, port).unwrap(),
         }
     }
 }
