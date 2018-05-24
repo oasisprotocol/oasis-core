@@ -26,6 +26,8 @@
 * Change consensus interface to support multiple contracts.
 * Use Merkle Patricia tree for state storage.
 * Dockerfile includes truffle for solidity development.
+* Add LRU cache storage backend that can wrap any existing storage backend to add an
+  in-memory cache.
 
 # 0.1.0-alpha.4
 
