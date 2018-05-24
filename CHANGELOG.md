@@ -28,6 +28,10 @@
 * Dockerfile includes truffle for solidity development.
 * Add LRU cache storage backend that can wrap any existing storage backend to add an
   in-memory cache.
+* RPCs can be configured to time out, treating compute nodes that
+  don't respond in time as failing. To enable timeouts, pass
+  `--rpc-timeout SECONDS` in clients that use client-utils and
+  `--forwarded-rpc-timeout SECONDS` in ekiden-compute.
 
 # 0.1.0-alpha.4
 
