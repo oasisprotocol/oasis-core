@@ -37,7 +37,8 @@ $ cargo ekiden shell
 ```
 
 All the following commands should be run in the container and not on
-the host. 
+the host.  The actual prompt from the bash shell running in the
+container will look like `root@xxxx:/code#` where `xxxx` is the docker
 
 ## Building core contracts
 
