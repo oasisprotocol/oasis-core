@@ -15,7 +15,8 @@ fn test_dummy_stake_backend() {
     let backend = Arc::new(DummyStakeEscrowBackend::new());
     let mut id_generator = LittleEndianCounter32::new();
 
-    let alice = id_generator.to_b256(); id_generator.incr_mut();
+    let alice = id_generator.to_b256();
+    id_generator.incr_mut();
 
     backend.deposit_stake(alice, 100).wait().unwrap();
 
@@ -23,7 +24,8 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 0);
 
-    let bob = id_generator.to_b256(); id_generator.incr_mut();
+    let bob = id_generator.to_b256();
+    id_generator.incr_mut();
 
     let bob_escrow_id = backend.allocate_escrow(alice, bob, 9).wait().unwrap();
 
@@ -33,7 +35,8 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 9);
 
-    let carol = id_generator.to_b256(); id_generator.incr_mut();
+    let carol = id_generator.to_b256();
+    id_generator.incr_mut();
     let carol_escrow_id = backend.allocate_escrow(alice, carol, 13).wait().unwrap();
 
     println!("got escrow id {} for carol", carol_escrow_id);
@@ -79,30 +82,39 @@ fn test_dummy_stake_backend() {
     assert_eq!(B256::from_slice(ed.get_entity()), bob);
     assert_eq!(ed.get_amount(), 9);
 
-    let t = backend.take_and_release_escrow(bob, bob_escrow_id, 10).wait();
+    let t = backend
+        .take_and_release_escrow(bob, bob_escrow_id, 10)
+        .wait();
     match t {
         Err(e) => {
             println!("Got error {}", e.message);
             assert_eq!(e.message, REQUEST_EXCEEDS_ESCROWED);
-        },
+        }
         Ok(v) => {
             println!("Got amount {} when request should have failed", v);
             assert!(false);
         }
     }
     println!("taking 5");
-    assert_eq!(backend.take_and_release_escrow(bob, bob_escrow_id, 5).wait().unwrap(),
-               5);
+    assert_eq!(
+        backend
+            .take_and_release_escrow(bob, bob_escrow_id, 5)
+            .wait()
+            .unwrap(),
+        5
+    );
     match backend.fetch_escrow_by_id(bob_escrow_id).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
             assert_eq!(e.message, NO_ESCROW_ACCOUNT);
-        },
+        }
         Ok(ed) => {
-            println!("Found escrow account {} when request should have failed, entity {}, amount {}",
-                     B256::from_slice(ed.get_escrow_id()),
-                     B256::from_slice(ed.get_entity()),
-                     ed.get_amount());
+            println!(
+                "Found escrow account {} when request should have failed, entity {}, amount {}",
+                B256::from_slice(ed.get_escrow_id()),
+                B256::from_slice(ed.get_entity()),
+                ed.get_amount()
+            );
             assert!(false);
         }
     }
@@ -115,11 +127,11 @@ fn test_dummy_stake_backend() {
         Err(e) => {
             println!("Got error {}", e.message);
             assert_eq!(e.message, NO_STAKE_ACCOUNT);
-        },
+        }
         Ok(ss) => {
             println!("Got stake status when call should have failed");
             println!(" total_stake: {}", ss.total_stake);
             println!(" escrowed: {}", ss.escrowed);
-        },
+        }
     }
 }

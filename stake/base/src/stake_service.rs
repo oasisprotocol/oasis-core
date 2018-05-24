@@ -2,8 +2,8 @@ use std::convert::{Into, TryFrom};
 
 use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_stake_api as api;
-use grpcio::{RpcContext, RpcStatus, UnarySink};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, UnarySink};
 
 use super::stake_backend::StakeEscrowBackend;
 use super::stake_backend::StakeStatus;
@@ -31,12 +31,9 @@ where
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl<T> api::Stake for StakeEscrowService<T>

@@ -173,7 +173,7 @@ impl DummyStakeEscrowBackendInner {
     pub fn deposit_stake(
         &mut self,
         msg_sender: B256,
-        additional_stake: AmountType,  // $$
+        additional_stake: AmountType, // $$
     ) -> Result<(), Error> {
         let entry = self.stakes
             .entry(msg_sender)
@@ -205,7 +205,7 @@ impl DummyStakeEscrowBackendInner {
             Some(e) => {
                 if e.amount - e.escrowed >= amount_requested {
                     e.amount -= amount_requested;
-                    Ok(amount_requested)  // $$
+                    Ok(amount_requested) // $$
                 } else {
                     Err(Error::new(INSUFFICIENT_FUNDS))
                 }
@@ -337,7 +337,7 @@ impl DummyStakeEscrowBackendInner {
         //   = \sum_{a \in stakeholder.accounts'} escrow_map[a].amount
         // ∴ invariants maintained.
 
-        Ok(amount_requested)  // $$
+        Ok(amount_requested) // $$
     }
 }
 
