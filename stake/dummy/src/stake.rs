@@ -22,6 +22,7 @@ use ekiden_stake_base::*;
 pub static INTERNAL_ERROR: &str = "INTERNAL ERROR: Invariance violation";
 pub static NO_STAKE_ACCOUNT: &str = "No such stake account";
 pub static NO_ESCROW_ACCOUNT: &str = "No such escrow account";
+pub static NOT_ESCROW_TARGET: &str = "Caller is not the target of the escrow account";
 pub static WOULD_OVERFLOW: &str = "Would overflow";
 pub static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
 pub static REQUEST_EXCEEDS_ESCROWED: &str = "Request exceeds escrowed funds";
@@ -172,7 +173,7 @@ impl DummyStakeEscrowBackendInner {
     pub fn deposit_stake(
         &mut self,
         msg_sender: B256,
-        additional_stake: AmountType,
+        additional_stake: AmountType,  // $$
     ) -> Result<(), Error> {
         let entry = self.stakes
             .entry(msg_sender)
@@ -204,7 +205,7 @@ impl DummyStakeEscrowBackendInner {
             Some(e) => {
                 if e.amount - e.escrowed >= amount_requested {
                     e.amount -= amount_requested;
-                    Ok(amount_requested)
+                    Ok(amount_requested)  // $$
                 } else {
                     Err(Error::new(INSUFFICIENT_FUNDS))
                 }
@@ -276,54 +277,67 @@ impl DummyStakeEscrowBackendInner {
         }
     }
 
+    // |msg_sender| must be the target of the escrow account identified by |escrow_id|.
+    // The escrow account is destroyed and funds dispersed if this call succeeds.
+    // Note that the amount claimed by the target is transferred out in the return,
+    // rather than transferred over to the msg_sender's stake account.
     pub fn take_and_release_escrow(
         &mut self,
         msg_sender: B256,
         escrow_id: B256,
         amount_requested: AmountType,
     ) -> Result<AmountType, Error> {
-        let info = match self.stakes.get_mut(&msg_sender) {
-            None => return Err(Error::new(NO_STAKE_ACCOUNT)),
-            Some(stake_info) => stake_info,
-        };
+        // msg_sender is the target of the escrow
+
         {
             let account = match self.escrow_map.get_mut(&escrow_id) {
                 None => return Err(Error::new(NO_ESCROW_ACCOUNT)),
                 Some(escrow_account) => escrow_account,
             };
-            if !(info.accounts.contains(&escrow_id)) {
-                return Err(Error::new(INTERNAL_ERROR));
-            }
             if amount_requested > account.amount {
                 return Err(Error::new(REQUEST_EXCEEDS_ESCROWED));
             };
+            if account.target != msg_sender {
+                return Err(Error::new(NOT_ESCROW_TARGET));
+            }
             // post: amount_requested <= account.amount
 
-            // check some invariants
-            if !(account.amount <= info.escrowed) {
+            let stakeholder = match self.stakes.get_mut(&account.owner) {
+                None => return Err(Error::new(INTERNAL_ERROR)),
+                Some(sh) => sh,
+            };
+            if !(stakeholder.accounts.contains(&escrow_id)) {
+                return Err(Error::new(INTERNAL_ERROR));
+            }
+
+            // check some invariants:
+            //
+            // total tied up in escrow cannot exceed stake
+            if stakeholder.amount < stakeholder.escrowed {
                 return Err(Error::new(INTERNAL_ERROR));
             }
             // single escrow account value cannot exceed total escrowed
-            if !(info.escrowed <= info.amount) {
+            if stakeholder.escrowed < account.amount {
                 return Err(Error::new(INTERNAL_ERROR));
             }
-            // total tied up in escrow cannot exceed stake
 
-            info.amount -= amount_requested;
-            info.escrowed -= account.amount;
-            info.accounts.remove(&escrow_id);
+            stakeholder.amount -= amount_requested;
+            stakeholder.escrowed -= account.amount;
+            stakeholder.accounts.remove(&escrow_id);
         } // terminate self.escrow_map mutable borrow via `account`
         self.escrow_map.remove(&escrow_id);
-        // amount_available' = info.amount' - info.escrowed'
-        //                   = info.amount - amount_requested - (info.escrowed - account.amount)
-        //                   = info.amount - info.escrowed + (account.amount - amount_requested)
-        //                   = amount_avaiable + (account.amount - amount_requested)
-        // info.escrowed' = info.escrowed - account.amount.
-        //                = \sum_{a \in info.accounts} escrow_map[a].amount - account.amount
-        //                = \sum_{a \in info.accounts'} escrow_map[a].amount
+        // amount_available'
+        //   = stakeholder.amount' - stakeholder.escrowed'
+        //   = stakeholder.amount - amount_requested - (stakeholder.escrowed - account.amount)
+        //   = stakeholder.amount - stakeholder.escrowed + (account.amount - amount_requested)
+        //   = amount_avaiable + (account.amount - amount_requested)
+        // stakeholder.escrowed'
+        //   = stakeholder.escrowed - account.amount.
+        //   = \sum_{a \in stakeholder.accounts} escrow_map[a].amount - account.amount
+        //   = \sum_{a \in stakeholder.accounts'} escrow_map[a].amount
         // ∴ invariants maintained.
 
-        Ok(amount_requested)
+        Ok(amount_requested)  // $$
     }
 }
 
