@@ -1,4 +1,4 @@
-FROM tozd/sgx:ubuntu-xenial
+FROM tozd/sgx:ubuntu-bionic
 
 ENV PATH="/ekiden/bin:${PATH}"
 
