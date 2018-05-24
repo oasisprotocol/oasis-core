@@ -7,9 +7,9 @@ extern crate ekiden_common;
 extern crate ekiden_contract_common;
 extern crate ekiden_enclave_untrusted;
 
-pub mod enclave;
 #[doc(hidden)]
 pub mod ecall_proxy;
+pub mod enclave;
 
 // Exports.
 pub use enclave::EnclaveContract;

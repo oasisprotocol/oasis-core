@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
                              StreamExt};
-use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::hash::empty_hash;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;

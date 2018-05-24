@@ -14,8 +14,8 @@ extern crate ekiden_rpc_trusted;
 use test::Bencher;
 
 use protobuf::Message;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use ekiden_common::error::Result;
 use ekiden_common::random;

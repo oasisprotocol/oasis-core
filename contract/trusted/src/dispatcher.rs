@@ -1,14 +1,14 @@
 //! Contract call batch dispatcher.
 use std::collections::HashMap;
-#[cfg(not(target_env = "sgx"))]
-use std::sync::{Mutex, MutexGuard};
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
+#[cfg(not(target_env = "sgx"))]
+use std::sync::{Mutex, MutexGuard};
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::error::Result;

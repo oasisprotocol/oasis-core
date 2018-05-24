@@ -1,8 +1,8 @@
 use std::convert::{Into, TryFrom};
 use std::sync::Arc;
 
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
@@ -25,12 +25,9 @@ impl ContractRegistryService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::ContractRegistry for ContractRegistryService {

@@ -6,9 +6,9 @@ extern crate ekiden_storage_api;
 extern crate grpcio;
 
 pub mod backend;
+pub mod mapper;
 #[cfg(not(target_env = "sgx"))]
 pub mod service;
-pub mod mapper;
 
 pub use backend::*;
 pub use mapper::*;

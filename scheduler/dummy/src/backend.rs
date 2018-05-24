@@ -417,15 +417,15 @@ mod tests {
     extern crate serde_cbor;
 
     use self::ekiden_beacon_dummy::InsecureDummyRandomBeacon;
-    use self::ekiden_registry_base::REGISTER_CONTRACT_SIGNATURE_CONTEXT;
     use self::ekiden_registry_base::test::populate_entity_registry;
+    use self::ekiden_registry_base::REGISTER_CONTRACT_SIGNATURE_CONTEXT;
     use self::ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
     use self::serde_cbor::to_vec;
     use super::*;
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
+    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};

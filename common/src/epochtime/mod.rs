@@ -4,9 +4,9 @@ use super::error::Result;
 use super::futures::{BoxFuture, BoxStream};
 use chrono::{DateTime, Utc};
 
-pub mod local;
 #[cfg(not(target_env = "sgx"))]
 pub mod grpc;
+pub mod local;
 
 /// The number of intervals (epochs) since a fixed instant in time (epoch date).
 pub type EpochTime = u64;

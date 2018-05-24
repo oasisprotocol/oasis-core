@@ -11,11 +11,11 @@ extern crate ekiden_common;
 extern crate ekiden_enclave_untrusted;
 extern crate ekiden_rpc_common;
 
+#[doc(hidden)]
+pub mod ecall_proxy;
 pub mod enclave;
 #[doc(hidden)]
 pub mod ocall_proxy;
-#[doc(hidden)]
-pub mod ecall_proxy;
 
 #[macro_use]
 pub mod router;

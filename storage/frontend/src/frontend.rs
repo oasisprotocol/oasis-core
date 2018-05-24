@@ -84,9 +84,9 @@ impl StorageFrontend {
                 })
                 .and_then(move |node| -> BoxFuture<Vec<Arc<StorageClient>>> {
                     let env = env.clone();
-                    Box::new(future::ok(vec![
-                        Arc::new(StorageClient::from_node(node, env)),
-                    ]))
+                    Box::new(future::ok(vec![Arc::new(StorageClient::from_node(
+                        node, env,
+                    ))]))
                 }),
         )
     }

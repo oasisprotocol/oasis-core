@@ -70,7 +70,7 @@ jobs:
       # Ensure everything is built. This needs to be after the key manager contract is built.
       - run: cargo build
       # Check style. This needs to be after everything is built.
-      - run: cargo fmt -- --write-mode=diff
+      - run: cargo fmt -- --write-mode=check
 
       # Contract end-to-end tests.
 

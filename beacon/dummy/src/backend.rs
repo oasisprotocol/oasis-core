@@ -5,8 +5,8 @@ use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::B256;
 use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
 use ekiden_common::futures::sync::mpsc;
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
 use ekiden_common::ring::digest;
 use ekiden_common::subscribers::StreamSubscribers;
 
@@ -162,8 +162,8 @@ mod tests {
 
     use self::rustc_hex::ToHex;
     use super::*;
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
+    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::{cpupool, Future};
 
     #[test]
