@@ -61,10 +61,6 @@ jobs:
 
       # Install ekiden-tools.
       - run: cargo install --force --path tools
-      # Build key manager contract.
-      - run:
-          command: cargo ekiden build-contract
-          working_directory: contracts/key-manager
       # Build token contract.
       - run:
           command: cargo ekiden build-contract --output-identity
@@ -82,16 +78,6 @@ jobs:
       - run:
           command: |
             ./target/debug/ekiden-node-dummy --time-source mockrpc
-          background: true
-      # Start key manager compute node.
-      - run:
-          command: |
-            ./target/debug/ekiden-compute \
-              -p 9003 \
-              --disable-key-manager \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              target/contract/ekiden-key-manager.so
           background: true
       # Start token compute nodes.
       - run:
@@ -162,7 +148,6 @@ jobs:
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
-          kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 
 workflows:
