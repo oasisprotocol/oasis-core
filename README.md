@@ -68,6 +68,12 @@ To build the token contract:
 
 The built contract will be stored under `target/contract/token.so`.
 
+To build the client token contract:
+```
+# cd clients/token
+# cargo build
+```
+
 ## Running a contract
 
 Starting directory is
@@ -98,12 +104,6 @@ To start the compute node for the token contract:
 # cargo run -p ekiden-compute -- \
     --no-persist-identity \
     target/contract/token.so
-```
-
-To start computer node for the client token contract:
-```
-# cd clients/token
-# cargo build
 ```
 
 After starting the nodes, to manually advance the epoch in the shared dummy node:
