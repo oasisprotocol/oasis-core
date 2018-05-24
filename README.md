@@ -2,6 +2,8 @@
 
 [![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
 
+Please use SSH instead of HTTPS for repo clone.
+
 ## Dependencies
 
 Here is a brief list of system dependencies currently used for development:
@@ -21,10 +23,7 @@ For instructions on building contracts, you should check out the documentation o
 The easiest way to build SGX code is to use the provided scripts, which run a Docker
 container with all the included tools.
 
-To start the SGX development container:
-```
-$ cargo ekiden shell
-```
+Ekiden docker set-up needs >10 GB memory and >=4 CPU cores. Make sure to have the right docker setting before starting ekiden container.
 
 If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
 ```
@@ -32,12 +31,20 @@ $ rustup install nightly
 $ cargo +nightly install --force --path tools
 ```
 
+To start the SGX development container:
+```
+$ cargo ekiden shell
+```
+
 All the following commands should be run in the container and not on
-the host.  The actual prompt from the bash shell running in the
-container will look like `root@xxxx:/code#` where `xxxx` is the docker
-container id; in the text below, we will just use `#`.
+the host. 
 
 ## Building core contracts
+
+Starting directory is
+```
+# cd /code
+```
 
 For building contracts we have our own Cargo extension which should be installed:
 ```
@@ -63,6 +70,11 @@ The built contract will be stored under `target/contract/token.so`.
 
 ## Running a contract
 
+Starting directory is
+```
+# cd /code
+```
+
 You need to run multiple Ekiden services, so it is recommended to run each of these in a
 separate container shell, attached to the same container. The following examples use the
 token contract, but the process is the same for any contract.
@@ -86,6 +98,12 @@ To start the compute node for the token contract:
 # cargo run -p ekiden-compute -- \
     --no-persist-identity \
     target/contract/token.so
+```
+
+To start computer node for the client token contract:
+```
+# cd clients/token
+# cargo build
 ```
 
 After starting the nodes, to manually advance the epoch in the shared dummy node:
