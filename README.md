@@ -23,7 +23,7 @@ For instructions on building contracts, you should check out the documentation o
 The easiest way to build SGX code is to use the provided scripts, which run a Docker
 container with all the included tools.
 
-Ekiden docker set-up needs >10 GB memory and >=4 CPU cores. Make sure to have the right docker setting before starting ekiden container.
+On MAC, ekiden docker set-up needs >10 GB memory and >=4 CPU cores. Make sure to have the right docker setting before starting ekiden container.
 
 If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
 ```
