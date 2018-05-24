@@ -2,8 +2,6 @@
 
 [![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
 
-Please use SSH instead of HTTPS for repo clone.
-
 ## Dependencies
 
 Here is a brief list of system dependencies currently used for development:
@@ -39,6 +37,7 @@ $ cargo ekiden shell
 All the following commands should be run in the container and not on
 the host.  The actual prompt from the bash shell running in the
 container will look like `root@xxxx:/code#` where `xxxx` is the docker
+container id; in the text below, we will just use `#`.
 
 ## Building core contracts
 
