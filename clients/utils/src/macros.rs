@@ -38,6 +38,11 @@ macro_rules! default_app {
                                  .takes_value(true)
                                  .required(true)
                                  .display_order(3))
+                            .arg(Arg::with_name("rpc-timeout")
+                                 .long("rpc-timeout")
+                                 .value_name("RPC_TIMEOUT")
+                                 .help("Mark nodes that take longer than this many seconds as failed")
+                                 .takes_value(true))
     };
 }
 
@@ -94,6 +99,14 @@ macro_rules! default_backend {
 
         Web3RpcClientBackend::new(
             grpc_environment,
+            if $args.is_present("rpc-timeout") {
+                Some(std::time::Duration::new(
+                    value_t_or_exit!($args, "rpc-timeout", u64),
+                    0,
+                ))
+            } else {
+                None
+            },
             &format!("{}", address.ip()),
             address.port(),
         ).unwrap()
