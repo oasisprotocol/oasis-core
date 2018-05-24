@@ -11,7 +11,6 @@ use ekiden_common::futures::{future, BoxFuture};
 
 use ekiden_stake_api as api;
 use ekiden_stake_base::*;
-use ekiden_stake_base::{AmountType, AMOUNT_MAX};
 
 // We put all error strings from which we construct Error::new(...)
 // here, so that we should not have a typographical error (e.g., "No
@@ -20,13 +19,12 @@ use ekiden_stake_base::{AmountType, AMOUNT_MAX};
 // per-module enums or something like that, and have the errors
 // propagate through gRPC...
 
-static INTERNAL_ERROR: &str = "INTERNAL ERROR: Invariance violation";
-static NO_STAKE_ACCOUNT: &str = "No such stake account";
-static NO_ESCROW_ACCOUNT: &str = "No such escrow account";
-static WOULD_OVERFLOW: &str = "Would overflow";
-static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
-static REQUEST_EXCEEDS_ESCROWED: &str = "Request exceeds escrowed funds";
-static NOT_IMPLEMENTED: &str = "NOT IMPLEMENTED"; // temporary
+pub static INTERNAL_ERROR: &str = "INTERNAL ERROR: Invariance violation";
+pub static NO_STAKE_ACCOUNT: &str = "No such stake account";
+pub static NO_ESCROW_ACCOUNT: &str = "No such escrow account";
+pub static WOULD_OVERFLOW: &str = "Would overflow";
+pub static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
+pub static REQUEST_EXCEEDS_ESCROWED: &str = "Request exceeds escrowed funds";
 
 // It would be nice if DummyStakeEscrowInfo contained its owner ID so
 // that EscrowAccount's owner and target can be just a reference to
@@ -113,7 +111,7 @@ impl EscrowAccount {
 // by the number of shards, or have large blocks of escrow account
 // numbers handed out to shards by a central server.
 
-struct LittleEndianCounter32 {
+pub struct LittleEndianCounter32 {
     digits: [u8; 32],
 }
 
@@ -227,12 +225,11 @@ impl DummyStakeEscrowBackendInner {
                 if e.amount - e.escrowed < escrow_amount {
                     Err(Error::new(INSUFFICIENT_FUNDS))
                 } else {
-                    // e.amount - e.escrowed >= escrow_amount
-                    // ==> e.amount >= e.escrowed + escrow_amount
+                    // escrow_amount <= e.amount - e.escrowed
+                    // ==> e.escrowed + escrow_amount <= e.amount
                     // and since
                     // 0 <= e.escrowed <= e.amount <= AMOUNT_MAX
                     // e.escrowed + escrow_amount <= AMOUNT_MAX (no overflow)
-                    e.amount -= escrow_amount;
                     e.escrowed += escrow_amount;
                     let id = self.next_account_id.to_b256();
                     let entry =
@@ -356,7 +353,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
     fn get_stake_status(&self, msg_sender: B256) -> BoxFuture<StakeStatus> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
+            let inner = inner.lock().unwrap();
             inner.get_stake_status(msg_sender)
         }))
     }
@@ -389,7 +386,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
     fn list_active_escrows(&self, msg_sender: B256) -> BoxFuture<Vec<api::EscrowData>> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
+            let inner = inner.lock().unwrap();
             let mut output = Vec::new();
             let ea_v = match inner.list_active_escrows(msg_sender) {
                 Err(e) => return Err(e),
@@ -409,7 +406,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
     fn fetch_escrow_by_id(&self, escrow_id: B256) -> BoxFuture<api::EscrowData> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
+            let inner = inner.lock().unwrap();
             let escrow_account = match inner.fetch_escrow_by_id(escrow_id) {
                 Err(e) => {
                     return Err(e);
@@ -436,13 +433,4 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
             inner.take_and_release_escrow(msg_sender, escrow_id, amount_requested)
         }))
     }
-}
-
-// temporarily here to force instantiation to (hopefully?) get more
-// compiler error messages.
-
-pub fn exercise_types() {
-    let test: StakeEscrowService<DummyStakeEscrowBackend> =
-        StakeEscrowService::new(DummyStakeEscrowBackend::new());
-    ()
 }
