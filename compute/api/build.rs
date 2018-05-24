@@ -8,10 +8,10 @@ fn main() {
         "src/generated",
         &["common"],
         &[
-            "web3",
-            "web3_grpc",
             "computation_group",
             "computation_group_grpc",
+            "web3",
+            "web3_grpc",
         ],
     );
 
