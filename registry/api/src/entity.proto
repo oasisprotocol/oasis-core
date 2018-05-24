@@ -15,6 +15,7 @@ service EntityRegistry {
     rpc GetNodes (NodesRequest) returns (NodesResponse) {}
     rpc GetNodesForEntity (EntityNodesRequest) returns (EntityNodesResponse) {}
     rpc WatchNodes (WatchNodeRequest) returns (stream WatchNodeResponse) {}
+    rpc WatchNodeList (WatchNodeListRequest) returns (stream WatchNodeListResponse) {}
 }
 
 message RegisterRequest {
@@ -77,6 +78,7 @@ message NodeResponse {
 }
 
 message NodesRequest {
+    uint64 epoch = 1;
 }
 
 message NodesResponse {
@@ -101,4 +103,12 @@ message WatchNodeResponse {
     }
     ChangeType event_type = 1;
     common.Node node = 2;
+}
+
+message WatchNodeListRequest {
+}
+
+message WatchNodeListResponse {
+    uint64 epoch = 1;
+    repeated common.Node node = 2;
 }

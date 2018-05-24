@@ -24,6 +24,7 @@ const RNG_CONTEXT_STORAGE: &'static [u8] = b"EkS-Dummy-Storage";
 
 enum AsyncEvent {
     Beacon((EpochTime, B256)),
+    Nodes((EpochTime, Vec<Node>)),
     Contract(Contract),
     Epoch(EpochTime),
 }
@@ -70,34 +71,21 @@ impl DummySchedulerBackendInner {
         assert_eq!(*cached, beacon, "Beacon changed for epoch: {}", epoch);
     }
 
-    fn on_epoch_transition(&mut self, epoch: EpochTime) {
-        // Cache the epoch.
-        self.current_epoch = epoch;
-
-        // Get the epoch's node list.
-        //
-        // TODO: While this *should* be event driven, every scheduler
-        // instance on potentially different nodes must have a consistent
-        // node list on a per-election basis.  This serves to push that
-        // requirement down to the entity registry, where it belongs.
-        //
-        // So yes, this uses wait() for now.  The correct thing to do is
-        // for the registry to provide a stream of (EpochTime, Vec<Node>)
-        // on a per-epoch basis.
+    fn on_node_list(&mut self, epoch: EpochTime, nodes: Vec<Node>) {
         assert!(
             !self.entity_cache.contains_key(&epoch),
             "Node list already present for epoch: {}",
             epoch
         );
-        let mut nodes = self.entity_registry.get_nodes().wait().unwrap();
-        nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
-        trace!(
-            "on_epoch_transition(): Epoch: {} ({} nodes)",
-            epoch,
-            nodes.len()
-        );
+        trace!("on_node_list(): Epoch: {} ({} nodes)", epoch, nodes.len());
         self.entity_cache.insert(epoch, nodes);
+    }
+
+    fn on_epoch_transition(&mut self, epoch: EpochTime) {
+        // Cache the epoch.
+        self.current_epoch = epoch;
+        trace!("on_epoch_transition(): Epoch: {}", epoch);
     }
 
     fn on_contract(&mut self, contract: Contract) {
@@ -275,9 +263,11 @@ impl Scheduler for DummySchedulerBackend {
             let shared_inner = self.inner.clone();
             let inner = self.inner.lock().unwrap();
 
-            // TODO: Subscribe to the entity registry, once it can present
-            // globally consistent, per-epoch views of the world.
             let beacon_stream = inner.beacon.watch_beacons().map(AsyncEvent::Beacon);
+            let nodes_stream = inner
+                .entity_registry
+                .watch_node_list()
+                .map(AsyncEvent::Nodes);
             let contract_stream = inner
                 .contract_registry
                 .get_contracts()
@@ -286,7 +276,10 @@ impl Scheduler for DummySchedulerBackend {
 
             // TODO: futures_util has stream::SelectAll, which appears to be
             // a less awful way of doing this.
-            let event_stream = beacon_stream.select(contract_stream).select(epoch_stream);
+            let event_stream = beacon_stream
+                .select(nodes_stream)
+                .select(contract_stream)
+                .select(epoch_stream);
 
             Box::new(
                 event_stream
@@ -295,6 +288,10 @@ impl Scheduler for DummySchedulerBackend {
                         match event {
                             AsyncEvent::Beacon((epoch, beacon)) => {
                                 inner.on_random_beacon(epoch, beacon);
+                                inner.maybe_mass_elect();
+                            }
+                            AsyncEvent::Nodes((epoch, nodes)) => {
+                                inner.on_node_list(epoch, nodes);
                                 inner.maybe_mass_elect();
                             }
                             AsyncEvent::Contract(contract) => inner.on_contract(contract),
@@ -438,7 +435,7 @@ mod tests {
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
         let scheduler = DummySchedulerBackend::new(
             beacon.clone(),
             contract_registry.clone(),
@@ -447,6 +444,7 @@ mod tests {
         );
 
         let mut pool = cpupool::CpuPool::new(1);
+        entity_registry.start(&mut pool);
         beacon.start(&mut pool);
         scheduler.start(&mut pool);
 

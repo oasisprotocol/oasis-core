@@ -26,7 +26,8 @@ use ekiden_consensus_base::test::generate_simulated_nodes;
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_registry_base::test::populate_entity_registry;
-use ekiden_registry_base::{ContractRegistryBackend, REGISTER_CONTRACT_SIGNATURE_CONTEXT};
+use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
+                           REGISTER_CONTRACT_SIGNATURE_CONTEXT};
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_base::Scheduler;
 use ekiden_scheduler_dummy::DummySchedulerBackend;
@@ -41,7 +42,7 @@ fn test_dummy_backend_two_rounds() {
     let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
     let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
-    let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+    let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
     let contract_registry = Arc::new(DummyContractRegistryBackend::new());
     let contract_sk =
         Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
@@ -96,6 +97,7 @@ fn test_dummy_backend_two_rounds() {
 
     // Start backends.
     beacon.start(&mut pool);
+    entity_registry.start(&mut pool);
     scheduler.start(&mut pool);
     backend.start(&mut pool);
 
