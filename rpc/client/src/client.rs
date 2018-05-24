@@ -4,15 +4,15 @@ use std::sync::Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 
-#[cfg(not(target_env = "sgx"))]
-use futures::Stream;
 use futures::future::{self, Future};
 #[cfg(not(target_env = "sgx"))]
 use futures::sync::{mpsc, oneshot};
+#[cfg(not(target_env = "sgx"))]
+use futures::Stream;
 
 use protobuf;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::error::Error;

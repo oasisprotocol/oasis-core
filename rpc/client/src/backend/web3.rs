@@ -14,8 +14,8 @@ use ekiden_rpc_common::api;
 
 use ekiden_compute_api::{CallContractRequest, WaitContractCallRequest, Web3Client};
 
-use super::{RpcClientBackend, RpcClientCredentials};
 use super::super::future::ClientFuture;
+use super::{RpcClientBackend, RpcClientCredentials};
 
 /// Address of a compute node.
 pub struct ComputeNodeAddress {
@@ -171,12 +171,10 @@ impl Web3RpcClientBackend {
     pub fn new(environment: Arc<grpcio::Environment>, host: &str, port: u16) -> Result<Self> {
         Self::new_pool(
             environment,
-            &[
-                ComputeNodeAddress {
-                    host: host.to_string(),
-                    port: port,
-                },
-            ],
+            &[ComputeNodeAddress {
+                host: host.to_string(),
+                port: port,
+            }],
         )
     }
 

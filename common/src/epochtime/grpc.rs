@@ -2,13 +2,13 @@
 use std::error::Error as StdError;
 use std::sync::Arc;
 
+use grpcio::RpcStatusCode::InvalidArgument;
 use grpcio::{Channel, Environment, RpcContext, RpcStatus, ServerStreamingSink, UnarySink,
              WriteFlags};
-use grpcio::RpcStatusCode::InvalidArgument;
 
-use super::{EpochTime, TimeSource, TimeSourceNotifier};
-use super::local::LocalTimeSourceNotifier;
 use super::super::error::Error;
+use super::local::LocalTimeSourceNotifier;
+use super::{EpochTime, TimeSource, TimeSourceNotifier};
 use futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use node::Node;
 
@@ -30,12 +30,9 @@ impl EpochTimeService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::TimeSource for EpochTimeService {

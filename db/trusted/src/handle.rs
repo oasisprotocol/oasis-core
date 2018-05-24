@@ -1,6 +1,6 @@
 //! Low-level key-value database interface.
-use std::sync::{Mutex, MutexGuard};
 use std::sync::Arc;
+use std::sync::{Mutex, MutexGuard};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
@@ -9,10 +9,10 @@ use ekiden_common::hash::empty_hash;
 use ekiden_storage_dummy::DummyStorageBackend;
 use ekiden_storage_lru::LruCacheStorageBackend;
 
-use super::Database;
 use super::patricia_trie::PatriciaTrie;
 #[cfg(target_env = "sgx")]
 use super::untrusted::UntrustedStorageBackend;
+use super::Database;
 
 /// Database handle.
 ///

@@ -28,14 +28,14 @@ extern crate ekiden_storage_base;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
-mod ias;
-mod instrumentation;
-mod handlers;
-mod services;
-mod worker;
-mod node;
 mod consensus;
 mod group;
+mod handlers;
+mod ias;
+mod instrumentation;
+mod node;
+mod services;
+mod worker;
 
 // Everything above should be moved into a library, while everything below should be in the binary.
 

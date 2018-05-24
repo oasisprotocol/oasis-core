@@ -18,9 +18,9 @@ extern crate ekiden_enclave_common;
 extern crate ekiden_rpc_common;
 
 pub mod backend;
-mod secure_channel;
 mod client;
 mod future;
+mod secure_channel;
 
 #[doc(hidden)]
 #[macro_use]

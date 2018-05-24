@@ -4,8 +4,8 @@ use ekiden_beacon_api as api;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::RandomBeacon;
 

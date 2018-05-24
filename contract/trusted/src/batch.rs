@@ -1,11 +1,11 @@
 //! Contract call batching.
 use std;
-#[cfg(not(target_env = "sgx"))]
-use std::sync::{Mutex, MutexGuard};
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
+#[cfg(not(target_env = "sgx"))]
+use std::sync::{Mutex, MutexGuard};
 
 use serde_cbor;
 

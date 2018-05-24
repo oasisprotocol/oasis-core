@@ -2,8 +2,8 @@ use std::borrow::Borrow;
 use std::fmt::Write;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use grpcio;
@@ -21,8 +21,8 @@ use ekiden_core::futures::sync::oneshot;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_storage_base::StorageBackend;
-use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 use ekiden_untrusted::rpc::router::RpcRouter;
+use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
 use super::consensus::ConsensusFrontend;
 use super::handlers;

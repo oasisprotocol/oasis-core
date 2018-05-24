@@ -1,5 +1,5 @@
-use futures::Async;
 use futures::future::Future;
+use futures::Async;
 
 use ekiden_common::error::Error;
 

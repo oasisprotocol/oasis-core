@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, Future, FutureExt, Stream};
 use ekiden_common::futures::sync::{mpsc, oneshot};
+use ekiden_common::futures::{future, BoxFuture, Future, FutureExt, Stream};
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;

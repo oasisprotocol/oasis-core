@@ -6,8 +6,8 @@ use grpcio;
 use grpcio::RpcStatus;
 use grpcio::RpcStatusCode::{Internal, Unimplemented};
 
-use ekiden_common::epochtime::{EpochTime, TimeSource};
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
+use ekiden_common::epochtime::{EpochTime, TimeSource};
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::{future, Future, Stream};
 use ekiden_node_dummy_api::{DummyDebug, SetEpochRequest, SetEpochResponse};
@@ -28,12 +28,9 @@ pub struct DebugService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl DebugService {

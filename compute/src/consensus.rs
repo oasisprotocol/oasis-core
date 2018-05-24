@@ -1,9 +1,9 @@
 //! Consensus frontend.
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_timer::Interval;
@@ -14,8 +14,8 @@ use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal, 
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
 use ekiden_core::futures::sync::{mpsc, oneshot};
+use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
 use ekiden_core::hash::EncodedHash;
 use ekiden_core::signature::{Signed, Signer};
 use ekiden_scheduler_base::CommitteeNode;
