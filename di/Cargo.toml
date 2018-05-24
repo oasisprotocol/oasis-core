@@ -1,0 +1,17 @@
+[package]
+name = "ekiden-di"
+version = "0.2.0-alpha"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Dependency injection for Rust"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[features]
+default = ["cli"]
+cli = ["clap"]
+
+[dependencies]
+error-chain = "0.11.0"
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+clap = { version = "2.29.1", optional = true }

@@ -3,9 +3,10 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{Channel, Environment};
+use grpcio::{self, Channel, ChannelBuilder};
 
 use ekiden_common::bytes::{B256, H256};
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::node::Node;
@@ -20,7 +21,7 @@ impl ConsensusClient {
         ConsensusClient(api::ConsensusClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<Environment>) -> Self {
+    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
         ConsensusClient::new(node.connect(env))
     }
 }
@@ -110,3 +111,36 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    remote,
+    "consensus-backend",
+    ConsensusClient,
+    ConsensusBackend,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
+            "{}:{}",
+            args.value_of("consensus-client-host").unwrap(),
+            args.value_of("consensus-client-port").unwrap(),
+        ));
+
+        let instance: Arc<ConsensusBackend> = Arc::new(ConsensusClient::new(channel));
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("consensus-client-host")
+            .long("consensus-client-host")
+            .help("(remote consensus backend) Host that the consensus client should connect to")
+            .takes_value(true)
+            .default_value("127.0.0.1"),
+        Arg::with_name("consensus-client-port")
+            .long("consensus-client-port")
+            .help("(remote consensus backend) Port that the consensus client should connect to")
+            .takes_value(true)
+            .default_value("42261")
+    ]
+);

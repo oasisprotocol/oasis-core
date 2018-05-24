@@ -156,6 +156,15 @@ impl InsecureDummyRandomBeaconInner {
     }
 }
 
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "random-beacon-backend",
+    InsecureDummyRandomBeacon,
+    RandomBeacon,
+    [TimeSourceNotifier]
+);
+
 #[cfg(test)]
 mod tests {
     extern crate rustc_hex;

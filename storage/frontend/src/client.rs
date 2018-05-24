@@ -1,9 +1,10 @@
 //! Storage gRPC client.
 use std::sync::Arc;
 
-use grpcio::{Channel, Environment};
+use grpcio::{self, Channel, ChannelBuilder};
 
 use ekiden_common::bytes::H256;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::node::Node;
@@ -18,7 +19,7 @@ impl StorageClient {
         StorageClient(api::StorageClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<Environment>) -> Self {
+    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
         StorageClient::new(node.connect(env))
     }
 }
@@ -50,3 +51,39 @@ impl StorageBackend for StorageClient {
         }
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    remote,
+    "storage-backend",
+    StorageClient,
+    StorageBackend,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let channel = ChannelBuilder::new(environment.grpc())
+            .max_receive_message_len(usize::max_value())
+            .max_send_message_len(usize::max_value())
+            .connect(&format!(
+                "{}:{}",
+                args.value_of("storage-client-host").unwrap(),
+                args.value_of("storage-client-port").unwrap(),
+            ));
+
+        let instance: Arc<StorageBackend> = Arc::new(StorageClient::new(channel));
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("storage-client-host")
+            .long("storage-client-host")
+            .help("(remote storage backend) Host that the storage client should connect to")
+            .takes_value(true)
+            .default_value("127.0.0.1"),
+        Arg::with_name("storage-client-port")
+            .long("storage-client-port")
+            .help("(remote storage backend) Port that the storage client should connect to")
+            .takes_value(true)
+            .default_value("42261")
+    ]
+);

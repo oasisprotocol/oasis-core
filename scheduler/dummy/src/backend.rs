@@ -421,6 +421,20 @@ fn make_committee_impl(
     })
 }
 
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "scheduler-backend",
+    DummySchedulerBackend,
+    Scheduler,
+    [
+        RandomBeacon,
+        ContractRegistryBackend,
+        EntityRegistryBackend,
+        TimeSourceNotifier
+    ]
+);
+
 #[cfg(test)]
 mod tests {
     extern crate ekiden_beacon_dummy;

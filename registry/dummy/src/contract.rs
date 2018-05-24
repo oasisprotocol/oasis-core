@@ -78,3 +78,12 @@ impl ContractRegistryBackend for DummyContractRegistryBackend {
         recv
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "contract-registry-backend",
+    DummyContractRegistryBackend,
+    ContractRegistryBackend,
+    []
+);
