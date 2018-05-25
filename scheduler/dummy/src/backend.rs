@@ -151,6 +151,8 @@ impl DummySchedulerBackendInner {
             make_committee_impl(contract, &nodes, CommitteeType::Storage, &entropy, epoch)?;
         committee_cache.insert(contract_id, vec![compute.clone(), storage.clone()]);
 
+        trace!("do_election(): Input node list: {:?}", nodes);
+
         trace!(
             "do_election(): Contract: {} Compute: {:?} Storage: {:?}",
             contract_id,
@@ -362,10 +364,22 @@ fn make_committee_impl(
     entropy: &[u8],
     epoch: EpochTime,
 ) -> Result<Committee> {
-    let (ctx, size) = match kind {
-        CommitteeType::Compute => (RNG_CONTEXT_COMPUTE, contract.replica_group_size as usize),
-        CommitteeType::Storage => (RNG_CONTEXT_STORAGE, contract.storage_group_size as usize),
+    let (ctx, size, backup_size) = match kind {
+        CommitteeType::Compute => {
+            // TODO: Should we ensure that there is more backup nodes than ordinary workers?
+            if contract.replica_group_backup_size == 0 {
+                return Err(Error::new("Empty replica group backup size not allowed"));
+            }
+
+            (
+                RNG_CONTEXT_COMPUTE,
+                (contract.replica_group_size + contract.replica_group_backup_size) as usize,
+                contract.replica_group_backup_size as usize,
+            )
+        }
+        CommitteeType::Storage => (RNG_CONTEXT_STORAGE, contract.storage_group_size as usize, 0),
     };
+
     if size == 0 {
         return Err(Error::new("Empty committee not allowed"));
     }
@@ -390,7 +404,8 @@ fn make_committee_impl(
     for i in 0..size {
         let role = match i {
             0 => Role::Leader,
-            _ => Role::Worker,
+            i if i < (size - backup_size) => Role::Worker,
+            _ => Role::BackupWorker,
         };
         members.push(CommitteeNode {
             role: role,
@@ -468,6 +483,7 @@ mod tests {
             features_sgx: false,
             advertisement_rate: 0,
             replica_group_size: 3,
+            replica_group_backup_size: 3,
             storage_group_size: 5,
         };
         let contract_signer = InMemorySigner::new(contract_sk);
@@ -523,36 +539,51 @@ mod tests {
 
             // Ensure that only 1 of each committee is returned, and that the
             // expected number of nodes are present.
-            match com.kind {
+            let (expected_workers, expected_backup_workers) = match com.kind {
                 CommitteeType::Compute => {
                     assert_eq!(has_compute, false);
-                    assert_eq!(com.members.len() as u64, contract.replica_group_size);
+                    assert_eq!(
+                        com.members.len() as u64,
+                        contract.replica_group_size + contract.replica_group_backup_size
+                    );
                     has_compute = true;
+
+                    (
+                        contract.replica_group_size - 1,
+                        contract.replica_group_backup_size,
+                    )
                 }
                 CommitteeType::Storage => {
                     assert_eq!(has_storage, false);
                     assert_eq!(com.members.len() as u64, contract.storage_group_size);
                     has_storage = true;
+
+                    (contract.storage_group_size - 1, 0)
                 }
-            }
+            };
 
             // Ensure that only 1 Leader is returned, and that each member is
             // unique, and actually a node.
             let mut com_nodes = HashSet::new();
             let mut has_leader = false;
+            let mut workers = 0;
+            let mut backup_workers = 0;
             for node in com.members {
                 match node.role {
                     Role::Leader => {
                         assert_eq!(has_leader, false);
                         has_leader = true;
                     }
-                    _ => {}
+                    Role::Worker => workers += 1,
+                    Role::BackupWorker => backup_workers += 1,
                 }
                 assert!(!com_nodes.contains(&node.public_key));
                 com_nodes.insert(node.public_key.clone());
             }
             assert!(com_nodes.is_subset(&nodes));
             assert!(has_leader);
+            assert_eq!(workers, expected_workers);
+            assert_eq!(backup_workers, expected_backup_workers);
         }
         assert!(has_compute);
         assert!(has_storage);

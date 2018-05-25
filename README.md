@@ -63,7 +63,7 @@ To start the shared dummy node:
 # ./target/debug/ekiden-node-dummy --time-source mockrpc
 ```
 
-To start the compute node for the token contract:
+To start the compute node for the token contract (you need to start two):
 ```
 # cargo run -p ekiden-compute -- \
     --no-persist-identity \
@@ -92,6 +92,11 @@ To run all tests (some should be skipped due to compile errors):
     --exclude ekiden-db-untrusted \
     --exclude ekiden-contract-untrusted \
     -- --test-threads 1
+```
+
+To run end-to-end tests:
+```
+# ./scripts/test-e2e.sh
 ```
 
 ## Developing

@@ -54,7 +54,8 @@ fn test_dummy_backend_two_rounds() {
         mode_nondeterministic: false,
         features_sgx: false,
         advertisement_rate: 0,
-        replica_group_size: NODE_COUNT as u64,
+        replica_group_size: NODE_COUNT as u64 - 1,
+        replica_group_backup_size: 1,
         storage_group_size: NODE_COUNT as u64,
     };
     let contract_signer = InMemorySigner::new(contract_sk);
@@ -107,7 +108,10 @@ fn test_dummy_backend_two_rounds() {
 
     // Start all nodes.
     let mut tasks = vec![];
-    tasks.append(&mut nodes.iter().map(|n| n.start(backend.clone())).collect());
+    tasks.append(&mut nodes
+        .iter()
+        .map(|n| n.start(backend.clone(), scheduler.clone()))
+        .collect());
 
     // Send compute requests to all nodes.
     for ref node in nodes.iter() {

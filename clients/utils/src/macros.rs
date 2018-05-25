@@ -31,6 +31,13 @@ macro_rules! default_app {
                                     .takes_value(true)
                                     .default_value("42261"),
                             )
+                            .arg(
+                                Arg::with_name("test-contract-id")
+                                    .long("test-contract-id")
+                                    .help("TEST ONLY OPTION: override contract identifier")
+                                    .takes_value(true)
+                                    .hidden(true)
+                            )
                             .arg(Arg::with_name("mr-enclave")
                                  .long("mr-enclave")
                                  .value_name("MRENCLAVE")
@@ -52,6 +59,7 @@ macro_rules! default_backend {
         use std::sync::Arc;
 
         use $crate::macros::ekiden_core::bytes::B256;
+        use $crate::macros::ekiden_core::futures::Stream;
         use $crate::macros::ekiden_registry_base::EntityRegistryBackend;
         use $crate::macros::ekiden_registry_client::EntityRegistryClient;
         use $crate::macros::ekiden_rpc_client::backend::Web3RpcClientBackend;
@@ -73,26 +81,32 @@ macro_rules! default_backend {
         let entity_registry = EntityRegistryClient::new(channel.clone());
 
         // Get computation group leader node.
-        let contract_id = value_t!($args, "mr-enclave", B256).unwrap_or_else(|e| e.exit());
-        let committees = scheduler
-            .get_committees(contract_id)
-            .wait()
-            .expect("failed to fetch committees from scheduler");
-        let committee = committees
-            .iter()
+        let contract_id = if $args.is_present("test-contract-id") {
+            value_t_or_exit!($args, "test-contract-id", B256)
+        } else {
+            value_t_or_exit!($args, "mr-enclave", B256)
+        };
+
+        let public_key = scheduler
+            .watch_committees()
             .filter(|committee| committee.kind == CommitteeType::Compute)
-            .next()
-            .expect("missing compute committee");
-        let leader = committee
+            .filter(|committee| committee.contract.id == contract_id)
+            .take(1)
+            .collect()
+            .wait()
+            .expect("failed to fetch committees from scheduler")
+            .first()
+            .unwrap()
             .members
             .iter()
             .filter(|member| member.role == Role::Leader)
+            .map(|member| member.public_key)
             .next()
             .expect("missing compute committee leader");
 
         // Resolve leader node based on its public key.
         let node = entity_registry
-            .get_node(leader.public_key)
+            .get_node(public_key)
             .wait()
             .expect("failed to resolve leader node");
         let address = node.addresses.first().expect("no address for leader node");

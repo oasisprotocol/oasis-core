@@ -14,6 +14,7 @@ message CommitteeNode {
   enum Role {
     WORKER = 0;
     LEADER = 1;
+    BACKUP_WORKER = 2;
   }
   Role role = 2;
 }

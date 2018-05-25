@@ -5,9 +5,11 @@ use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::futures::{future, BoxFuture, Future, FutureExt, Stream};
+use ekiden_common::hash::empty_hash;
 use ekiden_common::ring::signature::Ed25519KeyPair;
-use ekiden_common::signature::{InMemorySigner, Signed};
+use ekiden_common::signature::InMemorySigner;
 use ekiden_common::untrusted;
+use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 use super::*;
@@ -32,6 +34,8 @@ impl SimulatedComputationBatch {
         let mut block = Block::new_parent_of(&child);
         // We currently just assume that the computation group is fixed.
         block.computation_group = child.computation_group;
+        block.header.input_hash = empty_hash();
+        block.header.output_hash = empty_hash();
         block.header.state_root = hash_storage_key(output);
         block.update();
 
@@ -94,20 +98,38 @@ impl SimulatedNode {
     }
 
     /// Start simulated node.
-    pub fn start<T>(&self, backend: Arc<T>) -> BoxFuture<()>
-    where
-        T: ConsensusBackend + Send + Sync + 'static,
-    {
+    pub fn start(
+        &self,
+        backend: Arc<ConsensusBackend>,
+        scheduler: Arc<Scheduler>,
+    ) -> BoxFuture<()> {
         // Create a channel for external commands. This is currently required because
         // there is no service discovery backend which we could subscribe to.
         let (sender, receiver) = mpsc::unbounded();
-        let contract_id = {
+        let (contract_id, public_key) = {
             let mut inner = self.inner.lock().unwrap();
             assert!(inner.command_channel.is_none());
             inner.command_channel.get_or_insert(sender);
 
-            inner.contract_id.clone()
+            (inner.contract_id, inner.public_key)
         };
+
+        // Fetch current committee to get our role.
+        let role = scheduler
+            .watch_committees()
+            .filter(|committee| committee.kind == CommitteeType::Compute)
+            .take(1)
+            .collect()
+            .wait()
+            .unwrap()
+            .first()
+            .unwrap()
+            .members
+            .iter()
+            .filter(|node| node.public_key == public_key)
+            .map(|node| node.role)
+            .next()
+            .unwrap();
 
         // Subscribe to new events.
         let event_processor: BoxFuture<()> = {
@@ -121,9 +143,13 @@ impl SimulatedNode {
                         let mut inner = shared_inner.lock().unwrap();
 
                         match event {
-                            Event::CommitmentsReceived => {
+                            Event::CommitmentsReceived(_) => {
                                 // Generate reveal.
-                                let computation = inner.computation.take().unwrap();
+                                let computation = match inner.computation.take() {
+                                    Some(computation) => computation,
+                                    None => return future::ok(()).into_box(),
+                                };
+
                                 let reveal = Reveal::new(
                                     &inner.signer,
                                     &computation.nonce,
@@ -131,32 +157,15 @@ impl SimulatedNode {
                                 );
 
                                 // Send reveal.
-                                let result = backend.reveal(inner.contract_id, reveal);
-
-                                // Leader also submits block.
-                                // TODO: Only the leader should submit a block.
-                                let backend = backend.clone();
-                                let shared_inner = shared_inner.clone();
-
-                                Box::new(result.and_then(move |_| {
-                                    let inner = shared_inner.lock().unwrap();
-
-                                    // Sign block.
-                                    let block = Signed::sign(
-                                        &inner.signer,
-                                        &BLOCK_SUBMIT_SIGNATURE_CONTEXT,
-                                        computation.block,
-                                    );
-
-                                    // Submit block.
-                                    Box::new(
-                                        backend.submit(inner.contract_id, block).then(|_| Ok(())),
-                                    )
-                                }))
+                                backend.reveal(inner.contract_id, reveal)
                             }
                             Event::RoundFailed(error) => {
                                 // Round has failed, so the test should abort.
                                 panic!("round failed: {}", error);
+                            }
+                            Event::DiscrepancyDetected(_) => {
+                                // Discrepancy has been detected.
+                                panic!("unexpected discrepancy detected during test");
                             }
                         }
                     }),
@@ -175,6 +184,11 @@ impl SimulatedNode {
                     .for_each(move |command| -> BoxFuture<()> {
                         match command {
                             Command::Compute(output) => {
+                                if role == Role::BackupWorker {
+                                    // TODO: Support testing discrepancy resolution.
+                                    return future::ok(()).into_box();
+                                }
+
                                 // Fetch latest block.
                                 let latest_block = backend.get_latest_block(contract_id);
 

@@ -1,3 +1,12 @@
+# Unreleased
+
+* **BACKWARD INCOMPATIBLE:** Store batches in storage and distribute only signed batch
+  hashes to workers.
+* **BACKWARD INCOMPATIBLE:** Remove `transactions` from consensus blocks and only store
+  input/output hashes in block header. Content is delegated to storage.
+* **BACKWARD INCOMPATIBLE:** Remove `submit` operation from consensus backend.
+* Add discrepancy resolution by using backup workers majority vote.
+
 # 0.1.0
 
 * **BACKWARD INCOMPATIBLE:** Remove old consensus node.

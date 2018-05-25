@@ -6,7 +6,7 @@ use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
 use ekiden_compute_api::{ComputationGroup, SubmitBatchRequest, SubmitBatchResponse};
-use ekiden_core::contract::batch::CallBatch;
+use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::signature::{Signature, Signed};
@@ -40,9 +40,9 @@ impl ComputationGroup for ComputationGroupService {
         sink: grpcio::UnarySink<SubmitBatchResponse>,
     ) {
         let mut f = || -> Result<()> {
-            let batch = CallBatch(request.take_batch().to_vec());
+            let batch_hash = H256::try_from(request.get_batch_hash())?;
             let signature = Signature::try_from(request.take_signature())?;
-            let signed_batch = Signed::from_parts(batch, signature);
+            let signed_batch = Signed::from_parts(batch_hash, signature);
 
             self.inner
                 .consensus_frontend

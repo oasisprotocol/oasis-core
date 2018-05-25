@@ -1,21 +1,25 @@
 //! Consensus backend interface.
-use ekiden_common::bytes::{B256, B64};
+use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream, Executor, Future, Stream};
-use ekiden_common::signature::Signed;
 
 use super::{Block, Commitment, Header, Reveal};
-
-/// Signature context used for block submissions.
-pub const BLOCK_SUBMIT_SIGNATURE_CONTEXT: B64 = B64(*b"EkBlkSub");
 
 /// Notification of a protocol event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     /// All commitments have been received for the current round.
     ///
-    /// This signals to the worker that it can submit its reveal.
-    CommitmentsReceived,
+    /// This signals to the worker that it can submit its reveal. The boolean flag
+    /// indicates whether the event has been emitted during discrepancy resolution.
+    CommitmentsReceived(bool),
+    /// Discrepancy resolution required.
+    ///
+    /// This signals to the backup workers that they should re-execute the computation,
+    /// where the argument is the hash of the [`CallBatch`].
+    ///
+    /// [`CallBatch`]: ekiden_contract_common::batch::CallBatch
+    DiscrepancyDetected(H256),
     /// Round failed.
     RoundFailed(Error),
 }
@@ -61,9 +65,4 @@ pub trait ConsensusBackend: Sync + Send {
 
     /// Reveal the block header that was committed to previously using `commit`.
     fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()>;
-
-    /// Submit the block for the current round.
-    ///
-    /// The signature should be made using `BLOCK_SUBMIT_SIGNATURE_CONTEXT`.
-    fn submit(&self, contract_id: B256, block: Signed<Block>) -> BoxFuture<()>;
 }
