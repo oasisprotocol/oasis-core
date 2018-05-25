@@ -221,6 +221,8 @@ if __name__ == '__main__':
                         help="Skip Git push")
     parser.add_argument('--bump-docker-images', action='store_true',
                         help="Also version bump, build and tag Docker images")
+    parser.add_argument('--no-build-docker-images', action='store_false', dest='build_docker_images',
+                        help="Skip building Docker images (assume they are already built)")
     args = parser.parse_args()
 
     # Parse current top-level directory.
@@ -243,8 +245,10 @@ if __name__ == '__main__':
         script_update_version(root_dir, '../tools/bin/main.rs', DEV_IMAGE, args.version)
         script_update_version(root_dir, '../docker/deployment/build-images.sh', DOCKER_IMAGE, args.version)
 
-        docker_build(root_dir, args.version, 'docker/development', 'ekiden/development')
-        docker_build(root_dir, args.version, 'docker/testing', 'ekiden/testing')
+        if args.build_docker_images:
+            docker_build(root_dir, args.version, 'docker/development', 'ekiden/development')
+            docker_build(root_dir, args.version, 'docker/testing', 'ekiden/testing')
+
         docker_push('ekiden/development', args.version)
         docker_push('ekiden/testing', args.version)
 
