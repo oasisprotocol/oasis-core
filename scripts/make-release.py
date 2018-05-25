@@ -8,7 +8,7 @@ import subprocess
 
 SECTION = re.compile(r'^\[(.+)\]')
 VERSION = re.compile(r'(version\s*=\s*")(.+)(")')
-DEPENDENCIES = re.compile(r'^(?:dependencies|build-dependencies|target\..+?\.dependencies|dependencies\.(\w+))$')
+DEPENDENCIES = re.compile(r'^(?:dependencies|build-dependencies|dev-dependencies|target\..+?\.dependencies|dependencies\.(\w+))$')
 INTERNAL_CRATES = re.compile(r'ekiden-.*')
 DOCKER_FROM = re.compile(r'FROM (.+?)(:.+)?$')
 CI_IMAGE = re.compile(r'(\s*-\s*image:\s*)(.+?)$')
