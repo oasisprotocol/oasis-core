@@ -3,7 +3,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.5
+      - image: ekiden/testing:0.1.0
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -126,7 +126,7 @@ jobs:
 
   deploy:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.5
+      - image: ekiden/testing:0.1.0
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV

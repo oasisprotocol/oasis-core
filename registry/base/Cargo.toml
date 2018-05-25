@@ -1,14 +1,14 @@
 [package]
 name = "ekiden-registry-base"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden storage interface traits"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-registry-api = { path = "../api", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.1.0" }
+ekiden-registry-api = { path = "../api", version = "0.1.0" }
 byteorder = "1"
 grpcio = "0.2.2"
 protobuf = "~1.4"

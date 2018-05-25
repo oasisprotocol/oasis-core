@@ -1,6 +1,6 @@
 [package]
 name = "client-utils"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = [
     "Nick Hynes <nhynes@berkeley.edu>",
     "Jernej Kos <jernej@kos.mx>"
@@ -14,9 +14,9 @@ threadpool = { version = "1.7.1", optional = true }
 time = { version = "0.1", optional = true }
 histogram = { version = "0.6.8", optional = true }
 grpcio = "0.2.2"
-ekiden-core = { path = "../../core/common", version = "0.1.0-alpha.4" }
-ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.1.0-alpha.4" }
-ekiden-scheduler-client = { path = "../../scheduler/client", version = "0.1.0-alpha.4" }
-ekiden-registry-base = { path = "../../registry/base", version = "0.1.0-alpha.4" }
-ekiden-registry-client = { path = "../../registry/client", version = "0.1.0-alpha.4" }
-ekiden-rpc-client = { path = "../../rpc/client", version = "0.1.0-alpha.4" }
+ekiden-core = { path = "../../core/common", version = "0.1.0" }
+ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.1.0" }
+ekiden-scheduler-client = { path = "../../scheduler/client", version = "0.1.0" }
+ekiden-registry-base = { path = "../../registry/base", version = "0.1.0" }
+ekiden-registry-client = { path = "../../registry/client", version = "0.1.0" }
+ekiden-rpc-client = { path = "../../rpc/client", version = "0.1.0" }

@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-common"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden common functionality (available to both trusted and untrusted parts)"
 keywords = ["ekiden"]
@@ -11,7 +11,7 @@ default = []
 profiling = []
 
 [dependencies]
-ekiden-common-api = { path = "./api", version = "0.1.0-alpha.4" }
+ekiden-common-api = { path = "./api", version = "0.1.0" }
 protobuf = "~1.4"
 byteorder = "1.2.1"
 rustc-hex = "1.0"

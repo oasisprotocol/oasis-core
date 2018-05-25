@@ -1,6 +1,6 @@
 [package]
 name = "token"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Raymond Cheng <me@raymondcheng.net>"]
 build = "build.rs"
 

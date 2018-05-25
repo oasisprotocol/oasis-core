@@ -1,16 +1,16 @@
 [package]
 name = "ekiden-db-trusted"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden database (trusted part)"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.1.0-alpha.4" }
-ekiden-storage-base = { path = "../../storage/base", version = "0.1.0-alpha.4" }
-ekiden-storage-lru = { path = "../../storage/lru_cache", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.1.0" }
+ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.1.0" }
+ekiden-storage-base = { path = "../../storage/base", version = "0.1.0" }
+ekiden-storage-lru = { path = "../../storage/lru_cache", version = "0.1.0" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 protobuf = "~1.4"
 sodalite = "0.3.0"
@@ -19,7 +19,7 @@ serde_cbor = "0.8.2"
 serde_derive = "1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.1.0-alpha.4" }
+ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.1.0" }
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../../tools", version = "0.1.0" }

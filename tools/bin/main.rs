@@ -146,7 +146,7 @@ fn main() {
                                 .help("Ekiden environment version to use")
                                 .long("docker-image")
                                 .env("EKIDEN_DOCKER_IMAGE")
-                                .default_value("ekiden/development:0.1.0-alpha.4"),
+                                .default_value("ekiden/development:0.1.0"),
                         )
                         .arg(
                             Arg::with_name("docker-name")

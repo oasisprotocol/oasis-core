@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-storage-api"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden storage API"
 keywords = ["ekiden"]
@@ -13,5 +13,5 @@ grpcio = "0.2.2"
 futures = "0.1"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../../tools", version = "0.1.0" }
 protoc-grpcio = "0.1.0"

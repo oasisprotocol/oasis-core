@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-rpc-untrusted"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden RPC (untrusted part)"
 keywords = ["ekiden"]
@@ -14,11 +14,11 @@ sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekid
 sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 protobuf = "~1.4"
 lazy_static = "1.0"
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0-alpha.4" }
-ekiden-rpc-common = { path = "../common", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.1.0" }
+ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.1.0" }
+ekiden-rpc-common = { path = "../common", version = "0.1.0" }
 serde = "1.0"
 serde_cbor = "0.8.2"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../../tools", version = "0.1.0" }

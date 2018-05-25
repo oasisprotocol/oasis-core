@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-key-manager"
-version = "0.1.0-alpha.4"
+version = "0.1.0"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden key manager"
 keywords = ["ekiden"]
@@ -11,12 +11,12 @@ build = "build.rs"
 default = []
 
 [dependencies]
-ekiden-core = { path = "../../core/common", version = "0.1.0-alpha.4" }
-ekiden-trusted = { path = "../../core/trusted", version = "0.1.0-alpha.4" }
-ekiden-key-manager-api = { path = "./api", version = "0.1.0-alpha.4" }
+ekiden-core = { path = "../../core/common", version = "0.1.0" }
+ekiden-trusted = { path = "../../core/trusted", version = "0.1.0" }
+ekiden-key-manager-api = { path = "./api", version = "0.1.0" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 protobuf = "~1.4"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
-ekiden-edl = { path = "../../core/edl", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../../tools", version = "0.1.0" }
+ekiden-edl = { path = "../../core/edl", version = "0.1.0" }
