@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
+use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, BoxStream};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, StreamExt};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
@@ -16,6 +17,25 @@ struct DummyEntityRegistryBackendInner {
     entities: HashMap<B256, Entity>,
     nodes: HashMap<B256, HashMap<B256, Node>>,
     nodeents: HashMap<B256, B256>,
+    node_lists: HashMap<EpochTime, Vec<Node>>,
+    current_epoch: EpochTime,
+}
+
+impl DummyEntityRegistryBackendInner {
+    fn build_node_list(&mut self, epoch: EpochTime) -> (EpochTime, Vec<Node>) {
+        assert!(!self.node_lists.contains_key(&epoch));
+        let mut nodes: Vec<Node> = self.nodes
+            .values()
+            .flat_map(|n| n.values())
+            .map(|n| n.clone())
+            .collect();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        self.node_lists.insert(epoch, nodes.clone());
+        self.node_lists
+            .retain(|&k, _| (epoch == 0 || k >= epoch - 1));
+
+        (epoch, nodes)
+    }
 }
 
 /// A dummy entity registry backend.
@@ -23,26 +43,50 @@ struct DummyEntityRegistryBackendInner {
 /// **This backend should only be used for tests. it is centralized and unsafe.***
 pub struct DummyEntityRegistryBackend {
     inner: Arc<Mutex<DummyEntityRegistryBackendInner>>,
+    time_notifier: Arc<TimeSourceNotifier>,
     /// Event subscribers.
     entity_subscribers: Arc<StreamSubscribers<RegistryEvent<Entity>>>,
     node_subscribers: Arc<StreamSubscribers<RegistryEvent<Node>>>,
+    node_list_subscribers: Arc<StreamSubscribers<(EpochTime, Vec<Node>)>>,
 }
 
 impl DummyEntityRegistryBackend {
-    pub fn new() -> Self {
+    pub fn new(time_notifier: Arc<TimeSourceNotifier>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(DummyEntityRegistryBackendInner {
                 entities: HashMap::new(),
                 nodes: HashMap::new(),
                 nodeents: HashMap::new(),
+                node_lists: HashMap::new(),
+                current_epoch: EKIDEN_EPOCH_INVALID,
             })),
+            time_notifier,
             entity_subscribers: Arc::new(StreamSubscribers::new()),
             node_subscribers: Arc::new(StreamSubscribers::new()),
+            node_list_subscribers: Arc::new(StreamSubscribers::new()),
         }
     }
 }
 
 impl EntityRegistryBackend for DummyEntityRegistryBackend {
+    fn start(&self, executor: &mut Executor) {
+        let node_list_subscribers = self.node_list_subscribers.clone();
+        let shared_inner = self.inner.clone();
+
+        executor.spawn({
+            Box::new(self.time_notifier.watch_epochs().for_each_log_errors(
+                module_path!(),
+                "Unexpected error while processing entity registry events",
+                move |event| {
+                    let mut inner = shared_inner.lock().unwrap();
+                    node_list_subscribers.notify(&inner.build_node_list(event));
+                    inner.current_epoch = event;
+                    future::ok(())
+                },
+            ))
+        });
+    }
+
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let entity_subscribers = self.entity_subscribers.clone();
@@ -170,18 +214,14 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
         }))
     }
 
-    fn get_nodes(&self) -> BoxFuture<Vec<Node>> {
+    fn get_nodes(&self, epoch: EpochTime) -> BoxFuture<Vec<Node>> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
-            let nodes = inner
-                .nodes
-                .values()
-                .flat_map(|n| n.values())
-                .map(|n| n.clone())
-                .collect();
-
-            Ok(nodes)
+            match inner.node_lists.get(&epoch) {
+                Some(nodes) => Ok(nodes.clone()),
+                None => Err(Error::new("No node list for epoch.")),
+            }
         }))
     }
 
@@ -198,5 +238,25 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
 
     fn watch_nodes(&self) -> BoxStream<RegistryEvent<Node>> {
         self.node_subscribers.subscribe().1
+    }
+
+    fn watch_node_list(&self) -> BoxStream<(EpochTime, Vec<Node>)> {
+        let inner = self.inner.lock().unwrap();
+        let (send, recv) = self.node_list_subscribers.subscribe();
+
+        // Feed the current node list to catch up the subscriber to
+        // current time.
+        if inner.current_epoch != EKIDEN_EPOCH_INVALID {
+            let nodes = match inner.node_lists.get(&inner.current_epoch) {
+                Some(nodes) => nodes,
+                None => {
+                    return recv;
+                }
+            };
+            send.unbounded_send((inner.current_epoch, nodes.clone()))
+                .unwrap();
+        }
+
+        recv
     }
 }

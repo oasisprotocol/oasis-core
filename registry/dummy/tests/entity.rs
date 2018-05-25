@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
+use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signature, Signed};
@@ -17,7 +18,10 @@ use ekiden_registry_dummy::DummyEntityRegistryBackend;
 
 #[test]
 fn test_dummy_entity_backend() {
-    let backend = Arc::new(DummyEntityRegistryBackend::new());
+    let time_source = Arc::new(MockTimeSource::new());
+    let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
+
+    let backend = Arc::new(DummyEntityRegistryBackend::new(time_notifier));
 
     let mut tasks: Vec<BoxFuture<()>> = Vec::new();
 

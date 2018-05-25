@@ -90,7 +90,7 @@ impl DummyBackend {
 
         let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
         let scheduler = Arc::new(DummySchedulerBackend::new(
             random_beacon.clone(),
             contract_registry.clone(),
@@ -153,6 +153,7 @@ impl DummyBackend {
         let mut executor = GrpcExecutor::new(self.grpc_environment.clone());
 
         self.random_beacon.start(&mut executor);
+        self.entity_registry.start(&mut executor);
         self.scheduler.start(&mut executor);
         self.consensus.start(&mut executor);
 
