@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.0
 
 * **BACKWARD INCOMPATIBLE:** Remove old consensus node.
 * **BACKWARD INCOMPATIBLE:** Compute node now requires the shared dummy node.
