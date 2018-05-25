@@ -1,17 +1,17 @@
 [package]
 name = "ekiden-contract-trusted"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden contract interface (trusted part)"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0" }
-ekiden-contract-common = { path = "../common", version = "0.1.0" }
-ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.1.0" }
-ekiden-rpc-common = { path = "../../rpc/common", version = "0.1.0" }
-ekiden-rpc-trusted = { path = "../../rpc/trusted", version = "0.1.0" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-contract-common = { path = "../common", version = "0.2.0-alpha" }
+ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.2.0-alpha" }
+ekiden-rpc-common = { path = "../../rpc/common", version = "0.2.0-alpha" }
+ekiden-rpc-trusted = { path = "../../rpc/trusted", version = "0.2.0-alpha" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 serde = "1.0"
 serde_cbor = "0.8.2"

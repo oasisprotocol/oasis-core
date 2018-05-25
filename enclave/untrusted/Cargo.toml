@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-enclave-untrusted"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = [
     "Raymond Cheng <me@raymondcheng.net>",
     "Jernej Kos <jernej@kos.mx>"
@@ -13,8 +13,8 @@ sgx-simulation = []
 protobuf = "~1.4"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1", features = ["global_init"] }
-ekiden-common = { path = "../../common", version = "0.1.0" }
-ekiden-enclave-common = { path = "../common", version = "0.1.0" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-enclave-common = { path = "../common", version = "0.2.0-alpha" }
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0" }
+ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }

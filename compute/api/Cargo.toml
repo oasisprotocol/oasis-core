@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-compute-api"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden compute node API"
 keywords = ["ekiden"]
@@ -8,11 +8,11 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-ekiden-common-api = { path = "../../common/api", version = "0.1.0" }
+ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 protobuf = "~1.4"
 grpcio = "0.2.2"
 futures = "0.1"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0" }
+ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
 protoc-grpcio = "0.1.0"

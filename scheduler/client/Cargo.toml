@@ -1,13 +1,13 @@
 [package]
 name = "ekiden-scheduler-client"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden Scheduler RPC CLient"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0" }
-ekiden-scheduler-api = { path = "../api", version = "0.1.0" }
-ekiden-scheduler-base = { path = "../base", version = "0.1.0" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-scheduler-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-scheduler-base = { path = "../base", version = "0.2.0-alpha" }
 grpcio = "0.2.2"

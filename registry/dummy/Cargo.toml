@@ -1,13 +1,13 @@
 [package]
 name = "ekiden-registry-dummy"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden dummy iregistry backend"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0" }
-ekiden-registry-base = { path = "../base", version = "0.1.0" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-registry-base = { path = "../base", version = "0.2.0-alpha" }
 serde = "1.0"
 serde_cbor = "0.8.2"

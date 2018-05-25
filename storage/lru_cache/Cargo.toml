@@ -1,15 +1,15 @@
 [package]
 name = "ekiden-storage-lru"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "LRU cache for Ekiden storage backends"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0" }
-ekiden-storage-base = { path = "../base", version = "0.1.0" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 lru-cache = "~0.1.1"
 
 [dev-dependencies]
-ekiden-storage-dummy = { path = "../dummy", version = "0.1.0" }
+ekiden-storage-dummy = { path = "../dummy", version = "0.2.0-alpha" }
