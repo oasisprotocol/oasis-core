@@ -244,7 +244,7 @@ if __name__ == '__main__':
         script_update_version(root_dir, '../docker/deployment/build-images.sh', DOCKER_IMAGE, args.version)
 
         docker_build(root_dir, args.version, 'docker/development', 'ekiden/development')
-        docker_build(root_dir, args.version, 'docker/testing', 'ekiden/development')
+        docker_build(root_dir, args.version, 'docker/testing', 'ekiden/testing')
         docker_push('ekiden/development', args.version)
         docker_push('ekiden/testing', args.version)
 
