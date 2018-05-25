@@ -1,13 +1,13 @@
 [package]
 name = "ekiden-core"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden common functionality (available to both trusted and untrusted parts)"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-enclave-common = { path = "../../enclave/common", version = "0.1.0-alpha.4" }
-ekiden-rpc-common = { path = "../../rpc/common", version = "0.1.0-alpha.4" }
-ekiden-contract-common = { path = "../../contract/common", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
+ekiden-rpc-common = { path = "../../rpc/common", version = "0.2.0-alpha" }
+ekiden-contract-common = { path = "../../contract/common", version = "0.2.0-alpha" }

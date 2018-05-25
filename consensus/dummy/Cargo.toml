@@ -1,24 +1,24 @@
 [package]
 name = "ekiden-consensus-dummy"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden dummy in-memory consensus backend"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-consensus-base = { path = "../base", version = "0.1.0-alpha.4" }
-ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.1.0-alpha.4" }
-ekiden-storage-base = { path = "../../storage/base", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-consensus-base = { path = "../base", version = "0.2.0-alpha" }
+ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 log = "0.4"
 
 [dev-dependencies]
-ekiden-beacon-base = { path = "../../beacon/base", version = "0.1.0-alpha.4" }
-ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.1.0-alpha.4" }
-ekiden-registry-base = { path = "../../registry/base", version = "0.1.0-alpha.4" }
-ekiden-registry-dummy = { path = "../../registry/dummy", version = "0.1.0-alpha.4" }
-ekiden-scheduler-dummy = { path = "../../scheduler/dummy", version = "0.1.0-alpha.4" }
-ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.1.0-alpha.4" }
+ekiden-beacon-base = { path = "../../beacon/base", version = "0.2.0-alpha" }
+ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.2.0-alpha" }
+ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
+ekiden-registry-dummy = { path = "../../registry/dummy", version = "0.2.0-alpha" }
+ekiden-scheduler-dummy = { path = "../../scheduler/dummy", version = "0.2.0-alpha" }
+ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.2.0-alpha" }
 serde = "1.0"
 serde_cbor = "0.8.2"

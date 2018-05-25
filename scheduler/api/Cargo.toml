@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-scheduler-api"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden scheduler API"
 keywords = ["ekiden"]
@@ -8,11 +8,11 @@ repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [dependencies]
-ekiden-common-api = { path = "../../common/api", version = "0.1.0-alpha.4" }
+ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 protobuf = "~1.4"
 grpcio = "0.2.2"
 futures = "0.1"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
 protoc-grpcio = "0.1.0"

@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-rpc-common"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden common RPC functionality"
 keywords = ["ekiden"]
@@ -8,8 +8,8 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-enclave-common = { path = "../../enclave/common", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 protobuf = "~1.4"
 sodalite = "0.3.0"
 byteorder = "1.2.1"
@@ -19,4 +19,4 @@ serde = "1.0"
 rand = "0.4.2"
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }

@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.0
 
 * **BACKWARD INCOMPATIBLE:** Remove old consensus node.
 * **BACKWARD INCOMPATIBLE:** Compute node now requires the shared dummy node.
@@ -32,6 +32,9 @@
   don't respond in time as failing. To enable timeouts, pass
   `--rpc-timeout SECONDS` in clients that use client-utils and
   `--forwarded-rpc-timeout SECONDS` in ekiden-compute.
+* EntityRegistry support for per-epoch node lists.  `get_nodes()` now takes an
+  epoch, and a `watch_node_list()` routine to subscribe to node list generation
+  has been added.
 
 # 0.1.0-alpha.4
 

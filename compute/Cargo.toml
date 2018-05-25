@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-compute"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden compute node"
 keywords = ["ekiden"]
@@ -8,21 +8,21 @@ repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
 [dependencies]
-ekiden-core = { path = "../core/common", version = "0.1.0-alpha.4" }
-ekiden-untrusted = { path = "../core/untrusted", version = "0.1.0-alpha.4" }
-ekiden-rpc-client = { path = "../rpc/client", version = "0.1.0-alpha.4" }
-ekiden-compute-api = { path = "./api", version = "0.1.0-alpha.4" }
-ekiden-consensus-base = { path = "../consensus/base", version = "0.1.0-alpha.4" }
-ekiden-consensus-client = { path = "../consensus/client", version = "0.1.0-alpha.4" }
-ekiden-storage-base = { path = "../storage/base", version = "0.1.0-alpha.4" }
-ekiden-storage-frontend = { path = "../storage/frontend", version = "0.1.0-alpha.4" }
-ekiden-scheduler-base = { path = "../scheduler/base", version = "0.1.0-alpha.4" }
-ekiden-scheduler-client = { path = "../scheduler/client", version = "0.1.0-alpha.4" }
-ekiden-beacon-base = { path = "../beacon/base", version = "0.1.0-alpha.4" }
-ekiden-beacon-dummy = { path = "../beacon/dummy", version = "0.1.0-alpha.4" }
-ekiden-registry-base = { path = "../registry/base", version = "0.1.0-alpha.4" }
-ekiden-registry-client = { path = "../registry/client", version = "0.1.0-alpha.4" }
-ekiden-tools = { path = "../tools", version = "0.1.0-alpha.4" }
+ekiden-core = { path = "../core/common", version = "0.2.0-alpha" }
+ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
+ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
+ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
+ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
+ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
+ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
+ekiden-scheduler-base = { path = "../scheduler/base", version = "0.2.0-alpha" }
+ekiden-scheduler-client = { path = "../scheduler/client", version = "0.2.0-alpha" }
+ekiden-beacon-base = { path = "../beacon/base", version = "0.2.0-alpha" }
+ekiden-beacon-dummy = { path = "../beacon/dummy", version = "0.2.0-alpha" }
+ekiden-registry-base = { path = "../registry/base", version = "0.2.0-alpha" }
+ekiden-registry-client = { path = "../registry/client", version = "0.2.0-alpha" }
+ekiden-tools = { path = "../tools", version = "0.2.0-alpha" }
 protobuf = "~1.4"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 thread_local = "0.3.5"
@@ -39,5 +39,5 @@ pretty_env_logger = "0.2"
 futures-timer = "0.1.1"
 
 [build-dependencies]
-ekiden-tools = { path = "../tools", version = "0.1.0-alpha.4" }
-ekiden-edl = { path = "../core/edl", version = "0.1.0-alpha.4" }
+ekiden-tools = { path = "../tools", version = "0.2.0-alpha" }
+ekiden-edl = { path = "../core/edl", version = "0.2.0-alpha" }
