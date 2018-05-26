@@ -15,7 +15,7 @@ sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekide
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-contract-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.2.0-alpha" }
-serde = "1.0"
+serde = "=1.0.59"
 serde_cbor = "0.8.2"
 
 [build-dependencies]

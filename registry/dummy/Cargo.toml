@@ -9,5 +9,5 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../base", version = "0.2.0-alpha" }
-serde = "1.0"
+serde = "=1.0.59"
 serde_cbor = "0.8.2"
