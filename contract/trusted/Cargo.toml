@@ -15,3 +15,6 @@ ekiden-rpc-trusted = { path = "../../rpc/trusted", version = "0.2.0-alpha" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 serde = "1.0"
 serde_cbor = "0.8.2"
+
+[dev-dependencies]
+serde_derive = "1.0"

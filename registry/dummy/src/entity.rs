@@ -91,7 +91,7 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
         let inner = self.inner.clone();
         let entity_subscribers = self.entity_subscribers.clone();
         Box::new(future::lazy(move || {
-            if entity.signature.public_key != entity.get_value_unsafe().id {
+            if entity.signature.public_key != entity.get_value_unsafe()?.id {
                 return Err(Error::new("Wrong signature."));
             }
             let entity = entity.open(&REGISTER_ENTITY_SIGNATURE_CONTEXT)?;
@@ -111,7 +111,7 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
         let entity_subscribers = self.entity_subscribers.clone();
         let node_subscribers = self.node_subscribers.clone();
         Box::new(future::lazy(move || {
-            if id.signature.public_key != *id.get_value_unsafe() {
+            if id.signature.public_key != id.get_value_unsafe()? {
                 return Err(Error::new("Wrong signature."));
             }
             let id = id.open(&DEREGISTER_ENTITY_SIGNATURE_CONTEXT)?;
@@ -170,7 +170,7 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
         let inner = self.inner.clone();
         let node_subscribers = self.node_subscribers.clone();
         Box::new(future::lazy(move || {
-            if node.get_value_unsafe().entity_id != node.signature.public_key {
+            if node.get_value_unsafe()?.entity_id != node.signature.public_key {
                 return Err(Error::new("Wrong signature."));
             }
             let node = node.open(&REGISTER_NODE_SIGNATURE_CONTEXT)?;

@@ -33,7 +33,7 @@ impl EntityRegistryBackend for EntityRegistryClient {
 
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let mut request = api::RegisterRequest::new();
-        request.set_entity(entity.get_value_unsafe().clone().into());
+        request.set_entity(entity.get_value_unsafe().unwrap().into());
         request.set_signature(entity.signature.into());
         match self.0.register_entity_async(&request) {
             Ok(f) => Box::new(
@@ -46,7 +46,7 @@ impl EntityRegistryBackend for EntityRegistryClient {
 
     fn deregister_entity(&self, id: Signed<B256>) -> BoxFuture<()> {
         let mut request = api::DeregisterRequest::new();
-        request.set_id(id.get_value_unsafe().to_vec());
+        request.set_id(id.get_value_unsafe().unwrap().to_vec());
         request.set_signature(id.signature.into());
         match self.0.deregister_entity_async(&request) {
             Ok(f) => Box::new(
@@ -111,7 +111,7 @@ impl EntityRegistryBackend for EntityRegistryClient {
 
     fn register_node(&self, node: Signed<Node>) -> BoxFuture<()> {
         let mut request = api::RegisterNodeRequest::new();
-        request.set_node(node.get_value_unsafe().clone().into());
+        request.set_node(node.get_value_unsafe().unwrap().into());
         request.set_signature(node.signature.into());
         match self.0.register_node_async(&request) {
             Ok(f) => Box::new(
