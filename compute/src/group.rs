@@ -204,13 +204,15 @@ impl ComputationGroup {
         trace!("Submitting batch to workers");
 
         // Sign batch.
-        let signed_calls = Signed::sign(&inner.signer, &SUBMIT_BATCH_SIGNATURE_CONTEXT, calls);
+        let signed_calls = Signed::sign(
+            &inner.signer,
+            &SUBMIT_BATCH_SIGNATURE_CONTEXT,
+            calls.clone(),
+        );
 
         // Submit batch.
         let mut request = SubmitBatchRequest::new();
-        request.set_batch(RepeatedField::from_vec(
-            signed_calls.get_value_unsafe().to_vec(),
-        ));
+        request.set_batch(RepeatedField::from_vec(calls.to_vec()));
         request.set_signature(signed_calls.signature.into());
 
         Box::new(
