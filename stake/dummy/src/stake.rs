@@ -1,7 +1,6 @@
 //! Ekiden dummy stake backend.
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::mem::size_of_val;
 use std::process::abort;
 use std::sync::{Arc, Mutex};
 
@@ -12,20 +11,6 @@ use ekiden_common::futures::{future, BoxFuture};
 use ekiden_stake_api as api;
 use ekiden_stake_base::*;
 
-// We put all error strings from which we construct Error::new(...)
-// here, so that we should not have a typographical error (e.g., "No
-// Account") in one of several error paths, leading to error handlers
-// that try to do string comparisons misfiring.  Ideally we could have
-// per-module enums or something like that, and have the errors
-// propagate through gRPC...
-
-pub static INTERNAL_ERROR: &str = "INTERNAL ERROR: Invariance violation";
-pub static NO_STAKE_ACCOUNT: &str = "No such stake account";
-pub static NO_ESCROW_ACCOUNT: &str = "No such escrow account";
-pub static NOT_ESCROW_TARGET: &str = "Caller is not the target of the escrow account";
-pub static WOULD_OVERFLOW: &str = "Would overflow";
-pub static INSUFFICIENT_FUNDS: &str = "Insufficient funds";
-pub static REQUEST_EXCEEDS_ESCROWED: &str = "Request exceeds escrowed funds";
 
 // It would be nice if DummyStakeEscrowInfo contained its owner ID so
 // that EscrowAccount's owner and target can be just a reference to
@@ -36,7 +21,7 @@ pub static REQUEST_EXCEEDS_ESCROWED: &str = "Request exceeds escrowed funds";
 
 // Invariant: 0 <= escrowed <= amount <= AMOUNT_MAX.
 struct DummyStakeEscrowInfo {
-    amount: AmountType,   // see max_value() below
+    amount: AmountType,
     escrowed: AmountType, // sum_{a \in accounts} escrow_map[a].amount
     accounts: HashSet<B256>, // account id, keys for escrow_map below
                           // \forall a \in accounts: escrow_map[a].owner is stakeholder (key
@@ -103,62 +88,20 @@ impl EscrowAccount {
     }
 }
 
-// We use 32-bytes / 64 hex digits so it can be converted to a B256
-// easily (do we want to use a B256 for escrow account numbers?)
-// Using a counter, however, creates a contention hot spot that
+// We use a B256 as a counter for escrow account numbers.  This is
+// deterministic.  However, it creates a contention hot spot that
 // prevents simple parallelization by sharding the stake/escrow
 // service, since we could otherwise simply dispatch to shards by the
 // stakeholder's public key and partition the escrow account numbers
 // by the number of shards, or have large blocks of escrow account
 // numbers handed out to shards by a central server.
 
-pub struct LittleEndianCounter32 {
-    digits: [u8; 32],
-}
-
-impl LittleEndianCounter32 {
-    pub fn new() -> Self {
-        Self { digits: [0; 32] }
-    }
-
-    pub fn incr_mut(&mut self) {
-        let mut ix = 0;
-        while ix < size_of_val(&self.digits) {
-            if {
-                self.digits[ix] += 1;
-                self.digits[ix] != 0
-            } {
-                break; // no carry needed
-            }
-            ix += 1;
-        }
-        if ix == size_of_val(&self.digits) {
-            println!("There were a lot more than nine billion names, but I'm done!");
-            abort()
-        }
-    }
-
-    pub fn to_b256(&self) -> B256 {
-        B256::from(self.digits.clone())
-    }
-
-    pub fn from_b256(v: B256) -> LittleEndianCounter32 {
-        // Is there a better way to do this?  It seems like
-        // digit-based member field access is for non-public
-        // interfaces and named member or getters/setters etc would be
-        // public interfaces.  Should we just serialize the B256 into
-        // digits?  The serde Serializer interface seems huge and
-        // might be overkill.
-        LittleEndianCounter32 { digits: v.0 }
-    }
-}
-
 struct DummyStakeEscrowBackendInner {
     // Per-entity state.
     stakes: HashMap<B256, DummyStakeEscrowInfo>,
     escrow_map: HashMap<B256, EscrowAccount>,
 
-    next_account_id: LittleEndianCounter32,
+    next_account_id: B256,
 }
 
 impl DummyStakeEscrowBackendInner {
@@ -166,7 +109,7 @@ impl DummyStakeEscrowBackendInner {
         Self {
             stakes: HashMap::new(),
             escrow_map: HashMap::new(),
-            next_account_id: LittleEndianCounter32::new(),
+            next_account_id: B256::new(),  // initally zero
         }
     }
 
@@ -179,7 +122,7 @@ impl DummyStakeEscrowBackendInner {
             .entry(msg_sender)
             .or_insert_with(|| DummyStakeEscrowInfo::new());
         if AMOUNT_MAX - entry.amount < additional_stake {
-            return Err(Error::new(WOULD_OVERFLOW));
+            return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
         }
         entry.amount += additional_stake;
         Ok(())
@@ -187,7 +130,7 @@ impl DummyStakeEscrowBackendInner {
 
     pub fn get_stake_status(&self, msg_sender: B256) -> Result<StakeStatus, Error> {
         match self.stakes.get(&msg_sender) {
-            None => Err(Error::new(NO_STAKE_ACCOUNT)),
+            None => Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
             Some(stake_ref) => Ok(StakeStatus {
                 total_stake: stake_ref.amount,
                 escrowed: stake_ref.escrowed,
@@ -201,13 +144,13 @@ impl DummyStakeEscrowBackendInner {
         amount_requested: AmountType,
     ) -> Result<AmountType, Error> {
         match self.stakes.get_mut(&msg_sender) {
-            None => Err(Error::new(NO_STAKE_ACCOUNT)),
+            None => Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
             Some(e) => {
                 if e.amount - e.escrowed >= amount_requested {
                     e.amount -= amount_requested;
                     Ok(amount_requested) // $$
                 } else {
-                    Err(Error::new(INSUFFICIENT_FUNDS))
+                    Err(Error::new(ErrorCodes::InsufficientFunds.to_string()))
                 }
             }
         }
@@ -221,10 +164,10 @@ impl DummyStakeEscrowBackendInner {
     ) -> Result<B256, Error> {
         // verify if sufficient funds
         match self.stakes.get_mut(&msg_sender) {
-            None => Err(Error::new(NO_STAKE_ACCOUNT)),
+            None => Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
             Some(e) => {
                 if e.amount - e.escrowed < escrow_amount {
-                    Err(Error::new(INSUFFICIENT_FUNDS))
+                    Err(Error::new(ErrorCodes::InsufficientFunds.to_string()))
                 } else {
                     // escrow_amount <= e.amount - e.escrowed
                     // ==> e.escrowed + escrow_amount <= e.amount
@@ -232,12 +175,18 @@ impl DummyStakeEscrowBackendInner {
                     // 0 <= e.escrowed <= e.amount <= AMOUNT_MAX
                     // e.escrowed + escrow_amount <= AMOUNT_MAX (no overflow)
                     e.escrowed += escrow_amount;
-                    let id = self.next_account_id.to_b256();
+                    let id = self.next_account_id; // .clone();
                     let entry =
                         EscrowAccount::new(id.clone(), msg_sender.clone(), target, escrow_amount);
                     self.escrow_map.insert(id.clone(), entry);
                     e.accounts.insert(id.clone());
-                    self.next_account_id.incr_mut();
+                    match self.next_account_id.incr_mut() {
+                        Ok(()) => (),
+                        Err(_e) => {
+                            println!("There were a lot more than nine billion names, but I'm done!");
+                            abort()
+                        }
+                    }
                     Ok(id)
                 }
             }
@@ -256,7 +205,7 @@ impl DummyStakeEscrowBackendInner {
                 for ea_id in a.accounts.iter() {
                     match self.escrow_map.get(&*ea_id) {
                         None => {
-                            return Err(Error::new(INTERNAL_ERROR));
+                            return Err(Error::new(ErrorCodes::InternalError.to_string()));
                         }
                         Some(e) => {
                             results.push((*e).clone());
@@ -272,7 +221,7 @@ impl DummyStakeEscrowBackendInner {
 
     pub fn fetch_escrow_by_id(&self, escrow_id: B256) -> Result<EscrowAccount, Error> {
         match self.escrow_map.get(&escrow_id) {
-            None => Err(Error::new(NO_ESCROW_ACCOUNT)),
+            None => Err(Error::new(ErrorCodes::NoEscrowAccount.to_string())),
             Some(e) => Ok((*e).clone()),
         }
     }
@@ -291,34 +240,34 @@ impl DummyStakeEscrowBackendInner {
 
         {
             let account = match self.escrow_map.get_mut(&escrow_id) {
-                None => return Err(Error::new(NO_ESCROW_ACCOUNT)),
+                None => return Err(Error::new(ErrorCodes::NoEscrowAccount.to_string())),
                 Some(escrow_account) => escrow_account,
             };
             if amount_requested > account.amount {
-                return Err(Error::new(REQUEST_EXCEEDS_ESCROWED));
+                return Err(Error::new(ErrorCodes::RequestExceedsEscrowedFunds.to_string()));
             };
             if account.target != msg_sender {
-                return Err(Error::new(NOT_ESCROW_TARGET));
+                return Err(Error::new(ErrorCodes::CallerNotEscrowTarget.to_string()));
             }
             // post: amount_requested <= account.amount
 
             let stakeholder = match self.stakes.get_mut(&account.owner) {
-                None => return Err(Error::new(INTERNAL_ERROR)),
+                None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
                 Some(sh) => sh,
             };
             if !(stakeholder.accounts.contains(&escrow_id)) {
-                return Err(Error::new(INTERNAL_ERROR));
+                return Err(Error::new(ErrorCodes::InternalError.to_string()));
             }
 
             // check some invariants:
             //
             // total tied up in escrow cannot exceed stake
             if stakeholder.amount < stakeholder.escrowed {
-                return Err(Error::new(INTERNAL_ERROR));
+                return Err(Error::new(ErrorCodes::InternalError.to_string()));
             }
             // single escrow account value cannot exceed total escrowed
             if stakeholder.escrowed < account.amount {
-                return Err(Error::new(INTERNAL_ERROR));
+                return Err(Error::new(ErrorCodes::InternalError.to_string()));
             }
 
             stakeholder.amount -= amount_requested;

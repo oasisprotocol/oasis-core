@@ -1,4 +1,5 @@
-use std::convert::{Into, TryFrom};
+use std::convert::Into;
+use std::fmt;
 
 use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_stake_api as api;
@@ -10,9 +11,39 @@ use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 
-// Error strings
-static BAD_PROTO_SENDER: &str = "Protobuf parsing error: msg_sender";
-static BAD_PROTO_TARGET: &str = "Protobuf parsing error: target";
+// Enum for error strings.  This is the usual ad hoc solution to the
+// subclass error type problem: the subclasses need to define their
+// own error codes, but the base class designer cannot, in general,
+// know what all the various errors might be.  This is defined at the
+// service level, so backend implementations should use these, and if
+// ever there are backend implementations that want to extend the
+// error codes, doing so is an API-breaking change (that requires a
+// semantic version bump) -- since adding to the enum means all
+// clients must be updated to handle the new values.  Since Error(..)
+// is taking the string version of the enum anyway, callers can use
+// match guards for the strings that were known when the code was
+// written and have a general string handler for a default case which
+// handles future extensions.
+#[derive(Debug)]
+pub enum ErrorCodes {
+    InternalError,
+    BadProtoSender,
+    BadProtoTarget,
+    NoStakeAccount,
+    NoEscrowAccount,
+    CallerNotEscrowTarget,
+    WouldOverflow,
+    InsufficientFunds,
+    RequestExceedsEscrowedFunds,
+}
+
+impl fmt::Display for ErrorCodes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+        // or, alternatively:
+        // fmt::Debug::fmt(self, f)
+    }
+}
 
 pub struct StakeEscrowService<T>
 where
@@ -48,7 +79,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => {
                     let a = req.get_amount();
                     Ok(self.inner.deposit_stake(s, a))
@@ -79,7 +110,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<StakeStatus>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => Ok(self.inner.get_stake_status(s)),
             }
         };
@@ -112,7 +143,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<(u64)>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => Ok(self.inner.withdraw_stake(s, req.get_amount_requested())),
             }
         };
@@ -144,9 +175,9 @@ where
     ) {
         let f = move || -> Result<BoxFuture<B256>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => match B256::try_from(req.get_target()) {
-                    Err(_e) => Err(Error::new(BAD_PROTO_TARGET)),
+                    Err(_e) => Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
                     Ok(t) => {
                         let a = req.get_escrow_amount();
                         Ok(self.inner.allocate_escrow(s, t, a))
@@ -182,7 +213,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<(Vec<api::EscrowData>)>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => Ok(self.inner.list_active_escrows(s)),
             }
         };
@@ -244,7 +275,7 @@ where
     ) {
         let f = move || -> Result<BoxFuture<u64>, Error> {
             match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(BAD_PROTO_SENDER)),
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => {
                     let i = B256::from_slice(req.get_escrow_id());
                     let a = req.get_amount_requested();

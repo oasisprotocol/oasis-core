@@ -13,10 +13,10 @@ use ekiden_stake_dummy::*;
 #[test]
 fn test_dummy_stake_backend() {
     let backend = Arc::new(DummyStakeEscrowBackend::new());
-    let mut id_generator = LittleEndianCounter32::new();
+    let mut id_generator = B256::new();
 
-    let alice = id_generator.to_b256();
-    id_generator.incr_mut();
+    let alice = id_generator;
+    id_generator.incr_mut().unwrap();
 
     backend.deposit_stake(alice, 100).wait().unwrap();
 
@@ -24,8 +24,8 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 0);
 
-    let bob = id_generator.to_b256();
-    id_generator.incr_mut();
+    let bob = id_generator;
+    id_generator.incr_mut().unwrap();
 
     let bob_escrow_id = backend.allocate_escrow(alice, bob, 9).wait().unwrap();
 
@@ -35,8 +35,8 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 9);
 
-    let carol = id_generator.to_b256();
-    id_generator.incr_mut();
+    let carol = id_generator;
+    id_generator.incr_mut().unwrap();
     let carol_escrow_id = backend.allocate_escrow(alice, carol, 13).wait().unwrap();
 
     println!("got escrow id {} for carol", carol_escrow_id);
@@ -88,7 +88,7 @@ fn test_dummy_stake_backend() {
     match t {
         Err(e) => {
             println!("Got error {}", e.message);
-            assert_eq!(e.message, REQUEST_EXCEEDS_ESCROWED);
+            assert_eq!(e.message, ErrorCodes::RequestExceedsEscrowedFunds.to_string());
         }
         Ok(v) => {
             println!("Got amount {} when request should have failed", v);
@@ -106,7 +106,7 @@ fn test_dummy_stake_backend() {
     match backend.fetch_escrow_by_id(bob_escrow_id).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
-            assert_eq!(e.message, NO_ESCROW_ACCOUNT);
+            assert_eq!(e.message, ErrorCodes::NoEscrowAccount.to_string());
         }
         Ok(ed) => {
             println!(
@@ -126,7 +126,7 @@ fn test_dummy_stake_backend() {
     match backend.get_stake_status(bob).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
-            assert_eq!(e.message, NO_STAKE_ACCOUNT);
+            assert_eq!(e.message, ErrorCodes::NoStakeAccount.to_string());
         }
         Ok(ss) => {
             println!("Got stake status when call should have failed");

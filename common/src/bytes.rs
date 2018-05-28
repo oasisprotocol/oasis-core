@@ -361,6 +361,25 @@ macro_rules! define_bytes_type {
                 $crate::random::get_random_bytes(&mut self.0).unwrap()
             }
 
+            /// Increment value as a little-endian counter.  Returns Err(()) on overflow.
+            pub fn incr_mut(&mut self) -> Result<(), Error> {
+                let mut ix = 0;
+                while ix < $size {
+                    if {
+                        self.0[ix] += 1;
+                        self.0[ix] != 0
+                    } {
+                        break; // no carry needed
+                    }
+                    ix += 1;
+                }
+                if ix == $size {
+                    Err(Error::new("Overflow"))
+                } else {
+                    Ok(())
+                }
+            }
+
             /// Try to convert from a slice.
             // TODO: Currently this cannot implement the TryFrom trait as it already implements From.
             pub fn try_from<'a>(s: &'a [u8]) -> Result<$from, Error> {
