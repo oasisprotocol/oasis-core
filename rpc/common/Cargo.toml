@@ -13,7 +13,7 @@ ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha"
 protobuf = "~1.4"
 sodalite = "0.3.0"
 byteorder = "1.2.1"
-serde = "1.0"
+serde = "=1.0.59"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"

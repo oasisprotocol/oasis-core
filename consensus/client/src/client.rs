@@ -101,7 +101,7 @@ impl ConsensusBackend for ConsensusClient {
     fn submit(&self, contract_id: B256, block: Signed<Block>) -> BoxFuture<()> {
         let mut req = api::SubmitRequest::new();
         req.set_contract_id(contract_id.to_vec());
-        req.set_block(block.get_value_unsafe().to_owned().into());
+        req.set_block(block.get_value_unsafe().unwrap().into());
         req.set_signature(block.signature.into());
         match self.0.submit_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),

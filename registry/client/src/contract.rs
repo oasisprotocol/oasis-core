@@ -30,7 +30,7 @@ impl ContractRegistryClient {
 impl ContractRegistryBackend for ContractRegistryClient {
     fn register_contract(&self, contract: Signed<Contract>) -> BoxFuture<()> {
         let mut request = api::RegisterContractRequest::new();
-        request.set_contract(contract.get_value_unsafe().clone().into());
+        request.set_contract(contract.get_value_unsafe().unwrap().into());
         request.set_signature(contract.signature.into());
         match self.0.register_contract_async(&request) {
             Ok(f) => Box::new(

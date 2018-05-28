@@ -20,5 +20,5 @@ rand = "0.4.2"
 [dev-dependencies]
 ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.2.0-alpha" }
 ekiden-registry-dummy = { path = "../../registry/dummy", version = "0.2.0-alpha" }
-serde = "1.0"
+serde = "=1.0.59"
 serde_cbor = "0.8.2"

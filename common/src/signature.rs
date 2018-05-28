@@ -1,10 +1,13 @@
 //! Signature interface.
-use std::sync::Arc;
-
-use serde::Serialize;
-use serde_cbor;
 use std;
 use std::convert::TryFrom;
+use std::marker::PhantomData;
+use std::sync::Arc;
+
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use serde_bytes;
+use serde_cbor;
 
 use super::bytes::{B256, B512, B64, H256};
 use super::error::{Error, Result};
@@ -211,8 +214,12 @@ impl Into<api::Signature> for Signature {
 /// Signature from a committee node.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Signed<T> {
-    /// Signed value.
-    value: T,
+    /// Untrusted serialized value.
+    #[serde(with = "serde_bytes")]
+    untrusted_raw_value: Vec<u8>,
+    /// Act as if we own a T.
+    #[serde(skip)]
+    value: PhantomData<T>,
     /// Signature.
     pub signature: Signature,
 }
@@ -223,43 +230,57 @@ impl<T> Signed<T> {
     where
         T: Serialize,
     {
-        let signature = Signature::sign(signer, context, &serde_cbor::to_vec(&value).unwrap());
+        let untrusted_raw_value = serde_cbor::to_vec(&value).unwrap();
+        let signature = Signature::sign(signer, context, &untrusted_raw_value);
 
-        Self { value, signature }
+        Self {
+            untrusted_raw_value,
+            value: PhantomData,
+            signature,
+        }
     }
 
     /// Verify signature and return signed value.
-    pub fn open(self, context: &B64) -> Result<T>
+    pub fn open(&self, context: &B64) -> Result<T>
     where
-        T: Serialize,
+        T: DeserializeOwned,
     {
         // First verify signature.
-        if !self.signature
-            .verify(context, &serde_cbor::to_vec(&self.value).unwrap())
-        {
+        if !self.signature.verify(context, &self.untrusted_raw_value) {
             return Err(Error::new("signature verification failed"));
         }
 
-        Ok(self.value)
+        self.get_value_unsafe()
     }
 
     /// Return value without verifying signature.
     ///
     /// Only use this variant if you have verified the signature yourself.
-    pub fn get_value_unsafe(&self) -> &T {
-        &self.value
+    pub fn get_value_unsafe(&self) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        Ok(serde_cbor::from_slice(&self.untrusted_raw_value)?)
     }
 
-    /// from_parts creates a Signed object from a detached signature.
-    pub fn from_parts(value: T, signature: Signature) -> Self {
-        Self { value, signature }
+    /// Create a signed object from a detached signature.
+    pub fn from_parts(value: T, signature: Signature) -> Self
+    where
+        T: Serialize,
+    {
+        Self {
+            untrusted_raw_value: serde_cbor::to_vec(&value).unwrap(),
+            value: PhantomData,
+            signature,
+        }
     }
 }
 
 impl<T: Clone> Clone for Signed<T> {
     fn clone(&self) -> Self {
         Signed {
-            value: self.value.clone(),
+            untrusted_raw_value: self.untrusted_raw_value.clone(),
+            value: PhantomData,
             signature: self.signature.clone(),
         }
     }
