@@ -42,6 +42,7 @@ fn docker_create(
     escape_keys: &str,
     shell: &str,
     hw: bool,
+    extra_args: &str,
 ) -> Result<Child> {
     let mut args = vec![
         "run",
@@ -69,19 +70,31 @@ fn docker_create(
         args.insert(3, "-e");
         args.insert(4, "EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1");
     }
+    if extra_args != "" {
+        for arg in extra_args.split(' ') {
+            if arg == "" {
+                // Skip extra spaces
+                continue;
+            }
+            // Start inserting just after escape_keys
+            let pos = args.len() - 3;
+            args.insert(pos, arg);
+        }
+    }
     Ok(Command::new("docker").args(args.iter()).spawn()?)
 }
 
 /// Generate a container name from the project, along with a hash of path+sgxmode.
-fn container_default_name(project: &cargo::ProjectRoot, hardware: bool) -> String {
+fn container_default_name(project: &cargo::ProjectRoot, hardware: bool, extra_args: &str) -> String {
     let package_name = match project.get_package() {
         Some(package) => package.name.clone(),
         None => String::from("ekiden"),
     };
     let work_dir = project.get_workspace_path();
     let work_dir = work_dir.to_str().unwrap();
+    let dir_and_args = format!("{}{}", work_dir, extra_args);
     let mut s = DefaultHasher::new();
-    work_dir.hash(&mut s);
+    dir_and_args.hash(&mut s);
 
     let mut sgx = "";
     if hardware {
@@ -99,7 +112,7 @@ pub fn shell(args: &ArgMatches) -> Result<()> {
     let work_dir = work_dir.to_str().unwrap();
 
     // Container name defaults to a basename of the current work dir.
-    let container_name = container_default_name(&project, args.is_present("hardware"));
+    let container_name = container_default_name(&project, args.is_present("hardware"), args.value_of("docker-extra-args").unwrap());
     let container_name = match args.value_of("docker-name") {
         Some(name) => String::from(name),
         None => container_name,
@@ -145,6 +158,7 @@ pub fn shell(args: &ArgMatches) -> Result<()> {
                 args.value_of("detach-keys").unwrap(),
                 args.value_of("docker-shell").unwrap(),
                 args.is_present("hardware"),
+                args.value_of("docker-extra-args").unwrap(),
             ),
         },
     };
@@ -158,7 +172,7 @@ pub fn cleanup_shell(args: &ArgMatches) -> Result<()> {
     let project = cargo::ProjectRoot::discover()?;
 
     // Container name defaults to a basename of the current work dir.
-    let container_name = container_default_name(&project, args.is_present("hardware"));
+    let container_name = container_default_name(&project, args.is_present("hardware"), args.value_of("docker-extra-args").unwrap());
     let container_name = match args.value_of("docker-name") {
         Some(name) => String::from(name),
         None => container_name,
