@@ -85,7 +85,11 @@ fn docker_create(
 }
 
 /// Generate a container name from the project, along with a hash of path+sgxmode.
-fn container_default_name(project: &cargo::ProjectRoot, hardware: bool, extra_args: &str) -> String {
+fn container_default_name(
+    project: &cargo::ProjectRoot,
+    hardware: bool,
+    extra_args: &str,
+) -> String {
     let package_name = match project.get_package() {
         Some(package) => package.name.clone(),
         None => String::from("ekiden"),
@@ -112,7 +116,11 @@ pub fn shell(args: &ArgMatches) -> Result<()> {
     let work_dir = work_dir.to_str().unwrap();
 
     // Container name defaults to a basename of the current work dir.
-    let container_name = container_default_name(&project, args.is_present("hardware"), args.value_of("docker-extra-args").unwrap());
+    let container_name = container_default_name(
+        &project,
+        args.is_present("hardware"),
+        args.value_of("docker-extra-args").unwrap(),
+    );
     let container_name = match args.value_of("docker-name") {
         Some(name) => String::from(name),
         None => container_name,
@@ -172,7 +180,11 @@ pub fn cleanup_shell(args: &ArgMatches) -> Result<()> {
     let project = cargo::ProjectRoot::discover()?;
 
     // Container name defaults to a basename of the current work dir.
-    let container_name = container_default_name(&project, args.is_present("hardware"), args.value_of("docker-extra-args").unwrap());
+    let container_name = container_default_name(
+        &project,
+        args.is_present("hardware"),
+        args.value_of("docker-extra-args").unwrap(),
+    );
     let container_name = match args.value_of("docker-name") {
         Some(name) => String::from(name),
         None => container_name,
