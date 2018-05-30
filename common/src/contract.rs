@@ -31,6 +31,8 @@ pub struct Contract {
 
     /// The size of the computation group this contract will be sharded out to.
     pub replica_group_size: u64,
+    /// The size of the discrepancy resolution replica group.
+    pub replica_group_backup_size: u64,
 
     /// The size of the storage grou pthis contract will use.
     pub storage_group_size: u64,
@@ -60,6 +62,7 @@ impl TryFrom<api::Contract> for Contract {
                 .any(|f| *f == api::Contract_Features::SGX),
             advertisement_rate: a.advertisement_rate,
             replica_group_size: a.replica_group_size,
+            replica_group_backup_size: a.replica_group_backup_size,
             storage_group_size: a.storage_group_size,
         })
     }
@@ -81,6 +84,7 @@ impl Into<api::Contract> for Contract {
         }
         c.set_advertisement_rate(self.advertisement_rate);
         c.set_replica_group_size(self.replica_group_size);
+        c.set_replica_group_backup_size(self.replica_group_backup_size);
         c.set_storage_group_size(self.storage_group_size);
         c
     }
