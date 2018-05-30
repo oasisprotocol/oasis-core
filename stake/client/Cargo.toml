@@ -1,0 +1,13 @@
+[package]
+name = "ekiden-stake-client"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden registry RPC clients"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-stake-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-stake-base = { path = "../base", version = "0.2.0-alpha" }
+grpcio = "0.2.2"
