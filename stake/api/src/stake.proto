@@ -1,0 +1,223 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+// This is the escrow service.  Entities deposit stake, and can create
+// escrow accounts for which the service acts as the escrow account
+// holder to enforce the (simple) escrow scenario: the ``target'' of
+// the escrow account and the stakeholder has some contract
+// (unspecified), and the target will, at the end of the contract,
+// release some, none, or all of the escrowed amount back to the
+// stakeholder, with the difference going to the target.  The
+// assumption is that the stakeholder will not create an escrow
+// account for a target unless the stakeholder knows (via code
+// auditing) that the target will not take the escrowed coins
+// arbitrarily.
+
+package escrow;
+
+service Stake {
+  rpc DepositStake (DepositStakeRequest)
+    returns (DepositStakeResponse) {}
+  rpc GetStakeStatus (GetStakeStatusRequest)
+    returns (GetStakeStatusResponse) {}
+  rpc WithdrawStake (WithdrawStakeRequest)
+    returns (WithdrawStakeResponse) {}
+  rpc AllocateEscrow (AllocateEscrowRequest)
+    returns (AllocateEscrowResponse) {}
+  rpc ListActiveEscrows (ListActiveEscrowsRequest)
+    returns (ListActiveEscrowsResponse) {}
+  rpc FetchEscrowById (FetchEscrowByIdRequest)
+    returns (FetchEscrowByIdResponse) {}
+  rpc TakeAndReleaseEscrow (TakeAndReleaseEscrowRequest)
+    returns (TakeAndReleaseEscrowResponse) {}
+}
+
+// Message fields annotated with $$ is where conceptually
+// cryptocurrency tokens are transferred.
+
+// The RPCs should go over a secured channel so that authentication
+// for msg_sender is provided (out-of-band in the communication
+// security layer, so the explicit field can be removed), message
+// authenticity and freshness is guaranteed, with message
+// confidentiality being optional.
+
+// uint64 types used for stake quantities in this API.  This must
+// match the definition of AmountType in the base backend trait
+// definition.  TODO: figure out whether we can define it as a type in
+// the proto file that is exported into the generated code.
+
+// Per-caller state:
+//  uint64 amount:  total stake amount
+//  uint64 escrowed:  amount of stake in escrow
+//  map<uint128, pair<entity, uint64>> escrow_map:  map from
+//    uuid for in-flight escrows and the entity and amount of the escrow
+
+// Invariants:
+//
+// 0 <= escrowed <= amount <= MAX_UINT64
+//
+// \sum_{\forall (uuid, escrow) in escrow_map} escrow.second <= MAX_UINT64
+//   (i.e., sum calculation does not overflow)
+//
+// \sum_{\forall (uuid, escrow) in escrow_map} escrow.second = escrowed
+
+message DepositStakeRequest {
+  // Deposit an additional |amount| into the caller's bond/escrow account.
+  bytes msg_sender = 1;
+  // This corresponds to msg.sender in Solidity; it should be an
+  // address, which could be the SHA1 hash of a public key (external
+  // address) or a contract address (blockchain address) [addresses
+  // are 160 bit values].  In the context of grpc, this would be
+  // RpcContext's auth_context()'s GetPeerIdentity(), which probably
+  // would come from the identity in a JWT.
+  uint64 amount = 2;  // $$
+}
+// Post: caller.amount <= caller.amount'  (new amount is at least previous)
+// If caller.amount + DepositStakeRequest.amount <= MAX_UINT64,
+// caller.amount' = caller.amount + DepositStakeRequest.amount
+// else caller.amount' = caller.amount and the call returns
+// with Err(StakeWouldOverflow)
+
+message DepositStakeResponse {
+  // Other than some internal error (out of memory? out of gas for
+  // processing the request?) which should be handled by the Rust/grpc
+  // framework, the only possible reason for failure is integer
+  // overflow.  Handled via Err(...) which propagates through the
+  // grpc layer.
+}
+
+// The authenticated caller can get their own stake information.  For
+// now, we do not expect it to be useful/desirable to query for other
+// entity's stake availability etc, though that could change.
+message GetStakeStatusRequest {
+  bytes msg_sender = 1;
+}
+
+message GetStakeStatusResponse {
+  uint64 total_stake = 1;
+  uint64 escrowed_stake = 2;
+}
+// Available stake for withdrawal is total_stake - escrowed_stake.
+
+// The authenticated caller can withdrawl up to the available stake for
+// withdrawal.
+//
+// If WithdrawStakeRequest.amount_requested <= caller.amount -
+// caller.escrowed then
+//   caller.amount' = caller.amount - WithdrawStakeRequested.amount_requested
+//   amount_returned = WithdrawStakeRequest.amount_requested
+//   failure_code = 0 (OK(()));
+// otherwise
+//   caller state unchanged
+//   failure_code = Err(InsufficientFunds)
+message WithdrawStakeRequest {
+  bytes msg_sender = 1;
+  uint64 amount_requested = 2;
+}
+
+message WithdrawStakeResponse {
+  uint64 amount_returned = 1;  // $$
+}
+
+// The authenticated caller takes some portion of their available
+// stake and create an escrow for use with a named target entity.  If
+// the target entity decides that the caller has not met their
+// obligation in a transaction, the target may take this escrow
+// amount; on the other hand, if all is well, the target may release
+// it back to the caller.
+//
+// *TODO*: do escrows expire?  If the entity to which the escrow was
+// made via AllocateEscrow disappears (becomes inaccessible), would
+// all funds escrowed to it also disappear (also become inaccessible)?
+// If escrow includes a time limit, then we need some security
+// guarantees about the validity of time, so that an attacker could
+// not trick the stake escrow service to expire an escrow earlier than
+// it should.  (Multisig time service ought to work, since setting the
+// clock back via replaying old messages doesn't help the attacker in
+// this situation.  Releasing escrowed funds a little later than we
+// should is just another denial-of-service attack.)
+//
+// If caller.stake - caller.escrowed >= AllocateEscrowRequest.escrow_amount
+// then
+//   uuid = generate_id()
+//   caller.escrow_map[uuid] = pair(entity, escrow_amount)
+//   caller.escrowed += AllocateEscrowRequest.escrow_amount
+//   failure_code = Ok(())
+// otherwise
+//   caller state unchanged
+//   failure_code = Err(WouldOverflow)
+message AllocateEscrowRequest {
+  bytes msg_sender = 1;
+  // Set aside from the caller's deposited bond for use with
+  // transactions with |entity| the |escrow_amount|, with an
+  // |escrow_id| uuid returned.
+  //
+  // The set-aside values are split apart from the total
+  // bond remaining, and |entity| can do the following operations:
+  //
+  // - FetchEscrowById (escrow_id, entity, escrow_amount) tuple is valid.
+  // - TakeAndReleaseEscrow (escrow_id, n)  n <= amount, amount-n is released.
+  //   (To release entire escrow, use n=0.)
+  bytes target = 2;
+  uint64 escrow_amount = 3;
+}
+
+message AllocateEscrowResponse {
+  // Failure reasons: Err(InsufficientFunds).
+  bytes escrow_id = 1;  // Should be uuid, so no two the same.
+}
+// The returned escrow id is an identifier and not an authenticator,
+// and instead of a randomly chosen uuid (i.e., version 4, with 122
+// random bits), this could be non-RFC 4122 compliant sequence number
+// to make this deterministic.
+
+message EscrowData {
+  bytes escrow_id = 1;
+  bytes entity = 2;
+  uint64 amount = 3;
+}
+
+// This is useful for the msg.sender to know what escrows are still
+// outstanding.
+message ListActiveEscrowsRequest {
+  bytes msg_sender = 1;
+}
+
+message ListActiveEscrowsResponse {
+  repeated EscrowData escrows = 1;
+}
+
+// Rather than sending the entity and amount information, we just
+// allow querying by the escrow id.  The caller (library) can verify
+// that entity address matches and that the amount that was set aside
+// is sufficent.  TODO: do we want to allow this only by the
+// stakeholder/owner of the escrow account or the escrow target?
+message FetchEscrowByIdRequest {
+  bytes escrow_id = 1;
+}
+
+message FetchEscrowByIdResponse {
+  // Possible errors: Err(NoSuchEscrowId)
+  EscrowData escrow = 1;
+}
+
+// The authenticated caller indicates that he transactions for which
+// the escrow was created is done.  If the escrow account owner has
+// met their obligations
+
+// msg_sender should have an account, or one will be created for it.
+message TakeAndReleaseEscrowRequest {
+  bytes msg_sender = 1;
+  bytes escrow_id = 2;
+  uint64 amount_requested = 3;
+}
+
+message TakeAndReleaseEscrowResponse {
+  // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
+  uint64 amount_taken = 1;  // $$ transferred to target (caller).
+  // If there is no Err(..), amount_taken should always equal
+  // amount_requested in the request message.  If there is escrow any
+  // left over, it is released into the stakeholder's account and
+  // available for withdrawal via WithdrawStakeRequest
+}
