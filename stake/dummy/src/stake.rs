@@ -10,7 +10,6 @@ use ekiden_common::futures::{future, BoxFuture};
 
 use ekiden_stake_base::*;
 
-
 // It would be nice if DummyStakeEscrowInfo contained its owner ID so
 // that EscrowAccount's owner and target can be just a reference to
 // the appropriate DummyStakeEscrowInfo.  The dynamic lifetime,
@@ -178,13 +177,14 @@ impl DummyStakeEscrowBackendInner {
                     let id = self.next_account_id;
                     match self.next_account_id.incr_mut() {
                         Err(_e) => {
-                            println!("There were a lot more than nine billion names, but I'm done!");
+                            println!(
+                                "There were a lot more than nine billion names, but I'm done!"
+                            );
                             abort()
                         }
-                        Ok(()) => ()
+                        Ok(()) => (),
                     }
-                    let entry =
-                        EscrowAccount::new(id, msg_sender.clone(), target, escrow_amount);
+                    let entry = EscrowAccount::new(id, msg_sender.clone(), target, escrow_amount);
                     self.escrow_map.insert(id, entry);
                     e.accounts.insert(id);
                     Ok(id)
@@ -202,7 +202,7 @@ impl DummyStakeEscrowBackendInner {
                     return Ok(results);
                 }
                 a
-            },
+            }
         };
 
         for ea_id in a.accounts.iter() {
@@ -220,8 +220,10 @@ impl DummyStakeEscrowBackendInner {
         Ok(results)
     }
 
-    pub fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType)
-                              -> Result<EscrowAccount, Error> {
+    pub fn fetch_escrow_by_id(
+        &self,
+        escrow_id: EscrowAccountIdType,
+    ) -> Result<EscrowAccount, Error> {
         match self.escrow_map.get(&escrow_id) {
             None => Err(Error::new(ErrorCodes::NoEscrowAccount.to_string())),
             Some(e) => Ok((*e).clone()),
@@ -246,7 +248,9 @@ impl DummyStakeEscrowBackendInner {
                 Some(escrow_account) => escrow_account,
             };
             if amount_requested > account.amount {
-                return Err(Error::new(ErrorCodes::RequestExceedsEscrowedFunds.to_string()));
+                return Err(Error::new(
+                    ErrorCodes::RequestExceedsEscrowedFunds.to_string(),
+                ));
             };
             if account.target != msg_sender {
                 return Err(Error::new(ErrorCodes::CallerNotEscrowTarget.to_string()));
@@ -357,23 +361,21 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
                 Err(e) => return Err(e),
                 Ok(v) => v,
             };
-            output.extend(ea_v.iter().map(|p| {
-                EscrowAccountStatus::new(p.id, p.target, p.amount)
-            }));
+            output.extend(
+                ea_v.iter()
+                    .map(|p| EscrowAccountStatus::new(p.id, p.target, p.amount)),
+            );
             Ok(output)
         }))
     }
 
-    fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType)
-                          -> BoxFuture<EscrowAccountStatus> {
+    fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
             match inner.fetch_escrow_by_id(escrow_id) {
                 Err(e) => return Err(e),
-                Ok(ea) => {
-                    Ok(EscrowAccountStatus::new(ea.id, ea.target, ea.amount))
-                },
+                Ok(ea) => Ok(EscrowAccountStatus::new(ea.id, ea.target, ea.amount)),
             }
         }))
     }

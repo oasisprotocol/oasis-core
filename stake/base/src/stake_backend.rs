@@ -62,16 +62,20 @@ impl EscrowAccountIdType {
 
     pub fn from_vec(id: Vec<u8>) -> Result<EscrowAccountIdType, Error> {
         if id.len() != 32 {
-            return Err(Error::new(ErrorCodes::BadEscrowId.to_string()))
+            return Err(Error::new(ErrorCodes::BadEscrowId.to_string()));
         }
-        Ok(EscrowAccountIdType{ id: U256::from_little_endian(&id) })
+        Ok(EscrowAccountIdType {
+            id: U256::from_little_endian(&id),
+        })
     }
 
     pub fn from_slice(slice: &[u8]) -> Result<EscrowAccountIdType, Error> {
         if slice.len() != 32 {
             return Err(Error::new(ErrorCodes::BadEscrowId.to_string()));
         }
-        Ok(EscrowAccountIdType{ id: U256::from_little_endian(slice) })
+        Ok(EscrowAccountIdType {
+            id: U256::from_little_endian(slice),
+        })
     }
 
     pub fn to_vec(&self) -> Vec<u8> {

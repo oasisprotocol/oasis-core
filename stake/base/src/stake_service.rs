@@ -142,11 +142,11 @@ where
         let f = move || -> Result<BoxFuture<EscrowAccountIdType>, Error> {
             let s = match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => s
+                Ok(s) => s,
             };
             let t = match B256::try_from(req.get_target()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
-                Ok(t) => t
+                Ok(t) => t,
             };
             let a = req.get_escrow_amount();
             Ok(self.inner.allocate_escrow(s, t, a))
@@ -187,14 +187,17 @@ where
             Ok(f) => f.then(|res| match res {
                 Ok(escrows) => {
                     let mut r = api::ListActiveEscrowsResponse::new();
-                    r.set_escrows(escrows.iter().map(
-                        |e| {
-                            let mut ae = api::EscrowData::new();
-                            ae.set_escrow_id(e.id.to_vec());
-                            ae.set_entity(e.target.to_vec());
-                            ae.set_amount(e.amount);
-                            ae
-                        }).collect()
+                    r.set_escrows(
+                        escrows
+                            .iter()
+                            .map(|e| {
+                                let mut ae = api::EscrowData::new();
+                                ae.set_escrow_id(e.id.to_vec());
+                                ae.set_entity(e.target.to_vec());
+                                ae.set_amount(e.amount);
+                                ae
+                            })
+                            .collect(),
                     );
                     Ok(r)
                 }

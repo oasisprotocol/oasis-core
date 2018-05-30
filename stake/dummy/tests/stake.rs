@@ -18,14 +18,14 @@ struct IdGenerator {
 
 impl IdGenerator {
     fn new() -> Self {
-        Self { id: B256::new(), }
+        Self { id: B256::new() }
     }
 
     fn get(&self) -> B256 {
         self.id
     }
 
-    fn incr_mut(&mut self) -> Result<(), Error>{
+    fn incr_mut(&mut self) -> Result<(), Error> {
         let mut ix = 0;
         while ix < self.id.len() {
             if {
@@ -37,7 +37,7 @@ impl IdGenerator {
             ix += 1;
         }
         if ix == self.id.len() {
-            return Err(Error::new("OVERFLOW"))
+            return Err(Error::new("OVERFLOW"));
         }
         Ok(())
     }
@@ -122,7 +122,10 @@ fn test_dummy_stake_backend() {
     match t {
         Err(e) => {
             println!("Got error {}", e.message);
-            assert_eq!(e.message, ErrorCodes::RequestExceedsEscrowedFunds.to_string());
+            assert_eq!(
+                e.message,
+                ErrorCodes::RequestExceedsEscrowedFunds.to_string()
+            );
         }
         Ok(v) => {
             println!("Got amount {} when request should have failed", v);
