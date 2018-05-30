@@ -157,7 +157,7 @@ fn main() {
                         )
                         .arg(
                             Arg::with_name("docker-extra-args")
-                                .help("Additional arguments to pass to Docker when creating the environment")
+                                .help("Additional comma-delimited arguments to pass to Docker when creating the environment")
                                 .long("docker-extra-args")
                                 .default_value("")
                         )

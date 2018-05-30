@@ -71,9 +71,9 @@ fn docker_create(
         args.insert(4, "EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1");
     }
     if extra_args != "" {
-        for arg in extra_args.split(' ') {
+        for arg in extra_args.split(',') {
             if arg == "" {
-                // Skip extra spaces
+                // Skip empty arguments
                 continue;
             }
             // Start inserting just after escape_keys
@@ -84,7 +84,7 @@ fn docker_create(
     Ok(Command::new("docker").args(args.iter()).spawn()?)
 }
 
-/// Generate a container name from the project, along with a hash of path+sgxmode.
+/// Generate a container name from the project, along with a hash of path&extra_args+sgxmode.
 fn container_default_name(
     project: &cargo::ProjectRoot,
     hardware: bool,
@@ -96,6 +96,11 @@ fn container_default_name(
     };
     let work_dir = project.get_workspace_path();
     let work_dir = work_dir.to_str().unwrap();
+
+    // The hash is created from the work_dir path, as well as extra Docker
+    // arguments, because some Docker arguments can't be applied or modified
+    // on an existing container (e.g. port mapping), but we also don't want
+    // to rebuild the container every time the user passes extra arguments.
     let dir_and_args = format!("{}{}", work_dir, extra_args);
     let mut s = DefaultHasher::new();
     dir_and_args.hash(&mut s);
