@@ -12,3 +12,4 @@ ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 ekiden-storage-api = { path = "../api", version = "0.2.0-alpha" }
 grpcio = "0.2.2"
+log = "0.4"

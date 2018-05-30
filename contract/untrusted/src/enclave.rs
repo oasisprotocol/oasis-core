@@ -10,7 +10,7 @@ use super::ecall_proxy;
 
 pub trait EnclaveContract {
     /// Maximum response size (in kilobytes).
-    const MAX_RESPONSE_SIZE: usize = 1024;
+    const MAX_RESPONSE_SIZE: usize = 8 * 1024;
 
     /// Check if the enclave has a batch ready for execution and copy it over.
     fn contract_take_batch(&self) -> Result<CallBatch>;
