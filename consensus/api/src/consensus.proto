@@ -11,19 +11,12 @@ service Consensus {
   rpc GetEvents (EventRequest) returns (stream EventResponse) {}
   rpc Commit (CommitRequest) returns (CommitResponse) {}
   rpc Reveal (RevealRequest) returns (RevealResponse) {}
-  rpc Submit (SubmitRequest) returns (SubmitResponse) {}
 }
 
 message Block {
   Header header = 1;
   repeated scheduler.CommitteeNode computation_group = 2;
-  repeated Transaction transactions = 3;
-  repeated Commitment commitments = 4;
-}
-
-message Transaction {
-  bytes input = 1;
-  bytes output_hash = 2;
+  repeated Commitment commitments = 3;
 }
 
 message Commitment {
@@ -37,9 +30,10 @@ message Header {
   bytes round = 3;
   bytes previous_hash = 4;
   bytes group_hash = 5;
-  bytes transaction_hash = 6;
-  bytes state_root = 7;
-  bytes commitments_hash = 8;
+  bytes input_hash = 6;
+  bytes output_hash = 7;
+  bytes state_root = 8;
+  bytes commitments_hash = 9;
 }
 
 message LatestBlockRequest {
@@ -62,11 +56,25 @@ message EventRequest {
   bytes contract_id = 1;
 }
 
-message EventResponse {
-  enum Event {
-    COMMITMENTSRECEIVED = 0;
-    ROUNDFAILED = 1;
+message Event {
+  message CommitmentsReceived {
+    bool discrepancy = 1;
   }
+  message RoundFailed {
+    string error = 1;
+  }
+  message DiscrepancyDetected {
+    bytes batch_hash = 1;
+  }
+
+  oneof event {
+    CommitmentsReceived commitments_received = 1;
+    RoundFailed round_failed = 2;
+    DiscrepancyDetected discrepancy_detected = 3;
+  }
+}
+
+message EventResponse {
   Event event = 1;
 }
 
@@ -86,13 +94,4 @@ message RevealRequest {
 }
 
 message RevealResponse {
-}
-
-message SubmitRequest {
-  bytes contract_id = 1;
-  Block block = 2;
-  common.Signature signature = 3;
-}
-
-message SubmitResponse {
 }

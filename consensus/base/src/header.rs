@@ -11,7 +11,7 @@ use ekiden_common::uint::U256;
 use super::commitment::Commitable;
 
 /// Block header.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Header {
     /// Protocol version number.
     pub version: u16,
@@ -23,8 +23,10 @@ pub struct Header {
     pub previous_hash: H256,
     /// Computation group hash.
     pub group_hash: H256,
-    /// Transaction hash.
-    pub transaction_hash: H256,
+    /// Input hash.
+    pub input_hash: H256,
+    /// Output hash.
+    pub output_hash: H256,
     /// State root hash.
     pub state_root: H256,
     /// Commitments hash.
@@ -45,13 +47,14 @@ impl TryFrom<api::Header> for Header {
     fn try_from(a: api::Header) -> Result<Self, self::Error> {
         Ok(Header {
             version: a.get_version() as u16,
-            namespace: B256::from(a.get_namespace()),
+            namespace: B256::try_from(a.get_namespace())?,
             round: U256::from_little_endian(a.get_round()),
-            previous_hash: H256::from(a.get_previous_hash()),
-            group_hash: H256::from(a.get_group_hash()),
-            transaction_hash: H256::from(a.get_transaction_hash()),
-            state_root: H256::from(a.get_state_root()),
-            commitments_hash: H256::from(a.get_commitments_hash()),
+            previous_hash: H256::try_from(a.get_previous_hash())?,
+            group_hash: H256::try_from(a.get_group_hash())?,
+            input_hash: H256::try_from(a.get_input_hash())?,
+            output_hash: H256::try_from(a.get_output_hash())?,
+            state_root: H256::try_from(a.get_state_root())?,
+            commitments_hash: H256::try_from(a.get_commitments_hash())?,
         })
     }
 }
@@ -64,7 +67,8 @@ impl Into<api::Header> for Header {
         h.set_round(self.round.to_vec());
         h.set_previous_hash(self.previous_hash.to_vec());
         h.set_group_hash(self.group_hash.to_vec());
-        h.set_transaction_hash(self.transaction_hash.to_vec());
+        h.set_input_hash(self.input_hash.to_vec());
+        h.set_output_hash(self.output_hash.to_vec());
         h.set_state_root(self.state_root.to_vec());
         h.set_commitments_hash(self.commitments_hash.to_vec());
         h

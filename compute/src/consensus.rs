@@ -7,18 +7,18 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_timer::Interval;
-use lru_cache::LruCache;
+use serde_cbor;
 
-use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal, Transaction,
-                            BLOCK_SUBMIT_SIGNATURE_CONTEXT};
+use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
 use ekiden_core::bytes::{B256, H256};
-use ekiden_core::contract::batch::CallBatch;
+use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
-use ekiden_core::hash::EncodedHash;
+use ekiden_core::hash::{empty_hash, EncodedHash};
 use ekiden_core::signature::{Signed, Signer};
 use ekiden_scheduler_base::CommitteeNode;
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 use super::group::ComputationGroup;
 use super::worker::{ComputedBatch, Worker};
@@ -28,7 +28,7 @@ enum Command {
     /// Append to current batch.
     AppendBatch(CallBatch),
     /// Process remote batch.
-    ProcessRemoteBatch(CallBatch, Vec<CommitteeNode>),
+    ProcessRemoteBatch(H256, Vec<CommitteeNode>),
 }
 
 /// Proposed block.
@@ -61,6 +61,8 @@ struct Inner {
     contract_id: B256,
     /// Consensus backend.
     backend: Arc<ConsensusBackend>,
+    /// Storage backend.
+    storage: Arc<StorageBackend>,
     /// Signer for the compute node.
     signer: Arc<Signer + Send + Sync>,
     /// Worker that can process batches.
@@ -81,10 +83,17 @@ struct Inner {
     batch_processing: AtomicBool,
     /// Currently proposed block.
     proposed_block: Mutex<Option<ProposedBlock>>,
-    /// Recently computed outputs.
-    recent_outputs: Mutex<LruCache<H256, Vec<u8>>>,
     /// Call subscribers (call id -> list of subscribers).
     call_subscribers: Mutex<HashMap<H256, Vec<oneshot::Sender<Vec<u8>>>>>,
+    /// Test-only configuration.
+    test_only_config: ConsensusTestOnlyConfiguration,
+}
+
+/// Consensus test-only configuration.
+#[derive(Clone)]
+pub struct ConsensusTestOnlyConfiguration {
+    /// Inject discrepancy when submitting commitment.
+    pub inject_discrepancy: bool,
 }
 
 /// Consensus frontend configuration.
@@ -96,6 +105,8 @@ pub struct ConsensusConfiguration {
     pub max_batch_size: usize,
     /// Maximum batch timeout.
     pub max_batch_timeout: u64,
+    /// Test-only configuration.
+    pub test_only: ConsensusTestOnlyConfiguration,
 }
 
 /// Compute node consensus frontend.
@@ -111,6 +122,7 @@ impl ConsensusFrontend {
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
+        storage: Arc<StorageBackend>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
@@ -118,7 +130,8 @@ impl ConsensusFrontend {
             inner: Arc::new(Inner {
                 contract_id,
                 backend,
-                signer: config.signer,
+                storage,
+                signer: config.signer.clone(),
                 worker,
                 computation_group,
                 command_sender,
@@ -128,8 +141,8 @@ impl ConsensusFrontend {
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 batch_processing: AtomicBool::new(false),
                 proposed_block: Mutex::new(None),
-                recent_outputs: Mutex::new(LruCache::new(config.max_batch_size * 10)),
                 call_subscribers: Mutex::new(HashMap::new()),
+                test_only_config: config.test_only.clone(),
             }),
         }
     }
@@ -147,13 +160,16 @@ impl ConsensusFrontend {
                     module_path!(),
                     "Unexpected error while processing consensus events",
                     move |event| match event {
-                        Event::CommitmentsReceived => {
-                            Self::handle_commitments_received(inner.clone())
+                        Event::CommitmentsReceived(discrepancy) => {
+                            Self::handle_commitments_received(inner.clone(), discrepancy)
                         }
                         Event::RoundFailed(error) => Self::fail_batch(
                             inner.clone(),
                             format!("Round failed: {}", error.message),
                         ),
+                        Event::DiscrepancyDetected(batch_hash) => {
+                            Self::handle_discrepancy_detected(inner.clone(), batch_hash)
+                        }
                     },
                 )
         });
@@ -191,8 +207,8 @@ impl ConsensusFrontend {
                         Command::AppendBatch(calls) => {
                             Self::handle_append_batch(inner.clone(), calls)
                         }
-                        Command::ProcessRemoteBatch(calls, committee) => {
-                            Self::process_batch(inner.clone(), calls, committee)
+                        Command::ProcessRemoteBatch(batch_hash, committee) => {
+                            Self::handle_remote_batch(inner.clone(), batch_hash, committee)
                         }
                     },
                 )
@@ -239,13 +255,51 @@ impl ConsensusFrontend {
         Self::check_and_process_current_batch(inner.clone())
     }
 
+    /// Handle process remote batch command.
+    fn handle_remote_batch(
+        inner: Arc<Inner>,
+        batch_hash: H256,
+        committee: Vec<CommitteeNode>,
+    ) -> BoxFuture<()> {
+        // TODO: Abort any batches that are currently being processed.
+
+        // Fetch batch from storage.
+        inner
+            .storage
+            .get(batch_hash)
+            .and_then(move |calls| {
+                let calls = match serde_cbor::from_slice(&calls) {
+                    Ok(calls) => calls,
+                    Err(error) => return future::err(Error::from(error)).into_box(),
+                };
+
+                Self::process_batch(inner.clone(), calls, committee)
+            })
+            .or_else(move |error| {
+                // Failed to fetch remote batch from storage.
+                error!(
+                    "Failed to fetch remote batch {:?} from storage: {}",
+                    batch_hash, error.message
+                );
+
+                Ok(())
+            })
+            .into_box()
+    }
+
     /// Handle commitments received event from consensus backend.
-    fn handle_commitments_received(inner: Arc<Inner>) -> BoxFuture<()> {
+    fn handle_commitments_received(inner: Arc<Inner>, discrepancy: bool) -> BoxFuture<()> {
+        // If this event has been emitted during discrepancy resolution, we should ignore
+        // it if we are not a backup worker.
+        if discrepancy && !inner.computation_group.is_backup_worker() {
+            return future::ok(()).into_box();
+        }
+
         // Ensure we have proposed a block in the current round.
         let proposed_block_guard = inner.proposed_block.lock().unwrap();
         if proposed_block_guard.is_none() {
             trace!("Ignoring commitments as we didn't propose any block");
-            return Box::new(future::ok(()));
+            return future::ok(()).into_box();
         }
 
         let proposed_block = proposed_block_guard.as_ref().unwrap();
@@ -258,45 +312,35 @@ impl ConsensusFrontend {
             &proposed_block.nonce,
             &proposed_block.block.header,
         );
-        let shared_inner = inner.clone();
-        let result = inner
+
+        let inner = inner.clone();
+        inner
             .backend
             .reveal(inner.contract_id, reveal)
             .or_else(|error| {
                 // Failed to submit reveal, abort current batch.
-                Self::fail_batch(
-                    shared_inner,
-                    format!("Failed to reveal block: {}", error.message),
-                )
-            });
+                Self::fail_batch(inner, format!("Failed to reveal block: {}", error.message))
+            })
+            .into_box()
+    }
 
-        // If we are a leader, also submit the block.
-        if inner.computation_group.is_leader() {
-            let block = proposed_block.block.clone();
-            let inner = inner.clone();
+    /// Handle discrepancy detected event from consensus backend.
+    fn handle_discrepancy_detected(inner: Arc<Inner>, batch_hash: H256) -> BoxFuture<()> {
+        warn!(
+            "Discrepancy detected while processing batch {:?}",
+            batch_hash
+        );
 
-            result
-                .and_then(|_| {
-                    info!("Submitting block");
-
-                    // Sign and submit block.
-                    let signed_block =
-                        Signed::sign(&inner.signer, &BLOCK_SUBMIT_SIGNATURE_CONTEXT, block);
-                    inner
-                        .backend
-                        .submit(inner.contract_id, signed_block)
-                        .or_else(|error| {
-                            // Failed to submit a block, abort current batch.
-                            Self::fail_batch(
-                                inner,
-                                format!("Failed to submit block: {}", error.message),
-                            )
-                        })
-                })
-                .into_box()
-        } else {
-            result.into_box()
+        // Only backup workers can do anything during discrepancy resolution.
+        if !inner.computation_group.is_backup_worker() {
+            trace!("I am not a backup worker, waiting for consensus to resolve discrepancy");
+            return future::ok(()).into_box();
         }
+
+        info!("Backup worker activating and processing batch");
+
+        let committee = inner.computation_group.get_committee();
+        Self::handle_remote_batch(inner, batch_hash, committee)
     }
 
     /// Handle new block from consensus backend.
@@ -327,24 +371,43 @@ impl ConsensusFrontend {
             }
         }
 
-        // Check if any subscribed transactions have been included in a block.
-        let mut call_subscribers = inner.call_subscribers.lock().unwrap();
-        let mut recent_outputs = inner.recent_outputs.lock().unwrap();
-        for transaction in &block.transactions {
-            let call_id = transaction.input.get_encoded_hash();
-            // We can only generate replies for outputs that we recently computed as outputs
-            // themselves are not included in blocks.
-            if let Some(output) = recent_outputs.get_mut(&call_id) {
-                if let Some(senders) = call_subscribers.remove(&call_id) {
-                    for sender in senders {
-                        // Explicitly ignore send errors as the receiver may have gone.
-                        drop(sender.send(output.clone()));
-                    }
-                }
-            }
-        }
+        if block.header.input_hash != empty_hash() {
+            // Check if any subscribed transactions have been included in a block. To do that
+            // we need to fetch transactions from storage first.
+            inner
+                .storage
+                .get(block.header.input_hash)
+                .join(inner.storage.get(block.header.output_hash))
+                .and_then(move |(inputs, outputs)| {
+                    let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
+                    let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
+                    let mut call_subscribers = inner.call_subscribers.lock().unwrap();
 
-        Box::new(future::ok(()))
+                    for (input, output) in inputs.iter().zip(outputs.iter()) {
+                        let call_id = input.get_encoded_hash();
+
+                        if let Some(senders) = call_subscribers.remove(&call_id) {
+                            for sender in senders {
+                                // Explicitly ignore send errors as the receiver may have gone.
+                                drop(sender.send(output.clone()));
+                            }
+                        }
+                    }
+
+                    Ok(())
+                })
+                .or_else(|error| {
+                    error!(
+                        "Failed to fetch transactions from storage: {}",
+                        error.message
+                    );
+
+                    Ok(())
+                })
+                .into_box()
+        } else {
+            future::ok(()).into_box()
+        }
     }
 
     /// Check if we need to send the current batch for processing.
@@ -378,12 +441,31 @@ impl ConsensusFrontend {
                 current_batch.calls.append(&mut remaining);
             }
 
-            // Submit signed batch to the rest of the computation group so they can start work.
-            let committee = inner.computation_group.submit(calls.clone());
-            // Process batch locally.
-            Self::process_batch(inner.clone(), calls, committee)
+            // Persist batch into storage so that the workers can get it.
+            // TODO: How to handle expiry of these items?
+            let inner = inner.clone();
+            let inner_clone = inner.clone();
+            let encoded_calls = serde_cbor::to_vec(&calls).unwrap();
+            let calls_hash = hash_storage_key(&encoded_calls);
+
+            inner
+                .storage
+                .insert(encoded_calls, u64::max_value())
+                .and_then(move |_| {
+                    // Submit signed batch hash to the rest of the computation group so they can start work.
+                    let committee = inner.computation_group.submit(calls_hash);
+                    // Process batch locally.
+                    Self::process_batch(inner, calls, committee)
+                })
+                .or_else(move |error| {
+                    Self::fail_batch(
+                        inner_clone,
+                        format!("Failed to store call batch: {}", error.message),
+                    )
+                })
+                .into_box()
         } else {
-            Box::new(future::ok(()))
+            future::ok(()).into_box()
         }
     }
 
@@ -430,6 +512,8 @@ impl ConsensusFrontend {
 
         // TODO: Should we move all failed calls back into the current batch?
 
+        // TODO: Should we notify consensus backend that we aborted?
+
         // Clear proposed block if any.
         drop(inner.proposed_block.lock().unwrap().take());
 
@@ -456,33 +540,32 @@ impl ConsensusFrontend {
             }
         };
 
-        // Create block from result batches.
-        let mut block = Block::new_parent_of(&computed_batch.block);
-        block.computation_group = committee;
-        block.header.state_root = computed_batch.new_state_root;
+        assert_eq!(computed_batch.calls.len(), computed_batch.outputs.len());
 
-        // Generate a list of transactions from call/output batches.
-        {
-            let mut recent_outputs = inner.recent_outputs.lock().unwrap();
-            for (call, output) in computed_batch
-                .calls
-                .iter()
-                .zip(computed_batch.outputs.drain(..))
-            {
-                block.transactions.push(Transaction {
-                    input: call.clone(),
-                    output_hash: output.get_encoded_hash(),
-                });
+        // Byzantine mode: inject discrepancy into computed batch.
+        if inner.test_only_config.inject_discrepancy {
+            warn!("BYZANTINE MODE: injecting discrepancy into proposed block");
 
-                recent_outputs.insert(call.get_encoded_hash(), output);
+            for output in computed_batch.outputs.iter_mut() {
+                *output = vec![];
             }
         }
 
+        // Encode outputs.
+        let encoded_outputs = serde_cbor::to_vec(&computed_batch.outputs).unwrap();
+
+        // Create block from result batches.
+        let mut block = Block::new_parent_of(&computed_batch.block);
+        block.computation_group = committee;
+        block.header.input_hash =
+            hash_storage_key(&serde_cbor::to_vec(&computed_batch.calls).unwrap());
+        block.header.output_hash = hash_storage_key(&encoded_outputs);
+        block.header.state_root = computed_batch.new_state_root;
         block.update();
 
         info!(
             "Proposing new block with {} transaction(s)",
-            block.transactions.len()
+            computed_batch.calls.len()
         );
 
         // Generate commitment.
@@ -503,13 +586,30 @@ impl ConsensusFrontend {
             proposed_block.get_or_insert(ProposedBlock { nonce, block });
         }
 
-        // Commit to block.
+        // Store outputs and then commit to block.
+        let inner_clone = inner.clone();
+
         inner
-            .backend
-            .commit(inner.contract_id, commitment)
+            .storage
+            .insert(encoded_outputs, u64::max_value())
             .or_else(|error| {
-                // Failed to commit a block, abort current batch.
-                Self::fail_batch(inner, format!("Failed to propose block: {}", error.message))
+                // Failed to store outputs, abort current batch.
+                Self::fail_batch(
+                    inner_clone,
+                    format!("Failed to store outputs: {}", error.message),
+                )
+            })
+            .and_then(|_| {
+                inner
+                    .backend
+                    .commit(inner.contract_id, commitment)
+                    .or_else(|error| {
+                        // Failed to commit a block, abort current batch.
+                        Self::fail_batch(
+                            inner,
+                            format!("Failed to propose block: {}", error.message),
+                        )
+                    })
             })
             .into_box()
     }
@@ -523,14 +623,14 @@ impl ConsensusFrontend {
     }
 
     /// Directly process a batch from a remote leader.
-    pub fn process_remote_batch(&self, calls: Signed<CallBatch>) -> Result<()> {
+    pub fn process_remote_batch(&self, batch_hash: Signed<H256>) -> Result<()> {
         // Open signed batch, verifying that it was signed by the leader and that the
         // committee matches.
-        let (calls, committee) = self.inner.computation_group.open_remote_batch(calls)?;
+        let (batch_hash, committee) = self.inner.computation_group.open_remote_batch(batch_hash)?;
 
         self.inner
             .command_sender
-            .unbounded_send(Command::ProcessRemoteBatch(calls, committee))
+            .unbounded_send(Command::ProcessRemoteBatch(batch_hash, committee))
             .unwrap();
 
         Ok(())
