@@ -86,7 +86,6 @@ fn test_dummy_stake_backend() {
 
         actual.insert((eas.id, eas.target, eas.amount));
     }
-
     let d: HashSet<_> = expected.symmetric_difference(&actual).collect();
     for triple in &d {
         println!("sd: ({}, {}, {})", triple.0, triple.1, triple.2);
@@ -110,10 +109,11 @@ fn test_dummy_stake_backend() {
     assert_eq!(eas.target, bob);
     assert_eq!(eas.amount, 9);
 
-    let t = backend
+    println!("taking 10 -- too much, should fail");
+    match backend
         .take_and_release_escrow(bob, bob_escrow_id, 10)
-        .wait();
-    match t {
+        .wait()
+    {
         Err(e) => {
             println!("Got error {}", e.message);
             assert_eq!(
@@ -126,6 +126,7 @@ fn test_dummy_stake_backend() {
             assert!(false);
         }
     }
+
     println!("taking 5");
     assert_eq!(
         backend
@@ -134,6 +135,7 @@ fn test_dummy_stake_backend() {
             .unwrap(),
         5
     );
+
     match backend.fetch_escrow_by_id(bob_escrow_id).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
