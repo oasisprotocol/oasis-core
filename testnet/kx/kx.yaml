@@ -28,6 +28,7 @@ spec:
     metadata:
       labels:
         copper: ekiden-token-key-manager
+        app: ekiden
     spec:
       containers:
         - name: ekiden-compute
@@ -77,6 +78,7 @@ spec:
     metadata:
       labels:
         copper: ekiden-token
+        app: ekiden
     spec:
       containers:
         - name: ekiden-compute
