@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-beacon-dummy"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden dummy random beacon"
 keywords = ["ekiden"]
@@ -8,8 +8,9 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 byteorder = "1.2.1"
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-beacon-base = { path = "../base", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-beacon-base = { path = "../base", version = "0.2.0-alpha" }
+log = "0.4"
 
 [dev-dependencies]
 rustc-hex = "1.0"

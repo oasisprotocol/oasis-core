@@ -1,4 +1,6 @@
 #![feature(use_extern_macros)]
+#![feature(clone_closures)]
+#![feature(try_from)]
 
 extern crate sgx_types;
 
@@ -15,6 +17,7 @@ extern crate protobuf;
 extern crate reqwest;
 extern crate thread_local;
 
+extern crate ekiden_beacon_base;
 extern crate ekiden_compute_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
@@ -22,15 +25,17 @@ extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
+extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
+mod consensus;
+mod group;
+mod handlers;
 mod ias;
 mod instrumentation;
-mod handlers;
-mod server;
-mod worker;
 mod node;
-mod consensus;
+mod services;
+mod worker;
 
 // Everything above should be moved into a library, while everything below should be in the binary.
 
@@ -38,14 +43,14 @@ mod consensus;
 extern crate clap;
 extern crate pretty_env_logger;
 
-extern crate ekiden_beacon_dummy;
-extern crate ekiden_consensus_dummy;
-extern crate ekiden_registry_dummy;
-extern crate ekiden_scheduler_dummy;
-extern crate ekiden_storage_dummy;
+extern crate ekiden_consensus_client;
+extern crate ekiden_registry_client;
+extern crate ekiden_scheduler_client;
+extern crate ekiden_storage_frontend;
 
 use std::fs::File;
 use std::io::{Read, Write};
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
@@ -62,6 +67,14 @@ use self::consensus::ConsensusConfiguration;
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, StorageConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
+
+/// Validate an IP address + port string.
+fn validate_addr_port(v: String) -> Result<(), String> {
+    match v.parse::<SocketAddr>() {
+        Ok(_) => return Ok(()),
+        Err(err) => return Err(err.to_string()),
+    }
+}
 
 fn main() {
     let matches = App::new("Ekiden Compute Node")
@@ -113,17 +126,29 @@ fn main() {
                 .takes_value(true)
                 .default_value("9003"),
         )
+        // TODO: Remove this once we handle backend configuration properly.
         .arg(
-            Arg::with_name("consensus-host")
-                .long("consensus-host")
+            Arg::with_name("dummy-host")
+                .long("dummy-host")
+                .help("Shared dummy node host")
                 .takes_value(true)
                 .default_value("127.0.0.1"),
         )
+        // TODO: Remove this once we handle backend configuration properly.
         .arg(
-            Arg::with_name("consensus-port")
-                .long("consensus-port")
+            Arg::with_name("dummy-port")
+                .long("dummy-port")
+                .help("Shared dummy node port")
                 .takes_value(true)
-                .default_value("9002"),
+                .default_value("42261"),
+        )
+        // TODO: Remove this once we have independent contract registration.
+        .arg(
+            Arg::with_name("compute-replicas")
+                .long("compute-replicas")
+                .help("Number of replicas in the computation group")
+                .takes_value(true)
+                .default_value("1"),
         )
         .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
         .arg(
@@ -169,6 +194,20 @@ fn main() {
             Arg::with_name("key-pair")
                 .long("key-pair")
                 .help("Path to key pair for this compute node (if not set, a new key pair will be generated)")
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("register-addr")
+                .long("register-addr")
+                .help("Address/port(s) to use when registering this compute node (if not set, all non-loopback local interfaces will be used).")
+                .takes_value(true)
+                .multiple(true)
+                .validator(validate_addr_port)
+        )
+        .arg(
+            Arg::with_name("forwarded-rpc-timeout")
+                .long("forwarded-rpc-timeout")
+                .help("Time limit in seconds for forwarded gRPC calls. If an RPC takes longer than this, we treat it as failed.")
                 .takes_value(true)
         )
         .get_matches();
@@ -219,6 +258,12 @@ fn main() {
     let mut node = ComputeNode::new(ComputeNodeConfiguration {
         grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or_else(|e| e.exit()),
         port: value_t!(matches, "port", u16).unwrap_or(9001),
+        // TODO: Remove this once we handle backend configuration properly.
+        dummy_host: matches.value_of("dummy-host").unwrap().to_string(),
+        // TODO: Remove this once we handle backend configuration properly.
+        dummy_port: value_t!(matches, "dummy-port", u16).unwrap_or_else(|e| e.exit()),
+        // TODO: Remove this once we have independent contract registration.
+        compute_replicas: value_t!(matches, "compute-replicas", u64).unwrap_or_else(|e| e.exit()),
         // Consensus configuration.
         consensus: ConsensusConfiguration {
             signer: signer,
@@ -256,6 +301,14 @@ fn main() {
                             .to_owned(),
                     )
                 },
+                forwarded_rpc_timeout: if matches.is_present("rpc-timeout") {
+                    Some(std::time::Duration::new(
+                        value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
+                        0,
+                    ))
+                } else {
+                    None
+                },
                 // Key manager configuration.
                 key_manager: if !matches.is_present("disable-key-manager") {
                     Some(KeyManagerConfiguration {
@@ -266,6 +319,11 @@ fn main() {
                     None
                 },
             }
+        },
+        register_addrs: if matches.is_present("register-addr") {
+            Some(values_t_or_exit!(matches, "register-addr", SocketAddr))
+        } else {
+            None
         },
     }).expect("failed to initialize compute node");
 

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_registry_api as api;
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::entity_backend::{EntityRegistryBackend, RegistryEvent};
 use ekiden_common::bytes::B256;
@@ -25,12 +25,9 @@ impl EntityRegistryService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::EntityRegistry for EntityRegistryService {
@@ -225,10 +222,13 @@ impl api::EntityRegistry for EntityRegistryService {
     fn get_nodes(
         &self,
         ctx: RpcContext,
-        _req: api::NodesRequest,
+        req: api::NodesRequest,
         sink: UnarySink<api::NodesResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<Vec<Node>>, Error> { Ok(self.inner.get_nodes()) };
+        let f = move || -> Result<BoxFuture<Vec<Node>>, Error> {
+            let epoch = req.get_epoch();
+            Ok(self.inner.get_nodes(epoch))
+        };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(node) => {
@@ -301,6 +301,23 @@ impl api::EntityRegistry for EntityRegistryService {
                 };
                 (r, WriteFlags::default())
             });
+        ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
+    }
+
+    fn watch_node_list(
+        &self,
+        ctx: RpcContext,
+        _req: api::WatchNodeListRequest,
+        sink: ServerStreamingSink<api::WatchNodeListResponse>,
+    ) {
+        let f = self.inner.watch_node_list().map(
+            |(epoch, nodes)| -> (api::WatchNodeListResponse, WriteFlags) {
+                let mut r = api::WatchNodeListResponse::new();
+                r.set_epoch(epoch);
+                r.set_node(nodes.iter().map(|n| n.to_owned().into()).collect());
+                (r, WriteFlags::default())
+            },
+        );
         ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
     }
 }

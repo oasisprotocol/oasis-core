@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use grpcio::{Channel, Environment};
 
+use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::node::Node;
@@ -34,8 +35,9 @@ impl ConsensusBackend for ConsensusClient {
         // TODO
     }
 
-    fn get_latest_block(&self) -> BoxFuture<Block> {
-        let req = api::LatestBlockRequest::new();
+    fn get_latest_block(&self, contract_id: B256) -> BoxFuture<Block> {
+        let mut req = api::LatestBlockRequest::new();
+        req.set_contract_id(contract_id.to_vec());
         match self.0.get_latest_block_async(&req) {
             Ok(f) => Box::new(
                 f.map(|r| Block::try_from(r.get_block().to_owned()).unwrap())
@@ -45,8 +47,9 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn get_blocks(&self) -> BoxStream<Block> {
-        let req = api::BlockRequest::new();
+    fn get_blocks(&self, contract_id: B256) -> BoxStream<Block> {
+        let mut req = api::BlockRequest::new();
+        req.set_contract_id(contract_id.to_vec());
         match self.0.get_blocks(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => Ok(Block::try_from(r.get_block().to_owned())?),
@@ -56,8 +59,9 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn get_events(&self) -> BoxStream<Event> {
-        let req = api::EventRequest::new();
+    fn get_events(&self, contract_id: B256) -> BoxStream<Event> {
+        let mut req = api::EventRequest::new();
+        req.set_contract_id(contract_id.to_vec());
         match self.0.get_events(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => match r.get_event() {
@@ -72,8 +76,9 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn commit(&self, commitment: Commitment) -> BoxFuture<()> {
+    fn commit(&self, contract_id: B256, commitment: Commitment) -> BoxFuture<()> {
         let mut req = api::CommitRequest::new();
+        req.set_contract_id(contract_id.to_vec());
         req.set_commitment(commitment.into());
         match self.0.commit_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),
@@ -81,8 +86,9 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn reveal(&self, reveal: Reveal<Header>) -> BoxFuture<()> {
+    fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()> {
         let mut req = api::RevealRequest::new();
+        req.set_contract_id(contract_id.to_vec());
         req.set_header(reveal.value.into());
         req.set_nonce(reveal.nonce.to_vec());
         req.set_signature(reveal.signature.into());
@@ -92,9 +98,10 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn submit(&self, block: Signed<Block>) -> BoxFuture<()> {
+    fn submit(&self, contract_id: B256, block: Signed<Block>) -> BoxFuture<()> {
         let mut req = api::SubmitRequest::new();
-        req.set_block(block.get_value_unsafe().to_owned().into());
+        req.set_contract_id(contract_id.to_vec());
+        req.set_block(block.get_value_unsafe().unwrap().into());
         req.set_signature(block.signature.into());
         match self.0.submit_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),

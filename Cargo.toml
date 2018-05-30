@@ -26,6 +26,7 @@ members = [
     "storage/dummy",
     "storage/frontend",
     "storage/persistent",
+    "storage/lru_cache",
 
     # Enclave loader (+ attestation).
     "enclave/common",
@@ -71,6 +72,7 @@ members = [
     # Registry.
     "registry/api",
     "registry/base",
+    "registry/client",
     "registry/dummy",
 
     # Scheduler.

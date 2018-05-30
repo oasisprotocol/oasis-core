@@ -1,18 +1,18 @@
 [package]
 name = "ekiden-consensus-base"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden consensus interface traits"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.1.0-alpha.4" }
-ekiden-storage-base = { path = "../../storage/base", version = "0.1.0-alpha.4" }
-ekiden-consensus-api = { path = "../api", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
+ekiden-consensus-api = { path = "../api", version = "0.2.0-alpha" }
 protobuf = "1.4.2"
 grpcio = "0.2.2"
-serde = "1.0"
+serde = "=1.0.59"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"

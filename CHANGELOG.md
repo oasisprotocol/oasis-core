@@ -1,6 +1,7 @@
-# Unreleased
+# 0.1.0
 
 * **BACKWARD INCOMPATIBLE:** Remove old consensus node.
+* **BACKWARD INCOMPATIBLE:** Compute node now requires the shared dummy node.
 * gRPC message types and conversion convention established.
 * Registry interface / centralized implementation added. (For entities and contracts)
 * Epoch interface / implementation added.
@@ -18,6 +19,22 @@
 * Extend `beacon::base::RandomBeacon` to enable event driven beacons.
 * Extend `scheduler::base::Scheduler` to enable event driven scheduling.
 * Add `common::futures::GrpcExecutor`.
+* Leader now forwards batches to workers in compute replica group.
+* Add `into_box`, `log_errors_and_discard` to `FutureExt` trait and `for_each_log_errors`
+  to StreamExt trait to simplify stream processing.
+* Clients using `client-utils` now automatically discover the compute replica group leader.
+* Change consensus interface to support multiple contracts.
+* Use Merkle Patricia tree for state storage.
+* Dockerfile includes truffle for solidity development.
+* Add LRU cache storage backend that can wrap any existing storage backend to add an
+  in-memory cache.
+* RPCs can be configured to time out, treating compute nodes that
+  don't respond in time as failing. To enable timeouts, pass
+  `--rpc-timeout SECONDS` in clients that use client-utils and
+  `--forwarded-rpc-timeout SECONDS` in ekiden-compute.
+* EntityRegistry support for per-epoch node lists.  `get_nodes()` now takes an
+  epoch, and a `watch_node_list()` routine to subscribe to node list generation
+  has been added.
 
 # 0.1.0-alpha.4
 

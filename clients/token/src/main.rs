@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate clap;
 extern crate futures;
-extern crate grpcio;
 extern crate rand;
 
 #[macro_use]

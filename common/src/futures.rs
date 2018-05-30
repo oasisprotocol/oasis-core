@@ -45,6 +45,33 @@ pub trait FutureExt: Future {
     fn wait(self) -> Result<Self::Item, Self::Error>
     where
         Self: Sized;
+
+    /// Convenience function for turning this future into a trait object.
+    fn into_box(self) -> Box<Future<Item = Self::Item, Error = Self::Error> + Send>
+    where
+        Self: Sized + Send + 'static,
+    {
+        Box::new(self)
+    }
+
+    /// Log errors produced by a future and discard them.
+    fn log_errors_and_discard(
+        self,
+        log_target: &'static str,
+        log_message: &'static str,
+    ) -> Box<Future<Item = (), Error = ()> + Send>
+    where
+        Self: Sized + Send + 'static,
+        Self::Error: ::std::fmt::Debug,
+    {
+        self.then(move |result| {
+            if let Err(error) = result {
+                warn!(target: log_target, "{}: {:?}", log_message, error);
+            }
+
+            future::ok(())
+        }).into_box()
+    }
 }
 
 impl<F: Future> FutureExt for F {
@@ -62,6 +89,44 @@ impl<F: Future> FutureExt for F {
         }
     }
 }
+
+/// Stream trait with extra helper methods.
+pub trait StreamExt: Stream {
+    /// Convenience function for turning this stream into a trait object.
+    fn into_box(self) -> Box<Stream<Item = Self::Item, Error = Self::Error> + Send>
+    where
+        Self: Sized + Send + 'static,
+    {
+        Box::new(self)
+    }
+
+    /// A wrapper for `for_each` which logs and discards all errors.
+    ///
+    /// This ensures that processing of the stream will continue even if errors are
+    /// introduced.
+    fn for_each_log_errors<F, U>(
+        self,
+        log_target: &'static str,
+        log_message: &'static str,
+        f: F,
+    ) -> Box<Future<Item = (), Error = ()> + Send>
+    where
+        F: Fn(Self::Item) -> U + Send + 'static,
+        U: FutureExt<Item = (), Error = Self::Error> + Send + 'static,
+        Self: Sized + Send + 'static,
+        Self::Error: ::std::fmt::Debug,
+    {
+        self.for_each(move |item| {
+            f(item)
+                .log_errors_and_discard(log_target, log_message)
+                .map_err(|()| -> Self::Error {
+                    unreachable!();
+                })
+        }).log_errors_and_discard(log_target, log_message)
+    }
+}
+
+impl<S: Stream> StreamExt for S {}
 
 /// Executor that uses the gRPC environment for execution.
 #[cfg(not(target_env = "sgx"))]

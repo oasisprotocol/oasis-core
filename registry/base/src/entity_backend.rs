@@ -1,7 +1,8 @@
 //! Registry backend interface.
 use ekiden_common::bytes::{B256, B64};
 use ekiden_common::entity::Entity;
-use ekiden_common::futures::{BoxFuture, BoxStream};
+use ekiden_common::epochtime::EpochTime;
+use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 
@@ -23,6 +24,9 @@ pub enum RegistryEvent<T> {
 
 /// Registry backend implementing the Ekiden registry interface.
 pub trait EntityRegistryBackend: Send + Sync {
+    /// Start the async event source associated with the beacon;
+    fn start(&self, executor: &mut Executor);
+
     /// Register and or update an entity with the registry.
     ///
     /// The signature should be made using `REGISTER_ENTITY_SIGNATURE_CONTEXT`
@@ -51,11 +55,18 @@ pub trait EntityRegistryBackend: Send + Sync {
     fn get_node(&self, id: B256) -> BoxFuture<Node>;
 
     /// Get a list of all registered nodes.
-    fn get_nodes(&self) -> BoxFuture<Vec<Node>>;
+    fn get_nodes(&self, epoch: EpochTime) -> BoxFuture<Vec<Node>>;
 
     /// Get a list of nodes registered to an entity id.
     fn get_nodes_for_entity(&self, id: B256) -> BoxFuture<Vec<Node>>;
 
     /// Watch for changes in node registration.
     fn watch_nodes(&self) -> BoxStream<RegistryEvent<Node>>;
+
+    /// Watch for the per-epoch stable node lists.  Upon subscription, the
+    /// node list for the current epoch will be sent immediately if available.
+    ///
+    /// Each node list will be sorted by node ID in lexographically ascending
+    /// order.
+    fn watch_node_list(&self) -> BoxStream<(EpochTime, Vec<Node>)>;
 }

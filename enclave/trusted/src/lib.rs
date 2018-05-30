@@ -36,5 +36,5 @@ macro_rules! enclave_init {
             // of the resulting library is removed by the linker and thus no
             // initialization is done.
         }
-    }
+    };
 }

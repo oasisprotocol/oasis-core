@@ -74,16 +74,13 @@ macro_rules! profile_block {
             &name[6..name.len() - 4]
         };
 
-        let _guard = $crate::profiling::ProfileGuard::new(
-            env!("CARGO_PKG_NAME"),
-            &name,
-            &$block_name,
-        );
+        let _guard =
+            $crate::profiling::ProfileGuard::new(env!("CARGO_PKG_NAME"), &name, &$block_name);
     };
 
     () => {
         profile_block!("");
-    }
+    };
 }
 
 /// Profile a given block.
@@ -92,7 +89,7 @@ macro_rules! profile_block {
 #[cfg(not(feature = "profiling"))]
 #[macro_export]
 macro_rules! profile_block {
-    ($block_name:expr) => ();
+    ($block_name:expr) => {};
 
-    () => ()
+    () => {};
 }

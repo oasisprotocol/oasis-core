@@ -1,17 +1,17 @@
 use std::convert::{Into, TryFrom};
 use std::sync::Arc;
 
-use ekiden_common::futures::{future, BoxFuture, Future, Stream};
-use ekiden_registry_api as api;
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use protobuf::RepeatedField;
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 
-use super::contract_backend::ContractRegistryBackend;
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
+use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_common::signature::{Signature, Signed};
+use ekiden_registry_api as api;
+
+use super::contract_backend::ContractRegistryBackend;
 
 #[derive(Clone)]
 pub struct ContractRegistryService {
@@ -25,12 +25,9 @@ impl ContractRegistryService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::ContractRegistry for ContractRegistryService {
@@ -101,7 +98,7 @@ impl api::ContractRegistry for ContractRegistryService {
             .get_contracts()
             .map(|res| -> (api::ContractsResponse, WriteFlags) {
                 let mut r = api::ContractsResponse::new();
-                r.set_contract(RepeatedField::from_vec(vec![res.into()]));
+                r.set_contract(res.into());
                 (r, WriteFlags::default())
             });
         ctx.spawn(f.forward(sink).then(|_f| future::ok(())));

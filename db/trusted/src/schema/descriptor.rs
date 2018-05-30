@@ -2,8 +2,8 @@
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_cbor;
 
 use super::super::{Database, DatabaseHandle};

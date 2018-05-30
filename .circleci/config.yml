@@ -1,8 +1,9 @@
+
 version: 2
 jobs:
   build:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.5
+      - image: ekiden/testing:0.1.0
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -28,16 +29,19 @@ jobs:
           cd target/debug
           mkdir ../cov
           for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
-            mkdir ../cov/$bin
-            kcov \
-              --exclude-pattern=$HOME/.cargo,/usr/lib \
-              --verify \
-              ../cov/$bin \
-              ./$bin \
-              --test-threads 1
+            ./$bin --test-threads 1
           done
+          # XXX(willscott): coverage disabled due breakage on upgrade to 18.04
+          #  mkdir ../cov/$bin
+          #  kcov \
+          #    --exclude-pattern=$HOME/.cargo,/usr/lib \
+          #    --verify \
+          #    ../cov/$bin \
+          #    ./$bin \
+          #    --test-threads 1
+          #done
       # Upload coverage info.
-      - run: codecov
+      #- run: codecov
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
       # compare against them.
@@ -56,11 +60,7 @@ jobs:
           destination: benchmarks
 
       # Install ekiden-tools.
-      - run: cargo install --force --path tools ekiden-tools
-      # Build key manager contract.
-      - run:
-          command: cargo ekiden build-contract
-          working_directory: contracts/key-manager
+      - run: cargo install --force --path tools
       # Build token contract.
       - run:
           command: cargo ekiden build-contract --output-identity
@@ -70,34 +70,63 @@ jobs:
       # Ensure everything is built. This needs to be after the key manager contract is built.
       - run: cargo build
       # Check style. This needs to be after everything is built.
-      - run: cargo fmt -- --write-mode=diff
+      - run: cargo fmt -- --write-mode=check
 
       # Contract end-to-end tests.
 
-      # Start key manager compute node.
+      # Start dummy node.
       - run:
           command: |
-            ./target/debug/ekiden-compute \
-              -p 9003 \
-              --disable-key-manager \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              target/contract/ekiden-key-manager.so
+            ./target/debug/ekiden-node-dummy --time-source mockrpc
           background: true
-      # Start token compute node.
+      # Start token compute nodes.
       - run:
           command: |
+            sleep 1
             ./target/debug/ekiden-compute \
               --no-persist-identity \
               --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10001 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            sleep 2
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10002 \
+              target/contract/token.so
+          background: true
+      - run:
+          command: |
+            sleep 3
+            ./target/debug/ekiden-compute \
+              --no-persist-identity \
+              --max-batch-size 1 \
+              --compute-replicas 3 \
+              --port 10003 \
               target/contract/token.so
           background: true
       # Start token client.
-      - run: sleep 10; ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+      - run: |
+          # Sleep so everything gets ready.
+          sleep 10
+
+          # Advance epoch to elect a new committee.
+          ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
+
+          # Sleep some more.
+          sleep 5
+
+          # Run the client.
+          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
 
   deploy:
     docker:
-      - image: ekiden/testing:0.1.0-alpha.5
+      - image: ekiden/testing:0.1.0
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -119,7 +148,7 @@ jobs:
           REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
-          kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
+          kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 
 workflows:

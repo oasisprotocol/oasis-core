@@ -1,19 +1,20 @@
+//! Client-facing service.
 use std::error::Error;
 use std::sync::Arc;
 
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
-use ekiden_compute_api::{CallContractRequest, CallContractResponse, Compute,
-                         WaitContractCallRequest, WaitContractCallResponse};
+use ekiden_compute_api::{CallContractRequest, CallContractResponse, WaitContractCallRequest,
+                         WaitContractCallResponse, Web3};
 use ekiden_core::bytes::H256;
 use ekiden_core::futures::Future;
 
-use super::consensus::ConsensusFrontend;
-use super::instrumentation;
-use super::worker::Worker;
+use super::super::consensus::ConsensusFrontend;
+use super::super::instrumentation;
+use super::super::worker::Worker;
 
-struct ComputeServiceInner {
+struct Web3ServiceInner {
     /// Worker.
     worker: Arc<Worker>,
     /// Consensus frontend.
@@ -23,15 +24,15 @@ struct ComputeServiceInner {
 }
 
 #[derive(Clone)]
-pub struct ComputeService {
-    inner: Arc<ComputeServiceInner>,
+pub struct Web3Service {
+    inner: Arc<Web3ServiceInner>,
 }
 
-impl ComputeService {
+impl Web3Service {
     /// Create new compute server instance.
     pub fn new(worker: Arc<Worker>, consensus_frontend: Arc<ConsensusFrontend>) -> Self {
-        ComputeService {
-            inner: Arc::new(ComputeServiceInner {
+        Web3Service {
+            inner: Arc::new(Web3ServiceInner {
                 worker,
                 consensus_frontend,
                 ins: instrumentation::HandlerMetrics::new(),
@@ -40,7 +41,7 @@ impl ComputeService {
     }
 }
 
-impl Compute for ComputeService {
+impl Web3 for Web3Service {
     fn call_contract(
         &self,
         ctx: grpcio::RpcContext,

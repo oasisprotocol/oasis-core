@@ -6,7 +6,7 @@ use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 /// Implement binary operator for uint type wrapper.
 macro_rules! impl_op_for_wrapper {
-    ($type: ident, $op: ident, $name: ident) => {
+    ($type:ident, $op:ident, $name:ident) => {
         impl $type<$name> for $name {
             type Output = $name;
 
@@ -15,12 +15,12 @@ macro_rules! impl_op_for_wrapper {
                 $name((self.0).$op(other.0))
             }
         }
-    }
+    };
 }
 
 /// Wrap given bigint::uint type so we can implement external traits on it.
 macro_rules! wrap_uint_type {
-    ($name: ident, $size: expr) => {
+    ($name:ident, $size:expr) => {
         #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
         pub struct $name(pub uint::$name);
 
@@ -53,7 +53,7 @@ macro_rules! wrap_uint_type {
 
         impl<T> From<T> for $name
         where
-            uint::$name: From<T>
+            uint::$name: From<T>,
         {
             fn from(value: T) -> Self {
                 $name(value.into())
@@ -93,15 +93,16 @@ macro_rules! wrap_uint_type {
                 $name(self.0.shr(shift))
             }
         }
-    }
+    };
 }
 
 /// Implement `Serialize` trait for given uint type.
 macro_rules! impl_serialize_for_uint {
-    ($name: ident, $size: expr) => {
+    ($name:ident, $size:expr) => {
         impl Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where S: Serializer
+            where
+                S: Serializer,
             {
                 let leading_empty_bytes = $size - (self.bits() + 7) / 8;
                 let mut buffer = [0u8; $size];
@@ -109,12 +110,12 @@ macro_rules! impl_serialize_for_uint {
                 buffer[leading_empty_bytes..].serialize(serializer)
             }
         }
-    }
+    };
 }
 
 /// Implement `Deserialize` trait for given uint type.
 macro_rules! impl_deserialize_for_uint {
-    ($name: ident, $size: expr) => {
+    ($name:ident, $size:expr) => {
         impl<'de> Deserialize<'de> for $name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
@@ -134,7 +135,7 @@ macro_rules! impl_deserialize_for_uint {
                 Ok($name::from(buffer_with_leading))
             }
         }
-    }
+    };
 }
 
 // Define wrapper types so we can implement traits on them.
@@ -172,7 +173,7 @@ mod test {
                 let value_decoded: $name = serde_cbor::from_slice(&value_encoded).unwrap();
                 assert_eq!(value_decoded, value);
             }
-        }
+        };
     }
 
     define_serde_test!(test_serde_u128, U128);

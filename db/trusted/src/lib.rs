@@ -16,10 +16,11 @@ extern crate serde_derive;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_trusted;
-extern crate ekiden_key_manager_client;
 extern crate ekiden_storage_base;
+#[cfg(not(target_env = "sgx"))]
+extern crate ekiden_storage_dummy;
+extern crate ekiden_storage_lru;
 
-pub mod aead;
 #[doc(hidden)]
 pub mod ecalls;
 #[cfg(target_env = "sgx")]
@@ -28,6 +29,7 @@ pub mod untrusted;
 pub mod handle;
 pub use handle::DatabaseHandle;
 
+pub mod patricia_trie;
 #[macro_use]
 pub mod schema;
 

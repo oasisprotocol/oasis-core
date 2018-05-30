@@ -5,8 +5,8 @@ use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_scheduler_api as api;
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use protobuf::RepeatedField;
 
 use super::backend::{Committee, Scheduler};
@@ -23,12 +23,9 @@ impl SchedulerService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::Scheduler for SchedulerService {
@@ -39,8 +36,6 @@ impl api::Scheduler for SchedulerService {
         sink: UnarySink<api::CommitteeResponse>,
     ) {
         let f = move || -> Result<BoxFuture<Vec<Committee>>, Error> {
-            // TODO: should api take full conttract, versus just ID?
-            // or should we fill in the rest of the contract from registry here?
             let contract_id = B256::from_slice(req.get_contract_id());
             Ok(self.inner.get_committees(contract_id))
         };

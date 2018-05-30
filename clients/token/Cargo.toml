@@ -1,6 +1,6 @@
 [package]
 name = "token-client"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = [
     "Jernej Kos <jernej@kos.mx>"
 ]
@@ -18,4 +18,3 @@ token-api = { path = "../../contracts/token/api" }
 clap = "2.29.1"
 rand = "0.4"
 futures = "0.1"
-grpcio = "0.2.2"

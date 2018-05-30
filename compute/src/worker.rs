@@ -2,9 +2,10 @@ use std::borrow::Borrow;
 use std::fmt::Write;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use grpcio;
 use protobuf;
@@ -21,8 +22,8 @@ use ekiden_core::futures::sync::oneshot;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_storage_base::StorageBackend;
-use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 use ekiden_untrusted::rpc::router::RpcRouter;
+use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
 use super::consensus::ConsensusFrontend;
 use super::handlers;
@@ -237,6 +238,9 @@ pub struct WorkerConfiguration {
     pub contract_filename: String,
     /// Optional saved identity path.
     pub saved_identity_path: Option<PathBuf>,
+    /// Time limit for forwarded gRPC calls. If an RPC takes longer
+    /// than this, we treat it as failed.
+    pub forwarded_rpc_timeout: Option<Duration>,
     /// Key manager configuration.
     pub key_manager: Option<KeyManagerConfiguration>,
 }
@@ -268,6 +272,7 @@ impl Worker {
                 router.add_handler(handlers::ContractForwarder::new(
                     ClientEndpoint::KeyManager,
                     grpc_environment.clone(),
+                    config.forwarded_rpc_timeout,
                     key_manager.host.clone(),
                     key_manager.port,
                 ));

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 
 use ekiden_common::bytes::B256;
-use ekiden_common::epochtime::SystemTimeSource;
+use ekiden_common::epochtime::local::SystemTimeSource;
 use ekiden_common::futures::Future;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_persistent::PersistentStorageBackend;

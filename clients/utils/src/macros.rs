@@ -1,96 +1,139 @@
+// Re-exports needed in exported macros.
+pub extern crate grpcio;
+
+pub extern crate ekiden_core;
+pub extern crate ekiden_registry_base;
+pub extern crate ekiden_registry_client;
+pub extern crate ekiden_rpc_client;
+pub extern crate ekiden_scheduler_base;
+pub extern crate ekiden_scheduler_client;
+
 #[macro_export]
 macro_rules! default_app {
     () => {
         App::new(concat!(crate_name!(), " client"))
-            .about(crate_description!())
-            .author(crate_authors!())
-            .version(crate_version!())
-            .arg(Arg::with_name("host")
-                 .long("host")
-                 .short("h")
-                 .takes_value(true)
-                 .default_value("127.0.0.1")
-                 .display_order(1))
-            .arg(Arg::with_name("port")
-                 .long("port")
-                 .short("p")
-                 .takes_value(true)
-                 .default_value("9001")
-                 .display_order(2))
-            .arg(Arg::with_name("nodes")
-                .long("nodes")
-                .help("A list of comma-separated compute node addresses (e.g. host1:9001,host2:9004)")
-                .takes_value(true))
-            .arg(Arg::with_name("mr-enclave")
-                 .long("mr-enclave")
-                 .value_name("MRENCLAVE")
-                 .help("MRENCLAVE in hex format")
-                 .takes_value(true)
-                 .required(true)
-                 .display_order(3))
+                            .about(crate_description!())
+                            .author(crate_authors!())
+                            .version(crate_version!())
+                            // TODO: Change this once we handle backend configuration properly.
+                            .arg(
+                                Arg::with_name("dummy-host")
+                                    .long("dummy-host")
+                                    .help("Shared dummy node host")
+                                    .takes_value(true)
+                                    .default_value("127.0.0.1"),
+                            )
+                            // TODO: Change this once we handle backend configuration properly.
+                            .arg(
+                                Arg::with_name("dummy-port")
+                                    .long("dummy-port")
+                                    .help("Shared dummy node port")
+                                    .takes_value(true)
+                                    .default_value("42261"),
+                            )
+                            .arg(Arg::with_name("mr-enclave")
+                                 .long("mr-enclave")
+                                 .value_name("MRENCLAVE")
+                                 .help("MRENCLAVE in hex format")
+                                 .takes_value(true)
+                                 .required(true)
+                                 .display_order(3))
+                            .arg(Arg::with_name("rpc-timeout")
+                                 .long("rpc-timeout")
+                                 .value_name("RPC_TIMEOUT")
+                                 .help("Mark nodes that take longer than this many seconds as failed")
+                                 .takes_value(true))
     };
 }
 
 #[macro_export]
 macro_rules! default_backend {
     ($args:ident) => {{
+        use std::sync::Arc;
+
+        use $crate::macros::ekiden_core::bytes::B256;
+        use $crate::macros::ekiden_registry_base::EntityRegistryBackend;
+        use $crate::macros::ekiden_registry_client::EntityRegistryClient;
+        use $crate::macros::ekiden_rpc_client::backend::Web3RpcClientBackend;
+        use $crate::macros::ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
+        use $crate::macros::ekiden_scheduler_client::SchedulerClient;
+        use $crate::macros::grpcio;
+
         // Create gRPC event loop.
-        let grpc_environment = std::sync::Arc::new(grpcio::EnvBuilder::new().build());
+        let grpc_environment = Arc::new(grpcio::EnvBuilder::new().build());
 
-        if $args.is_present("nodes") {
-            // Pool of compute nodes.
-            use std::str::FromStr;
-            use ekiden_rpc_client::backend::web3::ComputeNodeAddress;
+        // Perform computation group leader discovery.
+        // TODO: Change this once we handle backend configuration properly.
+        let channel = grpcio::ChannelBuilder::new(grpc_environment.clone()).connect(&format!(
+            "{}:{}",
+            $args.value_of("dummy-host").unwrap(),
+            value_t!($args, "dummy-port", u16).unwrap(),
+        ));
+        let scheduler = SchedulerClient::new(channel.clone());
+        let entity_registry = EntityRegistryClient::new(channel.clone());
 
-            let nodes: Vec<ComputeNodeAddress> = $args
-                .value_of("nodes")
-                .unwrap()
-                .split(",")
-                .map(|address: &str| {
-                    let parts: Vec<&str> = address.split(":").collect();
+        // Get computation group leader node.
+        let contract_id = value_t!($args, "mr-enclave", B256).unwrap_or_else(|e| e.exit());
+        let committees = scheduler
+            .get_committees(contract_id)
+            .wait()
+            .expect("failed to fetch committees from scheduler");
+        let committee = committees
+            .iter()
+            .filter(|committee| committee.kind == CommitteeType::Compute)
+            .next()
+            .expect("missing compute committee");
+        let leader = committee
+            .members
+            .iter()
+            .filter(|member| member.role == Role::Leader)
+            .next()
+            .expect("missing compute committee leader");
 
-                    ComputeNodeAddress {
-                        host: parts[0].to_string(),
-                        port: u16::from_str(&parts[1]).unwrap(),
-                    }
-                })
-                .collect();
+        // Resolve leader node based on its public key.
+        let node = entity_registry
+            .get_node(leader.public_key)
+            .wait()
+            .expect("failed to resolve leader node");
+        let address = node.addresses.first().expect("no address for leader node");
 
-            ekiden_rpc_client::backend::Web3RpcClientBackend::new_pool(
-                grpc_environment,
-                &nodes
-            ).unwrap()
-        } else {
-            ekiden_rpc_client::backend::Web3RpcClientBackend::new(
-                grpc_environment,
-                $args.value_of("host").unwrap(),
-                value_t!($args, "port", u16).unwrap_or(9001)
-            ).unwrap()
-        }
+        Web3RpcClientBackend::new(
+            grpc_environment,
+            if $args.is_present("rpc-timeout") {
+                Some(std::time::Duration::new(
+                    value_t_or_exit!($args, "rpc-timeout", u64),
+                    0,
+                ))
+            } else {
+                None
+            },
+            &format!("{}", address.ip()),
+            address.port(),
+        ).unwrap()
     }};
 }
 
 #[macro_export]
 macro_rules! contract_client {
-    ($signer:ident, $contract:ident, $args:ident, $backend:ident) => {
+    ($signer:ident, $contract:ident, $args:ident, $backend:ident) => {{
+        use std::sync::Arc;
+
+        use $crate::macros::ekiden_core::enclave::quote::MrEnclave;
+
         $contract::Client::new(
-            ::std::sync::Arc::new($backend),
-            value_t!($args, "mr-enclave", ekiden_core::enclave::quote::MrEnclave).unwrap_or_else(|e| e.exit()),
+            Arc::new($backend),
+            value_t!($args, "mr-enclave", MrEnclave).unwrap_or_else(|e| e.exit()),
             $signer,
         )
-    };
-    ($signer:ident, $contract:ident, $args:ident) => {
-        {
-            let backend = default_backend!($args);
-            contract_client!($signer, $contract, $args, backend)
-        }
-    };
-    ($signer:ident, $contract:ident) => {
-        {
-            let args = default_app!().get_matches();
-            contract_client!($signer, $contract, args)
-        }
-    };
+    }};
+    ($signer:ident, $contract:ident, $args:ident) => {{
+        let backend = default_backend!($args);
+        contract_client!($signer, $contract, $args, backend)
+    }};
+    ($signer:ident, $contract:ident) => {{
+        let args = default_app!().get_matches();
+        contract_client!($signer, $contract, args)
+    }};
 }
 
 #[cfg(feature = "benchmark")]
@@ -99,17 +142,21 @@ macro_rules! benchmark_client {
     ($signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
         let args = std::sync::Arc::new(
             default_app!()
-                .arg(Arg::with_name("benchmark-threads")
-                    .long("benchmark-threads")
-                    .help("Number of benchmark threads")
-                    .takes_value(true)
-                    .default_value("4"))
-                .arg(Arg::with_name("benchmark-runs")
-                    .long("benchmark-runs")
-                    .help("Number of scenario runs")
-                    .takes_value(true)
-                    .default_value("1000"))
-            .get_matches()
+                .arg(
+                    Arg::with_name("benchmark-threads")
+                        .long("benchmark-threads")
+                        .help("Number of benchmark threads")
+                        .takes_value(true)
+                        .default_value("4"),
+                )
+                .arg(
+                    Arg::with_name("benchmark-runs")
+                        .long("benchmark-runs")
+                        .help("Number of scenario runs")
+                        .takes_value(true)
+                        .default_value("1000"),
+                )
+                .get_matches(),
         );
 
         let benchmark = $crate::benchmark::Benchmark::new(
@@ -118,9 +165,9 @@ macro_rules! benchmark_client {
             move || {
                 let args = args.clone();
                 contract_client!($signer, $contract, args)
-            }
+            },
         );
 
         benchmark.run($init, $scenario, $finalize)
-    }}
+    }};
 }
