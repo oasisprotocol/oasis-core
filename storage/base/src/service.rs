@@ -73,7 +73,10 @@ impl api::Storage for StorageService {
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(error) => {
+                error!("Failed to insert data to storage backend: {:?}", error);
+                invalid!(sink, Internal, error)
+            }
         }).map_err(|_e| ()));
     }
 }

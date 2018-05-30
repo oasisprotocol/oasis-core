@@ -1,5 +1,4 @@
 //! Storage gRPC client.
-use std::error::Error as StdError;
 use std::sync::Arc;
 
 use grpcio::{Channel, Environment};
@@ -31,9 +30,9 @@ impl StorageBackend for StorageClient {
         match self.0.get_async(&req) {
             Ok(f) => Box::new(
                 f.map(|mut resp| -> Vec<u8> { resp.take_data() })
-                    .map_err(|e| Error::new(e.description())),
+                    .map_err(|error| Error::new(format!("{:?}", error))),
             ),
-            Err(e) => Box::new(future::err(Error::new(e.description()))),
+            Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
     }
 
@@ -43,8 +42,11 @@ impl StorageBackend for StorageClient {
         req.set_expiry(expiry);
 
         match self.0.insert_async(&req) {
-            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),
-            Err(e) => Box::new(future::err(Error::new(e.description()))),
+            Ok(f) => Box::new(
+                f.map(|_r| ())
+                    .map_err(|error| Error::new(format!("{:?}", error))),
+            ),
+            Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
     }
 }
