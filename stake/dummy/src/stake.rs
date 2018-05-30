@@ -8,7 +8,6 @@ use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
 
-use ekiden_stake_api as api;
 use ekiden_stake_base::*;
 
 
@@ -23,9 +22,10 @@ use ekiden_stake_base::*;
 struct DummyStakeEscrowInfo {
     amount: AmountType,
     escrowed: AmountType, // sum_{a \in accounts} escrow_map[a].amount
-    accounts: HashSet<B256>, // account id, keys for escrow_map below
-                          // \forall a \in accounts: escrow_map[a].owner is stakeholder (key
-                          // to this instance in stakes below)
+    accounts: HashSet<EscrowAccountIdType>,
+    // account id, keys for escrow_map below.  \forall a \in accounts:
+    // escrow_map[a].owner is stakeholder (key to this instance in
+    // stakes below)
 }
 
 impl DummyStakeEscrowInfo {
@@ -40,7 +40,7 @@ impl DummyStakeEscrowInfo {
 
 #[derive(Clone, Eq)]
 struct EscrowAccount {
-    id: B256,
+    id: EscrowAccountIdType,
     owner: B256,  // &DummyStakeEscrowInfo
     target: B256, // &DummyStakeEscrowInfo
     amount: AmountType,
@@ -78,7 +78,7 @@ impl PartialEq for EscrowAccount {
 }
 
 impl EscrowAccount {
-    fn new(id: B256, owner: B256, target: B256, amount: AmountType) -> Self {
+    fn new(id: EscrowAccountIdType, owner: B256, target: B256, amount: AmountType) -> Self {
         Self {
             id: id,
             owner: owner,
@@ -99,9 +99,9 @@ impl EscrowAccount {
 struct DummyStakeEscrowBackendInner {
     // Per-entity state.
     stakes: HashMap<B256, DummyStakeEscrowInfo>,
-    escrow_map: HashMap<B256, EscrowAccount>,
+    escrow_map: HashMap<EscrowAccountIdType, EscrowAccount>,
 
-    next_account_id: B256,
+    next_account_id: EscrowAccountIdType,
 }
 
 impl DummyStakeEscrowBackendInner {
@@ -109,7 +109,7 @@ impl DummyStakeEscrowBackendInner {
         Self {
             stakes: HashMap::new(),
             escrow_map: HashMap::new(),
-            next_account_id: B256::new(),  // initally zero
+            next_account_id: EscrowAccountIdType::new(),
         }
     }
 
@@ -161,7 +161,7 @@ impl DummyStakeEscrowBackendInner {
         msg_sender: B256,
         target: B256,
         escrow_amount: AmountType,
-    ) -> Result<B256, Error> {
+    ) -> Result<EscrowAccountIdType, Error> {
         // verify if sufficient funds
         match self.stakes.get_mut(&msg_sender) {
             None => Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
@@ -175,18 +175,18 @@ impl DummyStakeEscrowBackendInner {
                     // 0 <= e.escrowed <= e.amount <= AMOUNT_MAX
                     // e.escrowed + escrow_amount <= AMOUNT_MAX (no overflow)
                     e.escrowed += escrow_amount;
-                    let id = self.next_account_id; // .clone();
-                    let entry =
-                        EscrowAccount::new(id.clone(), msg_sender.clone(), target, escrow_amount);
-                    self.escrow_map.insert(id.clone(), entry);
-                    e.accounts.insert(id.clone());
+                    let id = self.next_account_id;
                     match self.next_account_id.incr_mut() {
-                        Ok(()) => (),
                         Err(_e) => {
                             println!("There were a lot more than nine billion names, but I'm done!");
                             abort()
                         }
+                        Ok(()) => ()
                     }
+                    let entry =
+                        EscrowAccount::new(id, msg_sender.clone(), target, escrow_amount);
+                    self.escrow_map.insert(id, entry);
+                    e.accounts.insert(id);
                     Ok(id)
                 }
             }
@@ -195,31 +195,33 @@ impl DummyStakeEscrowBackendInner {
 
     pub fn list_active_escrows(&self, msg_sender: B256) -> Result<Vec<EscrowAccount>, Error> {
         let mut results: Vec<EscrowAccount> = Vec::new();
-        match self.stakes.get(&msg_sender) {
-            None => Ok(results),
+        let a = match self.stakes.get(&msg_sender) {
+            None => return Ok(results),
             Some(a) => {
                 if a.escrowed == 0 {
                     return Ok(results);
                 }
+                a
+            },
+        };
 
-                for ea_id in a.accounts.iter() {
-                    match self.escrow_map.get(&*ea_id) {
-                        None => {
-                            return Err(Error::new(ErrorCodes::InternalError.to_string()));
-                        }
-                        Some(e) => {
-                            results.push((*e).clone());
-                        }
-                    }
+        for ea_id in a.accounts.iter() {
+            match self.escrow_map.get(&*ea_id) {
+                None => {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
                 }
-
-                results.sort();
-                Ok(results)
+                Some(e) => {
+                    results.push((*e).clone());
+                }
             }
         }
+
+        results.sort();
+        Ok(results)
     }
 
-    pub fn fetch_escrow_by_id(&self, escrow_id: B256) -> Result<EscrowAccount, Error> {
+    pub fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType)
+                              -> Result<EscrowAccount, Error> {
         match self.escrow_map.get(&escrow_id) {
             None => Err(Error::new(ErrorCodes::NoEscrowAccount.to_string())),
             Some(e) => Ok((*e).clone()),
@@ -233,7 +235,7 @@ impl DummyStakeEscrowBackendInner {
     pub fn take_and_release_escrow(
         &mut self,
         msg_sender: B256,
-        escrow_id: B256,
+        escrow_id: EscrowAccountIdType,
         amount_requested: AmountType,
     ) -> Result<AmountType, Error> {
         // msg_sender is the target of the escrow
@@ -338,7 +340,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         msg_sender: B256,
         target: B256,
         escrow_amount: AmountType,
-    ) -> BoxFuture<B256> {
+    ) -> BoxFuture<EscrowAccountIdType> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
@@ -346,7 +348,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 
-    fn list_active_escrows(&self, msg_sender: B256) -> BoxFuture<Vec<api::EscrowData>> {
+    fn list_active_escrows(&self, msg_sender: B256) -> BoxFuture<Vec<EscrowAccountStatus>> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
@@ -356,38 +358,30 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
                 Ok(v) => v,
             };
             output.extend(ea_v.iter().map(|p| {
-                let mut api_ed = api::EscrowData::new();
-                api_ed.set_escrow_id(p.id.to_vec());
-                api_ed.set_entity(p.target.to_vec());
-                api_ed.set_amount(p.amount);
-                api_ed
+                EscrowAccountStatus::new(p.id, p.target, p.amount)
             }));
             Ok(output)
         }))
     }
 
-    fn fetch_escrow_by_id(&self, escrow_id: B256) -> BoxFuture<api::EscrowData> {
+    fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType)
+                          -> BoxFuture<EscrowAccountStatus> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
-            let escrow_account = match inner.fetch_escrow_by_id(escrow_id) {
-                Err(e) => {
-                    return Err(e);
-                }
-                Ok(ea) => ea,
-            };
-            let mut ed: api::EscrowData = api::EscrowData::new();
-            ed.set_escrow_id(escrow_account.id.to_vec());
-            ed.set_entity(escrow_account.target.to_vec());
-            ed.set_amount(escrow_account.amount);
-            Ok(ed)
+            match inner.fetch_escrow_by_id(escrow_id) {
+                Err(e) => return Err(e),
+                Ok(ea) => {
+                    Ok(EscrowAccountStatus::new(ea.id, ea.target, ea.amount))
+                },
+            }
         }))
     }
 
     fn take_and_release_escrow(
         &self,
         msg_sender: B256,
-        escrow_id: B256,
+        escrow_id: EscrowAccountIdType,
         amount_requested: AmountType,
     ) -> BoxFuture<AmountType> {
         let inner = self.inner.clone();

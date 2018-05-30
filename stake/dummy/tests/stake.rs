@@ -6,17 +6,55 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
+use ekiden_common::error::Error;
 use ekiden_common::futures::Future;
 use ekiden_stake_base::*;
 use ekiden_stake_dummy::*;
 
+#[derive(Copy, Clone)]
+struct IdGenerator {
+    id: B256,
+}
+
+impl IdGenerator {
+    fn new() -> Self {
+        Self { id: B256::new(), }
+    }
+
+    fn get(&self) -> B256 {
+        self.id
+    }
+
+    fn incr_mut(&mut self) -> Result<(), Error>{
+        let mut ix = 0;
+        while ix < self.id.len() {
+            if {
+                self.id.0[ix] += 1;
+                self.id.0[ix] != 0
+            } {
+                break; // no carry needed
+            }
+            ix += 1;
+        }
+        if ix == self.id.len() {
+            return Err(Error::new("OVERFLOW"))
+        }
+        Ok(())
+    }
+
+    fn gen_id(&mut self) -> B256 {
+        let rv = self.get();
+        self.incr_mut().unwrap();
+        rv
+    }
+}
+
 #[test]
 fn test_dummy_stake_backend() {
     let backend = Arc::new(DummyStakeEscrowBackend::new());
-    let mut id_generator = B256::new();
+    let mut id_generator = IdGenerator::new();
 
-    let alice = id_generator;
-    id_generator.incr_mut().unwrap();
+    let alice = id_generator.gen_id();
 
     backend.deposit_stake(alice, 100).wait().unwrap();
 
@@ -24,8 +62,7 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 0);
 
-    let bob = id_generator;
-    id_generator.incr_mut().unwrap();
+    let bob = id_generator.gen_id();
 
     let bob_escrow_id = backend.allocate_escrow(alice, bob, 9).wait().unwrap();
 
@@ -35,8 +72,7 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 9);
 
-    let carol = id_generator;
-    id_generator.incr_mut().unwrap();
+    let carol = id_generator.gen_id();
     let carol_escrow_id = backend.allocate_escrow(alice, carol, 13).wait().unwrap();
 
     println!("got escrow id {} for carol", carol_escrow_id);
@@ -47,16 +83,14 @@ fn test_dummy_stake_backend() {
     for triple in &expected {
         println!("expected: ({}, {}, {})", triple.0, triple.1, triple.2);
     }
-    let ved = backend.list_active_escrows(alice).wait().unwrap();
+    let veas = backend.list_active_escrows(alice).wait().unwrap();
     let mut actual = HashSet::new();
-    for ed in &ved {
-        let escrow_id = B256::from_slice(ed.get_escrow_id());
-        let target = B256::from_slice(ed.get_entity());
-        println!("escrow_id: {}", escrow_id);
-        println!("target: {}", target);
-        println!("amount: {}", ed.get_amount());
+    for eas in &veas {
+        println!("escrow_id: {}", eas.id);
+        println!("target: {}", eas.target);
+        println!("amount: {}", eas.amount);
 
-        actual.insert((escrow_id, target, ed.get_amount()));
+        actual.insert((eas.id, eas.target, eas.amount));
     }
 
     let d: HashSet<_> = expected.symmetric_difference(&actual).collect();
@@ -77,10 +111,10 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100 - 10);
     assert_eq!(stake_status.escrowed, 9 + 13);
 
-    let ed = backend.fetch_escrow_by_id(bob_escrow_id).wait().unwrap();
-    assert_eq!(B256::from_slice(ed.get_escrow_id()), bob_escrow_id);
-    assert_eq!(B256::from_slice(ed.get_entity()), bob);
-    assert_eq!(ed.get_amount(), 9);
+    let eas = backend.fetch_escrow_by_id(bob_escrow_id).wait().unwrap();
+    assert_eq!(eas.id, bob_escrow_id);
+    assert_eq!(eas.target, bob);
+    assert_eq!(eas.amount, 9);
 
     let t = backend
         .take_and_release_escrow(bob, bob_escrow_id, 10)
@@ -108,12 +142,10 @@ fn test_dummy_stake_backend() {
             println!("Got error {}", e.message);
             assert_eq!(e.message, ErrorCodes::NoEscrowAccount.to_string());
         }
-        Ok(ed) => {
+        Ok(eas) => {
             println!(
-                "Found escrow account {} when request should have failed, entity {}, amount {}",
-                B256::from_slice(ed.get_escrow_id()),
-                B256::from_slice(ed.get_entity()),
-                ed.get_amount()
+                "Found escrow account {} when request should have failed, target {}, amount {}",
+                eas.id, eas.target, eas.amount
             );
             assert!(false);
         }

@@ -1,49 +1,15 @@
-use std::convert::Into;
-use std::fmt;
-
 use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_stake_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, RpcStatus, UnarySink};
 
+use super::stake_backend::ErrorCodes;
+use super::stake_backend::EscrowAccountIdType;
+use super::stake_backend::EscrowAccountStatus;
 use super::stake_backend::StakeEscrowBackend;
 use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
-
-// Enum for error strings.  This is the usual ad hoc solution to the
-// subclass error type problem: the subclasses need to define their
-// own error codes, but the base class designer cannot, in general,
-// know what all the various errors might be.  This is defined at the
-// service level, so backend implementations should use these, and if
-// ever there are backend implementations that want to extend the
-// error codes, doing so is an API-breaking change (that requires a
-// semantic version bump) -- since adding to the enum means all
-// clients must be updated to handle the new values.  Since Error(..)
-// is taking the string version of the enum anyway, callers can use
-// match guards for the strings that were known when the code was
-// written and have a general string handler for a default case which
-// handles future extensions.
-#[derive(Debug)]
-pub enum ErrorCodes {
-    InternalError,
-    BadProtoSender,
-    BadProtoTarget,
-    NoStakeAccount,
-    NoEscrowAccount,
-    CallerNotEscrowTarget,
-    WouldOverflow,
-    InsufficientFunds,
-    RequestExceedsEscrowedFunds,
-}
-
-impl fmt::Display for ErrorCodes {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-        // or, alternatively:
-        // fmt::Debug::fmt(self, f)
-    }
-}
 
 pub struct StakeEscrowService<T>
 where
@@ -173,17 +139,17 @@ where
         req: api::AllocateEscrowRequest,
         sink: UnarySink<api::AllocateEscrowResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<B256>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => match B256::try_from(req.get_target()) {
-                    Err(_e) => Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
-                    Ok(t) => {
-                        let a = req.get_escrow_amount();
-                        Ok(self.inner.allocate_escrow(s, t, a))
-                    }
-                },
-            }
+        let f = move || -> Result<BoxFuture<EscrowAccountIdType>, Error> {
+            let s = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s
+            };
+            let t = match B256::try_from(req.get_target()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
+                Ok(t) => t
+            };
+            let a = req.get_escrow_amount();
+            Ok(self.inner.allocate_escrow(s, t, a))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -211,7 +177,7 @@ where
         req: api::ListActiveEscrowsRequest,
         sink: UnarySink<api::ListActiveEscrowsResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<(Vec<api::EscrowData>)>, Error> {
+        let f = move || -> Result<BoxFuture<Vec<EscrowAccountStatus>>, Error> {
             match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => Ok(self.inner.list_active_escrows(s)),
@@ -221,7 +187,15 @@ where
             Ok(f) => f.then(|res| match res {
                 Ok(escrows) => {
                     let mut r = api::ListActiveEscrowsResponse::new();
-                    r.set_escrows(escrows.iter().map(|e| e.to_owned().into()).collect());
+                    r.set_escrows(escrows.iter().map(
+                        |e| {
+                            let mut ae = api::EscrowData::new();
+                            ae.set_escrow_id(e.id.to_vec());
+                            ae.set_entity(e.target.to_vec());
+                            ae.set_amount(e.amount);
+                            ae
+                        }).collect()
+                    );
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -243,15 +217,22 @@ where
         req: api::FetchEscrowByIdRequest,
         sink: UnarySink<api::FetchEscrowByIdResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<api::EscrowData>, Error> {
-            let i = B256::from_slice(req.get_escrow_id());
-            Ok(self.inner.fetch_escrow_by_id(i))
+        let f = move || -> Result<BoxFuture<EscrowAccountStatus>, Error> {
+            let id = match EscrowAccountIdType::from_slice(req.get_escrow_id()) {
+                Err(e) => return Err(e),
+                Ok(i) => i,
+            };
+            Ok(self.inner.fetch_escrow_by_id(id))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(escrow) => {
+                    let mut ed = api::EscrowData::new();
+                    ed.set_escrow_id(escrow.id.to_vec());
+                    ed.set_entity(escrow.target.to_vec());
+                    ed.set_amount(escrow.amount);
                     let mut r = api::FetchEscrowByIdResponse::new();
-                    r.set_escrow(escrow);
+                    r.set_escrow(ed);
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -274,14 +255,16 @@ where
         sink: UnarySink<api::TakeAndReleaseEscrowResponse>,
     ) {
         let f = move || -> Result<BoxFuture<u64>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => {
-                    let i = B256::from_slice(req.get_escrow_id());
-                    let a = req.get_amount_requested();
-                    Ok(self.inner.take_and_release_escrow(s, i, a))
-                }
-            }
+            let s = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let i = match EscrowAccountIdType::from_slice(req.get_escrow_id()) {
+                Err(e) => return Err(e),
+                Ok(i) => i,
+            };
+            let a = req.get_amount_requested();
+            Ok(self.inner.take_and_release_escrow(s, i, a))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
