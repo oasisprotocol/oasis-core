@@ -127,6 +127,21 @@ fn test_dummy_stake_backend() {
         }
     }
 
+    println!("carol attempts to take 4");
+    match backend
+        .take_and_release_escrow(carol, bob_escrow_id, 4)
+        .wait()
+    {
+        Err(e) => {
+            println!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::CallerNotEscrowTarget.to_string());
+        }
+        Ok(amount) => {
+            println!("Got {}!!!", amount);
+            assert!(false);
+        }
+    };
+
     println!("taking 5");
     assert_eq!(
         backend
@@ -136,6 +151,7 @@ fn test_dummy_stake_backend() {
         5
     );
 
+    println!("escrow id should be invalid");
     match backend.fetch_escrow_by_id(bob_escrow_id).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
@@ -154,15 +170,18 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.total_stake, 100 - 10 - 5);
     assert_eq!(stake_status.escrowed, 13);
 
+    println!("bob's account should have been credited");
     match backend.get_stake_status(bob).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
-            assert_eq!(e.message, ErrorCodes::NoStakeAccount.to_string());
+            assert!(false);
         }
         Ok(ss) => {
-            println!("Got stake status when call should have failed");
+            println!("Got stake status");
             println!(" total_stake: {}", ss.total_stake);
             println!(" escrowed: {}", ss.escrowed);
+            assert_eq!(ss.total_stake, 5);
+            assert_eq!(ss.escrowed, 0);
         }
     }
 }

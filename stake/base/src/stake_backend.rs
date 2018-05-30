@@ -158,11 +158,13 @@ pub trait StakeEscrowBackend: Send + Sync {
 
     /// Dissolves the escrow account |escrow_id|: the |msg_sender|
     /// must be the target of the escrow account, and
-    /// |amount_requested| of the escrow amount is returned ($$) to
-    /// the caller (e.g., forfeiture).  Any remaining amount is marked
-    /// as available in the stake account of the creator of the escrow
-    /// account, i.e., it is released from escrow and returned back to
-    /// the owner.
+    /// |amount_requested| of the escrow amount is transferred to the
+    /// caller's stake account (e.g., stake forfeiture).  Any
+    /// remaining amount is marked as available in the stake account
+    /// of the creator of the escrow account, i.e., it is released
+    /// from escrow and returned back to the owner.  It is an error to
+    /// refer to |escrow_id| after this succeeds, since the escrow
+    /// account will have been destroyed.
     fn take_and_release_escrow(
         &self,
         msg_sender: B256,
