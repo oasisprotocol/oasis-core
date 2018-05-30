@@ -8,37 +8,31 @@ use std::sync::Arc;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::Future;
+use ekiden_common::uint::U256;
 use ekiden_stake_base::*;
 use ekiden_stake_dummy::*;
 
 #[derive(Copy, Clone)]
 struct IdGenerator {
-    id: B256,
+    id: U256,
 }
 
 impl IdGenerator {
     fn new() -> Self {
-        Self { id: B256::new() }
+        Self { id: U256::from(0) }
     }
 
     fn get(&self) -> B256 {
-        self.id
+        B256::from_slice(&self.id.to_vec())
     }
 
     fn incr_mut(&mut self) -> Result<(), Error> {
-        let mut ix = 0;
-        while ix < self.id.len() {
-            if {
-                self.id.0[ix] += 1;
-                self.id.0[ix] != 0
-            } {
-                break; // no carry needed
-            }
-            ix += 1;
-        }
-        if ix == self.id.len() {
+        let mut next = self.id;
+        next = next + U256::from(1);
+        if next == U256::from(0) {
             return Err(Error::new("OVERFLOW"));
         }
+        self.id = next;
         Ok(())
     }
 
