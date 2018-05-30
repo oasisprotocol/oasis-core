@@ -90,3 +90,4 @@ members = [
     "node/dummy",
     "node/dummy/api",
 ]
+exclude = [ "thirdparty" ]
