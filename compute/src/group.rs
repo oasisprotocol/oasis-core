@@ -2,14 +2,13 @@
 use std::sync::{Arc, Mutex};
 
 use grpcio;
-use protobuf::RepeatedField;
 
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
-use ekiden_core::bytes::{B256, B64};
-use ekiden_core::contract::batch::CallBatch;
+use ekiden_core::bytes::{B256, B64, H256};
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, IntoFuture, Stream, StreamExt};
 use ekiden_core::futures::sync::mpsc;
+use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, IntoFuture, Stream,
+                           StreamExt};
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
 use ekiden_core::signature::{Signed, Signer};
@@ -22,7 +21,7 @@ const SUBMIT_BATCH_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgBaSu");
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
     /// Submit batch to workers.
-    Submit(CallBatch),
+    Submit(H256),
     /// Update committee.
     UpdateCommittee(Vec<CommitteeNode>),
 }
@@ -48,12 +47,27 @@ struct Inner {
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
 }
 
+impl Inner {
+    /// Get local node's role in the committee.
+    ///
+    /// May be `None` in case the local node is not part of the computation group.
+    fn get_role(&self) -> Option<Role> {
+        let committee = self.committee.lock().unwrap();
+        committee
+            .iter()
+            .filter(|node| node.public_key == self.signer.get_public_key())
+            .map(|node| node.role.clone())
+            .next()
+    }
+}
+
 /// Structure that maintains connections to the current compute committee.
 pub struct ComputationGroup {
     inner: Arc<Inner>,
 }
 
 impl ComputationGroup {
+    /// Create new computation group.
     pub fn new(
         contract_id: B256,
         scheduler: Arc<Scheduler>,
@@ -122,7 +136,9 @@ impl ComputationGroup {
                     module_path!(),
                     "Unexpected error while processing group commands",
                     move |command| match command {
-                        Command::Submit(calls) => Self::handle_submit(inner.clone(), calls),
+                        Command::Submit(batch_hash) => {
+                            Self::handle_submit(inner.clone(), batch_hash)
+                        }
                         Command::UpdateCommittee(members) => {
                             Self::handle_update_committee(inner.clone(), members)
                         }
@@ -152,18 +168,12 @@ impl ComputationGroup {
             return Box::new(future::ok(()));
         }
 
-        // Check if we are the leader.
-        if members.iter().any(|node| {
-            node.public_key == inner.signer.get_public_key() && node.role == Role::Leader
-        }) {
-            info!("We are now the computation group leader");
-        }
-
         // Resolve nodes via the entity registry.
         // TODO: Support group fetch to avoid multiple requests to registry or make scheduler return nodes.
         let nodes: Vec<BoxFuture<Node>> = members
             .iter()
             .filter(|node| node.public_key != inner.signer.get_public_key())
+            .filter(|node| node.role == Role::Worker)
             .map(|node| inner.entity_registry.get_node(node.public_key))
             .collect();
 
@@ -186,6 +196,7 @@ impl ComputationGroup {
                     }
 
                     info!("Update of computation group committee finished");
+                    info!("Our new role is: {:?}", inner.get_role().unwrap());
 
                     Ok(())
                 })
@@ -200,40 +211,37 @@ impl ComputationGroup {
     }
 
     /// Handle batch submission.
-    fn handle_submit(inner: Arc<Inner>, calls: CallBatch) -> BoxFuture<()> {
+    fn handle_submit(inner: Arc<Inner>, batch_hash: H256) -> BoxFuture<()> {
         trace!("Submitting batch to workers");
 
         // Sign batch.
-        let signed_calls = Signed::sign(&inner.signer, &SUBMIT_BATCH_SIGNATURE_CONTEXT, calls);
+        let signed_batch = Signed::sign(&inner.signer, &SUBMIT_BATCH_SIGNATURE_CONTEXT, batch_hash);
 
         // Submit batch.
         let mut request = SubmitBatchRequest::new();
-        request.set_batch(RepeatedField::from_vec(
-            signed_calls.get_value_unsafe().to_vec(),
-        ));
-        request.set_signature(signed_calls.signature.into());
+        request.set_batch_hash(batch_hash.to_vec());
+        request.set_signature(signed_batch.signature.into());
 
-        Box::new(
-            inner
-                .node_group
-                .call_all(move |client| client.submit_batch_async(&request))
-                .and_then(|results| {
-                    for result in results {
-                        if let Err(error) = result {
-                            error!("Failed to submit batch to node: {}", error.message);
-                        }
+        inner
+            .node_group
+            .call_all(move |client| client.submit_batch_async(&request))
+            .and_then(|results| {
+                for result in results {
+                    if let Err(error) = result {
+                        error!("Failed to submit batch to node: {}", error.message);
                     }
+                }
 
-                    Ok(())
-                }),
-        )
+                Ok(())
+            })
+            .into_box()
     }
 
     /// Submit batch to workers in the computation group.
-    pub fn submit(&self, calls: CallBatch) -> Vec<CommitteeNode> {
+    pub fn submit(&self, batch_hash: H256) -> Vec<CommitteeNode> {
         self.inner
             .command_sender
-            .unbounded_send(Command::Submit(calls))
+            .unbounded_send(Command::Submit(batch_hash))
             .unwrap();
 
         let committee = self.inner.committee.lock().unwrap();
@@ -245,13 +253,13 @@ impl ComputationGroup {
     /// Returns the call batch and the current compute committee.
     pub fn open_remote_batch(
         &self,
-        calls: Signed<CallBatch>,
-    ) -> Result<(CallBatch, Vec<CommitteeNode>)> {
+        batch_hash: Signed<H256>,
+    ) -> Result<(H256, Vec<CommitteeNode>)> {
         // Check if batch was signed by leader, drop otherwise.
         let committee = {
             let committee = self.inner.committee.lock().unwrap();
             if !committee.iter().any(|node| {
-                node.role == Role::Leader && node.public_key == calls.signature.public_key
+                node.role == Role::Leader && node.public_key == batch_hash.signature.public_key
             }) {
                 warn!("Dropping call batch not signed by compute committee leader");
                 return Err(Error::new("not signed by compute committee leader"));
@@ -260,14 +268,28 @@ impl ComputationGroup {
             committee.clone()
         };
 
-        Ok((calls.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
+        Ok((batch_hash.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
+    }
+
+    /// Get current committee.
+    pub fn get_committee(&self) -> Vec<CommitteeNode> {
+        self.inner.committee.lock().unwrap().clone()
+    }
+
+    /// Get local node's role in the committee.
+    ///
+    /// May be `None` in case the local node is not part of the computation group.
+    pub fn get_role(&self) -> Option<Role> {
+        self.inner.get_role()
     }
 
     /// Check if the local node is a leader of the computation group.
     pub fn is_leader(&self) -> bool {
-        let committee = self.inner.committee.lock().unwrap();
-        committee.iter().any(|node| {
-            node.public_key == self.inner.signer.get_public_key() && node.role == Role::Leader
-        })
+        self.get_role() == Some(Role::Leader)
+    }
+
+    /// Check if the local node is a backup worker in the computation group.
+    pub fn is_backup_worker(&self) -> bool {
+        self.get_role() == Some(Role::BackupWorker)
     }
 }

@@ -10,9 +10,9 @@ use ekiden_common_api::create_time_source;
 use ekiden_consensus_api::create_consensus;
 use ekiden_consensus_base::{ConsensusBackend, ConsensusService};
 use ekiden_consensus_dummy::DummyConsensusBackend;
-use ekiden_core::epochtime::{TimeSource, EPOCH_INTERVAL};
 use ekiden_core::epochtime::grpc::EpochTimeService;
 use ekiden_core::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource, SystemTimeSource};
+use ekiden_core::epochtime::{TimeSource, EPOCH_INTERVAL};
 use ekiden_core::error::{Error, Result};
 use ekiden_node_dummy_api::create_dummy_debug;
 use ekiden_registry_api::{create_contract_registry, create_entity_registry};
@@ -90,7 +90,7 @@ impl DummyBackend {
 
         let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
         let scheduler = Arc::new(DummySchedulerBackend::new(
             random_beacon.clone(),
             contract_registry.clone(),
@@ -153,6 +153,7 @@ impl DummyBackend {
         let mut executor = GrpcExecutor::new(self.grpc_environment.clone());
 
         self.random_beacon.start(&mut executor);
+        self.entity_registry.start(&mut executor);
         self.scheduler.start(&mut executor);
         self.consensus.start(&mut executor);
 

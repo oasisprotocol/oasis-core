@@ -10,7 +10,7 @@ service ComputationGroup {
 }
 
 message SubmitBatchRequest {
-    repeated bytes batch = 1;
+    bytes batch_hash = 1;
     common.Signature signature = 2;
 }
 

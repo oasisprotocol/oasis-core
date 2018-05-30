@@ -13,7 +13,6 @@ use ekiden_consensus_api as api;
 
 use super::commitment::Commitment;
 use super::header::Header;
-use super::transaction::Transaction;
 
 /// Block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,10 +21,8 @@ pub struct Block {
     pub header: Header,
     /// Designated computation group.
     pub computation_group: Vec<CommitteeNode>,
-    /// Ordered batch of transactions as defined by the group leader.
-    pub transactions: Vec<Transaction>,
     /// Commitments from compute nodes in the same order as in the computation group.
-    pub commitments: Vec<Commitment>,
+    pub commitments: Vec<Option<Commitment>>,
 }
 
 impl Block {
@@ -38,12 +35,12 @@ impl Block {
                 round: child.header.round + U256::from(1),
                 previous_hash: child.header.get_encoded_hash(),
                 group_hash: H256::zero(),
-                transaction_hash: H256::zero(),
+                input_hash: H256::zero(),
+                output_hash: H256::zero(),
                 state_root: H256::zero(),
                 commitments_hash: H256::zero(),
             },
             computation_group: vec![],
-            transactions: vec![],
             commitments: vec![],
         };
 
@@ -54,7 +51,6 @@ impl Block {
     /// Update header based on current block content.
     pub fn update(&mut self) {
         self.header.group_hash = self.computation_group.get_encoded_hash();
-        self.header.transaction_hash = self.transactions.get_encoded_hash();
         self.header.commitments_hash = self.commitments.get_encoded_hash();
     }
 
@@ -62,11 +58,9 @@ impl Block {
     ///
     /// This checks the following:
     ///   * Computation group matches the hash in the header.
-    ///   * Transaction list matches the hash in the header.
     ///   * Commitments list matches the hash in the header.
     pub fn is_internally_consistent(&self) -> bool {
         self.computation_group.get_encoded_hash() == self.header.group_hash
-            && self.transactions.get_encoded_hash() == self.header.transaction_hash
             && self.commitments.get_encoded_hash() == self.header.commitments_hash
     }
 }
@@ -81,19 +75,17 @@ impl TryFrom<api::Block> for Block {
             computation.push(CommitteeNode::try_from(item.to_owned())?);
         }
 
-        let mut txns = Vec::new();
-        for item in a.get_transactions().iter() {
-            txns.push(Transaction::try_from(item.to_owned())?);
-        }
-
         let mut commits = Vec::new();
         for item in a.get_commitments().iter() {
-            commits.push(Commitment::try_from(item.to_owned())?);
+            if item.get_digest().is_empty() {
+                commits.push(None);
+            } else {
+                commits.push(Some(Commitment::try_from(item.to_owned())?));
+            }
         }
         Ok(Block {
             header: header,
             computation_group: computation,
-            transactions: txns,
             commitments: commits,
         })
     }
@@ -111,15 +103,12 @@ impl Into<api::Block> for Block {
         }
         b.set_computation_group(RepeatedField::from_vec(groups));
 
-        let mut txns = Vec::new();
-        for item in self.transactions {
-            txns.push(item.into());
-        }
-        b.set_transactions(RepeatedField::from_vec(txns));
-
         let mut commits = Vec::new();
         for item in self.commitments {
-            commits.push(item.into());
+            match item {
+                Some(item) => commits.push(item.into()),
+                None => commits.push(api::Commitment::new()),
+            }
         }
         b.set_commitments(RepeatedField::from_vec(commits));
         b
@@ -133,8 +122,8 @@ mod tests {
     use ekiden_common::signature::InMemorySigner;
     use ekiden_common::untrusted;
 
-    use super::*;
     use super::super::*;
+    use super::*;
 
     #[test]
     fn test_block_commitment() {

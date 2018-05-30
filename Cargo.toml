@@ -26,6 +26,7 @@ members = [
     "storage/dummy",
     "storage/frontend",
     "storage/persistent",
+    "storage/lru_cache",
 
     # Enclave loader (+ attestation).
     "enclave/common",
@@ -79,6 +80,11 @@ members = [
     "scheduler/base",
     "scheduler/client",
     "scheduler/dummy",
+
+    # Stake escrow.
+    "stake/api",
+    "stake/base",
+    "stake/dummy",
 
     # Dummy shared backend node.
     "node/dummy",

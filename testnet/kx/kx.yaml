@@ -43,57 +43,6 @@ spec:
 kind: Service
 apiVersion: v1
 metadata:
-  name: ekiden-token-key-manager
-spec:
-  ports:
-    - name: contract-grpc
-      port: 9003
-  selector:
-    copper: ekiden-token-key-manager
-  # type: ClusterIP
----
-kind: Deployment
-apiVersion: extensions/v1beta1
-metadata:
-  name: ekiden-token-key-manager
-  labels:
-    app: ekiden
-spec:
-  selector:
-    matchLabels:
-      copper: ekiden-token-key-manager
-  # replicas: 1
-  template:
-    metadata:
-      labels:
-        copper: ekiden-token-key-manager
-    spec:
-      containers:
-        - name: ekiden-compute
-          image: docker.io/oasislabs/testnet:latest
-          env:
-            - name: LD_LIBRARY_PATH
-              value: /opt/intel/sgxsdk/lib64
-          command:
-            - ekiden-compute
-          args:
-            - --port
-            - "9003"
-            - --dummy-host
-            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
-            - --dummy-port
-            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
-            - --disable-key-manager
-            - --no-persist-identity
-            - --max-batch-size
-            - "1"
-            - --metrics-addr
-            - "0.0.0.0:3000"
-            - ekiden/lib/ekiden-key-manager.so
----
-kind: Service
-apiVersion: v1
-metadata:
   name: ekiden-token
 spec:
   ports:
@@ -137,10 +86,6 @@ spec:
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
             - --dummy-port
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
-            - --key-manager-host
-            - $(EKIDEN_TOKEN_KEY_MANAGER_SERVICE_HOST)
-            - --key-manager-port
-            - $(EKIDEN_TOKEN_KEY_MANAGER_SERVICE_PORT_CONTRACT_GRPC)
             - ekiden/lib/token.so
 ---
 kind: Service

@@ -13,10 +13,12 @@ use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     /// Worker node.
     Worker,
+    /// Backup worker node for discrepancy resolution.
+    BackupWorker,
     /// Group leader.
     Leader,
 }
@@ -37,6 +39,7 @@ impl TryFrom<api::CommitteeNode> for CommitteeNode {
         Ok(CommitteeNode {
             role: match a.get_role() {
                 api::CommitteeNode_Role::WORKER => Role::Worker,
+                api::CommitteeNode_Role::BACKUP_WORKER => Role::BackupWorker,
                 api::CommitteeNode_Role::LEADER => Role::Leader,
             },
             public_key: B256::from(a.get_public_key()),
@@ -50,6 +53,7 @@ impl Into<api::CommitteeNode> for CommitteeNode {
         let mut c = api::CommitteeNode::new();
         match self.role {
             Role::Worker => c.set_role(api::CommitteeNode_Role::WORKER),
+            Role::BackupWorker => c.set_role(api::CommitteeNode_Role::BACKUP_WORKER),
             Role::Leader => c.set_role(api::CommitteeNode_Role::LEADER),
         };
         c.set_public_key(self.public_key.to_vec());

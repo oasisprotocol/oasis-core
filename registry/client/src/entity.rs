@@ -7,8 +7,9 @@ use grpcio::{Channel, Environment};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
+use ekiden_common::epochtime::EpochTime;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_registry_api as api;
@@ -28,9 +29,11 @@ impl EntityRegistryClient {
 }
 
 impl EntityRegistryBackend for EntityRegistryClient {
+    fn start(&self, _executor: &mut Executor) {}
+
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let mut request = api::RegisterRequest::new();
-        request.set_entity(entity.get_value_unsafe().clone().into());
+        request.set_entity(entity.get_value_unsafe().unwrap().into());
         request.set_signature(entity.signature.into());
         match self.0.register_entity_async(&request) {
             Ok(f) => Box::new(
@@ -43,7 +46,7 @@ impl EntityRegistryBackend for EntityRegistryClient {
 
     fn deregister_entity(&self, id: Signed<B256>) -> BoxFuture<()> {
         let mut request = api::DeregisterRequest::new();
-        request.set_id(id.get_value_unsafe().to_vec());
+        request.set_id(id.get_value_unsafe().unwrap().to_vec());
         request.set_signature(id.signature.into());
         match self.0.deregister_entity_async(&request) {
             Ok(f) => Box::new(
@@ -108,7 +111,7 @@ impl EntityRegistryBackend for EntityRegistryClient {
 
     fn register_node(&self, node: Signed<Node>) -> BoxFuture<()> {
         let mut request = api::RegisterNodeRequest::new();
-        request.set_node(node.get_value_unsafe().clone().into());
+        request.set_node(node.get_value_unsafe().unwrap().into());
         request.set_signature(node.signature.into());
         match self.0.register_node_async(&request) {
             Ok(f) => Box::new(
@@ -131,8 +134,9 @@ impl EntityRegistryBackend for EntityRegistryClient {
         }
     }
 
-    fn get_nodes(&self) -> BoxFuture<Vec<Node>> {
-        let request = api::NodesRequest::new();
+    fn get_nodes(&self, epoch: EpochTime) -> BoxFuture<Vec<Node>> {
+        let mut request = api::NodesRequest::new();
+        request.set_epoch(epoch);
         match self.0.get_nodes_async(&request) {
             Ok(f) => Box::new(f.map_err(|error| Error::new(error.description())).and_then(
                 |mut response| {
@@ -183,6 +187,27 @@ impl EntityRegistryBackend for EntityRegistryClient {
                             Ok(RegistryEvent::Deregistered(node))
                         }
                     }
+                }
+                Err(error) => Err(Error::new(error.description())),
+            })),
+            Err(error) => Box::new(stream::once(Err(Error::new(error.description())))),
+        }
+    }
+
+    fn watch_node_list(&self) -> BoxStream<(EpochTime, Vec<Node>)> {
+        let request = api::WatchNodeListRequest::new();
+        match self.0.watch_node_list(&request) {
+            Ok(stream) => Box::new(stream.then(|result| match result {
+                Ok(mut response) => {
+                    let epoch = response.get_epoch();
+                    let mut response = response.take_node().into_vec();
+                    let mut nodes = vec![];
+                    for raw_node in response {
+                        let node = Node::try_from(raw_node)?;
+                        nodes.push(node);
+                    }
+
+                    Ok((epoch, nodes))
                 }
                 Err(error) => Err(Error::new(error.description())),
             })),

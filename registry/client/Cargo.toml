@@ -1,13 +1,13 @@
 [package]
 name = "ekiden-registry-client"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden registry RPC clients"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-ekiden-common = { path = "../../common", version = "0.1.0-alpha.4" }
-ekiden-registry-api = { path = "../api", version = "0.1.0-alpha.4" }
-ekiden-registry-base = { path = "../base", version = "0.1.0-alpha.4" }
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-registry-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-registry-base = { path = "../base", version = "0.2.0-alpha" }
 grpcio = "0.2.2"

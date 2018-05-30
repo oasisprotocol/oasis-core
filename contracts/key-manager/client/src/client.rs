@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-#[cfg(not(target_env = "sgx"))]
-use std::sync::{Mutex, MutexGuard};
+use std::collections::HashMap;
 use std::sync::Arc;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
+#[cfg(not(target_env = "sgx"))]
+use std::sync::{Mutex, MutexGuard};
 
 use ekiden_common::error::{Error, Result};
 use ekiden_enclave_common::quote::MrEnclave;

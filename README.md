@@ -51,15 +51,6 @@ For building contracts we have our own Cargo extension which should be installed
 # cargo install --force --path tools
 ```
 
-The following examples use the key manager and token contracts, but the process is the
-same for any contract. To build the key manager (required by all other contracts):
-```
-# cd contracts/key-manager
-# cargo ekiden build-contract
-```
-
-The built contract will be stored under `target/contract/ekiden-key-manager.so`.
-
 To build the token contract:
 ```
 # cd contracts/token
@@ -90,16 +81,7 @@ To start the shared dummy node:
 # ./target/debug/ekiden-node-dummy --time-source mockrpc
 ```
 
-To start the compute node for the key manager contract:
-```
-# cargo run -p ekiden-compute -- \
-    -p 9003 \
-    --disable-key-manager \
-    --no-persist-identity \
-    target/contract/ekiden-key-manager.so
-```
-
-To start the compute node for the token contract:
+To start the compute node for the token contract (you need to start two):
 ```
 # cargo run -p ekiden-compute -- \
     --no-persist-identity \
@@ -128,6 +110,11 @@ To run all tests (some should be skipped due to compile errors):
     --exclude ekiden-db-untrusted \
     --exclude ekiden-contract-untrusted \
     -- --test-threads 1
+```
+
+To run end-to-end tests:
+```
+# ./scripts/test-e2e.sh
 ```
 
 ## Developing

@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 
 use histogram::Histogram;
 use threadpool::ThreadPool;
@@ -137,7 +137,7 @@ macro_rules! time_block {
         $result.$measurement = time::precise_time_ns() - start;
 
         result
-    }}
+    }};
 }
 
 /// Helper to collect into a Vec without redeclaring an item type.

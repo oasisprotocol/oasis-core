@@ -7,9 +7,9 @@ extern crate sodalite;
 extern crate ekiden_common;
 extern crate ekiden_enclave_common;
 
+pub mod client;
 pub mod reflection;
 pub mod secure_channel;
-pub mod client;
 
 mod generated;
 

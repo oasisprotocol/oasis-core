@@ -1,14 +1,14 @@
 //! RPC method dispatcher.
 use std::collections::HashMap;
-#[cfg(not(target_env = "sgx"))]
-use std::sync::{Mutex, MutexGuard};
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
+#[cfg(not(target_env = "sgx"))]
+use std::sync::{Mutex, MutexGuard};
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::error::Result;
@@ -17,9 +17,9 @@ use ekiden_enclave_trusted::utils::{read_enclave_request, write_enclave_response
 use ekiden_rpc_common::api;
 use ekiden_rpc_common::reflection::ApiMethodDescriptor;
 
-use super::{request, response};
 use super::error::DispatchError;
 use super::secure_channel::open_request_box;
+use super::{request, response};
 
 /// List of methods that allow plain requests. All other requests must be done over
 /// a secure channel.

@@ -5,8 +5,8 @@ use futures::future::{self, Future};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_enclave_trusted::identity;
-use ekiden_rpc_client::ClientFuture;
 use ekiden_rpc_client::backend::{RpcClientBackend, RpcClientCredentials};
+use ekiden_rpc_client::ClientFuture;
 use ekiden_rpc_common::api;
 use ekiden_rpc_common::client::ClientEndpoint;
 

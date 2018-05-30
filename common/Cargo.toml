@@ -1,6 +1,6 @@
 [package]
 name = "ekiden-common"
-version = "0.1.0-alpha.4"
+version = "0.2.0-alpha"
 authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden common functionality (available to both trusted and untrusted parts)"
 keywords = ["ekiden"]
@@ -11,7 +11,7 @@ default = []
 profiling = []
 
 [dependencies]
-ekiden-common-api = { path = "./api", version = "0.1.0-alpha.4" }
+ekiden-common-api = { path = "./api", version = "0.2.0-alpha" }
 protobuf = "~1.4"
 byteorder = "1.2.1"
 rustc-hex = "1.0"
@@ -19,9 +19,11 @@ ring = { git = "https://github.com/ekiden/ring", default-features = false, featu
 untrusted = "0.5.1"
 bigint = { version = "4", features = ["std"] }
 chrono = "0.4.2"
-serde = "1.0"
+# We cannot use serde>=1.0.60 as it requires rustc 1.26+.
+serde = "=1.0.59"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"
+serde_bytes = "~0.10"
 log = "0.4"
 
 [target.'cfg(target_env = "sgx")'.dependencies]

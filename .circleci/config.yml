@@ -1,9 +1,11 @@
+defaults: &defaults
+  docker:
+    - image: ekiden/testing:0.1.0
 
 version: 2
 jobs:
   build:
-    docker:
-      - image: ekiden/testing:0.1.0-alpha.5
+    <<: *defaults
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -61,10 +63,6 @@ jobs:
 
       # Install ekiden-tools.
       - run: cargo install --force --path tools
-      # Build key manager contract.
-      - run:
-          command: cargo ekiden build-contract
-          working_directory: contracts/key-manager
       # Build token contract.
       - run:
           command: cargo ekiden build-contract --output-identity
@@ -74,72 +72,33 @@ jobs:
       # Ensure everything is built. This needs to be after the key manager contract is built.
       - run: cargo build
       # Check style. This needs to be after everything is built.
-      - run: cargo fmt -- --write-mode=diff
+      - run: cargo fmt -- --write-mode=check
 
-      # Contract end-to-end tests.
+      # Store built files.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/debug/ekiden-node-dummy
+            - target/debug/ekiden-node-dummy-controller
+            - target/debug/ekiden-compute
+            - target/debug/token-client
+            - target/contract/token.so
+            - target/contract/token.mrenclave
+            - tests
+            - scripts
 
-      # Start dummy node.
-      - run:
-          command: |
-            ./target/debug/ekiden-node-dummy --time-source mockrpc
-          background: true
-      # Start key manager compute node.
-      - run:
-          command: |
-            ./target/debug/ekiden-compute \
-              -p 9003 \
-              --disable-key-manager \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              target/contract/ekiden-key-manager.so
-          background: true
-      # Start token compute nodes.
-      - run:
-          command: |
-            ./target/debug/ekiden-compute \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              --compute-replicas 3 \
-              --port 10001 \
-              target/contract/token.so
-          background: true
-      - run:
-          command: |
-            sleep 1
-            ./target/debug/ekiden-compute \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              --compute-replicas 3 \
-              --port 10002 \
-              target/contract/token.so
-          background: true
-      - run:
-          command: |
-            sleep 2
-            ./target/debug/ekiden-compute \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              --compute-replicas 3 \
-              --port 10003 \
-              target/contract/token.so
-          background: true
-      # Start token client.
-      - run: |
-          # Sleep so everything gets ready.
-          sleep 10
-
-          # Advance epoch to elect a new committee.
-          ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
-
-          # Sleep some more.
-          sleep 5
-
-          # Run the client.
-          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+  # E2E tests.
+  test_e2e:
+    <<: *defaults
+    steps:
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - attach_workspace:
+          at: /workspace
+      # Run tests.
+      - run: /workspace/scripts/test-e2e.sh /workspace
 
   deploy:
-    docker:
-      - image: ekiden/testing:0.1.0-alpha.5
+    <<: *defaults
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -162,7 +121,6 @@ jobs:
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
-          kubectl set image deployments/ekiden-token-key-manager ekiden-compute=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
 
 workflows:
@@ -170,12 +128,16 @@ workflows:
   build:
     jobs:
       - build
+      - test_e2e:
+          requires:
+            - build
       - deploy:
           filters:
             branches:
               only: master
           requires:
             - build
+            - test_e2e
 experimental:
   notify:
     branches:

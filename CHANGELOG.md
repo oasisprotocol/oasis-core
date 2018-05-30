@@ -1,5 +1,14 @@
 # Unreleased
 
+* **BACKWARD INCOMPATIBLE:** Store batches in storage and distribute only signed batch
+  hashes to workers.
+* **BACKWARD INCOMPATIBLE:** Remove `transactions` from consensus blocks and only store
+  input/output hashes in block header. Content is delegated to storage.
+* **BACKWARD INCOMPATIBLE:** Remove `submit` operation from consensus backend.
+* Add discrepancy resolution by using backup workers majority vote.
+
+# 0.1.0
+
 * **BACKWARD INCOMPATIBLE:** Remove old consensus node.
 * **BACKWARD INCOMPATIBLE:** Compute node now requires the shared dummy node.
 * gRPC message types and conversion convention established.
@@ -26,6 +35,15 @@
 * Change consensus interface to support multiple contracts.
 * Use Merkle Patricia tree for state storage.
 * Dockerfile includes truffle for solidity development.
+* Add LRU cache storage backend that can wrap any existing storage backend to add an
+  in-memory cache.
+* RPCs can be configured to time out, treating compute nodes that
+  don't respond in time as failing. To enable timeouts, pass
+  `--rpc-timeout SECONDS` in clients that use client-utils and
+  `--forwarded-rpc-timeout SECONDS` in ekiden-compute.
+* EntityRegistry support for per-epoch node lists.  `get_nodes()` now takes an
+  epoch, and a `watch_node_list()` routine to subscribe to node list generation
+  has been added.
 
 # 0.1.0-alpha.4
 

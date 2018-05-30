@@ -15,6 +15,7 @@ extern crate lru_cache;
 extern crate prometheus;
 extern crate protobuf;
 extern crate reqwest;
+extern crate serde_cbor;
 extern crate thread_local;
 
 extern crate ekiden_beacon_base;
@@ -28,14 +29,14 @@ extern crate ekiden_storage_base;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
-mod ias;
-mod instrumentation;
-mod handlers;
-mod services;
-mod worker;
-mod node;
 mod consensus;
 mod group;
+mod handlers;
+mod ias;
+mod instrumentation;
+mod node;
+mod services;
+mod worker;
 
 // Everything above should be moved into a library, while everything below should be in the binary.
 
@@ -58,14 +59,16 @@ use std::thread;
 use clap::{App, Arg};
 use log::LevelFilter;
 
+use ekiden_core::bytes::B256;
 use ekiden_core::ring::rand::SystemRandom;
 use ekiden_core::ring::signature::Ed25519KeyPair;
 use ekiden_core::signature::{InMemorySigner, Signer};
 use ekiden_core::untrusted;
 
-use self::consensus::ConsensusConfiguration;
+use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
 use self::ias::{IASConfiguration, SPID};
-use self::node::{ComputeNode, ComputeNodeConfiguration, StorageConfiguration};
+use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration,
+                 StorageConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
 
 /// Validate an IP address + port string.
@@ -150,6 +153,14 @@ fn main() {
                 .takes_value(true)
                 .default_value("1"),
         )
+        // TODO: Remove this once we have independent contract registration.
+        .arg(
+            Arg::with_name("compute-backup-replicas")
+                .long("compute-backup-replicas")
+                .help("Number of backup replicas in the computation group")
+                .takes_value(true)
+                .default_value("1"),
+        )
         .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
         .arg(
             Arg::with_name("grpc-threads")
@@ -203,6 +214,25 @@ fn main() {
                 .takes_value(true)
                 .multiple(true)
                 .validator(validate_addr_port)
+        )
+        .arg(
+            Arg::with_name("forwarded-rpc-timeout")
+                .long("forwarded-rpc-timeout")
+                .help("Time limit in seconds for forwarded gRPC calls. If an RPC takes longer than this, we treat it as failed.")
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("test-inject-discrepancy")
+                .long("test-inject-discrepancy")
+                .help("TEST ONLY OPTION: inject discrepancy into consensus process")
+                .hidden(true)
+        )
+        .arg(
+            Arg::with_name("test-contract-id")
+                .long("test-contract-id")
+                .help("TEST ONLY OPTION: override contract identifier")
+                .takes_value(true)
+                .hidden(true)
         )
         .get_matches();
 
@@ -258,11 +288,17 @@ fn main() {
         dummy_port: value_t!(matches, "dummy-port", u16).unwrap_or_else(|e| e.exit()),
         // TODO: Remove this once we have independent contract registration.
         compute_replicas: value_t!(matches, "compute-replicas", u64).unwrap_or_else(|e| e.exit()),
+        // TODO: Remove this once we have independent contract registration.
+        compute_backup_replicas: value_t!(matches, "compute-backup-replicas", u64)
+            .unwrap_or_else(|e| e.exit()),
         // Consensus configuration.
         consensus: ConsensusConfiguration {
             signer: signer,
             max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
             max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
+            test_only: ConsensusTestOnlyConfiguration {
+                inject_discrepancy: matches.is_present("test-inject-discrepancy"),
+            },
         },
         // Storage configuration.
         storage: StorageConfiguration {},
@@ -295,6 +331,14 @@ fn main() {
                             .to_owned(),
                     )
                 },
+                forwarded_rpc_timeout: if matches.is_present("rpc-timeout") {
+                    Some(std::time::Duration::new(
+                        value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
+                        0,
+                    ))
+                } else {
+                    None
+                },
                 // Key manager configuration.
                 key_manager: if !matches.is_present("disable-key-manager") {
                     Some(KeyManagerConfiguration {
@@ -310,6 +354,13 @@ fn main() {
             Some(values_t_or_exit!(matches, "register-addr", SocketAddr))
         } else {
             None
+        },
+        test_only: ComputeNodeTestOnlyConfiguration {
+            contract_id: if matches.is_present("test-contract-id") {
+                Some(value_t_or_exit!(matches, "test-contract-id", B256))
+            } else {
+                None
+            },
         },
     }).expect("failed to initialize compute node");
 

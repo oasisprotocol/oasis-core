@@ -24,6 +24,7 @@ const RNG_CONTEXT_STORAGE: &'static [u8] = b"EkS-Dummy-Storage";
 
 enum AsyncEvent {
     Beacon((EpochTime, B256)),
+    Nodes((EpochTime, Vec<Node>)),
     Contract(Contract),
     Epoch(EpochTime),
 }
@@ -70,34 +71,21 @@ impl DummySchedulerBackendInner {
         assert_eq!(*cached, beacon, "Beacon changed for epoch: {}", epoch);
     }
 
-    fn on_epoch_transition(&mut self, epoch: EpochTime) {
-        // Cache the epoch.
-        self.current_epoch = epoch;
-
-        // Get the epoch's node list.
-        //
-        // TODO: While this *should* be event driven, every scheduler
-        // instance on potentially different nodes must have a consistent
-        // node list on a per-election basis.  This serves to push that
-        // requirement down to the entity registry, where it belongs.
-        //
-        // So yes, this uses wait() for now.  The correct thing to do is
-        // for the registry to provide a stream of (EpochTime, Vec<Node>)
-        // on a per-epoch basis.
+    fn on_node_list(&mut self, epoch: EpochTime, nodes: Vec<Node>) {
         assert!(
             !self.entity_cache.contains_key(&epoch),
             "Node list already present for epoch: {}",
             epoch
         );
-        let mut nodes = self.entity_registry.get_nodes().wait().unwrap();
-        nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
-        trace!(
-            "on_epoch_transition(): Epoch: {} ({} nodes)",
-            epoch,
-            nodes.len()
-        );
+        trace!("on_node_list(): Epoch: {} ({} nodes)", epoch, nodes.len());
         self.entity_cache.insert(epoch, nodes);
+    }
+
+    fn on_epoch_transition(&mut self, epoch: EpochTime) {
+        // Cache the epoch.
+        self.current_epoch = epoch;
+        trace!("on_epoch_transition(): Epoch: {}", epoch);
     }
 
     fn on_contract(&mut self, contract: Contract) {
@@ -162,6 +150,8 @@ impl DummySchedulerBackendInner {
         let storage =
             make_committee_impl(contract, &nodes, CommitteeType::Storage, &entropy, epoch)?;
         committee_cache.insert(contract_id, vec![compute.clone(), storage.clone()]);
+
+        trace!("do_election(): Input node list: {:?}", nodes);
 
         trace!(
             "do_election(): Contract: {} Compute: {:?} Storage: {:?}",
@@ -275,9 +265,11 @@ impl Scheduler for DummySchedulerBackend {
             let shared_inner = self.inner.clone();
             let inner = self.inner.lock().unwrap();
 
-            // TODO: Subscribe to the entity registry, once it can present
-            // globally consistent, per-epoch views of the world.
             let beacon_stream = inner.beacon.watch_beacons().map(AsyncEvent::Beacon);
+            let nodes_stream = inner
+                .entity_registry
+                .watch_node_list()
+                .map(AsyncEvent::Nodes);
             let contract_stream = inner
                 .contract_registry
                 .get_contracts()
@@ -286,7 +278,10 @@ impl Scheduler for DummySchedulerBackend {
 
             // TODO: futures_util has stream::SelectAll, which appears to be
             // a less awful way of doing this.
-            let event_stream = beacon_stream.select(contract_stream).select(epoch_stream);
+            let event_stream = beacon_stream
+                .select(nodes_stream)
+                .select(contract_stream)
+                .select(epoch_stream);
 
             Box::new(
                 event_stream
@@ -295,6 +290,10 @@ impl Scheduler for DummySchedulerBackend {
                         match event {
                             AsyncEvent::Beacon((epoch, beacon)) => {
                                 inner.on_random_beacon(epoch, beacon);
+                                inner.maybe_mass_elect();
+                            }
+                            AsyncEvent::Nodes((epoch, nodes)) => {
+                                inner.on_node_list(epoch, nodes);
                                 inner.maybe_mass_elect();
                             }
                             AsyncEvent::Contract(contract) => inner.on_contract(contract),
@@ -365,10 +364,22 @@ fn make_committee_impl(
     entropy: &[u8],
     epoch: EpochTime,
 ) -> Result<Committee> {
-    let (ctx, size) = match kind {
-        CommitteeType::Compute => (RNG_CONTEXT_COMPUTE, contract.replica_group_size as usize),
-        CommitteeType::Storage => (RNG_CONTEXT_STORAGE, contract.storage_group_size as usize),
+    let (ctx, size, backup_size) = match kind {
+        CommitteeType::Compute => {
+            // TODO: Should we ensure that there is more backup nodes than ordinary workers?
+            if contract.replica_group_backup_size == 0 {
+                return Err(Error::new("Empty replica group backup size not allowed"));
+            }
+
+            (
+                RNG_CONTEXT_COMPUTE,
+                (contract.replica_group_size + contract.replica_group_backup_size) as usize,
+                contract.replica_group_backup_size as usize,
+            )
+        }
+        CommitteeType::Storage => (RNG_CONTEXT_STORAGE, contract.storage_group_size as usize, 0),
     };
+
     if size == 0 {
         return Err(Error::new("Empty committee not allowed"));
     }
@@ -393,7 +404,8 @@ fn make_committee_impl(
     for i in 0..size {
         let role = match i {
             0 => Role::Leader,
-            _ => Role::Worker,
+            i if i < (size - backup_size) => Role::Worker,
+            _ => Role::BackupWorker,
         };
         members.push(CommitteeNode {
             role: role,
@@ -417,15 +429,15 @@ mod tests {
     extern crate serde_cbor;
 
     use self::ekiden_beacon_dummy::InsecureDummyRandomBeacon;
-    use self::ekiden_registry_base::REGISTER_CONTRACT_SIGNATURE_CONTEXT;
     use self::ekiden_registry_base::test::populate_entity_registry;
+    use self::ekiden_registry_base::REGISTER_CONTRACT_SIGNATURE_CONTEXT;
     use self::ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
     use self::serde_cbor::to_vec;
     use super::*;
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
+    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
@@ -438,7 +450,7 @@ mod tests {
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new());
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
         let scheduler = DummySchedulerBackend::new(
             beacon.clone(),
             contract_registry.clone(),
@@ -447,6 +459,7 @@ mod tests {
         );
 
         let mut pool = cpupool::CpuPool::new(1);
+        entity_registry.start(&mut pool);
         beacon.start(&mut pool);
         scheduler.start(&mut pool);
 
@@ -470,6 +483,7 @@ mod tests {
             features_sgx: false,
             advertisement_rate: 0,
             replica_group_size: 3,
+            replica_group_backup_size: 3,
             storage_group_size: 5,
         };
         let contract_signer = InMemorySigner::new(contract_sk);
@@ -525,36 +539,51 @@ mod tests {
 
             // Ensure that only 1 of each committee is returned, and that the
             // expected number of nodes are present.
-            match com.kind {
+            let (expected_workers, expected_backup_workers) = match com.kind {
                 CommitteeType::Compute => {
                     assert_eq!(has_compute, false);
-                    assert_eq!(com.members.len() as u64, contract.replica_group_size);
+                    assert_eq!(
+                        com.members.len() as u64,
+                        contract.replica_group_size + contract.replica_group_backup_size
+                    );
                     has_compute = true;
+
+                    (
+                        contract.replica_group_size - 1,
+                        contract.replica_group_backup_size,
+                    )
                 }
                 CommitteeType::Storage => {
                     assert_eq!(has_storage, false);
                     assert_eq!(com.members.len() as u64, contract.storage_group_size);
                     has_storage = true;
+
+                    (contract.storage_group_size - 1, 0)
                 }
-            }
+            };
 
             // Ensure that only 1 Leader is returned, and that each member is
             // unique, and actually a node.
             let mut com_nodes = HashSet::new();
             let mut has_leader = false;
+            let mut workers = 0;
+            let mut backup_workers = 0;
             for node in com.members {
                 match node.role {
                     Role::Leader => {
                         assert_eq!(has_leader, false);
                         has_leader = true;
                     }
-                    _ => {}
+                    Role::Worker => workers += 1,
+                    Role::BackupWorker => backup_workers += 1,
                 }
                 assert!(!com_nodes.contains(&node.public_key));
                 com_nodes.insert(node.public_key.clone());
             }
             assert!(com_nodes.is_subset(&nodes));
             assert!(has_leader);
+            assert_eq!(workers, expected_workers);
+            assert_eq!(backup_workers, expected_backup_workers);
         }
         assert!(has_compute);
         assert!(has_storage);

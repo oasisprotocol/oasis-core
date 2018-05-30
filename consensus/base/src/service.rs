@@ -4,13 +4,12 @@ use std::sync::Arc;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Result;
 use ekiden_common::futures::{future, Future, Stream};
-use ekiden_common::signature::{Signature, Signed};
+use ekiden_common::signature::Signature;
 use ekiden_consensus_api as api;
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
+use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::{ConsensusBackend, Event};
-use block::Block;
 use commitment::{Commitment, Reveal};
 use header::Header;
 
@@ -26,12 +25,9 @@ impl ConsensusService {
 }
 
 macro_rules! invalid {
-    ($sink:ident,$code:ident,$e:expr) => {
-        $sink.fail(RpcStatus::new(
-            $code,
-            Some($e.description().to_owned()),
-        ))
-    }
+    ($sink:ident, $code:ident, $e:expr) => {
+        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
+    };
 }
 
 impl api::Consensus for ConsensusService {
@@ -103,15 +99,27 @@ impl api::Consensus for ConsensusService {
         };
         let f = match f() {
             Ok(f) => f.map(|response| -> (api::EventResponse, WriteFlags) {
-                let mut pb_response = api::EventResponse::new();
+                let mut event = api::Event::new();
                 match response {
-                    Event::CommitmentsReceived => {
-                        pb_response.set_event(api::EventResponse_Event::COMMITMENTSRECEIVED)
+                    Event::CommitmentsReceived(discrepancy) => {
+                        let mut args = api::Event_CommitmentsReceived::new();
+                        args.set_discrepancy(discrepancy);
+                        event.set_commitments_received(args);
                     }
-                    Event::RoundFailed(_) => {
-                        pb_response.set_event(api::EventResponse_Event::ROUNDFAILED)
+                    Event::RoundFailed(error) => {
+                        let mut args = api::Event_RoundFailed::new();
+                        args.set_error(error.message.to_owned());
+                        event.set_round_failed(args);
+                    }
+                    Event::DiscrepancyDetected(batch_hash) => {
+                        let mut args = api::Event_DiscrepancyDetected::new();
+                        args.set_batch_hash(batch_hash.to_vec());
+                        event.set_discrepancy_detected(args);
                     }
                 };
+
+                let mut pb_response = api::EventResponse::new();
+                pb_response.set_event(event);
 
                 (pb_response, WriteFlags::default())
             }),
@@ -174,35 +182,6 @@ impl api::Consensus for ConsensusService {
             Ok(f) => f.then(|response| match response {
                 Ok(()) => Ok(api::RevealResponse::new()),
                 Err(e) => Err(e),
-            }),
-            Err(error) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |response| match response {
-            Ok(response) => sink.success(response),
-            Err(error) => invalid!(sink, Internal, error),
-        }).map_err(|_error| ()));
-    }
-
-    fn submit(
-        &self,
-        ctx: RpcContext,
-        req: api::SubmitRequest,
-        sink: UnarySink<api::SubmitResponse>,
-    ) {
-        let f = move || -> Result<_> {
-            let contract_id = B256::try_from(req.get_contract_id())?;
-            let block = Block::try_from(req.get_block().clone())?;
-            let signature = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner
-                .submit(contract_id, Signed::from_parts(block, signature)))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok(()) => Ok(api::SubmitResponse::new()),
-                Err(error) => Err(error),
             }),
             Err(error) => {
                 ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
