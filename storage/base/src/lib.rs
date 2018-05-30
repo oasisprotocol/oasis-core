@@ -4,6 +4,9 @@ extern crate ekiden_common;
 extern crate ekiden_storage_api;
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;
+#[cfg(not(target_env = "sgx"))]
+#[macro_use]
+extern crate log;
 
 pub mod backend;
 pub mod mapper;

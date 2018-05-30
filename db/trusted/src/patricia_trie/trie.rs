@@ -607,4 +607,24 @@ mod test {
         // After removing foo the root should be gone as well.
         assert_eq!(tree.remove(Some(new_root), b"foo"), None);
     }
+
+    /// Test an insertion in a deep node.
+    #[test]
+    fn test_feather() {
+        let storage = Arc::new(DummyStorageBackend::new());
+        let tree = PatriciaTrie::new(storage);
+        let mut root_hash = None;
+        let mut key_buf = *b"\x83gStateDbhaccountsx(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let val = b"don't embed don't embed don't embed don't embed don't embed";
+        root_hash = Some(tree.insert(root_hash, &key_buf, val));
+        for i in 20..60 {
+            key_buf[i] = b'3';
+            root_hash = Some(tree.insert(root_hash, &key_buf, val));
+            key_buf[i] = b'2';
+            root_hash = Some(tree.insert(root_hash, &key_buf, val));
+        }
+        key_buf[59] = b'4';
+        root_hash = Some(tree.insert(root_hash, &key_buf, val));
+        drop(root_hash);
+    }
 }

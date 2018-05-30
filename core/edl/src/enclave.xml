@@ -1,9 +1,9 @@
 <EnclaveConfiguration>
   <ProdID>0</ProdID>
   <ISVSVN>0</ISVSVN>
-  <StackMaxSize>0x40000</StackMaxSize>
+  <StackMaxSize>0x200000</StackMaxSize>
   <HeapMaxSize>0x10000000</HeapMaxSize>
-  <!-- Contracts should support only a single TCS due to secury reasons. -->
+  <!-- Contracts should support only a single TCS due to security reasons. -->
   <TCSNum>1</TCSNum>
   <TCSPolicy>0</TCSPolicy>
   <DisableDebug>0</DisableDebug>
