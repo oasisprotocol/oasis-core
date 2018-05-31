@@ -58,6 +58,8 @@ fn docker_create(
         "INTEL_SGX_SDK=/opt/sgxsdk",
         "-w",
         "/code",
+        "--cap-add",
+        "SYS_PTRACE",
         "--detach-keys",
         escape_keys,
         image,
