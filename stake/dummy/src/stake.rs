@@ -257,28 +257,45 @@ impl DummyStakeEscrowBackendInner {
             }
             // post: amount_requested <= account.amount
 
-            let stakeholder = match self.stakes.get_mut(&account.owner) {
+            {
+                // amount_requested is credited to the target
+                // account. First ensure that no overflow can occur.
+                let target = self.stakes
+                    .entry(msg_sender)
+                    .or_insert_with(|| DummyStakeEscrowInfo::new());
+                if AMOUNT_MAX - target.amount < amount_requested {
+                    return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
+                }
+            }
+            {
+                let stakeholder = match self.stakes.get_mut(&account.owner) {
+                    None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
+                    Some(sh) => sh,
+                };
+                if !(stakeholder.accounts.contains(&escrow_id)) {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
+                }
+
+                // check some invariants:
+                //
+                // total tied up in escrow cannot exceed stake
+                if stakeholder.amount < stakeholder.escrowed {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
+                }
+                // single escrow account value cannot exceed total escrowed
+                if stakeholder.escrowed < account.amount {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
+                }
+
+                stakeholder.amount -= amount_requested;
+                stakeholder.escrowed -= account.amount;
+                stakeholder.accounts.remove(&escrow_id);
+            }
+            let target = match self.stakes.get_mut(&msg_sender) {
                 None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
-                Some(sh) => sh,
+                Some(t) => t,
             };
-            if !(stakeholder.accounts.contains(&escrow_id)) {
-                return Err(Error::new(ErrorCodes::InternalError.to_string()));
-            }
-
-            // check some invariants:
-            //
-            // total tied up in escrow cannot exceed stake
-            if stakeholder.amount < stakeholder.escrowed {
-                return Err(Error::new(ErrorCodes::InternalError.to_string()));
-            }
-            // single escrow account value cannot exceed total escrowed
-            if stakeholder.escrowed < account.amount {
-                return Err(Error::new(ErrorCodes::InternalError.to_string()));
-            }
-
-            stakeholder.amount -= amount_requested;
-            stakeholder.escrowed -= account.amount;
-            stakeholder.accounts.remove(&escrow_id);
+            target.amount += amount_requested;
         } // terminate self.escrow_map mutable borrow via `account`
         self.escrow_map.remove(&escrow_id);
         // amount_available'

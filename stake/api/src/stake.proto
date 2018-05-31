@@ -213,9 +213,10 @@ message TakeAndReleaseEscrowRequest {
 
 message TakeAndReleaseEscrowResponse {
   // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
-  uint64 amount_taken = 1;  // $$ transferred to target (caller).
-  // If there is no Err(..), amount_taken should always equal
-  // amount_requested in the request message.  If there is escrow any
-  // left over, it is released into the stakeholder's account and
-  // available for withdrawal via WithdrawStakeRequest
+  uint64 amount_taken = 1;
+  // amount transferred to target (caller)'s stake account.  If there
+  // is no Err(..), amount_taken should always equal amount_requested
+  // in the request message.  If there is escrow any left over, it is
+  // released into the stakeholder's account and available for
+  // withdrawal via WithdrawStakeRequest
 }
