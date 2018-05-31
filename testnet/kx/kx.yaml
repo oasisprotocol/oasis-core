@@ -64,7 +64,7 @@ spec:
   selector:
     matchLabels:
       copper: ekiden-token
-  # replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
