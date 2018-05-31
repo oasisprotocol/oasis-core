@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "common/api/src/common.proto";
-
 // This is the escrow service.  Entities deposit stake, and can create
 // escrow accounts for which the service acts as the escrow account
 // holder to enforce the (simple) escrow scenario: the ``target'' of
