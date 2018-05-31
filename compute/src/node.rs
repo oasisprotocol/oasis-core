@@ -101,6 +101,8 @@ impl ComputeNode {
         // Create scheduler.
         // TODO: Base on configuration.
         let channel = grpcio::ChannelBuilder::new(grpc_environment.clone())
+            .max_receive_message_len(usize::max_value())
+            .max_send_message_len(usize::max_value())
             .connect(&format!("{}:{}", config.dummy_host, config.dummy_port));
         let contract_registry = Arc::new(ContractRegistryClient::new(channel.clone()));
         let entity_registry = Arc::new(EntityRegistryClient::new(channel.clone()));
@@ -229,6 +231,12 @@ impl ComputeNode {
             ComputationGroupService::new(consensus_frontend.clone()),
         );
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
+            .channel_args(
+                grpcio::ChannelBuilder::new(grpc_environment.clone())
+                    .max_receive_message_len(usize::max_value())
+                    .max_send_message_len(usize::max_value())
+                    .build_args(),
+            )
             .register_service(web3)
             .register_service(inter_node)
             .bind("0.0.0.0", config.port)

@@ -27,7 +27,7 @@ use ekiden_storage_base::{StorageBackend, StorageService};
 use ekiden_storage_dummy::DummyStorageBackend;
 
 use futures_timer::{Interval, TimerHandle};
-use grpcio::{Environment, Server, ServerBuilder};
+use grpcio::{ChannelBuilder, Environment, Server, ServerBuilder};
 
 use super::service::DebugService;
 
@@ -123,6 +123,12 @@ impl DummyBackend {
         ));
 
         let server = server_builder
+            .channel_args(
+                ChannelBuilder::new(grpc_environment.clone())
+                    .max_receive_message_len(usize::max_value())
+                    .max_send_message_len(usize::max_value())
+                    .build_args(),
+            )
             .bind("0.0.0.0", config.port)
             .register_service(time_service)
             .register_service(beacon_service)
