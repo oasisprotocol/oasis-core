@@ -1,0 +1,14 @@
+[package]
+name = "ekiden-stake-base"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden Stake Escrow interface traits"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-stake-api = { path = "../api", version = "0.2.0-alpha" }
+byteorder = "1"
+grpcio = "0.2.2"
+protobuf = "~1.4"

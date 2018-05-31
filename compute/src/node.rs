@@ -35,6 +35,12 @@ use super::worker::{Worker, WorkerConfiguration};
 // TODO: Add backend configuration.
 pub struct StorageConfiguration;
 
+/// Compute node test-only configuration.
+pub struct ComputeNodeTestOnlyConfiguration {
+    /// Override contract identifier.
+    pub contract_id: Option<B256>,
+}
+
 /// Compute node configuration.
 pub struct ComputeNodeConfiguration {
     /// Number of gRPC threads.
@@ -50,6 +56,9 @@ pub struct ComputeNodeConfiguration {
     /// Number of compute replicas.
     // TODO: Remove this once we have independent contract registration.
     pub compute_replicas: u64,
+    /// Number of compute backup replicas.
+    // TODO: Remove this once we have independent contract registration.
+    pub compute_backup_replicas: u64,
     /// Consensus configuration.
     pub consensus: ConsensusConfiguration,
     /// Storage configuration.
@@ -60,6 +69,8 @@ pub struct ComputeNodeConfiguration {
     pub worker: WorkerConfiguration,
     /// Registration address/port override(s).
     pub register_addrs: Option<Vec<SocketAddr>>,
+    /// Test-only configuration.
+    pub test_only: ComputeNodeTestOnlyConfiguration,
 }
 
 /// Compute node.
@@ -107,13 +118,22 @@ impl ComputeNode {
         // TODO: Get this from somewhere.
         // TODO: This should probably be done independently?
         // TODO: We currently use the node key pair as the entity key pair.
-        let contract_id =
-            B256::from(get_contract_identity(config.worker.contract_filename.clone())?.as_slice());
+        let contract_id = match config.test_only.contract_id {
+            Some(contract_id) => {
+                warn!("Using manually overriden contract id");
+                contract_id
+            }
+            None => B256::from(
+                get_contract_identity(config.worker.contract_filename.clone())?.as_slice(),
+            ),
+        };
+
         info!("Running compute node for contract {:?}", contract_id);
         let contract = {
             let mut contract = Contract::default();
             contract.id = contract_id;
             contract.replica_group_size = config.compute_replicas;
+            contract.replica_group_backup_size = config.compute_backup_replicas;
             contract.storage_group_size = 1;
 
             contract
@@ -180,7 +200,7 @@ impl ComputeNode {
             config.worker,
             grpc_environment.clone(),
             ias,
-            storage_backend,
+            storage_backend.clone(),
         ));
 
         // Create computation group.
@@ -199,6 +219,7 @@ impl ComputeNode {
             worker.clone(),
             computation_group.clone(),
             consensus_backend.clone(),
+            storage_backend.clone(),
         ));
 
         // Create compute node gRPC server.

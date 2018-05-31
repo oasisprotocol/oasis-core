@@ -19,7 +19,7 @@ thread_local! {
     static STORAGE: RefCell<Option<Arc<StorageBackend>>> = RefCell::new(None);
 
     /// Transfer buffer for storage OCALLs.
-    static TRANSFER_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![0; 1024 * 1024]);
+    static TRANSFER_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![0; 8 * 1024 * 1024]);
 }
 
 struct WithStorageGuard;

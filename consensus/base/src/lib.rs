@@ -18,13 +18,11 @@ pub mod block;
 pub mod commitment;
 pub mod header;
 pub mod service;
-pub mod transaction;
 
 pub use backend::*;
 pub use block::*;
 pub use commitment::*;
 pub use header::*;
 pub use service::*;
-pub use transaction::*;
 
 pub mod test;

@@ -1,9 +1,11 @@
+defaults: &defaults
+  docker:
+    - image: ekiden/testing:0.1.0
 
 version: 2
 jobs:
   build:
-    docker:
-      - image: ekiden/testing:0.1.0
+    <<: *defaults
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -72,61 +74,31 @@ jobs:
       # Check style. This needs to be after everything is built.
       - run: cargo fmt -- --write-mode=check
 
-      # Contract end-to-end tests.
+      # Store built files.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/debug/ekiden-node-dummy
+            - target/debug/ekiden-node-dummy-controller
+            - target/debug/ekiden-compute
+            - target/debug/token-client
+            - target/contract/token.so
+            - target/contract/token.mrenclave
+            - tests
+            - scripts
 
-      # Start dummy node.
-      - run:
-          command: |
-            ./target/debug/ekiden-node-dummy --time-source mockrpc
-          background: true
-      # Start token compute nodes.
-      - run:
-          command: |
-            sleep 1
-            ./target/debug/ekiden-compute \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              --compute-replicas 3 \
-              --port 10001 \
-              target/contract/token.so
-          background: true
-      - run:
-          command: |
-            sleep 2
-            ./target/debug/ekiden-compute \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              --compute-replicas 3 \
-              --port 10002 \
-              target/contract/token.so
-          background: true
-      - run:
-          command: |
-            sleep 3
-            ./target/debug/ekiden-compute \
-              --no-persist-identity \
-              --max-batch-size 1 \
-              --compute-replicas 3 \
-              --port 10003 \
-              target/contract/token.so
-          background: true
-      # Start token client.
-      - run: |
-          # Sleep so everything gets ready.
-          sleep 10
-
-          # Advance epoch to elect a new committee.
-          ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
-
-          # Sleep some more.
-          sleep 5
-
-          # Run the client.
-          ./target/debug/token-client --mr-enclave $(cat target/contract/token.mrenclave)
+  # E2E tests.
+  test_e2e:
+    <<: *defaults
+    steps:
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - attach_workspace:
+          at: /workspace
+      # Run tests.
+      - run: /workspace/scripts/test-e2e.sh /workspace
 
   deploy:
-    docker:
-      - image: ekiden/testing:0.1.0
+    <<: *defaults
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -156,12 +128,16 @@ workflows:
   build:
     jobs:
       - build
+      - test_e2e:
+          requires:
+            - build
       - deploy:
           filters:
             branches:
               only: master
           requires:
             - build
+            - test_e2e
 experimental:
   notify:
     branches:

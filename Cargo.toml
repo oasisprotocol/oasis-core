@@ -81,6 +81,12 @@ members = [
     "scheduler/client",
     "scheduler/dummy",
 
+    # Stake escrow.
+    "stake/api",
+    "stake/base",
+    "stake/client",
+    "stake/dummy",
+
     # Dummy shared backend node.
     "node/dummy",
     "node/dummy/api",

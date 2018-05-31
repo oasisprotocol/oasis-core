@@ -5,6 +5,7 @@ authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
 description = "Ekiden build tools"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
+build = "build.rs"
 
 [dependencies]
 mktemp = "0.3.1"
@@ -21,6 +22,7 @@ serde_derive = "1.0"
 error-chain = "0.11.0"
 filebuffer = "0.3"
 regex = "~1.0.0"
+rustc-hex = "1.0.0"
 
 [[bin]]
 name = "cargo-ekiden"
