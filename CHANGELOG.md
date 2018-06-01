@@ -7,6 +7,7 @@
 * **BACKWARD INCOMPATIBLE:** Remove `submit` operation from consensus backend.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
+* Add `common::futures::retry` which implements retrying futures on failure.
 
 # 0.1.0
 
