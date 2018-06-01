@@ -50,6 +50,19 @@ impl StakeEscrowBackend for StakeClient {
         }
     }
 
+    fn transfer_stake(&self, sender: B256, target: B256, amount: u64) -> BoxFuture<()> {
+        let mut request = api::TransferStakeRequest::new();
+        request.set_msg_sender(sender.to_vec());
+        request.set_target(target.to_vec());
+        request.set_amount(amount);
+        match self.0.transfer_stake_async(&request) {
+            Ok(f) => Box::new(
+                f.map(|_response| ()).map_err(|error| Error::new(error.description())),
+            ),
+            Err(error) => Box::new(future::err(Error::new(error.description()))),
+        }
+    }
+
     fn withdraw_stake(&self, sender: B256, amount_requested: u64) -> BoxFuture<u64> {
         let mut request = api::WithdrawStakeRequest::new();
         request.set_msg_sender(sender.to_vec());

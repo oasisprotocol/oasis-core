@@ -128,6 +128,10 @@ pub trait StakeEscrowBackend: Send + Sync {
     /// Returns the stake account status (StakeStatus) of the caller |msg_sender|.
     fn get_stake_status(&self, msg_sender: B256) -> BoxFuture<StakeStatus>;
 
+    /// Transfers |amount_requested| from |msg_sender|'s stake account to
+    /// the stake account belonging to |target|.
+    fn transfer_stake(&self, msg_sender: B256, target: B256, amount: AmountType) -> BoxFuture<()>;
+
     /// Withdraws |amount_requested| ($$) from the stake account
     /// belonging to the caller |msg_sender|.  The value
     /// |amount_requested| cannot exceed available funds (e.g.,

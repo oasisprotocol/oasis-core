@@ -17,6 +17,14 @@ struct IdGenerator {
     id: U256,
 }
 
+fn get_and_show_stake(backend: &Arc<DummyStakeEscrowBackend>, id: B256, name: &str) -> StakeStatus {
+    let ss = backend.get_stake_status(id).wait().unwrap();
+    println!("{}'s stake status:", name);
+    println!(" total_stake: {}", ss.total_stake);
+    println!(" escrowed: {}", ss.escrowed);
+    ss
+}
+
 impl IdGenerator {
     fn new() -> Self {
         Self { id: U256::from(0) }
@@ -52,7 +60,7 @@ fn test_dummy_stake_backend() {
 
     backend.deposit_stake(alice, 100).wait().unwrap();
 
-    let stake_status = backend.get_stake_status(alice).wait().unwrap();
+    let stake_status = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 0);
 
@@ -62,7 +70,7 @@ fn test_dummy_stake_backend() {
 
     println!("got escrow id {} for bob", bob_escrow_id);
 
-    let stake_status = backend.get_stake_status(alice).wait().unwrap();
+    let stake_status = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(stake_status.total_stake, 100);
     assert_eq!(stake_status.escrowed, 9);
 
@@ -142,7 +150,7 @@ fn test_dummy_stake_backend() {
         }
     };
 
-    println!("taking 5");
+    println!("bob taking 5");
     assert_eq!(
         backend
             .take_and_release_escrow(bob, bob_escrow_id, 5)
@@ -171,17 +179,65 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.escrowed, 13);
 
     println!("bob's account should have been credited");
-    match backend.get_stake_status(bob).wait() {
+    let ss = get_and_show_stake(&backend, bob, "Bob");
+    assert_eq!(ss.total_stake, 5);
+    assert_eq!(ss.escrowed, 0);
+
+    println!("transfer from bob to carol -- too much");
+    match backend.transfer_stake(bob, carol, 100).wait() {
         Err(e) => {
             println!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
+        }
+        Ok(_) => {
+            println!("Transfer should not have succeeded.");
             assert!(false);
         }
-        Ok(ss) => {
-            println!("Got stake status");
-            println!(" total_stake: {}", ss.total_stake);
-            println!(" escrowed: {}", ss.escrowed);
-            assert_eq!(ss.total_stake, 5);
-            assert_eq!(ss.escrowed, 0);
+    }
+
+    println!("transfer from bob to carol -- some (2)");
+    backend.transfer_stake(bob, carol, 2).wait().unwrap();
+    // verify amounts
+    let ss = get_and_show_stake(&backend, bob, "Bob");
+    assert_eq!(ss.total_stake, 3);
+    assert_eq!(ss.escrowed, 0);
+    let ss = get_and_show_stake(&backend, carol, "Carol");
+    assert_eq!(ss.total_stake, 2);
+    assert_eq!(ss.escrowed, 0);
+
+    // Transfer all
+    println!("transfer from bob to carol -- all");
+    backend.transfer_stake(bob, carol, 3).wait().unwrap();
+    // verify amounts
+    let ss = get_and_show_stake(&backend, bob, "Bob");
+    assert_eq!(ss.total_stake, 0);
+    assert_eq!(ss.escrowed, 0);
+
+    let ss = get_and_show_stake(&backend, carol, "Carol");
+    assert_eq!(ss.total_stake, 5);
+    assert_eq!(ss.escrowed, 0);
+
+    println!("transfer from alice to bob -- should be insufficient");
+    match backend.transfer_stake(alice, bob, 100 - 10 - 5 - 13 + 1).wait() {
+        Err(e) => {
+            println!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
+        }
+        Ok(_) => {
+            println!("Transfer succeeded.");
+            assert!(false);
         }
     }
+
+    println!("transfer from alice to dexter -- should create dexter account");
+    let dexter = id_generator.gen_id();
+    backend.transfer_stake(alice, dexter, 17).wait().unwrap();
+    // verify amounts
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13);
+
+    let ss = get_and_show_stake(&backend, dexter, "Dexter");
+    assert_eq!(ss.total_stake, 17);
+    assert_eq!(ss.escrowed, 0);
 }
