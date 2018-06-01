@@ -26,6 +26,7 @@ extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
+extern crate ekiden_storage_batch;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 

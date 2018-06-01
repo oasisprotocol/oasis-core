@@ -15,6 +15,7 @@ ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
 ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
+ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../scheduler/base", version = "0.2.0-alpha" }
 ekiden-scheduler-client = { path = "../scheduler/client", version = "0.2.0-alpha" }
