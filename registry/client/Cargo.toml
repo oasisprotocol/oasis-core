@@ -8,6 +8,7 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-registry-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../base", version = "0.2.0-alpha" }
 grpcio = "0.2.2"

@@ -260,3 +260,12 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
         recv
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "entity-registry-backend",
+    DummyEntityRegistryBackend,
+    EntityRegistryBackend,
+    [TimeSourceNotifier]
+);

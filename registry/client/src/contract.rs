@@ -3,10 +3,11 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{Channel, Environment};
+use grpcio::{self, Channel, ChannelBuilder};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::node::Node;
@@ -22,7 +23,7 @@ impl ContractRegistryClient {
         ContractRegistryClient(api::ContractRegistryClient::new(channel))
     }
 
-    pub fn from_node(node: &Node, environment: Arc<Environment>) -> Self {
+    pub fn from_node(node: &Node, environment: Arc<grpcio::Environment>) -> Self {
         ContractRegistryClient::new(node.connect(environment))
     }
 }
@@ -66,3 +67,38 @@ impl ContractRegistryBackend for ContractRegistryClient {
         }
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    remote,
+    "contract-registry-backend",
+    ContractRegistryClient,
+    ContractRegistryBackend,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
+            "{}:{}",
+            args.value_of("contract-registry-client-host").unwrap(),
+            args.value_of("contract-registry-client-port").unwrap(),
+        ));
+
+        let instance: Arc<ContractRegistryBackend> = Arc::new(
+            ContractRegistryClient::new(channel)
+        );
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("contract-registry-client-host")
+            .long("contract-registry-client-host")
+            .help("(remote contract registry backend) Host that the contract registry client should connect to")
+            .takes_value(true)
+            .default_value("127.0.0.1"),
+        Arg::with_name("contract-registry-client-port")
+            .long("contract registry-client-port")
+            .help("(remote contract registry backend) Port that the contract registry client should connect to")
+            .takes_value(true)
+            .default_value("42261")
+    ]
+);
