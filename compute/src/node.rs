@@ -8,7 +8,7 @@ use ekiden_compute_api;
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_client::ConsensusClient;
 use ekiden_core::address::Address;
-use ekiden_core::bytes::B256;
+use ekiden_core::bytes::{B256, H160};
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
 use ekiden_core::error::Result;
@@ -151,11 +151,15 @@ impl ComputeNode {
         // Register entity with the registry.
         // TODO: This should probably be done independently?
         // TODO: We currently use the node key pair as the entity key pair.
+        // TODO: Should learn ethereum identity from web3 provider or config.
         let entity_pk = config.consensus.signer.get_public_key();
         let signed_entity = Signed::sign(
             &config.consensus.signer,
             &REGISTER_ENTITY_SIGNATURE_CONTEXT,
-            Entity { id: entity_pk },
+            Entity {
+                id: entity_pk,
+                eth_address: Some(H160::default()),
+            },
         );
         // XXX: Needed to avoid registering the key manager compute node for now.
         if config.worker.key_manager.is_some() {
