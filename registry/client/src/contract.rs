@@ -96,7 +96,7 @@ create_component!(
             .takes_value(true)
             .default_value("127.0.0.1"),
         Arg::with_name("contract-registry-client-port")
-            .long("contract registry-client-port")
+            .long("contract-registry-client-port")
             .help("(remote contract registry backend) Port that the contract registry client should connect to")
             .takes_value(true)
             .default_value("42261")
