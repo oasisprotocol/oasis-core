@@ -153,7 +153,9 @@ impl DummyStakeEscrowBackendInner {
             }
         }
         {
-            let target = self.stakes.entry(target).or_insert_with(|| DummyStakeEscrowInfo::new());
+            let target = self.stakes
+                .entry(target)
+                .or_insert_with(|| DummyStakeEscrowInfo::new());
             if target.amount > AMOUNT_MAX - amount {
                 return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
             }

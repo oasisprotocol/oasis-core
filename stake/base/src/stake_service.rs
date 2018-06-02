@@ -110,13 +110,11 @@ where
         let f = move || -> Result<BoxFuture<()>, Error> {
             match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => {
-                    match B256::try_from(req.get_target()) {
-                        Err(_e) => Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
-                        Ok(t) => {
-                            let amount = req.get_amount();
-                            Ok(self.inner.transfer_stake(s, t, amount))
-                        },
+                Ok(s) => match B256::try_from(req.get_target()) {
+                    Err(_e) => Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
+                    Ok(t) => {
+                        let amount = req.get_amount();
+                        Ok(self.inner.transfer_stake(s, t, amount))
                     }
                 },
             }

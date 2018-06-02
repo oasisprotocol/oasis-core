@@ -57,7 +57,8 @@ impl StakeEscrowBackend for StakeClient {
         request.set_amount(amount);
         match self.0.transfer_stake_async(&request) {
             Ok(f) => Box::new(
-                f.map(|_response| ()).map_err(|error| Error::new(error.description())),
+                f.map(|_response| ())
+                    .map_err(|error| Error::new(error.description())),
             ),
             Err(error) => Box::new(future::err(Error::new(error.description()))),
         }

@@ -218,7 +218,10 @@ fn test_dummy_stake_backend() {
     assert_eq!(ss.escrowed, 0);
 
     println!("transfer from alice to bob -- should be insufficient");
-    match backend.transfer_stake(alice, bob, 100 - 10 - 5 - 13 + 1).wait() {
+    match backend
+        .transfer_stake(alice, bob, 100 - 10 - 5 - 13 + 1)
+        .wait()
+    {
         Err(e) => {
             println!("Got error {}", e.message);
             assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
