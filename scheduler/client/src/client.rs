@@ -3,9 +3,10 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{Channel, Environment};
+use grpcio::{self, Channel, ChannelBuilder};
 
 use ekiden_common::bytes::B256;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_common::node::Node;
@@ -20,7 +21,7 @@ impl SchedulerClient {
         SchedulerClient(api::SchedulerClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<Environment>) -> Self {
+    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
         SchedulerClient::new(node.connect(env))
     }
 }
@@ -58,3 +59,36 @@ impl Scheduler for SchedulerClient {
         }
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    remote,
+    "scheduler-backend",
+    SchedulerClient,
+    Scheduler,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
+            "{}:{}",
+            args.value_of("scheduler-client-host").unwrap(),
+            args.value_of("scheduler-client-port").unwrap(),
+        ));
+
+        let instance: Arc<Scheduler> = Arc::new(SchedulerClient::new(channel));
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("scheduler-client-host")
+            .long("scheduler-client-host")
+            .help("(remote scheduler backend) Host that the scheduler client should connect to")
+            .takes_value(true)
+            .default_value("127.0.0.1"),
+        Arg::with_name("scheduler-client-port")
+            .long("scheduler-client-port")
+            .help("(remote scheduler backend) Port that the scheduler client should connect to")
+            .takes_value(true)
+            .default_value("42261")
+    ]
+);

@@ -1,5 +1,5 @@
 [package]
-name = "ekiden-storage-frontend"
+name = "ekiden-storage-batch"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden storage interface traits"
@@ -8,9 +8,6 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
-ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
-ekiden-storage-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
-ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
-grpcio = "0.2.2"
+ekiden-storage-dummy = { path = "../dummy", version = "0.2.0-alpha" }
+log = "0.4"

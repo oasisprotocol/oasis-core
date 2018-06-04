@@ -3,9 +3,10 @@ use std::error::Error as StdError;
 use std::sync::Arc;
 
 use grpcio::RpcStatusCode::InvalidArgument;
-use grpcio::{Channel, Environment, RpcContext, RpcStatus, ServerStreamingSink, UnarySink,
+use grpcio::{self, Channel, ChannelBuilder, RpcContext, RpcStatus, ServerStreamingSink, UnarySink,
              WriteFlags};
 
+use super::super::environment::Environment;
 use super::super::error::Error;
 use super::local::LocalTimeSourceNotifier;
 use super::{EpochTime, TimeSource, TimeSourceNotifier};
@@ -84,7 +85,7 @@ impl TimeSourceClient {
         TimeSourceClient(api::TimeSourceClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<Environment>) -> Self {
+    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
         TimeSourceClient::new(node.connect(env))
     }
 }
@@ -116,3 +117,36 @@ impl TimeSourceNotifier for TimeSourceClient {
         }
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    remote,
+    "time-source",
+    TimeSourceClient,
+    TimeSourceNotifier,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
+            "{}:{}",
+            args.value_of("ts-client-host").unwrap(),
+            args.value_of("ts-client-port").unwrap(),
+        ));
+
+        let instance: Arc<TimeSourceNotifier> = Arc::new(TimeSourceClient::new(channel));
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("ts-client-host")
+            .long("ts-client-host")
+            .help("(remote time source backend) Host that the time source client should connect to")
+            .takes_value(true)
+            .default_value("127.0.0.1"),
+        Arg::with_name("ts-client-port")
+            .long("ts-client-port")
+            .help("(remote time source backend) Port that the time source client should connect to")
+            .takes_value(true)
+            .default_value("42261")
+    ]
+);

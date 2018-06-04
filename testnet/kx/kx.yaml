@@ -65,7 +65,7 @@ spec:
   selector:
     matchLabels:
       copper: ekiden-token
-  # replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
@@ -84,9 +84,25 @@ spec:
             - --no-persist-identity
             - --metrics-addr
             - "0.0.0.0:3000"
-            - --dummy-host
+            - --consensus-client-host
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
-            - --dummy-port
+            - --consensus-client-port
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
+            - --contract-registry-client-host
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
+            - --contract-registry-client-port
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
+            - --entity-registry-client-host
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
+            - --entity-registry-client-port
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
+            - --scheduler-client-host
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
+            - --scheduler-client-port
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
+            - --storage-client-host
+            - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
+            - --storage-client-port
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
             - ekiden/lib/token.so
 ---

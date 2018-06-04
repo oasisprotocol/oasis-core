@@ -19,6 +19,8 @@ service Stake {
     returns (DepositStakeResponse) {}
   rpc GetStakeStatus (GetStakeStatusRequest)
     returns (GetStakeStatusResponse) {}
+  rpc TransferStake (TransferStakeRequest)
+    returns (TransferStakeResponse) {}
   rpc WithdrawStake (WithdrawStakeRequest)
     returns (WithdrawStakeResponse) {}
   rpc AllocateEscrow (AllocateEscrowRequest)
@@ -97,6 +99,22 @@ message GetStakeStatusResponse {
   uint64 escrowed_stake = 2;
 }
 // Available stake for withdrawal is total_stake - escrowed_stake.
+
+// Transfer |amount| stake from the stake account belonging to
+// |msg_sender| to that belonging to |target|.  If no account exists
+// for |target|, it is automatically created.
+message TransferStakeRequest {
+  bytes msg_sender = 1;
+  bytes target = 2;
+  uint64 amount = 3;
+}
+
+// If there is no overflow in adding to the target account, or
+// underflow in deducting from the msg_sender account, then the null
+// response would indicate success.  Otherwise an error would be
+// reported.
+message TransferStakeResponse {
+}
 
 // The authenticated caller can withdrawl up to the available stake for
 // withdrawal.
@@ -201,8 +219,12 @@ message FetchEscrowByIdResponse {
 }
 
 // The authenticated caller indicates that he transactions for which
-// the escrow was created is done.  If the escrow account owner has
-// met their obligations
+// the escrow was created is done, and the escrow account identified
+// by |escrow_id| should be liquidated.  If the escrow account owner
+// has met their obligations, the |amount_requested| could be zero,
+// and the balance would be returned to the creator of the escrow
+// account.  Otherwise, the entire amount specified by |escrow_id|
+// could be forefeited and claimed by |msg_sender|.
 
 // msg_sender should have an account, or one will be created for it.
 message TakeAndReleaseEscrowRequest {
@@ -213,9 +235,10 @@ message TakeAndReleaseEscrowRequest {
 
 message TakeAndReleaseEscrowResponse {
   // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
-  uint64 amount_taken = 1;  // $$ transferred to target (caller).
-  // If there is no Err(..), amount_taken should always equal
-  // amount_requested in the request message.  If there is escrow any
-  // left over, it is released into the stakeholder's account and
-  // available for withdrawal via WithdrawStakeRequest
+  uint64 amount_taken = 1;
+  // amount transferred to target (caller)'s stake account.  If there
+  // is no Err(..), amount_taken should always equal amount_requested
+  // in the request message.  If there is escrow any left over, it is
+  // released into the stakeholder's account and available for
+  // withdrawal via WithdrawStakeRequest
 }

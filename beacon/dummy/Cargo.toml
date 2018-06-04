@@ -9,6 +9,7 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 byteorder = "1.2.1"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-beacon-base = { path = "../base", version = "0.2.0-alpha" }
 log = "0.4"
 

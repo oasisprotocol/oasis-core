@@ -156,6 +156,12 @@ fn main() {
                                 .env("EKIDEN_DOCKER_NAME"),
                         )
                         .arg(
+                            Arg::with_name("docker-extra-args")
+                                .help("Additional comma-delimited arguments to pass to Docker when creating the environment")
+                                .long("docker-extra-args")
+                                .default_value("")
+                        )
+                        .arg(
                             Arg::with_name("hardware")
                                 .help("Enter a hardware backed rather than simulated environment")
                                 .long("hw"),
