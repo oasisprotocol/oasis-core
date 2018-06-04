@@ -1,5 +1,3 @@
-#![feature(conservative_impl_trait)]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -40,7 +38,8 @@ impl DynamoDbBackend {
     }
 
     /// Like `futures::sync::oneshot::spawn_fn`, but `R` doesn't have to be `Send`.
-    fn spawn_fn<F, R>(&self, f: F) -> impl futures::Future<Item = R::Item, Error = R::Error>
+    // TODO: change to `-> impl Future`
+    fn spawn_fn<F, R>(&self, f: F) -> Box<futures::Future<Item = R::Item, Error = R::Error> + Send>
     where
         F: FnOnce() -> R + Send + 'static,
         R: futures::IntoFuture,
@@ -56,7 +55,7 @@ impl DynamoDbBackend {
                 Ok(())
             })
         });
-        result_rx.then(|result| result.unwrap())
+        Box::new(result_rx.then(|result| result.unwrap()))
     }
 }
 
