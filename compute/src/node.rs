@@ -6,22 +6,21 @@ use grpcio;
 
 use ekiden_compute_api;
 use ekiden_consensus_base::ConsensusBackend;
-use ekiden_consensus_client::ConsensusClient;
 use ekiden_core::address::Address;
 use ekiden_core::bytes::{B256, H160};
 use ekiden_core::contract::Contract;
 use ekiden_core::entity::Entity;
+use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Future, GrpcExecutor};
 use ekiden_core::node::Node;
 use ekiden_core::signature::Signed;
+use ekiden_di::Container;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
-use ekiden_registry_client::{ContractRegistryClient, EntityRegistryClient};
 use ekiden_scheduler_base::Scheduler;
-use ekiden_scheduler_client::SchedulerClient;
-use ekiden_storage_frontend::StorageClient;
+use ekiden_storage_base::StorageBackend;
 use ekiden_tools::get_contract_identity;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
@@ -31,10 +30,6 @@ use super::services::computation_group::ComputationGroupService;
 use super::services::web3::Web3Service;
 use super::worker::{Worker, WorkerConfiguration};
 
-/// Storage configuration.
-// TODO: Add backend configuration.
-pub struct StorageConfiguration;
-
 /// Compute node test-only configuration.
 pub struct ComputeNodeTestOnlyConfiguration {
     /// Override contract identifier.
@@ -43,16 +38,8 @@ pub struct ComputeNodeTestOnlyConfiguration {
 
 /// Compute node configuration.
 pub struct ComputeNodeConfiguration {
-    /// Number of gRPC threads.
-    pub grpc_threads: usize,
     /// gRPC server port.
     pub port: u16,
-    /// Shared dummy node host.
-    // TODO: Remove this once we handle backend configuration properly.
-    pub dummy_host: String,
-    /// Shared dummy node port.
-    // TODO: Remove this once we handle backend configuration properly.
-    pub dummy_port: u16,
     /// Number of compute replicas.
     // TODO: Remove this once we have independent contract registration.
     pub compute_replicas: u64,
@@ -61,8 +48,6 @@ pub struct ComputeNodeConfiguration {
     pub compute_backup_replicas: u64,
     /// Consensus configuration.
     pub consensus: ConsensusConfiguration,
-    /// Storage configuration.
-    pub storage: StorageConfiguration,
     /// IAS configuration.
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
@@ -91,28 +76,15 @@ pub struct ComputeNode {
 
 impl ComputeNode {
     /// Create new compute node.
-    pub fn new(config: ComputeNodeConfiguration) -> Result<Self> {
-        // Create gRPC environment.
-        let grpc_environment = Arc::new(grpcio::Environment::new(config.grpc_threads));
-
+    pub fn new(config: ComputeNodeConfiguration, mut container: Container) -> Result<Self> {
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias)?);
 
-        // Create scheduler.
-        // TODO: Base on configuration.
-        let channel = grpcio::ChannelBuilder::new(grpc_environment.clone())
-            .connect(&format!("{}:{}", config.dummy_host, config.dummy_port));
-        let contract_registry = Arc::new(ContractRegistryClient::new(channel.clone()));
-        let entity_registry = Arc::new(EntityRegistryClient::new(channel.clone()));
-        let scheduler = Arc::new(SchedulerClient::new(channel.clone()));
-
-        // Create storage backend.
-        // TODO: Base on configuration.
-        let storage_backend = Arc::new(StorageClient::new(channel.clone()));
-
-        // Create consensus backend.
-        // TODO: Base on configuration.
-        let consensus_backend = Arc::new(ConsensusClient::new(channel.clone()));
+        let contract_registry = container.inject::<ContractRegistryBackend>()?;
+        let entity_registry = container.inject::<EntityRegistryBackend>()?;
+        let scheduler = container.inject::<Scheduler>()?;
+        let storage_backend = container.inject::<StorageBackend>()?;
+        let consensus_backend = container.inject::<ConsensusBackend>()?;
 
         // Create contract.
         // TODO: Get this from somewhere.
@@ -199,6 +171,10 @@ impl ComputeNode {
             info!("Compute node registration done");
         }
 
+        // Environment.
+        let environment = container.inject::<Environment>()?;
+        let grpc_environment = environment.grpc();
+
         // Create worker.
         let worker = Arc::new(Worker::new(
             config.worker,
@@ -233,6 +209,12 @@ impl ComputeNode {
             ComputationGroupService::new(consensus_frontend.clone()),
         );
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
+            .channel_args(
+                grpcio::ChannelBuilder::new(grpc_environment.clone())
+                    .max_receive_message_len(usize::max_value())
+                    .max_send_message_len(usize::max_value())
+                    .build_args(),
+            )
             .register_service(web3)
             .register_service(inter_node)
             .bind("0.0.0.0", config.port)

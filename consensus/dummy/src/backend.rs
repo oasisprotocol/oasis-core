@@ -713,3 +713,12 @@ impl ConsensusBackend for DummyConsensusBackend {
         self.send_command(Command::Reveal(contract_id, reveal, sender), receiver)
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "consensus-backend",
+    DummyConsensusBackend,
+    ConsensusBackend,
+    [Scheduler, StorageBackend]
+);

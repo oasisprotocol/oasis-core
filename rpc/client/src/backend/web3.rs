@@ -58,6 +58,8 @@ impl ComputeNodes {
         address: &ComputeNodeAddress,
     ) -> Result<()> {
         let channel = grpcio::ChannelBuilder::new(environment)
+            .max_receive_message_len(usize::max_value())
+            .max_send_message_len(usize::max_value())
             .connect(&format!("{}:{}", address.host, address.port));
         let client = Web3Client::new(channel);
 

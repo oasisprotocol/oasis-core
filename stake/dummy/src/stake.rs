@@ -137,6 +137,38 @@ impl DummyStakeEscrowBackendInner {
         }
     }
 
+    pub fn transfer_stake(
+        &mut self,
+        msg_sender: B256,
+        target: B256,
+        amount: AmountType,
+    ) -> Result<(), Error> {
+        {
+            let entry = match self.stakes.get_mut(&msg_sender) {
+                None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
+                Some(e) => e,
+            };
+            if entry.amount - entry.escrowed < amount {
+                return Err(Error::new(ErrorCodes::InsufficientFunds.to_string()));
+            }
+        }
+        {
+            let target = self.stakes
+                .entry(target)
+                .or_insert_with(|| DummyStakeEscrowInfo::new());
+            if target.amount > AMOUNT_MAX - amount {
+                return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
+            }
+            target.amount += amount;
+        }
+        let entry = match self.stakes.get_mut(&msg_sender) {
+            None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
+            Some(e) => e,
+        };
+        entry.amount -= amount;
+        Ok(())
+    }
+
     pub fn withdraw_stake(
         &mut self,
         msg_sender: B256,
@@ -341,6 +373,14 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
             inner.get_stake_status(msg_sender)
+        }))
+    }
+
+    fn transfer_stake(&self, msg_sender: B256, target: B256, amount: AmountType) -> BoxFuture<()> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
+            inner.transfer_stake(msg_sender, target, amount)
         }))
     }
 

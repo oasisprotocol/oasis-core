@@ -2,6 +2,8 @@
 extern crate ekiden_beacon_base;
 extern crate ekiden_common;
 extern crate ekiden_core;
+#[macro_use]
+extern crate ekiden_di;
 extern crate ekiden_registry_base;
 extern crate ekiden_scheduler_base;
 

@@ -54,3 +54,12 @@ impl StorageBackend for DummyStorageBackend {
         }))
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "storage-backend",
+    DummyStorageBackend,
+    StorageBackend,
+    []
+);

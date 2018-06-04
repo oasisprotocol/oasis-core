@@ -29,6 +29,9 @@ extern crate serde_derive;
 pub extern crate untrusted;
 
 extern crate ekiden_common_api;
+#[allow(unused_imports)]
+#[macro_use]
+extern crate ekiden_di;
 
 pub mod address;
 pub mod bytes;
@@ -50,4 +53,5 @@ pub mod random;
 pub mod signature;
 #[macro_use]
 pub mod uint;
+pub mod environment;
 pub mod subscribers;
