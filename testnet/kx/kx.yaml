@@ -28,6 +28,7 @@ spec:
     metadata:
       labels:
         copper: ekiden-token-node-dummy
+        app: ekiden
     spec:
       containers:
         - name: ekiden-node-dummy
@@ -69,6 +70,7 @@ spec:
     metadata:
       labels:
         copper: ekiden-token
+        app: ekiden
     spec:
       containers:
         - name: ekiden-compute
