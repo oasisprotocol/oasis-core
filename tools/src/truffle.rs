@@ -3,6 +3,11 @@ use std::env;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
 
+/// The hard coded truffle development Ethereum address, taken from
+/// http://truffleframework.com/docs/getting_started/console (entry 0).
+pub const DEVELOPMENT_ADDRESS: &'static [u8] =
+    b"\x62\x73\x06\x09\x0a\xba\xb3\xa6\xe1\x40\x0e\x93\x45\xbc\x60\xc7\x8a\x8b\xef\x57";
+
 /// Start at truffle develop instance and return a handle for testing against.
 pub fn start_truffle(cwd: &str) -> Child {
     if env::var("EXTERNAL_BLOCKCHAIN").is_ok() {
