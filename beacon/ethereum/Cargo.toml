@@ -18,5 +18,4 @@ web3 = { git = "https://github.com/ekiden/rust-web3" }
 
 [dev-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
-pretty_env_logger = "0.2"
 scopeguard = "0.3.3"
