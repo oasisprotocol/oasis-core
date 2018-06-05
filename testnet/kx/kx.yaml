@@ -127,13 +127,14 @@ metadata:
   namespace: monitoring
   labels:
     app: ekiden-dashboard
+    prometheus: kube-prometheus
 spec:
   selector:
     matchLabels:
       app: ekiden-dashboard
-    endpoints:
-      - port: metrics
-        interval: 5s
-    namespaceSelector:
-      matchNames:
-        - default
+  endpoints:
+    - port: metrics
+      interval: 5s
+  namespaceSelector:
+    matchNames:
+      - default
