@@ -139,12 +139,21 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
 mod tests {
     use ekiden_storage_base;
     use ekiden_storage_base::StorageBackend;
+    use rusoto_core;
+    use rusoto_core::ProvideAwsCredentials;
     use tokio_core;
 
     use DynamoDbBackend;
     #[test]
     fn play() {
         let mut core = tokio_core::reactor::Core::new().unwrap();
+
+        if core.run(rusoto_core::reactor::CredentialsProvider::default().credentials()).is_err() {
+            // Skip this if AWS credentials aren't available. Maybe make this non-silent if the
+            // test framework supports it.
+            return;
+        }
+
         let storage = DynamoDbBackend::new(
             core.remote(),
             "us-west-2".parse().unwrap(),
