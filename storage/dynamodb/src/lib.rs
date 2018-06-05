@@ -1,3 +1,5 @@
+#![feature(use_extern_macros)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -137,8 +139,12 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
 
 #[cfg(test)]
 mod tests {
+    use ekiden_common;
     use ekiden_storage_base;
     use ekiden_storage_base::StorageBackend;
+    extern crate log;
+    use self::log::log;
+    use self::log::warn;
     use rusoto_core;
     use rusoto_core::ProvideAwsCredentials;
     use tokio_core;
@@ -148,9 +154,12 @@ mod tests {
     fn play() {
         let mut core = tokio_core::reactor::Core::new().unwrap();
 
-        if core.run(rusoto_core::reactor::CredentialsProvider::default().credentials()).is_err() {
-            // Skip this if AWS credentials aren't available. Maybe make this non-silent if the
-            // test framework supports it.
+        if let Err(e) = core.run(rusoto_core::reactor::CredentialsProvider::default().credentials())
+        {
+            // Skip this if AWS credentials aren't available.
+
+            ekiden_common::testing::try_init_logging();
+            warn!("{} Skipping DynamoDB test.", e);
             return;
         }
 
