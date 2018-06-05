@@ -11,6 +11,8 @@
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
 * Add support for dependency injection.
+* Bugfix: `epochtime::LocalTimeSourceNotifier::watch_epochs()` will now
+  correctly broadcast the current epoch if it is available.
 
 # 0.1.0
 
