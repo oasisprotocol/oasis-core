@@ -25,6 +25,7 @@ members = [
     "storage/api",
     "storage/base",
     "storage/dummy",
+    "storage/dynamodb",
     "storage/frontend",
     "storage/persistent",
     "storage/lru_cache",
