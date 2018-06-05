@@ -2,6 +2,22 @@
 
 WORKDIR=${1:-$(pwd)}
 
+run_dummy_node_default() {
+    ${WORKDIR}/target/debug/ekiden-node-dummy \
+        --time-source mockrpc \
+        --storage-backend dummy \
+        &
+}
+
+run_dummy_node_storage_dynamodb() {
+    ${WORKDIR}/target/debug/ekiden-node-dummy \
+        --time-source mockrpc \
+        --storage-backend dynamodb \
+        --storage-dynamodb-region us-west-2 \
+        --storage-dynamodb-table-name test \
+        &
+}
+
 run_compute_node() {
     local id=$1
     shift
@@ -26,6 +42,7 @@ run_test() {
     local description=$2
     local client=$3
     local epochs=$4
+    local dummy_node_runner=$5
 
     echo "RUNNING TEST: ${description}"
 
@@ -33,7 +50,7 @@ run_test() {
     trap 'kill -- -0' EXIT
 
     # Start dummy node.
-    ${WORKDIR}/target/debug/ekiden-node-dummy --time-source mockrpc &
+    $dummy_node_runner
     sleep 1
 
     # Run the client. We run the client first so that we test whether it waits for the
@@ -85,7 +102,8 @@ scenario_discrepancy_leader() {
     run_compute_node 3 --test-inject-discrepancy
 }
 
-run_test scenario_basic "e2e-basic" token 1
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1
-run_test scenario_basic "e2e-long" test-long-term 3
+run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
+run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
+run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
+run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
+run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb

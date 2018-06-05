@@ -18,6 +18,7 @@ extern crate ekiden_common_api;
 extern crate ekiden_consensus_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
+extern crate ekiden_di;
 extern crate ekiden_registry_api;
 extern crate ekiden_registry_base;
 extern crate ekiden_scheduler_api;

@@ -7,7 +7,11 @@ extern crate log;
 extern crate pretty_env_logger;
 
 extern crate ekiden_common;
+extern crate ekiden_di;
+use ekiden_di::Component;
 extern crate ekiden_node_dummy;
+extern crate ekiden_storage_dummy;
+extern crate ekiden_storage_dynamodb;
 
 use std::process::exit;
 use std::sync::Arc;
@@ -24,6 +28,10 @@ const TIME_SOURCE_MOCK_RPC: &'static str = "mockrpc";
 const TIME_SOURCE_SYSTEM: &'static str = "system";
 
 fn main() {
+    let mut known_components = ekiden_di::KnownComponents::new();
+    ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
+    ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
+
     let matches = App::new("Ekiden Dummy Shared Backend Node")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Oasis Labs Inc. <info@oasislabs.com>")
@@ -72,6 +80,7 @@ fn main() {
                 .requires_if("time-source", TIME_SOURCE_MOCK)
                 .display_order(1),
         )
+        .args(&known_components.get_arguments())
         .get_matches();
 
     // Initialize logger.
@@ -97,12 +106,15 @@ fn main() {
         _ => panic!("Invalid time source specified."),
     };
 
+    let container = known_components.build_with_arguments(&matches).unwrap();
+
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
             grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap(),
             port: value_t!(matches, "port", u16).unwrap(),
         },
         time_source_impl,
+        container,
     ) {
         Ok(backends) => backends,
         Err(err) => {
