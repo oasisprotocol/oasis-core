@@ -11,6 +11,11 @@ extern crate sgx_rand;
 #[cfg(target_env = "sgx")]
 extern crate sgx_trts;
 
+#[cfg(not(target_env = "sgx"))]
+extern crate env_logger;
+#[cfg(not(target_env = "sgx"))]
+extern crate pretty_env_logger;
+
 extern crate bigint;
 extern crate byteorder;
 extern crate chrono;
@@ -55,3 +60,4 @@ pub mod signature;
 pub mod uint;
 pub mod environment;
 pub mod subscribers;
+pub mod testing;

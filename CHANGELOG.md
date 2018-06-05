@@ -14,6 +14,8 @@
 * Bugfix: `epochtime::LocalTimeSourceNotifier::watch_epochs()` will now
   correctly broadcast the current epoch if it is available.
 * The initial Ethereum smart contract based Random Beacon has been added.
+* Add `common::testing::try_init_logging` which can be called from tests to
+  initialize logging while honoring `cargo test`'s capture behavior.
 
 # 0.1.0
 

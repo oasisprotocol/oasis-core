@@ -9,9 +9,6 @@ extern crate ekiden_tools;
 extern crate scopeguard;
 extern crate web3;
 
-extern crate log;
-extern crate pretty_env_logger;
-
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_ethereum::EthereumRandomBeacon;
 use ekiden_common::bytes::{B256, H160};
@@ -19,28 +16,10 @@ use ekiden_common::entity::Entity;
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_common::error::Error;
 use ekiden_common::futures::{cpupool, future, stream, BoxStream, Future, Stream};
+use ekiden_common::testing;
 use ekiden_tools::truffle::{deploy_truffle, start_truffle, DEVELOPMENT_ADDRESS};
-use log::LevelFilter;
 use web3::api::Web3;
 use web3::transports::WebSocket;
-
-fn try_init_logging() {
-    // `pretty_env_logger` logs to stderr by default.  While it could be
-    // re-targetted to log to stdout, Rust/Cargo bugs prevent stdout from
-    // threads being captured, so there's no point.
-    //
-    // See: https://github.com/rust-lang/rust/issues/42474
-
-    for arg in std::env::args() {
-        if arg == "--nocapture" {
-            pretty_env_logger::formatted_builder()
-                .unwrap()
-                .filter(None, LevelFilter::Trace)
-                .init();
-            return;
-        }
-    }
-}
 
 /// Make a stream of transactions between two truffle default accts to keep the chain going.
 fn mine<T: 'static + web3::Transport + Sync + Send>(tport: T) -> BoxStream<u64>
@@ -59,7 +38,7 @@ where
 
 #[test]
 fn beacon_integration() {
-    try_init_logging();
+    testing::try_init_logging();
 
     let mut executor = cpupool::CpuPool::new(4);
 
