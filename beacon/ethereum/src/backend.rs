@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
+use std::result::Result as StdResult;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -13,7 +14,10 @@ use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
                              StreamExt};
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_di;
 use ethabi::Token;
+#[allow(unused_imports)]
+use rustc_hex::FromHex;
 use serde_json;
 use web3;
 use web3::api::Web3;
@@ -471,3 +475,34 @@ where
             .into_box()
     }
 }
+
+type EthereumRandomBeaconViaWebsocket = EthereumRandomBeacon<web3::transports::WebSocket>;
+create_component!(
+    ethereum,
+    "random-beacon-backend",
+    EthereumRandomBeaconViaWebsocket,
+    RandomBeacon,
+    (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
+        let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
+        let local_identity = container.inject::<Entity>()?;
+        let time_notifier = container.inject::<TimeSourceNotifier>()?;
+
+        let args = container.get_arguments().unwrap();
+        let contract_address = args.value_of("beacon-address").unwrap();
+        let contract_address = contract_address.split_at(2).1.from_hex();
+        let contract_address = H160::from_slice(&contract_address.unwrap());
+
+        let instance: Arc<EthereumRandomBeaconViaWebsocket> =
+            Arc::new(EthereumRandomBeacon::new(
+                client,
+                local_identity,
+                contract_address,
+                time_notifier,
+            ).map_err(|e| ekiden_di::error::Error::from(e.description()))?);
+        Ok(Box::new(instance))
+    }),
+    [Arg::with_name("beacon-address")
+        .long("beacon-address")
+        .help("Ethereum address at which the random beacon has been deployed")
+        .takes_value(true)]
+);
