@@ -26,10 +26,12 @@ extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
+extern crate ekiden_storage_batch;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
 mod consensus;
+mod environment;
 mod group;
 mod handlers;
 mod ias;
@@ -45,6 +47,7 @@ extern crate clap;
 extern crate pretty_env_logger;
 
 extern crate ekiden_consensus_client;
+extern crate ekiden_di;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
@@ -64,12 +67,28 @@ use ekiden_core::ring::rand::SystemRandom;
 use ekiden_core::ring::signature::Ed25519KeyPair;
 use ekiden_core::signature::{InMemorySigner, Signer};
 use ekiden_core::untrusted;
+use ekiden_di::{Component, KnownComponents};
 
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
 use self::ias::{IASConfiguration, SPID};
-use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration,
-                 StorageConfiguration};
+use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
+
+/// Register known components for dependency injection.
+fn register_components(known_components: &mut KnownComponents) {
+    // Environment.
+    self::environment::ComputeNodeEnvironment::register(known_components);
+    // Storage.
+    ekiden_storage_frontend::StorageClient::register(known_components);
+    // Consensus.
+    ekiden_consensus_client::ConsensusClient::register(known_components);
+    // Scheduler.
+    ekiden_scheduler_client::SchedulerClient::register(known_components);
+    // Entity registry.
+    ekiden_registry_client::EntityRegistryClient::register(known_components);
+    // Contract registry.
+    ekiden_registry_client::ContractRegistryClient::register(known_components);
+}
 
 /// Validate an IP address + port string.
 fn validate_addr_port(v: String) -> Result<(), String> {
@@ -80,6 +99,10 @@ fn validate_addr_port(v: String) -> Result<(), String> {
 }
 
 fn main() {
+    // Create known components registry.
+    let mut known_components = KnownComponents::new();
+    register_components(&mut known_components);
+
     let matches = App::new("Ekiden Compute Node")
         .version("0.1.0")
         .author("Jernej Kos <jernej@kos.mx>")
@@ -129,22 +152,6 @@ fn main() {
                 .takes_value(true)
                 .default_value("9003"),
         )
-        // TODO: Remove this once we handle backend configuration properly.
-        .arg(
-            Arg::with_name("dummy-host")
-                .long("dummy-host")
-                .help("Shared dummy node host")
-                .takes_value(true)
-                .default_value("127.0.0.1"),
-        )
-        // TODO: Remove this once we handle backend configuration properly.
-        .arg(
-            Arg::with_name("dummy-port")
-                .long("dummy-port")
-                .help("Shared dummy node port")
-                .takes_value(true)
-                .default_value("42261"),
-        )
         // TODO: Remove this once we have independent contract registration.
         .arg(
             Arg::with_name("compute-replicas")
@@ -162,13 +169,6 @@ fn main() {
                 .default_value("1"),
         )
         .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
-        .arg(
-            Arg::with_name("grpc-threads")
-                .long("grpc-threads")
-                .help("Number of threads to use for the event loop.")
-                .default_value("4")
-                .takes_value(true),
-        )
         .arg(
             Arg::with_name("metrics-addr")
                 .long("metrics-addr")
@@ -234,6 +234,7 @@ fn main() {
                 .takes_value(true)
                 .hidden(true)
         )
+        .args(&known_components.get_arguments())
         .get_matches();
 
     // Initialize logger.
@@ -241,6 +242,11 @@ fn main() {
         .unwrap()
         .filter(None, LevelFilter::Trace)
         .init();
+
+    // Initialize component container.
+    let container = known_components
+        .build_with_arguments(&matches)
+        .expect("failed to initialize component container");
 
     // Setup key pair.
     let mut key_pair = if let Some(filename) = matches.value_of("key-pair") {
@@ -279,90 +285,87 @@ fn main() {
     info!("Using public key {:?}", signer.get_public_key());
 
     // Setup compute node.
-    let mut node = ComputeNode::new(ComputeNodeConfiguration {
-        grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap_or_else(|e| e.exit()),
-        port: value_t!(matches, "port", u16).unwrap_or(9001),
-        // TODO: Remove this once we handle backend configuration properly.
-        dummy_host: matches.value_of("dummy-host").unwrap().to_string(),
-        // TODO: Remove this once we handle backend configuration properly.
-        dummy_port: value_t!(matches, "dummy-port", u16).unwrap_or_else(|e| e.exit()),
-        // TODO: Remove this once we have independent contract registration.
-        compute_replicas: value_t!(matches, "compute-replicas", u64).unwrap_or_else(|e| e.exit()),
-        // TODO: Remove this once we have independent contract registration.
-        compute_backup_replicas: value_t!(matches, "compute-backup-replicas", u64)
-            .unwrap_or_else(|e| e.exit()),
-        // Consensus configuration.
-        consensus: ConsensusConfiguration {
-            signer: signer,
-            max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
-            max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
-            test_only: ConsensusTestOnlyConfiguration {
-                inject_discrepancy: matches.is_present("test-inject-discrepancy"),
+    let mut node = ComputeNode::new(
+        ComputeNodeConfiguration {
+            port: value_t!(matches, "port", u16).unwrap_or(9001),
+            // TODO: Remove this once we have independent contract registration.
+            compute_replicas: value_t!(matches, "compute-replicas", u64)
+                .unwrap_or_else(|e| e.exit()),
+            // TODO: Remove this once we have independent contract registration.
+            compute_backup_replicas: value_t!(matches, "compute-backup-replicas", u64)
+                .unwrap_or_else(|e| e.exit()),
+            // Consensus configuration.
+            consensus: ConsensusConfiguration {
+                signer: signer,
+                max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
+                max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
+                test_only: ConsensusTestOnlyConfiguration {
+                    inject_discrepancy: matches.is_present("test-inject-discrepancy"),
+                },
             },
-        },
-        // Storage configuration.
-        storage: StorageConfiguration {},
-        // IAS configuration.
-        ias: if matches.is_present("ias-spid") {
-            Some(IASConfiguration {
-                spid: value_t!(matches, "ias-spid", SPID).unwrap_or_else(|e| e.exit()),
-                pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
-            })
-        } else {
-            warn!("IAS is not configured, validation will always return an error.");
+            // IAS configuration.
+            ias: if matches.is_present("ias-spid") {
+                Some(IASConfiguration {
+                    spid: value_t!(matches, "ias-spid", SPID).unwrap_or_else(|e| e.exit()),
+                    pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
+                })
+            } else {
+                warn!("IAS is not configured, validation will always return an error.");
 
-            None
-        },
-        // Worker configuration.
-        worker: {
-            // Check if passed contract exists.
-            let contract_filename = matches.value_of("contract").unwrap();
-            if !Path::new(contract_filename).exists() {
-                panic!(format!("Could not find contract: {}", contract_filename))
-            }
+                None
+            },
+            // Worker configuration.
+            worker: {
+                // Check if passed contract exists.
+                let contract_filename = matches.value_of("contract").unwrap();
+                if !Path::new(contract_filename).exists() {
+                    panic!(format!("Could not find contract: {}", contract_filename))
+                }
 
-            WorkerConfiguration {
-                contract_filename: contract_filename.to_owned(),
-                saved_identity_path: if matches.is_present("no-persist-identity") {
-                    None
-                } else {
-                    Some(
-                        Path::new(matches.value_of("identity-file").unwrap_or("identity.pb"))
-                            .to_owned(),
-                    )
-                },
-                forwarded_rpc_timeout: if matches.is_present("rpc-timeout") {
-                    Some(std::time::Duration::new(
-                        value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
-                        0,
-                    ))
-                } else {
-                    None
-                },
-                // Key manager configuration.
-                key_manager: if !matches.is_present("disable-key-manager") {
-                    Some(KeyManagerConfiguration {
-                        host: matches.value_of("key-manager-host").unwrap().to_owned(),
-                        port: value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
-                    })
-                } else {
-                    None
-                },
-            }
-        },
-        register_addrs: if matches.is_present("register-addr") {
-            Some(values_t_or_exit!(matches, "register-addr", SocketAddr))
-        } else {
-            None
-        },
-        test_only: ComputeNodeTestOnlyConfiguration {
-            contract_id: if matches.is_present("test-contract-id") {
-                Some(value_t_or_exit!(matches, "test-contract-id", B256))
+                WorkerConfiguration {
+                    contract_filename: contract_filename.to_owned(),
+                    saved_identity_path: if matches.is_present("no-persist-identity") {
+                        None
+                    } else {
+                        Some(
+                            Path::new(matches.value_of("identity-file").unwrap_or("identity.pb"))
+                                .to_owned(),
+                        )
+                    },
+                    forwarded_rpc_timeout: if matches.is_present("rpc-timeout") {
+                        Some(std::time::Duration::new(
+                            value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
+                            0,
+                        ))
+                    } else {
+                        None
+                    },
+                    // Key manager configuration.
+                    key_manager: if !matches.is_present("disable-key-manager") {
+                        Some(KeyManagerConfiguration {
+                            host: matches.value_of("key-manager-host").unwrap().to_owned(),
+                            port: value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
+                        })
+                    } else {
+                        None
+                    },
+                }
+            },
+            register_addrs: if matches.is_present("register-addr") {
+                Some(values_t_or_exit!(matches, "register-addr", SocketAddr))
             } else {
                 None
             },
+            test_only: ComputeNodeTestOnlyConfiguration {
+                contract_id: if matches.is_present("test-contract-id") {
+                    Some(value_t_or_exit!(matches, "test-contract-id", B256))
+                } else {
+                    None
+                },
+            },
         },
-    }).expect("failed to initialize compute node");
+        container,
+    ).expect("failed to initialize compute node");
 
     // Start compute node.
     node.start();

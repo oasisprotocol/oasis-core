@@ -1,0 +1,20 @@
+[package]
+name = "ekiden-storage-dynamodb"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "An Ekiden storage backend that uses AWS DynamoDB"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+futures = "0.1"
+rusoto_core = "0.32.0"
+rusoto_dynamodb = "0.32.0"
+tokio-core = "0.1.17"
+
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
+
+[dev-dependencies]
+log = "0.4.1"
+pretty_env_logger = "0.2"

@@ -101,6 +101,40 @@ where
         }).map_err(|_e| ()));
     }
 
+    fn transfer_stake(
+        &self,
+        ctx: RpcContext,
+        req: api::TransferStakeRequest,
+        sink: UnarySink<api::TransferStakeResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<()>, Error> {
+            match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => match B256::try_from(req.get_target()) {
+                    Err(_e) => Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
+                    Ok(t) => {
+                        let amount = req.get_amount();
+                        Ok(self.inner.transfer_stake(s, t, amount))
+                    }
+                },
+            }
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(_) => Ok(api::TransferStakeResponse::new()),
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
     fn withdraw_stake(
         &self,
         ctx: RpcContext,

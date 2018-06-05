@@ -16,6 +16,7 @@ message Address {
 
 message Entity {
     bytes id = 1;
+    bytes eth_address = 2;
 }
 
 message Node {

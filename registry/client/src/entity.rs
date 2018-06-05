@@ -3,10 +3,11 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{Channel, Environment};
+use grpcio::{self, Channel, ChannelBuilder};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::Environment;
 use ekiden_common::epochtime::EpochTime;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
@@ -23,7 +24,7 @@ impl EntityRegistryClient {
         EntityRegistryClient(api::EntityRegistryClient::new(channel))
     }
 
-    pub fn from_node(node: &Node, environment: Arc<Environment>) -> Self {
+    pub fn from_node(node: &Node, environment: Arc<grpcio::Environment>) -> Self {
         EntityRegistryClient::new(node.connect(environment))
     }
 }
@@ -215,3 +216,36 @@ impl EntityRegistryBackend for EntityRegistryClient {
         }
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    remote,
+    "entity-registry-backend",
+    EntityRegistryClient,
+    EntityRegistryBackend,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
+            "{}:{}",
+            args.value_of("entity-registry-client-host").unwrap(),
+            args.value_of("entity-registry-client-port").unwrap(),
+        ));
+
+        let instance: Arc<EntityRegistryBackend> = Arc::new(EntityRegistryClient::new(channel));
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("entity-registry-client-host")
+            .long("entity-registry-client-host")
+            .help("(remote entity registry backend) Host that the entity registry client should connect to")
+            .takes_value(true)
+            .default_value("127.0.0.1"),
+        Arg::with_name("entity-registry-client-port")
+            .long("entity-registry-client-port")
+            .help("(remote entity registry backend) Port that the entity registry client should connect to")
+            .takes_value(true)
+            .default_value("42261")
+    ]
+);

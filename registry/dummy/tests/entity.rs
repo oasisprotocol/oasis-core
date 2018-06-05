@@ -30,7 +30,7 @@ fn test_dummy_entity_backend() {
     let public_key = B256::from(key_pair.public_key_bytes());
     let signer = InMemorySigner::new(key_pair);
 
-    let ent = Entity { id: public_key };
+    let ent = Entity::for_local_test(public_key);
 
     let sig = Signature::sign(
         &signer,

@@ -137,6 +137,38 @@ impl DummyStakeEscrowBackendInner {
         }
     }
 
+    pub fn transfer_stake(
+        &mut self,
+        msg_sender: B256,
+        target: B256,
+        amount: AmountType,
+    ) -> Result<(), Error> {
+        {
+            let entry = match self.stakes.get_mut(&msg_sender) {
+                None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
+                Some(e) => e,
+            };
+            if entry.amount - entry.escrowed < amount {
+                return Err(Error::new(ErrorCodes::InsufficientFunds.to_string()));
+            }
+        }
+        {
+            let target = self.stakes
+                .entry(target)
+                .or_insert_with(|| DummyStakeEscrowInfo::new());
+            if target.amount > AMOUNT_MAX - amount {
+                return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
+            }
+            target.amount += amount;
+        }
+        let entry = match self.stakes.get_mut(&msg_sender) {
+            None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
+            Some(e) => e,
+        };
+        entry.amount -= amount;
+        Ok(())
+    }
+
     pub fn withdraw_stake(
         &mut self,
         msg_sender: B256,
@@ -257,28 +289,45 @@ impl DummyStakeEscrowBackendInner {
             }
             // post: amount_requested <= account.amount
 
-            let stakeholder = match self.stakes.get_mut(&account.owner) {
+            {
+                // amount_requested is credited to the target
+                // account. First ensure that no overflow can occur.
+                let target = self.stakes
+                    .entry(msg_sender)
+                    .or_insert_with(|| DummyStakeEscrowInfo::new());
+                if AMOUNT_MAX - target.amount < amount_requested {
+                    return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
+                }
+            }
+            {
+                let stakeholder = match self.stakes.get_mut(&account.owner) {
+                    None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
+                    Some(sh) => sh,
+                };
+                if !(stakeholder.accounts.contains(&escrow_id)) {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
+                }
+
+                // check some invariants:
+                //
+                // total tied up in escrow cannot exceed stake
+                if stakeholder.amount < stakeholder.escrowed {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
+                }
+                // single escrow account value cannot exceed total escrowed
+                if stakeholder.escrowed < account.amount {
+                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
+                }
+
+                stakeholder.amount -= amount_requested;
+                stakeholder.escrowed -= account.amount;
+                stakeholder.accounts.remove(&escrow_id);
+            }
+            let target = match self.stakes.get_mut(&msg_sender) {
                 None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
-                Some(sh) => sh,
+                Some(t) => t,
             };
-            if !(stakeholder.accounts.contains(&escrow_id)) {
-                return Err(Error::new(ErrorCodes::InternalError.to_string()));
-            }
-
-            // check some invariants:
-            //
-            // total tied up in escrow cannot exceed stake
-            if stakeholder.amount < stakeholder.escrowed {
-                return Err(Error::new(ErrorCodes::InternalError.to_string()));
-            }
-            // single escrow account value cannot exceed total escrowed
-            if stakeholder.escrowed < account.amount {
-                return Err(Error::new(ErrorCodes::InternalError.to_string()));
-            }
-
-            stakeholder.amount -= amount_requested;
-            stakeholder.escrowed -= account.amount;
-            stakeholder.accounts.remove(&escrow_id);
+            target.amount += amount_requested;
         } // terminate self.escrow_map mutable borrow via `account`
         self.escrow_map.remove(&escrow_id);
         // amount_available'
@@ -324,6 +373,14 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         Box::new(future::lazy(move || {
             let inner = inner.lock().unwrap();
             inner.get_stake_status(msg_sender)
+        }))
+    }
+
+    fn transfer_stake(&self, msg_sender: B256, target: B256, amount: AmountType) -> BoxFuture<()> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
+            inner.transfer_stake(msg_sender, target, amount)
         }))
     }
 
