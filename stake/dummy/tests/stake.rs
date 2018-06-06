@@ -243,4 +243,76 @@ fn test_dummy_stake_backend() {
     let ss = get_and_show_stake(&backend, dexter, "Dexter");
     assert_eq!(ss.total_stake, 17);
     assert_eq!(ss.escrowed, 0);
+
+    // ----------------------------------------------------
+    // self transfer
+    // ----------------------------------------------------
+    println!("transfer from dexter to dexter");
+    backend.transfer_stake(dexter, dexter, 17).wait().unwrap();
+    let ss = get_and_show_stake(&backend, dexter, "Dexter");
+    assert_eq!(ss.total_stake, 17);
+    assert_eq!(ss.escrowed, 0);
+    // ----------------------------------------------------
+    println!("transfer too much from dexter to dexter");
+    match backend.transfer_stake(dexter, dexter, 19).wait() {
+        Err(e) => {
+            println!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
+        }
+        Ok(_) => {
+            println!("Transfer succeeded but shouldn't.");
+            assert!(false);
+        }
+    }
+    let ss = get_and_show_stake(&backend, dexter, "Dexter");
+    assert_eq!(ss.total_stake, 17);
+    assert_eq!(ss.escrowed, 0);
+
+    // ----------------------------------------------------
+    // Self escrow & release
+    // ----------------------------------------------------
+    println!("create escrow from alice to alice");
+    let self_escrow_id = backend.allocate_escrow(alice, alice, 19).wait().unwrap();
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13 + 19);
+
+    println!("taking some from self-escrow");
+    backend
+        .take_and_release_escrow(alice, self_escrow_id, 11)
+        .wait()
+        .unwrap();
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13);
+    // ----------------------------------------------------
+    println!("create escrow from alice to alice");
+    let self_escrow_id = backend.allocate_escrow(alice, alice, 23).wait().unwrap();
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13 + 23);
+
+    println!("taking all from self-escrow");
+    backend
+        .take_and_release_escrow(alice, self_escrow_id, 23)
+        .wait()
+        .unwrap();
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13);
+    // ----------------------------------------------------
+    println!("create escrow from alice to alice");
+    let self_escrow_id = backend.allocate_escrow(alice, alice, 29).wait().unwrap();
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13 + 29);
+
+    println!("taking none from self-escrow");
+    backend
+        .take_and_release_escrow(alice, self_escrow_id, 0)
+        .wait()
+        .unwrap();
+    let ss = get_and_show_stake(&backend, alice, "Alice");
+    assert_eq!(ss.total_stake, 100 - 10 - 5 - 17);
+    assert_eq!(ss.escrowed, 13);
 }
