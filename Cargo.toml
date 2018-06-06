@@ -71,6 +71,7 @@ members = [
 
     # Clients.
     "clients/token",
+    "clients/test-long-term",
 
     # Registry.
     "registry/api",
