@@ -34,18 +34,22 @@ run_test() {
     ${WORKDIR}/target/debug/ekiden-node-dummy --time-source mockrpc &
     sleep 1
 
+    # Run the client. We run the client first so that we test whether it waits for the
+    # committee to be elected and connects to the leader.
+    ${WORKDIR}/target/debug/token-client \
+        --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
+        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 &
+    client_pid=$!
+
     # Start compute nodes.
     $scenario
 
     # Advance epoch to elect a new committee.
     sleep 2
     ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
-    sleep 2
 
-    # Run the client.
-    ${WORKDIR}/target/debug/token-client \
-        --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000
+    # Wait on the client and check its exit status.
+    wait ${client_pid}
 
     # Cleanup.
     echo "Cleaning up."

@@ -19,6 +19,7 @@
 * Move `GrpcEnvironment` to `common::environment` to make it reusable.
 * Add `spawn` to `common::environment::Environment` to make it easier to spawn tasks
   using the environment's default executor.
+* Make clients aware of compute committee changes and manage connections.
 
 # 0.1.0
 
