@@ -7,6 +7,8 @@
 * **BACKWARD INCOMPATIBLE:** Remove `submit` operation from consensus backend.
 * **BACKWARD INCOMPATIBLE:** Compute node arguments `--dummy-host` and `--dummy-port`
   have been removed. Backend-specific configuration arguments should be used instead.
+* **BACKWARD INCOMPATIBLE:** The Ethereum backend(s), Rust glue, and build
+  tooling have all been moved to a single `ethereum/` crate.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
