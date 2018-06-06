@@ -87,6 +87,7 @@ jobs:
             - target/debug/ekiden-node-dummy-controller
             - target/debug/ekiden-compute
             - target/debug/token-client
+            - target/debug/test-long-term-client
             - target/contract/token.so
             - target/contract/token.mrenclave
             - tests

@@ -1,40 +1,23 @@
 use std::sync::Arc;
-use std::{thread, time};
 
 extern crate ekiden_beacon_base;
-extern crate ekiden_beacon_ethereum;
 extern crate ekiden_common;
-extern crate ekiden_tools;
+extern crate ekiden_ethereum;
 #[macro_use(defer)]
 extern crate scopeguard;
 extern crate web3;
 
 use ekiden_beacon_base::RandomBeacon;
-use ekiden_beacon_ethereum::EthereumRandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{cpupool, future, stream, BoxStream, Future, Stream};
+use ekiden_common::futures::{cpupool, future, Future, Stream};
 use ekiden_common::testing;
-use ekiden_tools::truffle::{deploy_truffle, start_truffle, DEVELOPMENT_ADDRESS};
+use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
+use ekiden_ethereum::EthereumRandomBeacon;
 use web3::api::Web3;
 use web3::transports::WebSocket;
-
-/// Make a stream of transactions between two truffle default accts to keep the chain going.
-fn mine<T: 'static + web3::Transport + Sync + Send>(tport: T) -> BoxStream<u64>
-where
-    <T as web3::Transport>::Out: std::marker::Send,
-{
-    Box::new(stream::unfold(0, move |state| {
-        thread::sleep(time::Duration::from_millis(500));
-        Some(
-            tport
-                .execute("evm_mine", vec![])
-                .then(move |_r| future::ok::<(u64, u64), Error>((0, state + 1))),
-        )
-    }))
-}
 
 #[test]
 fn beacon_integration() {

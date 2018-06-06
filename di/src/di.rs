@@ -202,7 +202,7 @@ pub struct Container<'a> {
     /// Component descriptors from the registry.
     components: HashMap<TypeId, ComponentDescriptor>,
     /// Component instances.
-    instances: HashMap<TypeId, Box<Any>>,
+    instances: HashMap<TypeId, Box<Any + Send>>,
     /// Optional arguments.
     #[cfg(all(feature = "cli", not(target_env = "sgx")))]
     arguments: Option<clap::ArgMatches<'a>>,
@@ -236,7 +236,7 @@ impl<'a> Container<'a> {
     }
 
     /// Inject a component.
-    pub fn inject<T: ?Sized + 'static>(&mut self) -> Result<Arc<T>> {
+    pub fn inject<T: ?Sized + Sync + Send + 'static>(&mut self) -> Result<Arc<T>> {
         let type_id = TypeId::of::<T>();
 
         // Check for existing instance.
