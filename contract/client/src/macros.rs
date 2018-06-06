@@ -1,8 +1,12 @@
 // This is re-exported here only so it can be used in macros under a common name.
+pub use ekiden_common::bytes::B256;
+pub use ekiden_common::environment::Environment;
 pub use ekiden_common::futures::{BoxFuture, Future};
 pub use ekiden_common::signature::Signer;
 pub use ekiden_enclave_common::quote;
+pub use ekiden_registry_base::EntityRegistryBackend;
 pub use ekiden_rpc_client::backend::RpcClientBackend;
+pub use ekiden_scheduler_base::Scheduler;
 
 /// Create a contract client for a given API.
 ///
@@ -31,28 +35,38 @@ macro_rules! create_contract_client {
     ) => {
         mod $output_module {
             use std::sync::Arc;
+            use std::time::Duration;
 
-            use $crate::client::ContractClient;
+            use $crate::manager::ContractClientManager;
             use $crate::macros::quote::MrEnclave;
-            use $crate::macros::{BoxFuture, RpcClientBackend, Signer};
+            use $crate::macros::*;
 
             pub use $api_module::*;
 
-            pub struct Client<Backend: RpcClientBackend + 'static> {
-                client: ContractClient<Backend>,
+            pub struct Client {
+                manager: ContractClientManager,
             }
 
             #[allow(dead_code)]
-            impl<Backend: RpcClientBackend + 'static> Client<Backend> {
+            impl Client {
                 /// Create new client instance.
-                pub fn new(backend: Arc<Backend>,
-                           mr_enclave: MrEnclave,
-                           signer: Arc<Signer + Send + Sync>) -> Self {
-
+                pub fn new(
+                    contract_id: B256,
+                    mr_enclave: MrEnclave,
+                    timeout: Option<Duration>,
+                    environment: Arc<Environment>,
+                    scheduler: Arc<Scheduler>,
+                    entity_registry: Arc<EntityRegistryBackend>,
+                    signer: Arc<Signer>
+                ) -> Self {
                     Client {
-                        client: ContractClient::new(
-                            backend,
+                        manager: ContractClientManager::new(
+                            contract_id,
                             mr_enclave,
+                            timeout,
+                            environment,
+                            scheduler,
+                            entity_registry,
                             signer,
                         ),
                     }
@@ -64,7 +78,7 @@ macro_rules! create_contract_client {
                         &self,
                         arguments: $request_type
                     ) -> BoxFuture<$response_type> {
-                        self.client.call(stringify!($method_name), arguments)
+                        self.manager.call(stringify!($method_name), arguments)
                     }
                 )*
             }

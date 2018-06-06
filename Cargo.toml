@@ -13,7 +13,6 @@ members = [
     # Random beacon.
     "beacon/base",
     "beacon/dummy",
-    "beacon/ethereum",
 
     # Consensus interface.
     "consensus/api",
@@ -71,6 +70,7 @@ members = [
 
     # Clients.
     "clients/token",
+    "clients/test-long-term",
 
     # Registry.
     "registry/api",
@@ -93,4 +93,7 @@ members = [
     # Dummy shared backend node.
     "node/dummy",
     "node/dummy/api",
+
+    # Ethereum backend components.
+    "ethereum",
 ]

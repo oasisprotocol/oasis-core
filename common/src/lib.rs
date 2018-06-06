@@ -21,6 +21,9 @@ extern crate byteorder;
 extern crate chrono;
 extern crate core;
 #[cfg(not(target_env = "sgx"))]
+#[macro_use]
+extern crate clap;
+#[cfg(not(target_env = "sgx"))]
 extern crate get_if_addrs;
 #[macro_use]
 extern crate log;
@@ -58,6 +61,7 @@ pub mod random;
 pub mod signature;
 #[macro_use]
 pub mod uint;
+#[cfg(not(target_env = "sgx"))]
 pub mod environment;
 pub mod subscribers;
 pub mod testing;

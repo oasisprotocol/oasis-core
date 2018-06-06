@@ -17,7 +17,7 @@ use super::untrusted;
 use ekiden_common_api as api;
 
 /// Signer interface.
-pub trait Signer {
+pub trait Signer: Sync + Send {
     /// Sign given 256-bit digest.
     fn sign(&self, data: &H256) -> B512;
 

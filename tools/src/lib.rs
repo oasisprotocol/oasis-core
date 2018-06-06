@@ -12,7 +12,6 @@ extern crate regex;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate rustc_hex;
 extern crate sgx_edl;
 extern crate toml;
 
@@ -21,7 +20,6 @@ pub mod command_buildcontract;
 pub mod command_shell;
 pub mod contract;
 pub mod error;
-pub mod truffle;
 pub mod utils;
 pub use utils::*;
 
