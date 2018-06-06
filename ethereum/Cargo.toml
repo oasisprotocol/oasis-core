@@ -1,17 +1,17 @@
 [package]
-name = "ekiden-beacon-ethereum"
+name = "ekiden-ethereum"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
-description = "Ekiden Ethereum random beacon"
+description = "Ekiden Ethereum backend components"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [dependencies]
 chrono = "0.4.2"
-ekiden-beacon-base = { path = "../base", version = "0.2.0-alpha" }
-ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
+ekiden-beacon-base = { path = "../beacon/base", version = "0.2.0-alpha" }
+ekiden-common = { path = "../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 ethabi = "5.1"
 log = "0.4"
 rustc-hex = "1.0.0"
@@ -19,5 +19,4 @@ serde_json = "1.0"
 web3 = { git = "https://github.com/ekiden/rust-web3" }
 
 [dev-dependencies]
-ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
 scopeguard = "0.3.3"

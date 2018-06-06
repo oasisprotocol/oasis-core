@@ -6,7 +6,8 @@ use serde_cbor;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{BoxFuture, Future};
+use ekiden_common::futures::sync::oneshot;
+use ekiden_common::futures::{future, BoxFuture, Future, FutureExt};
 use ekiden_common::signature::Signer;
 use ekiden_contract_common::call::{ContractOutput, SignedContractCall};
 use ekiden_contract_common::protocol;
@@ -21,7 +22,11 @@ pub struct ContractClient<Backend: RpcClientBackend + 'static> {
     /// Underlying RPC client.
     rpc: RpcClient<Backend>,
     /// Signer used for signing contract calls.
-    signer: Arc<Signer + Send + Sync>,
+    signer: Arc<Signer>,
+    /// Shutdown signal (receiver).
+    shutdown_receiver: future::Shared<oneshot::Receiver<()>>,
+    /// Shutdown signal (sender).
+    shutdown_sender: oneshot::Sender<()>,
 }
 
 impl<Backend> ContractClient<Backend>
@@ -29,15 +34,15 @@ where
     Backend: RpcClientBackend + 'static,
 {
     /// Create new client instance.
-    pub fn new(
-        backend: Arc<Backend>,
-        mr_enclave: MrEnclave,
-        signer: Arc<Signer + Send + Sync>,
-    ) -> Self {
+    pub fn new(backend: Arc<Backend>, mr_enclave: MrEnclave, signer: Arc<Signer>) -> Self {
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
         ContractClient {
             backend: backend.clone(),
             rpc: RpcClient::new(backend, mr_enclave, false),
             signer,
+            shutdown_receiver: shutdown_receiver.shared(),
+            shutdown_sender,
         }
     }
 
@@ -50,21 +55,36 @@ where
         let backend = self.backend.clone();
         let call = SignedContractCall::sign(&self.signer, method, arguments);
 
-        Box::new(
-            self.rpc
-                .call(protocol::METHOD_CONTRACT_SUBMIT, call)
-                .and_then(move |call_id: H256| {
-                    // Subscribe to contract call so we will know when the call is done.
-                    backend.wait_contract_call(call_id).and_then(|output| {
-                        // TODO: Submit proof of publication, get decryption.
+        self.rpc
+            .call(protocol::METHOD_CONTRACT_SUBMIT, call)
+            .and_then(move |call_id: H256| {
+                // Subscribe to contract call so we will know when the call is done.
+                backend.wait_contract_call(call_id).and_then(|output| {
+                    // TODO: Submit proof of publication, get decryption.
 
-                        let output: ContractOutput<O> = serde_cbor::from_slice(&output)?;
-                        match output {
-                            ContractOutput::Success(data) => Ok(data),
-                            ContractOutput::Error(error) => Err(Error::new(error)),
-                        }
-                    })
-                }),
-        )
+                    let output: ContractOutput<O> = serde_cbor::from_slice(&output)?;
+                    match output {
+                        ContractOutput::Success(data) => Ok(data),
+                        ContractOutput::Error(error) => Err(Error::new(error)),
+                    }
+                })
+            })
+            .select(
+                self.shutdown_receiver
+                    .clone()
+                    .then(|_result| -> BoxFuture<O> {
+                        // However the shutdown receiver future completes, we need to abort as
+                        // it has either been dropped or an explicit shutdown signal was sent.
+                        future::err(Error::new("contract client closed")).into_box()
+                    }),
+            )
+            .map(|(result, _)| result)
+            .map_err(|(error, _)| error)
+            .into_box()
+    }
+
+    /// Cancel all pending contract calls and consume itself.
+    pub fn shutdown(self) {
+        drop(self.shutdown_sender.send(()));
     }
 }

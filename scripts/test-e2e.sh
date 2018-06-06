@@ -24,6 +24,8 @@ run_compute_node() {
 run_test() {
     local scenario=$1
     local description=$2
+    local client=$3
+    local epochs=$4
 
     echo "RUNNING TEST: ${description}"
 
@@ -34,18 +36,24 @@ run_test() {
     ${WORKDIR}/target/debug/ekiden-node-dummy --time-source mockrpc &
     sleep 1
 
+    # Run the client. We run the client first so that we test whether it waits for the
+    # committee to be elected and connects to the leader.
+    ${WORKDIR}/target/debug/${client}-client \
+        --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
+        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 &
+    client_pid=$!
+
     # Start compute nodes.
     $scenario
 
     # Advance epoch to elect a new committee.
-    sleep 2
-    ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
-    sleep 2
+    for epoch in $(seq $epochs); do
+        sleep 2
+        ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch
+    done
 
-    # Run the client.
-    ${WORKDIR}/target/debug/token-client \
-        --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000
+    # Wait on the client and check its exit status.
+    wait ${client_pid}
 
     # Cleanup.
     echo "Cleaning up."
@@ -77,6 +85,7 @@ scenario_discrepancy_leader() {
     run_compute_node 3 --test-inject-discrepancy
 }
 
-run_test scenario_basic "e2e-basic"
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker"
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader"
+run_test scenario_basic "e2e-basic" token 1
+run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1
+run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1
+run_test scenario_basic "e2e-long" test-long-term 3

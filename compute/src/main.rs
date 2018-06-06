@@ -31,7 +31,6 @@ extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
 mod consensus;
-mod environment;
 mod group;
 mod handlers;
 mod ias;
@@ -77,7 +76,7 @@ use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
 /// Register known components for dependency injection.
 fn register_components(known_components: &mut KnownComponents) {
     // Environment.
-    self::environment::ComputeNodeEnvironment::register(known_components);
+    ekiden_core::environment::GrpcEnvironment::register(known_components);
     // Storage.
     ekiden_storage_frontend::StorageClient::register(known_components);
     // Consensus.

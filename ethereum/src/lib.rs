@@ -1,4 +1,4 @@
-// ! Ekidem Ethereum random beacon backend.
+// ! Ekiden Ethereum backend components.
 extern crate chrono;
 extern crate ekiden_beacon_base;
 extern crate ekiden_common;
@@ -11,6 +11,7 @@ extern crate web3;
 #[macro_use]
 extern crate log;
 
-mod backend;
+mod beacon;
+pub mod truffle;
 
-pub use backend::EthereumRandomBeacon;
+pub use beacon::EthereumRandomBeacon;
