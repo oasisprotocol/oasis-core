@@ -22,7 +22,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
     let signed_entity = Signed::sign(
         &entity_signer,
         &REGISTER_ENTITY_SIGNATURE_CONTEXT,
-        Entity { id: entity_pk },
+        Entity::for_local_test(entity_pk),
     );
     registry.register_entity(signed_entity).wait().unwrap();
 

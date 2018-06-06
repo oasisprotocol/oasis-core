@@ -5,7 +5,17 @@
 * **BACKWARD INCOMPATIBLE:** Remove `transactions` from consensus blocks and only store
   input/output hashes in block header. Content is delegated to storage.
 * **BACKWARD INCOMPATIBLE:** Remove `submit` operation from consensus backend.
+* **BACKWARD INCOMPATIBLE:** Compute node arguments `--dummy-host` and `--dummy-port`
+  have been removed. Backend-specific configuration arguments should be used instead.
 * Add discrepancy resolution by using backup workers majority vote.
+* Add passing extra arguments to Docker in shell (`--docker-extra-args`).
+* Add `common::futures::retry` which implements retrying futures on failure.
+* Add support for dependency injection.
+* Bugfix: `epochtime::LocalTimeSourceNotifier::watch_epochs()` will now
+  correctly broadcast the current epoch if it is available.
+* The initial Ethereum smart contract based Random Beacon has been added.
+* Add `common::testing::try_init_logging` which can be called from tests to
+  initialize logging while honoring `cargo test`'s capture behavior.
 
 # 0.1.0
 

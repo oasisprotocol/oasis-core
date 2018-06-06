@@ -19,9 +19,11 @@ use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
+use ekiden_core::futures::Future;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_storage_base::StorageBackend;
+use ekiden_storage_batch::BatchStorageBackend;
 use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
@@ -115,14 +117,20 @@ impl WorkerInner {
         batch: &CallBatch,
         root_hash: &H256,
     ) -> Result<(OutputBatch, H256)> {
+        // Prepare batch storage (perform up to 3 retries).
+        let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone(), 3));
+
         // Run in storage context.
         let (new_state_root, outputs) =
             self.contract
-                .with_storage(self.storage.clone(), root_hash, || {
+                .with_storage(batch_storage.clone(), root_hash, || {
                     // Execute batch.
                     let _enclave_timer = self.ins.req_time_enclave.start_timer();
                     self.contract.contract_call_batch(batch)
                 })?;
+
+        // Commit batch storage.
+        batch_storage.commit().wait()?;
 
         Ok((outputs?, new_state_root))
     }

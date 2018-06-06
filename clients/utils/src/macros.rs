@@ -72,11 +72,14 @@ macro_rules! default_backend {
 
         // Perform computation group leader discovery.
         // TODO: Change this once we handle backend configuration properly.
-        let channel = grpcio::ChannelBuilder::new(grpc_environment.clone()).connect(&format!(
-            "{}:{}",
-            $args.value_of("dummy-host").unwrap(),
-            value_t!($args, "dummy-port", u16).unwrap(),
-        ));
+        let channel = grpcio::ChannelBuilder::new(grpc_environment.clone())
+            .max_receive_message_len(usize::max_value())
+            .max_send_message_len(usize::max_value())
+            .connect(&format!(
+                "{}:{}",
+                $args.value_of("dummy-host").unwrap(),
+                value_t!($args, "dummy-port", u16).unwrap(),
+            ));
         let scheduler = SchedulerClient::new(channel.clone());
         let entity_registry = EntityRegistryClient::new(channel.clone());
 

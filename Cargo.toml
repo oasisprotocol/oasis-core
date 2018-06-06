@@ -13,6 +13,7 @@ members = [
     # Random beacon.
     "beacon/base",
     "beacon/dummy",
+    "beacon/ethereum",
 
     # Consensus interface.
     "consensus/api",
@@ -24,9 +25,11 @@ members = [
     "storage/api",
     "storage/base",
     "storage/dummy",
+    "storage/dynamodb",
     "storage/frontend",
     "storage/persistent",
     "storage/lru_cache",
+    "storage/batch",
 
     # Enclave loader (+ attestation).
     "enclave/common",
@@ -84,6 +87,7 @@ members = [
     # Stake escrow.
     "stake/api",
     "stake/base",
+    "stake/client",
     "stake/dummy",
 
     # Dummy shared backend node.
