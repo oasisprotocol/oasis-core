@@ -21,3 +21,5 @@ ekiden-scheduler-client = { path = "../../scheduler/client", version = "0.2.0-al
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 ekiden-registry-client = { path = "../../registry/client", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../../rpc/client", version = "0.2.0-alpha" }
+pretty_env_logger = "0.2"
+log = "0.4"

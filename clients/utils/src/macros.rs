@@ -1,9 +1,18 @@
 // Re-exports needed in exported macros.
+pub use log::LevelFilter;
+pub use pretty_env_logger::formatted_builder;
+
 pub use ekiden_core::enclave::quote::MrEnclave;
 
 #[macro_export]
 macro_rules! default_app {
-    () => {
+    () => {{
+        // Initialize logger.
+        $crate::macros::formatted_builder()
+            .unwrap()
+            .filter(None, $crate::macros::LevelFilter::Trace)
+            .init();
+
         App::new(concat!(crate_name!(), " client"))
             .about(crate_description!())
             .author(crate_authors!())
@@ -31,7 +40,7 @@ macro_rules! default_app {
                     .help("Mark nodes that take longer than this many seconds as failed")
                     .takes_value(true),
             )
-    };
+    }};
 }
 
 #[macro_export]

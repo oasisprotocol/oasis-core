@@ -1,5 +1,7 @@
 #[cfg(feature = "benchmark")]
 extern crate histogram;
+extern crate log;
+extern crate pretty_env_logger;
 #[cfg(feature = "benchmark")]
 extern crate threadpool;
 #[cfg(feature = "benchmark")]
