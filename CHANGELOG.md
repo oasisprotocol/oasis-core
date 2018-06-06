@@ -16,6 +16,9 @@
 * The initial Ethereum smart contract based Random Beacon has been added.
 * Add `common::testing::try_init_logging` which can be called from tests to
   initialize logging while honoring `cargo test`'s capture behavior.
+* Move `GrpcEnvironment` to `common::environment` to make it reusable.
+* Add `spawn` to `common::environment::Environment` to make it easier to spawn tasks
+  using the environment's default executor.
 
 # 0.1.0
 
