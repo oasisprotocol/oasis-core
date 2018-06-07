@@ -1,121 +1,63 @@
 // Re-exports needed in exported macros.
-pub extern crate grpcio;
+pub use log::LevelFilter;
+pub use pretty_env_logger::formatted_builder;
 
-pub extern crate ekiden_core;
-pub extern crate ekiden_registry_base;
-pub extern crate ekiden_registry_client;
-pub extern crate ekiden_rpc_client;
-pub extern crate ekiden_scheduler_base;
-pub extern crate ekiden_scheduler_client;
+pub use ekiden_core::enclave::quote::MrEnclave;
 
 #[macro_export]
 macro_rules! default_app {
-    () => {
+    () => {{
+        // Initialize logger.
+        $crate::macros::formatted_builder()
+            .unwrap()
+            .filter(None, $crate::macros::LevelFilter::Trace)
+            .init();
+
         App::new(concat!(crate_name!(), " client"))
-                            .about(crate_description!())
-                            .author(crate_authors!())
-                            .version(crate_version!())
-                            // TODO: Change this once we handle backend configuration properly.
-                            .arg(
-                                Arg::with_name("dummy-host")
-                                    .long("dummy-host")
-                                    .help("Shared dummy node host")
-                                    .takes_value(true)
-                                    .default_value("127.0.0.1"),
-                            )
-                            // TODO: Change this once we handle backend configuration properly.
-                            .arg(
-                                Arg::with_name("dummy-port")
-                                    .long("dummy-port")
-                                    .help("Shared dummy node port")
-                                    .takes_value(true)
-                                    .default_value("42261"),
-                            )
-                            .arg(
-                                Arg::with_name("test-contract-id")
-                                    .long("test-contract-id")
-                                    .help("TEST ONLY OPTION: override contract identifier")
-                                    .takes_value(true)
-                                    .hidden(true)
-                            )
-                            .arg(Arg::with_name("mr-enclave")
-                                 .long("mr-enclave")
-                                 .value_name("MRENCLAVE")
-                                 .help("MRENCLAVE in hex format")
-                                 .takes_value(true)
-                                 .required(true)
-                                 .display_order(3))
-                            .arg(Arg::with_name("rpc-timeout")
-                                 .long("rpc-timeout")
-                                 .value_name("RPC_TIMEOUT")
-                                 .help("Mark nodes that take longer than this many seconds as failed")
-                                 .takes_value(true))
-    };
+            .about(crate_description!())
+            .author(crate_authors!())
+            .version(crate_version!())
+            .arg(
+                Arg::with_name("test-contract-id")
+                    .long("test-contract-id")
+                    .help("TEST ONLY OPTION: override contract identifier")
+                    .takes_value(true)
+                    .hidden(true),
+            )
+            .arg(
+                Arg::with_name("mr-enclave")
+                    .long("mr-enclave")
+                    .value_name("MRENCLAVE")
+                    .help("MRENCLAVE in hex format")
+                    .takes_value(true)
+                    .required(true)
+                    .display_order(3),
+            )
+            .arg(
+                Arg::with_name("rpc-timeout")
+                    .long("rpc-timeout")
+                    .value_name("RPC_TIMEOUT")
+                    .help("Mark nodes that take longer than this many seconds as failed")
+                    .takes_value(true),
+            )
+    }};
 }
 
 #[macro_export]
-macro_rules! default_backend {
-    ($args:ident) => {{
-        use std::sync::Arc;
+macro_rules! contract_client {
+    ($signer:ident, $contract:ident, $args:ident, $container:ident) => {{
+        use $crate::macros::*;
 
-        use $crate::macros::ekiden_core::bytes::B256;
-        use $crate::macros::ekiden_core::futures::Stream;
-        use $crate::macros::ekiden_registry_base::EntityRegistryBackend;
-        use $crate::macros::ekiden_registry_client::EntityRegistryClient;
-        use $crate::macros::ekiden_rpc_client::backend::Web3RpcClientBackend;
-        use $crate::macros::ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
-        use $crate::macros::ekiden_scheduler_client::SchedulerClient;
-        use $crate::macros::grpcio;
-
-        // Create gRPC event loop.
-        let grpc_environment = Arc::new(grpcio::EnvBuilder::new().build());
-
-        // Perform computation group leader discovery.
-        // TODO: Change this once we handle backend configuration properly.
-        let channel = grpcio::ChannelBuilder::new(grpc_environment.clone())
-            .max_receive_message_len(usize::max_value())
-            .max_send_message_len(usize::max_value())
-            .connect(&format!(
-                "{}:{}",
-                $args.value_of("dummy-host").unwrap(),
-                value_t!($args, "dummy-port", u16).unwrap(),
-            ));
-        let scheduler = SchedulerClient::new(channel.clone());
-        let entity_registry = EntityRegistryClient::new(channel.clone());
-
-        // Get computation group leader node.
+        // Determine contract identifier.
         let contract_id = if $args.is_present("test-contract-id") {
             value_t_or_exit!($args, "test-contract-id", B256)
         } else {
             value_t_or_exit!($args, "mr-enclave", B256)
         };
 
-        let public_key = scheduler
-            .watch_committees()
-            .filter(|committee| committee.kind == CommitteeType::Compute)
-            .filter(|committee| committee.contract.id == contract_id)
-            .take(1)
-            .collect()
-            .wait()
-            .expect("failed to fetch committees from scheduler")
-            .first()
-            .unwrap()
-            .members
-            .iter()
-            .filter(|member| member.role == Role::Leader)
-            .map(|member| member.public_key)
-            .next()
-            .expect("missing compute committee leader");
-
-        // Resolve leader node based on its public key.
-        let node = entity_registry
-            .get_node(public_key)
-            .wait()
-            .expect("failed to resolve leader node");
-        let address = node.addresses.first().expect("no address for leader node");
-
-        Web3RpcClientBackend::new(
-            grpc_environment,
+        $contract::Client::new(
+            contract_id,
+            value_t_or_exit!($args, "mr-enclave", MrEnclave),
             if $args.is_present("rpc-timeout") {
                 Some(std::time::Duration::new(
                     value_t_or_exit!($args, "rpc-timeout", u64),
@@ -124,32 +66,24 @@ macro_rules! default_backend {
             } else {
                 None
             },
-            &format!("{}", address.ip()),
-            address.port(),
-        ).unwrap()
-    }};
-}
-
-#[macro_export]
-macro_rules! contract_client {
-    ($signer:ident, $contract:ident, $args:ident, $backend:ident) => {{
-        use std::sync::Arc;
-
-        use $crate::macros::ekiden_core::enclave::quote::MrEnclave;
-
-        $contract::Client::new(
-            Arc::new($backend),
-            value_t!($args, "mr-enclave", MrEnclave).unwrap_or_else(|e| e.exit()),
+            $container.inject().unwrap(),
+            $container.inject().unwrap(),
+            $container.inject().unwrap(),
             $signer,
         )
     }};
-    ($signer:ident, $contract:ident, $args:ident) => {{
-        let backend = default_backend!($args);
-        contract_client!($signer, $contract, $args, backend)
-    }};
     ($signer:ident, $contract:ident) => {{
-        let args = default_app!().get_matches();
-        contract_client!($signer, $contract, args)
+        let known_components = $crate::components::create_known_components();
+        let args = default_app!()
+            .args(&known_components.get_arguments())
+            .get_matches();
+
+        // Initialize component container.
+        let mut container = known_components
+            .build_with_arguments(&args)
+            .expect("failed to initialize component container");
+
+        contract_client!($signer, $contract, args, container)
     }};
 }
 
@@ -157,7 +91,10 @@ macro_rules! contract_client {
 #[macro_export]
 macro_rules! benchmark_client {
     ($signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
-        let args = std::sync::Arc::new(
+        use std::sync::{Arc, Mutex};
+
+        let known_components = $crate::components::create_known_components();
+        let args = Arc::new(
             default_app!()
                 .arg(
                     Arg::with_name("benchmark-threads")
@@ -173,15 +110,26 @@ macro_rules! benchmark_client {
                         .takes_value(true)
                         .default_value("1000"),
                 )
+                .args(&known_components.get_arguments())
                 .get_matches(),
         );
+
+        // Initialize component container.
+        let container = known_components
+            .build_with_arguments(&args)
+            .expect("failed to initialize component container");
+        let container = Arc::new(Mutex::new(container));
 
         let benchmark = $crate::benchmark::Benchmark::new(
             value_t!(args, "benchmark-runs", usize).unwrap_or_else(|e| e.exit()),
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
             move || {
                 let args = args.clone();
-                contract_client!($signer, $contract, args)
+                let shared_container = container.clone();
+                let mut container = shared_container.lock().unwrap();
+                let signer = $signer.clone();
+
+                contract_client!(signer, $contract, args, container)
             },
         );
 

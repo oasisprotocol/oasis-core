@@ -24,6 +24,7 @@ members = [
     "storage/api",
     "storage/base",
     "storage/dummy",
+    "storage/dynamodb",
     "storage/frontend",
     "storage/persistent",
     "storage/lru_cache",
@@ -69,6 +70,7 @@ members = [
 
     # Clients.
     "clients/token",
+    "clients/test-long-term",
 
     # Registry.
     "registry/api",
@@ -91,4 +93,8 @@ members = [
     # Dummy shared backend node.
     "node/dummy",
     "node/dummy/api",
+
+    # Ethereum backend components.
+    "ethereum",
 ]
+exclude = [ "thirdparty" ]

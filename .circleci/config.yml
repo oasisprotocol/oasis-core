@@ -14,6 +14,11 @@ jobs:
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
 
+      # Check if all core crates have the same version (issue #175)
+      - run:
+          name: Checking if all Ekiden crates have the same version
+          command: test `find . -name "Cargo.toml" -print0 | xargs -0 grep '^version = "' | cut -d'"' -f2 | sort | uniq | wc -l` == 1
+
       # Cargo tests. Some tests are excluded as they currently don't compile.
       # Heuristic glob to detect what test binaries that cargo builds.
       # If that gets too janky, try `cargo test --message-format=json`
@@ -82,6 +87,7 @@ jobs:
             - target/debug/ekiden-node-dummy-controller
             - target/debug/ekiden-compute
             - target/debug/token-client
+            - target/debug/test-long-term-client
             - target/contract/token.so
             - target/contract/token.mrenclave
             - tests

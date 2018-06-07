@@ -31,10 +31,7 @@ with_api! {
 }
 
 /// Initializes the token scenario.
-fn init<Backend>(client: &mut token::Client<Backend>, _runs: usize, _threads: usize)
-where
-    Backend: ekiden_rpc_client::backend::RpcClientBackend,
-{
+fn init(client: &mut token::Client, _runs: usize, _threads: usize) {
     // Create new token contract.
     let mut request = token::CreateRequest::new();
     request.set_sender("bank".to_string());
@@ -62,10 +59,7 @@ fn create_address() -> String {
 }
 
 /// Runs the token scenario.
-fn scenario<Backend>(client: &mut token::Client<Backend>)
-where
-    Backend: ekiden_rpc_client::backend::RpcClientBackend,
-{
+fn scenario(client: &mut token::Client) {
     // Generate random addresses.
     let destination = create_address();
     let poor = create_address();
@@ -105,10 +99,7 @@ where
 }
 
 /// Finalize the token scenario.
-fn finalize<Backend>(client: &mut token::Client<Backend>, runs: usize, threads: usize)
-where
-    Backend: ekiden_rpc_client::backend::RpcClientBackend,
-{
+fn finalize(client: &mut token::Client, runs: usize, threads: usize) {
     // Check final balance.
     let response = client
         .get_balance({

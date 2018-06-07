@@ -7,10 +7,21 @@
 * **BACKWARD INCOMPATIBLE:** Remove `submit` operation from consensus backend.
 * **BACKWARD INCOMPATIBLE:** Compute node arguments `--dummy-host` and `--dummy-port`
   have been removed. Backend-specific configuration arguments should be used instead.
+* **BACKWARD INCOMPATIBLE:** The Ethereum backend(s), Rust glue, and build
+  tooling have all been moved to a single `ethereum/` crate.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
 * Add support for dependency injection.
+* Bugfix: `epochtime::LocalTimeSourceNotifier::watch_epochs()` will now
+  correctly broadcast the current epoch if it is available.
+* The initial Ethereum smart contract based Random Beacon has been added.
+* Add `common::testing::try_init_logging` which can be called from tests to
+  initialize logging while honoring `cargo test`'s capture behavior.
+* Move `GrpcEnvironment` to `common::environment` to make it reusable.
+* Add `spawn` to `common::environment::Environment` to make it easier to spawn tasks
+  using the environment's default executor.
+* Make clients aware of compute committee changes and manage connections.
 
 # 0.1.0
 
