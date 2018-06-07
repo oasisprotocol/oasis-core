@@ -11,6 +11,7 @@ ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-stake-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-stake-api = { path = "../api", version = "0.2.0-alpha" }
+log = "0.4"
 serde = "1.0"
 serde_cbor = "0.8.2"
 serde_derive = "1.0"
