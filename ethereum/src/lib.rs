@@ -14,6 +14,8 @@ extern crate web3;
 extern crate log;
 
 mod beacon;
+pub mod entity_di;
 pub mod truffle;
+pub mod web3_di;
 
 pub use beacon::EthereumRandomBeacon;
