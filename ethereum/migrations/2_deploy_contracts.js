@@ -28,11 +28,14 @@ module.exports = function (deployer, network) {
                 instance.mock_beacon.call()
             ]);
         }).then(function(beacon_addrs) {
-            // Placate truffle_deploy by spitting out the addresses of the
-            // contracts created by the RandomBeaconDeployer in the format
-            // it expects to see.
-            console.log("  RandomBeaconOasis: " + beacon_addrs[0]);
-            console.log("  RandomBeaconMock: " + beacon_addrs[1]);
+            // Pass all the contract addresses to truffle_deploy in the rust
+            // side as a simple JSON formatted dictionary.
+            let addrs = {
+                "RandomBeaconOasis": beacon_addrs[0],
+                "RandomBeaconMock": beacon_addrs[1],
+                "MockEpoch": MockEpoch.address
+            };
+            console.log("CONTRACT_ADDRESSES: " + JSON.stringify(addrs));
         });
     }
 };
