@@ -106,4 +106,8 @@ run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
 run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
-run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb
+if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
+    run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb
+else
+    echo >&2 "Skipping DynamoDB test."
+fi
