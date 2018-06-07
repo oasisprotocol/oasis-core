@@ -20,3 +20,6 @@ Enclave_t.h
 
 # Saved enclave identity.
 /identity*.pb
+
+# Development-linked Workspaces.
+/thirdparty/
