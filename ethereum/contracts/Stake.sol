@@ -39,8 +39,8 @@ contract UintSet {
   }
 }
 
-// The Ekiden Stake token.  It ERC20 compatible, but also includes the
-// notion of escrow accounts in addition to allowances.  Escrow
+// The Ekiden Stake token.  It is ERC20 compatible, but also includes
+// the notion of escrow accounts in addition to allowances.  Escrow
 // Accounts hold tokens that the stakeholder cannot use until the
 // escrow account is closed.
 contract Stake {
