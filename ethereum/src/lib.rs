@@ -1,5 +1,7 @@
 // ! Ekiden Ethereum backend components.
 extern crate chrono;
+#[macro_use]
+extern crate clap;
 extern crate ekiden_beacon_base;
 extern crate ekiden_common;
 #[macro_use]

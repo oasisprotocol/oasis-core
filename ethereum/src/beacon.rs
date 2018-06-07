@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::Utc;
+use clap::value_t_or_exit;
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
@@ -488,9 +489,7 @@ create_component!(
         let time_notifier = container.inject::<TimeSourceNotifier>()?;
 
         let args = container.get_arguments().unwrap();
-        let contract_address = args.value_of("beacon-address").unwrap();
-        let contract_address = contract_address.split_at(2).1.from_hex();
-        let contract_address = H160::from_slice(&contract_address.unwrap());
+        let contract_address = value_t_or_exit!(args, "beacon-address", H160);
 
         let instance: Arc<EthereumRandomBeaconViaWebsocket> =
             Arc::new(EthereumRandomBeacon::new(
