@@ -36,7 +36,7 @@ fn beacon_integration() {
     let client = Web3::new(transport.clone());
 
     // Make sure our contracts are deployed.
-    let address = deploy_truffle("RandomBeacon", env!("CARGO_MANIFEST_DIR"));
+    let address = deploy_truffle("RandomBeaconOasis", env!("CARGO_MANIFEST_DIR"));
 
     // Run a driver to make some background transactions such that things confirm.
     let tx_stream = mine(transport);

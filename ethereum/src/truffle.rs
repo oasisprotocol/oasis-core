@@ -67,6 +67,7 @@ pub fn deploy_truffle(name: &str, cwd: &str) -> Vec<u8> {
 pub fn test_truffle(cwd: &str) {
     let status = Command::new("truffle")
         .arg("test")
+        .arg("--network=test") // The `=` is mandatory, truffle bug?
         .current_dir(cwd)
         .status()
         .expect("truffle failed");
