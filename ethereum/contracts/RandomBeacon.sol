@@ -83,7 +83,7 @@ contract RandomBeacon {
 
         timestamp = timestamp - ekiden_epoch; // Start at the Ekiden epoch.
         uint64 epoch = timestamp / ekiden_epoch_interval;
-        uint64 till = timestamp % ekiden_epoch_interval;
+        uint64 till = ekiden_epoch_interval - timestamp % ekiden_epoch_interval;
         assert(epoch != ekiden_epoch_invalid);
 
         return (epoch, till);
