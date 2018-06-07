@@ -1,6 +1,5 @@
 //! Consensus gRPC client.
 use std::convert::TryFrom;
-use std::error::Error as StdError;
 use std::sync::Arc;
 
 use grpcio::{self, Channel, ChannelBuilder};
@@ -41,9 +40,9 @@ impl ConsensusBackend for ConsensusClient {
         match self.0.get_latest_block_async(&req) {
             Ok(f) => Box::new(
                 f.map(|r| Block::try_from(r.get_block().to_owned()).unwrap())
-                    .map_err(|e| Error::new(e.description())),
+                    .map_err(|e| e.into()),
             ),
-            Err(e) => Box::new(future::err(Error::new(e.description()))),
+            Err(e) => Box::new(future::err(e.into())),
         }
     }
 
@@ -53,9 +52,9 @@ impl ConsensusBackend for ConsensusClient {
         match self.0.get_blocks(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => Ok(Block::try_from(r.get_block().to_owned())?),
-                Err(e) => Err(Error::new(e.description())),
+                Err(e) => Err(e.into()),
             })),
-            Err(e) => Box::new(stream::once::<Block, _>(Err(Error::new(e.description())))),
+            Err(e) => Box::new(stream::once::<Block, _>(Err(e.into()))),
         }
     }
 
@@ -83,9 +82,9 @@ impl ConsensusBackend for ConsensusClient {
                         Err(Error::new("unknown event type"))
                     }
                 }
-                Err(e) => Err(Error::new(e.description())),
+                Err(e) => Err(e.into()),
             })),
-            Err(e) => Box::new(stream::once::<Event, _>(Err(Error::new(e.description())))),
+            Err(e) => Box::new(stream::once::<Event, _>(Err(e.into()))),
         }
     }
 
@@ -94,8 +93,8 @@ impl ConsensusBackend for ConsensusClient {
         req.set_contract_id(contract_id.to_vec());
         req.set_commitment(commitment.into());
         match self.0.commit_async(&req) {
-            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),
-            Err(e) => Box::new(future::err(Error::new(e.description()))),
+            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
+            Err(e) => Box::new(future::err(e.into())),
         }
     }
 
@@ -106,8 +105,8 @@ impl ConsensusBackend for ConsensusClient {
         req.set_nonce(reveal.nonce.to_vec());
         req.set_signature(reveal.signature.into());
         match self.0.reveal_async(&req) {
-            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| Error::new(e.description()))),
-            Err(e) => Box::new(future::err(Error::new(e.description()))),
+            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
+            Err(e) => Box::new(future::err(e.into())),
         }
     }
 }

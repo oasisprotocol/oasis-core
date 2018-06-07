@@ -60,7 +60,7 @@ token contract, but the process is the same for any contract.
 
 To start the shared dummy node:
 ```
-# ./target/debug/ekiden-node-dummy --time-source mockrpc
+# ./target/debug/ekiden-node-dummy --time-source mockrpc --storage-backend dummy
 ```
 
 To start the compute node for the token contract (you need to start two):

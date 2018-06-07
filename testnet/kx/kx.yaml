@@ -40,6 +40,8 @@ spec:
             - mock
             - --mock-epoch-interval
             - "60"
+            - --storage-backend
+            - dummy
 ---
 kind: Service
 apiVersion: v1
