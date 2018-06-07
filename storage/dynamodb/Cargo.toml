@@ -7,12 +7,14 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
+clap = "2.31.2"
 futures = "0.1"
 rusoto_core = "0.32.0"
 rusoto_dynamodb = "0.32.0"
 tokio-core = "0.1.17"
 
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 
 [dev-dependencies]
