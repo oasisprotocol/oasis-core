@@ -1,4 +1,5 @@
 //! Ekiden storage interface.
+extern crate ekiden_di;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -9,6 +10,7 @@ use serde_cbor;
 use sled::{ConfigBuilder, Tree};
 
 use ekiden_common::bytes::{B256, H256};
+use ekiden_common::epochtime::local::SystemTimeSource;
 use ekiden_common::epochtime::TimeSource;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
@@ -95,3 +97,26 @@ impl StorageBackend for PersistentStorageBackend {
         }))
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    persistent,
+    "storage-backend",
+    PersistentStorageBackend,
+    StorageBackend,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        // TODO: pass in contract_id argument
+        let contract_id = B256::zero();
+        let backend = match PersistentStorageBackend::new(
+            contract_id,
+            Box::new(SystemTimeSource {}),
+            HashMap::new(),
+        ) {
+            Ok(backend) => backend,
+            Err(e) => return Err(e.message.into()),
+        };
+        let instance: Arc<StorageBackend> = Arc::new(backend);
+        Ok(Box::new(instance))
+    }),
+    []
+);
