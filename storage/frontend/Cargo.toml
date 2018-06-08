@@ -13,4 +13,4 @@ ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 ekiden-storage-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
-grpcio = "0.2.2"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }

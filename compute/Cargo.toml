@@ -25,7 +25,7 @@ ekiden-beacon-dummy = { path = "../beacon/dummy", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../registry/base", version = "0.2.0-alpha" }
 ekiden-registry-client = { path = "../registry/client", version = "0.2.0-alpha" }
 ekiden-tools = { path = "../tools", version = "0.2.0-alpha" }
-protobuf = "~1.4"
+protobuf = "~2.0"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 thread_local = "0.3.5"
 clap = "2.29.1"
@@ -34,7 +34,7 @@ base64 = "0.9.0"
 prometheus = "0.3.10"
 hyper = "0.11"
 tokio-core = "0.1"
-grpcio = "0.2.2"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 lru-cache = "0.1.1"
 log = "0.4"
 pretty_env_logger = "0.2"

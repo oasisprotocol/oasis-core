@@ -211,8 +211,8 @@ impl ComputeNode {
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
             .channel_args(
                 grpcio::ChannelBuilder::new(grpc_environment.clone())
-                    .max_receive_message_len(usize::max_value())
-                    .max_send_message_len(usize::max_value())
+                    .max_receive_message_len(i32::max_value())
+                    .max_send_message_len(i32::max_value())
                     .build_args(),
             )
             .register_service(web3)

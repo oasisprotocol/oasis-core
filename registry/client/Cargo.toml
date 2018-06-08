@@ -11,4 +11,4 @@ ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-registry-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../base", version = "0.2.0-alpha" }
-grpcio = "0.2.2"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }

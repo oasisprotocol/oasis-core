@@ -11,6 +11,7 @@
   tooling have all been moved to a single `ethereum/` crate.
 * **BACKWARD INCOMPATIBLE:** Dummy node now requires `--storage-backend BACKEND` option.
   Use backend `dummy` for original behavior.
+* **BACKWARD INCOMPATIBLE:** Bump `protobuf` dependency to `2.0`.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
