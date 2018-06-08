@@ -13,6 +13,7 @@
   Use backend `dummy` for original behavior.
 * **BACKWARD INCOMPATIBLE:** Bump `protobuf` dependency to `2.0`.
 * **BACKWARD INCOMPATIBLE:** Remove unused key manager support from compute node.
+* **BACKWARD INCOMPATIBLE:** Use TLS for compute node gRPC channels.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.

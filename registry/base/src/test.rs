@@ -8,6 +8,7 @@ use ekiden_common::node::Node;
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
+use ekiden_common::x509::Certificate;
 
 use super::{EntityRegistryBackend, REGISTER_ENTITY_SIGNATURE_CONTEXT,
             REGISTER_NODE_SIGNATURE_CONTEXT};
@@ -33,6 +34,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
             entity_id: entity_pk,
             expiration: 0xffffffffffffffff,
             addresses: vec![],
+            certificate: Certificate::default(),
             stake: vec![],
         };
 

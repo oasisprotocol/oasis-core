@@ -15,6 +15,7 @@ use ekiden_core::error::Result;
 use ekiden_core::futures::{Future, GrpcExecutor};
 use ekiden_core::node::Node;
 use ekiden_core::signature::Signed;
+use ekiden_core::x509::Certificate;
 use ekiden_di::Container;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
@@ -134,6 +135,7 @@ impl ComputeNode {
 
         // Register node with the registry.
         // TODO: Handle this properly, do not start any other services before registration is done.
+        let (certificate, private_key) = Certificate::generate()?;
         let node = Node {
             id: config.consensus.signer.get_public_key(),
             entity_id: entity_pk,
@@ -148,6 +150,7 @@ impl ComputeNode {
                 }
                 None => Address::for_local_port(config.port)?,
             },
+            certificate: certificate.clone(),
             stake: vec![],
         };
 
@@ -203,7 +206,13 @@ impl ComputeNode {
             )
             .register_service(web3)
             .register_service(inter_node)
-            .bind("0.0.0.0", config.port)
+            .bind_secure(
+                "0.0.0.0",
+                config.port,
+                grpcio::ServerCredentialsBuilder::new()
+                    .add_cert(certificate.get_pem()?, private_key.get_pem()?)
+                    .build(),
+            )
             .build()?;
 
         Ok(Self {
