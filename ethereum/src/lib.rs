@@ -10,6 +10,8 @@ extern crate web3;
 extern crate log;
 
 mod beacon;
+mod mockepoch;
 pub mod truffle;
 
 pub use beacon::EthereumRandomBeacon;
+pub use mockepoch::EthereumMockTime;

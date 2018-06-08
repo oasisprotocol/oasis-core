@@ -1,16 +1,15 @@
 pragma solidity ^0.4.23;
 
+import "./EpochABI.sol";
+
 contract RandomBeacon {
-    // The Ekiden epoch relative to the Unix epoch.
-    uint64 constant ekiden_epoch = 1514764800; // 2018-01-01T00:00:00+00:00
-    // The Ekiden epoch interval.
-    uint64 constant ekiden_epoch_interval = 86400; // 1 day
-    // The placeholder invalid Ekiden epoch.
-    uint64 constant ekiden_epoch_invalid = 0xffffffffffffffff;
     // The maximum time till an epoch transition, that the next epoch's beacon
     // can be pre-generated at.  This value should be long enough to ensure
     // that thre won't be down time on the epoch transition.
     uint64 constant pre_generate_slack = 600; // 10 minutes.
+
+    // The EpochContract used for timekeeping;
+    EpochContract epoch_source;
 
     // The stored random beacon value by epoch.
     struct Beacon {
@@ -27,13 +26,17 @@ contract RandomBeacon {
         bytes32 _entropy
     );
 
+    constructor(address epoch_addr) public {
+        epoch_source = EpochContract(epoch_addr);
+    }
+
     function() public {
         revert();
     }
 
     // Generate and set the beacon if it does not exist.
     function set_beacon() public {
-        (uint64 epoch, uint64 till) = oasis_epoch(uint64(block.timestamp));
+        (uint64 epoch, , uint64 till) = epoch_source.get_epoch(uint64(block.timestamp));
 
         // Try to generate for the current epoch.
         bool did_generate = generate_beacon(epoch);
@@ -50,7 +53,7 @@ contract RandomBeacon {
     // Get the random beacon entropy for the epoch corresponding to the
     // specified UNIX epoch time.
     function get_beacon(uint64 timestamp) public view returns (uint64, bytes32) {
-        (uint64 epoch, ) = oasis_epoch(timestamp);
+        (uint64 epoch, ,) = epoch_source.get_epoch(timestamp);
 
         Beacon storage b = beacons[epoch];
         require(b.initialized);
@@ -75,17 +78,5 @@ contract RandomBeacon {
             return true;
         }
         return false;
-    }
-
-    // Get the current Oasis epoch based on the block timestamp.
-    function oasis_epoch(uint64 timestamp) internal pure returns (uint64, uint64) {
-        require(timestamp >= ekiden_epoch);
-
-        timestamp = timestamp - ekiden_epoch; // Start at the Ekiden epoch.
-        uint64 epoch = timestamp / ekiden_epoch_interval;
-        uint64 till = timestamp % ekiden_epoch_interval;
-        assert(epoch != ekiden_epoch_invalid);
-
-        return (epoch, till);
     }
 }
