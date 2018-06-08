@@ -16,6 +16,7 @@ ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha"
 ekiden-consensus-dummy = { path = "../../consensus/dummy", version = "0.2.0-alpha" }
 ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-node-dummy-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-registry-api = { path = "../../registry/api", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
@@ -26,6 +27,7 @@ ekiden-scheduler-dummy = { path = "../../scheduler/dummy", version = "0.2.0-alph
 ekiden-storage-api = { path = "../../storage/api", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.2.0-alpha" }
+ekiden-storage-dynamodb = { path = "../../storage/dynamodb", version = "0.2.0-alpha" }
 clap = "2.29.1"
 grpcio = "0.2.2"
 log = "0.4"

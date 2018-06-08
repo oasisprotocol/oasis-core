@@ -9,6 +9,8 @@
   have been removed. Backend-specific configuration arguments should be used instead.
 * **BACKWARD INCOMPATIBLE:** The Ethereum backend(s), Rust glue, and build
   tooling have all been moved to a single `ethereum/` crate.
+* **BACKWARD INCOMPATIBLE:** Dummy node now requires `--storage-backend BACKEND` option.
+  Use backend `dummy` for original behavior.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
@@ -22,6 +24,7 @@
 * Add `spawn` to `common::environment::Environment` to make it easier to spawn tasks
   using the environment's default executor.
 * Make clients aware of compute committee changes and manage connections.
+* Added AWS DynamoDB-backed storage backend.
 
 # 0.1.0
 

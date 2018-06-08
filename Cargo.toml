@@ -97,3 +97,4 @@ members = [
     # Ethereum backend components.
     "ethereum",
 ]
+exclude = [ "thirdparty" ]
