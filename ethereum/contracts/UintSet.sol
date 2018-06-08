@@ -9,16 +9,16 @@ contract UintSet {
   }
   // post-condition: members.length == 1, locations empty.
 
-  function size() public view returns (uint num_elements) {
-    num_elements = members.length - 1;
+  function size() public view returns (uint num_elements_) {
+    num_elements_ = members.length - 1;
   }
 
-  function get(uint ix) public view returns (uint datum) {
-    datum = members[ix+1]; // out, enforcing no-zero element access
+  function get(uint _ix) public view returns (uint datum_) {
+    datum_ = members[_ix+1]; // out, enforcing no-zero element access
   }
 
-  function isMember(uint _v) public view returns (bool is_contained) {
-    is_contained = locations[_v] != 0;
+  function isMember(uint _v) public view returns (bool is_contained_) {
+    is_contained_ = locations[_v] != 0;
   }
 
   function addEntry(uint _v) public {
