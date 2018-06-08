@@ -3,19 +3,20 @@ pragma solidity ^0.4.23;
 interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData) external; }
 
 contract UintSet {
-  uint[] public values;  // zero index location is not used.
-  mapping(uint => uint) locations;
+  uint[] internal values;  // zero index location is not used.
+  mapping(uint => uint) internal locations;
 
   constructor() public {
     values.push(0); // dummy value
   }
+  // post-condition: values.length == 1, locations empty.
 
   function size() public view returns (uint num_elements) {
-    num_elements = values.length;
+    num_elements = values.length - 1;
   }
 
   function get(uint ix) public view returns (uint datum) {
-    datum = values[ix]; // out
+    datum = values[ix+1]; // out, enforcing no-zero element access
   }
 
   function isMember(uint _v) public view returns (bool is_contained) {
@@ -24,17 +25,21 @@ contract UintSet {
 
   function addEntry(uint _v) public {
     require(!isMember(_v));
+    // _v \not\in locations; \forall i \in [0,values.length): values[i] \ne _v
     locations[_v] = values.length;
     values.push(_v);
+    // _v \in locations; locations[_v] = values.length-1; values[values.length-1] = _v
   }
 
   function removeEntry(uint _v) public {
+    // Remove entry in values array for _v by moving the last element there
+    // and updating the mapping.
     require(isMember(_v));
     uint last = values[values.length - 1];
-    uint v_pos = locations[_v];
+    uint v_pos = locations[_v];  // v_pos \in [0, values.length), so could be values.length - 1.
     values[v_pos] = last;
     locations[last] = v_pos;
-    delete locations[_v];  // if _v is the last entry, this also removes it.
+    delete locations[_v];  // if _v was the last entry, this also removes it since swap was no-op.
     values.length--;
   }
 }
@@ -45,7 +50,6 @@ contract UintSet {
 // escrow account is closed.
 contract Stake {
   uint256 constant AMOUNT_MAX = ~uint256(0);
-  uint constant UINT_MAX     = ~uint(0);
   uint8 public constant decimals = 18;
 
   event Transfer(address indexed from, address indexed to, uint256 value);
@@ -248,8 +252,7 @@ contract Stake {
     uint owner_ix = stakes[owner];
     require(owner_ix != 0);
     has_next = accounts[owner_ix].escrows.size() != 0; // out
-    if (has_next) state = 0; // out
-    else state = UINT_MAX; // out
+    state = 0; // out
   }
 
   function list_active_escrow_get(address owner, uint state) public view
@@ -266,13 +269,8 @@ contract Stake {
     target = escrows[escrow_ix].target; // out
     amount = escrows[escrow_ix].amount; // out
 
-    if (state + 1 < accounts[owner_ix].escrows.size()) {
-      has_next = true; // out
-      next_state = state + 1; // out
-    } else {
-      has_next = false; // out
-      next_state = UINT_MAX; // out
-    }
+    next_state = state + 1; // out
+    has_next = next_state < accounts[owner_ix].escrows.size(); // out
   }
 
   function fetch_escrow_by_id(uint escrow_id) public view
