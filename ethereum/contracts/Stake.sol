@@ -2,57 +2,16 @@ pragma solidity ^0.4.23;
 
 interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData) external; }
 
-contract UintSet {
-  uint[] internal values;  // zero index location is not used.
-  mapping(uint => uint) internal locations;
-
-  constructor() public {
-    values.push(0); // dummy value
-  }
-  // post-condition: values.length == 1, locations empty.
-
-  function size() public view returns (uint num_elements) {
-    num_elements = values.length - 1;
-  }
-
-  function get(uint ix) public view returns (uint datum) {
-    datum = values[ix+1]; // out, enforcing no-zero element access
-  }
-
-  function isMember(uint _v) public view returns (bool is_contained) {
-    is_contained = locations[_v] != 0;
-  }
-
-  function addEntry(uint _v) public {
-    require(!isMember(_v));
-    // _v \not\in locations; \forall i \in [0,values.length): values[i] \ne _v
-    locations[_v] = values.length;
-    values.push(_v);
-    // _v \in locations; locations[_v] = values.length-1; values[values.length-1] = _v
-  }
-
-  function removeEntry(uint _v) public {
-    // Remove entry in values array for _v by moving the last element there
-    // and updating the mapping.
-    require(isMember(_v));
-    uint last = values[values.length - 1];
-    uint v_pos = locations[_v];  // v_pos \in [0, values.length), so could be values.length - 1.
-    values[v_pos] = last;
-    locations[last] = v_pos;
-    delete locations[_v];  // if _v was the last entry, this also removes it since swap was no-op.
-    values.length--;
-  }
-}
+import "./ERC20Interface.sol";
+import "./UintSet.sol";
 
 // The Ekiden Stake token.  It is ERC20 compatible, but also includes
 // the notion of escrow accounts in addition to allowances.  Escrow
 // Accounts hold tokens that the stakeholder cannot use until the
 // escrow account is closed.
-contract Stake {
+contract Stake is ERC20Interface {
   uint256 constant AMOUNT_MAX = ~uint256(0);
-  uint8 public constant decimals = 18;
 
-  event Transfer(address indexed from, address indexed to, uint256 value);
   event Burn(address indexed from, uint256 value);
   event EscrowClose(uint indexed escrow_id,
 		    address indexed owner, uint256 value_returned,
@@ -82,22 +41,23 @@ contract Stake {
 
   string public name;
   string public symbol;
-  uint256 public total_supply;
+  uint8 public constant decimals = 18;
+  uint256 public totalSupply;
 
   StakeEscrowInfo[] accounts;  // zero index is never used (mapping default)
   EscrowAccount[] escrows;  // zero index is never used
 
   mapping(address => uint) stakes;
 
-  constructor(uint256 initial_supply, string tokenName, string tokenSymbol) public {
+  constructor(uint256 _initial_supply, string _tokenName, string _tokenSymbol) public {
     StakeEscrowInfo memory dummy_stake;
     accounts.push(dummy_stake); // fill in zero index
     EscrowAccount memory dummy_escrow;
     escrows.push(dummy_escrow); // fill in zero index
-    total_supply = initial_supply * 10 ** uint256(decimals);
-    _depositStake(msg.sender, total_supply);
-    name = tokenName;
-    symbol = tokenSymbol;
+    totalSupply = _initial_supply * 10 ** uint256(decimals);
+    _depositStake(msg.sender, totalSupply);
+    name = _tokenName;
+    symbol = _tokenSymbol;
   }
 
   function _addNewStakeEscrowInfo(address _addr, uint _amount, uint _escrowed) private
@@ -126,13 +86,29 @@ contract Stake {
   // Solidity does not allow returning a struct; we return the members
   // individually.  To be able to return structs, we'd need to have to
   // have at the top: pragma experimental ABIEncoderV2;
-  function get_stake_status(address owner) public view
-    returns (uint256 total_stake, uint256 escrowed) {
-    uint id = stakes[owner];
-    require(id != 0);
-    total_stake = accounts[id].amount; // out
-    escrowed = accounts[id].escrowed; // out
+  function getStakeStatus(address _owner) public view
+    returns (uint256 total_stake_, uint256 escrowed_) {
+    uint ix = stakes[_owner];
+    require(ix != 0);
+    total_stake_ = accounts[ix].amount; // out
+    escrowed_ = accounts[ix].escrowed; // out
     return;
+  }
+
+  // This is really the available balance for a transferFrom
+  // operation.  If we returned just the amount, then another
+  // ERC20-compliant contract that checks balanceOf before using an
+  // approval via transferFrom would encounter what would appear to be
+  // an inconsistency: the transferFrom (read/write) is using what
+  // should be the correct amount from the earlier returned value from
+  // balanceOf (read), and within a transaction the balance could not
+  // have decreased to make the transfer invalid.
+  //
+  // Use getStakeStatus for the details.
+  function balanceOf(address _owner) public view returns (uint balance_) {
+    uint ix = stakes[_owner];
+    require(ix != 0);
+    balance_ = accounts[ix].amount - accounts[ix].escrowed;
   }
 
   function _transfer(address src, address dst, uint256 amount) private {
@@ -156,7 +132,7 @@ contract Stake {
     _transfer(msg.sender, target, amount);
   }
 
-  function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+  function transferFrom(address _from, address _to, uint256 _value) public returns (bool success_) {
     require(_to != 0x0);  // from ERC20: use Burn instead
     uint from_ix = stakes[_from];
     require(from_ix != 0);
@@ -178,20 +154,21 @@ contract Stake {
     accounts[from_ix].allowances[msg.sender] -= _value;
     // Do not bother to delete mapping entry even if zeroed, since
     // there is a good chance that there will be another approval.
-    success = true; // out
+    success_ = true;
   }
 
   // ERC20 approve function.  This is idempotent.  Previous approval
   // is lost, not incremented.
-  function approve(address _spender, uint256 _value) public returns (bool success) {
+  function approve(address _spender, uint256 _value) public returns (bool success_) {
     uint from_ix = stakes[msg.sender];
     require(from_ix != 0);
     accounts[from_ix].allowances[_spender] = _value;
-    success = true; // out
+    emit Approval(msg.sender, _spender, _value);
+    success_ = true;
   }
 
   function approveAndCall(address _spender, uint256 _value, bytes _extraData) public
-    returns (bool success) {
+    returns (bool success_) {
     tokenRecipient spender = tokenRecipient(_spender);
     if (approve(_spender, _value)) {
       spender.receiveApproval(msg.sender, _value, this, _extraData);
@@ -200,16 +177,16 @@ contract Stake {
     return false;
   }
 
-  function burn(uint256 _value) public returns (bool success) {
+  function burn(uint256 _value) public returns (bool success_) {
     uint owner_ix = stakes[msg.sender];
     require(owner_ix != 0);
     require(accounts[owner_ix].amount - accounts[owner_ix].escrowed >= _value);
     accounts[owner_ix].amount -= _value;
-    total_supply -= _value;
-    success = true; // out
+    totalSupply -= _value;
+    success_ = true;
   }
 
-  function burnFrom(address _from, uint256 _value) public returns (bool success) {
+  function burnFrom(address _from, uint256 _value) public returns (bool success_) {
     uint from_ix = stakes[_from];
     require(from_ix != 0);
     require(accounts[from_ix].allowances[msg.sender] >= _value);
@@ -217,17 +194,17 @@ contract Stake {
     accounts[from_ix].allowances[msg.sender] -= _value;
     accounts[from_ix].amount -= _value;
     emit Burn(_from, _value);
-    success = true; // out
+    success_ = true;
   }
 
   // The function withdraw_stake destroys tokens. Not needed?
 
-  function allocate_escrow(address target, uint256 amount) public {
-    _allocate_escrow(msg.sender, target, amount);
+  function allocateEscrow(address target, uint256 amount) public {
+    _allocateEscrow(msg.sender, target, amount);
   }
 
-  function _allocate_escrow(address owner, address target, uint256 amount)
-    private returns (uint escrow_id) {
+  function _allocateEscrow(address owner, address target, uint256 amount)
+    private returns (uint escrow_id_) {
     uint owner_ix = stakes[owner];
     require (owner_ix != 0);
     // NoStakeAccount
@@ -239,15 +216,15 @@ contract Stake {
     ea.owner = owner;
     ea.target = target;
     ea.amount = amount;
-    escrow_id = escrows.length; // out
+    escrow_id_ = escrows.length;
     escrows.push(ea);  // copies to storage
-    accounts[owner_ix].escrows.addEntry(escrow_id);
+    accounts[owner_ix].escrows.addEntry(escrow_id_);
   }
 
   // The information is publicly available in the blockchain, so we
   // might as well allow the public to get the information via an API
   // call, instead of reconstructing it from the blockchain.
-  function list_active_escrows_iterator(address owner) public view
+  function listActiveEscrowsIterator(address owner) public view
     returns (bool has_next, uint state) {
     uint owner_ix = stakes[owner];
     require(owner_ix != 0);
@@ -255,38 +232,39 @@ contract Stake {
     state = 0; // out
   }
 
-  function list_active_escrow_get(address owner, uint state) public view
-    returns (uint id, address target, uint256 amount,
-	     bool has_next, uint next_state) {
-    uint owner_ix = stakes[owner];
+  function listActiveEscrowGet(address _owner, uint _state) public view
+    returns (uint id_, address target_, uint256 amount_,
+	     bool has_next_, uint next_state_) {
+    uint owner_ix = stakes[_owner];
     require(owner_ix != 0);
-    require(state < accounts[owner_ix].escrows.size());
-    uint escrow_ix = accounts[owner_ix].escrows.get(state);
+    require(_state < accounts[owner_ix].escrows.size());
+    uint escrow_ix = accounts[owner_ix].escrows.get(_state);
     require(escrow_ix != 0);
     require(escrow_ix < escrows.length);
 
-    id = escrow_ix; // out
-    target = escrows[escrow_ix].target; // out
-    amount = escrows[escrow_ix].amount; // out
+    id_ = escrow_ix;
+    target_ = escrows[escrow_ix].target;
+    amount_ = escrows[escrow_ix].amount;
 
-    next_state = state + 1; // out
-    has_next = next_state < accounts[owner_ix].escrows.size(); // out
+    next_state_ = _state + 1;
+    has_next_ = next_state_ < accounts[owner_ix].escrows.size();
   }
 
-  function fetch_escrow_by_id(uint escrow_id) public view
-    returns (address owner, address target, uint256 amount) {
-    owner = escrows[escrow_id].owner; // out
-    target = escrows[escrow_id].target; // out
-    amount = escrows[escrow_id].amount; // out
+  function fetchEscrowById(uint _escrow_id) public view
+    returns (address owner_, address target_, uint256 amount_) {
+    owner_ = escrows[_escrow_id].owner; // out
+    target_ = escrows[_escrow_id].target; // out
+    amount_ = escrows[_escrow_id].amount; // out
   }
 
-  function take_and_release_escrow(uint escrow_id, uint256 amount_requested) public {
-    address owner = escrows[escrow_id].owner;  // NoEscrowAccount if previously deleted
+  function takeAndReleaseEscrow(uint _escrow_id, uint256 _amount_requested) public {
+    EscrowAccount memory ea = escrows[_escrow_id];
+    address owner = ea.owner;  // NoEscrowAccount if previously deleted
     uint owner_ix = stakes[owner];
     require(owner_ix != 0);  // NoStakeAccount
-    require(amount_requested <= escrows[escrow_id].amount); // RequestExceedsEscrowedFunds
-    uint amount_to_return = escrows[escrow_id].amount - amount_requested;
-    require(msg.sender == escrows[escrow_id].target); // CallerNotEscrowTarget
+    require(_amount_requested <= ea.amount); // RequestExceedsEscrowedFunds
+    uint amount_to_return = ea.amount - _amount_requested;
+    require(msg.sender == ea.target); // CallerNotEscrowTarget
 
     uint sender_ix = stakes[msg.sender];
     if (sender_ix == 0) {
@@ -294,25 +272,25 @@ contract Stake {
     }
 
     // check some invariants
-    require(escrows[escrow_id].amount <= accounts[sender_ix].escrowed);
-    require(accounts[sender_ix].escrowed <= accounts[sender_ix].amount);
+    require(ea.amount <= accounts[owner_ix].escrowed);
+    require(accounts[owner_ix].escrowed <= accounts[owner_ix].amount);
 
     // require(amount_requested <= accounts[owner_ix].amount );
     // implies by
-    //   amount_requested <= escrows[escrow_id].amount
-    //                    <= accounts[sender_ix].escrowed
-    //                    <= accounts[sender_ix].amount
+    //   _amount_requested <= ea.amount
+    //                     <= accounts[owner_ix].escrowed
+    //                     <= accounts[owner_ix].amount
 
-    require(accounts[sender_ix].amount <= AMOUNT_MAX - amount_requested);
+    require(accounts[sender_ix].amount <= AMOUNT_MAX - _amount_requested);
     // WouldOverflow
 
-    accounts[owner_ix].amount -= amount_requested;
-    accounts[owner_ix].escrowed -= escrows[escrow_id].amount;
-    accounts[owner_ix].escrows.removeEntry(escrow_id);
-    accounts[sender_ix].amount += amount_requested;
+    accounts[owner_ix].amount -= _amount_requested;
+    accounts[owner_ix].escrowed -= ea.amount;
+    accounts[owner_ix].escrows.removeEntry(_escrow_id);
+    accounts[sender_ix].amount += _amount_requested;
 
-    delete escrows[escrow_id];
-    emit EscrowClose(escrow_id, owner, amount_to_return, msg.sender, amount_requested);
+    delete escrows[_escrow_id];
+    emit EscrowClose(_escrow_id, owner, amount_to_return, msg.sender, _amount_requested);
   }
 }
 
