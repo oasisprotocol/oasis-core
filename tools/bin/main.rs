@@ -129,6 +129,12 @@ fn main() {
                                 .help("Custom location to cache build artifacts")
                                 .long("target-dir")
                                 .takes_value(true),
+                        )
+                        .arg(
+                            Arg::with_name("verbose")
+                                .help("increase verbosity")
+                                .multiple(true)
+                                .short("v"),
                         ),
                 )
                 .subcommand(
