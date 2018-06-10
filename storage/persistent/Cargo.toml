@@ -10,6 +10,5 @@ repository = "https://github.com/oasislabs/ekiden"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
-base64 = "~0.6.0"
 serde_cbor = "0.8.2"
 sled = "~0.15.0"
