@@ -135,6 +135,11 @@ fn main() {
                                 .help("increase verbosity")
                                 .multiple(true)
                                 .short("v"),
+                        )
+                        .arg(
+                            Arg::with_name("cargo-args")
+                                .help("additional args forwarded to cargo")
+                                .raw(true),
                         ),
                 )
                 .subcommand(
