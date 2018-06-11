@@ -1,5 +1,4 @@
 const RandomBeacon = artifacts.require("RandomBeacon");
-const util = require('util');
 
 function unix_time() {
     return Math.floor(new Date()/1000);
@@ -32,13 +31,9 @@ contract("Ethereum RandomBeacon test", async (accounts) => {
         let set_res = await instance.set_beacon();
         let res = await instance.get_beacon.call(unix_time());
 
-        console.log("Epoch: " + res[0].toString());
-        console.log("Entropy: " + res[1].toString());
-
         // If invoked close to the epoch transition, the set_beacon() call
         // can generate 2 events (due to the next epoch's beacon also being
         // generated).
-        console.log("Events: " + util.inspect(contract_events));
         assert(Object.keys(contract_events).length > 0, "Not at least 1 OnGenerate");
 
         // Ensure the epoch/entropy value returned from get_beacon()

@@ -15,7 +15,9 @@ extern crate log;
 
 mod beacon;
 pub mod entity_di;
+mod mockepoch;
 pub mod truffle;
 pub mod web3_di;
 
 pub use beacon::EthereumRandomBeacon;
+pub use mockepoch::EthereumMockTime;

@@ -14,6 +14,7 @@ use ekiden_core::epochtime::grpc::EpochTimeService;
 use ekiden_core::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource, SystemTimeSource};
 use ekiden_core::epochtime::{TimeSource, EPOCH_INTERVAL};
 use ekiden_core::error::{Error, Result};
+use ekiden_di;
 use ekiden_node_dummy_api::create_dummy_debug;
 use ekiden_registry_api::{create_contract_registry, create_entity_registry};
 use ekiden_registry_base::{ContractRegistryBackend, ContractRegistryService,
@@ -24,7 +25,6 @@ use ekiden_scheduler_base::{Scheduler, SchedulerService};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_api::create_storage;
 use ekiden_storage_base::{StorageBackend, StorageService};
-use ekiden_storage_dummy::DummyStorageBackend;
 
 use futures_timer::{Interval, TimerHandle};
 use grpcio::{ChannelBuilder, Environment, Server, ServerBuilder};
@@ -78,6 +78,7 @@ impl DummyBackend {
     pub fn new(
         config: DummyBackendConfiguration,
         time_source_impl: TimeSourceImpl,
+        mut di_container: ekiden_di::Container,
     ) -> Result<Self> {
         let time_source: Arc<TimeSource> = match time_source_impl {
             TimeSourceImpl::Mock((ref ts, _, _)) => ts.clone(),
@@ -98,7 +99,7 @@ impl DummyBackend {
             time_notifier.clone(),
         ));
 
-        let storage = Arc::new(DummyStorageBackend::new());
+        let storage = di_container.inject::<StorageBackend>()?;
 
         let consensus = Arc::new(DummyConsensusBackend::new(
             scheduler.clone(),

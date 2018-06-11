@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+extern crate clap;
+use clap::value_t_or_exit;
 extern crate futures;
 extern crate rusoto_core;
 extern crate rusoto_dynamodb;
@@ -13,7 +15,10 @@ extern crate ekiden_common;
 use ekiden_common::bytes::H256;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::futures::Future;
+extern crate ekiden_di;
+use ekiden_di::create_component;
 extern crate ekiden_storage_base;
+use ekiden_storage_base::StorageBackend;
 
 /// A storage backend that uses Amazon DynamoDB.
 pub struct DynamoDbBackend {
@@ -136,6 +141,62 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
         }))
     }
 }
+
+fn di_factory(
+    container: &mut ekiden_di::Container,
+) -> ekiden_di::error::Result<Box<std::any::Any>> {
+    let args = container.get_arguments().unwrap();
+    let region = value_t_or_exit!(args, "storage-dynamodb-region", rusoto_core::region::Region);
+    let table_name = args.value_of("storage-dynamodb-table-name")
+        .unwrap()
+        .to_string();
+    let (init_tx, init_rx) = futures::sync::oneshot::channel();
+    std::thread::spawn(|| match tokio_core::reactor::Core::new() {
+        Ok(mut core) => {
+            init_tx.send(Ok(core.remote())).unwrap();
+            loop {
+                core.turn(None);
+            }
+        }
+        Err(e) => {
+            init_tx.send(Err(e)).unwrap();
+        }
+    });
+    use ekiden_di::error::ResultExt;
+    let remote = init_rx
+        .wait()
+        .unwrap()
+        .chain_err(|| "Couldn't create rector core")?;
+    let backend: Arc<StorageBackend> = Arc::new(DynamoDbBackend::new(remote, region, table_name));
+    Ok(Box::new(backend))
+}
+
+fn di_arg_region<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-dynamodb-region")
+        .long("storage-dynamodb-region")
+        .help("AWS region that the DynamoDB storage backend should use")
+        .takes_value(true)
+        .required(true)
+}
+
+fn di_arg_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-dynamodb-table-name")
+        .long("storage-dynamodb-table-name")
+        .help("DynamoDB table that the DynamoDB storage backend should use")
+        .takes_value(true)
+        .required(true)
+}
+
+// Register for dependency injection. This preparation starts a thread for the reactor core that
+// runs forever.
+create_component!(
+    dynamodb,
+    "storage-backend",
+    DynamoDbBackend,
+    StorageBackend,
+    di_factory,
+    [di_arg_region(), di_arg_table_name()]
+);
 
 #[cfg(test)]
 mod tests {

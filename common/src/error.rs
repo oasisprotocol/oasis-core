@@ -28,7 +28,7 @@ impl Error {
 
 impl<T: error::Error> From<T> for Error {
     fn from(error: T) -> Self {
-        Self::new(error.description())
+        Self::new(format!("{:?}", error))
     }
 }
 

@@ -1,7 +1,9 @@
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxStream, Future};
 use rustc_hex::FromHex;
+use serde_json;
 use std;
+use std::collections::HashMap;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::{env, thread, time};
@@ -37,9 +39,13 @@ pub fn start_truffle(cwd: &str) -> Child {
     }
 }
 
-/// Deploy a named contract in the current truffle context.
-/// return the etherum address it is deployed to.
-pub fn deploy_truffle(name: &str, cwd: &str) -> Vec<u8> {
+/// Deploy all existing contracts in the current truffle context, and
+/// return a map of the contract name -> contract address.
+///
+/// WARNING: This expects the migration script to dump the contract
+/// addresses to stdout in JSON format, which is non-standard behavior.
+/// See: migrations/2_deploy_contracts.js
+pub fn deploy_truffle(cwd: &str) -> HashMap<String, Vec<u8>> {
     let migrate = Command::new("truffle")
         .arg("migrate")
         .arg("--reset")
@@ -47,10 +53,10 @@ pub fn deploy_truffle(name: &str, cwd: &str) -> Vec<u8> {
         .output()
         .unwrap();
     let output = String::from_utf8_lossy(&migrate.stdout);
-    let contract_address = output
+    let contract_addresses = output
         .lines()
         .filter_map(|x| {
-            if x.starts_with(&format!("  {}", name)) {
+            if x.starts_with("CONTRACT_ADDRESSES: ") {
                 Some(x.trim().rsplit(" ").next())
             } else {
                 None
@@ -59,14 +65,24 @@ pub fn deploy_truffle(name: &str, cwd: &str) -> Vec<u8> {
         .next()
         .expect(&format!("Truffle deployment failed: {:?}", output))
         .unwrap();
-    let address = contract_address.split_at(2).1.from_hex().unwrap();
-    address
+
+    // Parse the simple contract name -> hex address dictionary JSON.
+    let contract_addresses: HashMap<String, String> =
+        serde_json::from_str(contract_addresses).unwrap();
+    let mut addresses = HashMap::new();
+    for (contract, addr_hex) in &contract_addresses {
+        let address = addr_hex.split_at(2).1.from_hex().unwrap();
+        addresses.insert(contract.to_string(), address);
+    }
+
+    addresses
 }
 
 /// Run truffle test in the current working directory.
 pub fn test_truffle(cwd: &str) {
     let status = Command::new("truffle")
         .arg("test")
+        .arg("--network=test") // The `=` is mandatory, truffle bug?
         .current_dir(cwd)
         .status()
         .expect("truffle failed");

@@ -21,15 +21,17 @@ For instructions on building contracts, you should check out the documentation o
 The easiest way to build SGX code is to use the provided scripts, which run a Docker
 container with all the included tools.
 
-To start the SGX development container:
-```
-$ cargo ekiden shell
-```
+On MacOS, the ekiden docker setup needs more than 10 GB memory and at least 4 CPU cores. Make sure to have the correct docker settings before starting the ekiden container or you might experience build failures.
 
 If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
 ```
 $ rustup install nightly
 $ cargo +nightly install --force --path tools
+```
+
+To start the SGX development container:
+```
+$ cargo ekiden shell
 ```
 
 All the following commands should be run in the container and not on
@@ -38,6 +40,11 @@ container will look like `root@xxxx:/code#` where `xxxx` is the docker
 container id; in the text below, we will just use `#`.
 
 ## Building core contracts
+
+Starting directory is
+```
+# cd /code
+```
 
 For building contracts we have our own Cargo extension which should be installed:
 ```
@@ -52,7 +59,18 @@ To build the token contract:
 
 The built contract will be stored under `target/contract/token.so`.
 
+To build the client token contract:
+```
+# cd clients/token
+# cargo build
+```
+
 ## Running a contract
+
+Starting directory is
+```
+# cd /code
+```
 
 You need to run multiple Ekiden services, so it is recommended to run each of these in a
 separate container shell, attached to the same container. The following examples use the
@@ -60,7 +78,7 @@ token contract, but the process is the same for any contract.
 
 To start the shared dummy node:
 ```
-# ./target/debug/ekiden-node-dummy --time-source mockrpc
+# ./target/debug/ekiden-node-dummy --time-source mockrpc --storage-backend dummy
 ```
 
 To start the compute node for the token contract (you need to start two):
