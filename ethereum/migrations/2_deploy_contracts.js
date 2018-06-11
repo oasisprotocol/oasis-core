@@ -2,6 +2,7 @@ var RandomBeacon = artifacts.require("./RandomBeacon.sol");
 var RandomBeaconDeployer = artifacts.require("./RandomBeaconDeployer.sol");
 var MockEpoch = artifacts.require("./MockEpoch.sol");
 var OasisEpoch = artifacts.require("./OasisEpoch.sol");
+var Stake = artifacts.require("./Stake.sol");
 
 module.exports = function (deployer, network) {
     if (network == "test") {
@@ -11,7 +12,9 @@ module.exports = function (deployer, network) {
         // The tests only use the standard epoch timesource anyway.
         deployer.deploy([ OasisEpoch, MockEpoch ]).then(function() {
             return deployer.deploy(RandomBeacon, OasisEpoch.address);
-        });
+        }).then(function() {
+	    return deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
+	});
     } else {
         // truffle does not really support deploying more than 1 instance
         // of a given contract all that well yet, so this uses a nasty kludge
@@ -36,6 +39,8 @@ module.exports = function (deployer, network) {
                 "MockEpoch": MockEpoch.address
             };
             console.log("CONTRACT_ADDRESSES: " + JSON.stringify(addrs));
-        });
+        }).then(function() {
+	    return deployer.deploy(1000000000, "Ekiden Stake", "E$");
+	});
     }
 };

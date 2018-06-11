@@ -66,6 +66,10 @@ contract Stake is ERC20Interface {
     symbol = _tokenSymbol;
   }
 
+  function() public {
+    revert();
+  }
+
   function _addNewStakeEscrowInfo(address _addr, uint _amount, uint _escrowed) private
     returns (uint ix_) {
     require(stakes[_addr] == 0);
@@ -190,6 +194,16 @@ contract Stake is ERC20Interface {
       success_ = true;
     } else {
       success_ = false;
+    }
+  }
+
+  function allowance(address _owner, address _spender) view returns (uint256 remaining) {
+    uint owner_ix = stakes[_owner];
+    // require(owner_ix != 0);
+    if (owner_ix == 0) {
+      remaining = 0;
+    } else {
+      remaining = accounts[owner_ix].allowances[_spender];
     }
   }
 
