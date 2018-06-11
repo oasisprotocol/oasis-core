@@ -32,7 +32,6 @@ extern crate ekiden_untrusted;
 
 mod consensus;
 mod group;
-mod handlers;
 mod ias;
 mod instrumentation;
 mod node;
@@ -71,7 +70,7 @@ use ekiden_di::{Component, KnownComponents};
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
-use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
+use self::worker::WorkerConfiguration;
 
 /// Register known components for dependency injection.
 fn register_components(known_components: &mut KnownComponents) {
@@ -139,18 +138,6 @@ fn main() {
                 .takes_value(true)
                 .requires("ias-spid"),
         )
-        .arg(
-            Arg::with_name("key-manager-host")
-                .long("key-manager-host")
-                .takes_value(true)
-                .default_value("127.0.0.1"),
-        )
-        .arg(
-            Arg::with_name("key-manager-port")
-                .long("key-manager-port")
-                .takes_value(true)
-                .default_value("9003"),
-        )
         // TODO: Remove this once we have independent contract registration.
         .arg(
             Arg::with_name("compute-replicas")
@@ -167,7 +154,6 @@ fn main() {
                 .takes_value(true)
                 .default_value("1"),
         )
-        .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
         .arg(
             Arg::with_name("metrics-addr")
                 .long("metrics-addr")
@@ -336,15 +322,6 @@ fn main() {
                             value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
                             0,
                         ))
-                    } else {
-                        None
-                    },
-                    // Key manager configuration.
-                    key_manager: if !matches.is_present("disable-key-manager") {
-                        Some(KeyManagerConfiguration {
-                            host: matches.value_of("key-manager-host").unwrap().to_owned(),
-                            port: value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
-                        })
                     } else {
                         None
                     },

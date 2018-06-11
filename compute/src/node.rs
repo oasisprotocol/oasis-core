@@ -115,10 +115,7 @@ impl ComputeNode {
             &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
             contract.clone(),
         );
-        // XXX: Needed to avoid registering the key manager compute node for now.
-        if config.worker.key_manager.is_some() {
-            contract_registry.register_contract(signed_contract).wait()?;
-        }
+        contract_registry.register_contract(signed_contract).wait()?;
 
         // Register entity with the registry.
         // TODO: This should probably be done independently?
@@ -133,10 +130,7 @@ impl ComputeNode {
                 eth_address: Some(H160::default()),
             },
         );
-        // XXX: Needed to avoid registering the key manager compute node for now.
-        if config.worker.key_manager.is_some() {
-            entity_registry.register_entity(signed_entity).wait()?;
-        }
+        entity_registry.register_entity(signed_entity).wait()?;
 
         // Register node with the registry.
         // TODO: Handle this properly, do not start any other services before registration is done.
@@ -164,24 +158,16 @@ impl ComputeNode {
             &REGISTER_NODE_SIGNATURE_CONTEXT,
             node,
         );
-        // XXX: Needed to avoid registering the key manager compute node for now.
-        if config.worker.key_manager.is_some() {
-            info!("Registering compute node with the registry");
-            entity_registry.register_node(signed_node).wait()?;
-            info!("Compute node registration done");
-        }
+        info!("Registering compute node with the registry");
+        entity_registry.register_node(signed_node).wait()?;
+        info!("Compute node registration done");
 
         // Environment.
         let environment = container.inject::<Environment>()?;
         let grpc_environment = environment.grpc();
 
         // Create worker.
-        let worker = Arc::new(Worker::new(
-            config.worker,
-            grpc_environment.clone(),
-            ias,
-            storage_backend.clone(),
-        ));
+        let worker = Arc::new(Worker::new(config.worker, ias, storage_backend.clone()));
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
