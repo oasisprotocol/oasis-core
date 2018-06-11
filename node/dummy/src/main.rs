@@ -12,6 +12,7 @@ use ekiden_di::Component;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_dynamodb;
+extern crate ekiden_storage_persistent;
 
 use std::process::exit;
 use std::sync::Arc;
@@ -31,6 +32,7 @@ fn main() {
     let mut known_components = ekiden_di::KnownComponents::new();
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
+    ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
 
     let matches = App::new("Ekiden Dummy Shared Backend Node")
         .version(env!("CARGO_PKG_VERSION"))

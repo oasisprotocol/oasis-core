@@ -1,20 +1,18 @@
 //! Ekiden storage interface.
-use std::collections::HashMap;
+extern crate ekiden_di;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use base64;
 use serde_cbor;
 use sled::{ConfigBuilder, Tree};
 
-use ekiden_common::bytes::{B256, H256};
+use ekiden_common::bytes::H256;
+use ekiden_common::epochtime::local::SystemTimeSource;
 use ekiden_common::epochtime::TimeSource;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
-
-pub const PERSISTENT_STORAGE_BASE_PATH: &str = "storage_base";
 
 struct PersistentStorageBackendInner {
     /// The actual sled database.
@@ -28,21 +26,11 @@ pub struct PersistentStorageBackend {
 }
 
 impl PersistentStorageBackend {
-    pub fn new(
-        contract_id: B256,
-        time: Box<TimeSource>,
-        config: HashMap<String, String>,
-    ) -> Result<Self> {
-        let db_path = base64::encode(&contract_id);
-        let storage_base = match config.get(PERSISTENT_STORAGE_BASE_PATH) {
-            Some(base) => base,
-            None => "./",
-        };
-        let mut pb = PathBuf::from(&storage_base);
+    pub fn new(time: Box<TimeSource>, storage_base: &str) -> Result<Self> {
+        let pb = PathBuf::from(&storage_base);
         if !pb.as_path().exists() {
             fs::create_dir(pb.as_path())?;
         }
-        pb.push(db_path);
         let config = ConfigBuilder::default().path(pb.as_path());
 
         Ok(Self {
@@ -95,3 +83,20 @@ impl StorageBackend for PersistentStorageBackend {
         }))
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    persistent,
+    "storage-backend",
+    PersistentStorageBackend,
+    StorageBackend,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let backend = match PersistentStorageBackend::new(Box::new(SystemTimeSource {}), "./") {
+            Ok(backend) => backend,
+            Err(e) => return Err(e.message.into()),
+        };
+        let instance: Arc<StorageBackend> = Arc::new(backend);
+        Ok(Box::new(instance))
+    }),
+    []
+);
