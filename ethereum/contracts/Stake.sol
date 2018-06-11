@@ -70,6 +70,16 @@ contract Stake is ERC20Interface {
     revert();
   }
 
+  // debug
+  function getIx(address _addr) public view returns (uint ix_) {
+    ix_ = stakes[_addr];
+  }
+
+  // debug
+  function getNumAccounts() public view returns (uint len_) {
+    len_ = accounts.length - 1;
+  }
+
   function _addNewStakeEscrowInfo(address _addr, uint _amount, uint _escrowed) private
     returns (uint ix_) {
     require(stakes[_addr] == 0);
@@ -96,7 +106,7 @@ contract Stake is ERC20Interface {
   // Solidity does not allow returning a struct; we return the members
   // individually.  To be able to return structs, we'd need to have to
   // have at the top: pragma experimental ABIEncoderV2;
-  function getStakeStatus(address _owner) public view
+  function getStakeStatus(address _owner) external view
     returns (uint256 total_stake_, uint256 escrowed_) {
     uint ix = stakes[_owner];
     require(ix != 0);
@@ -115,39 +125,52 @@ contract Stake is ERC20Interface {
   // have decreased to make the transfer invalid.
   //
   // Use getStakeStatus for the details.
-  function balanceOf(address _owner) public view returns (uint balance_) {
+  function balanceOf(address _owner) external view returns (uint balance_) {
     uint ix = stakes[_owner];
     require(ix != 0);
     balance_ = accounts[ix].amount - accounts[ix].escrowed;
   }
 
-  function _transfer(address _src, address _dst, uint256 _amount) private {
+  function _transfer(address _src, address _dst, uint256 _amount) private
+    returns (bool success_) {
     uint src_ix = stakes[_src];
+    emit Transfer(_src, _dst, 0);
     require(src_ix != 0);
     // NoStakeAccount
 
-    require(_amount <= accounts[src_ix].amount - accounts[src_ix].escrowed);
+    if (!(_amount <= accounts[src_ix].amount - accounts[src_ix].escrowed)) {
+      return false;
+    }
     // InsufficentFunds
 
     uint dst_ix = stakes[_dst];
     if (dst_ix == 0) {
-      _addNewStakeEscrowInfo(_dst, _amount, 0);
-      accounts[src_ix].amount -= _amount;
-      emit Transfer(_src, _dst, _amount);
-      return;
+      // dst_ix = _addNewStakeEscrowInfo(_dst, _amount, 0);
+      // require(dst_ix != 0);
+      // accounts[src_ix].amount -= _amount;
+      // emit Transfer(_src, _dst, _amount);
+      // return true;
+      dst_ix = _addNewStakeEscrowInfo(_dst, 0, 0);
+
+      uint test_ix = getIx(_dst);
+      require(test_ix == 2);
+      uint na = getNumAccounts();
+      require(na == 2);  // First transfer only
+      // require(false);  // verify that the transfer test exercise this path
     }
     require(accounts[dst_ix].amount <= AMOUNT_MAX - _amount);
     // WouldOverflow
     accounts[src_ix].amount -= _amount;
     accounts[dst_ix].amount += _amount;
     emit Transfer(_src, _dst, _amount);
+    return true;
   }
 
-  function transfer(address _target, uint256 _amount) public {
-    _transfer(msg.sender, _target, _amount);
+  function transfer(address _target, uint256 _amount) external returns (bool success_) {
+    return _transfer(msg.sender, _target, _amount);
   }
 
-  function transferFrom(address _from, address _to, uint256 _value) public returns (bool success_) {
+  function transferFrom(address _from, address _to, uint256 _value) external returns (bool success_) {
     require(_to != 0x0);  // from ERC20: use Burn instead
     uint from_ix = stakes[_from];
     require(from_ix != 0);
@@ -159,11 +182,17 @@ contract Stake is ERC20Interface {
     assert(to_ix != 0);
     // InternalError since _addNewStakeEscrowInfo should return non-zero index.
 
-    require(_value <= accounts[from_ix].allowances[msg.sender]);
-    // InsufficientAllowance
+    if (!(_value <= accounts[from_ix].allowances[msg.sender])) {
+      // InsufficientAllowance
+      success_ = false;
+      return;
+    }
 
-    require(_value <= accounts[from_ix].amount - accounts[from_ix].escrowed);
-    // InsufficientFunds
+    if (!(_value <= accounts[from_ix].amount - accounts[from_ix].escrowed)) {
+      // InsufficientFunds
+      success_ = false;
+      return;
+    }
 
     require(accounts[to_ix].amount <= AMOUNT_MAX - _value);
     // WouldOverflow
@@ -186,7 +215,7 @@ contract Stake is ERC20Interface {
     success_ = true;
   }
 
-  function approveAndCall(address _spender, uint256 _value, bytes _extraData) public
+  function approveAndCall(address _spender, uint256 _value, bytes _extraData) external
     returns (bool success_) {
     tokenRecipient spender = tokenRecipient(_spender);
     if (approve(_spender, _value)) {
@@ -197,7 +226,7 @@ contract Stake is ERC20Interface {
     }
   }
 
-  function allowance(address _owner, address _spender) view returns (uint256 remaining) {
+  function allowance(address _owner, address _spender) external view returns (uint256 remaining) {
     uint owner_ix = stakes[_owner];
     // require(owner_ix != 0);
     if (owner_ix == 0) {
@@ -207,7 +236,7 @@ contract Stake is ERC20Interface {
     }
   }
 
-  function burn(uint256 _value) public returns (bool success_) {
+  function burn(uint256 _value) external returns (bool success_) {
     uint owner_ix = stakes[msg.sender];
     require(owner_ix != 0);
     require(_value <= accounts[owner_ix].amount - accounts[owner_ix].escrowed);
@@ -217,7 +246,7 @@ contract Stake is ERC20Interface {
     success_ = true;
   }
 
-  function burnFrom(address _from, uint256 _value) public returns (bool success_) {
+  function burnFrom(address _from, uint256 _value) external returns (bool success_) {
     uint from_ix = stakes[_from];
     require(from_ix != 0);
     require(_value <= accounts[from_ix].allowances[msg.sender]);
@@ -229,7 +258,7 @@ contract Stake is ERC20Interface {
     success_ = true;
   }
 
-  function allocateEscrow(address target, uint256 amount) public returns (uint escrow_id_) {
+  function allocateEscrow(address target, uint256 amount) external returns (uint escrow_id_) {
     escrow_id_ = _allocateEscrow(msg.sender, target, amount);
   }
 
@@ -254,7 +283,7 @@ contract Stake is ERC20Interface {
   // The information is publicly available in the blockchain, so we
   // might as well allow the public to get the information via an API
   // call, instead of reconstructing it from the blockchain.
-  function listActiveEscrowsIterator(address owner) public view
+  function listActiveEscrowsIterator(address owner) external view
     returns (bool has_next_, uint state_) {
     uint owner_ix = stakes[owner];
     require(owner_ix != 0);
@@ -262,7 +291,7 @@ contract Stake is ERC20Interface {
     state_ = 0;
   }
 
-  function listActiveEscrowGet(address _owner, uint _state) public view
+  function listActiveEscrowGet(address _owner, uint _state) external view
     returns (uint id_, address target_, uint256 amount_,
 	     bool has_next_, uint next_state_) {
     uint owner_ix = stakes[_owner];
@@ -281,7 +310,7 @@ contract Stake is ERC20Interface {
     has_next_ = next_state_ < accounts[owner_ix].escrows.size();
   }
 
-  function fetchEscrowById(uint _escrow_id) public view
+  function fetchEscrowById(uint _escrow_id) external view
     returns (address owner_, address target_, uint256 amount_) {
     require(_escrow_id != 0);
     EscrowAccount memory ea = escrows[_escrow_id]; // copy to memory
@@ -291,7 +320,7 @@ contract Stake is ERC20Interface {
     amount_ = ea.amount; // out
   }
 
-  function takeAndReleaseEscrow(uint _escrow_id, uint256 _amount_requested) public {
+  function takeAndReleaseEscrow(uint _escrow_id, uint256 _amount_requested) external {
     require(_escrow_id != 0);
     EscrowAccount memory ea = escrows[_escrow_id];
     require(ea.owner != 0x0);  // deleted escrow account will have zero address
