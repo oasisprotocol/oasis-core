@@ -94,19 +94,15 @@ impl ContractClientManager {
         self.inner.environment.spawn({
             let inner = self.inner.clone();
             let contract_id = self.inner.contract_id;
-            let contract_id_2 = contract_id.clone();
+            trace!("watching for contract ID {}", contract_id);
 
             self.inner
                 .scheduler
                 .watch_committees()
                 .inspect(move |committee| {
                     trace!(
-                        "committee watch: update to {} contract, kind={:?}",
-                        if committee.contract.id == contract_id_2 {
-                            "our"
-                        } else {
-                            "other"
-                        },
+                        "committee watch: update to contract {}, kind={:?}",
+                        committee.contract.id,
                         committee.kind,
                     );
                 })
@@ -129,7 +125,7 @@ impl ContractClientManager {
                             None => {
                                 warn!("committee watch: committee has no leader. bailing");
                                 return future::err(Error::new("missing committee leader"))
-                                    .into_box()
+                                    .into_box();
                             }
                         };
                         let previous_leader = inner.leader.read().unwrap();
