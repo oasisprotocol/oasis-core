@@ -2,7 +2,6 @@ extern crate ekiden_common;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_persistent;
 
-use std::collections::HashMap;
 use std::fs;
 
 use ekiden_common::epochtime::local::SystemTimeSource;
@@ -12,13 +11,8 @@ use ekiden_storage_persistent::PersistentStorageBackend;
 
 #[test]
 fn test_persistent_backend() {
-    let mut config = HashMap::new();
     let db_path = String::from("./db/");
-    config.insert(
-        ekiden_storage_persistent::PERSISTENT_STORAGE_BASE_PATH.to_owned(),
-        db_path.to_owned(),
-    );
-    let backend = PersistentStorageBackend::new(Box::new(SystemTimeSource {}), config);
+    let backend = PersistentStorageBackend::new(Box::new(SystemTimeSource {}), &db_path);
     assert!(!backend.is_err());
     let backend = backend.unwrap();
     let key = hash_storage_key(b"value");
