@@ -9,8 +9,10 @@ build = "build.rs"
 
 [dependencies]
 chrono = "0.4.2"
+clap = "2.29.1"
 ekiden-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-beacon-base = { path = "../beacon/base", version = "0.2.0-alpha" }
+ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 ethabi = "5.1"
 log = "0.4"
 rustc-hex = "1.0.0"
