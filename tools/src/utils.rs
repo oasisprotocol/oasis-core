@@ -207,6 +207,7 @@ pub fn protoc(args: ProtocArgs) {
         out_dir: args.out_dir,
         includes: args.includes,
         input: args.input,
+        customize: protoc_rust::Customize::default(),
     }).expect("Failed to run protoc");
 
     // Output descriptor of the generated files into a temporary file.

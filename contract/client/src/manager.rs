@@ -144,6 +144,7 @@ impl ContractClientManager {
                                     inner.timeout,
                                     &format!("{}", address.ip()),
                                     address.port(),
+                                    node.certificate.clone(),
                                 )?;
                                 let client = ContractClient::new(
                                     Arc::new(backend),

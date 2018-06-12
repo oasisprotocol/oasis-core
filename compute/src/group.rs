@@ -38,7 +38,7 @@ struct Inner {
     /// Computation committee metadata.
     committee: Mutex<Vec<CommitteeNode>>,
     /// Signer for the compute node.
-    signer: Arc<Signer + Send + Sync>,
+    signer: Arc<Signer>,
     /// gRPC environment.
     environment: Arc<grpcio::Environment>,
     /// Command sender.
@@ -72,7 +72,7 @@ impl ComputationGroup {
         contract_id: B256,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
-        signer: Arc<Signer + Send + Sync>,
+        signer: Arc<Signer>,
         environment: Arc<grpcio::Environment>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();

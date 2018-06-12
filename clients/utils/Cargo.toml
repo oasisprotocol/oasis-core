@@ -13,7 +13,7 @@ benchmark = ["threadpool", "time", "histogram"]
 threadpool = { version = "1.7.1", optional = true }
 time = { version = "0.1", optional = true }
 histogram = { version = "0.6.8", optional = true }
-grpcio = "0.2.2"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }

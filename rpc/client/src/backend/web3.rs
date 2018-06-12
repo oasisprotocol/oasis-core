@@ -11,6 +11,7 @@ use protobuf::Message;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
 use ekiden_rpc_common::api;
 
 use ekiden_compute_api::{CallContractRequest, WaitContractCallRequest, Web3Client};
@@ -24,6 +25,8 @@ pub struct ComputeNodeAddress {
     pub host: String,
     /// Compute node port.
     pub port: u16,
+    /// Compute node certificate.
+    pub certificate: Certificate,
 }
 
 struct ComputeNode {
@@ -58,9 +61,15 @@ impl ComputeNodes {
         address: &ComputeNodeAddress,
     ) -> Result<()> {
         let channel = grpcio::ChannelBuilder::new(environment)
-            .max_receive_message_len(usize::max_value())
-            .max_send_message_len(usize::max_value())
-            .connect(&format!("{}:{}", address.host, address.port));
+            .max_receive_message_len(i32::max_value())
+            .max_send_message_len(i32::max_value())
+            .override_ssl_target(CERTIFICATE_COMMON_NAME)
+            .secure_connect(
+                &format!("{}:{}", address.host, address.port),
+                grpcio::ChannelCredentialsBuilder::new()
+                    .root_cert(address.certificate.get_pem()?)
+                    .build(),
+            );
         let client = Web3Client::new(channel);
 
         let mut nodes = self.nodes.lock().unwrap();
@@ -179,6 +188,7 @@ impl Web3RpcClientBackend {
         timeout: Option<Duration>,
         host: &str,
         port: u16,
+        certificate: Certificate,
     ) -> Result<Self> {
         Self::new_pool(
             environment,
@@ -186,6 +196,7 @@ impl Web3RpcClientBackend {
             &[ComputeNodeAddress {
                 host: host.to_string(),
                 port: port,
+                certificate,
             }],
         )
     }
