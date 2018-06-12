@@ -100,11 +100,7 @@ impl ContractClientManager {
                 .scheduler
                 .watch_committees()
                 .inspect(move |committee| {
-                    trace!(
-                        "committee watch: update to contract {}, kind={:?}",
-                        committee.contract.id,
-                        committee.kind,
-                    );
+                    trace!("committee watch: received {:?}", committee);
                 })
                 .filter(move |committee| committee.contract.id == contract_id)
                 .filter(|committee| committee.kind == CommitteeType::Compute)
