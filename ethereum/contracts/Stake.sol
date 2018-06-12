@@ -19,8 +19,9 @@ contract Stake is ERC20Interface {
   event EscrowCreate(uint indexed escrow_id,
 		     address indexed owner,
 		     address indexed target,
-		     uint256 escrow_amount);
-  event EscrowClose(uint indexed escrow_id,
+		     uint256 escrow_amount,
+		     uint256 aux);
+  event EscrowClose(uint indexed escrow_id, uint256 aux,
 		    address indexed owner, uint256 value_returned,
 		    address indexed target, uint256 value_claimed);
 
@@ -46,6 +47,7 @@ contract Stake is ERC20Interface {
     address owner;
     address target;
     uint256 amount;
+    uint256 aux;  // what the escrow account is used for?
   }
 
   // ERC20 public variables; set once, at constract instantiation.
@@ -246,24 +248,26 @@ contract Stake is ERC20Interface {
     success_ = true;
   }
 
-  function allocateEscrow(address target, uint256 amount) external returns (uint escrow_id_) {
-    escrow_id_ = _allocateEscrow(msg.sender, target, amount);
-    emit EscrowCreate(escrow_id_, msg.sender, target, amount);
+  function allocateEscrow(address _target, uint256 _amount, uint256 _aux) external
+    returns (uint escrow_id_) {
+    escrow_id_ = _allocateEscrow(msg.sender, _target, _amount, _aux);
+    emit EscrowCreate(escrow_id_, msg.sender, _target, _amount, _aux);
   }
 
-  function _allocateEscrow(address owner, address target, uint256 amount)
+  function _allocateEscrow(address _owner, address _target, uint256 _amount, uint256 _aux)
     private returns (uint escrow_id_) {
-    uint owner_ix = stakes[owner];
+    uint owner_ix = stakes[_owner];
     require (owner_ix != 0);
     // NoStakeAccount
-    require (amount <= accounts[owner_ix].amount - accounts[owner_ix].escrowed);
+    require (_amount <= accounts[owner_ix].amount - accounts[owner_ix].escrowed);
     // InsufficientFunds
 
-    accounts[owner_ix].escrowed += amount;
+    accounts[owner_ix].escrowed += _amount;
     EscrowAccount memory ea;
-    ea.owner = owner;
-    ea.target = target;
-    ea.amount = amount;
+    ea.owner = _owner;
+    ea.target = _target;
+    ea.amount = _amount;
+    ea.aux = _aux;
     escrow_id_ = escrows.length;
     escrows.push(ea);  // copies to storage
     accounts[owner_ix].escrows.addEntry(escrow_id_);
@@ -281,7 +285,7 @@ contract Stake is ERC20Interface {
   }
 
   function listActiveEscrowGet(address _owner, uint _state) external view
-    returns (uint id_, address target_, uint256 amount_,
+    returns (uint id_, address target_, uint256 amount_, uint256 aux_,
 	     bool has_next_, uint next_state_) {
     uint owner_ix = stakes[_owner];
     require(owner_ix != 0);
@@ -289,24 +293,27 @@ contract Stake is ERC20Interface {
     uint escrow_ix = accounts[owner_ix].escrows.get(_state);
     assert(escrow_ix != 0);
     assert(escrow_ix < escrows.length);
-    assert(escrows[escrow_ix].owner == _owner);
+    EscrowAccount memory ea = escrows[escrow_ix];
+    assert(ea.owner == _owner);
 
     id_ = escrow_ix;
-    target_ = escrows[escrow_ix].target;
-    amount_ = escrows[escrow_ix].amount;
+    target_ = ea.target;
+    amount_ = ea.amount;
+    aux_ = ea.aux;
 
     next_state_ = _state + 1;
     has_next_ = next_state_ < accounts[owner_ix].escrows.size();
   }
 
   function fetchEscrowById(uint _escrow_id) external view
-    returns (address owner_, address target_, uint256 amount_) {
+    returns (address owner_, address target_, uint256 amount_, uint256 aux_) {
     require(_escrow_id != 0);
     EscrowAccount memory ea = escrows[_escrow_id]; // copy to memory
     require(ea.owner != 0x0); // deleted escrow account will have zero address
     owner_ = ea.owner; // out
     target_ = ea.target; // out
     amount_ = ea.amount; // out
+    aux_ = ea.aux;
   }
 
   function takeAndReleaseEscrow(uint _escrow_id, uint256 _amount_requested) external {
@@ -344,7 +351,7 @@ contract Stake is ERC20Interface {
     accounts[sender_ix].amount += _amount_requested;
 
     delete escrows[_escrow_id];
-    emit EscrowClose(_escrow_id, owner, amount_to_return, msg.sender, _amount_requested);
+    emit EscrowClose(_escrow_id, ea.aux, owner, amount_to_return, msg.sender, _amount_requested);
   }
 }
 
