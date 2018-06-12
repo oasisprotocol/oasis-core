@@ -28,6 +28,7 @@ ekiden-storage-api = { path = "../../storage/api", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.2.0-alpha" }
 ekiden-storage-dynamodb = { path = "../../storage/dynamodb", version = "0.2.0-alpha" }
+ekiden-storage-persistent = { path = "../../storage/persistent", version = "0.2.0-alpha" }
 clap = "2.29.1"
 grpcio = "0.2.2"
 log = "0.4"
