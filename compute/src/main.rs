@@ -46,25 +46,18 @@ extern crate pretty_env_logger;
 
 extern crate ekiden_consensus_client;
 extern crate ekiden_di;
+extern crate ekiden_ethereum;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
-use std::fs::File;
-use std::io::{Read, Write};
-use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
 use std::thread;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
 use ekiden_core::bytes::B256;
-use ekiden_core::ring::rand::SystemRandom;
-use ekiden_core::ring::signature::Ed25519KeyPair;
-use ekiden_core::signature::{InMemorySigner, Signer};
-use ekiden_core::untrusted;
 use ekiden_di::{Component, KnownComponents};
 
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
@@ -86,14 +79,9 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_registry_client::EntityRegistryClient::register(known_components);
     // Contract registry.
     ekiden_registry_client::ContractRegistryClient::register(known_components);
-}
-
-/// Validate an IP address + port string.
-fn validate_addr_port(v: String) -> Result<(), String> {
-    match v.parse::<SocketAddr>() {
-        Ok(_) => return Ok(()),
-        Err(err) => return Err(err.to_string()),
-    }
+    // Local identities.
+    ekiden_ethereum::identity::EthereumEntityIdentity::register(known_components);
+    ekiden_ethereum::identity::EthereumNodeIdentity::register(known_components);
 }
 
 fn main() {
@@ -187,20 +175,6 @@ fn main() {
                 .help("Do not persist enclave identity (useful for contract development)"),
         )
         .arg(
-            Arg::with_name("key-pair")
-                .long("key-pair")
-                .help("Path to key pair for this compute node (if not set, a new key pair will be generated)")
-                .takes_value(true)
-        )
-        .arg(
-            Arg::with_name("register-addr")
-                .long("register-addr")
-                .help("Address/port(s) to use when registering this compute node (if not set, all non-loopback local interfaces will be used).")
-                .takes_value(true)
-                .multiple(true)
-                .validator(validate_addr_port)
-        )
-        .arg(
             Arg::with_name("forwarded-rpc-timeout")
                 .long("forwarded-rpc-timeout")
                 .help("Time limit in seconds for forwarded gRPC calls. If an RPC takes longer than this, we treat it as failed.")
@@ -233,42 +207,6 @@ fn main() {
         .build_with_arguments(&matches)
         .expect("failed to initialize component container");
 
-    // Setup key pair.
-    let mut key_pair = if let Some(filename) = matches.value_of("key-pair") {
-        // Load key pair from existing file.
-        if let Ok(mut file) = File::open(filename) {
-            let mut key_pair = vec![];
-            file.read_to_end(&mut key_pair).unwrap();
-            info!("Loaded node key pair from {}", filename);
-
-            Some(key_pair)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    if key_pair.is_none() {
-        // Generate new key pair.
-        info!("Generating new key pair");
-        let rng = SystemRandom::new();
-        let new_key_pair = Ed25519KeyPair::generate_pkcs8(&rng).unwrap().to_vec();
-
-        if let Some(filename) = matches.value_of("key-pair") {
-            // Persist key pair to file.
-            let mut file = File::create(filename).expect("unable to create key pair file");
-            file.write(&new_key_pair).unwrap();
-        }
-
-        key_pair = Some(new_key_pair);
-    }
-
-    let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&key_pair.unwrap())).unwrap();
-    let signer = Arc::new(InMemorySigner::new(key_pair));
-
-    info!("Using public key {:?}", signer.get_public_key());
-
     // Setup compute node.
     let mut node = ComputeNode::new(
         ComputeNodeConfiguration {
@@ -281,7 +219,6 @@ fn main() {
                 .unwrap_or_else(|e| e.exit()),
             // Consensus configuration.
             consensus: ConsensusConfiguration {
-                signer: signer,
                 max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
                 max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
                 test_only: ConsensusTestOnlyConfiguration {
@@ -326,11 +263,6 @@ fn main() {
                         None
                     },
                 }
-            },
-            register_addrs: if matches.is_present("register-addr") {
-                Some(values_t_or_exit!(matches, "register-addr", SocketAddr))
-            } else {
-                None
             },
             test_only: ComputeNodeTestOnlyConfiguration {
                 contract_id: if matches.is_present("test-contract-id") {

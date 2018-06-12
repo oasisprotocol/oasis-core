@@ -1,21 +1,17 @@
 //! Compute node.
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use grpcio;
 
 use ekiden_compute_api;
 use ekiden_consensus_base::ConsensusBackend;
-use ekiden_core::address::Address;
-use ekiden_core::bytes::{B256, H160};
+use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
-use ekiden_core::entity::Entity;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Future, GrpcExecutor};
-use ekiden_core::node::Node;
+use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
-use ekiden_core::x509::Certificate;
 use ekiden_di::Container;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
@@ -53,8 +49,6 @@ pub struct ComputeNodeConfiguration {
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
     pub worker: WorkerConfiguration,
-    /// Registration address/port override(s).
-    pub register_addrs: Option<Vec<SocketAddr>>,
     /// Test-only configuration.
     pub test_only: ComputeNodeTestOnlyConfiguration,
 }
@@ -87,10 +81,19 @@ impl ComputeNode {
         let storage_backend = container.inject::<StorageBackend>()?;
         let consensus_backend = container.inject::<ConsensusBackend>()?;
 
+        // Register entity with the registry.
+        // TODO: This should probably be done independently?
+        let entity_identity = container.inject::<EntityIdentity>()?;
+        info!("Registering entity with the registry");
+        entity_registry
+            .register_entity(entity_identity.get_signed_entity(&REGISTER_ENTITY_SIGNATURE_CONTEXT))
+            .wait()?;
+        info!("Entity registration done");
+
         // Create contract.
         // TODO: Get this from somewhere.
         // TODO: This should probably be done independently?
-        // TODO: We currently use the node key pair as the entity key pair.
+        // TODO: We currently use the entity key pair as the contract key pair.
         let contract_id = match config.test_only.contract_id {
             Some(contract_id) => {
                 warn!("Using manually overriden contract id");
@@ -112,54 +115,18 @@ impl ComputeNode {
             contract
         };
         let signed_contract = Signed::sign(
-            &config.consensus.signer,
+            &entity_identity.get_entity_signer(),
             &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
             contract.clone(),
         );
         contract_registry.register_contract(signed_contract).wait()?;
 
-        // Register entity with the registry.
-        // TODO: This should probably be done independently?
-        // TODO: We currently use the node key pair as the entity key pair.
-        // TODO: Should learn ethereum identity from web3 provider or config.
-        let entity_pk = config.consensus.signer.get_public_key();
-        let signed_entity = Signed::sign(
-            &config.consensus.signer,
-            &REGISTER_ENTITY_SIGNATURE_CONTEXT,
-            Entity {
-                id: entity_pk,
-                eth_address: Some(H160::default()),
-            },
-        );
-        entity_registry.register_entity(signed_entity).wait()?;
-
         // Register node with the registry.
-        // TODO: Handle this properly, do not start any other services before registration is done.
-        let (certificate, private_key) = Certificate::generate()?;
-        let node = Node {
-            id: config.consensus.signer.get_public_key(),
-            entity_id: entity_pk,
-            expiration: 0xffffffffffffffff,
-            addresses: match config.register_addrs {
-                Some(addrs) => {
-                    let mut addr_vec = vec![];
-                    for addr in addrs {
-                        addr_vec.push(Address(addr.clone()));
-                    }
-                    addr_vec
-                }
-                None => Address::for_local_port(config.port)?,
-            },
-            certificate: certificate.clone(),
-            stake: vec![],
-        };
-
-        info!("Registering compute node addresses: {:?}", node.addresses);
-
+        let node_identity = container.inject::<NodeIdentity>()?;
         let signed_node = Signed::sign(
-            &config.consensus.signer,
+            &entity_identity.get_entity_signer(),
             &REGISTER_NODE_SIGNATURE_CONTEXT,
-            node,
+            node_identity.get_node(),
         );
         info!("Registering compute node with the registry");
         entity_registry.register_node(signed_node).wait()?;
@@ -177,7 +144,7 @@ impl ComputeNode {
             contract_id,
             scheduler.clone(),
             entity_registry.clone(),
-            config.consensus.signer.clone(),
+            node_identity.get_node_signer(),
             grpc_environment.clone(),
         ));
 
@@ -189,6 +156,7 @@ impl ComputeNode {
             computation_group.clone(),
             consensus_backend.clone(),
             storage_backend.clone(),
+            node_identity.get_node_signer(),
         ));
 
         // Create compute node gRPC server.
@@ -210,7 +178,10 @@ impl ComputeNode {
                 "0.0.0.0",
                 config.port,
                 grpcio::ServerCredentialsBuilder::new()
-                    .add_cert(certificate.get_pem()?, private_key.get_pem()?)
+                    .add_cert(
+                        node_identity.get_tls_certificate().get_pem()?,
+                        node_identity.get_tls_private_key().get_pem()?,
+                    )
                     .build(),
             )
             .build()?;

@@ -9,7 +9,7 @@ use super::error::{Error, Result};
 pub const CERTIFICATE_COMMON_NAME: &'static str = "ekiden-node";
 
 /// Private key associated with a certificate.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct PrivateKey {
     /// DER-encoded private key.
     der: Vec<u8>,

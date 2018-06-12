@@ -65,6 +65,7 @@ pub mod signature;
 pub mod uint;
 #[cfg(not(target_env = "sgx"))]
 pub mod environment;
+pub mod identity;
 pub mod subscribers;
 pub mod testing;
 pub mod x509;
