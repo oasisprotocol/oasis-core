@@ -120,7 +120,7 @@ macro_rules! create_component {
         }
 
         fn get_arguments(&self) -> Vec<$crate::macros::clap::Arg<'static, 'static>> {
-            #[allow(unused_variables)]
+            #[allow(unused_imports)]
             use $crate::macros::clap::Arg;
 
             vec![$( $arg ),*]

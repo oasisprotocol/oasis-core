@@ -10,9 +10,9 @@ build = "build.rs"
 [dependencies]
 mktemp = "0.3.1"
 cc = "1.0"
-protoc = "~1.4"
-protoc-rust = "~1.4"
-protobuf = "~1.4"
+protoc = "~2.0"
+protoc-rust = "~2.0"
+protobuf = "~2.0"
 sgx_edl = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 clap = "2.29.1"
 ansi_term = "0.11"

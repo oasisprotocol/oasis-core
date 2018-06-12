@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use grpcio;
 use protobuf;
 use protobuf::Message;
 use thread_local::ThreadLocal;
@@ -21,14 +20,11 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::Future;
 use ekiden_core::rpc::api;
-use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_batch::BatchStorageBackend;
-use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
 use super::consensus::ConsensusFrontend;
-use super::handlers;
 use super::ias::IAS;
 use super::instrumentation;
 
@@ -230,15 +226,6 @@ impl WorkerInner {
     }
 }
 
-/// Key manager configuration.
-#[derive(Clone, Debug)]
-pub struct KeyManagerConfiguration {
-    /// Compute node host.
-    pub host: String,
-    /// Compute node port.
-    pub port: u16,
-}
-
 /// Worker configuration.
 #[derive(Clone, Debug)]
 pub struct WorkerConfiguration {
@@ -249,8 +236,6 @@ pub struct WorkerConfiguration {
     /// Time limit for forwarded gRPC calls. If an RPC takes longer
     /// than this, we treat it as failed.
     pub forwarded_rpc_timeout: Option<Duration>,
-    /// Key manager configuration.
-    pub key_manager: Option<KeyManagerConfiguration>,
 }
 
 /// Worker which executes contracts in secure enclaves.
@@ -264,29 +249,7 @@ pub struct Worker {
 
 impl Worker {
     /// Create new contract worker.
-    pub fn new(
-        config: WorkerConfiguration,
-        grpc_environment: Arc<grpcio::Environment>,
-        ias: Arc<IAS>,
-        storage: Arc<StorageBackend>,
-    ) -> Self {
-        // Setup enclave RPC routing.
-        // TODO: This sets up the routing globally, we should set it up the same as storage.
-        {
-            let mut router = RpcRouter::get_mut();
-
-            // Key manager endpoint.
-            if let Some(ref key_manager) = config.key_manager {
-                router.add_handler(handlers::ContractForwarder::new(
-                    ClientEndpoint::KeyManager,
-                    grpc_environment.clone(),
-                    config.forwarded_rpc_timeout,
-                    key_manager.host.clone(),
-                    key_manager.port,
-                ));
-            }
-        }
-
+    pub fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
         // Spawn inner worker in a separate thread.
         let (command_sender, command_receiver) = channel();
         thread::spawn(move || {

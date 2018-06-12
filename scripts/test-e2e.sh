@@ -31,7 +31,7 @@ run_compute_node() {
         --max-batch-size 1 \
         --compute-replicas 2 \
         --port ${port} \
-        --key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/contract/token.so &

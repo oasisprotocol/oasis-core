@@ -1,4 +1,5 @@
 //! Ekiden environment.
+use std::env;
 use std::sync::{Arc, Mutex};
 
 use clap::value_t_or_exit;
@@ -27,6 +28,9 @@ pub struct GrpcEnvironment {
 
 impl GrpcEnvironment {
     pub fn new(grpc_environment: grpcio::Environment) -> Self {
+        // Enable support for ECDSA-based ciphers in gRPC.
+        env::set_var("GRPC_SSL_CIPHER_SUITES", "ECDHE-ECDSA-AES256-GCM-SHA384");
+
         let grpc_environment = Arc::new(grpc_environment);
 
         Self {
