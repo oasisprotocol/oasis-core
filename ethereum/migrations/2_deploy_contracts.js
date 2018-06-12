@@ -10,7 +10,7 @@ module.exports = function (deployer, network) {
         // copies of the RandomBeacon contract are deployed at once.
         //
         // The tests only use the standard epoch timesource anyway.
-	deployer.deploy(Stake, 1000000000, "EkidenStake", "E$").then(
+	deployer.deploy(Stake, 1, "EkidenStake", "E$").then(
 	    function() {
 		return deployer.deploy([ OasisEpoch, MockEpoch ]);
 	    }

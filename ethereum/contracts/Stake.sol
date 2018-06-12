@@ -16,6 +16,10 @@ contract Stake is ERC20Interface {
   uint256 constant AMOUNT_MAX = ~uint256(0);
 
   event Burn(address indexed from, uint256 value);
+  event EscrowCreate(uint indexed escrow_id,
+		     address indexed owner,
+		     address indexed target,
+		     uint256 escrow_amount);
   event EscrowClose(uint indexed escrow_id,
 		    address indexed owner, uint256 value_returned,
 		    address indexed target, uint256 value_claimed);
@@ -68,16 +72,6 @@ contract Stake is ERC20Interface {
 
   function() public {
     revert();
-  }
-
-  // debug
-  function getIx(address _addr) public view returns (uint ix_) {
-    ix_ = stakes[_addr];
-  }
-
-  // debug
-  function getNumAccounts() public view returns (uint len_) {
-    len_ = accounts.length - 1;
   }
 
   function _addNewStakeEscrowInfo(address _addr, uint _amount, uint _escrowed) private
@@ -134,40 +128,34 @@ contract Stake is ERC20Interface {
   function _transfer(address _src, address _dst, uint256 _amount) private
     returns (bool success_) {
     uint src_ix = stakes[_src];
-    emit Transfer(_src, _dst, 0);
     require(src_ix != 0);
     // NoStakeAccount
 
     if (!(_amount <= accounts[src_ix].amount - accounts[src_ix].escrowed)) {
-      return false;
+      success_ = false;
+      return;
     }
     // InsufficentFunds
 
     uint dst_ix = stakes[_dst];
     if (dst_ix == 0) {
-      // dst_ix = _addNewStakeEscrowInfo(_dst, _amount, 0);
-      // require(dst_ix != 0);
-      // accounts[src_ix].amount -= _amount;
-      // emit Transfer(_src, _dst, _amount);
-      // return true;
-      dst_ix = _addNewStakeEscrowInfo(_dst, 0, 0);
-
-      uint test_ix = getIx(_dst);
-      require(test_ix == 2);
-      uint na = getNumAccounts();
-      require(na == 2);  // First transfer only
-      // require(false);  // verify that the transfer test exercise this path
+      dst_ix = _addNewStakeEscrowInfo(_dst, _amount, 0);
+      require(dst_ix != 0);
+      accounts[src_ix].amount -= _amount;
+      emit Transfer(_src, _dst, _amount);
+      success_ = true;
+      return;
     }
     require(accounts[dst_ix].amount <= AMOUNT_MAX - _amount);
     // WouldOverflow
     accounts[src_ix].amount -= _amount;
     accounts[dst_ix].amount += _amount;
     emit Transfer(_src, _dst, _amount);
-    return true;
+    success_ = true;
   }
 
   function transfer(address _target, uint256 _amount) external returns (bool success_) {
-    return _transfer(msg.sender, _target, _amount);
+    success_ = _transfer(msg.sender, _target, _amount);
   }
 
   function transferFrom(address _from, address _to, uint256 _value) external returns (bool success_) {
@@ -260,6 +248,7 @@ contract Stake is ERC20Interface {
 
   function allocateEscrow(address target, uint256 amount) external returns (uint escrow_id_) {
     escrow_id_ = _allocateEscrow(msg.sender, target, amount);
+    emit EscrowCreate(escrow_id_, msg.sender, target, amount);
   }
 
   function _allocateEscrow(address owner, address target, uint256 amount)
