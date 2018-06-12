@@ -90,13 +90,18 @@ impl ContractClientManager {
 
     /// Start contract client manager.
     fn start(&self) {
+        trace!("spawning committee watch");
         self.inner.environment.spawn({
             let inner = self.inner.clone();
             let contract_id = self.inner.contract_id;
+            trace!("watching for contract ID {}", contract_id);
 
             self.inner
                 .scheduler
                 .watch_committees()
+                .inspect(move |committee| {
+                    trace!("committee watch: received {:?}", committee);
+                })
                 .filter(move |committee| committee.contract.id == contract_id)
                 .filter(|committee| committee.kind == CommitteeType::Compute)
                 .for_each_log_errors(
@@ -104,6 +109,7 @@ impl ContractClientManager {
                     "Unexpected error while watching scheduler committees",
                     move |committee| -> BoxFuture<()> {
                         // Committee has been updated, check if we need to update the leader.
+                        trace!("committee watch: processing this update");
                         let new_leader = match committee
                             .members
                             .iter()
@@ -113,14 +119,16 @@ impl ContractClientManager {
                         {
                             Some(leader) => leader,
                             None => {
+                                warn!("committee watch: committee has no leader. bailing");
                                 return future::err(Error::new("missing committee leader"))
-                                    .into_box()
+                                    .into_box();
                             }
                         };
                         let previous_leader = inner.leader.read().unwrap();
 
                         if let Some(ref previous_leader) = *previous_leader {
                             if previous_leader.node.id == new_leader {
+                                trace!("committee watch: leader is the same. bailing");
                                 return future::ok(()).into_box();
                             }
                         }
@@ -138,6 +146,7 @@ impl ContractClientManager {
                             .get_node(new_leader)
                             .and_then(move |node| {
                                 // Create new client to the leader node.
+                                trace!("committee watch: constructing backends");
                                 let address = node.addresses[0];
                                 let backend = Web3RpcClientBackend::new(
                                     inner.environment.grpc(),
@@ -152,6 +161,7 @@ impl ContractClientManager {
                                 );
 
                                 // Change the leader.
+                                trace!("committee watch: changing leader");
                                 let mut previous_leader = inner.leader.write().unwrap();
                                 let new_leader = Arc::new(Leader { node, client });
                                 if previous_leader.is_none() {
@@ -159,6 +169,7 @@ impl ContractClientManager {
                                     // needed the first time when there is no leader yet.
                                     let mut leader_notify = inner.leader_notify.lock().unwrap();
                                     let leader_notify = leader_notify.take().unwrap();
+                                    trace!("committee watch: sending to leader_notify");
                                     drop(leader_notify.send(new_leader.clone()));
                                 }
                                 *previous_leader = Some(new_leader);
@@ -177,19 +188,32 @@ impl ContractClientManager {
         C: Serialize + Send + 'static,
         O: DeserializeOwned + Send + 'static,
     {
+        trace!("call: obtaining read lock on leader");
         let leader = self.inner.leader.read().unwrap();
+        trace!("call: done obtaining read lock on leader");
 
         match *leader {
-            Some(ref leader) => leader.client.call(method, arguments),
+            Some(ref leader) => {
+                trace!("call: have leader. entering leader client call");
+                let result = leader.client.call(method, arguments);
+                trace!("call: leader client call returned");
+                result
+            }
             None => {
                 // No leader yet, we need to wait for the leader and then make the call.
+                trace!("call: leader is None. will combinate future_leader");
                 let method = method.to_owned();
 
                 self.inner
                     .future_leader
                     .clone()
                     .map_err(|error| error.into())
-                    .and_then(move |leader| leader.client.call(&method, arguments))
+                    .and_then(move |leader| {
+                        trace!("call: future_leader resolved. entering leader client call");
+                        let result = leader.client.call(&method, arguments);
+                        trace!("call: leader client call returned");
+                        result
+                    })
                     .into_box()
             }
         }

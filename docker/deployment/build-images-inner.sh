@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 # Our development image sets up the PATH in .bashrc. Source that.
 PS1='\$'
@@ -13,6 +13,7 @@ it, you can remove it and try again.
 EOF
     exit 1
 fi
+set -x
 
 # Build all Ekiden binaries and resources.
 cargo install --force --path tools
