@@ -9,6 +9,7 @@ use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::node::Node;
+use ekiden_common::protobuf::RepeatedField;
 use ekiden_consensus_api as api;
 use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Header, Reveal};
 
@@ -93,10 +94,36 @@ impl ConsensusBackend for ConsensusClient {
     fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()> {
         let mut req = api::RevealRequest::new();
         req.set_contract_id(contract_id.to_vec());
-        req.set_header(reveal.value.into());
-        req.set_nonce(reveal.nonce.to_vec());
-        req.set_signature(reveal.signature.into());
+        req.set_reveal(reveal.into());
         match self.0.reveal_async(&req) {
+            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
+            Err(e) => Box::new(future::err(e.into())),
+        }
+    }
+
+    fn commit_many(&self, contract_id: B256, commitments: Vec<Commitment>) -> BoxFuture<()> {
+        let mut req = api::CommitManyRequest::new();
+
+        req.set_contract_id(contract_id.to_vec());
+        req.set_commitments(RepeatedField::from_vec(
+            commitments.clone().into_iter().map(|c| c.into()).collect(),
+        ));
+
+        match self.0.commit_many_async(&req) {
+            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
+            Err(e) => Box::new(future::err(e.into())),
+        }
+    }
+
+    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal<Header>>) -> BoxFuture<()> {
+        let mut req = api::RevealManyRequest::new();
+
+        req.set_contract_id(contract_id.to_vec());
+        req.set_reveals(RepeatedField::from_vec(
+            reveals.clone().into_iter().map(|r| r.into()).collect(),
+        ));
+
+        match self.0.reveal_many_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
             Err(e) => Box::new(future::err(e.into())),
         }

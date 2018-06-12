@@ -1,7 +1,8 @@
 //! Computation group structures.
 use std::sync::{Arc, Mutex};
 
-use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
+use ekiden_compute_api::{ComputationGroupClient, SubmitAggCommitRequest, SubmitAggRevealRequest,
+                         SubmitBatchRequest};
 use ekiden_core::bytes::{B256, B64, H256};
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
@@ -14,8 +15,16 @@ use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
 
+use ekiden_consensus_base::{Commitment, Header, Reveal};
+
 /// Signature context used for batch submission.
 const SUBMIT_BATCH_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgBaSu");
+
+/// Signature context used for submitting a commit to leader for aggregation.
+const SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgACSu");
+
+/// Signature context used for submitting a reveal to leader for aggregation.
+const SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgARSu");
 
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
@@ -23,6 +32,10 @@ enum Command {
     Submit(H256),
     /// Update committee.
     UpdateCommittee(Vec<CommitteeNode>),
+    /// Submit a commit to the leader for aggregation.
+    SubmitAggCommit(Commitment),
+    /// Submit a reveal to the leader for aggregation.
+    SubmitAggReveal(Reveal<Header>),
 }
 
 struct Inner {
@@ -33,7 +46,7 @@ struct Inner {
     /// Entity registry.
     entity_registry: Arc<EntityRegistryBackend>,
     /// Computation node group.
-    node_group: NodeGroup<ComputationGroupClient>,
+    node_group: NodeGroup<ComputationGroupClient, CommitteeNode>,
     /// Computation committee metadata.
     committee: Mutex<Vec<CommitteeNode>>,
     /// Signer for the compute node.
@@ -59,6 +72,15 @@ impl Inner {
             .filter(|node| node.public_key == self.signer.get_public_key())
             .map(|node| node.role.clone())
             .next()
+    }
+
+    /// Finds the leader of the current committee.
+    fn find_leader(&self) -> Option<CommitteeNode> {
+        let committee = self.committee.lock().unwrap();
+        committee
+            .iter()
+            .find(|node| node.role == Role::Leader)
+            .cloned()
     }
 }
 
@@ -142,6 +164,12 @@ impl ComputationGroup {
 
                         Self::handle_update_committee(inner.clone(), members)
                     }
+                    Command::SubmitAggCommit(commit) => {
+                        Self::handle_submit_agg_commit(inner.clone(), commit)
+                    }
+                    Command::SubmitAggReveal(reveal) => {
+                        Self::handle_submit_agg_reveal(inner.clone(), reveal)
+                    }
                 },
             )
         });
@@ -171,21 +199,29 @@ impl ComputationGroup {
 
         // Resolve nodes via the entity registry.
         // TODO: Support group fetch to avoid multiple requests to registry or make scheduler return nodes.
-        let nodes: Vec<BoxFuture<Node>> = members
+        let nodes: Vec<BoxFuture<(Node, CommitteeNode)>> = members
             .iter()
             .filter(|node| node.public_key != inner.signer.get_public_key())
-            .filter(|node| node.role == Role::Worker)
-            .map(|node| inner.entity_registry.get_node(node.public_key))
+            .filter(|node| node.role == Role::Worker || node.role == Role::Leader)
+            .map(|node| {
+                let node = node.clone();
+
+                inner
+                    .entity_registry
+                    .get_node(node.public_key)
+                    .and_then(move |reg_node| Ok((reg_node, node.clone())))
+                    .into_box()
+            })
             .collect();
 
         Box::new(
             future::join_all(nodes)
                 .and_then(move |nodes| {
                     // Update group.
-                    for node in nodes {
+                    for (node, committee_node) in nodes {
                         let channel = node.connect(inner.environment.grpc());
                         let client = ComputationGroupClient::new(channel);
-                        inner.node_group.add_node(client);
+                        inner.node_group.add_node(client, committee_node);
                     }
 
                     trace!("New committee: {:?}", members);
@@ -228,11 +264,92 @@ impl ComputationGroup {
 
         inner
             .node_group
-            .call_all(move |client| client.submit_batch_async(&request))
+            .call_filtered(
+                |_, node| node.role == Role::Worker,
+                move |client, _| client.submit_batch_async(&request),
+            )
             .and_then(|results| {
                 for result in results {
                     if let Err(error) = result {
                         error!("Failed to submit batch to node: {}", error.message);
+                    }
+                }
+
+                Ok(())
+            })
+            .into_box()
+    }
+
+    /// Handle submission of a single commit to the leader for aggregation.
+    fn handle_submit_agg_commit(inner: Arc<Inner>, commit: Commitment) -> BoxFuture<()> {
+        trace!("Submitting aggregate commit to leader");
+
+        // Sign commit.
+        let signed_commit = Signed::sign(
+            &inner.signer,
+            &SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT,
+            commit.clone(),
+        );
+
+        // Submit commit.
+        let mut request = SubmitAggCommitRequest::new();
+        request.set_commit(commit.into());
+        request.set_signature(signed_commit.signature.into());
+
+        inner
+            .node_group
+            .call_filtered(
+                |_, node| node.role == Role::Leader,
+                move |client, _| client.submit_agg_commit_async(&request),
+            )
+            .and_then(|results| {
+                trace!("Aggregate commit submitted successfully!");
+
+                for result in results {
+                    if let Err(error) = result {
+                        error!(
+                            "Failed to submit aggregate commit to node: {}",
+                            error.message
+                        );
+                    }
+                }
+
+                Ok(())
+            })
+            .into_box()
+    }
+
+    /// Handle submission of a single reveal to the leader for aggregation.
+    fn handle_submit_agg_reveal(inner: Arc<Inner>, reveal: Reveal<Header>) -> BoxFuture<()> {
+        trace!("Submitting aggregate reveal to leader");
+
+        // Sign reveal.
+        let signed_reveal = Signed::sign(
+            &inner.signer,
+            &SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT,
+            reveal.clone(),
+        );
+
+        // Submit reveal.
+        let mut request = SubmitAggRevealRequest::new();
+        request.set_reveal(reveal.into());
+        request.set_signature(signed_reveal.signature.into());
+
+        inner
+            .node_group
+            .call_filtered(
+                |_, node| node.role == Role::Leader,
+                move |client, _| client.submit_agg_reveal_async(&request),
+            )
+            .and_then(|results| {
+                trace!("Aggregate reveal submitted successfully!");
+
+                for result in results {
+                    if let Err(error) = result {
+                        error!(
+                            "Failed to submit aggregate reveal to node: {}",
+                            error.message
+                        );
                     }
                 }
 
@@ -250,6 +367,30 @@ impl ComputationGroup {
 
         let committee = self.inner.committee.lock().unwrap();
         committee.clone()
+    }
+
+    /// Submit a commit to the leader for aggregation.
+    ///
+    /// Returns the current leader of the computation group.
+    pub fn submit_agg_commit(&self, commit: Commitment) -> CommitteeNode {
+        self.inner
+            .command_sender
+            .unbounded_send(Command::SubmitAggCommit(commit))
+            .unwrap();
+
+        self.inner.find_leader().unwrap()
+    }
+
+    /// Submit a reveal to the leader for aggregation.
+    ///
+    /// Returns the current leader of the computation group.
+    pub fn submit_agg_reveal(&self, reveal: Reveal<Header>) -> CommitteeNode {
+        self.inner
+            .command_sender
+            .unbounded_send(Command::SubmitAggReveal(reveal))
+            .unwrap();
+
+        self.inner.find_leader().unwrap()
     }
 
     /// Verify that given batch has been signed by the current leader.
@@ -275,6 +416,60 @@ impl ComputationGroup {
         Ok((batch_hash.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
     }
 
+    pub fn open_agg_commit(&self, signed_commit: Signed<Commitment>) -> Result<Commitment> {
+        // Check if commitment was signed by a worker and that we're the
+        // current leader, drop otherwise.  Also note that the leader and
+        // backup workers also count as workers.
+        let leader = self.inner.find_leader().unwrap();
+
+        if leader.public_key != self.inner.signer.get_public_key() {
+            warn!("Dropping commit for aggregation, as we're not the current compute committee leader");
+            return Err(Error::new("am not the current compute committee leader"));
+        }
+
+        let committee = self.inner.committee.lock().unwrap();
+
+        if !committee.iter().any(|node| {
+            (node.role == Role::Worker || node.role == Role::BackupWorker
+                || node.role == Role::Leader)
+                && node.public_key == signed_commit.signature.public_key
+        }) {
+            warn!(
+                "Dropping commit for aggregation, as it was not signed by compute committee worker"
+            );
+            return Err(Error::new("not signed by compute committee worker"));
+        }
+
+        Ok(signed_commit.open(&SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT)?)
+    }
+
+    pub fn open_agg_reveal(&self, signed_reveal: Signed<Reveal<Header>>) -> Result<Reveal<Header>> {
+        // Check if reveal was signed by a worker and that we're the
+        // current leader, drop otherwise.  Also note that the leader and
+        // backup workers also count as workers.
+        let leader = self.inner.find_leader().unwrap();
+
+        if leader.public_key != self.inner.signer.get_public_key() {
+            warn!("Dropping reveal for aggregation, as we're not the current compute committee leader");
+            return Err(Error::new("am not the current compute committee leader"));
+        }
+
+        let committee = self.inner.committee.lock().unwrap();
+
+        if !committee.iter().any(|node| {
+            (node.role == Role::Worker || node.role == Role::BackupWorker
+                || node.role == Role::Leader)
+                && node.public_key == signed_reveal.signature.public_key
+        }) {
+            warn!(
+                "Dropping reveal for aggregation, as it was not signed by compute committee worker"
+            );
+            return Err(Error::new("not signed by compute committee worker"));
+        }
+
+        Ok(signed_reveal.open(&SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT)?)
+    }
+
     /// Subscribe to notifications on our current role in the computation committee.
     pub fn watch_role(&self) -> BoxStream<Option<Role>> {
         self.inner.role_subscribers.subscribe().1
@@ -283,6 +478,26 @@ impl ComputationGroup {
     /// Get current committee.
     pub fn get_committee(&self) -> Vec<CommitteeNode> {
         self.inner.committee.lock().unwrap().clone()
+    }
+
+    /// Get number of workers (+ leader!) in the committee.
+    pub fn get_number_of_workers(&self) -> usize {
+        let committee = self.inner.committee.lock().unwrap();
+
+        committee
+            .iter()
+            .filter(|node| node.role == Role::Worker || node.role == Role::Leader)
+            .count()
+    }
+
+    /// Get number of backup workers in the committee.
+    pub fn get_number_of_backup_workers(&self) -> usize {
+        let committee = self.inner.committee.lock().unwrap();
+
+        committee
+            .iter()
+            .filter(|node| node.role == Role::BackupWorker)
+            .count()
     }
 
     /// Get local node's role in the committee.

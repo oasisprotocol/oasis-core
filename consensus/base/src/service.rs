@@ -4,7 +4,6 @@ use std::sync::Arc;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Result;
 use ekiden_common::futures::{future, Future, Stream};
-use ekiden_common::signature::Signature;
 use ekiden_consensus_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
@@ -160,17 +159,77 @@ impl api::Consensus for ConsensusService {
     ) {
         let f = move || -> Result<_> {
             let contract_id = B256::try_from(req.get_contract_id())?;
-            let header = Header::try_from(req.get_header().clone())?;
-            let nonce = B256::from(req.get_nonce());
-            let signature = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.reveal(
-                contract_id,
-                Reveal {
-                    value: header,
-                    nonce: nonce,
-                    signature: signature,
-                },
-            ))
+            let reveal = Reveal::try_from(req.get_reveal().clone())?;
+
+            Ok(self.inner.reveal(contract_id, reveal))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|response| match response {
+                Ok(()) => Ok(api::RevealResponse::new()),
+                Err(e) => Err(e),
+            }),
+            Err(error) => {
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |response| match response {
+            Ok(response) => sink.success(response),
+            Err(error) => invalid_rpc!(sink, Internal, error),
+        }).map_err(|_error| ()));
+    }
+
+    fn commit_many(
+        &self,
+        ctx: RpcContext,
+        req: api::CommitManyRequest,
+        sink: UnarySink<api::CommitResponse>,
+    ) {
+        let f = move || -> Result<_> {
+            let contract_id = B256::try_from(req.get_contract_id())?;
+            let mut commitments: Vec<Commitment> = Vec::new();
+
+            for c in req.get_commitments() {
+                let commitment = Commitment::try_from(c.clone())?;
+
+                commitments.push(commitment);
+            }
+
+            Ok(self.inner.commit_many(contract_id, commitments))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(()) => Ok(api::CommitResponse::new()),
+                Err(e) => Err(e),
+            }),
+            Err(error) => {
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |response| match response {
+            Ok(response) => sink.success(response),
+            Err(error) => invalid_rpc!(sink, Internal, error),
+        }).map_err(|_error| ()));
+    }
+
+    fn reveal_many(
+        &self,
+        ctx: RpcContext,
+        req: api::RevealManyRequest,
+        sink: UnarySink<api::RevealResponse>,
+    ) {
+        let f = move || -> Result<_> {
+            let contract_id = B256::try_from(req.get_contract_id())?;
+            let mut reveals: Vec<Reveal<Header>> = Vec::new();
+
+            for r in req.get_reveals() {
+                let reveal = Reveal::try_from(r.clone())?;
+
+                reveals.push(reveal);
+            }
+
+            Ok(self.inner.reveal_many(contract_id, reveals))
         };
         let f = match f() {
             Ok(f) => f.then(|response| match response {

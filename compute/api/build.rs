@@ -6,7 +6,7 @@ fn main() {
     // Must be done first to create src/generated directory
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
-        &["common"],
+        &["common", "consensus"],
         &[
             "computation_group",
             "computation_group_grpc",
