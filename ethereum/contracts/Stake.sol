@@ -127,16 +127,40 @@ contract Stake is ERC20Interface {
     balance_ = accounts[ix].amount - accounts[ix].escrowed;
   }
 
+  // ERC20 definition allows contract method to revert or return with
+  // success_ == false. It warns users of transfer and transferFrom
+  // that one *must* check the returned result.
+  //
+  // Having success_ out parameter makes it easier for contracts to
+  // try to do the transfer, rather than to do balanceOf before
+  // attempting the transfer.  However, if _some_ contracts revert and
+  // some return success_ = false, then contracts that use the ERC20
+  // interface *must* use balanceOf to check ahead of time rather than
+  // be able to rely on the returned success_ status.
+  //
+  // Example implementations such as
+  //
+  // https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/token/ERC20/BasicToken.sol
+  //
+  // uses require(..) to check for insufficient funds.  This means
+  // that there are likely to be ERC20 contracts in-the-wild that does
+  // the same.
+  //
+  // Since truffle makes it difficult to test the returned value of a
+  // contract call that actually performs a transaction -- requiring
+  // instead that the code generate an event (which in this case
+  // exists, but in some cases would be a test-only event), we just
+  // make all branches that would have returned with success_ = false
+  // revert the transaction.  We could rely on the event, but then we
+  // would have no way to test whether the event is generated
+  // if-and-only-if the transaction succeeds.
   function _transfer(address _src, address _dst, uint256 _amount) private
     returns (bool success_) {
     uint src_ix = stakes[_src];
     require(src_ix != 0);
     // NoStakeAccount
 
-    if (!(_amount <= accounts[src_ix].amount - accounts[src_ix].escrowed)) {
-      success_ = false;
-      return;
-    }
+    require(_amount <= accounts[src_ix].amount - accounts[src_ix].escrowed);
     // InsufficentFunds
 
     uint dst_ix = stakes[_dst];
@@ -160,7 +184,7 @@ contract Stake is ERC20Interface {
     success_ = _transfer(msg.sender, _target, _amount);
   }
 
-  function transferFrom(address _from, address _to, uint256 _value) external returns (bool success_) {
+  function transferFrom(address _from, address _to, uint _value) external returns (bool success_) {
     require(_to != 0x0);  // from ERC20: use Burn instead
     uint from_ix = stakes[_from];
     require(from_ix != 0);
@@ -172,17 +196,11 @@ contract Stake is ERC20Interface {
     assert(to_ix != 0);
     // InternalError since _addNewStakeEscrowInfo should return non-zero index.
 
-    if (!(_value <= accounts[from_ix].allowances[msg.sender])) {
-      // InsufficientAllowance
-      success_ = false;
-      return;
-    }
+    require(_value <= accounts[from_ix].allowances[msg.sender]);
+    // InsufficientAllowance
 
-    if (!(_value <= accounts[from_ix].amount - accounts[from_ix].escrowed)) {
-      // InsufficientFunds
-      success_ = false;
-      return;
-    }
+    require(_value <= accounts[from_ix].amount - accounts[from_ix].escrowed);
+    // InsufficientFunds
 
     require(accounts[to_ix].amount <= AMOUNT_MAX - _value);
     // WouldOverflow
@@ -192,6 +210,7 @@ contract Stake is ERC20Interface {
     accounts[from_ix].allowances[msg.sender] -= _value;
     // Do not bother to delete mapping entry even if zeroed, since
     // there is a good chance that there will be another approval.
+    emit Transfer(_from, _to, _value);
     success_ = true;
   }
 
