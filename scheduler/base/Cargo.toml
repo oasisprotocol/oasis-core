@@ -9,7 +9,7 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-scheduler-api = { path = "../api", version = "0.2.0-alpha" }
-grpcio = "0.2.2"
-protobuf = "~1.4"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+protobuf = "~2.0"
 serde = "=1.0.59"
 serde_derive = "1.0"

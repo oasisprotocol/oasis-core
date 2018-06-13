@@ -64,7 +64,7 @@ struct Inner {
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Signer for the compute node.
-    signer: Arc<Signer + Send + Sync>,
+    signer: Arc<Signer>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -99,8 +99,6 @@ pub struct ConsensusTestOnlyConfiguration {
 /// Consensus frontend configuration.
 #[derive(Clone)]
 pub struct ConsensusConfiguration {
-    /// Signer for the compute node.
-    pub signer: Arc<Signer + Send + Sync>,
     /// Maximum batch size.
     pub max_batch_size: usize,
     /// Maximum batch timeout.
@@ -123,6 +121,7 @@ impl ConsensusFrontend {
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
         storage: Arc<StorageBackend>,
+        signer: Arc<Signer>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
@@ -131,7 +130,7 @@ impl ConsensusFrontend {
                 contract_id,
                 backend,
                 storage,
-                signer: config.signer.clone(),
+                signer,
                 worker,
                 computation_group,
                 command_sender,

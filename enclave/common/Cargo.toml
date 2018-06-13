@@ -12,7 +12,7 @@ base64 = "0.9.0"
 byteorder = "1.2.1"
 chrono = "0.4.2"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-protobuf = "~1.4"
+protobuf = "~2.0"
 sodalite = "0.3.0"
 pem-iterator = "0.2"
 percent-encoding = "1.0.1"

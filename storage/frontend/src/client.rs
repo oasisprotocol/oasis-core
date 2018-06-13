@@ -63,8 +63,8 @@ create_component!(
 
         let args = container.get_arguments().unwrap();
         let channel = ChannelBuilder::new(environment.grpc())
-            .max_receive_message_len(usize::max_value())
-            .max_send_message_len(usize::max_value())
+            .max_receive_message_len(i32::max_value())
+            .max_send_message_len(i32::max_value())
             .connect(&format!(
                 "{}:{}",
                 args.value_of("storage-client-host").unwrap(),

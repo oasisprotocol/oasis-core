@@ -27,6 +27,8 @@ extern crate clap;
 extern crate get_if_addrs;
 #[macro_use]
 extern crate log;
+#[cfg(not(target_env = "sgx"))]
+extern crate openssl;
 pub extern crate ring;
 extern crate rustc_hex;
 extern crate serde;
@@ -63,5 +65,7 @@ pub mod signature;
 pub mod uint;
 #[cfg(not(target_env = "sgx"))]
 pub mod environment;
+pub mod identity;
 pub mod subscribers;
 pub mod testing;
+pub mod x509;

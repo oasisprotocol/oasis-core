@@ -3,17 +3,13 @@ pragma solidity ^0.4.23;
 import "./EpochABI.sol";
 
 contract RandomBeacon {
-    // The maximum time till an epoch transition, that the next epoch's beacon
-    // can be pre-generated at.  This value should be long enough to ensure
-    // that thre won't be down time on the epoch transition.
-    uint64 constant pre_generate_slack = 600; // 10 minutes.
-
     // The EpochContract used for timekeeping;
     EpochContract epoch_source;
 
     // The stored random beacon value by epoch.
     struct Beacon {
         bytes32 entropy;
+        uint block_number;
         bool initialized;
     }
 
@@ -26,8 +22,10 @@ contract RandomBeacon {
         bytes32 _entropy
     );
 
-    constructor(address epoch_addr) public {
-        epoch_source = EpochContract(epoch_addr);
+    // Construct a new RandomBeacon contract instance, using the EpochContract
+    // instance at `_epoch_addr`.
+    constructor(address _epoch_addr) public {
+        epoch_source = EpochContract(_epoch_addr);
     }
 
     function() public {
@@ -36,47 +34,44 @@ contract RandomBeacon {
 
     // Generate and set the beacon if it does not exist.
     function set_beacon() public {
-        (uint64 epoch, , uint64 till) = epoch_source.get_epoch(uint64(block.timestamp));
-
-        // Try to generate for the current epoch.
-        bool did_generate = generate_beacon(epoch);
-
-        // If it's sufficiently close to the epoch transition, pre-generate
-        // the next epoch's beacon.
-        if (till < pre_generate_slack) {
-            did_generate = did_generate || generate_beacon(epoch+1);
-        }
-
-        require(did_generate);
+        (uint64 epoch, , uint64 till) = epoch_source.get_epoch(
+            uint64(block.timestamp)
+        );
+        generate_beacon(epoch);
     }
 
     // Get the random beacon entropy for the epoch corresponding to the
     // specified UNIX epoch time.
-    function get_beacon(uint64 timestamp) public view returns (uint64, bytes32) {
-        (uint64 epoch, ,) = epoch_source.get_epoch(timestamp);
+    function get_beacon(uint64 _timestamp) public view
+        returns (uint64 epoch_, bytes32 entropy_, uint block_number_) {
+        (epoch_, ,) = epoch_source.get_epoch(_timestamp);
 
-        Beacon storage b = beacons[epoch];
+        Beacon storage b = beacons[epoch_];
         require(b.initialized);
-
-        return (epoch, b.entropy);
+        entropy_ = b.entropy;
+        block_number_ = b.block_number;
     }
 
-    // Generates pseudo-random (insecure) entropy.
+    // Generates pseudo-random (insecure) entropy, and emits the corresponding
+    // event.  Iff the beacon already exists for the specified epoch, this
+    // will `revert()`.
     //
     // Note: The generation algorithm is similar to, but different from
     // the one used for dummy::InsecureDummyRandomBeacon.
-    function generate_beacon(uint64 epoch) internal returns (bool) {
-        Beacon storage b = beacons[epoch];
-        if (!b.initialized) {
-            // Generate the beacon value for the current epoch.
-            b.entropy = keccak256(abi.encodePacked("EkB-Ether", epoch, blockhash(block.number-1)));
-            b.initialized = true;
+    function generate_beacon(uint64 _epoch) internal {
+        Beacon storage b = beacons[_epoch];
+        require(!b.initialized);
 
-            // Emit an event.
-            emit OnGenerate(epoch, b.entropy);
+        // Generate the beacon value for the current epoch.
+        b.entropy = keccak256(abi.encodePacked(
+            "EkB-Ether",
+            _epoch,
+            blockhash(block.number-1)
+        ));
+        b.block_number = block.number;
+        b.initialized = true;
 
-            return true;
-        }
-        return false;
+        // Emit an event.
+        emit OnGenerate(_epoch, b.entropy);
     }
 }

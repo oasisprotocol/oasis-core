@@ -80,6 +80,16 @@ where
 
         ctor_future.wait()
     }
+
+    // Return the block number at which the beacon value for an epoch was
+    // generated if any.
+    pub fn get_block_for_epoch(&self, epoch: EpochTime) -> Option<u64> {
+        let block_number = match self.inner.get_beacon(epoch) {
+            Some(ent) => ent.1,
+            None => return None,
+        };
+        Some(block_number)
+    }
 }
 
 impl<T: 'static + Transport + Sync + Send> RandomBeacon for EthereumRandomBeacon<T>
@@ -133,12 +143,14 @@ where
 
                             match r {
                                 Ok(result) => {
-                                    let (entropy, epoch): (
+                                    let (entropy, epoch, block_number): (
                                         web3::types::H256,
                                         u64,
+                                        web3::types::U256,
                                     ) = result;
                                     let entropy = B256::from(entropy.0);
-                                    let _ = inner.on_beacon(epoch, entropy);
+                                    let block_number = block_number.low_u64();
+                                    let _ = inner.on_beacon(epoch, entropy, block_number);
                                 }
                                 Err(e) => warn!("start: Failed to query current beacon: {:?}", e),
                             }
@@ -187,7 +199,7 @@ where
 
     fn get_beacon(&self, epoch: EpochTime) -> BoxFuture<B256> {
         let f = match self.inner.get_beacon(epoch) {
-            Some(ent) => future::ok(ent),
+            Some(ent) => future::ok(ent.0),
             None => future::err(Error::new("Beacon not available")),
         };
         f.into_box()
@@ -210,7 +222,7 @@ struct EthereumRandomBeaconCache<T: Transport + Sync + Send> {
 struct EthereumRandomBeaconCacheInner<T: Transport + Sync + Send> {
     contract: Arc<EthContract<T>>,
     local_eth_address: web3::types::H160,
-    cache: HashMap<EpochTime, B256>,
+    cache: HashMap<EpochTime, (B256, u64)>,
     subscribers: StreamSubscribers<(EpochTime, B256)>,
     command_sender: mpsc::UnboundedSender<Command>,
     command_receiver: Option<mpsc::UnboundedReceiver<Command>>,
@@ -322,7 +334,7 @@ where
         inner.local_eth_address
     }
 
-    fn get_beacon(&self, epoch: EpochTime) -> Option<B256> {
+    fn get_beacon(&self, epoch: EpochTime) -> Option<(B256, u64)> {
         let inner = self.inner.lock().unwrap();
         match inner.cache.get(&epoch) {
             Some(ent) => Some(ent.clone()),
@@ -330,15 +342,20 @@ where
         }
     }
 
-    fn on_beacon(&self, epoch: EpochTime, entropy: B256) -> Result<()> {
+    fn on_beacon(&self, epoch: EpochTime, entropy: B256, block_number: u64) -> Result<()> {
         let mut inner = self.inner.lock().unwrap();
 
-        trace!("OnBeacon: Epoch: {}, Entropy: {:?}.", epoch, entropy);
+        trace!(
+            "OnBeacon: Epoch: {}, Entropy: {:?} BlockNumber: {}.",
+            epoch,
+            entropy,
+            block_number
+        );
 
         match inner.cache.get(&epoch) {
             Some(ent) => {
                 // Be tolerant of exact duplicate events.
-                if *ent != entropy {
+                if (*ent).0 != entropy {
                     return Err(Error::new("Beacon already cached for epoch"));
                 }
                 return Ok(());
@@ -346,7 +363,7 @@ where
             None => {}
         }
 
-        inner.cache.insert(epoch, entropy);
+        inner.cache.insert(epoch, (entropy, block_number));
         let _ = inner.maybe_notify(epoch);
 
         Ok(())
@@ -373,13 +390,18 @@ where
             Ok(data) => data,
             Err(e) => return future::err(Error::new(e.description())).into_box(),
         };
+        let block_number = match log.block_number {
+            Some(block_number) => block_number,
+            None => return future::err(Error::new("Invalid Log, no block number")).into_box(),
+        };
 
         match format!("0x{:#x}", log.topics[0]).as_str() {
             ON_GENERATE_EVENT => {
                 let epoch = log.topics[1].low_u64();
                 let entropy = data;
+                let block_number = block_number.low_u64();
 
-                match self.on_beacon(epoch, entropy) {
+                match self.on_beacon(epoch, entropy, block_number) {
                     Ok(_) => future::ok(()).into_box(),
                     Err(e) => future::err(Error::new(e.description())).into_box(),
                 }
@@ -434,7 +456,7 @@ where
         }
 
         // Don't notify if the beacon is unknown.
-        let beacon = match self.cache.get(&epoch) {
+        let (beacon, _) = match self.cache.get(&epoch) {
             Some(ent) => ent.clone(),
             None => return false,
         };

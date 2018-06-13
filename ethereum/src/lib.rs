@@ -11,14 +11,18 @@ extern crate ekiden_registry_dummy;
 extern crate ekiden_storage_base;
 extern crate ethabi;
 extern crate rustc_hex;
+extern crate serde;
 extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_cbor;
 extern crate web3;
 #[macro_use]
 extern crate log;
 
 mod beacon;
 mod contract_registry;
-pub mod entity_di;
+pub mod identity;
 mod entity_registry;
 mod mockepoch;
 pub mod truffle;
