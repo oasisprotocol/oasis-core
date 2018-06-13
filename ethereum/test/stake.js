@@ -3,9 +3,12 @@ const Stake = artifacts.require("Stake");
 contract("Ethereum Stake test", async (accounts) => {
     let initial_allocation = 1;
     let transfer_amount = 1000;
+    var BN_decimals = null;
+    var BN_shift = null;
     let BN_initial_allocation = web3.toBigNumber(initial_allocation);
     let BN_transfer_amount = web3.toBigNumber(transfer_amount);
     let BN_10 = web3.toBigNumber(10);
+    var BN_initial_tokens = null;
     let small_allowance = 4321;
     let BN_small_allowance = web3.toBigNumber(small_allowance);
     let BN_too_much = web3.toBigNumber(10).pow(web3.toBigNumber(20));
@@ -27,18 +30,16 @@ contract("Ethereum Stake test", async (accounts) => {
 
     it("should have decimals per contract", async () => {
 	let instance = await Stake.deployed();
-	let decimals = await instance.decimals.call();
-	assert.equal(decimals, 18); // matches contract
+	BN_decimals = await instance.decimals.call();
+	assert(BN_decimals.eq(18)); // matches contract
     })
 
     it("should have correct initial balance via getBalance", async () => {
 	let instance = await Stake.deployed();
-	let decimals = await instance.decimals.call();
 	let balance = await instance.balanceOf.call(accounts[0]);
-	var initial = BN_initial_allocation
-	    .times(BN_10.pow(web3.toBigNumber(decimals)));
-	// assert.equal(balance.toNumber(), initial_allocation * 10**decimals);
-	assert(balance.eq(initial), "Initial balance wrong");
+	BN_shift = BN_10.pow(BN_decimals);
+	BN_initial_tokens = BN_initial_allocation.times(BN_shift);
+	assert(balance.eq(BN_initial_tokens), "Initial balance wrong");
 	// matches configuration in ../migrations/2_deploy_contracts.js
     })
 
@@ -62,12 +63,9 @@ contract("Ethereum Stake test", async (accounts) => {
 	assert(transfer_status, "transfer to 2nd account should succeed");
 
 	// check balances
-	let decimals = await instance.decimals.call();
 
 	var a0_bal = await instance.balanceOf.call(accounts[0]);
-	var expected = BN_initial_allocation
-	    .times(BN_10.pow(web3.toBigNumber(decimals)))
-	    .minus(BN_transfer_amount);
+	var expected = BN_initial_tokens.minus(BN_transfer_amount);
 	assert(expected.eq(a0_bal),
 	       "post-transfer balance for 1st account incorrect");
 
@@ -142,10 +140,14 @@ contract("Ethereum Stake test", async (accounts) => {
 
 	assert.notEqual(escrow_id, -1, "no event set the id");
 
-	let decimals = await instance.decimals.call();
-	let BN_decimals = web3.toBigNumber(decimals);
-	var expected = (BN_initial_allocation
-			.times(BN_10.pow(BN_decimals))
+	// fetchEscrowById
+	var [fetch_owner, fetch_target, fetch_amount, fetch_aux] = await instance.fetchEscrowById(escrow_id);
+	assert.equal(fetch_owner, accounts[0]);
+	assert.equal(fetch_target, accounts[1]);
+	assert(fetch_amount.eq(BN_escrow_amount));
+	assert.equal(fetch_aux, aux);
+
+	var expected = (BN_initial_tokens
 			.minus(BN_transfer_amount)
 			.minus(BN_escrow_amount));
 
@@ -154,9 +156,7 @@ contract("Ethereum Stake test", async (accounts) => {
 	       "post-allocate available balance for 1st account wrong");
 
 	var [bal, escrowed] = await instance.getStakeStatus.call(accounts[0]);
-	expected = (BN_initial_allocation
-		    .times(BN_10.pow(BN_decimals))
-		    .minus(BN_transfer_amount));
+	expected = BN_initial_tokens.minus(BN_transfer_amount);
 	assert(expected.eq(bal), 
 	       "post-allocate StakeStatus stake wrong");
 	assert(BN_escrow_amount.eq(escrowed),
@@ -228,8 +228,7 @@ contract("Ethereum Stake test", async (accounts) => {
 	assert(seen_event, "There should have been an EscrowClose event");
 
 	a0_bal = await instance.balanceOf.call(accounts[0]);
-	expected = (BN_initial_allocation
-		    .times(BN_10.pow(BN_decimals))
+	expected = (BN_initial_tokens
 		    .minus(BN_transfer_amount)
 		    .minus(BN_escrow_to_take));
 	assert(expected.eq(a0_bal),
