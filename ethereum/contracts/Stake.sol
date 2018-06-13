@@ -10,6 +10,7 @@ import "./UintSet.sol";
 // Accounts hold tokens that the stakeholder cannot use until the
 // escrow account is closed.
 contract Stake is ERC20Interface {
+  using UintSet for UintSet.Data;
   // The convention used here is that contract input parameters are
   // prefixed with an underscore, and output parameters (in returns
   // list) are suffixed with an underscore.
@@ -30,8 +31,8 @@ contract Stake is ERC20Interface {
 		     // that are in escrow.
     uint256 escrowed;  // sum_{a \in accounts} escrow_map[a].amount
 
-    UintSet escrows;  // Set containing all the escrow account ids
-		      // created by the stakeholder.
+    UintSet.Data escrows;  // Set containing all the escrow account
+			   // ids created by the stakeholder.
 
     // ERC20 allowances.  Unlike escrows, these permit an address to
     // transfer an amount without setting the tokens aside, so there
@@ -82,10 +83,10 @@ contract Stake is ERC20Interface {
     StakeEscrowInfo memory entry;
     entry.amount = _amount;
     entry.escrowed = _escrowed;
-    entry.escrows = new UintSet();
     ix_ = accounts.length;
     stakes[_addr] = ix_;
     accounts.push(entry);
+    accounts[ix_].escrows.init();  // init must be called when in storage
   }
 
   function _depositStake(address _owner, uint256 _additional_stake) private {
@@ -111,14 +112,14 @@ contract Stake is ERC20Interface {
     return;
   }
 
-  // This is really the available balance for a transferFrom
-  // operation.  If we returned just the amount, then another
-  // ERC20-compliant contract that checks balanceOf before using an
-  // approval via transferFrom would encounter what would appear to be
-  // an inconsistency: the transferFrom (read/write) is using what
-  // should be the correct amount from the earlier returned value from
-  // balanceOf (read), and within a transaction the balance could not
-  // have decreased to make the transfer invalid.
+  // This is really the available balance for a transfer or
+  // transferFrom operation.  If we returned just the amount, then
+  // another ERC20-compliant contract that checks balanceOf before
+  // using an approval via transferFrom would encounter what would
+  // appear to be an inconsistency: the transferFrom (read/write) is
+  // using what should be the correct amount from the earlier returned
+  // value from balanceOf (read), and within a transaction the balance
+  // could not have decreased to make the transfer invalid.
   //
   // Use getStakeStatus for the details.
   function balanceOf(address _owner) external view returns (uint balance_) {
@@ -150,10 +151,10 @@ contract Stake is ERC20Interface {
   // contract call that actually performs a transaction -- requiring
   // instead that the code generate an event (which in this case
   // exists, but in some cases would be a test-only event), we just
-  // make all branches that would have returned with success_ = false
-  // revert the transaction.  We could rely on the event, but then we
-  // would have no way to test whether the event is generated
-  // if-and-only-if the transaction succeeds.
+  // make all conditions that would have returned with success_ =
+  // false revert the transaction.  We could rely on the event in our
+  // tests, but then we would have no way to test verify whether the
+  // event is generated if-and-only-if the transaction succeeds.
   function _transfer(address _src, address _dst, uint256 _amount) private
     returns (bool success_) {
     uint src_ix = stakes[_src];

@@ -2,6 +2,7 @@ var RandomBeacon = artifacts.require("./RandomBeacon.sol");
 var RandomBeaconDeployer = artifacts.require("./RandomBeaconDeployer.sol");
 var MockEpoch = artifacts.require("./MockEpoch.sol");
 var OasisEpoch = artifacts.require("./OasisEpoch.sol");
+var UintSet = artifacts.require("./UintSet.sol");
 var Stake = artifacts.require("./Stake.sol");
 
 module.exports = function (deployer, network) {
@@ -10,27 +11,31 @@ module.exports = function (deployer, network) {
         // copies of the RandomBeacon contract are deployed at once.
         //
         // The tests only use the standard epoch timesource anyway.
-	deployer.deploy(Stake, 1, "EkidenStake", "E$").then(
-	    function() {
-		return deployer.deploy([ OasisEpoch, MockEpoch ]);
-	    }
-	).then(function() {
-            return deployer.deploy(RandomBeacon, OasisEpoch.address);
+	deployer.deploy(UintSet).then(function() {
+	    return deployer.link(UintSet, Stake);
+	}).then(function() {
+	    return deployer.deploy(Stake, 1, "EkidenStake", "E$");
+	}).then(function() {
+	    return deployer.deploy([ OasisEpoch, MockEpoch ]);
+	}).then(function() {
+	    return deployer.deploy(RandomBeacon, OasisEpoch.address);
         });
     } else {
         // truffle does not really support deploying more than 1 instance
         // of a given contract all that well yet, so this uses a nasty kludge
         // to deploy the RandomBeacon for each time source.
-	deployer.deploy(Stake, 1000000000, "EkidenStake", "E$").then(
-	    function() {
-		return deployer.deploy([ OasisEpoch, MockEpoch ]);
-	    }
-	).then(function() {
-            return deployer.deploy(
+	deployer.deploy(UintSet).then(function() {
+	    return deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
+	}).then(function() {
+	    return deployer.link(UintSet, Stake);
+	}).then(function() {
+	    return deployer.deploy([ OasisEpoch, MockEpoch ]);
+	}).then(function() {
+	    return deployer.deploy(
                 RandomBeaconDeployer,
                 OasisEpoch.address,
                 MockEpoch.address
-            );
+	    );
         }).then(function(instance) {
             return Promise.all([
                 instance.oasis_beacon.call(),

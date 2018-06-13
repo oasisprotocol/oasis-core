@@ -10,7 +10,6 @@ contract("Ethereum Stake test", async (accounts) => {
     let BN_small_allowance = web3.toBigNumber(small_allowance);
     let BN_too_much = web3.toBigNumber(10).pow(web3.toBigNumber(20));
     var block_num = 0;
-    // large_allowance is greater than available balance, which is allowed
 
     it("should return correct name per test config", async () => {
 	let instance = await Stake.deployed();
@@ -424,6 +423,61 @@ contract("Ethereum Stake test", async (accounts) => {
 	// allowance should be zero
 	read_allowance = await instance.allowance.call(accounts[0], accounts[1]);
 	assert(read_allowance.eq(0));
+
+	// Crazy allowance:
+	// BN_too_much is greater than available balance, which is allowed
+	contract_events = {};
+	events = instance.Approval({},{fromBlock: block_num + 1, toBlock: "latest"});
+	events.watch(function(error, result) {
+	    assert.isNull(error, "Event error: " + error);
+	    contract_events[result.transactionHash] = result;
+	    block_num = result.blockNumber;
+	});
+
+	result = await instance.approve(accounts[1], BN_too_much);
+
+	events.stopWatching();
+	seen_event = false;
+	for (var tx_hash in contract_events) {
+	    if (!contract_events.hasOwnProperty(tx_hash)) {
+		continue;
+	    }
+	    seen_event = true;
+	    args = contract_events[tx_hash].args;
+	    assert.equal(args.tokenOwner, accounts[0]);
+	    assert.equal(args.spender, accounts[1]);
+	    assert(args.tokens.eq(BN_too_much));
+	}
+	assert(seen_event, "Approve BN_too_much event not generated.");
+
+	// allowance should be BN_too_much
+	read_allowance = await instance.allowance.call(accounts[0], accounts[1]);
+	assert(read_allowance.eq(BN_too_much));
+
+	// Set allowance to zero.
+	contract_events = {};
+	events = instance.Approval({},{fromBlock: block_num + 1, toBlock: "latest"});
+	events.watch(function(error, result) {
+	    assert.isNull(error, "Event error: " + error);
+	    contract_events[result.transactionHash] = result;
+	    block_num = result.blockNumber;
+	});
+
+	result = await instance.approve(accounts[1], 0);
+
+	events.stopWatching();
+	seen_event = false;
+	for (var tx_hash in contract_events) {
+	    if (!contract_events.hasOwnProperty(tx_hash)) {
+		continue;
+	    }
+	    seen_event = true;
+	    args = contract_events[tx_hash].args;
+	    assert.equal(args.tokenOwner, accounts[0]);
+	    assert.equal(args.spender, accounts[1]);
+	    assert(args.tokens.eq(0));
+	}
+	assert(seen_event, "Approve zero event not generated.");
     })
 
     it("should burn! burn!", async() => {
