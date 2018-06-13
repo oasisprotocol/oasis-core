@@ -6,6 +6,8 @@ spec:
   ports:
     - name: parity-web3
       port: 8545
+    - name: parity-ws
+      port: 8546
   selector:
     copper: parity
   # type: ClusterIP
@@ -34,8 +36,9 @@ spec:
             - --nat
             - none
             - --no-ui
-            - --no-ws
             - --jsonrpc-interface
+            - 0.0.0.0
+            - --ws-interface
             - 0.0.0.0
           volumeMounts:
             - mountPath: /root/.local/share/io.parity.ethereum
