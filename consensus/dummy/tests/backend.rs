@@ -8,6 +8,7 @@ extern crate ekiden_registry_dummy;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_dummy;
 extern crate ekiden_storage_dummy;
+extern crate grpcio;
 
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::contract::Contract;
+use ekiden_common::environment::GrpcEnvironment;
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_common::epochtime::EPOCH_INTERVAL;
 use ekiden_common::futures::{cpupool, future, Future, Stream};
@@ -26,8 +28,7 @@ use ekiden_consensus_base::test::generate_simulated_nodes;
 use ekiden_consensus_base::ConsensusBackend;
 use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_registry_base::test::populate_entity_registry;
-use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
-                           REGISTER_CONTRACT_SIGNATURE_CONTEXT};
+use ekiden_registry_base::{ContractRegistryBackend, REGISTER_CONTRACT_SIGNATURE_CONTEXT};
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
 use ekiden_scheduler_base::Scheduler;
 use ekiden_scheduler_dummy::DummySchedulerBackend;
@@ -42,7 +43,10 @@ fn test_dummy_backend_two_rounds() {
     let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
     let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
-    let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
+    let grpc_environment = grpcio::EnvBuilder::new().build();
+    let env = Arc::new(GrpcEnvironment::new(grpc_environment));
+
+    let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone(), env));
     let contract_registry = Arc::new(DummyContractRegistryBackend::new());
     let contract_sk =
         Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
@@ -98,7 +102,6 @@ fn test_dummy_backend_two_rounds() {
 
     // Start backends.
     beacon.start(&mut pool);
-    entity_registry.start(&mut pool);
     scheduler.start(&mut pool);
     backend.start(&mut pool);
 

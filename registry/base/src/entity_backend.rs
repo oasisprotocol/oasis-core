@@ -2,7 +2,7 @@
 use ekiden_common::bytes::{B256, B64};
 use ekiden_common::entity::Entity;
 use ekiden_common::epochtime::EpochTime;
-use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
+use ekiden_common::futures::{BoxFuture, BoxStream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 
@@ -24,9 +24,6 @@ pub enum RegistryEvent<T> {
 
 /// Registry backend implementing the Ekiden registry interface.
 pub trait EntityRegistryBackend: Send + Sync {
-    /// Start the async event source associated with the beacon;
-    fn start(&self, executor: &mut Executor);
-
     /// Register and or update an entity with the registry.
     ///
     /// The signature should be made using `REGISTER_ENTITY_SIGNATURE_CONTEXT`

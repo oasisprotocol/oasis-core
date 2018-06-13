@@ -440,6 +440,7 @@ mod tests {
     extern crate ekiden_beacon_dummy;
     extern crate ekiden_registry_base;
     extern crate ekiden_registry_dummy;
+    extern crate grpcio;
     extern crate serde_cbor;
 
     use self::ekiden_beacon_dummy::InsecureDummyRandomBeacon;
@@ -450,6 +451,7 @@ mod tests {
     use super::*;
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
+    use ekiden_common::environment::GrpcEnvironment;
     use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::cpupool;
@@ -464,7 +466,12 @@ mod tests {
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
+        let grpc_environment = grpcio::EnvBuilder::new().build();
+        let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(
+            time_notifier.clone(),
+            environment.clone(),
+        ));
         let scheduler = DummySchedulerBackend::new(
             beacon.clone(),
             contract_registry.clone(),
@@ -472,10 +479,9 @@ mod tests {
             time_notifier.clone(),
         );
 
-        let mut pool = cpupool::CpuPool::new(1);
-        entity_registry.start(&mut pool);
-        beacon.start(&mut pool);
-        scheduler.start(&mut pool);
+        let pool = cpupool::CpuPool::new(1);
+        beacon.start(&mut pool.clone());
+        scheduler.start(&mut pool.clone());
 
         // Populate the entity registry.
         let mut nodes = vec![];

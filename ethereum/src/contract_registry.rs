@@ -1,12 +1,14 @@
 //! Ekiden ethereum contract registry backend.
 use std::error::Error as StdError;
+use std::mem;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
+use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{self, B256, H160};
 use ekiden_common::contract::Contract as EkContract;
 use ekiden_common::entity::Entity;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::sync::oneshot;
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream};
 use ekiden_common::signature::Signed;
 use ekiden_registry_base::*;
@@ -48,6 +50,7 @@ where
         local_identity: Arc<Entity>,
         contract_address: bytes::H160,
         storage: Arc<StorageBackend>,
+        beacon: Arc<RandomBeacon>,
         executor: &mut Executor,
     ) -> Result<Self> {
         let contract_dfn: serde_json::Value = match serde_json::from_slice(CONTRACT_CONTRACT) {
@@ -88,7 +91,7 @@ where
         let result = ctor_future.wait();
         if result.is_ok() {
             let result = result.unwrap();
-            result.start(executor);
+            let _ = result.start(beacon, executor);
             Ok(result)
         } else {
             result
@@ -125,35 +128,42 @@ where
         }
     }
 
-    fn start(&self, executor: &mut Executor) {
+    fn start(&self, beacon: Arc<RandomBeacon>, executor: &mut Executor) -> Result<()> {
         let contract = self.eth_contract.clone();
         let contract = contract.lock().unwrap();
         let contract_address = contract.address();
 
         let client = self.client.clone();
-        let eth_filter = client.eth_filter();
         let cache = self.cache.clone();
         let storage = self.storage.clone();
 
-        let filter = web3::types::FilterBuilder::default()
-                    // TODO: cache state and catch-up, rather than rebuilding from beginning
-                    .from_block(BlockNumber::from(0))
-                    .to_block(BlockNumber::Latest)
-                    .address(vec![contract_address])
-                    .build();
+        let (sender, receiver): (
+            oneshot::Sender<Result<()>>,
+            oneshot::Receiver<Result<()>>,
+        ) = oneshot::channel();
+        let sender = Arc::new(Mutex::new(Some(sender)));
 
-        let task = eth_filter
-            .create_logs_filter(filter)
-            .or_else(|e| future::err(Error::new(e.description())))
-            .and_then(move |filter| {
-                let future_cache = cache.clone();
-                let future_storage = storage.clone();
-                filter
-                    .logs()
-                    .then(move |r| match r {
-                        Err(e) => future::err(Error::new(e.description())).into_box(),
+        let triggers = beacon.watch_beacons().fold(0, move |last_block, notify| {
+            info!("Beacon triggered. playing log blocks in registry.");
+            let eth_filter = client.eth_filter();
+            let cache = cache.clone();
+            let storage = storage.clone();
+            let sender = sender.clone();
+            let (epoch, _) = notify;
+            let current_block = beacon.get_block_for_epoch(epoch).unwrap();
+            let filter = web3::types::FilterBuilder::default()
+                .from_block(BlockNumber::Number(last_block))
+                .to_block(BlockNumber::Number(current_block - 1))
+                .address(vec![contract_address])
+                .build();
+            let task = eth_filter
+                .create_logs_filter(filter)
+                .or_else(|e| future::err(Error::new(format!("{:?}", e))))
+                .and_then(move |filter| {
+                    filter.logs().then(move |r| match r {
+                        Err(e) => future::err(Error::new(format!("{:?}", e))).into_box(),
                         Ok(logs) => future::join_all(logs.into_iter().map(move |log| {
-                            trace!("Catchup log: {:?}", log);
+                            trace!("Log replay: {:?}", log);
                             EthereumContractRegistryBackend::<T>::on_log(
                                 cache.clone(),
                                 storage.clone(),
@@ -161,29 +171,27 @@ where
                             )
                         })).into_box(),
                     })
-                    .and_then(move |_r| {
-                        // TODO: should poll time be 1 second / configurable / what
-                        filter
-                            .stream(Duration::from_millis(100))
-                            .map_err(|e| Error::new(e.description()))
-                            .map(move |log| {
-                                trace!("Streamed log: {:?}", log);
-                                EthereumContractRegistryBackend::<T>::on_log(
-                                    future_cache.clone(),
-                                    future_storage.clone(),
-                                    &log,
-                                )
-                            })
-                            .fold(0, |acc, _x| future::ok::<_, Error>(acc))
-                            .or_else(|e| future::err(Error::new(e.description())))
-                    })
-                    .and_then(|_r| future::ok(()))
-            })
-            .or_else(|e| {
-                error!("{}", e);
-                future::ok(())
-            });
-        executor.spawn(Box::new(task));
+                })
+                .and_then(move |_r| {
+                    if last_block == 0 {
+                        // Caught up.
+                        let mut sender = sender.lock().unwrap();
+                        match mem::replace(&mut *sender, None) {
+                            Some(sender) => sender.send(Ok(())).unwrap(),
+                            None => warn!("tried to re-trigger caught-up notification"),
+                        }
+                    }
+                    future::ok(current_block)
+                })
+                .or_else(|e| {
+                    error!("{:?}", e);
+                    future::err(e)
+                });
+            task
+        });
+        executor.spawn(Box::new(triggers.then(|_r| future::ok(()))));
+
+        receiver.wait().unwrap() // Block till filter is installed.
     }
 }
 

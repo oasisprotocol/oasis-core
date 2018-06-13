@@ -10,7 +10,7 @@ use ekiden_common::entity::Entity;
 use ekiden_common::environment::Environment;
 use ekiden_common::epochtime::EpochTime;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
+use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_registry_api as api;
@@ -30,8 +30,6 @@ impl EntityRegistryClient {
 }
 
 impl EntityRegistryBackend for EntityRegistryClient {
-    fn start(&self, _executor: &mut Executor) {}
-
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let mut request = api::RegisterRequest::new();
         request.set_entity(entity.get_value_unsafe().unwrap().into());

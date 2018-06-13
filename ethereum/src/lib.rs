@@ -22,8 +22,8 @@ extern crate log;
 
 mod beacon;
 mod contract_registry;
-pub mod identity;
 mod entity_registry;
+pub mod identity;
 mod mockepoch;
 pub mod truffle;
 

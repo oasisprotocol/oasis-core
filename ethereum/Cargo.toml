@@ -27,4 +27,5 @@ web3 = { git = "https://github.com/ekiden/rust-web3" }
 
 [dev-dependencies]
 ekiden-storage-dummy = { path = "../storage/dummy", version = "0.2.0-alpha" }
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 scopeguard = "0.3.3"
