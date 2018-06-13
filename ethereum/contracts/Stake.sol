@@ -304,7 +304,7 @@ contract Stake is ERC20Interface {
     state_ = 0;
   }
 
-  function listActiveEscrowGet(address _owner, uint _state) external view
+  function listActiveEscrowsGet(address _owner, uint _state) external view
     returns (uint id_, address target_, uint256 amount_, uint256 aux_,
 	     bool has_next_, uint next_state_) {
     uint owner_ix = stakes[_owner];
