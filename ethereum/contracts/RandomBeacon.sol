@@ -3,11 +3,6 @@ pragma solidity ^0.4.23;
 import "./EpochABI.sol";
 
 contract RandomBeacon {
-    // The maximum time till an epoch transition, that the next epoch's beacon
-    // can be pre-generated at.  This value should be long enough to ensure
-    // that thre won't be down time on the epoch transition.
-    uint64 constant pre_generate_slack = 600; // 10 minutes.
-
     // The EpochContract used for timekeeping;
     EpochContract epoch_source;
 
@@ -41,17 +36,7 @@ contract RandomBeacon {
         (uint64 epoch, , uint64 till) = epoch_source.get_epoch(
             uint64(block.timestamp)
         );
-
-        // Try to generate for the current epoch.
-        bool did_generate = generate_beacon(epoch);
-
-        // If it's sufficiently close to the epoch transition, pre-generate
-        // the next epoch's beacon.
-        if (till < pre_generate_slack) {
-            did_generate = did_generate || generate_beacon(epoch+1);
-        }
-
-        require(did_generate);
+        generate_beacon(epoch);
     }
 
     // Get the random beacon entropy for the epoch corresponding to the
@@ -64,26 +49,25 @@ contract RandomBeacon {
         entropy_ = b.entropy;
     }
 
-    // Generates pseudo-random (insecure) entropy.
+    // Generates pseudo-random (insecure) entropy, and emits the corresponding
+    // event.  Iff the beacon already exists for the specified epoch, this
+    // will `revert()`.
     //
     // Note: The generation algorithm is similar to, but different from
     // the one used for dummy::InsecureDummyRandomBeacon.
-    function generate_beacon(uint64 _epoch) internal returns (bool) {
+    function generate_beacon(uint64 _epoch) internal {
         Beacon storage b = beacons[_epoch];
-        if (!b.initialized) {
-            // Generate the beacon value for the current epoch.
-            b.entropy = keccak256(abi.encodePacked(
-                "EkB-Ether",
-                _epoch,
-                blockhash(block.number-1)
-            ));
-            b.initialized = true;
+        require(!b.initialized);
 
-            // Emit an event.
-            emit OnGenerate(_epoch, b.entropy);
+        // Generate the beacon value for the current epoch.
+        b.entropy = keccak256(abi.encodePacked(
+            "EkB-Ether",
+            _epoch,
+            blockhash(block.number-1)
+        ));
+        b.initialized = true;
 
-            return true;
-        }
-        return false;
+        // Emit an event.
+        emit OnGenerate(_epoch, b.entropy);
     }
 }
