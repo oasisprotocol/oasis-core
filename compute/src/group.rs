@@ -6,12 +6,12 @@ use grpcio;
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
 use ekiden_core::bytes::{B256, B64, H256};
 use ekiden_core::error::{Error, Result};
+use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::mpsc;
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, IntoFuture, Stream,
-                           StreamExt};
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
 use ekiden_core::signature::{Signed, Signer};
+use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
 
@@ -45,6 +45,8 @@ struct Inner {
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
+    /// Role subscribers.
+    role_subscribers: StreamSubscribers<Option<Role>>,
 }
 
 impl Inner {
@@ -88,6 +90,7 @@ impl ComputationGroup {
                 environment,
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
+                role_subscribers: StreamSubscribers::new(),
             }),
         }
     }
@@ -96,29 +99,19 @@ impl ComputationGroup {
     pub fn start(&self, executor: &mut Executor) {
         info!("Starting computation group services");
 
-        // Subscribe to computation group formations for given contract and update nodes.
-        executor.spawn({
-            let inner = self.inner.clone();
-            let contract_id = self.inner.contract_id;
+        let mut event_sources = stream::SelectAll::new();
 
+        // Subscribe to computation group formations for given contract and update nodes.
+        let contract_id = self.inner.contract_id;
+        event_sources.push(
             self.inner
                 .scheduler
                 .watch_committees()
                 .filter(|committee| committee.kind == CommitteeType::Compute)
                 .filter(move |committee| committee.contract.id == contract_id)
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while processing committee updates",
-                    move |committees| {
-                        // Update node group with new nodes.
-                        inner
-                            .command_sender
-                            .unbounded_send(Command::UpdateCommittee(committees.members))
-                            .map_err(|error| Error::from(error))
-                            .into_future()
-                    },
-                )
-        });
+                .map(|committee| Command::UpdateCommittee(committee.members))
+                .into_box(),
+        );
 
         // Receive commands.
         let command_receiver = self.inner
@@ -127,23 +120,26 @@ impl ComputationGroup {
             .unwrap()
             .take()
             .expect("start already called");
+        event_sources.push(
+            command_receiver
+                .map_err(|_| Error::new("command channel closed"))
+                .into_box(),
+        );
+
+        // Process commands.
         executor.spawn({
             let inner = self.inner.clone();
 
-            command_receiver
-                .map_err(|_| Error::new("command channel closed"))
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while processing group commands",
-                    move |command| match command {
-                        Command::Submit(batch_hash) => {
-                            Self::handle_submit(inner.clone(), batch_hash)
-                        }
-                        Command::UpdateCommittee(members) => {
-                            Self::handle_update_committee(inner.clone(), members)
-                        }
-                    },
-                )
+            event_sources.for_each_log_errors(
+                module_path!(),
+                "Unexpected error while processing group commands",
+                move |command| match command {
+                    Command::Submit(batch_hash) => Self::handle_submit(inner.clone(), batch_hash),
+                    Command::UpdateCommittee(members) => {
+                        Self::handle_update_committee(inner.clone(), members)
+                    }
+                },
+            )
         });
     }
 
@@ -165,6 +161,7 @@ impl ComputationGroup {
             .any(|node| node.public_key == inner.signer.get_public_key())
         {
             info!("No longer a member of the computation group");
+            inner.role_subscribers.notify(&None);
             return Box::new(future::ok(()));
         }
 
@@ -195,8 +192,11 @@ impl ComputationGroup {
                         *committee = members;
                     }
 
+                    let new_role = inner.get_role().unwrap();
+                    info!("Our new role is: {:?}", new_role);
+                    inner.role_subscribers.notify(&Some(new_role));
+
                     info!("Update of computation group committee finished");
-                    info!("Our new role is: {:?}", inner.get_role().unwrap());
 
                     Ok(())
                 })
@@ -271,6 +271,11 @@ impl ComputationGroup {
         Ok((batch_hash.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
     }
 
+    /// Subscribe to notifications on our current role in the computation committee.
+    pub fn watch_role(&self) -> BoxStream<Option<Role>> {
+        self.inner.role_subscribers.subscribe().1
+    }
+
     /// Get current committee.
     pub fn get_committee(&self) -> Vec<CommitteeNode> {
         self.inner.committee.lock().unwrap().clone()
@@ -286,10 +291,5 @@ impl ComputationGroup {
     /// Check if the local node is a leader of the computation group.
     pub fn is_leader(&self) -> bool {
         self.get_role() == Some(Role::Leader)
-    }
-
-    /// Check if the local node is a backup worker in the computation group.
-    pub fn is_backup_worker(&self) -> bool {
-        self.get_role() == Some(Role::BackupWorker)
     }
 }
