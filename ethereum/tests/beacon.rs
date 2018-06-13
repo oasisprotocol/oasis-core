@@ -77,5 +77,11 @@ fn beacon_integration() {
         .expect("failed to get beacon");
     assert_eq!(entropy, polled_entropy);
 
+    // Ensure that there is a cached block number for the current epoch.
+    let block_number = beacon
+        .get_block_for_epoch(epoch)
+        .expect("no block for epoch");
+    assert!(block_number > 0); // This is usually `7` but that's not guaranteed.
+
     drop(handle);
 }
