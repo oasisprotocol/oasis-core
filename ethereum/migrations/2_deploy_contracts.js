@@ -25,9 +25,9 @@ module.exports = function (deployer, network) {
         // of a given contract all that well yet, so this uses a nasty kludge
         // to deploy the RandomBeacon for each time source.
 	deployer.deploy(UintSet).then(function() {
-	    return deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
-	}).then(function() {
 	    return deployer.link(UintSet, Stake);
+	}).then(function() {
+	    return deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
 	}).then(function() {
 	    return deployer.deploy([ OasisEpoch, MockEpoch ]);
 	}).then(function() {
