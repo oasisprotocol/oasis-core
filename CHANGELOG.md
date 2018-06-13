@@ -30,6 +30,7 @@
   using the environment's default executor.
 * Make clients aware of compute committee changes and manage connections.
 * Added AWS DynamoDB-backed storage backend.
+* Backport `SelectAll` stream combinator from futures 0.3.
 
 # 0.1.0
 
