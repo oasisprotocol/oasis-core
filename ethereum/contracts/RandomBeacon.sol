@@ -26,8 +26,10 @@ contract RandomBeacon {
         bytes32 _entropy
     );
 
-    constructor(address epoch_addr) public {
-        epoch_source = EpochContract(epoch_addr);
+    // Construct a new RandomBeacon contract instance, using the EpochContract
+    // instance at `_epoch_addr`.
+    constructor(address _epoch_addr) public {
+        epoch_source = EpochContract(_epoch_addr);
     }
 
     function() public {
@@ -36,7 +38,9 @@ contract RandomBeacon {
 
     // Generate and set the beacon if it does not exist.
     function set_beacon() public {
-        (uint64 epoch, , uint64 till) = epoch_source.get_epoch(uint64(block.timestamp));
+        (uint64 epoch, , uint64 till) = epoch_source.get_epoch(
+            uint64(block.timestamp)
+        );
 
         // Try to generate for the current epoch.
         bool did_generate = generate_beacon(epoch);
@@ -52,28 +56,31 @@ contract RandomBeacon {
 
     // Get the random beacon entropy for the epoch corresponding to the
     // specified UNIX epoch time.
-    function get_beacon(uint64 timestamp) public view returns (uint64, bytes32) {
-        (uint64 epoch, ,) = epoch_source.get_epoch(timestamp);
+    function get_beacon(uint64 _timestamp) public view returns (uint64 epoch_, bytes32 entropy_) {
+        (epoch_, ,) = epoch_source.get_epoch(_timestamp);
 
-        Beacon storage b = beacons[epoch];
+        Beacon storage b = beacons[epoch_];
         require(b.initialized);
-
-        return (epoch, b.entropy);
+        entropy_ = b.entropy;
     }
 
     // Generates pseudo-random (insecure) entropy.
     //
     // Note: The generation algorithm is similar to, but different from
     // the one used for dummy::InsecureDummyRandomBeacon.
-    function generate_beacon(uint64 epoch) internal returns (bool) {
-        Beacon storage b = beacons[epoch];
+    function generate_beacon(uint64 _epoch) internal returns (bool) {
+        Beacon storage b = beacons[_epoch];
         if (!b.initialized) {
             // Generate the beacon value for the current epoch.
-            b.entropy = keccak256(abi.encodePacked("EkB-Ether", epoch, blockhash(block.number-1)));
+            b.entropy = keccak256(abi.encodePacked(
+                "EkB-Ether",
+                _epoch,
+                blockhash(block.number-1)
+            ));
             b.initialized = true;
 
             // Emit an event.
-            emit OnGenerate(epoch, b.entropy);
+            emit OnGenerate(_epoch, b.entropy);
 
             return true;
         }
