@@ -9,6 +9,7 @@ contract RandomBeacon {
     // The stored random beacon value by epoch.
     struct Beacon {
         bytes32 entropy;
+        uint block_number;
         bool initialized;
     }
 
@@ -41,12 +42,14 @@ contract RandomBeacon {
 
     // Get the random beacon entropy for the epoch corresponding to the
     // specified UNIX epoch time.
-    function get_beacon(uint64 _timestamp) public view returns (uint64 epoch_, bytes32 entropy_) {
+    function get_beacon(uint64 _timestamp) public view
+        returns (uint64 epoch_, bytes32 entropy_, uint block_number_) {
         (epoch_, ,) = epoch_source.get_epoch(_timestamp);
 
         Beacon storage b = beacons[epoch_];
         require(b.initialized);
         entropy_ = b.entropy;
+        block_number_ = b.block_number;
     }
 
     // Generates pseudo-random (insecure) entropy, and emits the corresponding
@@ -65,6 +68,7 @@ contract RandomBeacon {
             _epoch,
             blockhash(block.number-1)
         ));
+        b.block_number = block.number;
         b.initialized = true;
 
         // Emit an event.
