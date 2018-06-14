@@ -7,12 +7,9 @@ extern crate sgx_types;
 extern crate base64;
 extern crate futures_timer;
 extern crate grpcio;
-extern crate hyper;
 #[macro_use]
 extern crate log;
 extern crate lru_cache;
-#[macro_use]
-extern crate prometheus;
 extern crate protobuf;
 extern crate reqwest;
 extern crate serde_cbor;
@@ -29,11 +26,12 @@ extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
+#[macro_use]
+extern crate ekiden_instrumentation;
 
 mod consensus;
 mod group;
 mod ias;
-mod instrumentation;
 mod node;
 mod services;
 mod worker;
@@ -47,6 +45,7 @@ extern crate pretty_env_logger;
 extern crate ekiden_consensus_client;
 extern crate ekiden_di;
 extern crate ekiden_ethereum;
+extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
@@ -82,6 +81,8 @@ fn register_components(known_components: &mut KnownComponents) {
     // Local identities.
     ekiden_ethereum::identity::EthereumEntityIdentity::register(known_components);
     ekiden_ethereum::identity::EthereumNodeIdentity::register(known_components);
+    // Instrumentation.
+    ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
 }
 
 fn main() {
@@ -141,12 +142,6 @@ fn main() {
                 .help("Number of backup replicas in the computation group")
                 .takes_value(true)
                 .default_value("1"),
-        )
-        .arg(
-            Arg::with_name("metrics-addr")
-                .long("metrics-addr")
-                .help("A SocketAddr (as a string) from which to serve metrics to Prometheus.")
-                .takes_value(true),
         )
         .arg(
             Arg::with_name("max-batch-size")
@@ -277,11 +272,6 @@ fn main() {
 
     // Start compute node.
     node.start();
-
-    // Start the Prometheus metrics endpoint.
-    if let Ok(metrics_addr) = value_t!(matches, "metrics-addr", std::net::SocketAddr) {
-        instrumentation::start_http_server(metrics_addr);
-    }
 
     loop {
         thread::park();

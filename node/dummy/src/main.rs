@@ -9,6 +9,7 @@ extern crate pretty_env_logger;
 extern crate ekiden_common;
 extern crate ekiden_di;
 use ekiden_di::Component;
+extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_dynamodb;
@@ -30,9 +31,11 @@ const TIME_SOURCE_SYSTEM: &'static str = "system";
 
 fn main() {
     let mut known_components = ekiden_di::KnownComponents::new();
+    ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
+    ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(&mut known_components);
 
     let matches = App::new("Ekiden Dummy Shared Backend Node")
         .version(env!("CARGO_PKG_VERSION"))
@@ -45,14 +48,6 @@ fn main() {
                 .takes_value(true)
                 .default_value("42261")
                 .display_order(1),
-        )
-        .arg(
-            Arg::with_name("grpc-threads")
-                .long("grpc-threads")
-                .help("Number of threads to use for the event loop.")
-                .default_value("4")
-                .takes_value(true)
-                .display_order(2),
         )
         .arg(
             Arg::with_name("time-source")
@@ -112,7 +107,6 @@ fn main() {
 
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
-            grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap(),
             port: value_t!(matches, "port", u16).unwrap(),
         },
         time_source_impl,
