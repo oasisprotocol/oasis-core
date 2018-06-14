@@ -38,6 +38,9 @@ spec:
             - --no-ui
             - --jsonrpc-interface
             - 0.0.0.0
+            - --jsonrpc-cors
+            # MetaMask https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn
+            - chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn
             - --ws-interface
             - 0.0.0.0
           volumeMounts:
