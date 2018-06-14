@@ -13,6 +13,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_cbor;
+extern crate tokio_core;
 extern crate web3;
 #[macro_use]
 extern crate log;
