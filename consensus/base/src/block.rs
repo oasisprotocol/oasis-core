@@ -1,8 +1,6 @@
 //! Block type.
 use std::convert::TryFrom;
 
-use protobuf::repeated::RepeatedField;
-
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::hash::EncodedHash;
@@ -101,7 +99,7 @@ impl Into<api::Block> for Block {
         for item in self.computation_group {
             groups.push(item.into());
         }
-        b.set_computation_group(RepeatedField::from_vec(groups));
+        b.set_computation_group(groups.into());
 
         let mut commits = Vec::new();
         for item in self.commitments {
@@ -110,7 +108,7 @@ impl Into<api::Block> for Block {
                 None => commits.push(api::Commitment::new()),
             }
         }
-        b.set_commitments(RepeatedField::from_vec(commits));
+        b.set_commitments(commits.into());
         b
     }
 }

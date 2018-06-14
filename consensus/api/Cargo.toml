@@ -10,10 +10,10 @@ build = "build.rs"
 [dependencies]
 ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 ekiden-scheduler-api = { path = "../../scheduler/api", version = "0.2.0-alpha" }
-protobuf = "1.4.2"
-grpcio = "0.2.2"
+protobuf = "~2.0"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 futures = "0.1"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
-protoc-grpcio = "0.1.0"
+protoc-grpcio = "0.2.0"

@@ -3,8 +3,6 @@ use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use protobuf::repeated::RepeatedField;
-
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::epochtime::EpochTime;
@@ -109,7 +107,7 @@ impl Into<api::Committee> for Committee {
         for member in self.members.iter() {
             members.push(member.to_owned().into());
         }
-        c.set_members(RepeatedField::from_vec(members));
+        c.set_members(members.into());
         c.set_contract(self.contract.deref().to_owned().into());
         c.set_valid_for(self.valid_for);
         c

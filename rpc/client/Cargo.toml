@@ -10,7 +10,7 @@ repository = "https://github.com/ekiden/ekiden"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 ekiden-rpc-common = { path = "../common", version = "0.2.0-alpha" }
-protobuf = "~1.4"
+protobuf = "~2.0"
 sodalite = "0.3.0"
 serde = "=1.0.59"
 serde_cbor = "0.8.2"
@@ -22,6 +22,6 @@ futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 ekiden-compute-api = { path = "../../compute/api", version = "0.2.0-alpha" }
 byteorder = "1.2.1"
 futures = "0.1"
-grpcio = "0.2.2"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 rand = "0.4"
 tokio-core = "0.1"

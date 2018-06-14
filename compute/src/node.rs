@@ -1,19 +1,16 @@
 //! Compute node.
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use grpcio;
 
 use ekiden_compute_api;
 use ekiden_consensus_base::ConsensusBackend;
-use ekiden_core::address::Address;
-use ekiden_core::bytes::{B256, H160};
+use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
-use ekiden_core::entity::Entity;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::{Future, GrpcExecutor};
-use ekiden_core::node::Node;
+use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
@@ -52,8 +49,6 @@ pub struct ComputeNodeConfiguration {
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
     pub worker: WorkerConfiguration,
-    /// Registration address/port override(s).
-    pub register_addrs: Option<Vec<SocketAddr>>,
     /// Test-only configuration.
     pub test_only: ComputeNodeTestOnlyConfiguration,
 }
@@ -86,10 +81,19 @@ impl ComputeNode {
         let storage_backend = container.inject::<StorageBackend>()?;
         let consensus_backend = container.inject::<ConsensusBackend>()?;
 
+        // Register entity with the registry.
+        // TODO: This should probably be done independently?
+        let entity_identity = container.inject::<EntityIdentity>()?;
+        info!("Registering entity with the registry");
+        entity_registry
+            .register_entity(entity_identity.get_signed_entity(&REGISTER_ENTITY_SIGNATURE_CONTEXT))
+            .wait()?;
+        info!("Entity registration done");
+
         // Create contract.
         // TODO: Get this from somewhere.
         // TODO: This should probably be done independently?
-        // TODO: We currently use the node key pair as the entity key pair.
+        // TODO: We currently use the entity key pair as the contract key pair.
         let contract_id = match config.test_only.contract_id {
             Some(contract_id) => {
                 warn!("Using manually overriden contract id");
@@ -111,84 +115,36 @@ impl ComputeNode {
             contract
         };
         let signed_contract = Signed::sign(
-            &config.consensus.signer,
+            &entity_identity.get_entity_signer(),
             &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
             contract.clone(),
         );
-        // XXX: Needed to avoid registering the key manager compute node for now.
-        if config.worker.key_manager.is_some() {
-            contract_registry.register_contract(signed_contract).wait()?;
-        }
-
-        // Register entity with the registry.
-        // TODO: This should probably be done independently?
-        // TODO: We currently use the node key pair as the entity key pair.
-        // TODO: Should learn ethereum identity from web3 provider or config.
-        let entity_pk = config.consensus.signer.get_public_key();
-        let signed_entity = Signed::sign(
-            &config.consensus.signer,
-            &REGISTER_ENTITY_SIGNATURE_CONTEXT,
-            Entity {
-                id: entity_pk,
-                eth_address: Some(H160::default()),
-            },
-        );
-        // XXX: Needed to avoid registering the key manager compute node for now.
-        if config.worker.key_manager.is_some() {
-            entity_registry.register_entity(signed_entity).wait()?;
-        }
+        contract_registry.register_contract(signed_contract).wait()?;
 
         // Register node with the registry.
-        // TODO: Handle this properly, do not start any other services before registration is done.
-        let node = Node {
-            id: config.consensus.signer.get_public_key(),
-            entity_id: entity_pk,
-            expiration: 0xffffffffffffffff,
-            addresses: match config.register_addrs {
-                Some(addrs) => {
-                    let mut addr_vec = vec![];
-                    for addr in addrs {
-                        addr_vec.push(Address(addr.clone()));
-                    }
-                    addr_vec
-                }
-                None => Address::for_local_port(config.port)?,
-            },
-            stake: vec![],
-        };
-
-        info!("Registering compute node addresses: {:?}", node.addresses);
-
+        let node_identity = container.inject::<NodeIdentity>()?;
         let signed_node = Signed::sign(
-            &config.consensus.signer,
+            &entity_identity.get_entity_signer(),
             &REGISTER_NODE_SIGNATURE_CONTEXT,
-            node,
+            node_identity.get_node(),
         );
-        // XXX: Needed to avoid registering the key manager compute node for now.
-        if config.worker.key_manager.is_some() {
-            info!("Registering compute node with the registry");
-            entity_registry.register_node(signed_node).wait()?;
-            info!("Compute node registration done");
-        }
+        info!("Registering compute node with the registry");
+        entity_registry.register_node(signed_node).wait()?;
+        info!("Compute node registration done");
 
         // Environment.
         let environment = container.inject::<Environment>()?;
         let grpc_environment = environment.grpc();
 
         // Create worker.
-        let worker = Arc::new(Worker::new(
-            config.worker,
-            grpc_environment.clone(),
-            ias,
-            storage_backend.clone(),
-        ));
+        let worker = Arc::new(Worker::new(config.worker, ias, storage_backend.clone()));
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
             contract_id,
             scheduler.clone(),
             entity_registry.clone(),
-            config.consensus.signer.clone(),
+            node_identity.get_node_signer(),
             grpc_environment.clone(),
         ));
 
@@ -200,6 +156,7 @@ impl ComputeNode {
             computation_group.clone(),
             consensus_backend.clone(),
             storage_backend.clone(),
+            node_identity.get_node_signer(),
         ));
 
         // Create compute node gRPC server.
@@ -211,13 +168,22 @@ impl ComputeNode {
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
             .channel_args(
                 grpcio::ChannelBuilder::new(grpc_environment.clone())
-                    .max_receive_message_len(usize::max_value())
-                    .max_send_message_len(usize::max_value())
+                    .max_receive_message_len(i32::max_value())
+                    .max_send_message_len(i32::max_value())
                     .build_args(),
             )
             .register_service(web3)
             .register_service(inter_node)
-            .bind("0.0.0.0", config.port)
+            .bind_secure(
+                "0.0.0.0",
+                config.port,
+                grpcio::ServerCredentialsBuilder::new()
+                    .add_cert(
+                        node_identity.get_tls_certificate().get_pem()?,
+                        node_identity.get_tls_private_key().get_pem()?,
+                    )
+                    .build(),
+            )
             .build()?;
 
         Ok(Self {

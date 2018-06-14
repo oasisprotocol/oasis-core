@@ -14,6 +14,10 @@ message Address {
     uint32 port = 3;
 }
 
+message Certificate {
+    bytes der = 1;
+}
+
 message Entity {
     bytes id = 1;
     bytes eth_address = 2;
@@ -24,8 +28,9 @@ message Node {
     bytes entity_id = 2;
     uint64 expiration = 3;
     repeated Address addresses = 4;
+    Certificate certificate = 5;
     // TODO: stake should be formalized in common or consensus.
-    bytes stake = 5;
+    bytes stake = 6;
 }
 
 message Signature {

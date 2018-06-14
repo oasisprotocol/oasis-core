@@ -1,8 +1,6 @@
 //! Consensus frontend.
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -13,11 +11,11 @@ use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::error::{Error, Result};
+use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
-use ekiden_core::futures::{future, BoxFuture, Executor, Future, FutureExt, Stream, StreamExt};
 use ekiden_core::hash::{empty_hash, EncodedHash};
 use ekiden_core::signature::{Signed, Signer};
-use ekiden_scheduler_base::CommitteeNode;
+use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 use super::group::ComputationGroup;
@@ -29,25 +27,124 @@ enum Command {
     AppendBatch(CallBatch),
     /// Process remote batch.
     ProcessRemoteBatch(H256, Vec<CommitteeNode>),
+    /// Process incoming queue.
+    ProcessIncomingQueue,
+    /// Process consensus block.
+    ProcessBlock(Block),
+    /// Process consensus backend event.
+    ProcessEvent(Event),
+    /// Update local role.
+    UpdateRole(Option<Role>),
 }
 
-/// Proposed block.
-struct ProposedBlock {
-    /// Nonce used when generating commitment.
-    nonce: B256,
-    /// Proposed block we committed to.
-    block: Block,
+/// State of the consensus frontend.
+///
+/// See the `transition` method for valid state transitions.
+#[derive(Clone, Debug)]
+enum State {
+    /// We are waiting for the scheduler to include us in a computation group.
+    NotReady,
+    /// Based on our role:
+    /// * `Leader`: We are waiting for enough calls to be queued in `incoming_queue` so
+    ///   that we can start processing them.
+    /// * `Worker`: We are waiting for a new remote batch from leader.
+    /// * `BackupWorker`: We are waiting for a new remote batch from the consensus backend.
+    WaitingForBatch(Role),
+    /// A batch has been dispatched to the worker for processing.
+    ProcessingBatch(Role),
+    /// We have committed to a specific batch in the current consensus round and are
+    /// waiting for the consensus backend to notify us to send reveals.
+    ProposedBatch(Role, B256, Block),
+    /// We have submitted a reveal for the committed batch in the current consensus
+    /// round and are waiting ro the consensus backend to finalize the block.
+    WaitingForFinalize(Role, Block),
 }
 
-/// Call batch that is being constructed.
-struct PendingBatch {
-    /// Instant when first item was queued in the batch.
+impl State {
+    /// Return current role based on state.
+    pub fn get_role(&self) -> Option<Role> {
+        match *self {
+            State::WaitingForBatch(role) => Some(role),
+            State::ProcessingBatch(role) => Some(role),
+            State::ProposedBatch(role, ..) => Some(role),
+            State::WaitingForFinalize(role, ..) => Some(role),
+            _ => None,
+        }
+    }
+
+    /// Return true if we are currently a leader.
+    pub fn is_leader(&self) -> bool {
+        if let Some(Role::Leader) = self.get_role() {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Helper macro for ensuring state is correct.
+///
+/// In case the state doesn't match the passed pattern, an error future is
+/// returned.
+macro_rules! require_state {
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*, $message:expr) => {{
+        let state = $inner.state.lock().unwrap();
+        match state.clone() {
+            $( $state )|* $(if $cond)* => {}
+            state => {
+                return future::err(Error::new(format!(
+                    "incorrect state for {}: {:?}",
+                    $message, state
+                ))).into_box()
+            }
+        }
+    }};
+
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr, $message:expr) => {{
+        let state = $inner.state.lock().unwrap();
+        match state.clone() {
+            $( $state )|* $(if $cond)* => $output,
+            state => {
+                return future::err(Error::new(format!(
+                    "incorrect state for {}: {:?}",
+                    $message, state
+                ))).into_box()
+            }
+        }
+    }};
+}
+
+/// Helper macro for ensuring state is correct.
+///
+/// In case the state doesn't match the passed pattern, an ok future is
+/// returned.
+macro_rules! require_state_ignore {
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*) => {{
+        let state = $inner.state.lock().unwrap();
+        match state.clone() {
+            $( $state )|* $(if $cond)* => {}
+            _ => return future::ok(()).into_box(),
+        }
+    }};
+
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr) => {{
+        let state = $inner.state.lock().unwrap();
+        match state.clone() {
+            $( $state )|* $(if $cond)* => $output,
+            _ => return future::ok(()).into_box(),
+        }
+    }};
+}
+
+/// Queue of incoming contract calls which are pending to be included in a batch.
+struct IncomingQueue {
+    /// Instant when first item was queued.
     start: Instant,
-    /// Batch of contract calls.
+    /// Queued contract calls.
     calls: CallBatch,
 }
 
-impl Default for PendingBatch {
+impl Default for IncomingQueue {
     fn default() -> Self {
         Self {
             start: Instant::now(),
@@ -57,6 +154,8 @@ impl Default for PendingBatch {
 }
 
 struct Inner {
+    /// Current state of the consensus frontend.
+    state: Mutex<State>,
     /// Contract identifier this consensus frontend is for.
     contract_id: B256,
     /// Consensus backend.
@@ -64,7 +163,7 @@ struct Inner {
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Signer for the compute node.
-    signer: Arc<Signer + Send + Sync>,
+    signer: Arc<Signer>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -73,16 +172,12 @@ struct Inner {
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
-    /// Current batch.
-    current_batch: Mutex<Option<PendingBatch>>,
+    /// Queue of incoming contract calls which are pending to be included in a batch.
+    incoming_queue: Mutex<Option<IncomingQueue>>,
     /// Maximum batch size.
     max_batch_size: usize,
     /// Maximum batch timeout.
     max_batch_timeout: Duration,
-    /// Flag if a batch is currently processing.
-    batch_processing: AtomicBool,
-    /// Currently proposed block.
-    proposed_block: Mutex<Option<ProposedBlock>>,
     /// Call subscribers (call id -> list of subscribers).
     call_subscribers: Mutex<HashMap<H256, Vec<oneshot::Sender<Vec<u8>>>>>,
     /// Test-only configuration.
@@ -99,8 +194,6 @@ pub struct ConsensusTestOnlyConfiguration {
 /// Consensus frontend configuration.
 #[derive(Clone)]
 pub struct ConsensusConfiguration {
-    /// Signer for the compute node.
-    pub signer: Arc<Signer + Send + Sync>,
     /// Maximum batch size.
     pub max_batch_size: usize,
     /// Maximum batch timeout.
@@ -123,24 +216,24 @@ impl ConsensusFrontend {
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
         storage: Arc<StorageBackend>,
+        signer: Arc<Signer>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
         Self {
             inner: Arc::new(Inner {
+                state: Mutex::new(State::NotReady),
                 contract_id,
                 backend,
                 storage,
-                signer: config.signer.clone(),
+                signer,
                 worker,
                 computation_group,
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
-                current_batch: Mutex::new(None),
+                incoming_queue: Mutex::new(None),
                 max_batch_size: config.max_batch_size,
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
-                batch_processing: AtomicBool::new(false),
-                proposed_block: Mutex::new(None),
                 call_subscribers: Mutex::new(HashMap::new()),
                 test_only_config: config.test_only.clone(),
             }),
@@ -149,86 +242,151 @@ impl ConsensusFrontend {
 
     /// Start consensus frontend.
     pub fn start(&self, executor: &mut Executor) {
-        // Subscribe to consensus events.
-        executor.spawn({
-            let inner = self.inner.clone();
+        let mut event_sources = stream::SelectAll::new();
 
+        // Subscribe to computation group updates.
+        event_sources.push(
+            self.inner
+                .computation_group
+                .watch_role()
+                .map(|role| Command::UpdateRole(role))
+                .into_box(),
+        );
+
+        // Subscribe to consensus events.
+        event_sources.push(
             self.inner
                 .backend
                 .get_events(self.inner.contract_id)
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while processing consensus events",
-                    move |event| match event {
-                        Event::CommitmentsReceived(discrepancy) => {
-                            Self::handle_commitments_received(inner.clone(), discrepancy)
-                        }
-                        Event::RoundFailed(error) => Self::fail_batch(
-                            inner.clone(),
-                            format!("Round failed: {}", error.message),
-                        ),
-                        Event::DiscrepancyDetected(batch_hash) => {
-                            Self::handle_discrepancy_detected(inner.clone(), batch_hash)
-                        }
-                    },
-                )
-        });
+                .map(|event| Command::ProcessEvent(event))
+                .into_box(),
+        );
 
         // Subscribe to consensus blocks.
-        executor.spawn({
-            let inner = self.inner.clone();
-
+        event_sources.push(
             self.inner
                 .backend
                 .get_blocks(self.inner.contract_id)
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while processing consensus blocks",
-                    move |block| Self::handle_block(inner.clone(), block),
-                )
-        });
+                .map(|block| Command::ProcessBlock(block))
+                .into_box(),
+        );
 
-        // Receive proposed batches from worker.
+        // Periodically check for batches.
+        event_sources.push(
+            Interval::new(self.inner.max_batch_timeout)
+                .map_err(|error| Error::from(error))
+                .map(|_| Command::ProcessIncomingQueue)
+                .into_box(),
+        );
+
+        // Subscribe to incoming command channel.
         let command_receiver = self.inner
             .command_receiver
             .lock()
             .unwrap()
             .take()
             .expect("start already called");
-        executor.spawn({
-            let inner = self.inner.clone();
-
+        event_sources.push(
             command_receiver
                 .map_err(|_| Error::new("command channel closed"))
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while processing consensus commands",
-                    move |command| match command {
-                        Command::AppendBatch(calls) => {
-                            Self::handle_append_batch(inner.clone(), calls)
-                        }
-                        Command::ProcessRemoteBatch(batch_hash, committee) => {
-                            Self::handle_remote_batch(inner.clone(), batch_hash, committee)
-                        }
-                    },
-                )
-        });
+                .into_box(),
+        );
 
-        // Periodically check for batches.
+        // Process consensus commands.
         executor.spawn({
             let inner = self.inner.clone();
 
-            Interval::new(self.inner.max_batch_timeout)
-                .map_err(|error| Error::from(error))
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while firing batch interval timer",
-                    move |_| {
-                        // Check if batch is ready to be sent for processing.
-                        Self::check_and_process_current_batch(inner.clone())
-                    },
-                )
+            event_sources.for_each_log_errors(
+                module_path!(),
+                "Unexpected error while processing consensus commands",
+                move |command| match command {
+                    Command::AppendBatch(calls) => Self::handle_append_batch(inner.clone(), calls),
+                    Command::ProcessRemoteBatch(batch_hash, committee) => {
+                        Self::handle_remote_batch(inner.clone(), batch_hash, committee)
+                    }
+                    Command::ProcessIncomingQueue => {
+                        Self::check_and_process_incoming_queue(inner.clone())
+                    }
+                    Command::ProcessBlock(block) => Self::handle_block(inner.clone(), block),
+                    Command::ProcessEvent(Event::CommitmentsReceived(discrepancy)) => {
+                        Self::handle_commitments_received(inner.clone(), discrepancy)
+                    }
+                    Command::ProcessEvent(Event::RoundFailed(error)) => {
+                        Self::fail_batch(inner.clone(), format!("Round failed: {}", error.message))
+                    }
+                    Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash)) => {
+                        Self::handle_discrepancy_detected(inner.clone(), batch_hash)
+                    }
+                    Command::UpdateRole(Some(role)) => {
+                        // Do nothing if the current role matches.
+                        let current_role = inner.state.lock().unwrap().get_role();
+                        if let Some(current_role) = current_role {
+                            if current_role == role {
+                                return future::ok(()).into_box();
+                            }
+                        }
+
+                        Self::transition(inner.clone(), State::WaitingForBatch(role));
+                        future::ok(()).into_box()
+                    }
+                    Command::UpdateRole(None) => Self::fail_batch(
+                        inner.clone(),
+                        "No longer part of computation group".to_string(),
+                    ),
+                },
+            )
         });
+    }
+
+    /// Transition the consensus frontend to a new state.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic in case of an invalid state transition.
+    fn transition(inner: Arc<Inner>, to: State) {
+        let mut state = inner.state.lock().unwrap();
+        match (&*state, &to) {
+            // Transitions from NotReady state when node role is determined.
+            (&State::NotReady, &State::WaitingForBatch(_)) => {}
+
+            // Transitions from WaitingForBatch state. We can either transition to batch
+            // processing in the same role or switch roles in case the committee changes.
+            (&State::WaitingForBatch(role_a), &State::ProcessingBatch(role_b))
+                if role_a == role_b => {}
+            (&State::WaitingForBatch(role_a), &State::WaitingForBatch(role_b))
+                if role_a != role_b => {}
+
+            // Transitions from ProcessingBatch state. We can either transition to proposing
+            // a batch (commit to batch) in the same role, abort the current batch and return
+            // to waiting for a batch in the same role or switch roles in case the committee
+            // changes.
+            (&State::ProcessingBatch(role_a), &State::ProposedBatch(role_b, ..))
+                if role_a == role_b => {}
+            (&State::ProcessingBatch(_), &State::WaitingForBatch(_)) => {}
+
+            // Transitions from the ProposedBatch state. We can either transition to submitting
+            // a reveal and waiting for round finalization in the same role, abort the current
+            // batch and return to waiting for a batch in the same role or switch roles in case
+            // the committee changes.
+            (&State::ProposedBatch(role_a, ..), &State::WaitingForFinalize(role_b, ..))
+                if role_a == role_b => {}
+            (&State::ProposedBatch(..), &State::WaitingForBatch(_)) => {}
+
+            // Transitions from WaitingForFinalize state. We can transition to waiting for new
+            // batches in either the current role or switch roles in case the committee changes.
+            (&State::WaitingForFinalize(..), &State::WaitingForBatch(_)) => {}
+
+            // We can stop being a member of the compute committee from any state.
+            (_, &State::NotReady) => {}
+
+            transition => panic!(
+                "illegal consensus frontend state transition: {:?}",
+                transition
+            ),
+        }
+
+        trace!("Consensus frontend transitioning to {:?}", to);
+        *state = to;
     }
 
     /// Handle append batch command.
@@ -239,20 +397,23 @@ impl ConsensusFrontend {
         }
 
         // If we are not a leader, do not append to batch.
-        if !inner.computation_group.is_leader() {
-            warn!("Ignoring append to batch as we are not the computation group leader");
-            return Box::new(future::ok(()));
+        {
+            let state = inner.state.lock().unwrap();
+            if !state.is_leader() {
+                warn!("Ignoring append to batch as we are not the computation group leader");
+                return Box::new(future::ok(()));
+            }
         }
 
         // Append to batch.
         {
-            let mut current_batch = inner.current_batch.lock().unwrap();
-            let current_batch = current_batch.get_or_insert_with(|| PendingBatch::default());
-            current_batch.calls.append(&mut calls);
+            let mut incoming_queue = inner.incoming_queue.lock().unwrap();
+            let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
+            incoming_queue.calls.append(&mut calls);
         }
 
         // Check if batch is ready to be sent for processing.
-        Self::check_and_process_current_batch(inner.clone())
+        Self::check_and_process_incoming_queue(inner.clone())
     }
 
     /// Handle process remote batch command.
@@ -261,13 +422,26 @@ impl ConsensusFrontend {
         batch_hash: H256,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
-        // TODO: Abort any batches that are currently being processed.
+        let role = require_state!(
+            inner,
+            State::WaitingForBatch(role @ Role::Worker) |
+            State::WaitingForBatch(role @ Role::BackupWorker) => role,
+            "handling remote batch"
+        );
 
         // Fetch batch from storage.
         inner
             .storage
             .get(batch_hash)
             .and_then(move |calls| {
+                require_state!(
+                    inner,
+                    State::WaitingForBatch(current_role) if current_role == role,
+                    "handling remote batch"
+                );
+
+                Self::transition(inner.clone(), State::ProcessingBatch(role));
+
                 let calls = match serde_cbor::from_slice(&calls) {
                     Ok(calls) => calls,
                     Err(error) => return future::err(Error::from(error)).into_box(),
@@ -289,29 +463,19 @@ impl ConsensusFrontend {
 
     /// Handle commitments received event from consensus backend.
     fn handle_commitments_received(inner: Arc<Inner>, discrepancy: bool) -> BoxFuture<()> {
-        // If this event has been emitted during discrepancy resolution, we should ignore
-        // it if we are not a backup worker.
-        if discrepancy && !inner.computation_group.is_backup_worker() {
-            return future::ok(()).into_box();
-        }
+        let (role, nonce, block) = require_state_ignore!(
+            inner,
+            State::ProposedBatch(role, nonce, block) => (role, nonce, block)
+        );
 
-        // Ensure we have proposed a block in the current round.
-        let proposed_block_guard = inner.proposed_block.lock().unwrap();
-        if proposed_block_guard.is_none() {
-            trace!("Ignoring commitments as we didn't propose any block");
-            return future::ok(()).into_box();
-        }
-
-        let proposed_block = proposed_block_guard.as_ref().unwrap();
+        assert!(!discrepancy || role == Role::BackupWorker);
 
         info!("Submitting reveal");
 
         // Generate and submit reveal.
-        let reveal = Reveal::new(
-            &inner.signer,
-            &proposed_block.nonce,
-            &proposed_block.block.header,
-        );
+        let reveal = Reveal::new(&inner.signer, &nonce, &block.header);
+
+        Self::transition(inner.clone(), State::WaitingForFinalize(role, block));
 
         let inner = inner.clone();
         inner
@@ -332,10 +496,7 @@ impl ConsensusFrontend {
         );
 
         // Only backup workers can do anything during discrepancy resolution.
-        if !inner.computation_group.is_backup_worker() {
-            trace!("I am not a backup worker, waiting for consensus to resolve discrepancy");
-            return future::ok(()).into_box();
-        }
+        require_state_ignore!(inner, State::WaitingForBatch(Role::BackupWorker));
 
         info!("Backup worker activating and processing batch");
 
@@ -351,24 +512,27 @@ impl ConsensusFrontend {
         );
 
         // Check if this is a block for the same round that we proposed.
-        {
-            let mut proposed_block = inner.proposed_block.lock().unwrap();
-            let should_clear = {
-                if let Some(ref proposed_block) = *proposed_block {
-                    proposed_block.block.header.round >= block.header.round
-                } else {
-                    false
+        let should_transition = {
+            let state = inner.state.lock().unwrap();
+            match &*state {
+                &State::WaitingForFinalize(role, ref proposed_block) => {
+                    if proposed_block.header.round >= block.header.round {
+                        Some(role)
+                    } else {
+                        None
+                    }
                 }
-            };
-
-            if should_clear {
-                info!("Block is for the same round or newer as recently proposed block");
-
-                // Clear proposed block.
-                proposed_block.take();
-                // Clear batch processing flag.
-                inner.batch_processing.store(false, SeqCst);
+                _ => None,
             }
+        };
+
+        if let Some(role) = should_transition {
+            info!("Block is for the same round or newer as recently proposed block");
+            info!("Considering the round finalized");
+
+            // TODO: We should actually check if the proposed block was included.
+
+            Self::transition(inner.clone(), State::WaitingForBatch(role));
         }
 
         if block.header.input_hash != empty_hash() {
@@ -416,29 +580,31 @@ impl ConsensusFrontend {
     /// * Number of calls it contains reaches `max_batch_size`.
     /// * More than `max_batch_timeout` time elapsed since batch was created.
     /// * No other batch is currently processing.
-    fn check_and_process_current_batch(inner: Arc<Inner>) -> BoxFuture<()> {
-        // First check if a batch is already being processed.
-        if inner.batch_processing.load(SeqCst) {
-            return Box::new(future::ok(()));
-        }
+    fn check_and_process_incoming_queue(inner: Arc<Inner>) -> BoxFuture<()> {
+        // We can only process the incoming queue if we are currently waiting for a
+        // batch and are a leader.
+        require_state_ignore!(inner, State::WaitingForBatch(Role::Leader));
 
-        // No batch yet, check if we should process.
-        let mut current_batch = inner.current_batch.lock().unwrap();
-        let should_process = if let Some(ref current_batch) = *current_batch {
-            current_batch.calls.len() >= inner.max_batch_size
-                || current_batch.start.elapsed() >= inner.max_batch_timeout
+        // Check if we should process.
+        let mut incoming_queue = inner.incoming_queue.lock().unwrap();
+        let should_process = if let Some(ref incoming_queue) = *incoming_queue {
+            incoming_queue.calls.len() >= inner.max_batch_size
+                || incoming_queue.start.elapsed() >= inner.max_batch_timeout
         } else {
             false
         };
 
         if should_process {
+            // Note that we can only be a leader here.
+            Self::transition(inner.clone(), State::ProcessingBatch(Role::Leader));
+
             // Take calls from current batch for processing. We only take up to max_batch_size
             // and leave the rest for the next batch, resetting the timestamp.
-            let mut calls = current_batch.take().unwrap().calls;
+            let mut calls = incoming_queue.take().unwrap().calls;
             if calls.len() > inner.max_batch_size {
                 let mut remaining = calls.split_off(inner.max_batch_size);
-                let current_batch = current_batch.get_or_insert_with(|| PendingBatch::default());
-                current_batch.calls.append(&mut remaining);
+                let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
+                incoming_queue.calls.append(&mut remaining);
             }
 
             // Persist batch into storage so that the workers can get it.
@@ -452,6 +618,12 @@ impl ConsensusFrontend {
                 .storage
                 .insert(encoded_calls, u64::max_value())
                 .and_then(move |_| {
+                    require_state!(
+                        inner,
+                        State::ProcessingBatch(Role::Leader),
+                        "processing batch"
+                    );
+
                     // Submit signed batch hash to the rest of the computation group so they can start work.
                     let committee = inner.computation_group.submit(calls_hash);
                     // Process batch locally.
@@ -475,32 +647,34 @@ impl ConsensusFrontend {
         calls: CallBatch,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
-        // We have decided to process the current batch.
-        inner.batch_processing.store(true, SeqCst);
+        require_state!(inner, State::ProcessingBatch(_), "processing batch");
 
         // Fetch the latest block and request the worker to process the batch.
         let shared_inner = inner.clone();
-        Box::new(
-            inner
-                .backend
-                .get_latest_block(inner.contract_id)
-                .and_then(|block| {
-                    // Send block and channel to worker.
-                    let process_batch = inner.worker.contract_call_batch(calls, block);
 
-                    // After the batch is processed, propose the batch.
-                    process_batch
-                        .map_err(|_| Error::new("channel closed"))
-                        .and_then(|result| Self::propose_batch(inner, result, committee))
-                })
-                .or_else(|error| {
-                    // Failed to get latest block, abort current batch.
-                    Self::fail_batch(
-                        shared_inner,
-                        format!("Failed to process batch: {}", error.message),
-                    )
-                }),
-        )
+        inner
+            .backend
+            .get_latest_block(inner.contract_id)
+            .and_then(|block| {
+                require_state!(inner, State::ProcessingBatch(_), "processing batch");
+
+                // Send block and channel to worker.
+                let process_batch = inner.worker.contract_call_batch(calls, block);
+
+                // After the batch is processed, propose the batch.
+                process_batch
+                    .map_err(|_| Error::new("channel closed"))
+                    .and_then(|result| Self::propose_batch(inner, result, committee))
+                    .into_box()
+            })
+            .or_else(|error| {
+                // Failed to get latest block, abort current batch.
+                Self::fail_batch(
+                    shared_inner,
+                    format!("Failed to process batch: {}", error.message),
+                )
+            })
+            .into_box()
     }
 
     /// Fail processing of current batch.
@@ -514,11 +688,12 @@ impl ConsensusFrontend {
 
         // TODO: Should we notify consensus backend that we aborted?
 
-        // Clear proposed block if any.
-        drop(inner.proposed_block.lock().unwrap().take());
-
-        // Clear batch processing flag.
-        inner.batch_processing.store(false, SeqCst);
+        // Transition state.
+        if let Some(role) = inner.state.lock().unwrap().get_role() {
+            Self::transition(inner.clone(), State::WaitingForBatch(role));
+        } else {
+            Self::transition(inner.clone(), State::NotReady);
+        }
 
         future::ok(()).into_box()
     }
@@ -529,6 +704,8 @@ impl ConsensusFrontend {
         computed_batch: Result<ComputedBatch>,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
+        let role = require_state!(inner, State::ProcessingBatch(role) => role, "proposing batch");
+
         // Check result of batch computation.
         let mut computed_batch = match computed_batch {
             Ok(computed_batch) => computed_batch,
@@ -572,19 +749,7 @@ impl ConsensusFrontend {
         let nonce = B256::random();
         let commitment = Commitment::new(&inner.signer, &nonce, &block.header);
 
-        // Store proposed block.
-        {
-            let mut proposed_block = inner.proposed_block.lock().unwrap();
-
-            // Ensure no block was previously proposed. This should never happen as we always
-            // check the batch_processing flag before processing a batch.
-            assert!(
-                proposed_block.is_none(),
-                "tried to overwrite proposed block"
-            );
-
-            proposed_block.get_or_insert(ProposedBlock { nonce, block });
-        }
+        Self::transition(inner.clone(), State::ProposedBatch(role, nonce, block));
 
         // Store outputs and then commit to block.
         let inner_clone = inner.clone();
@@ -600,6 +765,8 @@ impl ConsensusFrontend {
                 )
             })
             .and_then(|_| {
+                require_state!(inner, State::ProposedBatch(..), "proposing batch");
+
                 inner
                     .backend
                     .commit(inner.contract_id, commitment)
@@ -610,6 +777,7 @@ impl ConsensusFrontend {
                             format!("Failed to propose block: {}", error.message),
                         )
                     })
+                    .into_box()
             })
             .into_box()
     }

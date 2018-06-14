@@ -31,23 +31,25 @@ contract("Ethereum RandomBeacon test", async (accounts) => {
         let set_res = await instance.set_beacon();
         let res = await instance.get_beacon.call(unix_time());
 
-        // If invoked close to the epoch transition, the set_beacon() call
-        // can generate 2 events (due to the next epoch's beacon also being
-        // generated).
+        // Ensure that at least one OnGenerate event was received.
         assert(Object.keys(contract_events).length > 0, "Not at least 1 OnGenerate");
 
-        // Ensure the epoch/entropy value returned from get_beacon()
-        // corresponds to a OnGenerate event emitted by the set_beacon().
+        // Ensure the epoch/entropy/block_number value returned from
+        // get_beacon() corresponds to a OnGenerate event emitted by the
+        // set_beacon().
         var got_OnGenerate = false;
         for (var tx_hash in contract_events) {
             if (!contract_events.hasOwnProperty(tx_hash)) {
                 continue;
             }
-            let args = contract_events[tx_hash].args;
+            let ev = contract_events[tx_hash];
+
+            let args = ev.args;
             if (args._epoch.toString() == res[0].toString()) {
                 assert.equal(args._entropy, res[1], "Event entropy != Call entropy");
                 got_OnGenerate = true;
             }
+            assert.equal(res[2], ev.blockNumber, "Event blockNumber != Call block_number");
         }
         assert(got_OnGenerate, "Didn't find OnGenerate event with the get_beacon() results");
 

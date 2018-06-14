@@ -2,7 +2,7 @@
 use sgx_types::*;
 
 #[cfg(target_env = "sgx")]
-use protobuf::{self, Message, MessageStatic};
+use protobuf::{self, Message};
 
 use ekiden_common::error::{Error, Result};
 use ekiden_rpc_common::client::ClientEndpoint;
@@ -29,7 +29,7 @@ extern "C" {
 pub fn untrusted_call_endpoint<Rq, Rs>(endpoint: &ClientEndpoint, request: Rq) -> Result<Rs>
 where
     Rq: Message,
-    Rs: Message + MessageStatic,
+    Rs: Message,
 {
     Ok(protobuf::parse_from_bytes(&untrusted_call_endpoint_raw(
         &endpoint,
