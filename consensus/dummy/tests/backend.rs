@@ -46,7 +46,10 @@ fn test_dummy_backend_two_rounds() {
     let grpc_environment = grpcio::EnvBuilder::new().build();
     let env = Arc::new(GrpcEnvironment::new(grpc_environment));
 
-    let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone(), env));
+    let entity_registry = Arc::new(DummyEntityRegistryBackend::new(
+        time_notifier.clone(),
+        env.clone(),
+    ));
     let contract_registry = Arc::new(DummyContractRegistryBackend::new());
     let contract_sk =
         Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
