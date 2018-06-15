@@ -4,9 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::Environment;
 use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, StreamExt};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, StreamExt};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
@@ -51,8 +52,8 @@ pub struct DummyEntityRegistryBackend {
 }
 
 impl DummyEntityRegistryBackend {
-    pub fn new(time_notifier: Arc<TimeSourceNotifier>) -> Self {
-        Self {
+    pub fn new(time_notifier: Arc<TimeSourceNotifier>, env: Arc<Environment>) -> Self {
+        let registry = Self {
             inner: Arc::new(Mutex::new(DummyEntityRegistryBackendInner {
                 entities: HashMap::new(),
                 nodes: HashMap::new(),
@@ -64,16 +65,27 @@ impl DummyEntityRegistryBackend {
             entity_subscribers: Arc::new(StreamSubscribers::new()),
             node_subscribers: Arc::new(StreamSubscribers::new()),
             node_list_subscribers: Arc::new(StreamSubscribers::new()),
-        }
+        };
+        registry.start(env);
+        registry
     }
-}
 
-impl EntityRegistryBackend for DummyEntityRegistryBackend {
-    fn start(&self, executor: &mut Executor) {
+    /// Notify the registry that time has advanced to a new epoch.
+    /// This allows for explicit driving of this registry as a
+    /// cache when driven by a source other than an external
+    /// time source directly.
+    pub fn mark_epoch(&self, epoch: EpochTime) {
+        let mut inner = self.inner.lock().unwrap();
+        self.node_list_subscribers
+            .notify(&inner.build_node_list(epoch));
+        inner.current_epoch = epoch;
+    }
+
+    fn start(&self, env: Arc<Environment>) {
         let node_list_subscribers = self.node_list_subscribers.clone();
         let shared_inner = self.inner.clone();
 
-        executor.spawn({
+        env.spawn({
             Box::new(self.time_notifier.watch_epochs().for_each_log_errors(
                 module_path!(),
                 "Unexpected error while processing entity registry events",
@@ -86,7 +98,9 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
             ))
         });
     }
+}
 
+impl EntityRegistryBackend for DummyEntityRegistryBackend {
     fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let entity_subscribers = self.entity_subscribers.clone();
@@ -267,5 +281,5 @@ create_component!(
     "entity-registry-backend",
     DummyEntityRegistryBackend,
     EntityRegistryBackend,
-    [TimeSourceNotifier]
+    [TimeSourceNotifier, Environment]
 );
