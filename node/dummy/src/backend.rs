@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use ekiden_beacon_api::create_beacon;
 use ekiden_beacon_base::{BeaconService, RandomBeacon};
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
+use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
 use ekiden_common_api::create_time_source;
 use ekiden_consensus_api::create_consensus;
@@ -27,7 +28,7 @@ use ekiden_storage_api::create_storage;
 use ekiden_storage_base::{StorageBackend, StorageService};
 
 use futures_timer::{Interval, TimerHandle};
-use grpcio::{ChannelBuilder, Environment, Server, ServerBuilder};
+use grpcio::{self, ChannelBuilder, Server, ServerBuilder};
 
 use super::service::DebugService;
 
@@ -69,7 +70,7 @@ pub struct DummyBackend {
     pub consensus: Arc<ConsensusBackend>,
 
     time_source: Arc<TimeSourceImpl>,
-    grpc_environment: Arc<Environment>,
+    grpc_environment: Arc<grpcio::Environment>,
     grpc_server: Server,
 }
 
@@ -91,7 +92,15 @@ impl DummyBackend {
 
         let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(time_notifier.clone()));
+        let env = Arc::new(GrpcEnvironment::new(grpcio::Environment::new(
+            config.grpc_threads,
+        )));
+        let grpc_environment = env.grpc();
+
+        let entity_registry = Arc::new(DummyEntityRegistryBackend::new(
+            time_notifier.clone(),
+            env.clone(),
+        ));
         let scheduler = Arc::new(DummySchedulerBackend::new(
             random_beacon.clone(),
             contract_registry.clone(),
@@ -106,7 +115,6 @@ impl DummyBackend {
             storage.clone(),
         ));
 
-        let grpc_environment = Arc::new(Environment::new(config.grpc_threads));
         let server_builder = ServerBuilder::new(grpc_environment.clone());
 
         let time_service = create_time_source(EpochTimeService::new(time_source.clone()));
@@ -160,7 +168,6 @@ impl DummyBackend {
         let mut executor = GrpcExecutor::new(self.grpc_environment.clone());
 
         self.random_beacon.start(&mut executor);
-        self.entity_registry.start(&mut executor);
         self.scheduler.start(&mut executor);
         self.consensus.start(&mut executor);
 

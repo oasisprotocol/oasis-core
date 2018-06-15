@@ -1,0 +1,52 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: parity
+spec:
+  ports:
+    - name: parity-web3
+      port: 8545
+    - name: parity-ws
+      port: 8546
+  selector:
+    copper: parity
+  # type: ClusterIP
+---
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: parity
+spec:
+  selector:
+    matchLabels:
+      copper: parity
+  # replicas: 1
+  template:
+    metadata:
+      labels:
+        copper: parity
+        app: ethereum
+    spec:
+      containers:
+        - name: omni
+          image: docker.io/parity/parity:v1.10.6
+          args:
+            - --config
+            - dev
+            - --nat
+            - none
+            - --no-ui
+            - --jsonrpc-interface
+            - 0.0.0.0
+            - --jsonrpc-cors
+            # MetaMask https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn
+            - chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn
+            - --ws-interface
+            - 0.0.0.0
+          volumeMounts:
+            - mountPath: /root/.local/share/io.parity.ethereum
+              name: parity-base
+      volumes:
+        - name: parity-base
+          awsElasticBlockStore:
+            volumeID: vol-0efe57e9e3c1c1d69

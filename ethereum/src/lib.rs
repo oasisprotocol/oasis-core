@@ -6,6 +6,9 @@ extern crate ekiden_beacon_base;
 extern crate ekiden_common;
 #[macro_use]
 extern crate ekiden_di;
+extern crate ekiden_registry_base;
+extern crate ekiden_registry_dummy;
+extern crate ekiden_storage_base;
 extern crate ethabi;
 extern crate rustc_hex;
 extern crate serde;
@@ -19,10 +22,14 @@ extern crate web3;
 extern crate log;
 
 mod beacon;
+mod contract_registry;
+mod entity_registry;
 pub mod identity;
 mod mockepoch;
 pub mod truffle;
 pub mod web3_di;
 
 pub use beacon::EthereumRandomBeacon;
+pub use contract_registry::EthereumContractRegistryBackend;
+pub use entity_registry::EthereumEntityRegistryBackend;
 pub use mockepoch::EthereumMockTime;

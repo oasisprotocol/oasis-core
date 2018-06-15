@@ -84,16 +84,6 @@ where
 
         ctor_future.wait()
     }
-
-    // Return the block number at which the beacon value for an epoch was
-    // generated if any.
-    pub fn get_block_for_epoch(&self, epoch: EpochTime) -> Option<u64> {
-        let block_number = match self.inner.get_beacon(epoch) {
-            Some(ent) => ent.1,
-            None => return None,
-        };
-        Some(block_number)
-    }
 }
 
 impl<T: 'static + Transport + Sync + Send> RandomBeacon for EthereumRandomBeacon<T>
@@ -211,6 +201,16 @@ where
 
     fn watch_beacons(&self) -> BoxStream<(EpochTime, B256)> {
         self.inner.watch_beacons()
+    }
+
+    // Return the block number at which the beacon value for an epoch was
+    // generated if any.
+    fn get_block_for_epoch(&self, epoch: EpochTime) -> Option<u64> {
+        let block_number = match self.inner.get_beacon(epoch) {
+            Some(ent) => ent.1,
+            None => return None,
+        };
+        Some(block_number)
     }
 }
 

@@ -1,6 +1,7 @@
 extern crate ekiden_common;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_dummy;
+extern crate grpcio;
 extern crate serde_cbor;
 
 use serde_cbor::to_vec;
@@ -8,6 +9,7 @@ use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::GrpcEnvironment;
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::ring::signature::Ed25519KeyPair;
@@ -21,7 +23,10 @@ fn test_dummy_entity_backend() {
     let time_source = Arc::new(MockTimeSource::new());
     let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
-    let backend = Arc::new(DummyEntityRegistryBackend::new(time_notifier));
+    let grpc_environment = grpcio::EnvBuilder::new().build();
+    let env = Arc::new(GrpcEnvironment::new(grpc_environment));
+
+    let backend = Arc::new(DummyEntityRegistryBackend::new(time_notifier, env));
 
     let mut tasks: Vec<BoxFuture<()>> = Vec::new();
 
