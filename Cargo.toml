@@ -34,6 +34,7 @@ members = [
     "storage/dynamodb",
     "storage/frontend",
     "storage/persistent",
+    "storage/rfc0004u",
     "storage/lru_cache",
     "storage/batch",
 
