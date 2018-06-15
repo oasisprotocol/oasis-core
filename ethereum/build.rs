@@ -10,4 +10,5 @@ fn main() {
     println!("cargo:rerun-if-changed={}", "contracts/MockEpoch.sol");
     println!("cargo:rerun-if-changed={}", "contracts/OasisEpoch.sol");
     println!("cargo:rerun-if-changed={}", "contracts/RandomBeacon.sol");
+    println!("cargo:rerun-if-changed={}", "contracts/Stake.sol");
 }
