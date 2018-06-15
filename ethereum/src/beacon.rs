@@ -272,7 +272,6 @@ where
                         time_notifier
                             .watch_epochs()
                             .for_each(move |now| {
-                                warn!("Beacon got epoch!");
                                 trace!("On Epoch: {}", now);
                                 let mut inner = shared_inner.lock().unwrap();
                                 inner.current_epoch = now;

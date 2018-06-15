@@ -22,3 +22,13 @@ kx.yaml`.
 This is not the same as deleting the cluster and recreating it though,
 because if you delete a field in the YAML file, it will remain
 unchanged instead of changing to the default value.
+
+---
+
+Kops configures the cluster so that masters are permitted to attach
+volumes tagged with key `KubernetesCluster` and value equal to the
+name of the cluster.
+
+Creating a pod that uses an AWS Elastic Block Store volume might show
+that attaching the volume times out, but the last time it happened, it
+eventually did attach successfully.
