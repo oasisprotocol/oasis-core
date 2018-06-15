@@ -2,6 +2,7 @@
 
 //! Ekiden registry interface.
 extern crate byteorder;
+#[macro_use]
 extern crate ekiden_common;
 extern crate ekiden_registry_api;
 extern crate grpcio;

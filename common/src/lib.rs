@@ -54,6 +54,9 @@ pub mod futures;
 pub mod hash;
 pub mod node;
 #[cfg(not(target_env = "sgx"))]
+#[macro_use]
+pub mod macros;
+#[cfg(not(target_env = "sgx"))]
 pub mod node_group;
 #[macro_use]
 pub mod profiling;

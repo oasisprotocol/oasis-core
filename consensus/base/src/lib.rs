@@ -8,6 +8,7 @@ extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
 extern crate ekiden_common;
 extern crate ekiden_consensus_api;
 extern crate ekiden_scheduler_base;
