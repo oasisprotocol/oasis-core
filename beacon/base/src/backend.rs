@@ -17,4 +17,10 @@ pub trait RandomBeacon: Send + Sync {
     /// the beacon value for the current epoch will be sent immediately if
     /// available.
     fn watch_beacons(&self) -> BoxStream<(EpochTime, B256)>;
+
+    /// Provide the ethereum block at which an epoch occured.
+    /// This will fail if an ethereum-backed beacon is not in use.
+    fn get_block_for_epoch(&self, _epoch: EpochTime) -> Option<u64> {
+        unimplemented!();
+    }
 }

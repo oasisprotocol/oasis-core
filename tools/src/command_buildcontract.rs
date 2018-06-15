@@ -88,14 +88,19 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
 
     // Configure builder.
     builder
-        .verbose(true)
+        .verbose(args.occurrences_of("verbose") > 0)
         .release(args.is_present("release"))
         .intel_sgx_sdk(Path::new(args.value_of("intel-sgx-sdk").unwrap()))
         .sgx_mode(match args.value_of("sgx-mode") {
             Some("HW") => SgxMode::Hardware,
             _ => SgxMode::Simulation,
         })
-        .signing_key(args.value_of("sign-key"));
+        .signing_key(args.value_of("sign-key"))
+        .cargo_args(
+            args.values_of("cargo-args")
+                .map(|args| args.collect())
+                .unwrap_or_default(),
+        );
 
     // Build contract.
     builder.build()?;

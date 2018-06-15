@@ -54,6 +54,8 @@ pub struct ContractBuilder<'a> {
     sgx_mode: SgxMode,
     /// Signing key location.
     signing_key: Option<PathBuf>,
+    /// Extra args for cargo
+    cargo_args: Vec<&'a str>,
 }
 
 impl<'a> ContractBuilder<'a> {
@@ -90,6 +92,7 @@ impl<'a> ContractBuilder<'a> {
                 _ => SgxMode::Simulation,
             },
             signing_key: None,
+            cargo_args: Vec::new(),
         })
     }
 
@@ -116,6 +119,12 @@ impl<'a> ContractBuilder<'a> {
     /// Set builder verbosity.
     pub fn verbose(&mut self, verbose: bool) -> &mut Self {
         self.verbose = verbose;
+        self
+    }
+
+    /// Set cargo args.
+    pub fn cargo_args(&mut self, args: Vec<&'a str>) -> &mut Self {
+        self.cargo_args = args;
         self
     }
 
@@ -221,11 +230,15 @@ impl<'a> ContractBuilder<'a> {
             xargo.arg("--release");
         }
 
+        let user_rustflags = env::var("RUSTFLAGS").unwrap_or_default();
         let xargo_status = xargo
             .arg("--target")
             .arg("x86_64-unknown-linux-sgx")
-            // TODO: Combine rustflags.
-            .env("RUSTFLAGS", "-Z force-unstable-if-unmarked")
+            .args(&self.cargo_args)
+            .env(
+                "RUSTFLAGS",
+                format!("-Z force-unstable-if-unmarked {}", user_rustflags),
+            )
             .env("RUST_TARGET_PATH", &self.build_path)
             .env("CARGO_TARGET_DIR", &self.target_path)
             .current_dir(&self.build_path)
