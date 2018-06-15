@@ -21,8 +21,8 @@ contract Stake is ERC20Interface {
 		     address indexed owner,
 		     address indexed target,
 		     uint256 escrow_amount,
-		     uint256 aux);
-  event EscrowClose(uint indexed escrow_id, uint256 aux,
+		     bytes32 aux);
+  event EscrowClose(uint indexed escrow_id, bytes32 aux,
 		    address indexed owner, uint256 value_returned,
 		    address indexed target, uint256 value_claimed);
 
@@ -48,7 +48,7 @@ contract Stake is ERC20Interface {
     address owner;
     address target;
     uint256 amount;
-    uint256 aux;  // what the escrow account is used for?
+    bytes32 aux;  // what the escrow account is used for?
   }
 
   // ERC20 public variables; set once, at constract instantiation.
@@ -106,9 +106,13 @@ contract Stake is ERC20Interface {
   function getStakeStatus(address _owner) external view
     returns (uint256 total_stake_, uint256 escrowed_) {
     uint ix = stakes[_owner];
-    require(ix != 0);
-    total_stake_ = accounts[ix].amount;
-    escrowed_ = accounts[ix].escrowed;
+    if (ix == 0) {
+      total_stake_ = 0;
+      escrowed_ = 0;
+    } else {
+      total_stake_ = accounts[ix].amount;
+      escrowed_ = accounts[ix].escrowed;
+    }
     return;
   }
 
@@ -121,11 +125,19 @@ contract Stake is ERC20Interface {
   // value from balanceOf (read), and within a transaction the balance
   // could not have decreased to make the transfer invalid.
   //
+  // NB: if _owner is invalid, we return zero because other ERC20
+  // tokens do so: they just have a mapping(address => uint256), so
+  // will return zero.  We emulate this instead of aborting the
+  // transaction.
+  //
   // Use getStakeStatus for the details.
   function balanceOf(address _owner) external view returns (uint balance_) {
     uint ix = stakes[_owner];
-    require(ix != 0);
-    balance_ = accounts[ix].amount - accounts[ix].escrowed;
+    if (ix == 0) {
+      balance_ = 0; // safe to query any account w/o aborting transaction
+    } else {
+      balance_ = accounts[ix].amount - accounts[ix].escrowed;
+    }
   }
 
   // ERC20 definition allows contract method to revert or return with
@@ -219,7 +231,9 @@ contract Stake is ERC20Interface {
   // is lost, not incremented.
   function approve(address _spender, uint256 _value) public returns (bool success_) {
     uint from_ix = stakes[msg.sender];
-    require(from_ix != 0);
+    if (from_ix == 0) {
+      from_ix = _addNewStakeEscrowInfo(msg.sender, 0, 0);
+    }
     accounts[from_ix].allowances[_spender] = _value;
     emit Approval(msg.sender, _spender, _value);
     success_ = true;
@@ -236,13 +250,12 @@ contract Stake is ERC20Interface {
     }
   }
 
-  function allowance(address _owner, address _spender) external view returns (uint256 remaining) {
+  function allowance(address _owner, address _spender) external view returns (uint256 remaining_) {
     uint owner_ix = stakes[_owner];
-    // require(owner_ix != 0);
     if (owner_ix == 0) {
-      remaining = 0;
+      remaining_ = 0; // safe to call for arbitrary owner
     } else {
-      remaining = accounts[owner_ix].allowances[_spender];
+      remaining_ = accounts[owner_ix].allowances[_spender];
     }
   }
 
@@ -268,13 +281,13 @@ contract Stake is ERC20Interface {
     success_ = true;
   }
 
-  function allocateEscrow(address _target, uint256 _amount, uint256 _aux) external
+  function allocateEscrow(address _target, uint256 _amount, bytes32 _aux) external
     returns (uint escrow_id_) {
     escrow_id_ = _allocateEscrow(msg.sender, _target, _amount, _aux);
     emit EscrowCreate(escrow_id_, msg.sender, _target, _amount, _aux);
   }
 
-  function _allocateEscrow(address _owner, address _target, uint256 _amount, uint256 _aux)
+  function _allocateEscrow(address _owner, address _target, uint256 _amount, bytes32 _aux)
     private returns (uint escrow_id_) {
     uint owner_ix = stakes[_owner];
     require (owner_ix != 0);
@@ -299,13 +312,16 @@ contract Stake is ERC20Interface {
   function listActiveEscrowsIterator(address owner) external view
     returns (bool has_next_, uint state_) {
     uint owner_ix = stakes[owner];
-    require(owner_ix != 0);
-    has_next_ = accounts[owner_ix].escrows.size() != 0;
+    if (owner_ix == 0) {
+      has_next_ = false;
+    } else {
+      has_next_ = accounts[owner_ix].escrows.size() != 0;
+    }
     state_ = 0;
   }
 
   function listActiveEscrowsGet(address _owner, uint _state) external view
-    returns (uint id_, address target_, uint256 amount_, uint256 aux_,
+    returns (uint id_, address target_, uint256 amount_, bytes32 aux_,
 	     bool has_next_, uint next_state_) {
     uint owner_ix = stakes[_owner];
     require(owner_ix != 0);
@@ -326,7 +342,7 @@ contract Stake is ERC20Interface {
   }
 
   function fetchEscrowById(uint _escrow_id) external view
-    returns (address owner_, address target_, uint256 amount_, uint256 aux_) {
+    returns (address owner_, address target_, uint256 amount_, bytes32 aux_) {
     require(_escrow_id != 0);
     EscrowAccount memory ea = escrows[_escrow_id]; // copy to memory
     require(ea.owner != 0x0); // deleted escrow account will have zero address
@@ -370,7 +386,10 @@ contract Stake is ERC20Interface {
     accounts[owner_ix].escrows.removeEntry(_escrow_id);
     accounts[sender_ix].amount += _amount_requested;
 
-    delete escrows[_escrow_id];
+    // delete escrows[_escrow_id];
+    escrows[_escrow_id].owner = 0x0;
+    escrows[_escrow_id].target = 0x0;
+    escrows[_escrow_id].amount = 0;
     emit EscrowClose(_escrow_id, ea.aux, owner, amount_to_return, msg.sender, _amount_requested);
   }
 }

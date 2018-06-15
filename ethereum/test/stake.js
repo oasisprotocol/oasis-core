@@ -96,6 +96,19 @@ contract("Ethereum Stake test", async (accounts) => {
 	assert(reverted, "obscenely large transfer allowed?!?");
     })
 
+    function padHexStringTo64(s) {
+	let slen = s.length;
+	if (slen > 64) {
+	    return "0x" + s.substr(0, 64);
+	}
+	let pad = 64 - slen;
+	var v = [];
+	v.length = pad;
+	v.fill('0');
+	var h = s + v.join('')
+	return "0x" + h;
+    }
+
     it("should handle escrow account creation", async () => {
 	let instance = await Stake.deployed();
 
@@ -104,7 +117,7 @@ contract("Ethereum Stake test", async (accounts) => {
 
 	var escrow_id = -1;
 	var result;
-	var aux = 0xdeadbeef;
+	var aux = padHexStringTo64('deadbeef');
 
 	var contract_events = {};
 	var events;
@@ -116,6 +129,7 @@ contract("Ethereum Stake test", async (accounts) => {
 	    assert.isNull(error, "Event error: " + error);
 	    contract_events[result.transactionHash] = result;
 	    block_num = result.blockNumber;
+		var args = result.args;
 	});
 
 	result = await instance.allocateEscrow(accounts[1],
@@ -555,7 +569,7 @@ contract("Ethereum Stake test", async (accounts) => {
 	assert(initial_supply.minus(burn_amount).eq(await instance.totalSupply()));
     });
 
-    it("shoudl burn from afar!", async() => {
+    it("should burn from afar!", async() => {
 	let instance = await Stake.deployed();
 
 	var initial_stake_amount;
@@ -683,13 +697,15 @@ contract("Ethereum Stake test", async (accounts) => {
 
 	var record_size = 3;
 	var test_info = [
-	    accounts[1], 1234,       0xdead,
-	    accounts[2], 2345,       0xbeef,
-	    accounts[1], 31415926,   0xcafe,
-	    accounts[0], 2718281828, 0xbabe,
+	    accounts[1], 1234,       padHexStringTo64("deadbeef"),
+	    accounts[1], 31415926,   padHexStringTo64("cafebabe"),
+	    accounts[0], 2718281828, padHexStringTo64("babedead"),
+	    accounts[2], 2345,       padHexStringTo64("beef"),
+	    accounts[2], 5432,       padHexStringTo64("aced"),
+	    accounts[1], 420,        padHexStringTo64("ac1dbabe"),
 	];
 	var result;
-	var seen = Array(4).fill(false);
+	var seen = Array(test_info.length / record_size).fill(false);
 	var escrow_ids = [];
 	var num_tests = seen.length;
 	var has_next, state;
@@ -701,29 +717,11 @@ contract("Ethereum Stake test", async (accounts) => {
 	    var amt  = test_info[record_size * entry + 1];
 	    var aux  = test_info[record_size * entry + 2];
 
-	    var contract_events = {};
-	    events = instance.EscrowCreate(
-		{},
-		{fromBlock: block_num + 1, toBlock: "latest"});
-	    events.watch(function(error, result) {
-		assert.isNull(error, "Event error: " + error);
-		contract_events[result.transactionHash] = result;
-		block_num = result.blockNumber;
-	    });
-
+	    // gross
+	    escrow_ids.push(await instance.allocateEscrow.call(acct, amt, aux));
 	    result = await instance.allocateEscrow(acct, amt, aux);
-	    events.stopWatching();
-	    var seen_allocate = false;
-	    for (var tx_hash in contract_events) {
-		if (!contract_events.hasOwnProperty(tx_hash)) {
-		    continue;
-		}
-		assert(!seen_allocate, "Multiple escrow creation events");
-		args = contract_events[tx_hash].args;
-		escrow_ids.push(args.escrow_id);
-		seen_allocate = true;
-	    }
 	}
+
 	[has_next, state] = await instance.listActiveEscrowsIterator(accounts[0]);
 	while (has_next) {
 	    [id, target, amt, aux, has_next, state] = await instance.listActiveEscrowsGet(
@@ -733,7 +731,7 @@ contract("Ethereum Stake test", async (accounts) => {
 	    for (var entry = 0; entry < num_tests; ++entry) {
 		if (target == test_info[record_size * entry + 0] &&
 		    amt.eq(test_info[record_size * entry + 1]) &&
-		    aux.eq(test_info[record_size * entry + 2])) {
+		    aux == test_info[record_size * entry + 2]) {
 		    assert(!seen[entry], "an escrow account was listed twice");
 		    seen[entry] = true;
 		    matched = true;
@@ -751,7 +749,7 @@ contract("Ethereum Stake test", async (accounts) => {
 	// tests later state is relatively clean.
 	for (var entry = 0; entry < num_tests; ++entry) {
 	    result = await instance.takeAndReleaseEscrow(
-		escrow_ids[entry], 0,
+		escrow_ids[entry], web3.toBigNumber(0),
 		{from: test_info[record_size * entry + 0]});
 	}
     });
