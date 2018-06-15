@@ -1,15 +1,18 @@
 use std::error::Error as StdError;
+use std::result::Result as StdResult;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use ekiden_common::bytes::H160;
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::Environment;
 use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_common::epochtime::{EpochTime, TimeSource, TimeSourceNotifier};
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::sync::oneshot;
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, FutureExt, Stream};
+use ekiden_di;
 use ethabi::Token;
 use serde_json;
 use web3;
@@ -36,7 +39,7 @@ where
         client: Arc<Web3<T>>,
         local_identity: Arc<Entity>,
         contract_address: H160,
-        executor: &mut Executor,
+        environment: Arc<Environment>,
     ) -> Result<Self> {
         let local_eth_address = match local_identity.eth_address {
             Some(addr) => web3::types::H160(addr.0),
@@ -84,7 +87,7 @@ where
         // Initialize the cache and start the notifier.  Done here because
         // neither trait includes start(), this is only used for testing,
         // and doing so ensures all other calls are race free.
-        let _ = this.start(executor)?;
+        let _ = this.start(environment)?;
 
         Ok(this)
     }
@@ -118,7 +121,7 @@ where
             .into_box()
     }
 
-    fn start(&self, executor: &mut Executor) -> Result<()> {
+    fn start(&self, environment: Arc<Environment>) -> Result<()> {
         let client = self.inner.client.clone();
         let shared_inner = self.inner.clone();
 
@@ -127,7 +130,7 @@ where
             oneshot::Receiver<Result<()>>,
         ) = oneshot::channel();
 
-        executor.spawn({
+        environment.spawn({
             client
                 .eth()
                 .block_number()
@@ -276,3 +279,31 @@ struct EthereumMockTimeCache {
     source: Arc<MockTimeSource>,
     notifier: Arc<LocalTimeSourceNotifier>,
 }
+
+type EthereumMockTimeViaWebsocket = EthereumMockTime<web3::transports::WebSocket>;
+create_component!(
+    ethereum,
+    "time-source-notifier",
+    EthereumMockTimeViaWebsocket,
+    TimeSourceNotifier,
+    (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
+        let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
+        let local_identity = container.inject::<Entity>()?;
+        let environment = container.inject::<Environment>()?;
+
+        let args = container.get_arguments().unwrap();
+        let contract_address = value_t_or_exit!(args, "time-address", H160);
+
+        let instance: Arc<EthereumMockTimeViaWebsocket> =
+            Arc::new(
+                EthereumMockTime::new(client, local_identity, contract_address, environment)
+                    .map_err(|e| ekiden_di::error::Error::from(e.description()))?,
+            );
+        Ok(Box::new(instance))
+    }),
+    [Arg::with_name("time-address")
+        .long("time-address")
+        .env("TIME_ADDRESS")
+        .help("Ethereum address at which the time source has been deployed")
+        .takes_value(true)]
+);

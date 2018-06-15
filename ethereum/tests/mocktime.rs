@@ -4,13 +4,17 @@ extern crate ekiden_common;
 extern crate ekiden_ethereum;
 #[macro_use(defer)]
 extern crate scopeguard;
+#[macro_use]
+extern crate log;
+extern crate grpcio;
 extern crate web3;
 
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::epochtime::{TimeSource, TimeSourceNotifier};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{cpupool, future, Future, Stream};
+use ekiden_common::futures::{future, Future, FutureExt, Stream};
 use ekiden_common::testing;
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumMockTime;
@@ -21,7 +25,8 @@ use web3::transports::WebSocket;
 fn mocktime_integration() {
     testing::try_init_logging();
 
-    let mut executor = cpupool::CpuPool::new(4);
+    let grpc_environment = grpcio::EnvBuilder::new().build();
+    let env = Arc::new(GrpcEnvironment::new(grpc_environment));
 
     // Spin up truffle.
     let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
@@ -41,7 +46,16 @@ fn mocktime_integration() {
 
     // Run a driver to make some background transactions such that things confirm.
     let tx_stream = mine(transport);
-    let _handle = executor.spawn(tx_stream.fold(0 as u64, |a, _b| future::ok::<u64, Error>(a)));
+    let _handle = env.spawn(
+        tx_stream
+            .fold(0 as u64, |a, _b| future::ok::<u64, Error>(a))
+            .map(|_r| ())
+            .map_err(|e| {
+                error!("{:?}", e);
+                ()
+            })
+            .into_box(),
+    );
 
     // Initialize the time source.
     let time_source = EthereumMockTime::new(
@@ -51,7 +65,7 @@ fn mocktime_integration() {
             eth_address: Some(H160::from_slice(DEVELOPMENT_ADDRESS)),
         }),
         H160::from_slice(&address),
-        &mut executor,
+        env.clone(),
     ).unwrap();
 
     // Ensure that the cache is coherent and contains the default values.

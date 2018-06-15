@@ -81,7 +81,7 @@ fn test_registry_ethereum_roundtrip() {
             client.clone(),
             me.clone(),
             H160::from_slice(&time_address),
-            &mut executor,
+            env.clone(),
         ).unwrap(),
     );
 

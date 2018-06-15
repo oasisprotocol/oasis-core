@@ -6,6 +6,7 @@ extern crate ekiden_storage_dummy;
 
 #[macro_use(defer)]
 extern crate scopeguard;
+extern crate grpcio;
 extern crate web3;
 
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use ekiden_beacon_base::backend::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::contract::Contract;
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::GrpcEnvironment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{cpupool, future, stream, Future, Stream};
 use ekiden_common::ring::signature::Ed25519KeyPair;
@@ -34,6 +36,8 @@ fn test_contract_registry_ethereum_roundtrip() {
     testing::try_init_logging();
 
     let mut executor = cpupool::CpuPool::new(4);
+    let grpc_environment = grpcio::EnvBuilder::new().build();
+    let env = Arc::new(GrpcEnvironment::new(grpc_environment));
 
     // Spin up truffle.
     let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
@@ -80,7 +84,7 @@ fn test_contract_registry_ethereum_roundtrip() {
             client.clone(),
             entity.clone(),
             H160::from_slice(&time_address),
-            &mut executor,
+            env.clone(),
         ).unwrap(),
     );
 
