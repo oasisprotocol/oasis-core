@@ -3,6 +3,7 @@
 //! Ekiden registry interface.
 extern crate byteorder;
 extern crate ekiden_common;
+extern crate ekiden_epochtime;
 extern crate ekiden_registry_api;
 extern crate grpcio;
 extern crate protobuf;

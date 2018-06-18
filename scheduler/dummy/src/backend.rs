@@ -5,12 +5,12 @@ use std::sync::{Arc, Mutex};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::contract::Contract;
 use ekiden_common::drbg::HmacDrbgRng;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_core::bytes::B256;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::node::Node;
 use ekiden_core::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend};
 use ekiden_scheduler_base::*;
 
@@ -127,7 +127,8 @@ impl DummySchedulerBackendInner {
     fn do_election(&mut self, contract: Arc<Contract>) -> Result<()> {
         let contract_id = contract.id;
 
-        let committee_cache = self.committee_cache
+        let committee_cache = self
+            .committee_cache
             .entry(self.current_epoch)
             .or_insert(HashMap::new());
         if committee_cache.contains_key(&contract_id) {
@@ -179,7 +180,8 @@ impl DummySchedulerBackendInner {
         );
 
         // Mass elect the new committees.
-        let contracts: Vec<_> = self.contract_cache
+        let contracts: Vec<_> = self
+            .contract_cache
             .values()
             .map(|contract| contract.clone())
             .collect();

@@ -3,12 +3,12 @@ use std::sync::{Arc, Mutex};
 use byteorder::{LittleEndian, WriteBytesExt};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::B256;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::Error;
 use ekiden_common::futures::sync::mpsc;
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
 use ekiden_common::ring::digest;
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 
 const DUMMY_BEACON_CONTEXT: &'static [u8] = b"EkB-Dumm";
 

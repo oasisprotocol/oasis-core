@@ -35,6 +35,9 @@ members = [
     "enclave/untrusted",
     "enclave/trusted",
 
+    # Epoch Time.
+    "epochtime",
+
     # RPC.
     "rpc/common",
     "rpc/client",

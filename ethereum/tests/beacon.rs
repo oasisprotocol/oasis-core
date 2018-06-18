@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 extern crate ekiden_beacon_base;
 extern crate ekiden_common;
+extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
 #[macro_use(defer)]
 extern crate scopeguard;
@@ -10,10 +11,10 @@ extern crate web3;
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
-use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_common::error::Error;
 use ekiden_common::futures::{cpupool, future, Future, Stream};
 use ekiden_common::testing;
+use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumRandomBeacon;
 use web3::api::Web3;

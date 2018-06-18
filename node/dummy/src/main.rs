@@ -9,6 +9,7 @@ extern crate pretty_env_logger;
 extern crate ekiden_common;
 extern crate ekiden_di;
 use ekiden_di::Component;
+extern crate ekiden_epochtime;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_dynamodb;
@@ -21,7 +22,7 @@ use std::thread;
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_common::epochtime::local::{MockTimeSource, SystemTimeSource};
+use ekiden_epochtime::local::{MockTimeSource, SystemTimeSource};
 use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration, TimeSourceImpl};
 
 const TIME_SOURCE_MOCK: &'static str = "mock";

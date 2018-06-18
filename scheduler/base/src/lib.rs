@@ -8,6 +8,7 @@ extern crate serde;
 extern crate serde_derive;
 
 extern crate ekiden_common;
+extern crate ekiden_epochtime;
 extern crate ekiden_scheduler_api;
 
 pub mod backend;

@@ -8,13 +8,13 @@ use chrono::Utc;
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
                              StreamExt};
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_di;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ethabi::Token;
 #[allow(unused_imports)]
 use rustc_hex::FromHex;

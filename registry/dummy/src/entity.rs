@@ -5,12 +5,12 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::Environment;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, BoxStream, StreamExt};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_registry_base::*;
 
 struct DummyEntityRegistryBackendInner {
@@ -25,7 +25,8 @@ struct DummyEntityRegistryBackendInner {
 impl DummyEntityRegistryBackendInner {
     fn build_node_list(&mut self, epoch: EpochTime) -> (EpochTime, Vec<Node>) {
         assert!(!self.node_lists.contains_key(&epoch));
-        let mut nodes: Vec<Node> = self.nodes
+        let mut nodes: Vec<Node> = self
+            .nodes
             .values()
             .flat_map(|n| n.values())
             .map(|n| n.clone())

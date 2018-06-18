@@ -1,8 +1,8 @@
 //! Random beacon interface.
 
 use ekiden_common::bytes::B256;
-use ekiden_common::epochtime::EpochTime;
 use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
+use ekiden_epochtime::interface::EpochTime;
 
 /// Random Beacon backend implementing the Ekiden random beacon interface.
 pub trait RandomBeacon: Send + Sync {

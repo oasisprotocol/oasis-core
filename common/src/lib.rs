@@ -48,7 +48,6 @@ pub mod bytes;
 pub mod contract;
 pub mod drbg;
 pub mod entity;
-pub mod epochtime;
 pub mod error;
 pub mod futures;
 pub mod hash;

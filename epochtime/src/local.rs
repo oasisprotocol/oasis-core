@@ -1,11 +1,11 @@
 //! Local epoch time implementation
 #[cfg(not(target_env = "sgx"))]
-use super::super::environment::Environment;
-use super::super::error::{Error, Result};
+use ekiden_common::environment::Environment;
+use ekiden_common::error::{Error, Result};
 #[allow(unused_imports)]
-use super::super::futures::{future, BoxFuture, BoxStream, Future, Stream};
-use super::super::subscribers::StreamSubscribers;
-use super::*;
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::subscribers::StreamSubscribers;
+use interface::*;
 use std::sync::{Arc, Mutex};
 #[cfg(not(target_env = "sgx"))]
 use std::time::{Duration, Instant};
@@ -13,9 +13,7 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, TimeZone, Utc};
 
 #[cfg(not(target_env = "sgx"))]
-extern crate futures_timer;
-#[cfg(not(target_env = "sgx"))]
-use self::futures_timer::{Interval, TimerHandle};
+use futures_timer::{Interval, TimerHandle};
 
 fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
     let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);

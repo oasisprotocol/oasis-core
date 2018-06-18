@@ -8,10 +8,10 @@ use serde_cbor;
 use sled::{ConfigBuilder, Tree};
 
 use ekiden_common::bytes::H256;
-use ekiden_common::epochtime::local::SystemTimeSource;
-use ekiden_common::epochtime::TimeSource;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture};
+use ekiden_epochtime::interface::TimeSource;
+use ekiden_epochtime::local::SystemTimeSource;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 struct PersistentStorageBackendInner {
