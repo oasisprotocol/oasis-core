@@ -17,11 +17,11 @@ extern crate ekiden_storage_persistent;
 
 use std::process::exit;
 use std::sync::Arc;
-use std::thread;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
+use ekiden_common::environment::Environment;
 use ekiden_common::epochtime::local::{MockTimeSource, SystemTimeSource};
 use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration, TimeSourceImpl};
 
@@ -84,7 +84,17 @@ fn main() {
     pretty_env_logger::formatted_builder()
         .unwrap()
         .filter(None, LevelFilter::Trace)
+        .filter(Some("mio"), LevelFilter::Warn)
+        .filter(Some("tokio_threadpool"), LevelFilter::Warn)
+        .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("hyper"), LevelFilter::Warn)
         .init();
+
+    let mut container = known_components
+        .build_with_arguments(&matches)
+        .expect("failed to initialize component container");
+
+    let environment = container.inject::<Environment>().unwrap();
 
     // Setup the backends and gRPC service.
     trace!("Initializing backends/gRPC service.");
@@ -102,8 +112,6 @@ fn main() {
         TIME_SOURCE_SYSTEM => TimeSourceImpl::System(Arc::new(SystemTimeSource {})),
         _ => panic!("Invalid time source specified."),
     };
-
-    let container = known_components.build_with_arguments(&matches).unwrap();
 
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
@@ -123,8 +131,6 @@ fn main() {
     trace!("Starting all workers.");
     backends.start();
 
-    trace!("Parking main thread.");
-    loop {
-        thread::park();
-    }
+    // Start the environment.
+    environment.start();
 }

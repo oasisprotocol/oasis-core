@@ -51,12 +51,12 @@ extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
 use std::path::Path;
-use std::thread;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
 use ekiden_core::bytes::B256;
+use ekiden_core::environment::Environment;
 use ekiden_di::{Component, KnownComponents};
 
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
@@ -195,12 +195,18 @@ fn main() {
     pretty_env_logger::formatted_builder()
         .unwrap()
         .filter(None, LevelFilter::Trace)
+        .filter(Some("mio"), LevelFilter::Warn)
+        .filter(Some("tokio_threadpool"), LevelFilter::Warn)
+        .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("hyper"), LevelFilter::Warn)
         .init();
 
     // Initialize component container.
-    let container = known_components
+    let mut container = known_components
         .build_with_arguments(&matches)
         .expect("failed to initialize component container");
+
+    let environment = container.inject::<Environment>().unwrap();
 
     // Setup compute node.
     let mut node = ComputeNode::new(
@@ -273,7 +279,6 @@ fn main() {
     // Start compute node.
     node.start();
 
-    loop {
-        thread::park();
-    }
+    // Start the environment.
+    environment.start();
 }
