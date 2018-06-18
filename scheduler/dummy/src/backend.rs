@@ -127,8 +127,7 @@ impl DummySchedulerBackendInner {
     fn do_election(&mut self, contract: Arc<Contract>) -> Result<()> {
         let contract_id = contract.id;
 
-        let committee_cache = self
-            .committee_cache
+        let committee_cache = self.committee_cache
             .entry(self.current_epoch)
             .or_insert(HashMap::new());
         if committee_cache.contains_key(&contract_id) {
@@ -180,8 +179,7 @@ impl DummySchedulerBackendInner {
         );
 
         // Mass elect the new committees.
-        let contracts: Vec<_> = self
-            .contract_cache
+        let contracts: Vec<_> = self.contract_cache
             .values()
             .map(|contract| contract.clone())
             .collect();
@@ -454,12 +452,12 @@ mod tests {
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
     use ekiden_common::environment::GrpcEnvironment;
-    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
     use ekiden_common::untrusted;
+    use ekiden_epochtime::interface::EPOCH_INTERVAL;
+    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use std::collections::HashSet;
 
     #[test]

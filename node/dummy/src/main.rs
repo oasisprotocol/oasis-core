@@ -10,6 +10,7 @@ extern crate ekiden_common;
 extern crate ekiden_di;
 use ekiden_di::Component;
 extern crate ekiden_epochtime;
+extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_dynamodb;
@@ -17,11 +18,11 @@ extern crate ekiden_storage_persistent;
 
 use std::process::exit;
 use std::sync::Arc;
-use std::thread;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
+use ekiden_common::environment::Environment;
 use ekiden_epochtime::local::{MockTimeSource, SystemTimeSource};
 use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration, TimeSourceImpl};
 
@@ -31,9 +32,11 @@ const TIME_SOURCE_SYSTEM: &'static str = "system";
 
 fn main() {
     let mut known_components = ekiden_di::KnownComponents::new();
+    ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
+    ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(&mut known_components);
 
     let matches = App::new("Ekiden Dummy Shared Backend Node")
         .version(env!("CARGO_PKG_VERSION"))
@@ -46,14 +49,6 @@ fn main() {
                 .takes_value(true)
                 .default_value("42261")
                 .display_order(1),
-        )
-        .arg(
-            Arg::with_name("grpc-threads")
-                .long("grpc-threads")
-                .help("Number of threads to use for the event loop.")
-                .default_value("4")
-                .takes_value(true)
-                .display_order(2),
         )
         .arg(
             Arg::with_name("time-source")
@@ -90,7 +85,17 @@ fn main() {
     pretty_env_logger::formatted_builder()
         .unwrap()
         .filter(None, LevelFilter::Trace)
+        .filter(Some("mio"), LevelFilter::Warn)
+        .filter(Some("tokio_threadpool"), LevelFilter::Warn)
+        .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("hyper"), LevelFilter::Warn)
         .init();
+
+    let mut container = known_components
+        .build_with_arguments(&matches)
+        .expect("failed to initialize component container");
+
+    let environment = container.inject::<Environment>().unwrap();
 
     // Setup the backends and gRPC service.
     trace!("Initializing backends/gRPC service.");
@@ -109,11 +114,8 @@ fn main() {
         _ => panic!("Invalid time source specified."),
     };
 
-    let container = known_components.build_with_arguments(&matches).unwrap();
-
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
-            grpc_threads: value_t!(matches, "grpc-threads", usize).unwrap(),
             port: value_t!(matches, "port", u16).unwrap(),
         },
         time_source_impl,
@@ -130,8 +132,6 @@ fn main() {
     trace!("Starting all workers.");
     backends.start();
 
-    trace!("Parking main thread.");
-    loop {
-        thread::park();
-    }
+    // Start the environment.
+    environment.start();
 }

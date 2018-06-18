@@ -43,7 +43,7 @@ pub mod clap {
 ///     FooBackend,
 ///     Backend,
 ///     (|container: &mut Container| -> Result<Box<Any>> {
-///         let instance: Arc<Backend> = Arc::new(FooBackend::new());
+///         let instance: Box<Backend> = Box::new(FooBackend::new());
 ///         Ok(Box::new(instance))
 ///     })
 /// );
@@ -60,7 +60,7 @@ pub mod clap {
 ///         let args = container.get_arguments().unwrap();
 ///         let arg = args.value_of("dummy-arg").unwrap();
 ///
-///         let instance: Arc<Backend> = Arc::new(FooBackend::new(arg));
+///         let instance: Box<Backend> = Box::new(FooBackend::new(arg));
 ///         Ok(Box::new(instance))
 ///     }),
 ///     [
@@ -84,7 +84,7 @@ macro_rules! create_component {
     ) => {
         #[allow(unused_variables)]
         fn build(&self, container: &mut Container) -> Result<Box<Any>> {
-            let instance: Arc<$trait> = Arc::new($component::new(
+            let instance: Box<$trait> = Box::new($component::new(
                 $( container.inject::<super::$dependency>()? ),*
             ));
             Ok(Box::new(instance))

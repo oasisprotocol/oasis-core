@@ -25,8 +25,7 @@ struct DummyEntityRegistryBackendInner {
 impl DummyEntityRegistryBackendInner {
     fn build_node_list(&mut self, epoch: EpochTime) -> (EpochTime, Vec<Node>) {
         assert!(!self.node_lists.contains_key(&epoch));
-        let mut nodes: Vec<Node> = self
-            .nodes
+        let mut nodes: Vec<Node> = self.nodes
             .values()
             .flat_map(|n| n.values())
             .map(|n| n.clone())

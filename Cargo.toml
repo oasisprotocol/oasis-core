@@ -2,6 +2,13 @@
 members = [
     "tools",
 
+    # Dependency injection.
+    "di",
+
+    # Instrumentation.
+    "instrumentation",
+    "instrumentation/prometheus",
+
     # Common.
     "common",
     "common/api",

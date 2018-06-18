@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use ekiden_beacon_api::create_beacon;
 use ekiden_beacon_base::{BeaconService, RandomBeacon};
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
-use ekiden_common::environment::{Environment, GrpcEnvironment};
+use ekiden_common::environment::Environment;
 use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
 use ekiden_common_api::create_time_source;
 use ekiden_consensus_api::create_consensus;
@@ -16,6 +16,7 @@ use ekiden_di;
 use ekiden_epochtime::grpc::EpochTimeService;
 use ekiden_epochtime::interface::{TimeSource, EPOCH_INTERVAL};
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource, SystemTimeSource};
+use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_node_dummy_api::create_dummy_debug;
 use ekiden_registry_api::{create_contract_registry, create_entity_registry};
 use ekiden_registry_base::{ContractRegistryBackend, ContractRegistryService,
@@ -46,8 +47,6 @@ pub enum TimeSourceImpl {
 
 /// Dummy Backend configuration.
 pub struct DummyBackendConfiguration {
-    /// Number of gRPC threads.
-    pub grpc_threads: usize,
     /// gRPC server port.
     pub port: u16,
 }
@@ -92,9 +91,7 @@ impl DummyBackend {
 
         let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
-        let env = Arc::new(GrpcEnvironment::new(grpcio::Environment::new(
-            config.grpc_threads,
-        )));
+        let env = di_container.inject::<Environment>()?;
         let grpc_environment = env.grpc();
 
         let entity_registry = Arc::new(DummyEntityRegistryBackend::new(
@@ -148,6 +145,10 @@ impl DummyBackend {
             .register_service(consensus_service)
             .register_service(debug_service)
             .build()?;
+
+        // Initialize metric collector.
+        let metrics = di_container.inject_owned::<MetricCollector>()?;
+        set_boxed_metric_collector(metrics).unwrap();
 
         Ok(Self {
             time_notifier,

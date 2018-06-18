@@ -66,8 +66,7 @@ impl api::TimeSource for EpochTimeService {
         _req: api::WatchEpochRequest,
         sink: ServerStreamingSink<api::WatchEpochResponse>,
     ) {
-        let f = self
-            .notifier
+        let f = self.notifier
             .watch_epochs()
             .map(|res| -> (api::WatchEpochResponse, WriteFlags) {
                 let mut r = api::WatchEpochResponse::new();
