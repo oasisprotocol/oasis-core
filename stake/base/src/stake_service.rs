@@ -3,6 +3,7 @@ use ekiden_stake_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, RpcStatus, UnarySink};
 
+use super::stake_backend::AmountType;
 use super::stake_backend::ErrorCodes;
 use super::stake_backend::EscrowAccountIdType;
 use super::stake_backend::EscrowAccountStatus;
@@ -10,6 +11,7 @@ use super::stake_backend::StakeEscrowBackend;
 use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
+use ekiden_common::uint::U256;
 
 pub struct StakeEscrowService<T>
 where
@@ -37,37 +39,6 @@ impl<T> api::Stake for StakeEscrowService<T>
 where
     T: StakeEscrowBackend,
 {
-    fn deposit_stake(
-        &self,
-        ctx: RpcContext,
-        req: api::DepositStakeRequest,
-        sink: UnarySink<api::DepositStakeResponse>,
-    ) {
-        let f = move || -> Result<BoxFuture<()>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => {
-                    let a = req.get_amount();
-                    Ok(self.inner.deposit_stake(s, a))
-                }
-            }
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok(()) => Ok(api::DepositStakeResponse::new()),
-                Err(e) => Err(e),
-            }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
-    }
-
     fn get_stake_status(
         &self,
         ctx: RpcContext,
@@ -75,17 +46,17 @@ where
         sink: UnarySink<api::GetStakeStatusResponse>,
     ) {
         let f = move || -> Result<BoxFuture<StakeStatus>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
+            match B256::try_from(req.get_owner()) {
                 Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => Ok(self.inner.get_stake_status(s)),
+                Ok(owner) => Ok(self.inner.get_stake_status(owner)),
             }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(status) => {
                     let mut r = api::GetStakeStatusResponse::new();
-                    r.set_total_stake(status.total_stake);
-                    r.set_escrowed_stake(status.escrowed);
+                    r.set_total_stake(status.total_stake.to_vec());
+                    r.set_escrowed_stake(status.escrowed.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -101,27 +72,25 @@ where
         }).map_err(|_e| ()));
     }
 
-    fn transfer_stake(
+    fn balance_of(
         &self,
         ctx: RpcContext,
-        req: api::TransferStakeRequest,
-        sink: UnarySink<api::TransferStakeResponse>,
+        req: api::BalanceOfRequest,
+        sink: UnarySink<api::BalanceOfResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<()>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
+            match B256::try_from(req.get_owner()) {
                 Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => match B256::try_from(req.get_target()) {
-                    Err(_e) => Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
-                    Ok(t) => {
-                        let amount = req.get_amount();
-                        Ok(self.inner.transfer_stake(s, t, amount))
-                    }
-                },
+                Ok(owner) => Ok(self.inner.balance_of(owner))
             }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok(_) => Ok(api::TransferStakeResponse::new()),
+                Ok(amount) => {
+                    let mut r = api::BalanceOfResponse::new();
+                    r.set_available_balance(amount.to_vec());
+                    Ok(r)
+                },
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -135,23 +104,257 @@ where
         }).map_err(|_e| ()));
     }
 
-    fn withdraw_stake(
+    fn transfer(
         &self,
         ctx: RpcContext,
-        req: api::WithdrawStakeRequest,
-        sink: UnarySink<api::WithdrawStakeResponse>,
+        req: api::TransferRequest,
+        sink: UnarySink<api::TransferResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<(u64)>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => Ok(self.inner.withdraw_stake(s, req.get_amount_requested())),
-            }
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let sender = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s
+            };
+            let target = match B256::try_from(req.get_target()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
+                Ok(t) => t
+            };
+            let value = U256::from_little_endian(req.get_value());
+            Ok(self.inner.transfer(sender, target, value))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok(amount_returned) => {
-                    let mut r = api::WithdrawStakeResponse::new();
-                    r.set_amount_returned(amount_returned);
+                Ok(b) => {
+                    let mut r = api::TransferResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                },
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn transfer_from(
+        &self,
+        ctx: RpcContext,
+        req: api::TransferFromRequest,
+        sink: UnarySink<api::TransferFromResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let sender = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let src = match B256::try_from(req.get_source_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
+                Ok(s) => s,
+            };
+            let dst = match B256::try_from(req.get_destination_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoDestination.to_string())),
+                Ok(d) => d,
+            };
+            let value = U256::from_little_endian(req.get_value());
+            Ok(self.inner.transfer_from(sender, src, dst, value))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::TransferFromResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn approve(
+        &self,
+        ctx: RpcContext,
+        req: api::ApproveRequest,
+        sink: UnarySink<api::ApproveResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let s = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let spender = match B256::try_from(req.get_spender_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSpender.to_string())),
+                Ok(s) => s,
+            };
+            let amt = U256::from_little_endian(req.get_value());
+            Ok(self.inner.approve(s, spender, amt))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::ApproveResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn approve_and_call(
+        &self,
+        ctx: RpcContext,
+        req: api::ApproveAndCallRequest,
+        sink: UnarySink<api::ApproveAndCallResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let s = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let spender = match B256::try_from(req.get_spender_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSpender.to_string())),
+                Ok(s) => s,
+            };
+            let amt = U256::from_little_endian(req.get_value());
+            let extra_data = req.get_extra_data().to_vec();
+            Ok(self.inner.approve_and_call(s, spender, amt, extra_data))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::ApproveAndCallResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn allowance(
+        &self,
+        ctx: RpcContext,
+        req: api::AllowanceRequest,
+        sink: UnarySink<api::AllowanceResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
+            let owner = match B256::try_from(req.get_owner_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
+                Ok(o) => o,
+            };
+            let spender = match B256::try_from(req.get_spender_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSpender.to_string())),
+                Ok(s) => s,
+            };
+            Ok(self.inner.allowance(owner, spender))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::AllowanceResponse::new();
+                    r.set_remaining(b.to_vec());
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn burn(
+        &self,
+        ctx: RpcContext,
+        req: api::BurnRequest,
+        sink: UnarySink<api::BurnResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let sender = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let amt = U256::from_little_endian(req.get_value());
+            Ok(self.inner.burn(sender, amt))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::BurnResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn burn_from(
+        &self,
+        ctx: RpcContext,
+        req: api::BurnFromRequest,
+        sink: UnarySink<api::BurnFromResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let sender = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let owner = match B256::try_from(req.get_owner_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
+                Ok(o) => o,
+            };
+            let amt = U256::from_little_endian(req.get_value());
+            Ok(self.inner.burn_from(sender, owner, amt))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::BurnFromResponse::new();
+                    r.set_success(b);
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -182,7 +385,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
                 Ok(t) => t,
             };
-            let a = req.get_escrow_amount();
+            let a = U256::from_little_endian(req.get_escrow_amount());
             Ok(self.inner.allocate_escrow(s, t, a))
         };
         let f = match f() {
@@ -205,34 +408,66 @@ where
         }).map_err(|_e| ()));
     }
 
-    fn list_active_escrows(
+    fn list_active_escrows_iterator(
         &self,
         ctx: RpcContext,
-        req: api::ListActiveEscrowsRequest,
-        sink: UnarySink<api::ListActiveEscrowsResponse>,
+        req: api::ListActiveEscrowsIteratorRequest,
+        sink: UnarySink<api::ListActiveEscrowsIteratorResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<Vec<EscrowAccountStatus>>, Error> {
-            match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => Ok(self.inner.list_active_escrows(s)),
+        let f = move || -> Result<BoxFuture<(bool, B256)>, Error> {
+            match B256::try_from(req.get_owner()) {
+                Err(_e) => Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
+                Ok(s) => Ok(self.inner.list_active_escrows_iterator(s)),
             }
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok(escrows) => {
-                    let mut r = api::ListActiveEscrowsResponse::new();
-                    r.set_escrows(
-                        escrows
-                            .iter()
-                            .map(|e| {
-                                let mut ae = api::EscrowData::new();
-                                ae.set_escrow_id(e.id.to_vec());
-                                ae.set_entity(e.target.to_vec());
-                                ae.set_amount(e.amount);
-                                ae
-                            })
-                            .collect(),
-                    );
+                Ok((has_next, state)) => {
+                    let mut r = api::ListActiveEscrowsIteratorResponse::new();
+                    r.set_has_next(has_next);
+                    r.set_state(state.to_vec());
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn list_active_escrows_get(
+        &self,
+        ctx: RpcContext,
+        req: api::ListActiveEscrowsGetRequest,
+        sink: UnarySink<api::ListActiveEscrowsGetResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<(EscrowAccountIdType, B256, AmountType, B256, bool, B256)>, Error> {
+            let owner = match B256::try_from(req.get_owner()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
+                Ok(s) => s,
+            };
+            let state = match B256::try_from(req.get_state()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoState.to_string())),
+                Ok(s) => s,
+            };
+            Ok(self.inner.list_active_escrows_get(owner, state))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok((eid, target, amount, aux, has_next, state)) => {
+                    let mut r = api::ListActiveEscrowsGetResponse::new();
+                    r.set_escrow_id(eid.to_vec());
+                    r.set_target(target.to_vec());
+                    r.set_amount(amount.to_vec());
+                    r.set_aux(aux.to_vec());
+                    r.set_has_next(has_next);
+                    r.set_state(state.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -264,12 +499,11 @@ where
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(escrow) => {
-                    let mut ed = api::EscrowData::new();
-                    ed.set_escrow_id(escrow.id.to_vec());
-                    ed.set_entity(escrow.target.to_vec());
-                    ed.set_amount(escrow.amount);
                     let mut r = api::FetchEscrowByIdResponse::new();
-                    r.set_escrow(ed);
+                    r.set_escrow_id(escrow.id.to_vec());
+                    r.set_target(escrow.target.to_vec());
+                    r.set_amount(escrow.amount.to_vec());
+                    r.set_aux(escrow.aux.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -291,7 +525,7 @@ where
         req: api::TakeAndReleaseEscrowRequest,
         sink: UnarySink<api::TakeAndReleaseEscrowResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<u64>, Error> {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
             let s = match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => s,
@@ -300,14 +534,14 @@ where
                 Err(e) => return Err(e),
                 Ok(i) => i,
             };
-            let a = req.get_amount_requested();
+            let a = U256::from_little_endian(req.get_amount_requested());
             Ok(self.inner.take_and_release_escrow(s, i, a))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(amount_taken) => {
                     let mut r = api::TakeAndReleaseEscrowResponse::new();
-                    r.set_amount_taken(amount_taken);
+                    r.set_amount_taken(amount_taken.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),

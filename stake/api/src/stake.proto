@@ -32,6 +32,8 @@ service Stake {
     returns (AllowanceResponse) {}
   rpc Burn (BurnRequest)
     returns (BurnResponse) {}
+  rpc BurnFrom (BurnFromRequest)
+    returns (BurnFromResponse) {}
   rpc AllocateEscrow (AllocateEscrowRequest)
     returns (AllocateEscrowResponse) {}
   rpc ListActiveEscrowsIterator (ListActiveEscrowsIteratorRequest)

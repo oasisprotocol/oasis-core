@@ -23,7 +23,12 @@ use ekiden_common::uint::U256;
 pub enum ErrorCodes {
     InternalError,
     BadProtoSender,
+    BadProtoOwner,
+    BadProtoDestination,
+    BadProtoAmount,
+    BadProtoSpender,
     BadProtoTarget,
+    BadProtoState,
     BadEscrowId,
     NoStakeAccount,
     NoEscrowAccount,
@@ -41,14 +46,10 @@ impl fmt::Display for ErrorCodes {
     }
 }
 
-pub type AmountType = u64;
-/// Dependent code can use either AmountType::max_value() directly or
-/// use the AMOUNT_MAX constant; unfortunately, since this is a type
-/// alias, we don't seem to be able to have the compiler forbid direct
-/// uses of u64::max_value(), which would be bad if/when the type alias
-/// ever changes to a narrower type.  An alternative is to wrap it in a
-/// struct, but that makes its use very cumbersome.
-pub static AMOUNT_MAX: AmountType = AmountType::max_value();
+pub type AmountType = U256;
+// U256 has no constructor that makes a compile-time global constant
+// possible, but !AmountType::from(0) works and might even be
+// efficient if constant folding works right.
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct EscrowAccountIdType {
@@ -108,11 +109,12 @@ pub struct EscrowAccountStatus {
     pub id: EscrowAccountIdType,
     pub target: B256,
     pub amount: AmountType,
+    pub aux: B256,
 }
 
 impl EscrowAccountStatus {
-    pub fn new(id: EscrowAccountIdType, target: B256, amount: AmountType) -> Self {
-        Self { id, target, amount }
+    pub fn new(id: EscrowAccountIdType, target: B256, amount: AmountType, aux: B256) -> Self {
+        Self { id, target, amount, aux }
     }
 }
 
@@ -122,25 +124,37 @@ impl EscrowAccountStatus {
 /// are requests for values, or status, and do not represent token
 /// transfers.
 pub trait StakeEscrowBackend: Send + Sync {
-    /// Deposits |amount| ($$) into the stake account for |msg_sender|.
-    fn deposit_stake(&self, msg_sender: B256, amount: AmountType) -> BoxFuture<()>;
-
     /// Returns the stake account status (StakeStatus) of the caller |msg_sender|.
-    fn get_stake_status(&self, msg_sender: B256) -> BoxFuture<StakeStatus>;
+    fn get_stake_status(&self, owner: B256) -> BoxFuture<StakeStatus>;
+
+    fn balance_of(&self, owner: B256) -> BoxFuture<AmountType>;
 
     /// Transfers |amount_requested| from |msg_sender|'s stake account to
-    /// the stake account belonging to |target|.
-    fn transfer_stake(&self, msg_sender: B256, target: B256, amount: AmountType) -> BoxFuture<()>;
+    /// the stake account belonging to |target|.  Returns success boolean flag.
+    fn transfer(&self, msg_sender: B256, target: B256, value: AmountType) -> BoxFuture<bool>;
 
-    /// Withdraws |amount_requested| ($$) from the stake account
-    /// belonging to the caller |msg_sender|.  The value
-    /// |amount_requested| cannot exceed available funds (e.g.,
-    /// |total_stake - escrowed|) in the stake account.
-    fn withdraw_stake(
-        &self,
-        msg_sender: B256,
-        amount_requested: AmountType,
-    ) -> BoxFuture<AmountType>;
+    /// Transfers |amount_requested| from |source_address|'s stake
+    /// account to the stake account belonging to
+    /// |destination_address|, when |msg_sender| has a sufficiently
+    /// large approval from |source_address|.  Returns success boolean
+    /// flag.
+    fn transfer_from(&self, msg_sender: B256, source_address: B256,
+                     destination_address: B256, value: AmountType) ->
+        BoxFuture<bool>;
+
+    /// Approve by |msg_sender| for |spender| to transferFrom up to |value| tokens.
+    fn approve(&self, msg_sender: B256, spender: B256, value: AmountType) ->
+        BoxFuture<bool>;
+
+    fn approve_and_call(&self, msg_sender: B256, spender: B256, value: AmountType,
+                        extra_data: Vec<u8>) ->
+        BoxFuture<bool>;
+
+    fn allowance(&self, owner: B256, spender: B256) -> BoxFuture<AmountType>;
+
+    fn burn(&self, msg_sender: B256, value: AmountType) -> BoxFuture<bool>;
+
+    fn burn_from(&self, msg_sender: B256, owner: B256, value: AmountType) -> BoxFuture<bool>;
 
     /// Allocates |escrow_amount| from the caller (|msg_sender|)'s
     /// stake account to create a new stake account with |target| as
@@ -155,7 +169,10 @@ pub trait StakeEscrowBackend: Send + Sync {
     ) -> BoxFuture<EscrowAccountIdType>;
 
     /// Returns a vector of all active escrow accounts created by |msg_sender|.
-    fn list_active_escrows(&self, msg_sender: B256) -> BoxFuture<Vec<EscrowAccountStatus>>;
+    fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<(bool, B256)>;
+
+    fn list_active_escrows_get(&self, owner: B256, state: B256) ->
+        BoxFuture<(EscrowAccountIdType, B256, AmountType, B256, bool, B256)>;
 
     /// Returns the escrow account data associated with a given |escrow_id|.
     fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus>;
