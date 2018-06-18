@@ -1,4 +1,5 @@
 //! Ekiden storage interface.
+#[macro_use]
 extern crate ekiden_common;
 #[cfg(not(target_env = "sgx"))]
 extern crate ekiden_storage_api;
