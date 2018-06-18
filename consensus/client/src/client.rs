@@ -7,7 +7,7 @@ use grpcio::{self, Channel, ChannelBuilder};
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Executor, Future, Stream};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::node::Node;
 use ekiden_consensus_api as api;
 use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Header, Reveal};
@@ -26,14 +26,6 @@ impl ConsensusClient {
 }
 
 impl ConsensusBackend for ConsensusClient {
-    fn start(&self, _executor: &mut Executor) {
-        // TODO: refactor / remove
-    }
-
-    fn shutdown(&self) {
-        // TODO
-    }
-
     fn get_latest_block(&self, contract_id: B256) -> BoxFuture<Block> {
         let mut req = api::LatestBlockRequest::new();
         req.set_contract_id(contract_id.to_vec());

@@ -2,7 +2,7 @@ use std::convert::{Into, TryFrom};
 use std::sync::Arc;
 
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
+use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;

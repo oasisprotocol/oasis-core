@@ -8,10 +8,10 @@ use chrono::Utc;
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::{mpsc, oneshot};
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
-                             StreamExt};
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_di;
 use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
@@ -40,6 +40,7 @@ where
 {
     // Create a new Ethereum random beacon.
     pub fn new(
+        environment: Arc<Environment>,
         client: Arc<Web3<T>>,
         local_identity: Arc<Entity>,
         contract_address: H160,
@@ -71,29 +72,27 @@ where
                 if actual_str != expected_str {
                     return Err(Error::new("Contract not deployed at specified address."));
                 } else {
-                    Ok(Self {
+                    let instance = Self {
                         inner: Arc::new(EthereumRandomBeaconCache::new(
                             client,
                             contract,
                             local_eth_address,
                             time_notifier,
                         )),
-                    })
+                    };
+                    instance.start(environment);
+
+                    Ok(instance)
                 }
             });
 
         ctor_future.wait()
     }
-}
 
-impl<T: 'static + Transport + Sync + Send> RandomBeacon for EthereumRandomBeacon<T>
-where
-    <T as web3::Transport>::Out: Send,
-{
-    fn start(&self, executor: &mut Executor) {
+    fn start(&self, environment: Arc<Environment>) {
         // Start the log watcher.
         let inner = self.inner.clone();
-        executor.spawn({
+        environment.spawn({
             let (contract, contract_address) = inner.contract();
             let client = inner.client.clone();
             let shared_inner = inner.clone();
@@ -188,9 +187,14 @@ where
                 .into_box()
         });
 
-        self.inner.start(executor);
+        self.inner.start(environment);
     }
+}
 
+impl<T: 'static + Transport + Sync + Send> RandomBeacon for EthereumRandomBeacon<T>
+where
+    <T as web3::Transport>::Out: Send,
+{
     fn get_beacon(&self, epoch: EpochTime) -> BoxFuture<B256> {
         let f = match self.inner.get_beacon(epoch) {
             Some(ent) => future::ok(ent.0),
@@ -257,9 +261,9 @@ where
         }
     }
 
-    fn start(&self, executor: &mut Executor) {
+    fn start(&self, environment: Arc<Environment>) {
         let inner = self.inner.clone();
-        executor.spawn({
+        environment.spawn({
             let mut inner = inner.lock().unwrap();
             let shared_inner = self.inner.clone();
 
@@ -294,7 +298,7 @@ where
 
         // Start the catchup mechanism.
         let inner = self.inner.clone();
-        executor.spawn({
+        environment.spawn({
             let mut inner = inner.lock().unwrap();
             let shared_inner = self.inner.clone();
             let command_receiver = inner.command_receiver.take().expect("start already called");
@@ -505,6 +509,7 @@ create_component!(
     EthereumRandomBeaconViaWebsocket,
     RandomBeacon,
     (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
+        let environment = container.inject()?;
         let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
         let local_identity = container.inject::<Entity>()?;
         let time_notifier = container.inject::<TimeSourceNotifier>()?;
@@ -514,6 +519,7 @@ create_component!(
 
         let instance: Arc<EthereumRandomBeaconViaWebsocket> =
             Arc::new(EthereumRandomBeacon::new(
+                environment,
                 client,
                 local_identity,
                 contract_address,
