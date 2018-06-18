@@ -1,0 +1,23 @@
+[package]
+name = "ekiden-instrumentation-prometheus"
+version = "0.2.0-alpha"
+authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+description = "Prometheus frontend for Ekiden instrumentation"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[features]
+default = ["server", "di"]
+server = ["hyper", "http", "futures", "ekiden-common"]
+di = ["ekiden-di", "clap"]
+
+[dependencies]
+ekiden-instrumentation = { path = "..", version = "0.2.0-alpha" }
+prometheus = "~0.4.2"
+hyper = { version = "~0.12", optional = true }
+http = { version = "~0.1.6", optional = true }
+futures = { version = "~0.1", optional = true }
+ekiden-common = { path = "../../common", "version" = "0.2.0-alpha", optional = true }
+ekiden-di = { path = "../../di", "version" = "0.2.0-alpha", optional = true }
+clap = { version = "2.29.1", optional = true }
+log = "0.4"

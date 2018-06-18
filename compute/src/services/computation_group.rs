@@ -39,6 +39,9 @@ impl ComputationGroup for ComputationGroupService {
         mut request: SubmitBatchRequest,
         sink: grpcio::UnarySink<SubmitBatchResponse>,
     ) {
+        measure_histogram_timer!("submit_batch_time");
+        measure_counter_inc!("submit_batch_calls");
+
         let mut f = || -> Result<()> {
             let batch_hash = H256::try_from(request.get_batch_hash())?;
             let signature = Signature::try_from(request.take_signature())?;

@@ -31,6 +31,8 @@
 * Make clients aware of compute committee changes and manage connections.
 * Added AWS DynamoDB-backed storage backend.
 * Backport `SelectAll` stream combinator from futures 0.3.
+* Add generic instrumentation framework (`ekiden-instrumentation`) and a Prometheus
+  frontend (`ekiden-instrumentation-prometheus`).
 
 # 0.1.0
 
