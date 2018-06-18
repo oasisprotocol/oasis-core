@@ -11,7 +11,6 @@ use ekiden_core::bytes::H256;
 use ekiden_core::futures::Future;
 
 use super::super::consensus::ConsensusFrontend;
-use super::super::instrumentation;
 use super::super::worker::Worker;
 
 struct Web3ServiceInner {
@@ -19,8 +18,6 @@ struct Web3ServiceInner {
     worker: Arc<Worker>,
     /// Consensus frontend.
     consensus_frontend: Arc<ConsensusFrontend>,
-    /// Instrumentation objects.
-    ins: instrumentation::HandlerMetrics,
 }
 
 #[derive(Clone)]
@@ -35,7 +32,6 @@ impl Web3Service {
             inner: Arc::new(Web3ServiceInner {
                 worker,
                 consensus_frontend,
-                ins: instrumentation::HandlerMetrics::new(),
             }),
         }
     }
@@ -48,9 +44,8 @@ impl Web3 for Web3Service {
         mut rpc_request: CallContractRequest,
         sink: grpcio::UnarySink<CallContractResponse>,
     ) {
-        // Instrumentation.
-        self.inner.ins.reqs_received.inc();
-        let _client_timer = self.inner.ins.req_time_client.start_timer();
+        measure_histogram_timer!("call_contract_time");
+        measure_counter_inc!("call_contract_calls");
 
         // Send command to worker thread and request any generated batches to be handled
         // by our consensus frontend.
@@ -85,6 +80,9 @@ impl Web3 for Web3Service {
         request: WaitContractCallRequest,
         sink: grpcio::UnarySink<WaitContractCallResponse>,
     ) {
+        measure_histogram_timer!("wait_contract_call_time");
+        measure_counter_inc!("wait_contract_call_calls");
+
         let call_id = request.get_call_id();
         if call_id.len() != H256::LENGTH {
             ctx.spawn(

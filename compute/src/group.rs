@@ -136,6 +136,8 @@ impl ComputationGroup {
                 move |command| match command {
                     Command::Submit(batch_hash) => Self::handle_submit(inner.clone(), batch_hash),
                     Command::UpdateCommittee(members) => {
+                        measure_counter_inc!("committee_updates_count");
+
                         Self::handle_update_committee(inner.clone(), members)
                     }
                 },

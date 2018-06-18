@@ -13,6 +13,7 @@ use ekiden_core::futures::{Future, GrpcExecutor};
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
+use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
@@ -185,6 +186,10 @@ impl ComputeNode {
                     .build(),
             )
             .build()?;
+
+        // Initialize metric collector.
+        let metrics = container.inject_owned::<MetricCollector>()?;
+        set_boxed_metric_collector(metrics).unwrap();
 
         Ok(Self {
             scheduler,

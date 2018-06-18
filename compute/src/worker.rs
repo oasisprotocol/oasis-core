@@ -26,7 +26,6 @@ use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, Enc
 
 use super::consensus::ConsensusFrontend;
 use super::ias::IAS;
-use super::instrumentation;
 
 /// Result bytes.
 pub type BytesResult = Result<Vec<u8>>;
@@ -62,12 +61,18 @@ struct WorkerInner {
     /// Enclave identity proof.
     #[allow(dead_code)]
     identity_proof: IdentityProof,
-    /// Instrumentation objects.
-    ins: instrumentation::WorkerMetrics,
 }
 
 impl WorkerInner {
     fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
+        measure_configure!(
+            "contract_call_batch_size",
+            "Contract call batch sizes.",
+            MetricConfig::Histogram {
+                buckets: vec![0., 1., 5., 10., 20., 50., 100., 200., 500., 1000.],
+            }
+        );
+
         let (contract, identity_proof) =
             Self::create_contract(&config.contract_filename, ias, config.saved_identity_path);
 
@@ -75,7 +80,6 @@ impl WorkerInner {
             contract,
             storage,
             identity_proof,
-            ins: instrumentation::WorkerMetrics::new(),
         }
     }
 
@@ -113,6 +117,8 @@ impl WorkerInner {
         batch: &CallBatch,
         root_hash: &H256,
     ) -> Result<(OutputBatch, H256)> {
+        measure_histogram!("contract_call_batch_size", batch.len());
+
         // Prepare batch storage (perform up to 3 retries).
         let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone(), 3));
 
@@ -120,13 +126,17 @@ impl WorkerInner {
         let (new_state_root, outputs) =
             self.contract
                 .with_storage(batch_storage.clone(), root_hash, || {
+                    measure_histogram_timer!("contract_call_batch_enclave_time");
+
                     // Execute batch.
-                    let _enclave_timer = self.ins.req_time_enclave.start_timer();
                     self.contract.contract_call_batch(batch)
                 })?;
 
         // Commit batch storage.
-        batch_storage.commit().wait()?;
+        {
+            measure_histogram_timer!("contract_call_storage_commit_time");
+            batch_storage.commit().wait()?;
+        }
 
         Ok((outputs?, new_state_root))
     }
@@ -145,7 +155,7 @@ impl WorkerInner {
         }
 
         let enclave_response = {
-            let _enclave_timer = self.ins.req_time_enclave.start_timer();
+            measure_histogram_timer!("rpc_call_enclave_time");
             self.contract.call(enclave_request)
         }?;
 
@@ -216,10 +226,14 @@ impl WorkerInner {
 
                     // Check if RPC call produced a batch of requests.
                     self.check_and_append_contract_batch(consensus_frontend);
+
+                    measure_counter_inc!("rpc_call_processed");
                 }
                 Command::ContractCallBatch(calls, block, sender) => {
                     // Process batch of contract calls.
                     self.handle_contract_batch(calls, block, sender);
+
+                    measure_counter_inc!("contract_call_processed");
                 }
             }
         }
@@ -278,6 +292,8 @@ impl Worker {
         request: Vec<u8>,
         consensus_frontend: Arc<ConsensusFrontend>,
     ) -> oneshot::Receiver<BytesResult> {
+        measure_counter_inc!("rpc_call_request");
+
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
             .send(Command::RpcCall(
@@ -295,6 +311,8 @@ impl Worker {
         calls: CallBatch,
         block: Block,
     ) -> oneshot::Receiver<Result<ComputedBatch>> {
+        measure_counter_inc!("contract_call_request");
+
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
             .send(Command::ContractCallBatch(calls, block, response_sender))
