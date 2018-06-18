@@ -214,7 +214,7 @@ pub struct Container<'a> {
     /// Component descriptors from the registry.
     components: HashMap<TypeId, ComponentDescriptor>,
     /// Component instances.
-    instances: HashMap<TypeId, Box<Any + Send>>,
+    instances: HashMap<TypeId, Box<Any + Send + Sync>>,
     /// Optional arguments.
     #[cfg(all(feature = "cli", not(target_env = "sgx")))]
     arguments: Option<clap::ArgMatches<'a>>,
@@ -255,11 +255,11 @@ impl<'a> Container<'a> {
         if self.instances.contains_key(&type_id) {
             let instance = self.instances.remove(&type_id).unwrap();
             // Unwrap here is safe as type was checked on initial construction.
-            let arc = instance.downcast::<Arc<T>>().unwrap();
-            let clone = arc.clone();
-            self.instances.insert(type_id, Box::new(*arc));
+            let clone = Any::downcast_ref::<Arc<T>>(&(*instance)).unwrap().clone();
 
-            return Ok(*clone);
+            self.instances.insert(type_id, instance);
+
+            return Ok(clone);
         }
 
         // Create new instance.
