@@ -1,12 +1,8 @@
 //! Epoch time interface.
 
-use super::error::Result;
-use super::futures::{BoxFuture, BoxStream};
 use chrono::{DateTime, Utc};
-
-#[cfg(not(target_env = "sgx"))]
-pub mod grpc;
-pub mod local;
+use ekiden_common::error::Result;
+use ekiden_common::futures::{BoxFuture, BoxStream};
 
 /// The number of intervals (epochs) since a fixed instant in time (epoch date).
 pub type EpochTime = u64;

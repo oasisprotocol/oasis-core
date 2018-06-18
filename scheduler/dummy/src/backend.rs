@@ -5,12 +5,12 @@ use std::sync::{Arc, Mutex};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::contract::Contract;
 use ekiden_common::drbg::HmacDrbgRng;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
 use ekiden_core::bytes::B256;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::node::Node;
 use ekiden_core::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend};
 use ekiden_scheduler_base::*;
 
@@ -452,12 +452,12 @@ mod tests {
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
     use ekiden_common::environment::GrpcEnvironment;
-    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
     use ekiden_common::untrusted;
+    use ekiden_epochtime::interface::EPOCH_INTERVAL;
+    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use std::collections::HashSet;
 
     #[test]

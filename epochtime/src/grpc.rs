@@ -6,12 +6,12 @@ use grpcio::RpcStatusCode::InvalidArgument;
 use grpcio::{self, Channel, ChannelBuilder, RpcContext, RpcStatus, ServerStreamingSink, UnarySink,
              WriteFlags};
 
-use super::super::environment::Environment;
-use super::super::error::Error;
+use super::interface::{EpochTime, TimeSource, TimeSourceNotifier};
 use super::local::LocalTimeSourceNotifier;
-use super::{EpochTime, TimeSource, TimeSourceNotifier};
-use futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
-use node::Node;
+use ekiden_common::environment::Environment;
+use ekiden_common::error::Error;
+use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::node::Node;
 
 use ekiden_common_api as api;
 

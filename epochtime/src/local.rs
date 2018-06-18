@@ -1,11 +1,19 @@
+//! Local epoch time implementation
+#[cfg(not(target_env = "sgx"))]
+use ekiden_common::environment::Environment;
+use ekiden_common::error::{Error, Result};
+#[allow(unused_imports)]
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::subscribers::StreamSubscribers;
+use interface::*;
 use std::sync::{Arc, Mutex};
-
-use super::super::error::{Error, Result};
-use super::super::futures::{future, BoxFuture, BoxStream};
-use super::super::subscribers::StreamSubscribers;
-use super::*;
+#[cfg(not(target_env = "sgx"))]
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, TimeZone, Utc};
+
+#[cfg(not(target_env = "sgx"))]
+use futures_timer::{Interval, TimerHandle};
 
 fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
     let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);
@@ -19,7 +27,7 @@ fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
 }
 
 /// A system time based TimeSource.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SystemTimeSource;
 
 impl TimeSource for SystemTimeSource {
@@ -226,3 +234,55 @@ mod tests {
         assert!(now_get_epoch == now_epoch_at);
     }
 }
+
+// Register for dependency injection.
+#[cfg(not(target_env = "sgx"))]
+create_component!(
+    system,
+    "time-source",
+    LocalTimeSourceNotifier,
+    TimeSourceNotifier,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+
+        let source = Arc::new(SystemTimeSource::default());
+        let notifier = Arc::new(LocalTimeSourceNotifier::new(source.clone()));
+        let instance: Arc<TimeSourceNotifier> = notifier.clone();
+
+        // drive instance.
+        let (now, till) = source.get_epoch().unwrap();
+        trace!("SystemTime: Epoch: {} Till: {}", now, till);
+
+        // Note: This assumes that the underlying futures_timer
+        // crate has relatively accurate time keeping, that the
+        // host's idea of civil time is correct at startup, and
+        // that timers are never early.
+        //
+        // This could be made more resilient to various
+        // failures/misbehavior by periodically polling the
+        // epoch (eg: once every 60s or so).
+
+        let at = Instant::now() + Duration::from_secs(till);
+        let dur = Duration::from_secs(EPOCH_INTERVAL);
+        let timer = Interval::new_handle(at, dur, TimerHandle::default());
+
+        environment.spawn({
+            let source = source.clone();
+            let notifier = notifier.clone();
+
+            Box::new(
+                timer
+                    .map_err(|error| Error::from(error))
+                    .for_each(move |_| {
+                        let (now, till) = source.get_epoch().unwrap();
+                        trace!("SystemTime: Epoch: {} Till: {}", now, till);
+                        notifier.notify_subscribers()
+                    })
+                    .then(|_| future::ok(())),
+            )
+        });
+
+        Ok(Box::new(instance))
+    }),
+    []
+);

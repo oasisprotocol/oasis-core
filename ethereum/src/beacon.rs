@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
+use std::result::Result as StdResult;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -7,13 +8,16 @@ use chrono::Utc;
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
                              StreamExt};
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_di;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ethabi::Token;
+#[allow(unused_imports)]
+use rustc_hex::FromHex;
 use serde_json;
 use web3;
 use web3::api::Web3;
@@ -493,3 +497,33 @@ where
             .into_box()
     }
 }
+
+type EthereumRandomBeaconViaWebsocket = EthereumRandomBeacon<web3::transports::WebSocket>;
+create_component!(
+    ethereum,
+    "random-beacon-backend",
+    EthereumRandomBeaconViaWebsocket,
+    RandomBeacon,
+    (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
+        let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
+        let local_identity = container.inject::<Entity>()?;
+        let time_notifier = container.inject::<TimeSourceNotifier>()?;
+
+        let args = container.get_arguments().unwrap();
+        let contract_address = value_t_or_exit!(args, "beacon-address", H160);
+
+        let instance: Arc<EthereumRandomBeaconViaWebsocket> =
+            Arc::new(EthereumRandomBeacon::new(
+                client,
+                local_identity,
+                contract_address,
+                time_notifier,
+            ).map_err(|e| ekiden_di::error::Error::from(e.description()))?);
+        Ok(Box::new(instance))
+    }),
+    [Arg::with_name("beacon-address")
+        .long("beacon-address")
+        .env("BEACON_ADDRESS")
+        .help("Ethereum address at which the random beacon has been deployed")
+        .takes_value(true)]
+);

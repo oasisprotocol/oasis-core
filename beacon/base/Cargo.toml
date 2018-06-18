@@ -9,4 +9,5 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-beacon-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }

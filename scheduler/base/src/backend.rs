@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
-use ekiden_common::epochtime::EpochTime;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
+use ekiden_epochtime::interface::EpochTime;
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.

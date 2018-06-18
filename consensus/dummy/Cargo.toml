@@ -17,6 +17,7 @@ log = "0.4"
 [dev-dependencies]
 ekiden-beacon-base = { path = "../../beacon/base", version = "0.2.0-alpha" }
 ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.2.0-alpha" }
+ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 ekiden-registry-dummy = { path = "../../registry/dummy", version = "0.2.0-alpha" }
 ekiden-scheduler-dummy = { path = "../../scheduler/dummy", version = "0.2.0-alpha" }

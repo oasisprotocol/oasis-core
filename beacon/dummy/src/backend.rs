@@ -3,12 +3,12 @@ use std::sync::{Arc, Mutex};
 use byteorder::{LittleEndian, WriteBytesExt};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::B256;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_common::error::Error;
 use ekiden_common::futures::sync::mpsc;
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
 use ekiden_common::ring::digest;
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 
 const DUMMY_BEACON_CONTEXT: &'static [u8] = b"EkB-Dumm";
 
@@ -171,9 +171,9 @@ mod tests {
 
     use self::rustc_hex::ToHex;
     use super::*;
-    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
     use ekiden_common::futures::{cpupool, Future};
+    use ekiden_epochtime::interface::EPOCH_INTERVAL;
+    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 
     #[test]
     fn test_insecure_dummy_random_beacon() {

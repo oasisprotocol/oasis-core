@@ -8,11 +8,11 @@ use grpcio::{self, Channel, ChannelBuilder};
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::Environment;
-use ekiden_common::epochtime::EpochTime;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
+use ekiden_epochtime::interface::EpochTime;
 use ekiden_registry_api as api;
 use ekiden_registry_base::{EntityRegistryBackend, RegistryEvent};
 

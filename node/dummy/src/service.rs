@@ -6,10 +6,10 @@ use grpcio;
 use grpcio::RpcStatus;
 use grpcio::RpcStatusCode::{Internal, Unimplemented};
 
-use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
-use ekiden_common::epochtime::{EpochTime, TimeSource};
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::{future, Future, Stream};
+use ekiden_epochtime::interface::{EpochTime, TimeSource};
+use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_node_dummy_api::{DummyDebug, SetEpochRequest, SetEpochResponse};
 
 use futures_timer::Interval;
