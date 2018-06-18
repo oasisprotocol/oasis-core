@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_storage_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use grpcio::{RpcContext, RpcStatus, UnarySink};
+use grpcio::{RpcContext, UnarySink};
 
 use super::backend::StorageBackend;
 use ekiden_common::bytes::H256;
@@ -18,12 +18,6 @@ impl StorageService {
     pub fn new(backend: Arc<StorageBackend>) -> Self {
         Self { inner: backend }
     }
-}
-
-macro_rules! invalid {
-    ($sink:ident, $code:ident, $e:expr) => {
-        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
-    };
 }
 
 impl api::Storage for StorageService {
@@ -42,13 +36,13 @@ impl api::Storage for StorageService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -67,7 +61,7 @@ impl api::Storage for StorageService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
@@ -75,7 +69,7 @@ impl api::Storage for StorageService {
             Ok(ret) => sink.success(ret),
             Err(error) => {
                 error!("Failed to insert data to storage backend: {:?}", error);
-                invalid!(sink, Internal, error)
+                invalid_rpc!(sink, Internal, error)
             }
         }).map_err(|_e| ()));
     }

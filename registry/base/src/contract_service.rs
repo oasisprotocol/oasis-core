@@ -24,12 +24,6 @@ impl ContractRegistryService {
     }
 }
 
-macro_rules! invalid {
-    ($sink:ident, $code:ident, $e:expr) => {
-        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
-    };
-}
-
 impl api::ContractRegistry for ContractRegistryService {
     fn register_contract(
         &self,
@@ -48,13 +42,13 @@ impl api::ContractRegistry for ContractRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -78,13 +72,13 @@ impl api::ContractRegistry for ContractRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
