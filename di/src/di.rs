@@ -172,8 +172,20 @@ pub trait ComponentFactory: Sync + Send {
 
     /// Build a new component instance.
     ///
-    /// This method must return a type-erased `Box<Arc<Trait>>` otherwise the container
-    /// will panic during injection.
+    /// This method must return either a type-erased `Box<Box<Trait>>` or an `Box<Arc<Trait>>`
+    /// otherwise the container will panic during injection. If the factory returns the
+    /// former the component can be injected as either shared or owned (see the inject methods
+    /// on [`Container`]). If the factory returns the latter the component can only be
+    /// injected as shared.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// fn build(&self, container: &mut Container) -> Result<Box<Any>> {
+    ///     let instance: Box<Trait> = Box::new(MyInstance::new());
+    ///     Box::new(instance)
+    /// }
+    /// ```
     fn build(&self, container: &mut Container) -> Result<Box<Any>>;
 
     /// Get command line arguments for configuring the component.
@@ -257,13 +269,44 @@ impl<'a> Container<'a> {
         };
 
         let instance = component.factory.build(self)?;
-        let arc = instance
-            .downcast::<Arc<T>>()
-            .expect("component factory must return boxed Arc<T>");
-        let clone = arc.clone();
-        self.instances.insert(type_id, Box::new(*arc));
+        let arc: Arc<T> = if instance.is::<Box<T>>() {
+            let instance = instance.downcast::<Box<T>>().unwrap();
+            (*instance).into()
+        } else if instance.is::<Arc<T>>() {
+            *instance.downcast::<Arc<T>>().unwrap()
+        } else {
+            panic!("component factory must return either Box<Trait> or Arc<Trait>");
+        };
 
-        Ok(*clone)
+        self.instances.insert(type_id, Box::new(arc.clone()));
+
+        Ok(arc)
+    }
+
+    /// Inject a component and transfer its ownership.
+    ///
+    /// This method can only be called once as the ownership of the constructed component
+    /// is transferred to the caller.
+    pub fn inject_owned<T: ?Sized + Sync + Send + 'static>(&mut self) -> Result<Box<T>> {
+        let type_id = TypeId::of::<T>();
+
+        // Check for existing instance.
+        if self.instances.contains_key(&type_id) {
+            return Err("component already injected as shared".into());
+        }
+
+        // Create new instance.
+        let component = match self.components.remove(&type_id) {
+            Some(component) => component,
+            None => return Err("component not found".into()),
+        };
+
+        let instance = component.factory.build(self)?;
+        let instance = instance
+            .downcast::<Box<T>>()
+            .expect("component factory must return Box<Trait>");
+
+        Ok(*instance)
     }
 }
 
@@ -335,5 +378,15 @@ pub mod test {
 
         let c = container.inject::<BarTrait>().unwrap();
         assert_eq!(c.say_hi(), 84);
+    }
+
+    #[test]
+    fn test_inject_owned() {
+        let mut registry = KnownComponents::new();
+        Foo::register(&mut registry);
+
+        let mut container = registry.build().unwrap();
+        let a = container.inject_owned::<FooTrait>().unwrap();
+        assert_eq!(a.hello(), 42);
     }
 }
