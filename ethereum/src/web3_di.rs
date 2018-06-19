@@ -11,7 +11,7 @@ use web3::transports::ws::WebSocket;
 use ekiden_di;
 
 type Web3ViaWebsocket = Web3<WebSocket>;
-struct Web3Factory {}
+pub struct Web3Factory {}
 
 /// Dependency injection for a web3 client.
 /// Expects a tokio Remote handle from the eventloop the client will be run on.

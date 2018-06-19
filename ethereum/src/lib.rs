@@ -30,7 +30,7 @@ mod mockepoch;
 pub mod truffle;
 pub mod web3_di;
 
-pub use beacon::EthereumRandomBeacon;
+pub use beacon::{EthereumRandomBeacon, EthereumRandomBeaconViaWebsocket};
 pub use contract_registry::EthereumContractRegistryBackend;
 pub use entity_registry::EthereumEntityRegistryBackend;
-pub use mockepoch::EthereumMockTime;
+pub use mockepoch::{EthereumMockTime, EthereumMockTimeViaWebsocket};
