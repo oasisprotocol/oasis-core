@@ -1,5 +1,6 @@
 #![feature(core_intrinsics)]
 #![feature(use_extern_macros)]
+#![feature(test)]
 
 #[cfg(target_env = "sgx")]
 extern crate sgx_trts;
