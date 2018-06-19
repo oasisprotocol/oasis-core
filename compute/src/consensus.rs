@@ -10,6 +10,7 @@ use serde_cbor;
 use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
+use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
@@ -158,6 +159,8 @@ struct Inner {
     state: Mutex<State>,
     /// Contract identifier this consensus frontend is for.
     contract_id: B256,
+    /// Environment.
+    environment: Arc<Environment>,
     /// Consensus backend.
     backend: Arc<ConsensusBackend>,
     /// Storage backend.
@@ -212,6 +215,7 @@ impl ConsensusFrontend {
     pub fn new(
         config: ConsensusConfiguration,
         contract_id: B256,
+        environment: Arc<Environment>,
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
@@ -220,10 +224,11 @@ impl ConsensusFrontend {
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
-        Self {
+        let instance = Self {
             inner: Arc::new(Inner {
                 state: Mutex::new(State::NotReady),
                 contract_id,
+                environment,
                 backend,
                 storage,
                 signer,
@@ -237,11 +242,14 @@ impl ConsensusFrontend {
                 call_subscribers: Mutex::new(HashMap::new()),
                 test_only_config: config.test_only.clone(),
             }),
-        }
+        };
+        instance.start();
+
+        instance
     }
 
     /// Start consensus frontend.
-    pub fn start(&self, executor: &mut Executor) {
+    fn start(&self) {
         let mut event_sources = stream::SelectAll::new();
 
         // Subscribe to computation group updates.
@@ -293,7 +301,7 @@ impl ConsensusFrontend {
         );
 
         // Process consensus commands.
-        executor.spawn({
+        self.inner.environment.spawn({
             let inner = self.inner.clone();
 
             event_sources.for_each_log_errors(

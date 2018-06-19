@@ -7,9 +7,10 @@ use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{self, B256, H160};
 use ekiden_common::contract::Contract as EkContract;
 use ekiden_common::entity::Entity;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream};
 use ekiden_common::signature::Signed;
 use ekiden_registry_base::*;
 use ekiden_registry_dummy::DummyContractRegistryBackend;
@@ -51,7 +52,7 @@ where
         contract_address: bytes::H160,
         storage: Arc<StorageBackend>,
         beacon: Arc<RandomBeacon>,
-        executor: &mut Executor,
+        environment: Arc<Environment>,
     ) -> Result<Self> {
         let contract_dfn: serde_json::Value = match serde_json::from_slice(CONTRACT_CONTRACT) {
             Ok(c) => c,
@@ -91,7 +92,7 @@ where
         let result = ctor_future.wait();
         if result.is_ok() {
             let result = result.unwrap();
-            let _ = result.start(beacon, executor);
+            let _ = result.start(beacon, environment);
             Ok(result)
         } else {
             result
@@ -128,7 +129,7 @@ where
         }
     }
 
-    fn start(&self, beacon: Arc<RandomBeacon>, executor: &mut Executor) -> Result<()> {
+    fn start(&self, beacon: Arc<RandomBeacon>, environment: Arc<Environment>) -> Result<()> {
         let contract = self.eth_contract.clone();
         let contract = contract.lock().unwrap();
         let contract_address = contract.address();
@@ -189,7 +190,7 @@ where
                 });
             task
         });
-        executor.spawn(Box::new(triggers.then(|_r| future::ok(()))));
+        environment.spawn(triggers.discard());
 
         receiver.wait().unwrap() // Block till filter is installed.
     }

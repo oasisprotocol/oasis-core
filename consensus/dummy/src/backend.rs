@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
+use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::{mpsc, oneshot};
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, FutureExt, Stream,
-                             StreamExt};
 use ekiden_common::hash::empty_hash;
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_common::uint::U256;
@@ -376,6 +376,8 @@ enum Command {
 }
 
 struct Inner {
+    /// Environment.
+    environment: Arc<Environment>,
     /// Scheduler.
     scheduler: Arc<Scheduler>,
     /// Storage backend.
@@ -408,13 +410,18 @@ pub struct DummyConsensusBackend {
 
 impl DummyConsensusBackend {
     /// Create new dummy consensus backend.
-    pub fn new(scheduler: Arc<Scheduler>, storage: Arc<StorageBackend>) -> Self {
+    pub fn new(
+        environment: Arc<Environment>,
+        scheduler: Arc<Scheduler>,
+        storage: Arc<StorageBackend>,
+    ) -> Self {
         // Create channels.
         let (command_sender, command_receiver) = mpsc::unbounded();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
-        Self {
+        let instance = Self {
             inner: Arc::new(Inner {
+                environment,
                 scheduler,
                 storage,
                 blocks: Mutex::new(HashMap::new()),
@@ -426,6 +433,83 @@ impl DummyConsensusBackend {
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
             }),
+        };
+        instance.start();
+
+        instance
+    }
+
+    fn start(&self) {
+        info!("Starting dummy consensus backend");
+
+        // Create command processing channel.
+        let command_receiver = self.inner
+            .command_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .expect("start already called");
+        let command_processor: BoxFuture<()> = {
+            let shared_inner = self.inner.clone();
+
+            command_receiver
+                .map_err(|_| Error::new("command channel closed"))
+                .for_each(move |command| -> BoxFuture<()> {
+                    let shared_inner = shared_inner.clone();
+
+                    // Decode command.
+                    let (contract_id, sender, command): (
+                        _,
+                        _,
+                        Box<Fn(_) -> _ + Send>,
+                    ) = match command {
+                        Command::Commit(contract_id, commitment, sender) => (
+                            contract_id,
+                            sender,
+                            Box::new(move |round| Round::add_commitment(round, commitment.clone())),
+                        ),
+                        Command::Reveal(contract_id, reveal, sender) => (
+                            contract_id,
+                            sender,
+                            Box::new(move |round| Round::add_reveal(round, reveal.clone())),
+                        ),
+                    };
+
+                    // Fetch the current round and process command.
+                    Self::get_round(shared_inner.clone(), contract_id)
+                        .and_then(move |round| {
+                            command(round.clone())
+                                .and_then(move |_| Self::try_finalize(shared_inner.clone(), round))
+                        })
+                        .then(move |result| {
+                            drop(sender.send(result));
+
+                            Ok(())
+                        })
+                        .into_box()
+                })
+                .into_box()
+        };
+
+        // Create shutdown signal handler.
+        let shutdown_receiver = self.inner
+            .shutdown_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .expect("start already called");
+        let shutdown = Box::new(shutdown_receiver.then(|_| Err(Error::new("shutdown"))));
+
+        self.inner.environment.spawn(Box::new(
+            future::join_all(vec![command_processor, shutdown]).then(|_| future::ok(())),
+        ));
+    }
+
+    pub fn shutdown(&self) {
+        info!("Shutting down dummy consensus backend");
+
+        if let Some(shutdown_sender) = self.inner.shutdown_sender.lock().unwrap().take() {
+            drop(shutdown_sender.send(()));
         }
     }
 
@@ -592,84 +676,6 @@ impl DummyConsensusBackend {
 }
 
 impl ConsensusBackend for DummyConsensusBackend {
-    fn start(&self, executor: &mut Executor) {
-        info!("Starting dummy consensus backend");
-
-        // Create command processing channel.
-        let command_receiver = self.inner
-            .command_receiver
-            .lock()
-            .unwrap()
-            .take()
-            .expect("start already called");
-        let command_processor: BoxFuture<()> = {
-            let shared_inner = self.inner.clone();
-
-            Box::new(
-                command_receiver
-                    .map_err(|_| Error::new("command channel closed"))
-                    .for_each(move |command| -> BoxFuture<()> {
-                        let shared_inner = shared_inner.clone();
-
-                        // Decode command.
-                        let (contract_id, sender, command): (
-                            _,
-                            _,
-                            Box<Fn(_) -> _ + Send>,
-                        ) = match command {
-                            Command::Commit(contract_id, commitment, sender) => (
-                                contract_id,
-                                sender,
-                                Box::new(move |round| {
-                                    Round::add_commitment(round, commitment.clone())
-                                }),
-                            ),
-                            Command::Reveal(contract_id, reveal, sender) => (
-                                contract_id,
-                                sender,
-                                Box::new(move |round| Round::add_reveal(round, reveal.clone())),
-                            ),
-                        };
-
-                        // Fetch the current round and process command.
-                        Self::get_round(shared_inner.clone(), contract_id)
-                            .and_then(move |round| {
-                                command(round.clone()).and_then(move |_| {
-                                    Self::try_finalize(shared_inner.clone(), round)
-                                })
-                            })
-                            .then(move |result| {
-                                drop(sender.send(result));
-
-                                Ok(())
-                            })
-                            .into_box()
-                    }),
-            )
-        };
-
-        // Create shutdown signal handler.
-        let shutdown_receiver = self.inner
-            .shutdown_receiver
-            .lock()
-            .unwrap()
-            .take()
-            .expect("start already called");
-        let shutdown = Box::new(shutdown_receiver.then(|_| Err(Error::new("shutdown"))));
-
-        executor.spawn(Box::new(
-            future::join_all(vec![command_processor, shutdown]).then(|_| future::ok(())),
-        ));
-    }
-
-    fn shutdown(&self) {
-        info!("Shutting down dummy consensus backend");
-
-        if let Some(shutdown_sender) = self.inner.shutdown_sender.lock().unwrap().take() {
-            drop(shutdown_sender.send(()));
-        }
-    }
-
     fn get_blocks(&self, contract_id: B256) -> BoxStream<Block> {
         let (sender, receiver) = self.inner.block_subscribers.subscribe();
         {
@@ -720,5 +726,5 @@ create_component!(
     "consensus-backend",
     DummyConsensusBackend,
     ConsensusBackend,
-    [Scheduler, StorageBackend]
+    [Environment, Scheduler, StorageBackend]
 );

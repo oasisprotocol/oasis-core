@@ -4,7 +4,7 @@ use std::sync::Arc;
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_registry_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
+use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::entity_backend::{EntityRegistryBackend, RegistryEvent};
 use ekiden_common::bytes::B256;

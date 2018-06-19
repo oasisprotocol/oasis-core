@@ -1,7 +1,7 @@
 //! Consensus backend interface.
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{BoxFuture, BoxStream, Executor, Future, Stream};
+use ekiden_common::futures::{BoxFuture, BoxStream, Future, Stream};
 
 use super::{Block, Commitment, Header, Reveal};
 
@@ -26,12 +26,6 @@ pub enum Event {
 
 /// Consensus backend implementing the Ekiden consensus interface.
 pub trait ConsensusBackend: Sync + Send {
-    /// Start consensus backend.
-    fn start(&self, executor: &mut Executor);
-
-    /// Ask the backend tasks to terminate.
-    fn shutdown(&self);
-
     /// Return the latest consensus block.
     ///
     /// The metadata contained in this block can be further used to get the latest

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{BoxFuture, BoxStream, Executor};
+use ekiden_common::futures::{BoxFuture, BoxStream};
 use ekiden_epochtime::interface::EpochTime;
 use ekiden_scheduler_api as api;
 
@@ -116,9 +116,6 @@ impl Into<api::Committee> for Committee {
 
 /// Scheduler backend implementing the Ekiden scheduler interface.
 pub trait Scheduler: Send + Sync {
-    /// Start the async event source associated with the scheduler.
-    fn start(&self, executor: &mut Executor);
-
     /// Return a vector of the committees for a given contract ID,
     /// for the current epoch.
     fn get_committees(&self, contract: B256) -> BoxFuture<Vec<Committee>>;
