@@ -282,3 +282,70 @@ create_component!(
     di_factory,
     [di_arg_aws_region(), di_arg_aws_table_name()]
 );
+
+#[cfg(test)]
+mod tests {
+    use ekiden_common;
+    use ekiden_epochtime::local::SystemTimeSource;
+    use ekiden_storage_base;
+    use ekiden_storage_base::StorageBackend;
+    use ekiden_storage_dynamodb::DynamoDbBackend;
+    use ekiden_storage_persistent::PersistentStorageBackend;
+    use log::log;
+    use log::warn;
+    use rusoto_core;
+    use rusoto_core::ProvideAwsCredentials;
+    use std::sync::Arc;
+    use tokio_core;
+
+    use Rfc0004UBackend;
+    #[test]
+    fn play() {
+        ekiden_common::testing::try_init_logging();
+        let mut core = tokio_core::reactor::Core::new().unwrap();
+
+        if let Err(e) = core.run(rusoto_core::reactor::CredentialsProvider::default().credentials())
+        {
+            // Skip this if AWS credentials aren't available.
+            warn!("{} Skipping RFC 0004 untrusted test.", e);
+            return;
+        }
+
+        let sled = Arc::new(
+            PersistentStorageBackend::new(
+                Box::new(SystemTimeSource {}),
+                "/tmp/ekiden-test-storage-persistent/",
+            ).unwrap(),
+        );
+        let aws = Arc::new(DynamoDbBackend::new(
+            core.remote(),
+            "us-west-2".parse().unwrap(),
+            "test".to_string(),
+        ));
+        let storage = Rfc0004UBackend::new(core.remote(), sled.clone(), aws.clone());
+
+        // Test retrieving item from sled layer.
+        let reference_value_sled = b"hello from sled".to_vec();
+        let reference_key_sled = ekiden_storage_base::hash_storage_key(&reference_value_sled);
+        core.run(sled.insert(reference_value_sled.clone(), 55))
+            .unwrap();
+        let retrieve_value_sled = core.run(storage.get(reference_key_sled)).unwrap();
+        assert_eq!(retrieve_value_sled, reference_value_sled);
+
+        // Test retrieving item from AWS layer.
+        let reference_value_aws = b"hello from aws".to_vec();
+        let reference_key_aws = ekiden_storage_base::hash_storage_key(&reference_value_aws);
+        core.run(aws.insert(reference_value_aws.clone(), 55))
+            .unwrap();
+        let retrieve_value_aws = core.run(storage.get(reference_key_aws)).unwrap();
+        assert_eq!(retrieve_value_aws, reference_value_aws);
+
+        // Test round trip insert and get.
+        let reference_value = b"hello from RFC 0004".to_vec();
+        let reference_key = ekiden_storage_base::hash_storage_key(&reference_value);
+        core.run(storage.insert(reference_value.clone(), 55))
+            .unwrap();
+        let roundtrip_value = core.run(storage.get(reference_key)).unwrap();
+        assert_eq!(roundtrip_value, roundtrip_value);
+    }
+}
