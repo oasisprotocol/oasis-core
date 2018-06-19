@@ -82,6 +82,7 @@ impl DummyBackend {
             env.clone(),
             scheduler.clone(),
             storage.clone(),
+            contract_registry.clone(),
         ));
 
         let server_builder = ServerBuilder::new(grpc_environment.clone());

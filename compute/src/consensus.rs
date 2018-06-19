@@ -1,6 +1,8 @@
 //! Consensus frontend.
 use std::collections::VecDeque;
 use std::fmt;
+#[cfg(feature = "testing")]
+use std::process::abort;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -223,6 +225,10 @@ struct Inner {
 pub struct ConsensusTestOnlyConfiguration {
     /// Inject discrepancy when submitting commitment.
     pub inject_discrepancy: bool,
+    /// Fail after commit.
+    pub fail_after_commit: bool,
+    /// Fail after reveal.
+    pub fail_after_reveal: bool,
 }
 
 /// Consensus frontend configuration.
@@ -760,11 +766,14 @@ impl ConsensusFrontend {
         assert_eq!(computed_batch.calls.len(), computed_batch.outputs.len());
 
         // Byzantine mode: inject discrepancy into computed batch.
-        if inner.test_only_config.inject_discrepancy {
-            warn!("BYZANTINE MODE: injecting discrepancy into proposed block");
+        #[cfg(feature = "testing")]
+        {
+            if inner.test_only_config.inject_discrepancy {
+                warn!("BYZANTINE MODE: injecting discrepancy into proposed block");
 
-            for output in computed_batch.outputs.iter_mut() {
-                *output = vec![];
+                for output in computed_batch.outputs.iter_mut() {
+                    *output = vec![];
+                }
             }
         }
 
@@ -823,13 +832,27 @@ impl ConsensusFrontend {
 
                 measure_counter_inc!("proposed_batch_count");
 
+                let shared_inner = inner.clone();
+
                 inner
                     .backend
                     .commit(inner.contract_id, commitment)
+                    .and_then(move |result| {
+                        // Test mode: crash after commit.
+                        #[cfg(feature = "testing")]
+                        {
+                            if inner.test_only_config.fail_after_commit {
+                                error!("TEST MODE: crashing after commit");
+                                abort();
+                            }
+                        }
+
+                        Ok(result)
+                    })
                     .or_else(|error| {
                         // Failed to commit a block, abort current batch.
                         Self::fail_batch(
-                            inner,
+                            shared_inner,
                             format!("Failed to propose block: {}", error.message),
                         )
                     })

@@ -1,22 +1,32 @@
 //! Dummy consensus backend.
+use std::cmp::min;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use ekiden_common::bytes::{B256, H256};
+use ekiden_common::contract::Contract;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::hash::empty_hash;
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_common::tokio::timer::Delay;
 use ekiden_common::uint::U256;
 use ekiden_consensus_base::{Block, Commitment as OpaqueCommitment, ConsensusBackend, Event,
                             Header, Reveal as OpaqueReveal};
+use ekiden_registry_base::ContractRegistryBackend;
 use ekiden_scheduler_base::{Committee, CommitteeNode, CommitteeType, Role, Scheduler};
 use ekiden_storage_base::StorageBackend;
 
 use super::commitment::{Commitment, Reveal};
+
+/// Hard time limit for a round after at least one node has sent a commitment.
+const ROUND_AFTER_COMMIT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Hard time limit for a round after enough nodes have sent commitments.
+const ROUND_REVEAL_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Round state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,10 +37,16 @@ enum State {
     DiscrepancyWaitingReveals,
 }
 
+#[derive(Eq, PartialEq)]
+enum WaitKind {
+    Commitments,
+    Reveals,
+}
+
 /// Try finalize result.
 #[derive(Eq, PartialEq)]
 enum FinalizationResult {
-    StillWaiting,
+    StillWaiting(u64, WaitKind),
     NotifyReveals(bool),
     Finalized(Block),
     DiscrepancyDetected(H256),
@@ -40,6 +56,8 @@ enum FinalizationResult {
 struct Round {
     /// Storage backend.
     storage: Arc<StorageBackend>,
+    /// Contract metadata.
+    contract: Contract,
     /// Computation committee.
     committee: Committee,
     /// Computation group, mapped by public key hashes.
@@ -52,11 +70,20 @@ struct Round {
     current_block: Block,
     /// Round state.
     state: State,
+    /// Current round timer handle.
+    timer_handle: Option<KillHandle>,
+    /// Timeout flag.
+    timeout: bool,
 }
 
 impl Round {
     /// Create new round descriptor.
-    fn new(storage: Arc<StorageBackend>, committee: Committee, block: Block) -> Self {
+    fn new(
+        storage: Arc<StorageBackend>,
+        contract: Contract,
+        committee: Committee,
+        block: Block,
+    ) -> Self {
         // Index computation group members by their public key hash.
         let mut computation_group = HashMap::new();
         for node in &committee.members {
@@ -65,12 +92,15 @@ impl Round {
 
         Self {
             storage,
+            contract,
             committee,
             computation_group,
             commitments: HashMap::new(),
             reveals: HashMap::new(),
             current_block: block,
             state: State::WaitingCommitments,
+            timer_handle: None,
+            timeout: false,
         }
     }
 
@@ -79,6 +109,10 @@ impl Round {
         self.commitments.clear();
         self.reveals.clear();
         self.state = State::WaitingCommitments;
+        self.timeout = false;
+        if let Some(timer_handle) = self.timer_handle.take() {
+            timer_handle.kill();
+        }
     }
 
     /// Add new commitments from one or more nodes in this round.
@@ -273,36 +307,169 @@ impl Round {
             .into_box()
     }
 
-    /// Try to finalize the round.
-    fn try_finalize(&mut self) -> BoxFuture<FinalizationResult> {
-        let num_nodes = self.computation_group.len();
-        let num_primary = self.computation_group
+    /// Check if the required number of nodes have sent commitments.
+    ///
+    /// If enough nodes have sent commitments, also transition the round to `success_state`.
+    fn check_commitments<F>(
+        &mut self,
+        filter: F,
+        num_required: u64,
+        success_state: State,
+    ) -> BoxFuture<FinalizationResult>
+    where
+        F: Fn(&CommitteeNode) -> bool,
+    {
+        let num_sent = self.commitments
+            .iter()
+            .filter(|&(id, _)| {
+                let node = self.computation_group.get(id).unwrap();
+                filter(node)
+            })
+            .count() as u64;
+
+        if num_sent < num_required {
+            info!("Still waiting for workers to commit");
+            return future::ok(FinalizationResult::StillWaiting(
+                num_sent,
+                WaitKind::Commitments,
+            )).into_box();
+        } else {
+            info!("Commitments received, now waiting for reveals from workers");
+            self.cancel_timer();
+            self.state = success_state;
+            return future::ok(FinalizationResult::NotifyReveals(false)).into_box();
+        }
+    }
+
+    /// Check if the required number of nodes have sent reveals.
+    ///
+    /// If enough nodes have sent reveals this method returns `None`, otherwise it returns
+    /// a finalization result to be returned.
+    fn check_reveals<F>(&self, filter: F, num_required: u64) -> Option<FinalizationResult>
+    where
+        F: Fn(&CommitteeNode) -> bool,
+    {
+        // Whatever is smaller (number of commits or num_required).
+        let num_commits = self.commitments
+            .iter()
+            .filter(|&(id, _)| {
+                let node = self.computation_group.get(id).unwrap();
+                filter(node)
+            })
+            .count() as u64;
+        let num_required = min(num_commits, num_required);
+
+        let num_sent = self.reveals
+            .iter()
+            .filter(|&(id, _)| {
+                let node = self.computation_group.get(id).unwrap();
+                filter(node)
+            })
+            .count() as u64;
+
+        if num_sent < num_required {
+            info!("Still waiting for other workers to reveal");
+            return Some(FinalizationResult::StillWaiting(
+                num_sent,
+                WaitKind::Reveals,
+            ));
+        }
+
+        None
+    }
+
+    /// Return the number of primary (leader, worker) nodes in the computation group.
+    fn get_primary_node_count(&self) -> u64 {
+        self.computation_group
             .iter()
             .filter(|&(_, node)| node.role == Role::Worker || node.role == Role::Leader)
-            .count();
-        let num_backup = num_nodes - num_primary;
+            .count() as u64
+    }
 
+    /// Return the number of backup nodes (backup worker) in the computation group.
+    fn get_backup_node_count(&self) -> u64 {
+        self.computation_group
+            .iter()
+            .filter(|&(_, node)| node.role == Role::BackupWorker)
+            .count() as u64
+    }
+
+    /// Return the number of primary nodes required to respond.
+    fn get_required_primary_count(&self) -> u64 {
+        // While a timer is running, all nodes are required to answer. After a timeout
+        // we allow some stragglers.
+        if self.timeout {
+            self.get_primary_node_count() - self.contract.replica_allowed_stragglers
+        } else {
+            self.get_primary_node_count()
+        }
+    }
+
+    /// Return the number of backup nodes required to respond.
+    fn get_required_backup_count(&self) -> u64 {
+        // While a timer is running, all nodes are required to answer. After a timeout
+        // we allow some stragglers.
+        if self.timeout {
+            self.get_backup_node_count() - self.contract.replica_allowed_stragglers
+        } else {
+            self.get_backup_node_count()
+        }
+    }
+
+    /// Cancel round timer if any is set.
+    fn cancel_timer(&mut self) {
+        trace!("Cancelling timer");
+        self.timeout = false;
+        if let Some(timer_handle) = self.timer_handle.take() {
+            timer_handle.kill();
+        }
+    }
+
+    /// Start round timer if none is set.
+    fn start_timer<F>(round: Arc<Mutex<Round>>, duration: Duration, f: F)
+    where
+        F: FnOnce() -> BoxFuture<()> + Send + 'static,
+    {
+        let shared_round = round.clone();
+        let mut round = round.lock().unwrap();
+        if round.timer_handle.is_some() {
+            trace!("Round timer already started, ignoring");
+            return;
+        }
+
+        trace!("Installing round timer.");
+        round.timer_handle = Some(spawn_killable(
+            Delay::new(Instant::now() + duration)
+                .map_err(|error| error.into())
+                .and_then(move |_| {
+                    // Set the timeout flag.
+                    shared_round.lock().unwrap().timeout = true;
+
+                    f()
+                })
+                .discard(),
+        ));
+    }
+
+    /// Try to finalize the round.
+    fn try_finalize(&mut self) -> BoxFuture<FinalizationResult> {
         // Check if all nodes sent commitments.
         match self.state {
             State::WaitingCommitments => {
-                if self.commitments.len() != num_primary {
-                    info!("Still waiting for workers to commit");
-                    return Box::new(future::ok(FinalizationResult::StillWaiting));
-                } else {
-                    info!("Commitments received, now waiting for reveals from workers");
-                    self.state = State::WaitingReveals;
-                    return Box::new(future::ok(FinalizationResult::NotifyReveals(false)));
-                }
+                let required_primary_count = self.get_required_primary_count();
+                return self.check_commitments(
+                    |node| node.role == Role::Worker || node.role == Role::Leader,
+                    required_primary_count,
+                    State::WaitingReveals,
+                );
             }
             State::DiscrepancyWaitingCommitments => {
-                if self.commitments.len() != num_nodes {
-                    info!("Still waiting for backup workers to commit");
-                    return Box::new(future::ok(FinalizationResult::StillWaiting));
-                } else {
-                    info!("Commitments received, now waiting for reveals from backup workers");
-                    self.state = State::DiscrepancyWaitingReveals;
-                    return Box::new(future::ok(FinalizationResult::NotifyReveals(true)));
-                }
+                let required_backup_count = self.get_required_backup_count();
+                return self.check_commitments(
+                    |node| node.role == Role::BackupWorker,
+                    required_backup_count,
+                    State::DiscrepancyWaitingReveals,
+                );
             }
             _ => {}
         }
@@ -310,19 +477,25 @@ impl Round {
         // Check if all nodes sent reveals.
         match self.state {
             State::WaitingReveals => {
-                if self.reveals.len() != num_primary {
-                    info!("Still waiting for other workers to reveal");
-                    return Box::new(future::ok(FinalizationResult::StillWaiting));
+                if let Some(result) = self.check_reveals(
+                    |node| node.role == Role::Worker || node.role == Role::Leader,
+                    self.get_required_primary_count(),
+                ) {
+                    return future::ok(result).into_box();
                 }
             }
             State::DiscrepancyWaitingReveals => {
-                if self.reveals.len() != num_nodes {
-                    info!("Still waiting for other backup workers to reveal");
-                    return Box::new(future::ok(FinalizationResult::StillWaiting));
+                if let Some(result) = self.check_reveals(
+                    |node| node.role == Role::BackupWorker,
+                    self.get_required_backup_count(),
+                ) {
+                    return future::ok(result).into_box();
                 }
             }
             _ => unreachable!(),
         }
+
+        self.cancel_timer();
 
         // Everything is ready, try to finalize round.
         let header = match self.state {
@@ -337,8 +510,14 @@ impl Round {
                         continue;
                     }
 
-                    let reveal = self.reveals.get(node_id).unwrap();
-                    let commitment = self.commitments.get(node_id).unwrap();
+                    let commitment = match self.commitments.get(node_id) {
+                        Some(commitment) => commitment,
+                        None => continue,
+                    };
+                    let reveal = match self.reveals.get(node_id) {
+                        Some(reveal) => reveal,
+                        None => continue,
+                    };
 
                     if header.is_none() {
                         header = Some(reveal.value.clone());
@@ -346,7 +525,6 @@ impl Round {
 
                     if !reveal.verify_commitment(&commitment) {
                         // TODO: Slash bond.
-                        // TODO: Should we instead treat this as if the node didn't submit a commitment?
                         discrepancy_detected = true;
                         break;
                     }
@@ -375,7 +553,7 @@ impl Round {
                 info!("Attempting to finalize discrepancy resolution round");
 
                 // Tally votes.
-                let mut votes: HashMap<Header, usize> = HashMap::new();
+                let mut votes: HashMap<Header, u64> = HashMap::new();
 
                 for (node_id, node) in self.computation_group.iter() {
                     if node.role != Role::BackupWorker {
@@ -395,7 +573,7 @@ impl Round {
                     votes.insert(vote, count + 1);
                 }
 
-                let min_votes = (num_backup / 2) + 1;
+                let min_votes = (self.get_backup_node_count() / 2) + 1;
                 let winner = votes
                     .drain()
                     .filter(|&(_, votes)| votes >= min_votes)
@@ -446,6 +624,8 @@ struct Inner {
     scheduler: Arc<Scheduler>,
     /// Storage backend.
     storage: Arc<StorageBackend>,
+    /// Contract registry backend.
+    contract_registry: Arc<ContractRegistryBackend>,
     /// In-memory blockchain.
     blocks: Mutex<HashMap<B256, Vec<Block>>>,
     /// Current rounds.
@@ -478,6 +658,7 @@ impl DummyConsensusBackend {
         environment: Arc<Environment>,
         scheduler: Arc<Scheduler>,
         storage: Arc<StorageBackend>,
+        contract_registry: Arc<ContractRegistryBackend>,
     ) -> Self {
         // Create channels.
         let (command_sender, command_receiver) = mpsc::unbounded();
@@ -488,6 +669,7 @@ impl DummyConsensusBackend {
                 environment,
                 scheduler,
                 storage,
+                contract_registry,
                 blocks: Mutex::new(HashMap::new()),
                 rounds: Mutex::new(HashMap::new()),
                 block_subscribers: StreamSubscribers::new(),
@@ -666,16 +848,27 @@ impl DummyConsensusBackend {
                         };
 
                         match existing_round {
-                            Some(round) => Ok(round),
+                            Some(round) => future::ok(round).into_box(),
                             None => {
-                                let new_round = Arc::new(Mutex::new(Round::new(
-                                    inner.storage.clone(),
-                                    committee,
-                                    block,
-                                )));
-                                rounds.insert(contract_id.clone(), new_round.clone());
+                                // Fetch contract metadata and then create a new round.
+                                let inner = inner.clone();
+                                inner
+                                    .contract_registry
+                                    .get_contract(contract_id)
+                                    .and_then(move |contract| {
+                                        let mut rounds = inner.rounds.lock().unwrap();
 
-                                Ok(new_round)
+                                        let new_round = Arc::new(Mutex::new(Round::new(
+                                            inner.storage.clone(),
+                                            contract,
+                                            committee,
+                                            block,
+                                        )));
+                                        rounds.insert(contract_id, new_round.clone());
+
+                                        Ok(new_round)
+                                    })
+                                    .into_box()
                             }
                         }
                     } else {
@@ -706,14 +899,28 @@ impl DummyConsensusBackend {
 
                     inner.block_subscribers.notify(&block);
                 }
-                Ok(FinalizationResult::StillWaiting) => {
+                Ok(FinalizationResult::StillWaiting(done_count, WaitKind::Commitments))
+                    if done_count >= 1 =>
+                {
                     // Still waiting for some round participants.
+                    Round::start_timer(round.clone(), ROUND_AFTER_COMMIT_TIMEOUT, move || {
+                        warn!("Commit timer expired, forcing finalization");
+                        Self::try_finalize(inner, round.clone())
+                    });
+                }
+                Ok(FinalizationResult::StillWaiting(..)) => {
+                    // Still waiting for any round participants.
                 }
                 Ok(FinalizationResult::NotifyReveals(discrepancy)) => {
                     // Notify round participants that they should reveal.
                     inner
                         .event_subscribers
                         .notify(&(contract_id.clone(), Event::CommitmentsReceived(discrepancy)));
+
+                    Round::start_timer(round.clone(), ROUND_REVEAL_TIMEOUT, move || {
+                        warn!("Reveal timer expired, forcing finalization");
+                        Self::try_finalize(inner, round.clone())
+                    });
                 }
                 Ok(FinalizationResult::DiscrepancyDetected(batch_hash)) => {
                     // Notify round participants that a discrepancy has been detected.
@@ -802,5 +1009,10 @@ create_component!(
     "consensus-backend",
     DummyConsensusBackend,
     ConsensusBackend,
-    [Environment, Scheduler, StorageBackend]
+    [
+        Environment,
+        Scheduler,
+        StorageBackend,
+        ContractRegistryBackend
+    ]
 );

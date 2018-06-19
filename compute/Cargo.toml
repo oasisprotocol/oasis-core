@@ -7,6 +7,10 @@ keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"
 build = "build.rs"
 
+[features]
+default = ["testing"]
+testing = []
+
 [dependencies]
 ekiden-core = { path = "../core/common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../di", version = "0.2.0-alpha" }
