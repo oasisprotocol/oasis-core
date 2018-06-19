@@ -38,7 +38,10 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
-            --exclude token
+            --exclude token \
+            --exclude ekiden-key-manager-api \
+            --exclude token-api \
+            -- --test-threads 1
           # XXX(pro-wh): will have to do this properly to skip old cached versions
           #   --no-run
           # cd target/debug

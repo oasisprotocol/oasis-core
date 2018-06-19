@@ -5,8 +5,8 @@ use std::time::Instant;
 ///
 /// # Examples
 ///
-/// ```
-/// let timer = Timer::new(|elapsed| println("elapsed: {}", elapsed));
+/// ```ignore
+/// let timer = Timer::new(|elapsed| println!("elapsed: {}", elapsed));
 /// // ...
 /// drop(timer);
 /// ```

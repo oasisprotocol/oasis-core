@@ -11,7 +11,7 @@
 /// For example, if you want to create enclave glue from the given API, and
 /// have the `create_enclave_rpc` macro available, you can invoke it with this
 /// concrete API by doing:
-/// ```
+/// ```ignore
 /// with_api! {
 ///     create_enclave_rpc!(api);
 /// }

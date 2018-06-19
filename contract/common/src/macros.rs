@@ -11,7 +11,7 @@
 /// For example, if you want to register contract methods with the dispatcher
 /// based on the given API, and have the `create_contract` macro available, you
 /// can invoke it with this concrete API by doing:
-/// ```
+/// ```ignore
 /// with_api! {
 ///     create_contract!(api);
 /// }
