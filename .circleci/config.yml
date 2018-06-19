@@ -19,6 +19,13 @@ jobs:
           name: Checking if all Ekiden crates have the same version
           command: test `find . -name "Cargo.toml" -print0 | xargs -0 grep '^version = "' | cut -d'"' -f2 | sort | uniq | wc -l` == 1
 
+      - restore_cache:
+          keys:
+            - experimental-v1-omni-{{ .Branch }}-{{ .Revision }}
+            - experimental-v1-omni-{{ .Branch }}-
+            - experimental-v1-omni-master-
+      - run: ./scripts/prune-target.sh
+
       # Cargo tests. Some tests are excluded as they currently don't compile.
       # Heuristic glob to detect what test binaries that cargo builds.
       # If that gets too janky, try `cargo test --message-format=json`
@@ -31,13 +38,14 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
-            --exclude token \
-            --no-run
-          cd target/debug
-          mkdir ../cov
-          for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
-            ./$bin --test-threads 1
-          done
+            --exclude token
+          # XXX(pro-wh): will have to do this properly to skip old cached versions
+          #   --no-run
+          # cd target/debug
+          # mkdir ../cov
+          # for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
+          #   ./$bin --test-threads 1
+          # done
           # XXX(willscott): coverage disabled due breakage on upgrade to 18.04
           #  mkdir ../cov/$bin
           #  kcov \
@@ -93,6 +101,11 @@ jobs:
             - tests
             - scripts
 
+      - save_cache:
+          key: experimental-v1-omni-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - target
+
   # E2E tests.
   test_e2e:
     <<: *defaults
@@ -114,6 +127,13 @@ jobs:
       - checkout
       - setup_remote_docker
 
+      - restore_cache:
+          keys:
+            - experimental-v1-omni-{{ .Branch }}-{{ .Revision }}
+            - experimental-v1-omni-{{ .Branch }}-
+            - experimental-v1-omni-master-
+      - run: ./scripts/prune-target.sh
+
       # Build deployment image.
       - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh
       # Push deployment image.
@@ -128,6 +148,11 @@ jobs:
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
+
+      - save_cache:
+          key: experimental-v1-omni-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - target
 
 workflows:
   version: 2
