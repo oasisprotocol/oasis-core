@@ -280,7 +280,7 @@ struct EthereumMockTimeCache {
     notifier: Arc<LocalTimeSourceNotifier>,
 }
 
-type EthereumMockTimeViaWebsocket = EthereumMockTime<web3::transports::WebSocket>;
+pub type EthereumMockTimeViaWebsocket = EthereumMockTime<web3::transports::WebSocket>;
 create_component!(
     ethereum,
     "time-source-notifier",

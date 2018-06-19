@@ -138,11 +138,11 @@ create_component!(
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
         let has_addr = {
             let args = container.get_arguments().unwrap();
-            args.is_present("ethereum-address")
+            args.is_present("entity-ethereum-address")
         };
         let eth_address = if has_addr {
             let args = container.get_arguments().unwrap();
-            let address = value_t_or_exit!(args, "ethereum-address", H160);
+            let address = value_t_or_exit!(args, "entity-ethereum-address", H160);
             Some(address)
         } else {
             match container.inject::<Web3<web3::transports::WebSocket>>() {
@@ -183,7 +183,7 @@ create_component!(
     [
         Arg::with_name("entity-ethereum-address")
             .long("entity-ethereum-address")
-            .help("Ethereum ddress for local entity identity")
+            .help("Ethereum address for local entity identity")
             .takes_value(true),
         Arg::with_name("entity-key-pair")
             .long("entity-key-pair")

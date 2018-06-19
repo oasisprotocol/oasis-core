@@ -239,7 +239,7 @@ mod tests {
 #[cfg(not(target_env = "sgx"))]
 create_component!(
     system,
-    "time-source",
+    "time-source-notifier",
     LocalTimeSourceNotifier,
     TimeSourceNotifier,
     (|container: &mut Container| -> Result<Box<Any>> {
