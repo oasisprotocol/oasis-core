@@ -97,7 +97,7 @@ message BalanceOfResponse {
 // for |target|, it is automatically created.
 message TransferRequest {
   bytes msg_sender = 1; // should be RpcContext info
-  bytes target = 2;
+  bytes destination_address = 2;
   bytes value = 3;
 }
 
@@ -228,10 +228,12 @@ message ListActiveEscrowsIteratorRequest {
 
 message ListActiveEscrowsIteratorResponse {
   bool has_next = 1;
+  // EscrowAccountIterator's owner field is omitted
   bytes state = 2; // opaque
 }
 
 message ListActiveEscrowsGetRequest {
+  // EscrowAccountIterator's has_next field is omitted
   bytes owner = 1;
   bytes state = 2;
 }

@@ -6,12 +6,12 @@ use grpcio::{RpcContext, RpcStatus, UnarySink};
 use super::stake_backend::AmountType;
 use super::stake_backend::ErrorCodes;
 use super::stake_backend::EscrowAccountIdType;
+use super::stake_backend::EscrowAccountIterator;
 use super::stake_backend::EscrowAccountStatus;
 use super::stake_backend::StakeEscrowBackend;
 use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
-use ekiden_common::uint::U256;
 
 pub struct StakeEscrowService<T>
 where
@@ -115,12 +115,12 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => s
             };
-            let target = match B256::try_from(req.get_target()) {
+            let destination_address = match B256::try_from(req.get_destination_address()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
                 Ok(t) => t
             };
-            let value = U256::from_little_endian(req.get_value());
-            Ok(self.inner.transfer(sender, target, value))
+            let value = AmountType::from_little_endian(req.get_value());
+            Ok(self.inner.transfer(sender, destination_address, value))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -161,7 +161,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoDestination.to_string())),
                 Ok(d) => d,
             };
-            let value = U256::from_little_endian(req.get_value());
+            let value = AmountType::from_little_endian(req.get_value());
             Ok(self.inner.transfer_from(sender, src, dst, value))
         };
         let f = match f() {
@@ -199,7 +199,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSpender.to_string())),
                 Ok(s) => s,
             };
-            let amt = U256::from_little_endian(req.get_value());
+            let amt = AmountType::from_little_endian(req.get_value());
             Ok(self.inner.approve(s, spender, amt))
         };
         let f = match f() {
@@ -237,7 +237,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSpender.to_string())),
                 Ok(s) => s,
             };
-            let amt = U256::from_little_endian(req.get_value());
+            let amt = AmountType::from_little_endian(req.get_value());
             let extra_data = req.get_extra_data().to_vec();
             Ok(self.inner.approve_and_call(s, spender, amt, extra_data))
         };
@@ -309,7 +309,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => s,
             };
-            let amt = U256::from_little_endian(req.get_value());
+            let amt = AmountType::from_little_endian(req.get_value());
             Ok(self.inner.burn(sender, amt))
         };
         let f = match f() {
@@ -347,7 +347,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
                 Ok(o) => o,
             };
-            let amt = U256::from_little_endian(req.get_value());
+            let amt = AmountType::from_little_endian(req.get_value());
             Ok(self.inner.burn_from(sender, owner, amt))
         };
         let f = match f() {
@@ -385,7 +385,7 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
                 Ok(t) => t,
             };
-            let a = U256::from_little_endian(req.get_escrow_amount());
+            let a = AmountType::from_little_endian(req.get_escrow_amount());
             Ok(self.inner.allocate_escrow(s, t, a))
         };
         let f = match f() {
@@ -414,7 +414,7 @@ where
         req: api::ListActiveEscrowsIteratorRequest,
         sink: UnarySink<api::ListActiveEscrowsIteratorResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<(bool, B256)>, Error> {
+        let f = move || -> Result<BoxFuture<EscrowAccountIterator>, Error> {
             match B256::try_from(req.get_owner()) {
                 Err(_e) => Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
                 Ok(s) => Ok(self.inner.list_active_escrows_iterator(s)),
@@ -422,10 +422,11 @@ where
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok((has_next, state)) => {
+                Ok(it) => {
                     let mut r = api::ListActiveEscrowsIteratorResponse::new();
-                    r.set_has_next(has_next);
-                    r.set_state(state.to_vec());
+                    r.set_has_next(it.has_next);
+                    // it.owner == req.get_owner()
+                    r.set_state(it.state.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -447,7 +448,7 @@ where
         req: api::ListActiveEscrowsGetRequest,
         sink: UnarySink<api::ListActiveEscrowsGetResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<(EscrowAccountIdType, B256, AmountType, B256, bool, B256)>, Error> {
+        let f = move || -> Result<BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>, Error> {
             let owner = match B256::try_from(req.get_owner()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
                 Ok(s) => s,
@@ -456,18 +457,20 @@ where
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoState.to_string())),
                 Ok(s) => s,
             };
-            Ok(self.inner.list_active_escrows_get(owner, state))
+            let it = EscrowAccountIterator::new(true, owner, state);
+            Ok(self.inner.list_active_escrows_get(it))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
-                Ok((eid, target, amount, aux, has_next, state)) => {
+                Ok((status, new_it)) => {
                     let mut r = api::ListActiveEscrowsGetResponse::new();
-                    r.set_escrow_id(eid.to_vec());
-                    r.set_target(target.to_vec());
-                    r.set_amount(amount.to_vec());
-                    r.set_aux(aux.to_vec());
-                    r.set_has_next(has_next);
-                    r.set_state(state.to_vec());
+                    r.set_escrow_id(status.id.to_vec());
+                    r.set_target(status.target.to_vec());
+                    r.set_amount(status.amount.to_vec());
+                    r.set_aux(status.aux.to_vec());
+                    r.set_has_next(new_it.has_next);
+                    // new_it.owner == it.owner
+                    r.set_state(new_it.state.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),
@@ -534,7 +537,7 @@ where
                 Err(e) => return Err(e),
                 Ok(i) => i,
             };
-            let a = U256::from_little_endian(req.get_amount_requested());
+            let a = AmountType::from_little_endian(req.get_amount_requested());
             Ok(self.inner.take_and_release_escrow(s, i, a))
         };
         let f = match f() {

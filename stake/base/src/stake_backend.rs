@@ -118,6 +118,18 @@ impl EscrowAccountStatus {
     }
 }
 
+pub struct EscrowAccountIterator {
+    pub has_next: bool,
+    pub owner: B256,
+    pub state: B256,
+}
+
+impl EscrowAccountIterator {
+    pub fn new(has_next: bool, owner: B256, state: B256) -> Self {
+        Self { has_next, owner, state }
+    }
+}
+
 /// Stake escrow backend implementing the Ekiden stake/escrow
 /// interface.  The AmountType parameters marked ($$) are intended to
 /// represent actual token transfers; the other AmountType parameters
@@ -131,7 +143,7 @@ pub trait StakeEscrowBackend: Send + Sync {
 
     /// Transfers |amount_requested| from |msg_sender|'s stake account to
     /// the stake account belonging to |target|.  Returns success boolean flag.
-    fn transfer(&self, msg_sender: B256, target: B256, value: AmountType) -> BoxFuture<bool>;
+    fn transfer(&self, msg_sender: B256, destination_address: B256, value: AmountType) -> BoxFuture<bool>;
 
     /// Transfers |amount_requested| from |source_address|'s stake
     /// account to the stake account belonging to
@@ -143,10 +155,10 @@ pub trait StakeEscrowBackend: Send + Sync {
         BoxFuture<bool>;
 
     /// Approve by |msg_sender| for |spender| to transferFrom up to |value| tokens.
-    fn approve(&self, msg_sender: B256, spender: B256, value: AmountType) ->
+    fn approve(&self, msg_sender: B256, spender_address: B256, value: AmountType) ->
         BoxFuture<bool>;
 
-    fn approve_and_call(&self, msg_sender: B256, spender: B256, value: AmountType,
+    fn approve_and_call(&self, msg_sender: B256, spender_address: B256, value: AmountType,
                         extra_data: Vec<u8>) ->
         BoxFuture<bool>;
 
@@ -169,10 +181,10 @@ pub trait StakeEscrowBackend: Send + Sync {
     ) -> BoxFuture<EscrowAccountIdType>;
 
     /// Returns a vector of all active escrow accounts created by |msg_sender|.
-    fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<(bool, B256)>;
+    fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator>;
 
-    fn list_active_escrows_get(&self, owner: B256, state: B256) ->
-        BoxFuture<(EscrowAccountIdType, B256, AmountType, B256, bool, B256)>;
+    fn list_active_escrows_get(&self, iter: EscrowAccountIterator) ->
+        BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>;
 
     /// Returns the escrow account data associated with a given |escrow_id|.
     fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus>;
