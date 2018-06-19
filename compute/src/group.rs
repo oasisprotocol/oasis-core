@@ -1,10 +1,9 @@
 //! Computation group structures.
 use std::sync::{Arc, Mutex};
 
-use grpcio;
-
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
 use ekiden_core::bytes::{B256, B64, H256};
+use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::mpsc;
@@ -39,8 +38,8 @@ struct Inner {
     committee: Mutex<Vec<CommitteeNode>>,
     /// Signer for the compute node.
     signer: Arc<Signer>,
-    /// gRPC environment.
-    environment: Arc<grpcio::Environment>,
+    /// Environment.
+    environment: Arc<Environment>,
     /// Command sender.
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
@@ -75,11 +74,11 @@ impl ComputationGroup {
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
         signer: Arc<Signer>,
-        environment: Arc<grpcio::Environment>,
+        environment: Arc<Environment>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
-        Self {
+        let instance = Self {
             inner: Arc::new(Inner {
                 contract_id,
                 scheduler,
@@ -92,11 +91,14 @@ impl ComputationGroup {
                 command_receiver: Mutex::new(Some(command_receiver)),
                 role_subscribers: StreamSubscribers::new(),
             }),
-        }
+        };
+        instance.start();
+
+        instance
     }
 
     /// Start computation group tasks.
-    pub fn start(&self, executor: &mut Executor) {
+    pub fn start(&self) {
         info!("Starting computation group services");
 
         let mut event_sources = stream::SelectAll::new();
@@ -127,7 +129,7 @@ impl ComputationGroup {
         );
 
         // Process commands.
-        executor.spawn({
+        self.inner.environment.spawn({
             let inner = self.inner.clone();
 
             event_sources.for_each_log_errors(
@@ -181,7 +183,7 @@ impl ComputationGroup {
                 .and_then(move |nodes| {
                     // Update group.
                     for node in nodes {
-                        let channel = node.connect(inner.environment.clone());
+                        let channel = node.connect(inner.environment.grpc());
                         let client = ComputationGroupClient::new(channel);
                         inner.node_group.add_node(client);
                     }

@@ -6,7 +6,7 @@ use ekiden_beacon_api::create_beacon;
 use ekiden_beacon_base::{BeaconService, RandomBeacon};
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::environment::Environment;
-use ekiden_common::futures::{future, Executor, Future, GrpcExecutor, Stream};
+use ekiden_common::futures::{future, Future, Stream};
 use ekiden_common_api::create_time_source;
 use ekiden_consensus_api::create_consensus;
 use ekiden_consensus_base::{ConsensusBackend, ConsensusService};
@@ -29,7 +29,7 @@ use ekiden_storage_api::create_storage;
 use ekiden_storage_base::{StorageBackend, StorageService};
 
 use futures_timer::{Interval, TimerHandle};
-use grpcio::{self, ChannelBuilder, Server, ServerBuilder};
+use grpcio::{ChannelBuilder, Server, ServerBuilder};
 
 use super::service::DebugService;
 
@@ -69,7 +69,7 @@ pub struct DummyBackend {
     pub consensus: Arc<ConsensusBackend>,
 
     time_source: Arc<TimeSourceImpl>,
-    grpc_environment: Arc<grpcio::Environment>,
+    environment: Arc<Environment>,
     grpc_server: Server,
 }
 
@@ -89,9 +89,12 @@ impl DummyBackend {
 
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
-        let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
-        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let env = di_container.inject::<Environment>()?;
+        let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(
+            env.clone(),
+            time_notifier.clone(),
+        ));
+        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let grpc_environment = env.grpc();
 
         let entity_registry = Arc::new(DummyEntityRegistryBackend::new(
@@ -99,6 +102,7 @@ impl DummyBackend {
             env.clone(),
         ));
         let scheduler = Arc::new(DummySchedulerBackend::new(
+            env.clone(),
             random_beacon.clone(),
             contract_registry.clone(),
             entity_registry.clone(),
@@ -108,6 +112,7 @@ impl DummyBackend {
         let storage = di_container.inject::<StorageBackend>()?;
 
         let consensus = Arc::new(DummyConsensusBackend::new(
+            env.clone(),
             scheduler.clone(),
             storage.clone(),
         ));
@@ -151,6 +156,7 @@ impl DummyBackend {
         set_boxed_metric_collector(metrics).unwrap();
 
         Ok(Self {
+            environment: env,
             time_notifier,
             random_beacon,
             contract_registry,
@@ -159,19 +165,12 @@ impl DummyBackend {
             storage,
             consensus,
             time_source: time_source_impl,
-            grpc_environment,
             grpc_server: server,
         })
     }
 
     /// Start the backend tasks.
     pub fn start(&mut self) {
-        let mut executor = GrpcExecutor::new(self.grpc_environment.clone());
-
-        self.random_beacon.start(&mut executor);
-        self.scheduler.start(&mut executor);
-        self.consensus.start(&mut executor);
-
         // Start the timer that drives the clock.
         match *self.time_source {
             TimeSourceImpl::Mock((ref ts, epoch_interval, wait_on_rpc)) => {
@@ -184,7 +183,7 @@ impl DummyBackend {
                 } else {
                     trace!("MockTime: Epoch: {} Till: {}", now, till);
                     let dur = Duration::from_secs(epoch_interval);
-                    executor.spawn({
+                    self.environment.spawn({
                         let time_source = ts.clone();
                         let time_notifier = self.time_notifier.clone();
 
@@ -228,7 +227,7 @@ impl DummyBackend {
                 let dur = Duration::from_secs(EPOCH_INTERVAL);
                 let timer = Interval::new_handle(at, dur, TimerHandle::default());
 
-                executor.spawn({
+                self.environment.spawn({
                     let time_source = ts.clone();
                     let time_notifier = self.time_notifier.clone();
 

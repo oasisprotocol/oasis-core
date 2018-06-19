@@ -10,17 +10,17 @@ extern crate grpcio;
 extern crate web3;
 
 use std::sync::Arc;
-use std::{thread, time};
+use std::time::{Duration, Instant};
 
-use ekiden_beacon_base::backend::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
-use ekiden_common::environment::GrpcEnvironment;
+use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::error::Error;
-use ekiden_common::futures::{cpupool, future, stream, Future, Stream};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::testing;
+use ekiden_common::tokio::timer::Delay;
 use ekiden_common::untrusted;
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::{EthereumEntityRegistryBackend, EthereumMockTime, EthereumRandomBeacon};
@@ -34,14 +34,13 @@ use web3::transports::WebSocket;
 fn test_registry_ethereum_roundtrip() {
     testing::try_init_logging();
 
-    let mut executor = cpupool::CpuPool::new(4);
     let grpc_environment = grpcio::EnvBuilder::new().build();
     let env = Arc::new(GrpcEnvironment::new(grpc_environment));
 
     // Spin up truffle.
     let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
     defer! {{
-        let _ = truffle.kill();
+        drop(truffle.kill());
     }};
 
     // Connect to truffle.
@@ -61,8 +60,7 @@ fn test_registry_ethereum_roundtrip() {
         .expect("could not find contract address");
 
     // Run a driver to make some background transactions such that things confirm.
-    let tx_stream = mine(transport);
-    let _handle = executor.spawn(tx_stream.fold(0 as u64, |a, _b| future::ok::<u64, Error>(a)));
+    env.spawn(mine(transport).discard());
 
     // Generate local acct. identity. (eth addr is the one hardcoded in truffle develop)
     let ent_sk =
@@ -87,25 +85,29 @@ fn test_registry_ethereum_roundtrip() {
 
     // Run a driver to make some background transactions such that things confirm.
     let local_source = time_source.clone();
-    let time_stream = Box::new(stream::unfold(0, move |state| {
-        thread::sleep(time::Duration::from_millis(500));
+    let time_stream = stream::unfold(0, move |state| {
+        let local_source = local_source.clone();
+
         Some(
-            local_source
-                .set_mock_time(state, 10)
-                .then(move |_r| future::ok::<(u64, u64), Error>((0, state + 1))),
+            Delay::new(Instant::now() + Duration::from_millis(500))
+                .then(move |_| local_source.set_mock_time(state, 10))
+                .then(move |_| future::ok::<(u64, u64), Error>((0, state + 1))),
         )
-    }));
-    let _time_handle =
-        executor.spawn(time_stream.fold(0 as u64, |a, _b| future::ok::<u64, Error>(a)));
+    });
+    env.spawn(
+        time_stream
+            .fold(0 as u64, |a, _b| future::ok::<u64, Error>(a))
+            .discard(),
+    );
 
     // Make a beacon.
     let beacon = EthereumRandomBeacon::new(
+        env.clone(),
         client.clone(),
         me.clone(),
         H160::from_slice(&beacon_address),
         time_source.clone(),
     ).unwrap();
-    beacon.start(&mut executor);
 
     // Launch the registry.
     let storage = DummyStorageBackend::new();
@@ -126,7 +128,7 @@ fn test_registry_ethereum_roundtrip() {
     );
     let myaddr = me.eth_address.clone();
     let time_advance = time_source.clone();
-    let _task = registry
+    registry
         .register_entity(signed_me)
         .then(move |r| {
             assert!(r.is_ok());
@@ -142,5 +144,6 @@ fn test_registry_ethereum_roundtrip() {
             drop(handle);
             future::ok::<(), ()>(())
         })
-        .wait();
+        .wait()
+        .unwrap();
 }

@@ -145,6 +145,7 @@ create_component!(
             let address = value_t_or_exit!(args, "entity-ethereum-address", H160);
             Some(address)
         } else {
+            info!("No local identity provided. Attempting to auto-discover through web3.");
             match container.inject::<Web3<web3::transports::WebSocket>>() {
                 Ok(client) => {
                     // TODO: unfortunate wait to resolve call to get local accts.

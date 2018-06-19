@@ -5,16 +5,13 @@ extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
 #[macro_use(defer)]
 extern crate scopeguard;
-#[macro_use]
-extern crate log;
 extern crate grpcio;
 extern crate web3;
 
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::{Environment, GrpcEnvironment};
-use ekiden_common::error::Error;
-use ekiden_common::futures::{future, Future, FutureExt, Stream};
+use ekiden_common::futures::{Future, FutureExt, Stream};
 use ekiden_common::testing;
 use ekiden_epochtime::interface::{TimeSource, TimeSourceNotifier};
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
@@ -32,7 +29,7 @@ fn mocktime_integration() {
     // Spin up truffle.
     let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
     defer! {{
-        let _ = truffle.kill();
+        drop(truffle.kill());
     }};
 
     // Connect to truffle.
@@ -46,17 +43,7 @@ fn mocktime_integration() {
         .expect("could not find contract address");
 
     // Run a driver to make some background transactions such that things confirm.
-    let tx_stream = mine(transport);
-    let _handle = env.spawn(
-        tx_stream
-            .fold(0 as u64, |a, _b| future::ok::<u64, Error>(a))
-            .map(|_r| ())
-            .map_err(|e| {
-                error!("{:?}", e);
-                ()
-            })
-            .into_box(),
-    );
+    env.spawn(mine(transport).discard());
 
     // Initialize the time source.
     let time_source = EthereumMockTime::new(

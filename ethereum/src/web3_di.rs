@@ -48,7 +48,6 @@ create_component!(
         });
 
         let client = init_rx.wait().unwrap()?;
-	panic!("shuoldn't need web3");
 
         Ok(Box::new(Arc::new(client)))
     }),
