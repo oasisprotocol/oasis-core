@@ -502,7 +502,7 @@ where
     }
 }
 
-type EthereumRandomBeaconViaWebsocket = EthereumRandomBeacon<web3::transports::WebSocket>;
+pub type EthereumRandomBeaconViaWebsocket = EthereumRandomBeacon<web3::transports::WebSocket>;
 create_component!(
     ethereum,
     "random-beacon-backend",
