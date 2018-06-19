@@ -25,6 +25,43 @@ impl StakeClient {
 }
 
 impl StakeEscrowBackend for StakeClient {
+    fn get_name(&self) -> BoxFuture<String> {
+        let request = api::GetNameRequest::new();
+        match self.0.get_name_async(&request) {
+            Ok(f) => Box::new(f.map(|response| response.get_name().to_string())
+                              .map_err(|error| Error::new(error.description()))),
+            Err(error) => Box::new(future::err(Error::new(error.description()))),
+        }
+    }
+
+    fn get_symbol(&self) -> BoxFuture<String> {
+        let request = api::GetSymbolRequest::new();
+        match self.0.get_symbol_async(&request) {
+            Ok(f) => Box::new(f.map(|response| response.get_symbol().to_string())
+                              .map_err(|error| Error::new(error.description()))),
+            Err(error) => Box::new(future::err(Error::new(error.description()))),
+        }
+    }
+
+    fn get_decimals(&self) -> BoxFuture<u8> {
+        let request = api::GetDecimalsRequest::new();
+        match self.0.get_decimals_async(&request) {
+            Ok(f) => Box::new(f.map(|response| response.get_decimals() as u8)
+                              .map_err(|error| Error::new(error.description()))),
+            Err(error) => Box::new(future::err(Error::new(error.description()))),
+        }
+    }
+
+    fn get_total_supply(&self) -> BoxFuture<AmountType> {
+        let request = api::GetTotalSupplyRequest::new();
+        match self.0.get_total_supply_async(&request) {
+            Ok(f) => Box::new(f.map(|response|
+                                    AmountType::from_little_endian(response.get_total_supply()))
+                              .map_err(|error| Error::new(error.description()))),
+            Err(error) => Box::new(future::err(Error::new(error.description()))),
+        }
+    }
+
     fn get_stake_status(&self, sender: B256) -> BoxFuture<StakeStatus> {
         let mut request = api::GetStakeStatusRequest::new();
         request.set_owner(sender.to_vec());

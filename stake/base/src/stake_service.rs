@@ -39,6 +39,122 @@ impl<T> api::Stake for StakeEscrowService<T>
 where
     T: StakeEscrowBackend,
 {
+    fn get_name(
+        &self,
+        ctx: RpcContext,
+        _req: api::GetNameRequest,
+        sink: UnarySink<api::GetNameResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<String>, Error> {
+            Ok(self.inner.get_name())
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(name) => {
+                    let mut r = api::GetNameResponse::new();
+                    r.set_name(name);
+                    Ok(r)
+                },
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r{
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn get_symbol(
+        &self,
+        ctx: RpcContext,
+        _req: api::GetSymbolRequest,
+        sink: UnarySink<api::GetSymbolResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<String>, Error> {
+            Ok(self.inner.get_symbol())
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(symbol) => {
+                    let mut r = api::GetSymbolResponse::new();
+                    r.set_symbol(symbol);
+                    Ok(r)
+                },
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r{
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn get_decimals(
+        &self,
+        ctx: RpcContext,
+        _req: api::GetDecimalsRequest,
+        sink: UnarySink<api::GetDecimalsResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<u8>, Error> {
+            Ok(self.inner.get_decimals())
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(decimals) => {
+                    let mut r = api::GetDecimalsResponse::new();
+                    r.set_decimals(decimals as u32);
+                    Ok(r)
+                },
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r{
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn get_total_supply(
+        &self,
+        ctx: RpcContext,
+        _req: api::GetTotalSupplyRequest,
+        sink: UnarySink<api::GetTotalSupplyResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
+            Ok(self.inner.get_total_supply())
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(supply) => {
+                    let mut r = api::GetTotalSupplyResponse::new();
+                    r.set_total_supply(supply.to_vec());
+                    Ok(r)
+                },
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r{
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
     fn get_stake_status(
         &self,
         ctx: RpcContext,

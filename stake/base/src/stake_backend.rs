@@ -56,9 +56,16 @@ pub struct EscrowAccountIdType {
     id: U256,
 }
 
+// The new() and incr_mut methods are really only used from the dummy impl.
 impl EscrowAccountIdType {
     pub fn new() -> Self {
-        Self { id: U256::from(0) }
+        // In EVM, the all-zero address is special.
+        let mut ea_id = Self { id: U256::from(0) };
+        match ea_id.incr_mut() {
+            Err(e) => panic!(e),
+            Ok(o) => o,
+        };
+        ea_id
     }
 
     pub fn from_vec(id: Vec<u8>) -> Result<EscrowAccountIdType, Error> {
@@ -136,6 +143,14 @@ impl EscrowAccountIterator {
 /// are requests for values, or status, and do not represent token
 /// transfers.
 pub trait StakeEscrowBackend: Send + Sync {
+    fn get_name(&self) -> BoxFuture<String>;
+
+    fn get_symbol(&self) -> BoxFuture<String>;
+
+    fn get_decimals(&self) -> BoxFuture<u8>;
+
+    fn get_total_supply(&self) -> BoxFuture<AmountType>;
+
     /// Returns the stake account status (StakeStatus) of the caller |msg_sender|.
     fn get_stake_status(&self, owner: B256) -> BoxFuture<StakeStatus>;
 

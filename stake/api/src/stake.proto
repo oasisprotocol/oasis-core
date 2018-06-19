@@ -16,6 +16,14 @@ syntax = "proto3";
 package stake;
 
 service Stake {
+  rpc GetName (GetNameRequest)
+    returns (GetNameResponse) {}
+  rpc GetSymbol (GetSymbolRequest)
+    returns (GetSymbolResponse) {}
+  rpc GetDecimals (GetDecimalsRequest)
+    returns (GetDecimalsResponse) {}
+  rpc GetTotalSupply (GetTotalSupplyRequest)
+    returns (GetTotalSupplyResponse) {}
   rpc GetStakeStatus (GetStakeStatusRequest)
     returns (GetStakeStatusResponse) {}
   rpc BalanceOf (BalanceOfRequest)
@@ -51,6 +59,34 @@ service Stake {
 // security layer, so the explicit field can be removed), message
 // authenticity and freshness is guaranteed, with message
 // confidentiality being optional.  The RPC context has this info.
+
+message GetNameRequest {
+}
+
+message GetNameResponse {
+  string name = 1;
+}
+
+message GetSymbolRequest {
+}
+
+message GetSymbolResponse {
+  string symbol = 1;
+}
+
+message GetDecimalsRequest {
+}
+
+message GetDecimalsResponse {
+  uint32 decimals = 1;  // uint8
+}
+
+message GetTotalSupplyRequest {
+}
+
+message GetTotalSupplyResponse {
+  bytes total_supply = 1;  // AmountType
+}
 
 // uint256 is used for stake quantities in this API.  This must
 // match the definition of AmountType in the base backend trait

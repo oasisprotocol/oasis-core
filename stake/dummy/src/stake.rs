@@ -25,6 +25,7 @@ struct DummyStakeEscrowInfo {
     // account id, keys for escrow_map below.  \forall a \in accounts:
     // escrow_map[a].owner is stakeholder (key to this instance in
     // stakes below)
+    allowances: HashMap<EscrowAccountIdType, AmountType>,
 }
 
 impl DummyStakeEscrowInfo {
@@ -33,6 +34,7 @@ impl DummyStakeEscrowInfo {
             amount: 0,
             escrowed: 0,
             accounts: HashSet::new(),
+            allowances: HashMap::new(),
         }
     }
 }
@@ -96,7 +98,12 @@ impl EscrowAccount {
 // numbers handed out to shards by a central server.
 
 struct DummyStakeEscrowBackendInner {
-    // Per-entity state.
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
+    pub totalSupply: AmountType,
+
+    // Per-address state.
     stakes: HashMap<B256, DummyStakeEscrowInfo>,
     escrow_map: HashMap<EscrowAccountIdType, EscrowAccount>,
 
@@ -104,27 +111,28 @@ struct DummyStakeEscrowBackendInner {
 }
 
 impl DummyStakeEscrowBackendInner {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(name: String, symbol: String, initial_supply: AmountType) -> Self {
+        let this = Self {
+            name: name.clone(),
+            symbol: symbol.clone(),
+            decimals: 18,
             stakes: HashMap::new(),
             escrow_map: HashMap::new(),
             next_account_id: EscrowAccountIdType::new(),
-        }
-    }
-
-    pub fn deposit_stake(
-        &mut self,
-        msg_sender: B256,
-        additional_stake: AmountType, // $$
-    ) -> Result<(), Error> {
-        let entry = self.stakes
-            .entry(msg_sender)
+        };
+        let entry = this.stakes
+            .entry(this.next_account_id)
             .or_insert_with(|| DummyStakeEscrowInfo::new());
-        if AMOUNT_MAX - entry.amount < additional_stake {
-            return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
+        let scale = AmountType::from(10) ** AmountType::From(this.decimals);
+        if initial_supply > !AmountType::From(0) / scale {
+            println!("Initial token count overflows due to scaling");
+            abort();
         }
-        entry.amount += additional_stake;
-        Ok(())
+        let supply = initial_supply * scale;
+        entry.amount = supply;
+        this.totalSupply = supply;
+        this.next_account_id.incr_mut()?;
+        this
     }
 
     pub fn get_stake_status(&self, msg_sender: B256) -> Result<StakeStatus, Error> {
@@ -137,7 +145,7 @@ impl DummyStakeEscrowBackendInner {
         }
     }
 
-    pub fn transfer_stake(
+    pub fn transfer(
         &mut self,
         msg_sender: B256,
         target: B256,
@@ -156,7 +164,7 @@ impl DummyStakeEscrowBackendInner {
             let target = self.stakes
                 .entry(target)
                 .or_insert_with(|| DummyStakeEscrowInfo::new());
-            if target.amount > AMOUNT_MAX - amount {
+            if target.amount > !AmountType::From(0) - amount {
                 return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
             }
             target.amount += amount;
@@ -167,24 +175,6 @@ impl DummyStakeEscrowBackendInner {
         };
         entry.amount -= amount;
         Ok(())
-    }
-
-    pub fn withdraw_stake(
-        &mut self,
-        msg_sender: B256,
-        amount_requested: AmountType,
-    ) -> Result<AmountType, Error> {
-        match self.stakes.get_mut(&msg_sender) {
-            None => Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
-            Some(e) => {
-                if e.amount - e.escrowed >= amount_requested {
-                    e.amount -= amount_requested;
-                    Ok(amount_requested) // $$
-                } else {
-                    Err(Error::new(ErrorCodes::InsufficientFunds.to_string()))
-                }
-            }
-        }
     }
 
     pub fn allocate_escrow(
@@ -203,8 +193,8 @@ impl DummyStakeEscrowBackendInner {
                     // escrow_amount <= e.amount - e.escrowed
                     // ==> e.escrowed + escrow_amount <= e.amount
                     // and since
-                    // 0 <= e.escrowed <= e.amount <= AMOUNT_MAX
-                    // e.escrowed + escrow_amount <= AMOUNT_MAX (no overflow)
+                    // 0 <= e.escrowed <= e.amount <= !AmountType::From(0)
+                    // e.escrowed + escrow_amount <= !AmountType::From(0) (no overflow)
                     e.escrowed += escrow_amount;
                     let id = self.next_account_id;
                     match self.next_account_id.incr_mut() {
@@ -223,33 +213,6 @@ impl DummyStakeEscrowBackendInner {
                 }
             }
         }
-    }
-
-    pub fn list_active_escrows(&self, msg_sender: B256) -> Result<Vec<EscrowAccount>, Error> {
-        let mut results: Vec<EscrowAccount> = Vec::new();
-        let a = match self.stakes.get(&msg_sender) {
-            None => return Ok(results),
-            Some(a) => {
-                if a.escrowed == 0 {
-                    return Ok(results);
-                }
-                a
-            }
-        };
-
-        for ea_id in a.accounts.iter() {
-            match self.escrow_map.get(&*ea_id) {
-                None => {
-                    return Err(Error::new(ErrorCodes::InternalError.to_string()));
-                }
-                Some(e) => {
-                    results.push((*e).clone());
-                }
-            }
-        }
-
-        results.sort();
-        Ok(results)
     }
 
     pub fn fetch_escrow_by_id(
@@ -295,7 +258,7 @@ impl DummyStakeEscrowBackendInner {
                 let target = self.stakes
                     .entry(msg_sender)
                     .or_insert_with(|| DummyStakeEscrowInfo::new());
-                if AMOUNT_MAX - target.amount < amount_requested {
+                if !AmountType::From(0) - target.amount < amount_requested {
                     return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
                 }
             }
@@ -360,14 +323,6 @@ impl DummyStakeEscrowBackend {
 }
 
 impl StakeEscrowBackend for DummyStakeEscrowBackend {
-    fn deposit_stake(&self, msg_sender: B256, amount: AmountType) -> BoxFuture<()> {
-        let inner = self.inner.clone();
-        Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
-            inner.deposit_stake(msg_sender, amount)
-        }))
-    }
-
     fn get_stake_status(&self, msg_sender: B256) -> BoxFuture<StakeStatus> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
@@ -376,23 +331,12 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 
-    fn transfer_stake(&self, msg_sender: B256, target: B256, amount: AmountType) -> BoxFuture<()> {
+    fn transfer(&self, msg_sender: B256, target: B256, amount: AmountType) -> BoxFuture<bool> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
-            inner.transfer_stake(msg_sender, target, amount)
-        }))
-    }
-
-    fn withdraw_stake(
-        &self,
-        msg_sender: B256,
-        amount_requested: AmountType,
-    ) -> BoxFuture<AmountType> {
-        let inner = self.inner.clone();
-        Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
-            inner.withdraw_stake(msg_sender, amount_requested)
+            let b = inner.transfer(msg_sender, target, amount)?;
+            Ok(b)
         }))
     }
 
@@ -406,23 +350,6 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
             inner.allocate_escrow(msg_sender, target, escrow_amount)
-        }))
-    }
-
-    fn list_active_escrows(&self, msg_sender: B256) -> BoxFuture<Vec<EscrowAccountStatus>> {
-        let inner = self.inner.clone();
-        Box::new(future::lazy(move || {
-            let inner = inner.lock().unwrap();
-            let mut output = Vec::new();
-            let ea_v = match inner.list_active_escrows(msg_sender) {
-                Err(e) => return Err(e),
-                Ok(v) => v,
-            };
-            output.extend(
-                ea_v.iter()
-                    .map(|p| EscrowAccountStatus::new(p.id, p.target, p.amount)),
-            );
-            Ok(output)
         }))
     }
 
