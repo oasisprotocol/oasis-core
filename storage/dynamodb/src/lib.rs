@@ -218,7 +218,6 @@ mod tests {
         if let Err(e) = core.run(rusoto_core::reactor::CredentialsProvider::default().credentials())
         {
             // Skip this if AWS credentials aren't available.
-
             ekiden_common::testing::try_init_logging();
             warn!("{} Skipping DynamoDB test.", e);
             return;
