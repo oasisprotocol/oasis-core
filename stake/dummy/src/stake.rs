@@ -574,5 +574,23 @@ create_component!(
     "stake-backend",
     DummyStakeEscrowBackend,
     StakeEscrowBackend,
-    []
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let args = container.get_arguments().unwrap();
+        let owner_hex = args.value_of("stake-owner").unwrap();
+        let owner_id = B256::from(owner_hex);
+        let instance: Box<StakeEscrowBackend> = Box::new(DummyStakeEscrowBackend::new(
+            owner_id, "Oasis Stake".to_string(), "OS$".to_string(), AmountType::from(100_000_000),
+            ));
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("stake-owner")
+            .long("stake-owner")
+            .help("Address which owns the initial stake")
+            // B256 so 32 bytes or 64 hex digits
+            // .......................1.........2.........3.........4.........5.........6.........
+            // .............0123456789012345678901234567890123456789012345678901234567890123456789
+            .default_value("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            .takes_value(true)
+    ]
 );
