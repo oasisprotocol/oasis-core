@@ -106,7 +106,8 @@ spec:
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
             - --storage-client-port
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
-            - --time-source-notifier system
+            - --time-source-notifier
+            - system
             - --web3-host
             - ws://$(PARITY_SERVICE_HOST):$(PARITY_SERVICE_PORT_PARITY_WS)
             - ekiden/lib/token.so
