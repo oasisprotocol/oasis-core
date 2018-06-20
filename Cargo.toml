@@ -33,6 +33,7 @@ members = [
     "storage/dummy",
     "storage/dynamodb",
     "storage/frontend",
+    "storage/multilayer",
     "storage/persistent",
     "storage/lru_cache",
     "storage/batch",
