@@ -10,8 +10,10 @@ repository = "https://github.com/oasislabs/ekiden"
 byteorder = "1.2.1"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
+ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-beacon-base = { path = "../base", version = "0.2.0-alpha" }
 log = "0.4"
 
 [dev-dependencies]
 rustc-hex = "1.0"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }

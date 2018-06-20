@@ -9,10 +9,11 @@ use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
-use ekiden_core::futures::{Future, GrpcExecutor};
+use ekiden_core::futures::Future;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
+use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
@@ -55,18 +56,8 @@ pub struct ComputeNodeConfiguration {
 
 /// Compute node.
 pub struct ComputeNode {
-    /// Scheduler.
-    scheduler: Arc<Scheduler>,
-    /// Consensus backend.
-    consensus_backend: Arc<ConsensusBackend>,
-    /// Consensus frontend.
-    consensus_frontend: Arc<ConsensusFrontend>,
-    /// Computation group.
-    computation_group: Arc<ComputationGroup>,
     /// gRPC server.
     server: grpcio::Server,
-    /// Futures executor used by this compute node.
-    executor: GrpcExecutor,
 }
 
 impl ComputeNode {
@@ -145,13 +136,14 @@ impl ComputeNode {
             scheduler.clone(),
             entity_registry.clone(),
             node_identity.get_node_signer(),
-            grpc_environment.clone(),
+            environment.clone(),
         ));
 
         // Create consensus frontend.
         let consensus_frontend = Arc::new(ConsensusFrontend::new(
             config.consensus,
             contract_id,
+            environment.clone(),
             worker.clone(),
             computation_group.clone(),
             consensus_backend.clone(),
@@ -186,35 +178,20 @@ impl ComputeNode {
             )
             .build()?;
 
-        Ok(Self {
-            scheduler,
-            consensus_backend,
-            consensus_frontend,
-            computation_group,
-            server,
-            executor: GrpcExecutor::new(grpc_environment),
-        })
+        // Initialize metric collector.
+        let metrics = container.inject_owned::<MetricCollector>()?;
+        set_boxed_metric_collector(metrics).unwrap();
+
+        Ok(Self { server })
     }
 
     /// Start compute node.
     pub fn start(&mut self) {
-        // Start scheduler tasks.
-        self.scheduler.start(&mut self.executor);
-
-        // Start consensus backend tasks.
-        self.consensus_backend.start(&mut self.executor);
-
-        // Start consensus frontend tasks.
-        self.consensus_frontend.start(&mut self.executor);
-
         // Start gRPC server.
         self.server.start();
 
         for &(ref host, port) in self.server.bind_addrs() {
             info!("Compute node listening on {}:{}", host, port);
         }
-
-        // Start computation group services.
-        self.computation_group.start(&mut self.executor);
     }
 }

@@ -1,10 +1,10 @@
 //! Registry backend interface.
 use ekiden_common::bytes::{B256, B64};
 use ekiden_common::entity::Entity;
-use ekiden_common::epochtime::EpochTime;
 use ekiden_common::futures::{BoxFuture, BoxStream};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
+use ekiden_epochtime::interface::EpochTime;
 
 /// Signature context used for entity registration
 pub const REGISTER_ENTITY_SIGNATURE_CONTEXT: B64 = B64(*b"EkEntReg");

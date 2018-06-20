@@ -15,8 +15,8 @@ lazy_static = { version = "1.0", features = ["spin_no_std"] }
 protobuf = "~2.0"
 sodalite = "0.3.0"
 serde = "=1.0.59"
-serde_cbor = "0.8.2"
 serde_derive = "1.0"
+bincode = "1.0.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.2.0-alpha" }

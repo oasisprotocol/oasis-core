@@ -1,11 +1,12 @@
 extern crate ekiden_common;
+extern crate ekiden_epochtime;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_persistent;
 
 use std::fs;
 
-use ekiden_common::epochtime::local::SystemTimeSource;
 use ekiden_common::futures::Future;
+use ekiden_epochtime::local::SystemTimeSource;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_persistent::PersistentStorageBackend;
 

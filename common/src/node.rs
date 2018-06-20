@@ -11,6 +11,7 @@ use ekiden_common_api as api;
 use super::address::Address;
 use super::bytes::B256;
 use super::error::{Error, Result};
+#[allow(unused_imports)]
 use super::x509::{Certificate, CERTIFICATE_COMMON_NAME};
 
 /// Node.

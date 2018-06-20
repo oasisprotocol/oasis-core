@@ -36,6 +36,8 @@ extern crate serde_bytes;
 extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
+#[cfg(not(target_env = "sgx"))]
+pub extern crate tokio;
 pub extern crate untrusted;
 
 extern crate ekiden_common_api;
@@ -48,11 +50,13 @@ pub mod bytes;
 pub mod contract;
 pub mod drbg;
 pub mod entity;
-pub mod epochtime;
 pub mod error;
 pub mod futures;
 pub mod hash;
 pub mod node;
+#[cfg(not(target_env = "sgx"))]
+#[macro_use]
+pub mod macros;
 #[cfg(not(target_env = "sgx"))]
 pub mod node_group;
 #[macro_use]

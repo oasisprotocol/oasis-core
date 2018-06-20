@@ -10,6 +10,7 @@ use serde_cbor;
 use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
+use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
@@ -158,6 +159,8 @@ struct Inner {
     state: Mutex<State>,
     /// Contract identifier this consensus frontend is for.
     contract_id: B256,
+    /// Environment.
+    environment: Arc<Environment>,
     /// Consensus backend.
     backend: Arc<ConsensusBackend>,
     /// Storage backend.
@@ -212,6 +215,7 @@ impl ConsensusFrontend {
     pub fn new(
         config: ConsensusConfiguration,
         contract_id: B256,
+        environment: Arc<Environment>,
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
@@ -220,10 +224,11 @@ impl ConsensusFrontend {
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
-        Self {
+        let instance = Self {
             inner: Arc::new(Inner {
                 state: Mutex::new(State::NotReady),
                 contract_id,
+                environment,
                 backend,
                 storage,
                 signer,
@@ -237,11 +242,14 @@ impl ConsensusFrontend {
                 call_subscribers: Mutex::new(HashMap::new()),
                 test_only_config: config.test_only.clone(),
             }),
-        }
+        };
+        instance.start();
+
+        instance
     }
 
     /// Start consensus frontend.
-    pub fn start(&self, executor: &mut Executor) {
+    fn start(&self) {
         let mut event_sources = stream::SelectAll::new();
 
         // Subscribe to computation group updates.
@@ -293,7 +301,7 @@ impl ConsensusFrontend {
         );
 
         // Process consensus commands.
-        executor.spawn({
+        self.inner.environment.spawn({
             let inner = self.inner.clone();
 
             event_sources.for_each_log_errors(
@@ -410,6 +418,8 @@ impl ConsensusFrontend {
             let mut incoming_queue = inner.incoming_queue.lock().unwrap();
             let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
             incoming_queue.calls.append(&mut calls);
+
+            measure_gauge!("incoming_queue_size", incoming_queue.calls.len());
         }
 
         // Check if batch is ready to be sent for processing.
@@ -490,6 +500,8 @@ impl ConsensusFrontend {
 
     /// Handle discrepancy detected event from consensus backend.
     fn handle_discrepancy_detected(inner: Arc<Inner>, batch_hash: H256) -> BoxFuture<()> {
+        measure_counter_inc!("discrepancy_detected_count");
+
         warn!(
             "Discrepancy detected while processing batch {:?}",
             batch_hash
@@ -657,6 +669,7 @@ impl ConsensusFrontend {
             .get_latest_block(inner.contract_id)
             .and_then(|block| {
                 require_state!(inner, State::ProcessingBatch(_), "processing batch");
+                measure_counter_inc!("processing_batch_count");
 
                 // Send block and channel to worker.
                 let process_batch = inner.worker.contract_call_batch(calls, block);
@@ -682,6 +695,8 @@ impl ConsensusFrontend {
     /// This method should be called on any failures related to the currently proposed
     /// batch in order to allow new batches to be processed.
     fn fail_batch(inner: Arc<Inner>, reason: String) -> BoxFuture<()> {
+        measure_counter_inc!("failed_batch_count");
+
         error!("{}", reason);
 
         // TODO: Should we move all failed calls back into the current batch?
@@ -766,6 +781,7 @@ impl ConsensusFrontend {
             })
             .and_then(|_| {
                 require_state!(inner, State::ProposedBatch(..), "proposing batch");
+                measure_counter_inc!("proposed_batch_count");
 
                 inner
                     .backend

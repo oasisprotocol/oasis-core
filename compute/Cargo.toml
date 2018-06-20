@@ -10,6 +10,9 @@ build = "build.rs"
 [dependencies]
 ekiden-core = { path = "../core/common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../di", version = "0.2.0-alpha" }
+ekiden-epochtime = { path = "../epochtime", version = "0.2.0-alpha" }
+ekiden-instrumentation = { path = "../instrumentation", version = "0.2.0-alpha" }
+ekiden-instrumentation-prometheus = { path = "../instrumentation/prometheus", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
@@ -32,8 +35,6 @@ thread_local = "0.3.5"
 clap = "2.29.1"
 reqwest = "0.8.2"
 base64 = "0.9.0"
-prometheus = "0.3.10"
-hyper = "0.11"
 tokio-core = "0.1"
 grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 lru-cache = "0.1.1"

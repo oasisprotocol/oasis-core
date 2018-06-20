@@ -10,9 +10,9 @@ extern crate sgx_types;
 extern crate lazy_static;
 extern crate protobuf;
 extern crate serde;
-extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
+extern crate bincode;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_trusted;

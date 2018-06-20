@@ -7,10 +7,15 @@ pub use ekiden_core::enclave::quote::MrEnclave;
 #[macro_export]
 macro_rules! default_app {
     () => {{
+        use $crate::macros::LevelFilter;
+
         // Initialize logger.
         $crate::macros::formatted_builder()
             .unwrap()
-            .filter(None, $crate::macros::LevelFilter::Trace)
+            .filter(None, LevelFilter::Trace)
+            .filter(Some("mio"), LevelFilter::Warn)
+            .filter(Some("tokio_threadpool"), LevelFilter::Warn)
+            .filter(Some("tokio_reactor"), LevelFilter::Warn)
             .init();
 
         App::new(concat!(crate_name!(), " client"))

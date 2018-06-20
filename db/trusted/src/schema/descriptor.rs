@@ -2,9 +2,9 @@
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 
+use bincode;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_cbor;
 
 use super::super::{Database, DatabaseHandle};
 
@@ -38,7 +38,7 @@ where
 
     /// Derive the key for storing this field in the underlying database.
     fn get_key(&self) -> Vec<u8> {
-        serde_cbor::to_vec(&(&self.namespace, &self.name)).unwrap()
+        bincode::serialize(&(&self.namespace, &self.name)).unwrap()
     }
 
     /// Insert a value for this field.
@@ -59,9 +59,9 @@ where
         Q: ?Sized + Serialize,
     {
         let mut db = DatabaseHandle::instance();
-        let value = serde_cbor::to_vec(&(value.borrow())).unwrap();
+        let value = bincode::serialize(&(value.borrow())).unwrap();
         match db.insert(&self.get_key(), &value) {
-            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
+            Some(value) => Some(bincode::deserialize(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -70,7 +70,7 @@ where
     pub fn get(&self) -> Option<T> {
         let db = DatabaseHandle::instance();
         match db.get(&self.get_key()) {
-            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
+            Some(value) => Some(bincode::deserialize(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -80,7 +80,7 @@ where
     pub fn remove(&self) -> Option<T> {
         let mut db = DatabaseHandle::instance();
         match db.remove(&self.get_key()) {
-            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
+            Some(value) => Some(bincode::deserialize(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -118,7 +118,7 @@ where
         K: Borrow<Q>,
         Q: ?Sized + Serialize,
     {
-        serde_cbor::to_vec(&(&self.namespace, &self.name, subkey)).unwrap()
+        bincode::serialize(&(&self.namespace, &self.name, subkey)).unwrap()
     }
 
     /// Insert a value for this field.
@@ -144,9 +144,9 @@ where
         P: ?Sized + Serialize,
     {
         let mut db = DatabaseHandle::instance();
-        let value = serde_cbor::to_vec(&(value.borrow())).unwrap();
+        let value = bincode::serialize(&(value.borrow())).unwrap();
         match db.insert(&self.get_key_for_subkey(key), &value) {
-            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
+            Some(value) => Some(bincode::deserialize(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -164,7 +164,7 @@ where
     {
         let db = DatabaseHandle::instance();
         match db.get(&self.get_key_for_subkey(key)) {
-            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
+            Some(value) => Some(bincode::deserialize(&value).expect("Corrupted state")),
             None => None,
         }
     }
@@ -183,7 +183,7 @@ where
     {
         let mut db = DatabaseHandle::instance();
         match db.remove(&self.get_key_for_subkey(key)) {
-            Some(value) => Some(serde_cbor::from_slice(&value).expect("Corrupted state")),
+            Some(value) => Some(bincode::deserialize(&value).expect("Corrupted state")),
             None => None,
         }
     }

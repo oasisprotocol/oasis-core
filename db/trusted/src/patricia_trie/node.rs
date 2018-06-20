@@ -1,4 +1,4 @@
-use serde_cbor;
+use bincode;
 
 use ekiden_common::bytes::H256;
 
@@ -72,7 +72,7 @@ impl Node {
 
     /// Size of serialized node.
     pub fn size(&self) -> usize {
-        serde_cbor::to_vec(self).unwrap().len()
+        bincode::serialize(self).unwrap().len()
     }
 
     /// Check if node can be embedded instead of requiring a pointer.

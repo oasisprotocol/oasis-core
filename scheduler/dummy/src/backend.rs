@@ -5,12 +5,13 @@ use std::sync::{Arc, Mutex};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::contract::Contract;
 use ekiden_common::drbg::HmacDrbgRng;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream};
+use ekiden_common::environment::Environment;
+use ekiden_common::futures::prelude::*;
 use ekiden_core::bytes::B256;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::node::Node;
 use ekiden_core::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend};
 use ekiden_scheduler_base::*;
 
@@ -30,6 +31,7 @@ enum AsyncEvent {
 }
 
 struct DummySchedulerBackendInner {
+    environment: Arc<Environment>,
     beacon: Arc<RandomBeacon>,
     contract_registry: Arc<ContractRegistryBackend>,
     entity_registry: Arc<EntityRegistryBackend>,
@@ -46,16 +48,18 @@ struct DummySchedulerBackendInner {
 
 impl DummySchedulerBackendInner {
     fn new(
+        environment: Arc<Environment>,
         beacon: Arc<RandomBeacon>,
         contract_registry: Arc<ContractRegistryBackend>,
         entity_registry: Arc<EntityRegistryBackend>,
         time_notifier: Arc<TimeSourceNotifier>,
     ) -> Self {
         Self {
-            beacon: beacon,
-            contract_registry: contract_registry,
-            entity_registry: entity_registry,
-            time_notifier: time_notifier,
+            environment,
+            beacon,
+            contract_registry,
+            entity_registry,
+            time_notifier,
             subscribers: StreamSubscribers::new(),
             beacon_cache: HashMap::new(),
             entity_cache: HashMap::new(),
@@ -236,24 +240,27 @@ pub struct DummySchedulerBackend {
 impl DummySchedulerBackend {
     /// Create a new dummy scheduler.
     pub fn new(
+        environment: Arc<Environment>,
         beacon: Arc<RandomBeacon>,
         contract_registry: Arc<ContractRegistryBackend>,
         entity_registry: Arc<EntityRegistryBackend>,
         time_notifier: Arc<TimeSourceNotifier>,
     ) -> Self {
-        Self {
+        let instance = Self {
             inner: Arc::new(Mutex::new(DummySchedulerBackendInner::new(
+                environment,
                 beacon,
                 contract_registry,
                 entity_registry,
                 time_notifier,
             ))),
-        }
-    }
-}
+        };
+        instance.start();
 
-impl Scheduler for DummySchedulerBackend {
-    fn start(&self, executor: &mut Executor) {
+        instance
+    }
+
+    fn start(&self) {
         // Subscribe to all event sources.
         //
         // Note: This assumes that every event source will send the current
@@ -261,10 +268,10 @@ impl Scheduler for DummySchedulerBackend {
         //
         // BUG: None of the registries actually implement the on-subscription
         // semantics required to catch up.
-        executor.spawn({
-            let shared_inner = self.inner.clone();
-            let inner = self.inner.lock().unwrap();
+        let shared_inner = self.inner.clone();
+        let inner = self.inner.lock().unwrap();
 
+        inner.environment.spawn({
             let beacon_stream = inner.beacon.watch_beacons().map(AsyncEvent::Beacon);
             let nodes_stream = inner
                 .entity_registry
@@ -306,9 +313,11 @@ impl Scheduler for DummySchedulerBackend {
                     })
                     .then(|_| future::ok(())),
             )
-        })
+        });
     }
+}
 
+impl Scheduler for DummySchedulerBackend {
     fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
         let locked_inner = self.inner.lock().unwrap();
 
@@ -428,6 +437,7 @@ create_component!(
     DummySchedulerBackend,
     Scheduler,
     [
+        Environment,
         RandomBeacon,
         ContractRegistryBackend,
         EntityRegistryBackend,
@@ -452,36 +462,35 @@ mod tests {
     use ekiden_common::bytes::B256;
     use ekiden_common::contract::Contract;
     use ekiden_common::environment::GrpcEnvironment;
-    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
-    use ekiden_common::futures::cpupool;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::{InMemorySigner, Signature, Signed};
     use ekiden_common::untrusted;
+    use ekiden_epochtime::interface::EPOCH_INTERVAL;
+    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use std::collections::HashSet;
 
     #[test]
     fn test_dummy_scheduler_integration() {
         let time_source = Arc::new(MockTimeSource::new());
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
-        let beacon = Arc::new(InsecureDummyRandomBeacon::new(time_notifier.clone()));
-        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let grpc_environment = grpcio::EnvBuilder::new().build();
         let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
+        let beacon = Arc::new(InsecureDummyRandomBeacon::new(
+            environment.clone(),
+            time_notifier.clone(),
+        ));
+        let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let entity_registry = Arc::new(DummyEntityRegistryBackend::new(
             time_notifier.clone(),
             environment.clone(),
         ));
         let scheduler = DummySchedulerBackend::new(
+            environment.clone(),
             beacon.clone(),
             contract_registry.clone(),
             entity_registry.clone(),
             time_notifier.clone(),
         );
-
-        let pool = cpupool::CpuPool::new(1);
-        beacon.start(&mut pool.clone());
-        scheduler.start(&mut pool.clone());
 
         // Populate the entity registry.
         let mut nodes = vec![];

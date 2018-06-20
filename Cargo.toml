@@ -2,6 +2,13 @@
 members = [
     "tools",
 
+    # Dependency injection.
+    "di",
+
+    # Instrumentation.
+    "instrumentation",
+    "instrumentation/prometheus",
+
     # Common.
     "common",
     "common/api",
@@ -26,6 +33,7 @@ members = [
     "storage/dummy",
     "storage/dynamodb",
     "storage/frontend",
+    "storage/multilayer",
     "storage/persistent",
     "storage/lru_cache",
     "storage/batch",
@@ -34,6 +42,9 @@ members = [
     "enclave/common",
     "enclave/untrusted",
     "enclave/trusted",
+
+    # Epoch Time.
+    "epochtime",
 
     # RPC.
     "rpc/common",

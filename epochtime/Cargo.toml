@@ -1,0 +1,18 @@
+[package]
+name = "ekiden-epochtime"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden Time Synchronization"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-common-api = { path = "../common/api", version = "0.2.0-alpha" }
+ekiden-common = { path = "../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../di", version = "0.2.0-alpha" }
+log = "0.4"
+futures-timer = "0.1.1"
+chrono = "0.4.2"
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }

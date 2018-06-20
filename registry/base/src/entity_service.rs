@@ -4,7 +4,7 @@ use std::sync::Arc;
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
 use ekiden_registry_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
+use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::entity_backend::{EntityRegistryBackend, RegistryEvent};
 use ekiden_common::bytes::B256;
@@ -22,12 +22,6 @@ impl EntityRegistryService {
     pub fn new(backend: Arc<EntityRegistryBackend>) -> Self {
         Self { inner: backend }
     }
-}
-
-macro_rules! invalid {
-    ($sink:ident, $code:ident, $e:expr) => {
-        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
-    };
 }
 
 impl api::EntityRegistry for EntityRegistryService {
@@ -48,13 +42,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -75,13 +69,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -105,13 +99,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -132,13 +126,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -184,13 +178,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -209,13 +203,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -239,13 +233,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 
@@ -269,13 +263,13 @@ impl api::EntityRegistry for EntityRegistryService {
                 Err(e) => Err(e),
             }),
             Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
+            Err(e) => invalid_rpc!(sink, Internal, e),
         }).map_err(|_e| ()));
     }
 

@@ -7,7 +7,7 @@ use ekiden_common::futures::{future, Future, Stream};
 use ekiden_common::signature::Signature;
 use ekiden_consensus_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use grpcio::{RpcContext, RpcStatus, ServerStreamingSink, UnarySink, WriteFlags};
+use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::{ConsensusBackend, Event};
 use commitment::{Commitment, Reveal};
@@ -22,12 +22,6 @@ impl ConsensusService {
     pub fn new(backend: Arc<ConsensusBackend>) -> Self {
         Self { inner: backend }
     }
-}
-
-macro_rules! invalid {
-    ($sink:ident, $code:ident, $e:expr) => {
-        $sink.fail(RpcStatus::new($code, Some($e.description().to_owned())))
-    };
 }
 
 impl api::Consensus for ConsensusService {
@@ -52,13 +46,13 @@ impl api::Consensus for ConsensusService {
                 Err(error) => Err(error),
             }),
             Err(error) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |response| match response {
             Ok(response) => sink.success(response),
-            Err(error) => invalid!(sink, Internal, error),
+            Err(error) => invalid_rpc!(sink, Internal, error),
         }).map_err(|_error| ()));
     }
 
@@ -80,7 +74,7 @@ impl api::Consensus for ConsensusService {
                 (pb_response, WriteFlags::default())
             }),
             Err(error) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
@@ -124,7 +118,7 @@ impl api::Consensus for ConsensusService {
                 (pb_response, WriteFlags::default())
             }),
             Err(error) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
@@ -148,13 +142,13 @@ impl api::Consensus for ConsensusService {
                 Err(e) => Err(e),
             }),
             Err(error) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |response| match response {
             Ok(response) => sink.success(response),
-            Err(error) => invalid!(sink, Internal, error),
+            Err(error) => invalid_rpc!(sink, Internal, error),
         }).map_err(|_error| ()));
     }
 
@@ -184,13 +178,13 @@ impl api::Consensus for ConsensusService {
                 Err(e) => Err(e),
             }),
             Err(error) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, error).map_err(|_error| ()));
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
                 return;
             }
         };
         ctx.spawn(f.then(move |response| match response {
             Ok(response) => sink.success(response),
-            Err(error) => invalid!(sink, Internal, error),
+            Err(error) => invalid_rpc!(sink, Internal, error),
         }).map_err(|_error| ()));
     }
 }

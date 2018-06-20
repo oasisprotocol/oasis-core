@@ -2,18 +2,20 @@ use std::sync::Arc;
 
 extern crate ekiden_beacon_base;
 extern crate ekiden_common;
+extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
 #[macro_use(defer)]
 extern crate scopeguard;
+extern crate grpcio;
 extern crate web3;
 
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
-use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
-use ekiden_common::error::Error;
-use ekiden_common::futures::{cpupool, future, Future, Stream};
+use ekiden_common::environment::{Environment, GrpcEnvironment};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
+use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumRandomBeacon;
 use web3::api::Web3;
@@ -23,12 +25,13 @@ use web3::transports::WebSocket;
 fn beacon_integration() {
     testing::try_init_logging();
 
-    let mut executor = cpupool::CpuPool::new(4);
+    let grpc_environment = grpcio::EnvBuilder::new().build();
+    let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
 
     // Spin up truffle.
     let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
     defer! {{
-        let _ = truffle.kill();
+        drop(truffle.kill());
     }};
 
     // Connect to truffle.
@@ -42,13 +45,13 @@ fn beacon_integration() {
         .expect("could not find contract address");
 
     // Run a driver to make some background transactions such that things confirm.
-    let tx_stream = mine(transport);
-    let _handle = executor.spawn(tx_stream.fold(0 as u64, |a, _b| future::ok::<u64, Error>(a)));
+    environment.spawn(mine(transport).discard());
 
     // Initialize the beacon.
     let time_source = Arc::new(SystemTimeSource {});
     let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
     let beacon = EthereumRandomBeacon::new(
+        environment.clone(),
         Arc::new(client),
         Arc::new(Entity {
             id: B256::zero(),
@@ -57,7 +60,6 @@ fn beacon_integration() {
         H160::from_slice(&address),
         time_notifier.clone(),
     ).unwrap();
-    beacon.start(&mut executor);
 
     // Pump the time source.
     time_notifier.notify_subscribers().unwrap();

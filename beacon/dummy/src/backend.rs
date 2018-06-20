@@ -3,12 +3,13 @@ use std::sync::{Arc, Mutex};
 use byteorder::{LittleEndian, WriteBytesExt};
 use ekiden_beacon_base::RandomBeacon;
 use ekiden_common::bytes::B256;
-use ekiden_common::epochtime::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::mpsc;
-use ekiden_common::futures::{future, BoxFuture, BoxStream, Executor, Future, Stream, StreamExt};
 use ekiden_common::ring::digest;
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
 
 const DUMMY_BEACON_CONTEXT: &'static [u8] = b"EkB-Dumm";
 
@@ -29,10 +30,10 @@ pub struct InsecureDummyRandomBeacon {
 
 impl InsecureDummyRandomBeacon {
     /// Create a new dummy random beacon.
-    pub fn new(time_notifier: Arc<TimeSourceNotifier>) -> Self {
+    pub fn new(environment: Arc<Environment>, time_notifier: Arc<TimeSourceNotifier>) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
-        Self {
+        let instance = Self {
             inner: Arc::new(InsecureDummyRandomBeaconInner {
                 subscribers: StreamSubscribers::new(),
                 command_sender,
@@ -40,14 +41,15 @@ impl InsecureDummyRandomBeacon {
                 time_notifier: time_notifier,
                 last_notify: Mutex::new((EKIDEN_EPOCH_INVALID, B256::zero())),
             }),
-        }
-    }
-}
+        };
+        instance.start(environment);
 
-impl RandomBeacon for InsecureDummyRandomBeacon {
-    fn start(&self, executor: &mut Executor) {
+        instance
+    }
+
+    fn start(&self, environment: Arc<Environment>) {
         // Subscribe to the time source.
-        executor.spawn({
+        environment.spawn({
             let shared_inner = self.inner.clone();
 
             Box::new(
@@ -77,7 +79,7 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
         });
         let inner = self.inner.clone();
 
-        executor.spawn({
+        environment.spawn({
             let command_receiver = inner
                 .command_receiver
                 .lock()
@@ -111,7 +113,9 @@ impl RandomBeacon for InsecureDummyRandomBeacon {
                 )
         });
     }
+}
 
+impl RandomBeacon for InsecureDummyRandomBeacon {
     fn get_beacon(&self, epoch: EpochTime) -> BoxFuture<B256> {
         Box::new(future::ok(self.inner.get_beacon_impl(epoch)))
     }
@@ -162,18 +166,20 @@ create_component!(
     "random-beacon-backend",
     InsecureDummyRandomBeacon,
     RandomBeacon,
-    [TimeSourceNotifier]
+    [Environment, TimeSourceNotifier]
 );
 
 #[cfg(test)]
 mod tests {
+    extern crate grpcio;
     extern crate rustc_hex;
 
     use self::rustc_hex::ToHex;
     use super::*;
-    use ekiden_common::epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
-    use ekiden_common::epochtime::EPOCH_INTERVAL;
-    use ekiden_common::futures::{cpupool, Future};
+    use ekiden_common::environment::GrpcEnvironment;
+    use ekiden_common::futures::Future;
+    use ekiden_epochtime::interface::EPOCH_INTERVAL;
+    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 
     #[test]
     fn test_insecure_dummy_random_beacon() {
@@ -183,9 +189,11 @@ mod tests {
             "36ae91d1c4c40e52bcaa86f5cbb8fe514f36e5165c721b18f5feabc25fb0aa84";
         const FAR_FUTURE: u64 = 0xcafebabedeadbeef;
 
+        let grpc_environment = grpcio::EnvBuilder::new().build();
+        let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
         let time_source = Arc::new(MockTimeSource::new());
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
-        let beacon = InsecureDummyRandomBeacon::new(time_notifier.clone());
+        let beacon = InsecureDummyRandomBeacon::new(environment.clone(), time_notifier.clone());
 
         // Trivial known answer tests, generated with a Go implementation of
         // the same algorithm.
@@ -194,10 +202,6 @@ mod tests {
 
         let v = &(beacon.get_beacon(FAR_FUTURE).wait()).unwrap();
         assert_eq!((*v).to_hex(), BEACON_FAR_FUTURE);
-
-        // Test the async event source.
-        let mut pool = cpupool::CpuPool::new(1);
-        beacon.start(&mut pool);
 
         // Subscribe to the beacon.
         let get_beacons = beacon

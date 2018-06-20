@@ -1,13 +1,17 @@
-use ekiden_common::error::Error;
-use ekiden_common::futures::{future, stream, BoxStream, Future};
+use std::collections::HashMap;
+use std::env;
+use std::io::Read;
+use std::marker::Send;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+
 use rustc_hex::FromHex;
 use serde_json;
-use std;
-use std::collections::HashMap;
-use std::io::Read;
-use std::process::{Child, Command, Stdio};
-use std::{env, thread, time};
 use web3;
+
+use ekiden_common::error::Error;
+use ekiden_common::futures::prelude::*;
+use ekiden_common::tokio::timer::Interval;
 
 /// The hard coded truffle development Ethereum address, taken from
 /// http://truffleframework.com/docs/getting_started/console (entry 0).
@@ -90,16 +94,13 @@ pub fn test_truffle(cwd: &str) {
 }
 
 /// Make a stream of transactions between two truffle default accts to keep the chain going.
-pub fn mine<T: 'static + web3::Transport + Sync + Send>(tport: T) -> BoxStream<u64>
+pub fn mine<T: 'static + web3::Transport + Sync + Send>(transport: T) -> BoxFuture<()>
 where
-    <T as web3::Transport>::Out: std::marker::Send,
+    <T as web3::Transport>::Out: Send,
 {
-    Box::new(stream::unfold(0, move |state| {
-        thread::sleep(time::Duration::from_millis(500));
-        Some(
-            tport
-                .execute("evm_mine", vec![])
-                .then(move |_r| future::ok::<(u64, u64), Error>((0, state + 1))),
-        )
-    }))
+    Interval::new(Instant::now(), Duration::from_millis(500))
+        .map_err(|_| ())
+        .for_each(move |_| transport.execute("evm_mine", vec![]).discard())
+        .map_err(|_| Error::new("internal error"))
+        .into_box()
 }

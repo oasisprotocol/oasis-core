@@ -567,3 +567,12 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 }
+
+// Register for dependency injection.
+create_component!(
+    dummy,
+    "stake-backend",
+    DummyStakeEscrowBackend,
+    StakeEscrowBackend,
+    []
+);

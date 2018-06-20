@@ -7,12 +7,9 @@ extern crate sgx_types;
 extern crate base64;
 extern crate futures_timer;
 extern crate grpcio;
-extern crate hyper;
 #[macro_use]
 extern crate log;
 extern crate lru_cache;
-#[macro_use]
-extern crate prometheus;
 extern crate protobuf;
 extern crate reqwest;
 extern crate serde_cbor;
@@ -29,11 +26,12 @@ extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
+#[macro_use]
+extern crate ekiden_instrumentation;
 
 mod consensus;
 mod group;
 mod ias;
-mod instrumentation;
 mod node;
 mod services;
 mod worker;
@@ -46,18 +44,20 @@ extern crate pretty_env_logger;
 
 extern crate ekiden_consensus_client;
 extern crate ekiden_di;
+extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
+extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
 use std::path::Path;
-use std::thread;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
 use ekiden_core::bytes::B256;
+use ekiden_core::environment::Environment;
 use ekiden_di::{Component, KnownComponents};
 
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
@@ -69,6 +69,9 @@ use self::worker::WorkerConfiguration;
 fn register_components(known_components: &mut KnownComponents) {
     // Environment.
     ekiden_core::environment::GrpcEnvironment::register(known_components);
+    // Time.
+    ekiden_ethereum::EthereumMockTimeViaWebsocket::register(known_components);
+    ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Storage.
     ekiden_storage_frontend::StorageClient::register(known_components);
     // Consensus.
@@ -82,6 +85,11 @@ fn register_components(known_components: &mut KnownComponents) {
     // Local identities.
     ekiden_ethereum::identity::EthereumEntityIdentity::register(known_components);
     ekiden_ethereum::identity::EthereumNodeIdentity::register(known_components);
+    // Ethereum services.
+    ekiden_ethereum::web3_di::Web3Factory::register(known_components);
+    ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(known_components);
+    // Instrumentation.
+    ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
 }
 
 fn main() {
@@ -143,12 +151,6 @@ fn main() {
                 .default_value("1"),
         )
         .arg(
-            Arg::with_name("metrics-addr")
-                .long("metrics-addr")
-                .help("A SocketAddr (as a string) from which to serve metrics to Prometheus.")
-                .takes_value(true),
-        )
-        .arg(
             Arg::with_name("max-batch-size")
                 .long("max-batch-size")
                 .help("Maximum size of a batch of requests")
@@ -200,12 +202,18 @@ fn main() {
     pretty_env_logger::formatted_builder()
         .unwrap()
         .filter(None, LevelFilter::Trace)
+        .filter(Some("mio"), LevelFilter::Warn)
+        .filter(Some("tokio_threadpool"), LevelFilter::Warn)
+        .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("hyper"), LevelFilter::Warn)
         .init();
 
     // Initialize component container.
-    let container = known_components
+    let mut container = known_components
         .build_with_arguments(&matches)
         .expect("failed to initialize component container");
+
+    let environment = container.inject::<Environment>().unwrap();
 
     // Setup compute node.
     let mut node = ComputeNode::new(
@@ -278,12 +286,6 @@ fn main() {
     // Start compute node.
     node.start();
 
-    // Start the Prometheus metrics endpoint.
-    if let Ok(metrics_addr) = value_t!(matches, "metrics-addr", std::net::SocketAddr) {
-        instrumentation::start_http_server(metrics_addr);
-    }
-
-    loop {
-        thread::park();
-    }
+    // Start the environment.
+    environment.start();
 }
