@@ -155,7 +155,6 @@ impl StorageBackend for Rfc0004UBackend {
                         }
                     })
             })
-            // Why doesn't Box::new() work here?
             .into_box()
             .shared();
         accessed_guard.insert(key, AccessedItem::Incoming(f.clone()));
