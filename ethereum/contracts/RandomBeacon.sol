@@ -34,7 +34,7 @@ contract RandomBeacon {
 
     // Generate and set the beacon if it does not exist.
     function set_beacon() public {
-        (uint64 epoch, , uint64 till) = epoch_source.get_epoch(
+        (uint64 epoch, ,) = epoch_source.get_epoch(
             uint64(block.timestamp)
         );
         generate_beacon(epoch);
