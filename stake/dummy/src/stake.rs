@@ -576,8 +576,7 @@ create_component!(
     StakeEscrowBackend,
     (|container: &mut Container| -> Result<Box<Any>> {
         let args = container.get_arguments().unwrap();
-        let owner_hex = args.value_of("stake-owner").unwrap();
-        let owner_id = B256::from(owner_hex);
+        let owner_id = value_t_or_exit!(args, "stake-owner", B256);
         let instance: Box<StakeEscrowBackend> = Box::new(DummyStakeEscrowBackend::new(
             owner_id, "Oasis Stake".to_string(), "OS$".to_string(), AmountType::from(100_000_000),
             ));
