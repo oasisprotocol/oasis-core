@@ -528,8 +528,11 @@ impl PatriciaTrie {
 
 #[cfg(test)]
 mod test {
+    extern crate test as rust_test;
+
     use std::sync::Arc;
 
+    use self::rust_test::Bencher;
     use ekiden_storage_dummy::DummyStorageBackend;
 
     use super::*;
@@ -620,6 +623,27 @@ mod test {
             key_buf[i] = b'2';
             root_hash = Some(tree.insert(root_hash, &key_buf, val));
         }
+        key_buf[59] = b'4';
+        root_hash = Some(tree.insert(root_hash, &key_buf, val));
+        drop(root_hash);
+    }
+
+    #[bench]
+    fn bench_feather(b: &mut Bencher) {
+        let storage = Arc::new(DummyStorageBackend::new());
+        let tree = PatriciaTrie::new(storage);
+        let mut root_hash = None;
+        let mut key_buf = *b"\x83gStateDbhaccountsx(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let val = b"don't embed don't embed don't embed don't embed don't embed";
+        root_hash = Some(tree.insert(root_hash, &key_buf, val));
+        let mut i = 0;
+        b.iter(|| {
+            i = (i + 1) % 39;
+            key_buf[20 + i] = b'3';
+            root_hash = Some(tree.insert(root_hash, &key_buf, val));
+            key_buf[20 + i] = b'2';
+            root_hash = Some(tree.insert(root_hash, &key_buf, val));
+        });
         key_buf[59] = b'4';
         root_hash = Some(tree.insert(root_hash, &key_buf, val));
         drop(root_hash);
