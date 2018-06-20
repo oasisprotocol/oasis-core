@@ -39,6 +39,8 @@ fn bench_persistent_speed(b: &mut Bencher) {
     assert!(!backend.is_err());
     let backend = backend.unwrap();
 
+    backend.insert(b"value".to_vec(), 10).wait().unwrap();
+
     b.iter(|| backend.insert(b"value".to_vec(), 10).wait().unwrap());
 
     fs::remove_dir_all(db_path).expect("Could not cleanup DB.");

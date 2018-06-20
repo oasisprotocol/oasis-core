@@ -40,8 +40,7 @@ impl PatriciaTrie {
         match pointer {
             NodePointer::Null => None,
             NodePointer::Pointer(pointer) => {
-                let node = self
-                    .storage
+                let node = self.storage
                     .get(pointer)
                     .wait()
                     .expect("failed to fetch from storage");
@@ -119,8 +118,7 @@ impl PatriciaTrie {
         match pointer {
             NodePointer::Null => panic!("null node pointer dereference"),
             NodePointer::Pointer(pointer) => {
-                let node = self
-                    .storage
+                let node = self.storage
                     .get(pointer)
                     .wait()
                     .expect("failed to fetch from storage");
@@ -369,9 +367,10 @@ impl PatriciaTrie {
                 } else {
                     let child_index = path[0] as usize;
 
-                    match self
-                        .remove_path_by_pointer(path[1..].into(), children[child_index].clone())
-                    {
+                    match self.remove_path_by_pointer(
+                        path[1..].into(),
+                        children[child_index].clone(),
+                    ) {
                         Some(node) => {
                             children[child_index] = self.insert_node(node);
                             collapse = false;
