@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde_cbor;
+use bincode;
 
 use ekiden_common::bytes::H256;
 #[cfg(not(target_env = "sgx"))]
@@ -44,10 +44,7 @@ impl PatriciaTrie {
                     .get(pointer)
                     .wait()
                     .expect("failed to fetch from storage");
-                self.get_path_by_node(
-                    path,
-                    serde_cbor::from_slice(&node).expect("corrupted state"),
-                )
+                self.get_path_by_node(path, bincode::deserialize(&node).expect("corrupted state"))
             }
             NodePointer::Embedded(node) => self.get_path_by_node(path, node.as_ref().clone()),
         }
@@ -104,7 +101,7 @@ impl PatriciaTrie {
             NodePointer::Pointer(
                 self.storage
                     .insert(
-                        serde_cbor::to_vec(&node).unwrap(),
+                        bincode::serialize(&node).unwrap(),
                         PatriciaTrie::STORAGE_EXPIRY_TIME,
                     )
                     .wait()
@@ -123,7 +120,7 @@ impl PatriciaTrie {
                     .wait()
                     .expect("failed to fetch from storage");
 
-                serde_cbor::from_slice(&node).expect("corrupted state")
+                bincode::deserialize(&node).expect("corrupted state")
             }
             NodePointer::Embedded(node) => node.as_ref().clone(),
         }
@@ -330,7 +327,7 @@ impl PatriciaTrie {
                 // Store embedded root node.
                 self.storage
                     .insert(
-                        serde_cbor::to_vec(&node).unwrap(),
+                        bincode::serialize(&node).unwrap(),
                         PatriciaTrie::STORAGE_EXPIRY_TIME,
                     )
                     .wait()
@@ -518,7 +515,7 @@ impl PatriciaTrie {
                 Some(
                     self.storage
                         .insert(
-                            serde_cbor::to_vec(&node).unwrap(),
+                            bincode::serialize(&node).unwrap(),
                             PatriciaTrie::STORAGE_EXPIRY_TIME,
                         )
                         .wait()
@@ -547,7 +544,7 @@ mod test {
         assert_eq!(tree.get(Some(new_root), b"foo"), Some(b"bar".to_vec()));
         assert_eq!(
             new_root,
-            H256::from("0x2da15d83cffa5166e3640515013130e0a34e55c93090610d3d908ea511222566")
+            H256::from("0xbc218e864cca90f1ae20ab1af191ef1aa31ac12b5af51c63ce6e7bdd6199992a")
         );
 
         let new_root = tree.insert(Some(new_root), b"hello", b"world");
@@ -555,7 +552,7 @@ mod test {
         assert_eq!(tree.get(Some(new_root), b"hello"), Some(b"world".to_vec()));
         assert_eq!(
             new_root,
-            H256::from("0x1b690c7433af5c84da923da85c7af82b2dfaec9910aebfa995d3d7cf0894d44b")
+            H256::from("0x44de9699b3aa1e9b94a390899fbada775accd13e3e748d98fc12866d8ae69085")
         );
 
         let pairs = [
@@ -578,7 +575,7 @@ mod test {
 
         assert_eq!(
             new_root,
-            H256::from("0xda20b06caed3c13a313e7b82f303f182d95cd7ea994676482feb6e136a4e9af2")
+            H256::from("0x4c859bcb7c7b33365ce1bbd19921a57b0f36b91075630e44d37d8a6c9b7d1ed5")
         );
 
         for &(ref key, _) in pairs.iter() {
@@ -589,7 +586,7 @@ mod test {
         // Should be equal as before all items were inserted.
         assert_eq!(
             new_root,
-            H256::from("0x1b690c7433af5c84da923da85c7af82b2dfaec9910aebfa995d3d7cf0894d44b")
+            H256::from("0x44de9699b3aa1e9b94a390899fbada775accd13e3e748d98fc12866d8ae69085")
         );
 
         assert_eq!(tree.get(Some(new_root), b"foo"), Some(b"bar".to_vec()));
@@ -601,7 +598,7 @@ mod test {
         // Should be equal as before hello was inserted.
         assert_eq!(
             new_root,
-            H256::from("0x2da15d83cffa5166e3640515013130e0a34e55c93090610d3d908ea511222566")
+            H256::from("0xbc218e864cca90f1ae20ab1af191ef1aa31ac12b5af51c63ce6e7bdd6199992a")
         );
 
         // After removing foo the root should be gone as well.
