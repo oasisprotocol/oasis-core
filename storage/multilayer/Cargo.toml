@@ -1,5 +1,5 @@
 [package]
-name = "ekiden-storage-rfc0004u"
+name = "ekiden-storage-multilayer"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "A layered Ekiden storage backend implementing the untrusted portion of RFC 0004"

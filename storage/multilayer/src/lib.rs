@@ -57,7 +57,7 @@ enum AccessedItem {
     Writeback(Vec<u8>),
 }
 
-pub struct Rfc0004UBackend {
+pub struct MultilayerBackend {
     /// We do some writeback operations on this separate executor.
     remote: tokio_core::reactor::Remote,
     /// This map lets us look up whether we're already accessing an item.
@@ -69,7 +69,7 @@ pub struct Rfc0004UBackend {
     aws: Arc<DynamoDbBackend>,
 }
 
-impl Rfc0004UBackend {
+impl MultilayerBackend {
     pub fn new(
         remote: tokio_core::reactor::Remote,
         sled: Arc<PersistentStorageBackend>,
@@ -86,7 +86,7 @@ impl Rfc0004UBackend {
     }
 }
 
-impl StorageBackend for Rfc0004UBackend {
+impl StorageBackend for MultilayerBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
         let mut accessed_guard = self.accessed.lock().unwrap();
         match accessed_guard.get(&key) {
@@ -216,10 +216,10 @@ fn di_factory(
     let args = container.get_arguments().unwrap();
     let aws_region = value_t_or_exit!(
         args,
-        "storage-rfc0004u-aws-region",
+        "storage-multilayer-aws-region",
         rusoto_core::region::Region
     );
-    let aws_table_name = args.value_of("storage-rfc0004u-aws-table-name")
+    let aws_table_name = args.value_of("storage-multilayer-aws-table-name")
         .unwrap()
         .to_string();
     let (init_tx, init_rx) = futures::sync::oneshot::channel();
@@ -251,22 +251,22 @@ fn di_factory(
         aws_region,
         aws_table_name,
     ));
-    let backend: Arc<StorageBackend> = Arc::new(Rfc0004UBackend::new(remote, sled, aws));
+    let backend: Arc<StorageBackend> = Arc::new(MultilayerBackend::new(remote, sled, aws));
     Ok(Box::new(backend))
 }
 
 fn di_arg_aws_region<'a, 'b>() -> clap::Arg<'a, 'b> {
-    clap::Arg::with_name("storage-rfc0004u-aws-region")
-        .long("storage-rfc0004u-aws-region")
-        .help("AWS region that the AWS layer of the RFC 0004 untrusted storage backend should use")
+    clap::Arg::with_name("storage-multilayer-aws-region")
+        .long("storage-multilayer-aws-region")
+        .help("AWS region that the AWS layer of the RFC 0004 multilayer storage backend should use")
         .takes_value(true)
         .required(true)
 }
 
 fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
-    clap::Arg::with_name("storage-rfc0004u-aws-table-name")
-        .long("storage-rfc0004u-aws-table-name")
-        .help("DynamoDB table that the AWS layer of the RFC 0004 untrusted storage backend should use")
+    clap::Arg::with_name("storage-multilayer-aws-table-name")
+        .long("storage-multilayer-aws-table-name")
+        .help("DynamoDB table that the AWS layer of the RFC 0004 multilayer storage backend should use")
         .takes_value(true)
         .required(true)
 }
@@ -274,9 +274,9 @@ fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
 // Register for dependency injection. This preparation starts a thread for the reactor core that
 // runs forever.
 create_component!(
-    rfc0004u,
+    multilayer,
     "storage-backend",
-    Rfc0004UBackend,
+    MultilayerBackend,
     StorageBackend,
     di_factory,
     [di_arg_aws_region(), di_arg_aws_table_name()]
@@ -297,7 +297,7 @@ mod tests {
     use std::sync::Arc;
     use tokio_core;
 
-    use Rfc0004UBackend;
+    use MultilayerBackend;
     #[test]
     fn play() {
         ekiden_common::testing::try_init_logging();
@@ -306,7 +306,7 @@ mod tests {
         if let Err(e) = core.run(rusoto_core::reactor::CredentialsProvider::default().credentials())
         {
             // Skip this if AWS credentials aren't available.
-            warn!("{} Skipping RFC 0004 untrusted test.", e);
+            warn!("{} Skipping multilayer storage test.", e);
             return;
         }
 
@@ -321,7 +321,7 @@ mod tests {
             "us-west-2".parse().unwrap(),
             "test".to_string(),
         ));
-        let storage = Rfc0004UBackend::new(core.remote(), sled.clone(), aws.clone());
+        let storage = MultilayerBackend::new(core.remote(), sled.clone(), aws.clone());
 
         // Test retrieving item from sled layer.
         let reference_value_sled = b"hello from sled".to_vec();
