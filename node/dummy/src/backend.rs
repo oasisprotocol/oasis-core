@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 
 use ekiden_beacon_api::create_beacon;
 use ekiden_beacon_base::{BeaconService, RandomBeacon};
-use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::environment::Environment;
 use ekiden_common::futures::{future, Future, Stream};
 use ekiden_common_api::create_time_source;
@@ -90,10 +89,7 @@ impl DummyBackend {
         let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
 
         let env = di_container.inject::<Environment>()?;
-        let random_beacon = Arc::new(InsecureDummyRandomBeacon::new(
-            env.clone(),
-            time_notifier.clone(),
-        ));
+        let random_beacon = di_container.inject::<RandomBeacon>()?;
         let contract_registry = Arc::new(DummyContractRegistryBackend::new());
         let grpc_environment = env.grpc();
 

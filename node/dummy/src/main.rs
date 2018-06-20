@@ -9,7 +9,9 @@ extern crate pretty_env_logger;
 extern crate ekiden_common;
 extern crate ekiden_di;
 use ekiden_di::Component;
+extern crate ekiden_beacon_dummy;
 extern crate ekiden_epochtime;
+extern crate ekiden_ethereum;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
@@ -36,6 +38,12 @@ fn main() {
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
+    ekiden_beacon_dummy::InsecureDummyRandomBeacon::register(&mut known_components);
+    ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
+    ekiden_ethereum::identity::EthereumEntityIdentity::register(&mut known_components);
+    ekiden_ethereum::EthereumMockTime::register(&mut known_components);
+    ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(&mut known_components);
+
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(&mut known_components);
 
     let matches = App::new("Ekiden Dummy Shared Backend Node")

@@ -10,6 +10,7 @@ use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, FutureExt, Stream};
+use ekiden_common::identity::EntityIdentity;
 use ekiden_di;
 use ekiden_epochtime::interface::{EpochTime, TimeSource, TimeSourceNotifier};
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
@@ -288,22 +289,24 @@ create_component!(
     TimeSourceNotifier,
     (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
         let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
-        let local_identity = container.inject::<Entity>()?;
+        let local_identity = container.inject::<EntityIdentity>()?;
         let environment = container.inject::<Environment>()?;
 
         let args = container.get_arguments().unwrap();
         let contract_address = value_t_or_exit!(args, "time-address", H160);
 
         let instance: Arc<EthereumMockTimeViaWebsocket> =
-            Arc::new(
-                EthereumMockTime::new(client, local_identity, contract_address, environment)
-                    .map_err(|e| ekiden_di::error::Error::from(e.description()))?,
-            );
+            Arc::new(EthereumMockTime::new(
+                client,
+                Arc::new(local_identity.get_entity()),
+                contract_address,
+                environment,
+            ).map_err(|e| ekiden_di::error::Error::from(e.description()))?);
         Ok(Box::new(instance))
     }),
     [Arg::with_name("time-address")
         .long("time-address")
-        .env("TIME_ADDRESS")
+        .env("ENV_MockEpoch")
         .help("Ethereum address at which the time source has been deployed")
         .takes_value(true)]
 );
