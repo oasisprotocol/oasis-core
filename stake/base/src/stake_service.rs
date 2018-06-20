@@ -502,7 +502,11 @@ where
                 Ok(t) => t,
             };
             let a = AmountType::from_little_endian(req.get_escrow_amount());
-            Ok(self.inner.allocate_escrow(s, t, a))
+            let aux = match B256::try_from(req.get_aux()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoAux.to_string())),
+                Ok(aux) => aux,
+            };
+            Ok(self.inner.allocate_escrow(s, t, a, aux))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {

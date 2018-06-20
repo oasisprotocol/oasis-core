@@ -29,6 +29,7 @@ pub enum ErrorCodes {
     BadProtoSpender,
     BadProtoTarget,
     BadProtoState,
+    BadProtoAux,
     BadEscrowId,
     NoStakeAccount,
     NoEscrowAccount,
@@ -59,13 +60,11 @@ pub struct EscrowAccountIdType {
 // The new() and incr_mut methods are really only used from the dummy impl.
 impl EscrowAccountIdType {
     pub fn new() -> Self {
-        // In EVM, the all-zero address is special.
-        let mut ea_id = Self { id: U256::from(0) };
-        match ea_id.incr_mut() {
-            Err(e) => panic!(e),
-            Ok(o) => o,
-        };
-        ea_id
+        // In EVM, the zero value is often special, since mapping
+        // default value is zero.  The Solidity contract does not use
+        // zero as a escrow account id, and we adhere to that
+        // convention here.
+        Self { id: U256::from(1) }
     }
 
     pub fn from_vec(id: Vec<u8>) -> Result<EscrowAccountIdType, Error> {
@@ -109,6 +108,12 @@ impl fmt::Display for EscrowAccountIdType {
 pub struct StakeStatus {
     pub total_stake: AmountType, // Total stake deposited...
     pub escrowed: AmountType,    // ... of which this much is tied up in escrow.
+}
+
+impl StakeStatus {
+    pub fn new(stake: AmountType, escrowed: AmountType) -> Self {
+        Self { total_stake: stake, escrowed: escrowed }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -193,6 +198,7 @@ pub trait StakeEscrowBackend: Send + Sync {
         msg_sender: B256,
         target: B256,
         escrow_amount: AmountType,
+        aux: B256,
     ) -> BoxFuture<EscrowAccountIdType>;
 
     /// Returns a vector of all active escrow accounts created by |msg_sender|.

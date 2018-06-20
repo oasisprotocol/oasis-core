@@ -182,11 +182,13 @@ impl StakeEscrowBackend for StakeClient {
         sender: B256,
         target: B256,
         amount: AmountType,
+        aux: B256,
     ) -> BoxFuture<EscrowAccountIdType> {
         let mut request = api::AllocateEscrowRequest::new();
         request.set_msg_sender(sender.to_vec());
         request.set_target(target.to_vec());
         request.set_escrow_amount(amount.to_vec());
+        request.set_aux(aux.to_vec());
         match self.0.allocate_escrow_async(&request) {
             Ok(f) => Box::new(
                 f.map_err(|error| Error::new(error.description()))

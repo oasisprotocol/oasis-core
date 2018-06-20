@@ -31,7 +31,7 @@ fn get_and_show_stake(backend: &Arc<DummyStakeEscrowBackend>, id: B256, name: &s
 
 impl IdGenerator {
     fn new() -> Self {
-        Self { id: U256::from(0) }
+        Self { id: U256::from(1) }
     }
 
     fn get(&self) -> B256 {
@@ -59,8 +59,12 @@ impl IdGenerator {
 fn test_dummy_stake_backend() {
     try_init_logging();
 
-    let backend = Arc::new(DummyStakeEscrowBackend::new());
     let mut id_generator = IdGenerator::new();
+    let oasis = id_generator.gen_id();
+
+    let backend = Arc::new(DummyStakeEscrowBackend::new(
+        oasis, "Oasis Stake", "O$", 1_000_000_000,
+    ));
 
     let alice = id_generator.gen_id();
 
