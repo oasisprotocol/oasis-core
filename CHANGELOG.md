@@ -33,6 +33,7 @@
 * Backport `SelectAll` stream combinator from futures 0.3.
 * Add generic instrumentation framework (`ekiden-instrumentation`) and a Prometheus
   frontend (`ekiden-instrumentation-prometheus`).
+* Added the multilayer storage backend described in RFC 0004.
 
 # 0.1.0
 
