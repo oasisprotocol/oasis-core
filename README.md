@@ -86,6 +86,7 @@ To start the compute node for the token contract (you need to start two):
 # cargo run -p ekiden-compute -- \
     --time-source-notifier system \
     --entity-ethereum-address 0000000000000000000000000000000000000000 \
+    --storage-backend remote \
     --no-persist-identity \
     target/contract/token.so
 ```

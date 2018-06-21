@@ -22,6 +22,7 @@ ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.2.0-alpha" 
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
+ekiden-storage-multilayer = { path = "../storage/multilayer", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../scheduler/base", version = "0.2.0-alpha" }
 ekiden-scheduler-client = { path = "../scheduler/client", version = "0.2.0-alpha" }
 ekiden-beacon-base = { path = "../beacon/base", version = "0.2.0-alpha" }

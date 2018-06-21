@@ -102,6 +102,8 @@ spec:
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
             - --scheduler-client-port
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
+            - --storage-backend
+            - remote
             - --storage-client-host
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
             - --storage-client-port

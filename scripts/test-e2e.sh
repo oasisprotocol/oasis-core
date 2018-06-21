@@ -36,6 +36,7 @@ run_compute_node() {
         --compute-replicas 2 \
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --storage-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
