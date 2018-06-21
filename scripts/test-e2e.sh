@@ -49,6 +49,7 @@ run_compute_node_storage_multilayer() {
     shift
     local extra_args=$*
 
+    local db_dir=/tmp/ekiden-test-storage-multilayer-sled-$id
     # Generate port number.
     let "port=id + 10000"
 
@@ -59,6 +60,7 @@ run_compute_node_storage_multilayer() {
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --storage-backend multilayer \
+        --storage-multilayer-sled-storage-base "$db_dir" \
         --storage-multilayer-aws-region us-west-2 \
         --storage-multilayer-aws-table-name test \
         --port ${port} \

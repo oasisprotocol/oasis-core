@@ -241,7 +241,8 @@ fn di_factory(
         .chain_err(|| "Couldn't create rector core")?;
     let sled = Arc::new(PersistentStorageBackend::new(
         Box::new(ekiden_epochtime::local::SystemTimeSource {}),
-        "./",
+        args.value_of("storage-multilayer-sled-storage-base")
+            .unwrap(),
     ).map_err(|e| {
         // Can't use chain_error because ekiden_common Error doesn't implement std Error.
         ekiden_di::error::Error::from(format!("Couldn't create sled layer: {:?}", e))
@@ -253,6 +254,15 @@ fn di_factory(
     ));
     let backend: Arc<StorageBackend> = Arc::new(MultilayerBackend::new(remote, sled, aws));
     Ok(Box::new(backend))
+}
+
+fn di_arg_sled_storage_base<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-multilayer-sled-storage-base")
+        .long("storage-multilayer-sled-storage-base")
+        .help("Database path that the sled layer of the RFC 0004 multilayer storage backend should use")
+        .takes_value(true)
+        // TODO: default value
+        .required(true)
 }
 
 fn di_arg_aws_region<'a, 'b>() -> clap::Arg<'a, 'b> {
@@ -279,7 +289,11 @@ create_component!(
     MultilayerBackend,
     StorageBackend,
     di_factory,
-    [di_arg_aws_region(), di_arg_aws_table_name()]
+    [
+        di_arg_sled_storage_base(),
+        di_arg_aws_region(),
+        di_arg_aws_table_name()
+    ]
 );
 
 #[cfg(test)]
