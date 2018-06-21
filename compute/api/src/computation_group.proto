@@ -1,12 +1,17 @@
 syntax = "proto3";
 
 import "common/api/src/common.proto";
+import "consensus/api/src/consensus.proto";
 
 package computation_group;
 
 service ComputationGroup {
     // Submit a batch to a worker in the same computation group.
     rpc SubmitBatch (SubmitBatchRequest) returns (SubmitBatchResponse) {}
+    // Submit a commit to the leader for aggregation.
+    rpc SubmitAggCommit (SubmitAggCommitRequest) returns (SubmitAggResponse) {}
+    // Submit a reveal to the leader for aggregation.
+    rpc SubmitAggReveal (SubmitAggRevealRequest) returns (SubmitAggResponse) {}
 }
 
 message SubmitBatchRequest {
@@ -15,4 +20,18 @@ message SubmitBatchRequest {
 }
 
 message SubmitBatchResponse {
+}
+
+message SubmitAggCommitRequest {
+    consensus.Commitment commit = 1;
+    common.Signature signature = 2;
+}
+
+message SubmitAggRevealRequest {
+    consensus.Reveal reveal = 1;
+    common.Signature signature = 2;
+}
+
+message SubmitAggResponse {
+    bytes receipt = 1;
 }

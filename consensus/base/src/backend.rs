@@ -59,4 +59,12 @@ pub trait ConsensusBackend: Sync + Send {
 
     /// Reveal the block header that was committed to previously using `commit`.
     fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()>;
+
+    /// Commit to results of processing multiple batches of contract invocations.
+    ///
+    /// Each passed `commitment` must be over the block header.
+    fn commit_many(&self, contract_id: B256, commitments: Vec<Commitment>) -> BoxFuture<()>;
+
+    /// Reveal multiple block headers that were committed to previously using `commit` or `commit_many`.
+    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal<Header>>) -> BoxFuture<()>;
 }

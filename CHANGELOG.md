@@ -34,6 +34,7 @@
 * Add generic instrumentation framework (`ekiden-instrumentation`) and a Prometheus
   frontend (`ekiden-instrumentation-prometheus`).
 * Added the multilayer storage backend described in RFC 0004.
+* Add aggregating commits and reveals in consensus.
 
 # 0.1.0
 

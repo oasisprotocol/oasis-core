@@ -5,13 +5,15 @@ use std::sync::Arc;
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
-use ekiden_compute_api::{ComputationGroup, SubmitBatchRequest, SubmitBatchResponse};
+use ekiden_compute_api::{ComputationGroup, SubmitAggCommitRequest, SubmitAggResponse,
+                         SubmitAggRevealRequest, SubmitBatchRequest, SubmitBatchResponse};
 use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::signature::{Signature, Signed};
 
 use super::super::consensus::ConsensusFrontend;
+use ekiden_consensus_base::{Commitment, Header, Reveal};
 
 struct Inner {
     /// Consensus frontend.
@@ -56,6 +58,66 @@ impl ComputationGroup for ComputationGroupService {
 
         let f = match f() {
             Ok(()) => sink.success(SubmitBatchResponse::new()),
+            Err(error) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Internal,
+                Some(error.description().to_owned()),
+            )),
+        };
+        ctx.spawn(f.map_err(|_error| ()));
+    }
+
+    fn submit_agg_commit(
+        &self,
+        ctx: grpcio::RpcContext,
+        mut request: SubmitAggCommitRequest,
+        sink: grpcio::UnarySink<SubmitAggResponse>,
+    ) {
+        trace!("Hello from submit_agg_commit!");
+
+        let mut f = || -> Result<()> {
+            let commit = Commitment::try_from(request.get_commit().clone())?;
+            let signature = Signature::try_from(request.take_signature())?;
+            let signed_commit = Signed::from_parts(commit, signature);
+
+            self.inner
+                .consensus_frontend
+                .process_agg_commit(signed_commit)?;
+
+            Ok(())
+        };
+
+        let f = match f() {
+            Ok(()) => sink.success(SubmitAggResponse::new()),
+            Err(error) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Internal,
+                Some(error.description().to_owned()),
+            )),
+        };
+        ctx.spawn(f.map_err(|_error| ()));
+    }
+
+    fn submit_agg_reveal(
+        &self,
+        ctx: grpcio::RpcContext,
+        mut request: SubmitAggRevealRequest,
+        sink: grpcio::UnarySink<SubmitAggResponse>,
+    ) {
+        trace!("Hello from submit_agg_reveal!");
+
+        let mut f = || -> Result<()> {
+            let reveal = Reveal::<Header>::try_from(request.get_reveal().clone())?;
+            let signature = Signature::try_from(request.take_signature())?;
+            let signed_reveal = Signed::from_parts(reveal, signature);
+
+            self.inner
+                .consensus_frontend
+                .process_agg_reveal(signed_reveal)?;
+
+            Ok(())
+        };
+
+        let f = match f() {
+            Ok(()) => sink.success(SubmitAggResponse::new()),
             Err(error) => sink.fail(RpcStatus::new(
                 RpcStatusCode::Internal,
                 Some(error.description().to_owned()),
