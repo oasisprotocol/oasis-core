@@ -51,6 +51,8 @@ struct Inner {
     committee: Mutex<Vec<CommitteeNode>>,
     /// Signer for the compute node.
     signer: Arc<Signer>,
+    /// Current leader of the computation committee.
+    leader: Arc<Mutex<Option<CommitteeNode>>>,
     /// Environment.
     environment: Arc<Environment>,
     /// Command sender.
@@ -72,15 +74,6 @@ impl Inner {
             .filter(|node| node.public_key == self.signer.get_public_key())
             .map(|node| node.role.clone())
             .next()
-    }
-
-    /// Finds the leader of the current committee.
-    fn find_leader(&self) -> Option<CommitteeNode> {
-        let committee = self.committee.lock().unwrap();
-        committee
-            .iter()
-            .find(|node| node.role == Role::Leader)
-            .cloned()
     }
 }
 
@@ -108,6 +101,7 @@ impl ComputationGroup {
                 node_group: NodeGroup::new(),
                 committee: Mutex::new(vec![]),
                 signer,
+                leader: Arc::new(Mutex::new(None)),
                 environment,
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
@@ -186,6 +180,9 @@ impl ComputationGroup {
         }
         inner.node_group.clear();
 
+        // Clear the current leader as well.
+        *inner.leader.lock().unwrap() = None;
+
         // Check if we are still part of the committee. If we are not, do not populate the node
         // group with any nodes as it is not needed.
         if !members
@@ -196,6 +193,12 @@ impl ComputationGroup {
             inner.role_subscribers.notify(&None);
             return Box::new(future::ok(()));
         }
+
+        // Find new leader.
+        *inner.leader.lock().unwrap() = members
+            .iter()
+            .find(|node| node.role == Role::Leader)
+            .cloned();
 
         // Resolve nodes via the entity registry.
         // TODO: Support group fetch to avoid multiple requests to registry or make scheduler return nodes.
@@ -378,7 +381,7 @@ impl ComputationGroup {
             .unbounded_send(Command::SubmitAggCommit(commit))
             .unwrap();
 
-        self.inner.find_leader().unwrap()
+        self.inner.leader.lock().unwrap().clone().unwrap()
     }
 
     /// Submit a reveal to the leader for aggregation.
@@ -390,7 +393,7 @@ impl ComputationGroup {
             .unbounded_send(Command::SubmitAggReveal(reveal))
             .unwrap();
 
-        self.inner.find_leader().unwrap()
+        self.inner.leader.lock().unwrap().clone().unwrap()
     }
 
     /// Verify that given batch has been signed by the current leader.
@@ -420,7 +423,7 @@ impl ComputationGroup {
         // Check if commitment was signed by a worker and that we're the
         // current leader, drop otherwise.  Also note that the leader and
         // backup workers also count as workers.
-        let leader = self.inner.find_leader().unwrap();
+        let leader = self.inner.leader.lock().unwrap().clone().unwrap();
 
         if leader.public_key != self.inner.signer.get_public_key() {
             warn!("Dropping commit for aggregation, as we're not the current compute committee leader");
@@ -447,7 +450,7 @@ impl ComputationGroup {
         // Check if reveal was signed by a worker and that we're the
         // current leader, drop otherwise.  Also note that the leader and
         // backup workers also count as workers.
-        let leader = self.inner.find_leader().unwrap();
+        let leader = self.inner.leader.lock().unwrap().clone().unwrap();
 
         if leader.public_key != self.inner.signer.get_public_key() {
             warn!("Dropping reveal for aggregation, as we're not the current compute committee leader");
