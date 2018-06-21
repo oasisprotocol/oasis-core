@@ -94,8 +94,8 @@ macro_rules! contract_client {
 
 #[cfg(feature = "benchmark")]
 #[macro_export]
-macro_rules! benchmark_client {
-    ($signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+macro_rules! benchmark_app {
+    () => {{
         use std::sync::{Arc, Mutex};
 
         let known_components = $crate::components::create_known_components();
@@ -125,6 +125,17 @@ macro_rules! benchmark_client {
             .expect("failed to initialize component container");
         let container = Arc::new(Mutex::new(container));
 
+        (args, container)
+    }};
+}
+
+#[cfg(feature = "benchmark")]
+#[macro_export]
+macro_rules! benchmark_client {
+    ($app:ident, $signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+        let (args, container) = ($app.0.clone(), $app.1.clone());
+        let signer = $signer.clone();
+
         let benchmark = $crate::benchmark::Benchmark::new(
             value_t!(args, "benchmark-runs", usize).unwrap_or_else(|e| e.exit()),
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
@@ -132,12 +143,15 @@ macro_rules! benchmark_client {
                 let args = args.clone();
                 let shared_container = container.clone();
                 let mut container = shared_container.lock().unwrap();
-                let signer = $signer.clone();
+                let signer = signer.clone();
 
                 contract_client!(signer, $contract, args, container)
             },
         );
 
-        benchmark.run($init, $scenario, $finalize)
+        let results = benchmark.run($init, $scenario, $finalize);
+        println!("------ {} ------", stringify!($scenario));
+        results.show();
+        println!("");
     }};
 }
