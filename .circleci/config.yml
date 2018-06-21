@@ -90,6 +90,7 @@ jobs:
             - target/debug/test-long-term-client
             - target/contract/token.so
             - target/contract/token.mrenclave
+            - ethereum/build/contracts
             - tests
             - scripts
 
@@ -98,6 +99,7 @@ jobs:
     <<: *defaults
     steps:
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - checkout
       - attach_workspace:
           at: /workspace
       # Run tests.
