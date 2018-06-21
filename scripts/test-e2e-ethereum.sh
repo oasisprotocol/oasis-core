@@ -6,7 +6,9 @@ WORKDIR=${1:-$(pwd)}
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
         --time-source system \
+        --time-source-notifier ethereum \
         --random-beacon-backend ethereum \
+        --beacon-address ${ENV_RandomBeaconMock} \
         --web3-host "ws://127.0.0.1:9545" \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --storage-backend dummy \
@@ -15,7 +17,7 @@ run_dummy_node_default() {
 
 run_ethereum() {
     #cd ${WORKDIR}/ethereum && ganache-cli -d -m "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat" -p 9545 &
-    cd ${WORKDIR}/ethereum && truffle develop < /dev/zero > /dev/null &
+    cd ${WORKDIR}/ethereum && tail -f /dev/null | truffle develop > /dev/null &
     eval `cd ${WORKDIR}/ethereum && truffle migrate --reset | grep ENV_ | awk '$0="export "$0'`
 }
 
@@ -34,6 +36,7 @@ run_compute_node() {
         --max-batch-size 1 \
         --compute-replicas 2 \
         --time-source-notifier ethereum \
+        --beacon-address ${ENV_RandomBeaconMock} \
         --entity-ethereum-address ${etherid} \
         --web3-host "ws://127.0.0.1:9545" \
         --port ${port} \
@@ -72,7 +75,10 @@ run_test() {
     # Advance epoch to elect a new committee.
     for epoch in $(seq $epochs); do
         sleep 2
-        ${WORKDIR}/target/debug/ekiden-mockepoch-controller set-epoch --epoch $epoch
+        ${WORKDIR}/target/debug/ekiden-mockepoch-controller \
+            --web3-host "ws://127.0.0.1:9545" \
+            --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+            set-epoch --epoch $epoch
     done
 
     # Wait on the client and check its exit status.

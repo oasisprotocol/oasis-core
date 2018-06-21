@@ -5,7 +5,9 @@ WORKDIR=${1:-$(pwd)}
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
         --random-beacon-backend dummy \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source mockrpc \
+        --time-source-notifier system \
         --storage-backend dummy \
         &
 }
@@ -13,6 +15,8 @@ run_dummy_node_default() {
 run_dummy_node_storage_dynamodb() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
         --time-source mockrpc \
+        --time-source-notifier system \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --storage-backend dynamodb \
         --storage-dynamodb-region us-west-2 \
         --storage-dynamodb-table-name test \

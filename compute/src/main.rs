@@ -205,6 +205,9 @@ fn main() {
         .filter(Some("mio"), LevelFilter::Warn)
         .filter(Some("tokio_threadpool"), LevelFilter::Warn)
         .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("tokio_io"), LevelFilter::Warn)
+        .filter(Some("tokio_core"), LevelFilter::Warn)
+        .filter(Some("web3"), LevelFilter::Info)
         .filter(Some("hyper"), LevelFilter::Warn)
         .init();
 

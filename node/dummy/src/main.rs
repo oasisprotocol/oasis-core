@@ -41,6 +41,7 @@ fn main() {
     ekiden_beacon_dummy::InsecureDummyRandomBeacon::register(&mut known_components);
     ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
     ekiden_ethereum::identity::EthereumEntityIdentity::register(&mut known_components);
+    ekiden_epochtime::local::LocalTimeSourceNotifier::register(&mut known_components);
     ekiden_ethereum::EthereumMockTime::register(&mut known_components);
     ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(&mut known_components);
 
@@ -96,6 +97,9 @@ fn main() {
         .filter(Some("mio"), LevelFilter::Warn)
         .filter(Some("tokio_threadpool"), LevelFilter::Warn)
         .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("tokio_io"), LevelFilter::Warn)
+        .filter(Some("tokio_core"), LevelFilter::Warn)
+        .filter(Some("web3"), LevelFilter::Info)
         .filter(Some("hyper"), LevelFilter::Warn)
         .init();
 

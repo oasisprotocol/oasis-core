@@ -518,7 +518,7 @@ create_component!(
         let args = container.get_arguments().unwrap();
         let contract_address = value_t_or_exit!(args, "beacon-address", H160);
 
-        let instance: Arc<EthereumRandomBeaconViaWebsocket> =
+        let instance: Arc<RandomBeacon> =
             Arc::new(EthereumRandomBeacon::new(
                 environment,
                 client,

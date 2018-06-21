@@ -295,12 +295,12 @@ create_component!(
         let args = container.get_arguments().unwrap();
         let contract_address = value_t_or_exit!(args, "time-address", H160);
 
-        let instance: Arc<EthereumMockTimeViaWebsocket> =
+        let instance: Arc<TimeSourceNotifier> =
             Arc::new(EthereumMockTime::new(
                 client,
                 Arc::new(local_identity.get_entity()),
                 contract_address,
-                environment,
+                environment.clone(),
             ).map_err(|e| ekiden_di::error::Error::from(e.description()))?);
         Ok(Box::new(instance))
     }),
