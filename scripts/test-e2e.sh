@@ -44,6 +44,30 @@ run_compute_node() {
         ${WORKDIR}/target/contract/token.so &
 }
 
+run_compute_node_storage_multilayer() {
+    local id=$1
+    shift
+    local extra_args=$*
+
+    # Generate port number.
+    let "port=id + 10000"
+
+    ${WORKDIR}/target/debug/ekiden-compute \
+        --no-persist-identity \
+        --max-batch-size 1 \
+        --compute-replicas 2 \
+        --time-source-notifier system \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --storage-backend multilayer \
+        --storage-multilayer-aws-region us-west-2 \
+        --storage-multilayer-aws-table-name test \
+        --port ${port} \
+        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        ${extra_args} \
+        ${WORKDIR}/target/contract/token.so &
+}
+
 run_test() {
     local scenario=$1
     local description=$2
@@ -109,6 +133,14 @@ scenario_discrepancy_leader() {
     run_compute_node 3 --test-inject-discrepancy
 }
 
+scenario_multilayer() {
+    run_compute_node_storage_multilayer 1
+    sleep 1
+    run_compute_node_storage_multilayer 2
+    sleep 1
+    run_compute_node_storage_multilayer 3
+}
+
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
@@ -117,4 +149,9 @@ if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
     run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb
 else
     echo >&2 "Skipping DynamoDB test."
+fi
+if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
+    run_test scenario_multilayer "e2e-storage-multilayer" token 1 run_dummy_node_default
+else
+    echo >&2 "Skipping multilayer storage backend test."
 fi
