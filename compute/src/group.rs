@@ -176,6 +176,11 @@ impl ComputationGroup {
         // Clear previous group.
         {
             let mut committee = inner.committee.lock().unwrap();
+            if *committee == members {
+                info!("Not updating committee as membership has not changed");
+                return future::ok(()).into_box();
+            }
+
             committee.clear();
         }
         inner.node_group.clear();
@@ -229,15 +234,19 @@ impl ComputationGroup {
 
                     trace!("New committee: {:?}", members);
 
+                    let old_role = inner.get_role();
+
                     // Update current committee.
                     {
                         let mut committee = inner.committee.lock().unwrap();
                         *committee = members;
                     }
 
-                    let new_role = inner.get_role().unwrap();
-                    info!("Our new role is: {:?}", new_role);
-                    inner.role_subscribers.notify(&Some(new_role));
+                    let new_role = inner.get_role();
+                    if new_role != old_role {
+                        info!("Our new role is: {:?}", &new_role.unwrap());
+                        inner.role_subscribers.notify(&new_role);
+                    }
 
                     info!("Update of computation group committee finished");
 

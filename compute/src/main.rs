@@ -5,7 +5,6 @@
 extern crate sgx_types;
 
 extern crate base64;
-extern crate futures_timer;
 extern crate grpcio;
 #[macro_use]
 extern crate log;
