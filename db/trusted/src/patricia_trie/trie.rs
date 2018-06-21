@@ -19,8 +19,8 @@ pub struct PatriciaTrie {
 }
 
 impl PatriciaTrie {
-    // TODO: Handle storage expiry.
-    const STORAGE_EXPIRY_TIME: u64 = u64::max_value();
+    // Keep tree around for this epoch and the next epoch so that next committee can get it.
+    const STORAGE_EXPIRY_TIME: u64 = 2;
 
     /// Construct a new merkle patricia tree backed by given storage.
     pub fn new(storage: Arc<StorageMapper>) -> Self {

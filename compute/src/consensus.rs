@@ -887,7 +887,7 @@ impl ConsensusFrontend {
             }
 
             // Persist batch into storage so that the workers can get it.
-            // TODO: How to handle expiry of these items?
+            // Save it for one epoch so that the current committee can access it.
             let inner = inner.clone();
             let inner_clone = inner.clone();
             let encoded_batch = serde_cbor::to_vec(&batch).unwrap();
@@ -901,7 +901,7 @@ impl ConsensusFrontend {
 
             inner
                 .storage
-                .insert(encoded_batch, u64::max_value())
+                .insert(encoded_batch, 1)
                 .and_then(move |_| {
                     require_state!(
                         inner,
@@ -1072,7 +1072,7 @@ impl ConsensusFrontend {
 
         inner
             .storage
-            .insert(encoded_outputs, u64::max_value())
+            .insert(encoded_outputs, 2)
             .or_else(|error| {
                 // Failed to store outputs, abort current batch.
                 Self::fail_batch(
