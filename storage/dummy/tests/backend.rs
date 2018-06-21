@@ -44,7 +44,7 @@ fn bench_dummy_speed(b: &mut Bencher) {
     use ekiden_storage_base::StorageBackend;
 
     let backend = DummyStorageBackend::new();
-    let key = hash_storage_key(b"value");
+    let _key = hash_storage_key(b"value");
 
     b.iter(|| backend.insert(b"value".to_vec(), 10).wait().unwrap())
 }

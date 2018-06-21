@@ -25,12 +25,13 @@ message Entity {
 
 message Node {
     bytes id = 1;
-    bytes entity_id = 2;
-    uint64 expiration = 3;
-    repeated Address addresses = 4;
-    Certificate certificate = 5;
+    bytes eth_address = 2;
+    bytes entity_id = 3;
+    uint64 expiration = 4;
+    repeated Address addresses = 5;
+    Certificate certificate = 6;
     // TODO: stake should be formalized in common or consensus.
-    bytes stake = 6;
+    bytes stake = 7;
 }
 
 message Signature {
