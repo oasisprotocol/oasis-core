@@ -6,6 +6,7 @@ version: 2
 jobs:
   build:
     <<: *defaults
+    resource_class: large
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -105,6 +106,7 @@ jobs:
 
   deploy:
     <<: *defaults
+    resource_class: large
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
