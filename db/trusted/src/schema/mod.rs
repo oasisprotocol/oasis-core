@@ -7,6 +7,12 @@ pub mod macros;
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+
+    use self::test::Bencher;
+
+    use ekiden_common::bytes::{B160, B256};
+
     use super::super::{Database, DatabaseHandle};
 
     database_schema! {
@@ -20,6 +26,10 @@ mod tests {
         pub struct AnotherSchema {
             pub foo: String,
             pub bar: String,
+        }
+
+        pub struct BenchSchema {
+            pub map: Map<(B160, B256), B256>,
         }
     }
 
@@ -84,5 +94,21 @@ mod tests {
 
         assert_eq!(schema1.foo.get(), Some("hello".to_owned()));
         assert_eq!(schema2.foo.get(), Some("world".to_owned()));
+    }
+
+    #[bench]
+    fn bench_map_insert_random(b: &mut Bencher) {
+        {
+            let mut db = DatabaseHandle::instance();
+            db.clear();
+        }
+
+        let schema = BenchSchema::new();
+
+        b.iter(|| {
+            schema
+                .map
+                .insert(&(B160::random(), B256::random()), &B256::zero());
+        });
     }
 }
