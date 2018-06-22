@@ -11,8 +11,16 @@ use ekiden_common::futures::{future, BoxFuture};
 
 use ekiden_stake_base::*;
 
-use usize_iterable_hashmap::*;
 use usize_iterable_hashset::*;
+// To implement the iterators which contain state in an opaque B256
+// state value, we could stuff the HashSet's .iter() into the B256,
+// but that would be unsafe since the peer could modify the state
+// before using the iterator.  Instead, we implement
+// UsizeIterableHashSet so that the iterator state is just a usize
+// value; it is invalidated by operations on the HashSet, but bogus
+// values are not dangerous.  We could also have kept a hashmap from
+// tokens to iterators and encode the tokens in the B256 values, but
+// then abandoned iterators would leak memory.
 
 // It would be nice if DummyStakeEscrowInfo contained its owner ID so
 // that EscrowAccount's owner and target can be just a reference to
@@ -26,7 +34,6 @@ struct DummyStakeEscrowInfo {
     amount: AmountType,
     escrowed: AmountType, // sum_{a \in accounts} escrow_map[a].amount
     accounts: UsizeIterableHashSet<EscrowAccountIdType>,
-    // accounts: HashSet<EscrowAccountIdType>,
     // account id, keys for escrow_map below.  \forall a \in accounts:
     // escrow_map[a].owner is stakeholder (key to this instance in
     // stakes below)
