@@ -9,7 +9,7 @@ use grpcio;
 use ekiden_common_api as api;
 
 use super::address::Address;
-use super::bytes::B256;
+use super::bytes::{B256, H160};
 use super::error::{Error, Result};
 #[allow(unused_imports)]
 use super::x509::{Certificate, CERTIFICATE_COMMON_NAME};
@@ -19,6 +19,8 @@ use super::x509::{Certificate, CERTIFICATE_COMMON_NAME};
 pub struct Node {
     /// A public key identifying the node.
     pub id: B256,
+    /// The ethereum address of this Entity.
+    pub eth_address: Option<H160>,
     /// The public key identifying the `Entity` controlling the node.
     pub entity_id: B256,
     /// The epoch in which this nodes committment expires.
@@ -42,9 +44,14 @@ impl TryFrom<api::Node> for Node {
             .map(|address| Address::try_from(address))
             .collect();
         let addresses = addresses?;
+        let eth_address = match H160::try_from(node.get_eth_address()) {
+            Ok(addr) => Some(addr),
+            Err(_) => None,
+        };
 
         Ok(Node {
             id: B256::try_from(node.get_id())?,
+            eth_address: eth_address,
             entity_id: B256::try_from(node.get_entity_id())?,
             expiration: node.expiration,
             addresses: addresses,
@@ -59,6 +66,10 @@ impl Into<api::Node> for Node {
     fn into(mut self) -> api::Node {
         let mut node = api::Node::new();
         node.set_id(self.id.to_vec());
+        if self.eth_address.is_some() {
+            node.set_eth_address(self.eth_address.unwrap().to_vec());
+        }
+
         node.set_entity_id(self.entity_id.to_vec());
         node.set_expiration(self.expiration);
         node.set_addresses(
@@ -104,6 +115,7 @@ mod test {
         // Non-default node with some data.
         let mut original = Node::default();
         original.id = B256::random();
+        original.eth_address = None;
         original.entity_id = B256::random();
         original.expiration = 1_000_000_000;
         original.addresses = Address::for_local_port(42).unwrap();

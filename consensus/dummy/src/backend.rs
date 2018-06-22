@@ -77,138 +77,195 @@ impl Round {
         self.state = State::WaitingCommitments;
     }
 
-    /// Add new commitment from a node in this round.
-    fn add_commitment(round: Arc<Mutex<Round>>, commitment: Commitment) -> BoxFuture<()> {
+    /// Add new commitments from one or more nodes in this round.
+    fn add_commitments(
+        round: Arc<Mutex<Round>>,
+        commitments: &[Commitment],
+    ) -> BoxFuture<Vec<Result<()>>> {
         let mut round = round.lock().unwrap();
 
-        // Ensure commitment is from a valid compute node and that we are in correct state.
-        let node_id = commitment.signature.public_key.clone();
-        {
-            let node = match round.computation_group.get(&node_id) {
-                Some(node) => node,
-                None => {
-                    return future::err(Error::new("node not part of computation group")).into_box()
-                }
-            };
+        // We're going to store the resulting futures for each commitment.
+        let mut results: Vec<BoxFuture<()>> = Vec::with_capacity(commitments.len());
 
-            match (node.role, round.state) {
-                (Role::Worker, State::WaitingCommitments)
-                | (Role::Leader, State::WaitingCommitments) => {}
+        for commitment in commitments.iter() {
+            // Ensure each commitment is from a valid compute node and that we are in correct state.
+            let node_id = commitment.signature.public_key.clone();
+            {
+                let node = match round.computation_group.get(&node_id) {
+                    Some(node) => node,
+                    None => {
+                        results.push(
+                            future::err(Error::new("node not part of computation group"))
+                                .into_box(),
+                        );
+                        continue;
+                    }
+                };
 
-                (Role::BackupWorker, State::DiscrepancyWaitingCommitments) => {}
+                match (node.role, round.state) {
+                    (Role::Worker, State::WaitingCommitments)
+                    | (Role::Leader, State::WaitingCommitments) => {}
 
-                _ => {
-                    return future::err(Error::new("node has incorrect role for current state"))
-                        .into_box()
+                    (Role::BackupWorker, State::DiscrepancyWaitingCommitments) => {}
+
+                    _ => {
+                        results.push(
+                            future::err(Error::new("node has incorrect role for current state"))
+                                .into_box(),
+                        );
+                        continue;
+                    }
                 }
             }
+
+            if !commitment.verify() {
+                results
+                    .push(future::err(Error::new("commitment has invalid signature")).into_box());
+                continue;
+            }
+
+            // Ensure node did not already submit a commitment.
+            if round.commitments.contains_key(&node_id) {
+                results.push(future::err(Error::new("node already sent commitment")).into_box());
+                continue;
+            }
+
+            round.commitments.insert(node_id, commitment.clone());
+
+            results.push(future::ok(()).into_box());
         }
 
-        if !commitment.verify() {
-            return future::err(Error::new("commitment has invalid signature")).into_box();
-        }
-
-        // Ensure node did not already submit a commitment.
-        if round.commitments.contains_key(&node_id) {
-            return future::err(Error::new("node already sent commitment")).into_box();
-        }
-
-        round.commitments.insert(node_id, commitment);
-
-        future::ok(()).into_box()
+        // Return a future returning a vector of results of the above futures
+        // in the same order as the commitments were given.
+        stream::futures_ordered(results)
+            .then(|r| Ok(r))
+            .collect()
+            .into_box()
     }
 
-    /// Add new reveal from a node in this round.
-    fn add_reveal(round: Arc<Mutex<Round>>, reveal: Reveal<Header>) -> BoxFuture<()> {
-        let shared_round = round.clone();
-        let round = round.lock().unwrap();
+    /// Add new reveals from one or more nodes in this round.
+    fn add_reveals(
+        round: Arc<Mutex<Round>>,
+        reveals: Vec<Reveal<Header>>,
+    ) -> BoxFuture<Vec<Result<()>>> {
+        // We're going to store the resulting futures for each reveal.
+        let mut results: Vec<BoxFuture<()>> = Vec::with_capacity(reveals.len());
 
-        // Ensure reveal is from a valid compute node and that we are in correct state.
-        let node_id = reveal.signature.public_key.clone();
-        {
-            let node = match round.computation_group.get(&node_id) {
-                Some(node) => node,
-                None => {
-                    return future::err(Error::new("node not part of computation group")).into_box()
-                }
-            };
+        for reveal in reveals.iter() {
+            let shared_round = round.clone();
+            let round = round.lock().unwrap();
+            let reveal = reveal.clone();
 
-            match (node.role, round.state) {
-                (Role::Worker, State::WaitingReveals) | (Role::Leader, State::WaitingReveals) => {}
+            // Ensure each reveal is from a valid compute node and that we are in correct state.
+            let node_id = reveal.signature.public_key.clone();
+            {
+                let node = match round.computation_group.get(&node_id) {
+                    Some(node) => node,
+                    None => {
+                        results.push(
+                            future::err(Error::new("node not part of computation group"))
+                                .into_box(),
+                        );
+                        continue;
+                    }
+                };
 
-                (Role::BackupWorker, State::DiscrepancyWaitingReveals) => {}
+                match (node.role, round.state) {
+                    (Role::Worker, State::WaitingReveals)
+                    | (Role::Leader, State::WaitingReveals) => {}
 
-                _ => {
-                    return future::err(Error::new("node has incorrect role for current state"))
-                        .into_box()
+                    (Role::BackupWorker, State::DiscrepancyWaitingReveals) => {}
+
+                    _ => {
+                        results.push(
+                            future::err(Error::new("node has incorrect role for current state"))
+                                .into_box(),
+                        );
+                        continue;
+                    }
                 }
             }
-        }
 
-        if !reveal.verify() {
-            return future::err(Error::new("reveal has invalid signature")).into_box();
-        }
+            if !reveal.verify() {
+                results.push(future::err(Error::new("reveal has invalid signature")).into_box());
+                continue;
+            }
 
-        // Ensure node submitted a commitment.
-        if !round.commitments.contains_key(&node_id) {
-            return future::err(Error::new("node did not send commitment")).into_box();
-        }
+            // Ensure node submitted a commitment.
+            if !round.commitments.contains_key(&node_id) {
+                results.push(future::err(Error::new("node did not send commitment")).into_box());
+                continue;
+            }
 
-        // Ensure node did not already submit a reveal.
-        if round.reveals.contains_key(&node_id) {
-            return future::err(Error::new("node already sent reveal")).into_box();
-        }
+            // Ensure node did not already submit a reveal.
+            if round.reveals.contains_key(&node_id) {
+                results.push(future::err(Error::new("node already sent reveal")).into_box());
+                continue;
+            }
 
-        // Check if block is based on the previous block.
-        if !reveal.value.is_parent_of(&round.current_block.header) {
-            return future::err(Error::new(
-                "submitted header is not based on previous block",
-            )).into_box();
-        }
+            // Check if block is based on the previous block.
+            if !reveal.value.is_parent_of(&round.current_block.header) {
+                results.push(
+                    future::err(Error::new(
+                        "submitted header is not based on previous block",
+                    )).into_box(),
+                );
+                continue;
+            }
 
-        let mut storage_checks = vec![];
+            let mut storage_checks = vec![];
 
-        // Check if storage backend contains correct input batch.
-        if reveal.value.input_hash != empty_hash() {
-            storage_checks.push(
-                round
-                    .storage
-                    .get(reveal.value.input_hash)
-                    .map_err(|_error| Error::new("inputs not found in storage"))
+            // Check if storage backend contains correct input batch.
+            if reveal.value.input_hash != empty_hash() {
+                storage_checks.push(
+                    round
+                        .storage
+                        .get(reveal.value.input_hash)
+                        .map_err(|_error| Error::new("inputs not found in storage"))
+                        .into_box(),
+                );
+            }
+
+            // Check if storage backend contains correct output batch.
+            if reveal.value.output_hash != empty_hash() {
+                storage_checks.push(
+                    round
+                        .storage
+                        .get(reveal.value.output_hash)
+                        .map_err(|_error| Error::new("outputs not found in storage"))
+                        .into_box(),
+                );
+            }
+
+            // Check if storage backend contains correct state root.
+            // TODO: Currently we just check a single key, we would need to check against a log.
+            if reveal.value.state_root != empty_hash() {
+                storage_checks.push(
+                    round
+                        .storage
+                        .get(reveal.value.state_root)
+                        .map_err(|_error| Error::new("state root not found in storage"))
+                        .into_box(),
+                );
+            }
+
+            results.push(
+                future::join_all(storage_checks)
+                    .and_then(move |_| {
+                        let mut round = shared_round.lock().unwrap();
+                        round.reveals.insert(node_id, reveal);
+
+                        Ok(())
+                    })
                     .into_box(),
             );
         }
 
-        // Check if storage backend contains correct output batch.
-        if reveal.value.output_hash != empty_hash() {
-            storage_checks.push(
-                round
-                    .storage
-                    .get(reveal.value.output_hash)
-                    .map_err(|_error| Error::new("outputs not found in storage"))
-                    .into_box(),
-            );
-        }
-
-        // Check if storage backend contains correct state root.
-        // TODO: Currently we just check a single key, we would need to check against a log.
-        if reveal.value.state_root != empty_hash() {
-            storage_checks.push(
-                round
-                    .storage
-                    .get(reveal.value.state_root)
-                    .map_err(|_error| Error::new("state root not found in storage"))
-                    .into_box(),
-            );
-        }
-
-        future::join_all(storage_checks)
-            .and_then(move |_| {
-                let mut round = shared_round.lock().unwrap();
-                round.reveals.insert(node_id, reveal);
-
-                Ok(())
-            })
+        // Return a future returning a vector of results of the above futures
+        // in the same order as the reveals were given.
+        stream::futures_ordered(results)
+            .then(|r| Ok(r))
+            .collect()
             .into_box()
     }
 
@@ -373,6 +430,8 @@ impl Round {
 enum Command {
     Commit(B256, Commitment, oneshot::Sender<Result<()>>),
     Reveal(B256, Reveal<Header>, oneshot::Sender<Result<()>>),
+    CommitMany(B256, Vec<Commitment>, oneshot::Sender<Result<()>>),
+    RevealMany(B256, Vec<Reveal<Header>>, oneshot::Sender<Result<()>>),
 }
 
 struct Inner {
@@ -466,12 +525,24 @@ impl DummyConsensusBackend {
                         Command::Commit(contract_id, commitment, sender) => (
                             contract_id,
                             sender,
-                            Box::new(move |round| Round::add_commitment(round, commitment.clone())),
+                            Box::new(move |round| {
+                                Round::add_commitments(round, &vec![commitment.clone()])
+                            }),
                         ),
                         Command::Reveal(contract_id, reveal, sender) => (
                             contract_id,
                             sender,
-                            Box::new(move |round| Round::add_reveal(round, reveal.clone())),
+                            Box::new(move |round| Round::add_reveals(round, vec![reveal.clone()])),
+                        ),
+                        Command::CommitMany(contract_id, commitments, sender) => (
+                            contract_id,
+                            sender,
+                            Box::new(move |round| Round::add_commitments(round, &commitments)),
+                        ),
+                        Command::RevealMany(contract_id, reveals, sender) => (
+                            contract_id,
+                            sender,
+                            Box::new(move |round| Round::add_reveals(round, reveals.clone())),
                         ),
                     };
 
@@ -717,6 +788,19 @@ impl ConsensusBackend for DummyConsensusBackend {
     fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
         self.send_command(Command::Reveal(contract_id, reveal, sender), receiver)
+    }
+
+    fn commit_many(&self, contract_id: B256, commitments: Vec<Commitment>) -> BoxFuture<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_command(
+            Command::CommitMany(contract_id, commitments, sender),
+            receiver,
+        )
+    }
+
+    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal<Header>>) -> BoxFuture<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_command(Command::RevealMany(contract_id, reveals, sender), receiver)
     }
 }
 

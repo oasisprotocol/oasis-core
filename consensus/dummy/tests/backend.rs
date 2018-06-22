@@ -13,7 +13,6 @@ extern crate grpcio;
 
 use std::sync::Arc;
 
-use ekiden_beacon_base::RandomBeacon;
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::contract::Contract;
