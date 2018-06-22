@@ -1,13 +1,13 @@
 //! Consensus frontend.
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use futures_timer::Interval;
 use serde_cbor;
 
-use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
+use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Header, Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::environment::Environment;
@@ -36,6 +36,10 @@ enum Command {
     ProcessEvent(Event),
     /// Update local role.
     UpdateRole(Option<Role>),
+    /// Process commit for aggregation from node with given role.
+    ProcessAggCommit(Commitment, Role),
+    /// Process reveal for aggregation from node with given role.
+    ProcessAggReveal(Reveal<Header>, Role),
 }
 
 /// State of the consensus frontend.
@@ -185,6 +189,27 @@ struct Inner {
     call_subscribers: Mutex<HashMap<H256, Vec<oneshot::Sender<Vec<u8>>>>>,
     /// Test-only configuration.
     test_only_config: ConsensusTestOnlyConfiguration,
+    /// Commits from workers or leader waiting to be sent as an aggregation to the backend.
+    agg_commits: Mutex<Vec<Commitment>>,
+    /// Commits from backup workers waiting to be sent as an aggregation to the backend.
+    agg_backup_commits: Mutex<Vec<Commitment>>,
+    /// Reveals from workers or leader waiting to be sent as an aggregation to the backend.
+    agg_reveals: Mutex<Vec<Reveal<Header>>>,
+    /// Reveals from backup workers waiting to be sent as an aggregation to the backend.
+    agg_backup_reveals: Mutex<Vec<Reveal<Header>>>,
+}
+
+/// Type of aggregation queue.
+///
+/// Used in handling of commits/reveals for aggregation to select the
+/// appropriate queue in the Inner struct, based on the role of the node
+/// that sent us the commit/reveal.
+#[derive(Copy, Clone, Debug)]
+enum AggregationQueueType {
+    /// Primary commit/reveal queue (either agg_commits or agg_reveals).
+    Primary,
+    /// Backup commit/reveal queue (either agg_backup_commits or agg_backup_reveals).
+    Backup,
 }
 
 /// Consensus test-only configuration.
@@ -241,6 +266,10 @@ impl ConsensusFrontend {
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 call_subscribers: Mutex::new(HashMap::new()),
                 test_only_config: config.test_only.clone(),
+                agg_commits: Mutex::new(Vec::new()),
+                agg_backup_commits: Mutex::new(Vec::new()),
+                agg_reveals: Mutex::new(Vec::new()),
+                agg_backup_reveals: Mutex::new(Vec::new()),
             }),
         };
         instance.start();
@@ -341,6 +370,12 @@ impl ConsensusFrontend {
                         inner.clone(),
                         "No longer part of computation group".to_string(),
                     ),
+                    Command::ProcessAggCommit(commit, role) => {
+                        Self::handle_agg_commit(inner.clone(), commit, role)
+                    }
+                    Command::ProcessAggReveal(reveal, role) => {
+                        Self::handle_agg_reveal(inner.clone(), reveal, role)
+                    }
                 },
             )
         });
@@ -487,15 +522,19 @@ impl ConsensusFrontend {
 
         Self::transition(inner.clone(), State::WaitingForFinalize(role, block));
 
-        let inner = inner.clone();
-        inner
-            .backend
-            .reveal(inner.contract_id, reveal)
-            .or_else(|error| {
-                // Failed to submit reveal, abort current batch.
-                Self::fail_batch(inner, format!("Failed to reveal block: {}", error.message))
-            })
-            .into_box()
+        if role == Role::Leader {
+            trace!("Commitments received, appending aggregate reveal on leader node (fast path)");
+
+            // Leader can just append to its own aggregate reveals queue.
+            Self::handle_agg_reveal(inner.clone(), reveal, role)
+        } else {
+            trace!("Commitments received, submitting aggregate reveal to leader");
+
+            // Submit reveal to leader for aggregation.
+            inner.computation_group.submit_agg_reveal(reveal);
+
+            future::ok(()).into_box()
+        }
     }
 
     /// Handle discrepancy detected event from consensus backend.
@@ -577,6 +616,195 @@ impl ConsensusFrontend {
                         "Failed to fetch transactions from storage: {}",
                         error.message
                     );
+
+                    Ok(())
+                })
+                .into_box()
+        } else {
+            future::ok(()).into_box()
+        }
+    }
+
+    /// Handle commit for aggregation command.
+    fn handle_agg_commit(inner: Arc<Inner>, commit: Commitment, role: Role) -> BoxFuture<()> {
+        require_state_ignore!(
+            inner,
+            State::ProcessingBatch(Role::Leader) | State::ProposedBatch(Role::Leader, ..)
+                | State::WaitingForFinalize(Role::Leader, ..)
+        );
+
+        trace!("Adding commit from {:?} to aggregation queue", role);
+
+        // Select appropriate queue based on the role of the node that sent
+        // us the commitment.  Also calculate how many commitments we need
+        // before we can send all the aggregated commitments to the backend.
+        let mut agg_commits: MutexGuard<Vec<Commitment>>;
+        let needed_commits: usize;
+        let agg_queue: AggregationQueueType;
+
+        match role {
+            Role::Worker | Role::Leader => {
+                agg_commits = inner.agg_commits.lock().unwrap();
+                needed_commits = inner.computation_group.get_number_of_workers();
+                agg_queue = AggregationQueueType::Primary;
+            }
+            Role::BackupWorker => {
+                agg_commits = inner.agg_backup_commits.lock().unwrap();
+                needed_commits = inner.computation_group.get_number_of_backup_workers();
+                agg_queue = AggregationQueueType::Backup;
+            }
+        }
+
+        // Add commit to the aggregation queue.
+        agg_commits.push(commit);
+
+        trace!(
+            "Commits in {:?} queue aggregated so far: {}/{}",
+            agg_queue,
+            agg_commits.len(),
+            needed_commits
+        );
+
+        // Check if it's time to send aggregated commits to the backend.
+        //
+        // For now, we only do this when we have aggregated commits from
+        // all the workers in the committee, timeouts will be added later.
+        //
+        // TODO: We should probably explicitly check that each worker
+        //       has sent exactly one commit instead of just checking
+        //       the length of the array.
+        if agg_commits.len() == needed_commits {
+            trace!(
+                "Submitting queued aggregated commits from {:?} queue to backend and clearing queue",
+                agg_queue
+            );
+
+            // Drain the aggregated commits into a new vector for sending.
+            let commits_to_send = agg_commits.drain(..).collect();
+
+            let inner = inner.clone();
+            inner
+                .backend
+                .commit_many(inner.contract_id, commits_to_send)
+                .and_then(move |_| {
+                    // Check that the aggregation queue is indeed empty.
+                    match agg_queue {
+                        AggregationQueueType::Primary => {
+                            assert!(inner.agg_commits.lock().unwrap().is_empty());
+                        }
+                        AggregationQueueType::Backup => {
+                            assert!(inner.agg_backup_commits.lock().unwrap().is_empty())
+                        }
+                    }
+
+                    trace!(
+                        "Queued aggregated commits from {:?} queue successfully sent to backend",
+                        agg_queue
+                    );
+
+                    Ok(())
+                })
+                .or_else(move |error| {
+                    error!(
+                        "Aggregated commits from {:?} queue failed: {}",
+                        agg_queue, error.message
+                    );
+
+                    // Should we do anything else here?
+
+                    Ok(())
+                })
+                .into_box()
+        } else {
+            future::ok(()).into_box()
+        }
+    }
+
+    /// Handle reveal for aggregation command.
+    fn handle_agg_reveal(inner: Arc<Inner>, reveal: Reveal<Header>, role: Role) -> BoxFuture<()> {
+        require_state_ignore!(
+            inner,
+            State::ProposedBatch(Role::Leader, ..) | State::WaitingForFinalize(Role::Leader, ..)
+        );
+
+        trace!("Adding reveal from {:?} to aggregation queue", role);
+
+        // Select appropriate queue based on the role of the node that sent
+        // us the reveal.  Also calculate how many reveals we need before we
+        // can send all the aggregated reveals to the backend.
+        let mut agg_reveals: MutexGuard<Vec<Reveal<Header>>>;
+        let needed_reveals: usize;
+        let agg_queue: AggregationQueueType;
+
+        match role {
+            Role::Worker | Role::Leader => {
+                agg_reveals = inner.agg_reveals.lock().unwrap();
+                needed_reveals = inner.computation_group.get_number_of_workers();
+                agg_queue = AggregationQueueType::Primary;
+            }
+            Role::BackupWorker => {
+                agg_reveals = inner.agg_backup_reveals.lock().unwrap();
+                needed_reveals = inner.computation_group.get_number_of_backup_workers();
+                agg_queue = AggregationQueueType::Backup;
+            }
+        }
+
+        // Add reveal to the aggregation queue.
+        agg_reveals.push(reveal);
+
+        trace!(
+            "Reveals in {:?} queue aggregated so far: {}/{}",
+            agg_queue,
+            agg_reveals.len(),
+            needed_reveals
+        );
+
+        // Check if it's time to send aggregated reveals to the backend.
+        //
+        // For now, we only do this when we have aggregated reveals from
+        // all the workers in the committee, timeouts will be added later.
+        //
+        // TODO: We should probably explicitly check that each worker
+        //       has sent exactly one reveal instead of just checking
+        //       the length of the array.
+        if agg_reveals.len() == needed_reveals {
+            trace!(
+                "Submitting queued aggregated reveals from {:?} queue to backend and clearing queue",
+                agg_queue
+            );
+
+            // Drain the aggregated reveals into a new vector for sending.
+            let reveals_to_send = agg_reveals.drain(..).collect();
+
+            let inner = inner.clone();
+            inner
+                .backend
+                .reveal_many(inner.contract_id, reveals_to_send)
+                .and_then(move |_| {
+                    // Check that the aggregation queue is indeed empty.
+                    match agg_queue {
+                        AggregationQueueType::Primary => {
+                            assert!(inner.agg_reveals.lock().unwrap().is_empty());
+                        }
+                        AggregationQueueType::Backup => {
+                            assert!(inner.agg_backup_reveals.lock().unwrap().is_empty())
+                        }
+                    }
+
+                    trace!(
+                        "Queued aggregated reveals from {:?} queue successfully sent to backend",
+                        agg_queue
+                    );
+
+                    Ok(())
+                })
+                .or_else(move |error| {
+                    error!(
+                        "Aggregated reveals from {:?} queue failed: {}",
+                        agg_queue, error.message
+                    );
+
+                    // Should we do anything else here?
 
                     Ok(())
                 })
@@ -703,6 +931,12 @@ impl ConsensusFrontend {
 
         // TODO: Should we notify consensus backend that we aborted?
 
+        // Also discard commits and reveals queued for aggregation.
+        inner.agg_commits.lock().unwrap().clear();
+        inner.agg_backup_commits.lock().unwrap().clear();
+        inner.agg_reveals.lock().unwrap().clear();
+        inner.agg_backup_reveals.lock().unwrap().clear();
+
         // Transition state.
         if let Some(role) = inner.state.lock().unwrap().get_role() {
             Self::transition(inner.clone(), State::WaitingForBatch(role));
@@ -779,21 +1013,26 @@ impl ConsensusFrontend {
                     format!("Failed to store outputs: {}", error.message),
                 )
             })
-            .and_then(|_| {
-                require_state!(inner, State::ProposedBatch(..), "proposing batch");
+            .and_then(move |_| {
+                let role = require_state!(inner, State::ProposedBatch(role, ..) => role, "proposing batch");
+
                 measure_counter_inc!("proposed_batch_count");
 
-                inner
-                    .backend
-                    .commit(inner.contract_id, commitment)
-                    .or_else(|error| {
-                        // Failed to commit a block, abort current batch.
-                        Self::fail_batch(
-                            inner,
-                            format!("Failed to propose block: {}", error.message),
-                        )
-                    })
-                    .into_box()
+                if role == Role::Leader {
+                    trace!(
+                        "In propose_batch, appending aggregate commit on leader node (fast path)"
+                    );
+
+                    // Leader can just append to its own aggregate commits queue.
+                    Self::handle_agg_commit(inner.clone(), commitment, role)
+                } else {
+                    trace!("In propose_batch, submitting aggregate commit to leader");
+
+                    // Submit the commit to leader for aggregation.
+                    inner.computation_group.submit_agg_commit(commitment);
+
+                    future::ok(()).into_box()
+                }
             })
             .into_box()
     }
@@ -815,6 +1054,34 @@ impl ConsensusFrontend {
         self.inner
             .command_sender
             .unbounded_send(Command::ProcessRemoteBatch(batch_hash, committee))
+            .unwrap();
+
+        Ok(())
+    }
+
+    /// Process a commit for aggregation.
+    pub fn process_agg_commit(&self, signed_commit: Signed<Commitment>) -> Result<()> {
+        // Open the signed commit, verifying that it was signed by a
+        // worker and that the leader matches.
+        let (commit, role) = self.inner.computation_group.open_agg_commit(signed_commit)?;
+
+        self.inner
+            .command_sender
+            .unbounded_send(Command::ProcessAggCommit(commit, role))
+            .unwrap();
+
+        Ok(())
+    }
+
+    /// Process a reveal for aggregation.
+    pub fn process_agg_reveal(&self, signed_reveal: Signed<Reveal<Header>>) -> Result<()> {
+        // Open the signed reveal, verifying that it was signed by a
+        // worker and that the leader matches.
+        let (reveal, role) = self.inner.computation_group.open_agg_reveal(signed_reveal)?;
+
+        self.inner
+            .command_sender
+            .unbounded_send(Command::ProcessAggReveal(reveal, role))
             .unwrap();
 
         Ok(())

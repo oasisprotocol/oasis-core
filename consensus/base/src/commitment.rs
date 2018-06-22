@@ -12,6 +12,8 @@ use ekiden_common::error::Error;
 use ekiden_common::ring::digest;
 use ekiden_common::signature::{Signature, Signer};
 
+use super::header::Header;
+
 /// Signature context used for commitments.
 const COMMITMENT_SIGNATURE_CONTEXT: B64 = B64(*b"EkCommit");
 /// Signature context used for reveals.
@@ -138,6 +140,32 @@ impl<T: Commitable> Reveal<T> {
         let value_digest = value.get_commitment_digest(&self.nonce);
 
         reveal_digest == value_digest
+    }
+}
+
+impl TryFrom<api::Reveal> for Reveal<Header> {
+    /// try_from Converts a protobuf reveal into a Reveal.
+    type Error = Error;
+    fn try_from(a: api::Reveal) -> Result<Self, Error> {
+        let hdr = Header::try_from(a.get_header().to_owned())?;
+        let non = B256::from(a.get_nonce());
+        let sig = Signature::try_from(a.get_signature().to_owned())?;
+        Ok(Reveal {
+            value: hdr,
+            nonce: non,
+            signature: sig,
+        })
+    }
+}
+
+impl Into<api::Reveal> for Reveal<Header> {
+    /// into Converts a reveal into a protobuf `consensus::api::Reveal` representation.
+    fn into(self) -> api::Reveal {
+        let mut c = api::Reveal::new();
+        c.set_header(self.value.into());
+        c.set_nonce(self.nonce.to_vec());
+        c.set_signature(self.signature.into());
+        c
     }
 }
 

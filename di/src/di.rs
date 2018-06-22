@@ -178,11 +178,24 @@ pub trait ComponentFactory: Sync + Send {
     /// on [`Container`]). If the factory returns the latter the component can only be
     /// injected as shared.
     ///
+    /// Note, you should explicitly **not** return a type-erased `Box<Box<Struct>>` or a
+    /// `Box<Arc<Struct>>`.
+    ///
     /// # Examples
     ///
     /// ```ignore
     /// fn build(&self, container: &mut Container) -> Result<Box<Any>> {
     ///     let instance: Box<Trait> = Box::new(MyInstance::new());
+    ///     Box::new(instance)
+    /// }
+    /// ```
+    ///
+    /// The following example shows **incorrect usage** which will result in a panic at
+    /// injection time:
+    ///
+    /// ```ignore
+    /// fn build(&self, container: &mut Container) -> Result<Box<Any>> {
+    ///     let instance = Box::new(MyInstance::new());
     ///     Box::new(instance)
     /// }
     /// ```

@@ -31,6 +31,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
     for public_key in public_keys {
         let node = Node {
             id: public_key,
+            eth_address: None,
             entity_id: entity_pk,
             expiration: 0xffffffffffffffff,
             addresses: vec![],

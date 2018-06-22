@@ -294,6 +294,8 @@ create_component!(
         let entity_identity = container.inject::<EntityIdentity>()?;
         let node = Node {
             id: signer.get_public_key(),
+            // TODO: support different local node addresses within an entity.
+            eth_address: entity_identity.get_entity().eth_address,
             entity_id: entity_identity.get_public_key(),
             expiration: 0xffffffffffffffff,
             addresses: {
