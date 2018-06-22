@@ -82,6 +82,6 @@ fn test_iteration() {
     for ix in 0..e.len() {
         actual.insert(*e.iter_get(ix).unwrap());
     }
-    let diff: Vec<&i32> = actual.symmetric_difference(&actual).collect();
+    let diff: Vec<&i32> = expected.symmetric_difference(&actual).collect();
     assert_eq!(diff.len(), 0);
 }
