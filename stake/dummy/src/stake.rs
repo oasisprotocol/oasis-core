@@ -1,6 +1,6 @@
 //! Ekiden dummy stake backend.
-use std::cmp::{Eq, Ordering};
-use std::collections::{HashMap, HashSet};
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::process::abort;
 use std::sync::{Arc, Mutex};
@@ -8,11 +8,11 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
+use ekiden_common::usize_iterable_hashset::UsizeIterableHashSet;
 use ekiden_core::identity::EntityIdentity;
 
 use ekiden_stake_base::*;
 
-use usize_iterable_hashset::*;
 // To implement the iterators which contain state in an opaque B256
 // state value, we could stuff the HashSet's .iter() into the B256,
 // but that would be unsafe since the peer could modify the state

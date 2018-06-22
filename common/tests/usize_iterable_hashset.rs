@@ -1,8 +1,8 @@
-extern crate ekiden_stake_dummy;
+extern crate ekiden_common;
 
 use std::collections::HashSet;
 
-use ekiden_stake_dummy::UsizeIterableHashSet;
+use ekiden_common::usize_iterable_hashset::UsizeIterableHashSet;
 
 #[test]
 fn test_empty_hashset() {
