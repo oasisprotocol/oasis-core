@@ -140,6 +140,26 @@ pub fn amount_type_pow(mut base: AmountType, mut exp: u8) -> AmountType {
 }
 
 
+// usize is 0..2^32-1 or 0..2^64-1; big endian since bytes.rs From<u64> is big endian
+fn b256_to_usize(x: B256) -> usize {
+    let mut v: usize = 0;
+    let bytes = x.to_vec();
+    let nbytes;
+    if usize::max_value() == u64::max_value() as usize &&
+        usize::max_value() as u64 == u64::max_value()
+    {
+        nbytes = 8;
+    } else {
+        nbytes = 4;
+    }
+    let vbytes = bytes.len();
+    for ix in vbytes - nbytes .. vbytes {
+        v = v << 8;
+        v |= bytes[ix] as usize;
+    }
+    v
+}
+
 impl DummyStakeEscrowBackendInner {
     pub fn new(owner_id: B256, name: String, symbol: String, initial_supply: AmountType) -> Self {
         let mut this = Self {
@@ -304,14 +324,35 @@ impl DummyStakeEscrowBackendInner {
         let entry = match self.stakes.get(&owner) {
             None => return Ok(EscrowAccountIterator::new(false, owner, B256::zero())),
             Some(e) => {
-                return Ok(EscrowAccountIterator::new(false, owner, B256::zero()));
+                return Ok(EscrowAccountIterator::new(true, owner, B256::zero()));
             }
         };
         Err(Error::new(ErrorCodes::NoEscrowAccount.to_string()))
     }
 
     pub fn list_active_escrows_get(&self, iter: EscrowAccountIterator) -> Result<(EscrowAccountStatus, EscrowAccountIterator), Error> {
-        unimplemented!();
+        let owner = iter.owner;
+        let entry = match self.stakes.get(&owner) {
+            None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
+            Some(e) => e,
+        };
+        let mut ix = b256_to_usize(iter.state);
+        if ix >= entry.accounts.len() {
+            return Err(Error::new(ErrorCodes::InvalidIterator.to_string()));
+        }
+        let id = match entry.accounts.iter_get(ix) {
+            None => return Err(Error::new(ErrorCodes::InvalidIterator.to_string())),
+            Some(id) => id,
+        };
+        let account = match self.escrow_map.get(id) {
+            None => return Err(Error::new(ErrorCodes::InvalidIterator.to_string())),
+            Some(act) => act,
+        };
+        let status = EscrowAccountStatus::new(account.id, account.target, account.amount, account.aux);
+        ix = ix + 1;
+        let has_next = ix < entry.accounts.len();
+        let new_it = EscrowAccountIterator::new(has_next, owner, B256::from(ix as u64));
+        Ok((status, new_it))
     }
 
     pub fn fetch_escrow_by_id(

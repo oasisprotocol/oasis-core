@@ -37,6 +37,7 @@ pub enum ErrorCodes {
     WouldOverflow,
     InsufficientFunds,
     RequestExceedsEscrowedFunds,
+    InvalidIterator,
 }
 
 impl fmt::Display for ErrorCodes {
