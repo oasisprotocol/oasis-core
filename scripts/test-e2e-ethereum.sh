@@ -5,7 +5,6 @@ WORKDIR=${1:-$(pwd)}
 # TODO: move all the mock services out ot compute
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --time-source system \
         --time-source-notifier ethereum \
         --random-beacon-backend ethereum \
         --beacon-address ${ENV_RandomBeaconMock} \

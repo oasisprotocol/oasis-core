@@ -5,8 +5,13 @@ use ekiden_common::error::{Error, Result};
 #[allow(unused_imports)]
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_di;
 use interface::*;
+#[cfg(not(target_env = "sgx"))]
+use std::mem;
 use std::sync::{Arc, Mutex};
+#[cfg(not(target_env = "sgx"))]
+use std::sync::{Once, ONCE_INIT};
 #[cfg(not(target_env = "sgx"))]
 use std::time::{Duration, Instant};
 
@@ -50,7 +55,11 @@ impl MockTimeSource {
     /// Create a new MockTimeSource at the start of epoch 0.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(MockTimeSourceInner { epoch: 0, till: 0 })),
+            inner: Arc::new(Mutex::new(MockTimeSourceInner {
+                waiting: false,
+                epoch: 0,
+                till: 0,
+            })),
         }
     }
 
@@ -66,6 +75,24 @@ impl MockTimeSource {
         let mut inner = self.inner.lock()?;
         inner.set_mock_time_impl(epoch, till)
     }
+
+    /// Set the mock epoch.
+    pub fn set_mock_epoch(&self, epoch: EpochTime) -> Result<()> {
+        let mut inner = self.inner.lock()?;
+        let till = inner.till;
+        inner.set_mock_time_impl(epoch, till)
+    }
+
+    /// Check-And-Set for initially-paused mock time sources.
+    pub fn was_waiting(&self) -> Result<(bool, u64)> {
+        let mut inner = self.inner.lock()?;
+        if inner.waiting {
+            inner.waiting = false;
+            Ok((true, inner.till))
+        } else {
+            Ok((false, inner.till))
+        }
+    }
 }
 
 impl TimeSource for MockTimeSource {
@@ -80,6 +107,7 @@ impl TimeSource for MockTimeSource {
 }
 
 struct MockTimeSourceInner {
+    waiting: bool,
     epoch: EpochTime,
     till: u64,
 }
@@ -235,6 +263,35 @@ mod tests {
     }
 }
 
+/// LocalTime is an explict path for the controller to recover
+/// specifc type information of DI injected variants of the time source.
+#[derive(Clone)]
+pub struct LocalTime {
+    pub mock: Arc<Mutex<Arc<MockTimeSource>>>,
+    pub notifier: Arc<Mutex<Arc<LocalTimeSourceNotifier>>>,
+}
+
+/// Get the system-used local time instance.
+// Follows the singleton pattern from
+// https://stackoverflow.com/questions/27791532/how-do-i-create-a-global-mutable-singleton
+#[cfg(not(target_env = "sgx"))]
+pub fn get_local_time() -> LocalTime {
+    static mut LOCALTIME: *const LocalTime = 0 as *const LocalTime;
+    static ONCE: Once = ONCE_INIT;
+    unsafe {
+        ONCE.call_once(|| {
+            let mock = Arc::new(MockTimeSource::new());
+            let notifier = Arc::new(LocalTimeSourceNotifier::new(mock.clone()));
+            let singleton = LocalTime {
+                mock: Arc::new(Mutex::new(mock)),
+                notifier: Arc::new(Mutex::new(notifier)),
+            };
+            LOCALTIME = mem::transmute(Box::new(singleton));
+        });
+        (*LOCALTIME).clone()
+    }
+}
+
 // Register for dependency injection.
 #[cfg(not(target_env = "sgx"))]
 create_component!(
@@ -248,6 +305,12 @@ create_component!(
         let source = Arc::new(SystemTimeSource::default());
         let notifier = Arc::new(LocalTimeSourceNotifier::new(source.clone()));
         let instance: Arc<TimeSourceNotifier> = notifier.clone();
+
+        {
+            let localtime = get_local_time();
+            let mut globalnotifier = localtime.notifier.lock().unwrap();
+            *globalnotifier = notifier.clone();
+        }
 
         // drive instance.
         let (now, till) = source.get_epoch().unwrap();
@@ -285,4 +348,116 @@ create_component!(
         Ok(Box::new(instance))
     }),
     []
+);
+
+pub struct MockTimeRpcNotifier {}
+#[cfg(not(target_env = "sgx"))]
+create_component!(
+    mockrpc,
+    "time-source-notifier",
+    MockTimeRpcNotifier,
+    TimeSourceNotifier,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let source = Arc::new(MockTimeSource::new());
+
+        let args = container.get_arguments().unwrap();
+
+        let notifier = Arc::new(LocalTimeSourceNotifier::new(source.clone()));
+        let instance: Arc<TimeSourceNotifier> = notifier.clone();
+
+        {
+            let localtime = get_local_time();
+            let mut globalsource = localtime.mock.lock().unwrap();
+            let mut globalnotifier = localtime.notifier.lock().unwrap();
+            *globalsource = source.clone();
+            *globalnotifier = notifier.clone();
+        }
+
+        // drive instance.
+        source
+            .set_mock_time(0, value_t_or_exit!(args, "mock-rpc-epoch-interval", u64))
+            .map_err(|e| ekiden_di::error::Error::from(format!("{:?}", e)))?;
+        let (now, till) = source.get_epoch().unwrap();
+        trace!("MockTimeRPC: Epoch: {} Till: {}", now, till);
+
+        // No timer, the entire operation is RPC dependent.
+
+        Ok(Box::new(instance))
+    }),
+    [Arg::with_name("mock-rpc-epoch-interval")
+        .long("mock-rpc-epoch-interval")
+        .help("Mock time epoch interval in seconds.")
+        .default_value("600")
+        .takes_value(true)]
+);
+
+pub struct MockTimeNotifier {}
+#[cfg(not(target_env = "sgx"))]
+create_component!(
+    mock,
+    "time-source-notifier",
+    MockTimeNotifier,
+    TimeSourceNotifier,
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment: Arc<Environment> = container.inject()?;
+        let source = Arc::new(MockTimeSource::new());
+
+        let args = container.get_arguments().unwrap();
+        let should_wait = args.is_present("time-rpc-wait");
+        let epoch_interval = value_t_or_exit!(args, "mock-epoch-interval", u64);
+
+        let notifier = Arc::new(LocalTimeSourceNotifier::new(source.clone()));
+        let instance: Arc<TimeSourceNotifier> = notifier.clone();
+
+        {
+            let localtime = get_local_time();
+            let mut globalsource = localtime.mock.lock().unwrap();
+            let mut globalnotifier = localtime.notifier.lock().unwrap();
+            *globalsource = source.clone();
+            *globalnotifier = notifier.clone();
+        }
+
+        // drive instance.
+        source
+            .set_mock_time(0, epoch_interval)
+            .map_err(|e| ekiden_di::error::Error::from(format!("{:?}", e)))?;
+        let (now, till) = source.get_epoch().unwrap();
+        trace!("MockTimeRPC: Epoch: {} Till: {}", now, till);
+
+        if should_wait {
+            trace!("MockTime: Epoch: {} Till: {} (-> Wait)", now, till);
+            source.inner.lock().unwrap().waiting = true;
+        } else {
+            trace!("MockTime: Epoch: {} Till: {}", now, till);
+            let dur = Duration::from_secs(epoch_interval);
+            environment.spawn({
+                let time_source = source.clone();
+                let time_notifier = notifier.clone();
+
+                Box::new(
+                    Interval::new(dur)
+                        .map_err(|error| Error::from(error))
+                        .for_each(move |_| {
+                            let (now, till) = time_source.get_epoch().unwrap();
+                            trace!("MockTime: Epoch: {} Till: {}", now + 1, till);
+                            time_source.set_mock_time(now + 1, till)?;
+                            time_notifier.notify_subscribers()
+                        })
+                        .then(|_| future::ok(())),
+                )
+            });
+        }
+
+        Ok(Box::new(instance))
+    }),
+    [
+        Arg::with_name("mock-epoch-interval")
+            .long("mock-epoch-interval")
+            .help("Mock time epoch interval in seconds.")
+            .default_value("600")
+            .takes_value(true),
+        Arg::with_name("time-rpc-wait")
+            .long("time-rpc-wait")
+            .help("Wait on an RPC call before starting MockTime timer.")
+    ]
 );

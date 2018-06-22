@@ -9,6 +9,9 @@ extern crate grpcio;
 extern crate ekiden_di;
 #[macro_use]
 extern crate log;
+#[cfg(not(target_env = "sgx"))]
+#[macro_use]
+extern crate clap;
 
 #[cfg(not(target_env = "sgx"))]
 pub mod grpc;

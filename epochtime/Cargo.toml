@@ -16,3 +16,4 @@ chrono = "0.4.2"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+clap = "2.29.1"
