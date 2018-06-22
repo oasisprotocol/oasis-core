@@ -72,7 +72,8 @@ impl ComputationGroup for ComputationGroupService {
         mut request: SubmitAggCommitRequest,
         sink: grpcio::UnarySink<SubmitAggResponse>,
     ) {
-        trace!("Hello from submit_agg_commit!");
+        measure_histogram_timer!("submit_agg_commit_time");
+        measure_counter_inc!("submit_agg_commit_calls");
 
         let mut f = || -> Result<()> {
             let commit = Commitment::try_from(request.get_commit().clone())?;
@@ -102,7 +103,8 @@ impl ComputationGroup for ComputationGroupService {
         mut request: SubmitAggRevealRequest,
         sink: grpcio::UnarySink<SubmitAggResponse>,
     ) {
-        trace!("Hello from submit_agg_reveal!");
+        measure_histogram_timer!("submit_agg_reveal_time");
+        measure_counter_inc!("submit_agg_reveal_calls");
 
         let mut f = || -> Result<()> {
             let reveal = Reveal::<Header>::try_from(request.get_reveal().clone())?;

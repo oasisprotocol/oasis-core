@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
-use ekiden_common::bytes::B64;
+use ekiden_common::bytes::{B256, B64};
 use ekiden_common::error::Result;
 use ekiden_common::signature::{Signature, Signed, Signer};
 
@@ -18,6 +18,8 @@ pub type Generic = serde_cbor::Value;
 /// Plain contract call.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ContractCall<T> {
+    /// Unique identifier.
+    pub id: B256,
     /// Contract method name.
     pub method: String,
     /// Contract method arguments.
@@ -35,6 +37,7 @@ impl<T> SignedContractCall<T> {
         T: Serialize,
     {
         let call = ContractCall {
+            id: B256::random(),
             method: method.to_owned(),
             arguments: arguments,
         };
@@ -131,6 +134,7 @@ mod tests {
     fn test_generic_call() {
         // Encode specific.
         let specific = ContractCall {
+            id: B256::random(),
             method: "specific".to_owned(),
             arguments: ComplexArguments {
                 a: 42,

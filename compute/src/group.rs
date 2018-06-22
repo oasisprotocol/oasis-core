@@ -176,6 +176,11 @@ impl ComputationGroup {
         // Clear previous group.
         {
             let mut committee = inner.committee.lock().unwrap();
+            if *committee == members {
+                info!("Not updating committee as membership has not changed");
+                return future::ok(()).into_box();
+            }
+
             committee.clear();
         }
         inner.node_group.clear();
@@ -229,15 +234,19 @@ impl ComputationGroup {
 
                     trace!("New committee: {:?}", members);
 
+                    let old_role = inner.get_role();
+
                     // Update current committee.
                     {
                         let mut committee = inner.committee.lock().unwrap();
                         *committee = members;
                     }
 
-                    let new_role = inner.get_role().unwrap();
-                    info!("Our new role is: {:?}", new_role);
-                    inner.role_subscribers.notify(&Some(new_role));
+                    let new_role = inner.get_role();
+                    if new_role != old_role {
+                        info!("Our new role is: {:?}", &new_role.unwrap());
+                        inner.role_subscribers.notify(&new_role);
+                    }
 
                     info!("Update of computation group committee finished");
 
@@ -419,7 +428,7 @@ impl ComputationGroup {
         Ok((batch_hash.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
     }
 
-    pub fn open_agg_commit(&self, signed_commit: Signed<Commitment>) -> Result<Commitment> {
+    pub fn open_agg_commit(&self, signed_commit: Signed<Commitment>) -> Result<(Commitment, Role)> {
         // Check if commitment was signed by a worker and that we're the
         // current leader, drop otherwise.  Also note that the leader and
         // backup workers also count as workers.
@@ -432,21 +441,36 @@ impl ComputationGroup {
 
         let committee = self.inner.committee.lock().unwrap();
 
-        if !committee.iter().any(|node| {
-            (node.role == Role::Worker || node.role == Role::BackupWorker
-                || node.role == Role::Leader)
-                && node.public_key == signed_commit.signature.public_key
-        }) {
+        // Find the node that signed this commitment.
+        let node = committee
+            .iter()
+            .find(|node| node.public_key == signed_commit.signature.public_key);
+
+        if node == None {
+            warn!("Dropping commit for aggregation, as it was not signed by any node");
+            return Err(Error::new("not signed by any node"));
+        }
+
+        // Get the role of the node that signed this commitment.
+        let role = node.unwrap().role;
+
+        if role != Role::Worker && role != Role::BackupWorker && role != Role::Leader {
             warn!(
                 "Dropping commit for aggregation, as it was not signed by compute committee worker"
             );
             return Err(Error::new("not signed by compute committee worker"));
         }
 
-        Ok(signed_commit.open(&SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT)?)
+        Ok((
+            signed_commit.open(&SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT)?,
+            role,
+        ))
     }
 
-    pub fn open_agg_reveal(&self, signed_reveal: Signed<Reveal<Header>>) -> Result<Reveal<Header>> {
+    pub fn open_agg_reveal(
+        &self,
+        signed_reveal: Signed<Reveal<Header>>,
+    ) -> Result<(Reveal<Header>, Role)> {
         // Check if reveal was signed by a worker and that we're the
         // current leader, drop otherwise.  Also note that the leader and
         // backup workers also count as workers.
@@ -459,18 +483,30 @@ impl ComputationGroup {
 
         let committee = self.inner.committee.lock().unwrap();
 
-        if !committee.iter().any(|node| {
-            (node.role == Role::Worker || node.role == Role::BackupWorker
-                || node.role == Role::Leader)
-                && node.public_key == signed_reveal.signature.public_key
-        }) {
+        // Find the node that signed this reveal.
+        let node = committee
+            .iter()
+            .find(|node| node.public_key == signed_reveal.signature.public_key);
+
+        if node == None {
+            warn!("Dropping reveal for aggregation, as it was not signed by any node");
+            return Err(Error::new("not signed by any node"));
+        }
+
+        // Get the role of the node that signed this reveal.
+        let role = node.unwrap().role;
+
+        if role != Role::Worker && role != Role::BackupWorker && role != Role::Leader {
             warn!(
                 "Dropping reveal for aggregation, as it was not signed by compute committee worker"
             );
             return Err(Error::new("not signed by compute committee worker"));
         }
 
-        Ok(signed_reveal.open(&SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT)?)
+        Ok((
+            signed_reveal.open(&SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT)?,
+            role,
+        ))
     }
 
     /// Subscribe to notifications on our current role in the computation committee.
