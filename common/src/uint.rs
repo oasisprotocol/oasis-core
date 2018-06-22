@@ -1,5 +1,4 @@
 //! Common big unsigned integer types.
-use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub};
 
 use bigint::uint;
@@ -95,8 +94,8 @@ macro_rules! wrap_uint_type {
             }
         }
 
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        impl ::core::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 let mut digits: Vec<String> = vec![];
                 let mut num = self.clone();
                 let ten = $name::from(10);
