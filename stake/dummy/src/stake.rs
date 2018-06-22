@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
+use ekiden_core::identity::EntityIdentity;
 
 use ekiden_stake_base::*;
 
@@ -685,8 +686,8 @@ create_component!(
     DummyStakeEscrowBackend,
     StakeEscrowBackend,
     (|container: &mut Container| -> Result<Box<Any>> {
-        let args = container.get_arguments().unwrap();
-        let owner_id = value_t_or_exit!(args, "stake-owner", B256);
+        let entity_identity = container.inject::<EntityIdentity>()?;
+        let owner_id = entity_identity.get_public_key();
         let instance: Box<StakeEscrowBackend> = Box::new(DummyStakeEscrowBackend::new(
             owner_id,
             "Oasis Stake".to_string(),
@@ -695,14 +696,5 @@ create_component!(
         ));
         Ok(Box::new(instance))
     }),
-    [
-        Arg::with_name("stake-owner")
-            .long("stake-owner")
-            .help("Address which owns the initial stake")
-            // B256 so 32 bytes or 64 hex digits
-            // .......................1.........2.........3.........4.........5.........6.........
-            // .............0123456789012345678901234567890123456789012345678901234567890123456789
-            .default_value("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-            .takes_value(true) // what default value makes sense?
-    ]
+    []
 );
