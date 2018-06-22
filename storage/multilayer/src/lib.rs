@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 
 extern crate clap;
 use clap::value_t_or_exit;
@@ -11,6 +12,7 @@ extern crate futures;
 use futures::future::Executor;
 use futures::future::Future;
 use futures::future::Shared;
+use futures::stream::Stream;
 extern crate log;
 use log::log;
 use log::trace;
@@ -27,6 +29,7 @@ extern crate ekiden_di;
 use ekiden_di::create_component;
 extern crate ekiden_epochtime;
 extern crate ekiden_storage_base;
+use ekiden_storage_base::BatchStorage;
 use ekiden_storage_base::StorageBackend;
 extern crate ekiden_storage_dynamodb;
 use ekiden_storage_dynamodb::DynamoDbBackend;
@@ -57,11 +60,18 @@ enum AccessedItem {
     Writeback(Vec<u8>),
 }
 
+struct WaitSet {
+    error_tx: futures::sync::mpsc::UnboundedSender<Error>,
+    error_rx: futures::sync::mpsc::UnboundedReceiver<Error>,
+}
+
 pub struct MultilayerBackend {
     /// We do some writeback operations on this separate executor.
     remote: tokio_core::reactor::Remote,
     /// This map lets us look up whether we're already accessing an item.
     accessed: Arc<Mutex<BTreeMap<H256, AccessedItem>>>,
+    /// The bookkeeping for batches.
+    batch: RwLock<Option<WaitSet>>,
 
     // Backing layers, as specified in RFC 0004.
     sled: Arc<PersistentStorageBackend>,
@@ -79,6 +89,7 @@ impl MultilayerBackend {
         Self {
             remote,
             accessed: Arc::new(Mutex::new(BTreeMap::new())),
+            batch: RwLock::new(None),
             sled,
             // remote_sled,
             aws,
@@ -184,6 +195,11 @@ impl StorageBackend for MultilayerBackend {
         }
         accessed_guard.insert(key, AccessedItem::Writeback(value.clone()));
         let accessed = self.accessed.clone();
+        let error_tx = self.batch
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|batch| batch.error_tx.clone());
         self.remote
             .execute(self.sled.insert(value.clone(), expiry).then(move |r| {
                 if let Err(e) = r {
@@ -198,15 +214,48 @@ impl StorageBackend for MultilayerBackend {
             }))
             .unwrap();
         self.remote
-            .execute(self.aws.insert(value, expiry).or_else(move |e| {
-                warn!(
-                    "insert: unable to back up key {} to aws layer: {:?}",
-                    key, e
-                );
+            .execute(self.aws.insert(value, expiry).then(move |r| {
+                if let Err(e) = r {
+                    warn!(
+                        "insert: unable to back up key {} to aws layer: {:?}",
+                        key, e
+                    );
+                    if let Some(tx) = error_tx {
+                        drop(tx.unbounded_send(e));
+                    }
+                }
                 Ok(())
             }))
             .unwrap();
         Box::new(futures::future::ok(()))
+    }
+}
+
+impl BatchStorage for MultilayerBackend {
+    fn start_batch(&self) {
+        let mut guard = self.batch.write().unwrap();
+        assert!(guard.is_none());
+        let (error_tx, error_rx) = futures::sync::mpsc::unbounded();
+        *guard = Some(WaitSet { error_tx, error_rx });
+    }
+
+    fn end_batch(&self) -> BoxFuture<()> {
+        self.batch
+            .write()
+            .unwrap()
+            .take()
+            .unwrap()
+            .error_rx
+            .collect()
+            .then(|r| {
+                let errors = r.unwrap();
+                if errors.is_empty() {
+                    Ok(())
+                } else {
+                    Err(Error::new(format!("Some inserts failed: {:?}", errors)))
+                }
+            })
+            .into_box()
     }
 }
 
@@ -252,7 +301,7 @@ fn di_factory(
         aws_region,
         aws_table_name,
     ));
-    let backend: Arc<StorageBackend> = Arc::new(MultilayerBackend::new(remote, sled, aws));
+    let backend: Arc<BatchStorage> = Arc::new(MultilayerBackend::new(remote, sled, aws));
     Ok(Box::new(backend))
 }
 
@@ -285,9 +334,9 @@ fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
 // runs forever.
 create_component!(
     multilayer,
-    "storage-backend",
+    "batch-storage",
     MultilayerBackend,
-    StorageBackend,
+    BatchStorage,
     di_factory,
     [
         di_arg_sled_storage_base(),
@@ -301,6 +350,7 @@ mod tests {
     use ekiden_common;
     use ekiden_epochtime::local::SystemTimeSource;
     use ekiden_storage_base;
+    use ekiden_storage_base::BatchStorage;
     use ekiden_storage_base::StorageBackend;
     use ekiden_storage_dynamodb::DynamoDbBackend;
     use ekiden_storage_persistent::PersistentStorageBackend;
@@ -359,6 +409,17 @@ mod tests {
         core.run(storage.insert(reference_value.clone(), 55))
             .unwrap();
         let roundtrip_value = core.run(storage.get(reference_key)).unwrap();
-        assert_eq!(roundtrip_value, roundtrip_value);
+        assert_eq!(roundtrip_value, reference_value);
+
+        // Test flush.
+        let reference_value = b"see you online".to_vec();
+        // key base64 should be yv+yNRRnh0p9iWCkKmziz4x7FhqbryDe5egHXcF6/Os=
+        let reference_key = ekiden_storage_base::hash_storage_key(&reference_value);
+        storage.start_batch();
+        core.run(storage.insert(reference_value.clone(), 55))
+            .unwrap();
+        core.run(storage.end_batch()).unwrap();
+        let persisted_value = core.run(aws.get(reference_key)).unwrap();
+        assert_eq!(persisted_value, reference_value);
     }
 }

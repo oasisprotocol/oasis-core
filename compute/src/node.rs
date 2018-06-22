@@ -18,7 +18,7 @@ use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
 use ekiden_scheduler_base::Scheduler;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::BatchStorage;
 use ekiden_tools::get_contract_identity;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
@@ -69,7 +69,7 @@ impl ComputeNode {
         let contract_registry = container.inject::<ContractRegistryBackend>()?;
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
         let scheduler = container.inject::<Scheduler>()?;
-        let storage_backend = container.inject::<StorageBackend>()?;
+        let storage_backend = container.inject::<BatchStorage>()?;
         let consensus_backend = container.inject::<ConsensusBackend>()?;
         let consensus_signer = container.inject::<ConsensusSigner>()?;
 

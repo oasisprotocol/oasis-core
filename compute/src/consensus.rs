@@ -20,7 +20,7 @@ use ekiden_core::hash::{empty_hash, EncodedHash};
 use ekiden_core::signature::Signed;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_scheduler_base::{CommitteeNode, Role};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, BatchStorage};
 
 use super::group::ComputationGroup;
 use super::worker::{ComputedBatch, Worker};
@@ -204,7 +204,7 @@ struct Inner {
     /// Consensus signer.
     signer: Arc<ConsensusSigner>,
     /// Storage backend.
-    storage: Arc<StorageBackend>,
+    storage: Arc<BatchStorage>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -281,7 +281,7 @@ impl ConsensusFrontend {
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
         signer: Arc<ConsensusSigner>,
-        storage: Arc<StorageBackend>,
+        storage: Arc<BatchStorage>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 

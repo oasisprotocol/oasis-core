@@ -74,7 +74,7 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_ethereum::EthereumMockTimeViaWebsocket::register(known_components);
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Storage.
-    ekiden_storage_frontend::StorageClient::register(known_components);
+    ekiden_storage_frontend::ImmediateClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
     // Consensus.
     ekiden_consensus_client::ConsensusClient::register(known_components);

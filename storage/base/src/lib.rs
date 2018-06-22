@@ -10,11 +10,13 @@ extern crate grpcio;
 extern crate log;
 
 pub mod backend;
+pub mod batch;
 pub mod mapper;
 #[cfg(not(target_env = "sgx"))]
 pub mod service;
 
 pub use backend::*;
+pub use batch::BatchStorage;
 pub use mapper::*;
 #[cfg(not(target_env = "sgx"))]
 pub use service::*;
