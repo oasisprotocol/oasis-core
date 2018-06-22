@@ -45,16 +45,14 @@ where
         _req: api::GetNameRequest,
         sink: UnarySink<api::GetNameResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<String>, Error> {
-            Ok(self.inner.get_name())
-        };
+        let f = move || -> Result<BoxFuture<String>, Error> { Ok(self.inner.get_name()) };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(name) => {
                     let mut r = api::GetNameResponse::new();
                     r.set_name(name);
                     Ok(r)
-                },
+                }
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -62,7 +60,7 @@ where
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r{
+        ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
             Err(e) => invalid!(sink, Internal, e),
         }).map_err(|_e| ()));
@@ -74,16 +72,14 @@ where
         _req: api::GetSymbolRequest,
         sink: UnarySink<api::GetSymbolResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<String>, Error> {
-            Ok(self.inner.get_symbol())
-        };
+        let f = move || -> Result<BoxFuture<String>, Error> { Ok(self.inner.get_symbol()) };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(symbol) => {
                     let mut r = api::GetSymbolResponse::new();
                     r.set_symbol(symbol);
                     Ok(r)
-                },
+                }
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -91,7 +87,7 @@ where
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r{
+        ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
             Err(e) => invalid!(sink, Internal, e),
         }).map_err(|_e| ()));
@@ -103,16 +99,14 @@ where
         _req: api::GetDecimalsRequest,
         sink: UnarySink<api::GetDecimalsResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<u8>, Error> {
-            Ok(self.inner.get_decimals())
-        };
+        let f = move || -> Result<BoxFuture<u8>, Error> { Ok(self.inner.get_decimals()) };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(decimals) => {
                     let mut r = api::GetDecimalsResponse::new();
                     r.set_decimals(decimals as u32);
                     Ok(r)
-                },
+                }
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -120,7 +114,7 @@ where
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r{
+        ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
             Err(e) => invalid!(sink, Internal, e),
         }).map_err(|_e| ()));
@@ -132,16 +126,15 @@ where
         _req: api::GetTotalSupplyRequest,
         sink: UnarySink<api::GetTotalSupplyResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<AmountType>, Error> {
-            Ok(self.inner.get_total_supply())
-        };
+        let f =
+            move || -> Result<BoxFuture<AmountType>, Error> { Ok(self.inner.get_total_supply()) };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(supply) => {
                     let mut r = api::GetTotalSupplyResponse::new();
                     r.set_total_supply(supply.to_vec());
                     Ok(r)
-                },
+                }
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -149,7 +142,7 @@ where
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r{
+        ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
             Err(e) => invalid!(sink, Internal, e),
         }).map_err(|_e| ()));
@@ -197,7 +190,7 @@ where
         let f = move || -> Result<BoxFuture<AmountType>, Error> {
             match B256::try_from(req.get_owner()) {
                 Err(_e) => Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(owner) => Ok(self.inner.balance_of(owner))
+                Ok(owner) => Ok(self.inner.balance_of(owner)),
             }
         };
         let f = match f() {
@@ -206,7 +199,7 @@ where
                     let mut r = api::BalanceOfResponse::new();
                     r.set_available_balance(amount.to_vec());
                     Ok(r)
-                },
+                }
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -229,11 +222,11 @@ where
         let f = move || -> Result<BoxFuture<bool>, Error> {
             let sender = match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => s
+                Ok(s) => s,
             };
             let destination_address = match B256::try_from(req.get_destination_address()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
-                Ok(t) => t
+                Ok(t) => t,
             };
             let value = AmountType::from_little_endian(req.get_value());
             Ok(self.inner.transfer(sender, destination_address, value))
@@ -244,7 +237,7 @@ where
                     let mut r = api::TransferResponse::new();
                     r.set_success(b);
                     Ok(r)
-                },
+                }
                 Err(e) => Err(e),
             }),
             Err(e) => {
@@ -414,12 +407,7 @@ where
         }).map_err(|_e| ()));
     }
 
-    fn burn(
-        &self,
-        ctx: RpcContext,
-        req: api::BurnRequest,
-        sink: UnarySink<api::BurnResponse>,
-    ) {
+    fn burn(&self, ctx: RpcContext, req: api::BurnRequest, sink: UnarySink<api::BurnResponse>) {
         let f = move || -> Result<BoxFuture<bool>, Error> {
             let sender = match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
@@ -568,18 +556,19 @@ where
         req: api::ListActiveEscrowsGetRequest,
         sink: UnarySink<api::ListActiveEscrowsGetResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>, Error> {
-            let owner = match B256::try_from(req.get_owner()) {
-                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
-                Ok(s) => s,
+        let f =
+            move || -> Result<BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>, Error> {
+                let owner = match B256::try_from(req.get_owner()) {
+                    Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
+                    Ok(s) => s,
+                };
+                let state = match B256::try_from(req.get_state()) {
+                    Err(_e) => return Err(Error::new(ErrorCodes::BadProtoState.to_string())),
+                    Ok(s) => s,
+                };
+                let it = EscrowAccountIterator::new(true, owner, state);
+                Ok(self.inner.list_active_escrows_get(it))
             };
-            let state = match B256::try_from(req.get_state()) {
-                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoState.to_string())),
-                Ok(s) => s,
-            };
-            let it = EscrowAccountIterator::new(true, owner, state);
-            Ok(self.inner.list_active_escrows_get(it))
-        };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok((status, new_it)) => {

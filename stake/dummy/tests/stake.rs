@@ -68,13 +68,19 @@ fn test_dummy_stake_backend() {
     let oasis = id_generator.gen_id();
 
     let backend = Arc::new(DummyStakeEscrowBackend::new(
-        oasis, "EkidenStake".to_string(), "E$".to_string(), AmountType::from(1),
+        oasis,
+        "EkidenStake".to_string(),
+        "E$".to_string(),
+        AmountType::from(1),
     ));
 
     let alice = id_generator.gen_id();
 
     // backend.deposit_stake(alice, AmountType::from(100)).wait().unwrap();
-    backend.transfer(oasis, alice, AmountType::from(100)).wait().unwrap();
+    backend
+        .transfer(oasis, alice, AmountType::from(100))
+        .wait()
+        .unwrap();
 
     let stake_status = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(stake_status.total_stake, AmountType::from(100));
@@ -83,7 +89,10 @@ fn test_dummy_stake_backend() {
     let bob = id_generator.gen_id();
     let bob_aux = id_generator.gen_id();
 
-    let bob_escrow_id = backend.allocate_escrow(alice, bob, AmountType::from(9), bob_aux).wait().unwrap();
+    let bob_escrow_id = backend
+        .allocate_escrow(alice, bob, AmountType::from(9), bob_aux)
+        .wait()
+        .unwrap();
 
     debug!("got escrow id {} for bob", bob_escrow_id);
 
@@ -93,7 +102,10 @@ fn test_dummy_stake_backend() {
 
     let carol = id_generator.gen_id();
     let carol_aux = id_generator.gen_id();
-    let carol_escrow_id = backend.allocate_escrow(alice, carol, AmountType::from(13), carol_aux).wait().unwrap();
+    let carol_escrow_id = backend
+        .allocate_escrow(alice, carol, AmountType::from(13), carol_aux)
+        .wait()
+        .unwrap();
 
     debug!("got escrow id {} for carol", carol_escrow_id);
 
@@ -101,7 +113,10 @@ fn test_dummy_stake_backend() {
     expected.insert((bob_escrow_id, bob, AmountType::from(9), bob_aux));
     expected.insert((carol_escrow_id, carol, AmountType::from(13), carol_aux));
     for entry in &expected {
-        debug!("expected: ({}, {}, {}, {})", entry.0, entry.1, entry.2, entry.3);
+        debug!(
+            "expected: ({}, {}, {}, {})",
+            entry.0, entry.1, entry.2, entry.3
+        );
     }
 
     let mut iter = backend.list_active_escrows_iterator(alice).wait().unwrap();
@@ -128,7 +143,12 @@ fn test_dummy_stake_backend() {
 
     // let withdrawn_amount = backend.withdraw_stake(alice, AmountType::from(10)).wait().unwrap();
     // assert_eq!(withdrawn_amount, AmountType::from(10));
-    assert!(backend.transfer(alice, oasis, AmountType::from(10)).wait().unwrap());
+    assert!(
+        backend
+            .transfer(alice, oasis, AmountType::from(10))
+            .wait()
+            .unwrap()
+    );
 
     let stake_status = backend.get_stake_status(alice).wait().unwrap();
     assert_eq!(stake_status.total_stake, AmountType::from(100 - 10));
@@ -221,7 +241,10 @@ fn test_dummy_stake_backend() {
     }
 
     debug!("transfer from bob to carol -- some (2)");
-    backend.transfer(bob, carol, AmountType::from(2)).wait().unwrap();
+    backend
+        .transfer(bob, carol, AmountType::from(2))
+        .wait()
+        .unwrap();
     // verify amounts
     let ss = get_and_show_stake(&backend, bob, "Bob");
     assert_eq!(ss.total_stake, AmountType::from(3));
@@ -232,7 +255,10 @@ fn test_dummy_stake_backend() {
 
     // Transfer all
     debug!("transfer from bob to carol -- all");
-    backend.transfer(bob, carol, AmountType::from(3)).wait().unwrap();
+    backend
+        .transfer(bob, carol, AmountType::from(3))
+        .wait()
+        .unwrap();
     // verify amounts
     let ss = get_and_show_stake(&backend, bob, "Bob");
     assert_eq!(ss.total_stake, AmountType::from(0));
@@ -259,7 +285,10 @@ fn test_dummy_stake_backend() {
 
     debug!("transfer from alice to dexter -- should create dexter account");
     let dexter = id_generator.gen_id();
-    backend.transfer(alice, dexter, AmountType::from(17)).wait().unwrap();
+    backend
+        .transfer(alice, dexter, AmountType::from(17))
+        .wait()
+        .unwrap();
     // verify amounts
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
@@ -273,13 +302,19 @@ fn test_dummy_stake_backend() {
     // self transfer
     // ----------------------------------------------------
     debug!("transfer from dexter to dexter");
-    backend.transfer(dexter, dexter, AmountType::from(17)).wait().unwrap();
+    backend
+        .transfer(dexter, dexter, AmountType::from(17))
+        .wait()
+        .unwrap();
     let ss = get_and_show_stake(&backend, dexter, "Dexter");
     assert_eq!(ss.total_stake, AmountType::from(17));
     assert_eq!(ss.escrowed, AmountType::from(0));
     // ----------------------------------------------------
     debug!("transfer too much from dexter to dexter");
-    match backend.transfer(dexter, dexter, AmountType::from(19)).wait() {
+    match backend
+        .transfer(dexter, dexter, AmountType::from(19))
+        .wait()
+    {
         Err(e) => {
             debug!("Got error {}", e.message);
             assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
@@ -298,7 +333,10 @@ fn test_dummy_stake_backend() {
     // ----------------------------------------------------
     debug!("create escrow from alice to alice");
     let self_19_aux = id_generator.gen_id();
-    let self_escrow_id = backend.allocate_escrow(alice, alice, AmountType::from(19), self_19_aux).wait().unwrap();
+    let self_escrow_id = backend
+        .allocate_escrow(alice, alice, AmountType::from(19), self_19_aux)
+        .wait()
+        .unwrap();
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
     assert_eq!(ss.escrowed, AmountType::from(13 + 19));
@@ -314,7 +352,10 @@ fn test_dummy_stake_backend() {
     // ----------------------------------------------------
     debug!("create escrow from alice to alice");
     let self_23_aux = id_generator.gen_id();
-    let self_escrow_id = backend.allocate_escrow(alice, alice, AmountType::from(23), self_23_aux).wait().unwrap();
+    let self_escrow_id = backend
+        .allocate_escrow(alice, alice, AmountType::from(23), self_23_aux)
+        .wait()
+        .unwrap();
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
     assert_eq!(ss.escrowed, AmountType::from(13 + 23));
@@ -330,7 +371,10 @@ fn test_dummy_stake_backend() {
     // ----------------------------------------------------
     debug!("create escrow from alice to alice");
     let self_29_aux = id_generator.gen_id();
-    let self_escrow_id = backend.allocate_escrow(alice, alice, AmountType::from(29), self_29_aux).wait().unwrap();
+    let self_escrow_id = backend
+        .allocate_escrow(alice, alice, AmountType::from(29), self_29_aux)
+        .wait()
+        .unwrap();
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
     assert_eq!(ss.escrowed, AmountType::from(13 + 29));

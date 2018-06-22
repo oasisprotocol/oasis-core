@@ -1,6 +1,6 @@
-use std::fmt::Display;
 use std::cmp::{Eq, Ordering};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
@@ -11,18 +11,9 @@ pub struct UsizeIterableHashSet<K> {
 
 impl<K: Hash + Eq + Display> UsizeIterableHashSet<K> {
     pub fn new() -> Self {
-        Self { map: HashMap::new(), store: vec![] }
-    }
-
-    #[test]
-    pub fn dump(&self) {
-        println!("map");
-        for (k, v) in &self.map {
-            println!("{} -> {}", k, v);
-        }
-        println!("store");
-        for k in &self.store {
-            println!("{}", k);
+        Self {
+            map: HashMap::new(),
+            store: vec![],
         }
     }
 
@@ -36,7 +27,7 @@ impl<K: Hash + Eq + Display> UsizeIterableHashSet<K> {
             None => {
                 self.map.insert(rck.clone(), self.store.len());
                 self.store.push(rck);
-            },
+            }
             Some(ix) => {
                 let r = self.store.get_mut(ix).unwrap();
                 self.map.insert(rck.clone(), ix);

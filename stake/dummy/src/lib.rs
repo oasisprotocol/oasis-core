@@ -14,5 +14,5 @@ mod usize_iterable_hashmap;
 mod usize_iterable_hashset;
 
 pub use stake::DummyStakeEscrowBackend;
-pub use usize_iterable_hashset::UsizeIterableHashSet;
 pub use usize_iterable_hashmap::UsizeIterableHashMap;
+pub use usize_iterable_hashset::UsizeIterableHashSet;

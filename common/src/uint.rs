@@ -111,7 +111,6 @@ macro_rules! wrap_uint_type {
                 write!(f, "{}", digits.join(""))
             }
         }
-
     };
 }
 

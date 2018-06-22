@@ -10,7 +10,10 @@ pub struct UsizeIterableHashMap<K, V> {
 
 impl<K: Hash + Eq, V> UsizeIterableHashMap<K, V> {
     pub fn new() -> Self {
-        Self { map: HashMap::new(), store: vec![] }
+        Self {
+            map: HashMap::new(),
+            store: vec![],
+        }
     }
 
     pub fn insert(&mut self, k: K, v: V) {
@@ -24,7 +27,7 @@ impl<K: Hash + Eq, V> UsizeIterableHashMap<K, V> {
             None => {
                 self.map.insert(rck, self.store.len());
                 self.store.push(entry);
-            },
+            }
             Some(ix) => {
                 let r = self.store.get_mut(ix).unwrap();
                 self.map.insert(rck, ix);

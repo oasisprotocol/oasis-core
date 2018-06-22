@@ -101,7 +101,13 @@ impl PartialEq for EscrowAccount {
 }
 
 impl EscrowAccount {
-    fn new(id: EscrowAccountIdType, owner: B256, target: B256, amount: AmountType, aux: B256) -> Self {
+    fn new(
+        id: EscrowAccountIdType,
+        owner: B256,
+        target: B256,
+        amount: AmountType,
+        aux: B256,
+    ) -> Self {
         Self {
             id: id,
             owner: owner,
@@ -146,21 +152,20 @@ pub fn amount_type_pow(mut base: AmountType, mut exp: u8) -> AmountType {
     result
 }
 
-
 // usize is 0..2^32-1 or 0..2^64-1; big endian since bytes.rs From<u64> is big endian
 fn b256_to_usize(x: B256) -> usize {
     let mut v: usize = 0;
     let bytes = x.to_vec();
     let nbytes;
-    if usize::max_value() == u64::max_value() as usize &&
-        usize::max_value() as u64 == u64::max_value()
+    if usize::max_value() == u64::max_value() as usize
+        && usize::max_value() as u64 == u64::max_value()
     {
         nbytes = 8;
     } else {
         nbytes = 4;
     }
     let vbytes = bytes.len();
-    for ix in vbytes - nbytes .. vbytes {
+    for ix in vbytes - nbytes..vbytes {
         v = v << 8;
         v |= bytes[ix] as usize;
     }
@@ -213,16 +218,14 @@ impl DummyStakeEscrowBackendInner {
     pub fn get_stake_status(&self, msg_sender: B256) -> Result<StakeStatus, Error> {
         match self.stakes.get(&msg_sender) {
             None => Ok(StakeStatus::new(AmountType::from(0), AmountType::from(0))),
-            Some(stake_ref) => Ok(StakeStatus::new(
-                stake_ref.amount,
-                stake_ref.escrowed))
+            Some(stake_ref) => Ok(StakeStatus::new(stake_ref.amount, stake_ref.escrowed)),
         }
     }
 
     pub fn balance_of(&self, owner: B256) -> Result<AmountType, Error> {
         match self.stakes.get(&owner) {
             None => Ok(AmountType::from(0)),
-            Some(stake_ref) => Ok(stake_ref.amount - stake_ref.escrowed)
+            Some(stake_ref) => Ok(stake_ref.amount - stake_ref.escrowed),
         }
     }
 
@@ -268,11 +271,22 @@ impl DummyStakeEscrowBackendInner {
         unimplemented!();
     }
 
-    pub fn approve(&self, msg_sender: B256, spender_address: B256, value: AmountType) -> Result<bool, Error> {
+    pub fn approve(
+        &self,
+        msg_sender: B256,
+        spender_address: B256,
+        value: AmountType,
+    ) -> Result<bool, Error> {
         unimplemented!();
     }
 
-    pub fn approve_and_call(&self, msg_sender: B256, spender_address: B256, value: AmountType, extra_data: Vec<u8>) -> Result<bool, Error> {
+    pub fn approve_and_call(
+        &self,
+        msg_sender: B256,
+        spender_address: B256,
+        value: AmountType,
+        extra_data: Vec<u8>,
+    ) -> Result<bool, Error> {
         unimplemented!();
     }
 
@@ -284,7 +298,12 @@ impl DummyStakeEscrowBackendInner {
         unimplemented!();
     }
 
-    pub fn burn_from(&self, msg_sender: B256, owner: B256, value: AmountType) -> Result<bool, Error> {
+    pub fn burn_from(
+        &self,
+        msg_sender: B256,
+        owner: B256,
+        value: AmountType,
+    ) -> Result<bool, Error> {
         unimplemented!();
     }
 
@@ -318,7 +337,8 @@ impl DummyStakeEscrowBackendInner {
                         }
                         Ok(()) => (),
                     }
-                    let entry = EscrowAccount::new(id, msg_sender.clone(), target, escrow_amount, aux);
+                    let entry =
+                        EscrowAccount::new(id, msg_sender.clone(), target, escrow_amount, aux);
                     self.escrow_map.insert(id, entry);
                     e.accounts.insert(id);
                     Ok(id)
@@ -327,7 +347,10 @@ impl DummyStakeEscrowBackendInner {
         }
     }
 
-    pub fn list_active_escrows_iterator(&self, owner: B256) -> Result<EscrowAccountIterator, Error> {
+    pub fn list_active_escrows_iterator(
+        &self,
+        owner: B256,
+    ) -> Result<EscrowAccountIterator, Error> {
         let entry = match self.stakes.get(&owner) {
             None => return Ok(EscrowAccountIterator::new(false, owner, B256::zero())),
             Some(e) => {
@@ -337,7 +360,10 @@ impl DummyStakeEscrowBackendInner {
         Err(Error::new(ErrorCodes::NoEscrowAccount.to_string()))
     }
 
-    pub fn list_active_escrows_get(&self, iter: EscrowAccountIterator) -> Result<(EscrowAccountStatus, EscrowAccountIterator), Error> {
+    pub fn list_active_escrows_get(
+        &self,
+        iter: EscrowAccountIterator,
+    ) -> Result<(EscrowAccountStatus, EscrowAccountIterator), Error> {
         let owner = iter.owner;
         let entry = match self.stakes.get(&owner) {
             None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
@@ -355,7 +381,8 @@ impl DummyStakeEscrowBackendInner {
             None => return Err(Error::new(ErrorCodes::InvalidIterator.to_string())),
             Some(act) => act,
         };
-        let status = EscrowAccountStatus::new(account.id, account.target, account.amount, account.aux);
+        let status =
+            EscrowAccountStatus::new(account.id, account.target, account.amount, account.aux);
         ix = ix + 1;
         let has_next = ix < entry.accounts.len();
         let new_it = EscrowAccountIterator::new(has_next, owner, B256::from(ix as u64));
@@ -368,7 +395,7 @@ impl DummyStakeEscrowBackendInner {
     ) -> Result<EscrowAccountStatus, Error> {
         match self.escrow_map.get(&escrow_id) {
             None => Err(Error::new(ErrorCodes::NoEscrowAccount.to_string())),
-            Some(e) => Ok(EscrowAccountStatus::new(e.id, e.target, e.amount, e.aux))
+            Some(e) => Ok(EscrowAccountStatus::new(e.id, e.target, e.amount, e.aux)),
         }
     }
 
@@ -465,7 +492,10 @@ impl DummyStakeEscrowBackend {
     pub fn new(owner_id: B256, name: String, symbol: String, initial_supply: AmountType) -> Self {
         Self {
             inner: Arc::new(Mutex::new(DummyStakeEscrowBackendInner::new(
-                owner_id, name, symbol, initial_supply,
+                owner_id,
+                name,
+                symbol,
+                initial_supply,
             ))),
         }
     }
@@ -520,7 +550,12 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 
-    fn transfer(&self, msg_sender: B256, destination_address: B256, value: AmountType) -> BoxFuture<bool> {
+    fn transfer(
+        &self,
+        msg_sender: B256,
+        destination_address: B256,
+        value: AmountType,
+    ) -> BoxFuture<bool> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
@@ -528,7 +563,13 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 
-    fn transfer_from(&self, msg_sender: B256, source_address: B256, destination_address: B256, value: AmountType) -> BoxFuture<bool> {
+    fn transfer_from(
+        &self,
+        msg_sender: B256,
+        source_address: B256,
+        destination_address: B256,
+        value: AmountType,
+    ) -> BoxFuture<bool> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
@@ -544,7 +585,13 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 
-    fn approve_and_call(&self, msg_sender: B256, spender: B256, value: AmountType, extra_data: Vec<u8>) -> BoxFuture<bool> {
+    fn approve_and_call(
+        &self,
+        msg_sender: B256,
+        spender: B256,
+        value: AmountType,
+        extra_data: Vec<u8>,
+    ) -> BoxFuture<bool> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
@@ -598,7 +645,10 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
         }))
     }
 
-    fn list_active_escrows_get(&self, iter: EscrowAccountIterator) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
+    fn list_active_escrows_get(
+        &self,
+        iter: EscrowAccountIterator,
+    ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             let mut inner = inner.lock().unwrap();
@@ -638,8 +688,11 @@ create_component!(
         let args = container.get_arguments().unwrap();
         let owner_id = value_t_or_exit!(args, "stake-owner", B256);
         let instance: Box<StakeEscrowBackend> = Box::new(DummyStakeEscrowBackend::new(
-            owner_id, "Oasis Stake".to_string(), "OS$".to_string(), AmountType::from(100_000_000),
-            ));
+            owner_id,
+            "Oasis Stake".to_string(),
+            "OS$".to_string(),
+            AmountType::from(100_000_000),
+        ));
         Ok(Box::new(instance))
     }),
     [
@@ -650,7 +703,6 @@ create_component!(
             // .......................1.........2.........3.........4.........5.........6.........
             // .............0123456789012345678901234567890123456789012345678901234567890123456789
             .default_value("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-            .takes_value(true)
-        // what default value makes sense?
+            .takes_value(true) // what default value makes sense?
     ]
 );

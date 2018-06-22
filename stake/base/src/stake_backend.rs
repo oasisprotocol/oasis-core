@@ -113,7 +113,10 @@ pub struct StakeStatus {
 
 impl StakeStatus {
     pub fn new(stake: AmountType, escrowed: AmountType) -> Self {
-        Self { total_stake: stake, escrowed: escrowed }
+        Self {
+            total_stake: stake,
+            escrowed: escrowed,
+        }
     }
 }
 
@@ -127,7 +130,12 @@ pub struct EscrowAccountStatus {
 
 impl EscrowAccountStatus {
     pub fn new(id: EscrowAccountIdType, target: B256, amount: AmountType, aux: B256) -> Self {
-        Self { id, target, amount, aux }
+        Self {
+            id,
+            target,
+            amount,
+            aux,
+        }
     }
 }
 
@@ -139,7 +147,11 @@ pub struct EscrowAccountIterator {
 
 impl EscrowAccountIterator {
     pub fn new(has_next: bool, owner: B256, state: B256) -> Self {
-        Self { has_next, owner, state }
+        Self {
+            has_next,
+            owner,
+            state,
+        }
     }
 }
 
@@ -164,24 +176,41 @@ pub trait StakeEscrowBackend: Send + Sync {
 
     /// Transfers |amount_requested| from |msg_sender|'s stake account to
     /// the stake account belonging to |target|.  Returns success boolean flag.
-    fn transfer(&self, msg_sender: B256, destination_address: B256, value: AmountType) -> BoxFuture<bool>;
+    fn transfer(
+        &self,
+        msg_sender: B256,
+        destination_address: B256,
+        value: AmountType,
+    ) -> BoxFuture<bool>;
 
     /// Transfers |amount_requested| from |source_address|'s stake
     /// account to the stake account belonging to
     /// |destination_address|, when |msg_sender| has a sufficiently
     /// large approval from |source_address|.  Returns success boolean
     /// flag.
-    fn transfer_from(&self, msg_sender: B256, source_address: B256,
-                     destination_address: B256, value: AmountType) ->
-        BoxFuture<bool>;
+    fn transfer_from(
+        &self,
+        msg_sender: B256,
+        source_address: B256,
+        destination_address: B256,
+        value: AmountType,
+    ) -> BoxFuture<bool>;
 
     /// Approve by |msg_sender| for |spender| to transferFrom up to |value| tokens.
-    fn approve(&self, msg_sender: B256, spender_address: B256, value: AmountType) ->
-        BoxFuture<bool>;
+    fn approve(
+        &self,
+        msg_sender: B256,
+        spender_address: B256,
+        value: AmountType,
+    ) -> BoxFuture<bool>;
 
-    fn approve_and_call(&self, msg_sender: B256, spender_address: B256, value: AmountType,
-                        extra_data: Vec<u8>) ->
-        BoxFuture<bool>;
+    fn approve_and_call(
+        &self,
+        msg_sender: B256,
+        spender_address: B256,
+        value: AmountType,
+        extra_data: Vec<u8>,
+    ) -> BoxFuture<bool>;
 
     fn allowance(&self, owner: B256, spender: B256) -> BoxFuture<AmountType>;
 
@@ -205,8 +234,10 @@ pub trait StakeEscrowBackend: Send + Sync {
     /// Returns a vector of all active escrow accounts created by |msg_sender|.
     fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator>;
 
-    fn list_active_escrows_get(&self, iter: EscrowAccountIterator) ->
-        BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>;
+    fn list_active_escrows_get(
+        &self,
+        iter: EscrowAccountIterator,
+    ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>;
 
     /// Returns the escrow account data associated with a given |escrow_id|.
     fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus>;

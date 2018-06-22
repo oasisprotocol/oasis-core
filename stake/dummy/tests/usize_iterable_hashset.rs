@@ -56,7 +56,10 @@ fn test_iteration() {
     let mut e: UsizeIterableHashSet<i32> = UsizeIterableHashSet::new();
     let mut expected: HashSet<i32> = HashSet::new();
     {
-        let mut iboth = |v| { e.insert(v); expected.insert(v); };
+        let mut iboth = |v| {
+            e.insert(v);
+            expected.insert(v);
+        };
         iboth(-1234);
         iboth(31415926);
         iboth(271828);
@@ -65,7 +68,10 @@ fn test_iteration() {
     assert!(e.contains(&-1234));
     assert!(e.contains(&31415926));
     {
-        let mut rboth = |v| { e.remove(v); expected.remove(v); };
+        let mut rboth = |v| {
+            e.remove(v);
+            expected.remove(v);
+        };
         rboth(&31415926);
     }
     assert!(!e.contains(&31415926));
