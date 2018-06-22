@@ -1,6 +1,7 @@
 //! Ekiden dummy stake backend.
-use std::cmp::Ordering;
+use std::cmp::{Eq, Ordering};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::process::abort;
 use std::sync::{Arc, Mutex};
 
@@ -9,6 +10,9 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
 
 use ekiden_stake_base::*;
+
+use usize_iterable_hashmap::*;
+use usize_iterable_hashset::*;
 
 // It would be nice if DummyStakeEscrowInfo contained its owner ID so
 // that EscrowAccount's owner and target can be just a reference to
@@ -21,7 +25,8 @@ use ekiden_stake_base::*;
 struct DummyStakeEscrowInfo {
     amount: AmountType,
     escrowed: AmountType, // sum_{a \in accounts} escrow_map[a].amount
-    accounts: HashSet<EscrowAccountIdType>,
+    accounts: UsizeIterableHashSet<EscrowAccountIdType>,
+    // accounts: HashSet<EscrowAccountIdType>,
     // account id, keys for escrow_map below.  \forall a \in accounts:
     // escrow_map[a].owner is stakeholder (key to this instance in
     // stakes below)
@@ -33,7 +38,8 @@ impl DummyStakeEscrowInfo {
         Self {
             amount: AmountType::from(0),
             escrowed: AmountType::from(0),
-            accounts: HashSet::new(),
+            // accounts: HashSet::new(),
+            accounts: UsizeIterableHashSet::new(),
             allowances: HashMap::new(),
         }
     }
@@ -295,7 +301,13 @@ impl DummyStakeEscrowBackendInner {
     }
 
     pub fn list_active_escrows_iterator(&self, owner: B256) -> Result<EscrowAccountIterator, Error> {
-        unimplemented!();
+        let entry = match self.stakes.get(&owner) {
+            None => return Ok(EscrowAccountIterator::new(false, owner, B256::zero())),
+            Some(e) => {
+                return Ok(EscrowAccountIterator::new(false, owner, B256::zero()));
+            }
+        };
+        Err(Error::new(ErrorCodes::NoEscrowAccount.to_string()))
     }
 
     pub fn list_active_escrows_get(&self, iter: EscrowAccountIterator) -> Result<(EscrowAccountStatus, EscrowAccountIterator), Error> {
@@ -325,7 +337,7 @@ impl DummyStakeEscrowBackendInner {
         // msg_sender is the target of the escrow
 
         {
-            let account = match self.escrow_map.get_mut(&escrow_id) {
+            let account = match self.escrow_map.get(&escrow_id) {
                 None => return Err(Error::new(ErrorCodes::NoEscrowAccount.to_string())),
                 Some(escrow_account) => escrow_account,
             };
@@ -591,5 +603,6 @@ create_component!(
             // .............0123456789012345678901234567890123456789012345678901234567890123456789
             .default_value("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
             .takes_value(true)
+        // what default value makes sense?
     ]
 );

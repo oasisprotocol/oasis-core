@@ -10,5 +10,7 @@ extern crate serde_cbor;
 extern crate clap;
 
 mod stake;
+mod usize_iterable_hashmap;
+mod usize_iterable_hashset;
 
 pub use stake::DummyStakeEscrowBackend;
