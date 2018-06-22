@@ -8,8 +8,8 @@ use serde::Serialize;
 use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
-use ekiden_common::futures::{future, BoxFuture, Future, FutureExt, Stream, StreamExt};
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signer;
 use ekiden_enclave_common::quote::MrEnclave;
@@ -161,6 +161,10 @@ impl ContractClientManager {
                                     let mut leader_notify = inner.leader_notify.lock().unwrap();
                                     let leader_notify = leader_notify.take().unwrap();
                                     drop(leader_notify.send(new_leader.clone()));
+                                }
+
+                                if let Some(previous_leader) = previous_leader.take() {
+                                    previous_leader.client.shutdown();
                                 }
                                 *previous_leader = Some(new_leader);
 
