@@ -1,15 +1,14 @@
 # How to look at the metrics
 1. Run the compute node with the metrics serving enabled, by passing a command line argument like `--metrics-addr=0.0.0.0:9091` to specify an address from which to serve them.
-2. Run prometheus by running (on host):
+2. Run Prometheus by running (on host):
 ```
 scripts/prometheus-dev.py \
-  --ekiden-name running-ekiden-container-name \
   --config path-to-prometheus.yml
 ```
 
-The script starts a Prometheus docker container and connects both (ekiden & prometheus) containers to a common network. The ekiden container is accessible on: `ekiden` address (via docker network alias).
+The script starts a Prometheus docker container and connects both (Ekiden & Prometheus) containers to a common network. The Ekiden container is accessible on: `ekiden` address (via docker network alias).
 
-Example of a base `prometheus.yml` file (assumes compute node exposing metrics on port 9091):
+Example of a base `prometheus.yml` file (assumes compute node is exposing metrics on port 9091):
 
 ```
 scrape_configs:
@@ -23,8 +22,6 @@ scrape_configs:
 ```
 
 3. Open Prometheus and look at [graphs](https://prometheus.io/docs/prometheus/latest/getting_started/#using-the-graphing-interface) or something. The metrics trace in this PR are listed below.
-
-# Prometheus-dev.py
 
 # Metrics
 ## From GRPC handlers

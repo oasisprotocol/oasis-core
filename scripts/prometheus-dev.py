@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 """
-Starts prometheus docker container and setups docker networking so
+Starts Prometheus docker container and setups docker networking so
 Ekiden and Prometheus containers can be connected.
 
-Script assumes ekiden container is allready running.
+Script assumes Ekiden container is allready running and by default will
+attach to container named "ekiden-*****". Use "--ekiden-name" to overide
+the default name.
 
 Usage:
     ./scripts/prometheus.py \
-      --ekiden-name "running-ekiden-container-name" \
       --config "path/to/prometheus.yml"
 
 For help, see:
@@ -22,13 +23,12 @@ import json
 
 
 PROMETHEUS_IMAGE_TAG = "quay.io/prometheus/prometheus:latest"
-ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
 def get_container_id(name):
     output = subprocess.check_output(
-        # Exact match!
-        ['docker', 'ps', '-q', '-f', 'name=^/{}$'.format(name)]
+        # Prefix match.
+        ['docker', 'ps', '-q', '-f', 'name=^/{}'.format(name)]
     )
     return output.split('\n')[0]
 
@@ -67,7 +67,7 @@ def connect_container(network_name, container_name):
     )
     parsed = json.loads(output)[0]
     for container in parsed['Containers']:
-        if parsed['Containers'][container]['Name'] == container_name:
+        if container.startswith(container_id):
             return True
 
     # Container not yet connected.
@@ -89,7 +89,7 @@ def cleanup_container(container_name):
 
 def run_prometheus(container_name, network_name, exposed_port, prometheus_config_path):
     cleanup_container(container_name)
-    command = ['docker', 'run', '--name', container_name, '--network={}'.format(network_name), '-p',
+    command = ['docker', 'run', '--name', container_name, '--network={}'.format(network_name), '--network-alias', 'prometheus', '-p',
                '{}:9090'.format(exposed_port), "-v", "{}:/etc/prometheus/prometheus.yml".format(prometheus_config_path), PROMETHEUS_IMAGE_TAG]
     subprocess.check_call(command)
 
@@ -99,10 +99,10 @@ if __name__ == '__main__':
     optional = parser._action_groups.pop()
     required = parser.add_argument_group('required arguments')
 
-    required.add_argument('--ekiden-name', type=str, required=True,
-                          help="Running ekiden container name.")
     required.add_argument('--config', type=str, required=True,
                           help="Path to prometheus.yml config.")
+    optional.add_argument('--ekiden-name', type=str, default="ekiden-",
+                          help="Running ekiden container name.")
     optional.add_argument('--name', type=str, default="prometheus",
                           help="Prometheus container name. Default: prometheus")
     optional.add_argument('--network-name', type=str, default="prometheus-ekiden",
