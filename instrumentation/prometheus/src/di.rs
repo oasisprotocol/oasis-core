@@ -1,5 +1,5 @@
 //! Dependency injection support.
-use super::{server, PrometheusMetricCollector};
+use super::{pusher, server, PrometheusMetricCollector};
 use ekiden_instrumentation::MetricCollector;
 use std::net::SocketAddr;
 
@@ -13,23 +13,34 @@ create_component!(
     PrometheusMetricCollector,
     MetricCollector,
     (|container: &mut Container| -> Result<Box<Any>> {
-        // Start Prometheus metrics endpoint when available.
-        #[cfg(feature = "server")]
+        // Start Prometheus metrics endpoint or pusher when available.
+        #[cfg(any(feature = "server", feature = "pusher"))]
         {
             let environment = container.inject()?;
             let args = container.get_arguments().unwrap();
-            if let Ok(address) = value_t!(args, "metrics-addr", SocketAddr) {
-                server::start(environment, address);
+            let mode = value_t!(args, "prometheus-mode", String);
+            let address = value_t!(args, "metrics-addr", SocketAddr);
+            match (mode, address) {
+                (Ok(mode), Ok(address)) => {
+                    if mode == PROMETHEUS_MODE_PULL {
+                        server::start(environment, address);
+                    } else if mode == PROMETHEUS_MODE_PUSH {
+                        pusher::start(environment, address);
+                    }
+                }
+                _ => ()
             }
         }
-
         let metric_collector: Box<MetricCollector> = Box::new(PrometheusMetricCollector::new());
         Ok(Box::new(metric_collector))
     }),
     [
         Arg::with_name("prometheus-mode")
             .long("prometheus-mode")
-            // TODO continue...
+            .help("Prometheus mode to be used: pull/push")
+            .possible_values(&[PROMETHEUS_MODE_PULL, PROMETHEUS_MODE_PUSH])
+            .default_value(PROMETHEUS_MODE_PULL)
+            .takes_value(true),
         Arg::with_name("metrics-addr")
             .long("metrics-addr")
             .help("A SocketAddr (as a string) from which to serve metrics to Prometheus.")

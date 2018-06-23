@@ -10,10 +10,8 @@ use std::time::Duration;
 
 /// Prometheus metrics endpoint.
 fn push_metrics() -> Result<()> {
-    // address: net::SocketAddr
-    let encoder = prometheus::TextEncoder::new();
     let metric_familys = prometheus::gather();
-    let address = "127.0.0.1:9091".to_owned();
+    let address = "prometheus:9090".to_owned();
     println!("Pushing metrics!");
     prometheus::push_metrics(
         "example_push",
@@ -26,11 +24,13 @@ fn push_metrics() -> Result<()> {
 
 /// Start an HTTP server for Prometheus metrics.
 pub fn start(environment: Arc<Environment>, address: net::SocketAddr) {
+    println!("Starging!");
+    println!("Got address: {}", address);
     let push = Box::new(
         Interval::new(Duration::from_secs(5))
             .map_err(|error| Error::from(error))
             // On each tick of the interval, push metrics.
-            .for_each(|_| {
+            .for_each(move |_| {
                 push_metrics()
             })
             .then(|_| future::ok(())),
