@@ -1,13 +1,11 @@
 //! Prometheus metric server.
-use std::net;
-use std::sync::Arc;
-
-use hyper::service::service_fn_ok;
-use hyper::{Body, Request, Response, Server};
-use prometheus::{self, Encoder};
-
 use ekiden_common::environment::Environment;
 use ekiden_common::futures::prelude::*;
+use hyper::{Body, Request, Response, Server};
+use hyper::service::service_fn_ok;
+use prometheus::{self, Encoder};
+use std::net;
+use std::sync::Arc;
 
 /// Prometheus metrics endpoint.
 fn metrics_service(_request: Request<Body>) -> Response<Body> {

@@ -5,14 +5,15 @@
 #[cfg_attr(test, macro_use)]
 extern crate ekiden_instrumentation;
 
-#[cfg(feature = "server")]
+#[cfg(any(feature = "server", feature = "pusher"))]
 extern crate ekiden_common;
-#[cfg(feature = "server")]
+#[cfg(any(feature = "server", feature = "pusher"))]
 extern crate futures;
 #[cfg(feature = "server")]
 extern crate http;
 #[cfg(feature = "server")]
 extern crate hyper;
+#[macro_use]
 extern crate prometheus;
 #[cfg(feature = "server")]
 #[macro_use]
@@ -28,11 +29,20 @@ pub mod di;
 #[cfg(feature = "server")]
 pub mod server;
 
-use std::collections::HashMap;
-use std::sync::RwLock;
+#[cfg(feature = "pusher")]
+extern crate tokio;
+
+#[cfg(feature = "pusher")]
+extern crate futures_timer;
+
+#[cfg(feature = "pusher")]
+#[macro_use]
+pub mod pusher;
 
 use ekiden_instrumentation::{set_boxed_metric_collector, Metric, MetricCollector,
                              MetricCollectorError, MetricConfig, MetricValue};
+use std::collections::HashMap;
+use std::sync::RwLock;
 
 enum PrometheusMetric {
     Counter(prometheus::Counter),
@@ -174,9 +184,8 @@ pub use self::di::*;
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time};
-
     use super::*;
+    use std::{thread, time};
 
     #[test]
     fn test_prometheus() {

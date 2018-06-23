@@ -1,9 +1,10 @@
 //! Dependency injection support.
+use super::{server, PrometheusMetricCollector};
+use ekiden_instrumentation::MetricCollector;
 use std::net::SocketAddr;
 
-use ekiden_instrumentation::MetricCollector;
-
-use super::{server, PrometheusMetricCollector};
+const PROMETHEUS_MODE_PULL: &'static str = "pull";
+const PROMETHEUS_MODE_PUSH: &'static str = "push";
 
 // Make Prometheus service injectable.
 create_component!(
@@ -25,8 +26,13 @@ create_component!(
         let metric_collector: Box<MetricCollector> = Box::new(PrometheusMetricCollector::new());
         Ok(Box::new(metric_collector))
     }),
-    [Arg::with_name("metrics-addr")
-        .long("metrics-addr")
-        .help("A SocketAddr (as a string) from which to serve metrics to Prometheus.")
-        .takes_value(true)]
+    [
+        Arg::with_name("prometheus-mode")
+            .long("prometheus-mode")
+            // TODO continue...
+        Arg::with_name("metrics-addr")
+            .long("metrics-addr")
+            .help("A SocketAddr (as a string) from which to serve metrics to Prometheus.")
+            .takes_value(true)
+    ]
 );
