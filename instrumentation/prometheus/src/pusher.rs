@@ -4,37 +4,26 @@ use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
 use futures_timer::Interval;
 use prometheus;
-use std::net;
 use std::sync::Arc;
 use std::time::Duration;
 
 /// Prometheus metrics endpoint.
-fn push_metrics() -> Result<()> {
-    let metric_familys = prometheus::gather();
-    println!("Metrics: {:?}", metric_familys);
-    let address = "prom-push:9091".to_owned();
-    info!("Pushing metrics!");
+fn push_metrics(address: &str) -> Result<()> {
     prometheus::push_metrics(
-        "example_push",
-        labels!{"instance".to_owned() => "HAL-9000".to_owned(),},
-        &address,
-        metric_familys,
+        "ekiden_push", // TODO: Add optional arguemnt for Job name.
+        labels!{}, // TODO: Add optional arguments for labels: labels!{"instance".to_owned() => "HAL-9000".to_owned(),},
+        address,
+        prometheus::gather(),
     ).unwrap();
     Ok(())
 }
 
-/// Start an HTTP server for Prometheus metrics.
-pub fn start(environment: Arc<Environment>, address: net::SocketAddr) {
-    info!("Starging!");
-    println!("Got address: {}", address);
+/// Start an task for pushing Prometheus metrics.
+pub fn start(environment: Arc<Environment>, address: String, period: Duration) {
     let push = Box::new(
-        Interval::new(Duration::from_secs(5))
+        Interval::new(period)
             .map_err(|error| Error::from(error))
-            // On each tick of the interval, push metrics.
-            .for_each(move |_| {
-                println!("in tick");
-                push_metrics()
-            })
+            .for_each(move |_| push_metrics(&address))
             .then(|_| future::ok(())),
     );
 
