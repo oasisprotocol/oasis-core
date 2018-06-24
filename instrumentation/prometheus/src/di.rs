@@ -20,15 +20,19 @@ create_component!(
             let args = container.get_arguments().unwrap();
             let mode = value_t!(args, "prometheus-mode", String);
             let address = value_t!(args, "metrics-addr", SocketAddr);
+            println!("Im here");
+            println!("Mode: {:?}", mode);
+            println!("Address: {:?}", address);
             match (mode, address) {
                 (Ok(mode), Ok(address)) => {
                     if mode == PROMETHEUS_MODE_PULL {
                         server::start(environment, address);
                     } else if mode == PROMETHEUS_MODE_PUSH {
+                        println!("Starting push");
                         pusher::start(environment, address);
                     }
                 }
-                _ => ()
+                _ => (),
             }
         }
         let metric_collector: Box<MetricCollector> = Box::new(PrometheusMetricCollector::new());
