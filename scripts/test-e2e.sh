@@ -153,7 +153,7 @@ else
     echo >&2 "Skipping DynamoDB test."
 fi
 if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
-    run_test scenario_multilayer "e2e-storage-multilayer" token 1 run_dummy_node_default
+    run_test scenario_multilayer "e2e-storage-multilayer" token 1 run_dummy_node_storage_dynamodb
 else
     echo >&2 "Skipping multilayer storage backend test."
 fi

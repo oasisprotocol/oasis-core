@@ -899,9 +899,11 @@ impl ConsensusFrontend {
                 State::ProcessingBatch(Role::Leader, Arc::new(batch.into())),
             );
 
+            inner.storage.start_batch();
             inner
                 .storage
                 .insert(encoded_batch, 1)
+                .join(inner.storage.end_batch())
                 .and_then(move |_| {
                     require_state!(
                         inner,
@@ -1070,9 +1072,12 @@ impl ConsensusFrontend {
         // Store outputs and then commit to block.
         let inner_clone = inner.clone();
 
+        inner.storage.start_batch();
         inner
             .storage
             .insert(encoded_outputs, 2)
+            .join(inner.storage.end_batch())
+            .and_then(|((), ())| Ok(()))
             .or_else(|error| {
                 // Failed to store outputs, abort current batch.
                 Self::fail_batch(
