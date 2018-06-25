@@ -10,7 +10,7 @@ use ekiden_compute_api::{ComputationGroup, SubmitAggCommitRequest, SubmitAggResp
 use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
-use ekiden_core::signature::{Signature, Signed};
+use ekiden_core::x509::get_node_id;
 
 use super::super::consensus::ConsensusFrontend;
 use ekiden_consensus_base::{Commitment, Reveal};
@@ -38,20 +38,19 @@ impl ComputationGroup for ComputationGroupService {
     fn submit_batch(
         &self,
         ctx: grpcio::RpcContext,
-        mut request: SubmitBatchRequest,
+        request: SubmitBatchRequest,
         sink: grpcio::UnarySink<SubmitBatchResponse>,
     ) {
         measure_histogram_timer!("submit_batch_time");
         measure_counter_inc!("submit_batch_calls");
 
-        let mut f = || -> Result<()> {
+        let f = || -> Result<()> {
+            let node_id = get_node_id(&ctx)?;
             let batch_hash = H256::try_from(request.get_batch_hash())?;
-            let signature = Signature::try_from(request.take_signature())?;
-            let signed_batch = Signed::from_parts(batch_hash, signature);
 
             self.inner
                 .consensus_frontend
-                .process_remote_batch(signed_batch)?;
+                .process_remote_batch(node_id, batch_hash)?;
 
             Ok(())
         };
@@ -69,20 +68,19 @@ impl ComputationGroup for ComputationGroupService {
     fn submit_agg_commit(
         &self,
         ctx: grpcio::RpcContext,
-        mut request: SubmitAggCommitRequest,
+        request: SubmitAggCommitRequest,
         sink: grpcio::UnarySink<SubmitAggResponse>,
     ) {
         measure_histogram_timer!("submit_agg_commit_time");
         measure_counter_inc!("submit_agg_commit_calls");
 
-        let mut f = || -> Result<()> {
-            let commit = Commitment::try_from(request.get_commit().clone())?;
-            let signature = Signature::try_from(request.take_signature())?;
-            let signed_commit = Signed::from_parts(commit, signature);
+        let f = || -> Result<()> {
+            let node_id = get_node_id(&ctx)?;
+            let commitment = Commitment::try_from(request.get_commit().clone())?;
 
             self.inner
                 .consensus_frontend
-                .process_agg_commit(signed_commit)?;
+                .process_agg_commit(node_id, commitment)?;
 
             Ok(())
         };
@@ -100,20 +98,19 @@ impl ComputationGroup for ComputationGroupService {
     fn submit_agg_reveal(
         &self,
         ctx: grpcio::RpcContext,
-        mut request: SubmitAggRevealRequest,
+        request: SubmitAggRevealRequest,
         sink: grpcio::UnarySink<SubmitAggResponse>,
     ) {
         measure_histogram_timer!("submit_agg_reveal_time");
         measure_counter_inc!("submit_agg_reveal_calls");
 
-        let mut f = || -> Result<()> {
+        let f = || -> Result<()> {
+            let node_id = get_node_id(&ctx)?;
             let reveal = Reveal::try_from(request.get_reveal().clone())?;
-            let signature = Signature::try_from(request.take_signature())?;
-            let signed_reveal = Signed::from_parts(reveal, signature);
 
             self.inner
                 .consensus_frontend
-                .process_agg_reveal(signed_reveal)?;
+                .process_agg_reveal(node_id, reveal)?;
 
             Ok(())
         };

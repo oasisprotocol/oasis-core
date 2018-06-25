@@ -3,28 +3,18 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_compute_api::{ComputationGroupClient, SubmitAggCommitRequest, SubmitAggRevealRequest,
                          SubmitBatchRequest};
-use ekiden_core::bytes::{B256, B64, H256};
+use ekiden_consensus_base::{Commitment, Reveal};
+use ekiden_core::bytes::{B256, H256};
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::mpsc;
+use ekiden_core::identity::NodeIdentity;
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
-use ekiden_core::signature::{Signed, Signer};
 use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
-
-use ekiden_consensus_base::{Commitment, Reveal};
-
-/// Signature context used for batch submission.
-const SUBMIT_BATCH_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgBaSu");
-
-/// Signature context used for submitting a commit to leader for aggregation.
-const SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgACSu");
-
-/// Signature context used for submitting a reveal to leader for aggregation.
-const SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgARSu");
 
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
@@ -49,12 +39,14 @@ struct Inner {
     node_group: NodeGroup<ComputationGroupClient, CommitteeNode>,
     /// Computation committee metadata.
     committee: Mutex<Vec<CommitteeNode>>,
-    /// Signer for the compute node.
-    signer: Arc<Signer>,
+    /// Compute node's public key.
+    public_key: B256,
     /// Current leader of the computation committee.
     leader: Arc<Mutex<Option<CommitteeNode>>>,
     /// Environment.
     environment: Arc<Environment>,
+    /// Node identity,
+    identity: Arc<NodeIdentity>,
     /// Command sender.
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
@@ -71,7 +63,7 @@ impl Inner {
         let committee = self.committee.lock().unwrap();
         committee
             .iter()
-            .filter(|node| node.public_key == self.signer.get_public_key())
+            .filter(|node| node.public_key == self.public_key)
             .map(|node| node.role.clone())
             .next()
     }
@@ -88,8 +80,8 @@ impl ComputationGroup {
         contract_id: B256,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
-        signer: Arc<Signer>,
         environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
@@ -100,9 +92,10 @@ impl ComputationGroup {
                 entity_registry,
                 node_group: NodeGroup::new(),
                 committee: Mutex::new(vec![]),
-                signer,
+                public_key: identity.get_public_key(),
                 leader: Arc::new(Mutex::new(None)),
                 environment,
+                identity,
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
                 role_subscribers: StreamSubscribers::new(),
@@ -192,7 +185,7 @@ impl ComputationGroup {
         // group with any nodes as it is not needed.
         if !members
             .iter()
-            .any(|node| node.public_key == inner.signer.get_public_key())
+            .any(|node| node.public_key == inner.public_key)
         {
             info!("No longer a member of the computation group");
             inner.role_subscribers.notify(&None);
@@ -209,7 +202,7 @@ impl ComputationGroup {
         // TODO: Support group fetch to avoid multiple requests to registry or make scheduler return nodes.
         let nodes: Vec<BoxFuture<(Node, CommitteeNode)>> = members
             .iter()
-            .filter(|node| node.public_key != inner.signer.get_public_key())
+            .filter(|node| node.public_key != inner.public_key)
             .filter(|node| node.role == Role::Worker || node.role == Role::Leader)
             .map(|node| {
                 let node = node.clone();
@@ -227,7 +220,8 @@ impl ComputationGroup {
                 .and_then(move |nodes| {
                     // Update group.
                     for (node, committee_node) in nodes {
-                        let channel = node.connect(inner.environment.grpc());
+                        let channel =
+                            node.connect(inner.environment.clone(), inner.identity.clone());
                         let client = ComputationGroupClient::new(channel);
                         inner.node_group.add_node(client, committee_node);
                     }
@@ -266,13 +260,9 @@ impl ComputationGroup {
     fn handle_submit(inner: Arc<Inner>, batch_hash: H256) -> BoxFuture<()> {
         trace!("Submitting batch to workers");
 
-        // Sign batch.
-        let signed_batch = Signed::sign(&inner.signer, &SUBMIT_BATCH_SIGNATURE_CONTEXT, batch_hash);
-
         // Submit batch.
         let mut request = SubmitBatchRequest::new();
         request.set_batch_hash(batch_hash.to_vec());
-        request.set_signature(signed_batch.signature.into());
 
         inner
             .node_group
@@ -296,17 +286,9 @@ impl ComputationGroup {
     fn handle_submit_agg_commit(inner: Arc<Inner>, commit: Commitment) -> BoxFuture<()> {
         trace!("Submitting aggregate commit to leader");
 
-        // Sign commit.
-        let signed_commit = Signed::sign(
-            &inner.signer,
-            &SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT,
-            commit.clone(),
-        );
-
         // Submit commit.
         let mut request = SubmitAggCommitRequest::new();
         request.set_commit(commit.into());
-        request.set_signature(signed_commit.signature.into());
 
         inner
             .node_group
@@ -335,17 +317,9 @@ impl ComputationGroup {
     fn handle_submit_agg_reveal(inner: Arc<Inner>, reveal: Reveal) -> BoxFuture<()> {
         trace!("Submitting aggregate reveal to leader");
 
-        // Sign reveal.
-        let signed_reveal = Signed::sign(
-            &inner.signer,
-            &SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT,
-            reveal.clone(),
-        );
-
         // Submit reveal.
         let mut request = SubmitAggRevealRequest::new();
         request.set_reveal(reveal.into());
-        request.set_signature(signed_reveal.signature.into());
 
         inner
             .node_group
@@ -405,49 +379,41 @@ impl ComputationGroup {
         self.inner.leader.lock().unwrap().clone().unwrap()
     }
 
-    /// Verify that given batch has been signed by the current leader.
+    /// Check if given node public key belongs to the current committee leader.
     ///
-    /// Returns the call batch and the current compute committee.
-    pub fn open_remote_batch(
-        &self,
-        batch_hash: Signed<H256>,
-    ) -> Result<(H256, Vec<CommitteeNode>)> {
-        // Check if batch was signed by leader, drop otherwise.
-        let committee = {
-            let committee = self.inner.committee.lock().unwrap();
-            if !committee.iter().any(|node| {
-                node.role == Role::Leader && node.public_key == batch_hash.signature.public_key
-            }) {
-                warn!("Dropping call batch not signed by compute committee leader");
-                return Err(Error::new("not signed by compute committee leader"));
-            }
+    /// Returns current committee.
+    pub fn check_remote_batch(&self, node_id: B256) -> Result<Vec<CommitteeNode>> {
+        let committee = self.inner.committee.lock().unwrap();
+        if !committee
+            .iter()
+            .any(|node| node.role == Role::Leader && node.public_key == node_id)
+        {
+            warn!("Dropping call batch not signed by compute committee leader");
+            return Err(Error::new("not current committee leader"));
+        }
 
-            committee.clone()
-        };
-
-        Ok((batch_hash.open(&SUBMIT_BATCH_SIGNATURE_CONTEXT)?, committee))
+        Ok(committee.clone())
     }
 
-    pub fn open_agg_commit(&self, signed_commit: Signed<Commitment>) -> Result<(Commitment, Role)> {
-        // Check if commitment was signed by a worker and that we're the
-        // current leader, drop otherwise.  Also note that the leader and
-        // backup workers also count as workers.
+    /// Check if commitment/reveal comes from a worker and that we're the current
+    /// leader, drop otherwise.
+    ///
+    /// Also note that the leader and backup workers also count as workers.
+    pub fn check_aggregated(&self, node_id: B256) -> Result<Role> {
         let leader = self.inner.leader.lock().unwrap().clone().unwrap();
 
-        if leader.public_key != self.inner.signer.get_public_key() {
-            warn!("Dropping commit for aggregation, as we're not the current compute committee leader");
+        if leader.public_key != self.inner.public_key {
+            warn!("Dropping commit/reveal for aggregation, as we're not the current compute committee leader");
             return Err(Error::new("am not the current compute committee leader"));
         }
 
         let committee = self.inner.committee.lock().unwrap();
 
         // Find the node that signed this commitment.
-        let node = committee
-            .iter()
-            .find(|node| node.public_key == signed_commit.signature.public_key);
+        let node = committee.iter().find(|node| node.public_key == node_id);
 
         if node == None {
-            warn!("Dropping commit for aggregation, as it was not signed by any node");
+            warn!("Dropping commit/reveal for aggregation, as it was not signed by any node");
             return Err(Error::new("not signed by any node"));
         }
 
@@ -456,54 +422,12 @@ impl ComputationGroup {
 
         if role != Role::Worker && role != Role::BackupWorker && role != Role::Leader {
             warn!(
-                "Dropping commit for aggregation, as it was not signed by compute committee worker"
+                "Dropping commit/reveal for aggregation, as it was not signed by compute committee worker"
             );
             return Err(Error::new("not signed by compute committee worker"));
         }
 
-        Ok((
-            signed_commit.open(&SUBMIT_AGG_COMMIT_SIGNATURE_CONTEXT)?,
-            role,
-        ))
-    }
-
-    pub fn open_agg_reveal(&self, signed_reveal: Signed<Reveal>) -> Result<(Reveal, Role)> {
-        // Check if reveal was signed by a worker and that we're the
-        // current leader, drop otherwise.  Also note that the leader and
-        // backup workers also count as workers.
-        let leader = self.inner.leader.lock().unwrap().clone().unwrap();
-
-        if leader.public_key != self.inner.signer.get_public_key() {
-            warn!("Dropping reveal for aggregation, as we're not the current compute committee leader");
-            return Err(Error::new("am not the current compute committee leader"));
-        }
-
-        let committee = self.inner.committee.lock().unwrap();
-
-        // Find the node that signed this reveal.
-        let node = committee
-            .iter()
-            .find(|node| node.public_key == signed_reveal.signature.public_key);
-
-        if node == None {
-            warn!("Dropping reveal for aggregation, as it was not signed by any node");
-            return Err(Error::new("not signed by any node"));
-        }
-
-        // Get the role of the node that signed this reveal.
-        let role = node.unwrap().role;
-
-        if role != Role::Worker && role != Role::BackupWorker && role != Role::Leader {
-            warn!(
-                "Dropping reveal for aggregation, as it was not signed by compute committee worker"
-            );
-            return Err(Error::new("not signed by compute committee worker"));
-        }
-
-        Ok((
-            signed_reveal.open(&SUBMIT_AGG_REVEAL_SIGNATURE_CONTEXT)?,
-            role,
-        ))
+        Ok(role)
     }
 
     /// Subscribe to notifications on our current role in the computation committee.
