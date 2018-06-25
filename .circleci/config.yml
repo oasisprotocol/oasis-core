@@ -37,19 +37,18 @@ jobs:
           cd target/debug
           mkdir ../cov
           for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
-            ./$bin --test-threads 1
+            mkdir ../cov/$bin
+            kcov \
+              --exclude-pattern=$HOME/.cargo,/usr/lib \
+              --clang \
+              --skip-solibs \
+              --verify \
+              ../cov/$bin \
+              ./$bin \
+              --test-threads 1
           done
-          # XXX(willscott): coverage disabled due breakage on upgrade to 18.04
-          #  mkdir ../cov/$bin
-          #  kcov \
-          #    --exclude-pattern=$HOME/.cargo,/usr/lib \
-          #    --verify \
-          #    ../cov/$bin \
-          #    ./$bin \
-          #    --test-threads 1
-          #done
       # Upload coverage info.
-      #- run: codecov
+      - run: codecov
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
       # compare against them.
