@@ -3,12 +3,15 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::{mpsc, oneshot};
-use ekiden_common::futures::{future, BoxFuture, Future, FutureExt, Stream};
 use ekiden_common::hash::empty_hash;
+use ekiden_common::identity::NodeIdentity;
+use ekiden_common::node::Node;
 use ekiden_common::ring::signature::Ed25519KeyPair;
-use ekiden_common::signature::InMemorySigner;
+use ekiden_common::signature::{InMemorySigner, Signer};
 use ekiden_common::untrusted;
+use ekiden_common::x509;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
@@ -25,26 +28,38 @@ pub struct SimulatedComputationBatch {
     /// Block produced by the computation batch.
     block: Block,
     /// Nonce used for commitment.
-    nonce: B256,
+    nonce: Nonce,
 }
 
-impl SimulatedComputationBatch {
-    /// Create new simulated computation batch.
-    pub fn new(child: Block, output: &[u8]) -> Self {
-        let mut block = Block::new_parent_of(&child);
-        // We currently just assume that the computation group is fixed.
-        block.computation_group = child.computation_group;
-        block.header.input_hash = empty_hash();
-        block.header.output_hash = empty_hash();
-        block.header.state_root = hash_storage_key(output);
-        block.update();
+struct SimulatedNodeIdentity {
+    signer: Arc<InMemorySigner>,
+}
 
-        // TODO: Include some simulated transactions.
+impl SimulatedNodeIdentity {
+    pub fn new() -> Self {
+        let key_pair =
+            Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
+        let signer = Arc::new(InMemorySigner::new(key_pair));
 
-        Self {
-            block,
-            nonce: B256::random(),
-        }
+        Self { signer }
+    }
+}
+
+impl NodeIdentity for SimulatedNodeIdentity {
+    fn get_node(&self) -> Node {
+        unimplemented!();
+    }
+
+    fn get_node_signer(&self) -> Arc<Signer> {
+        self.signer.clone()
+    }
+
+    fn get_tls_certificate(&self) -> &x509::Certificate {
+        unimplemented!();
+    }
+
+    fn get_tls_private_key(&self) -> &x509::PrivateKey {
+        unimplemented!();
     }
 }
 
@@ -53,10 +68,8 @@ struct SimulatedNodeInner {
     contract_id: B256,
     /// Storage backend.
     storage: Arc<StorageBackend>,
-    /// Signer for the simulated node.
-    signer: InMemorySigner,
-    /// Public key for the simulated node.
-    public_key: B256,
+    /// Node identity.
+    identity: Arc<SimulatedNodeIdentity>,
     /// Shutdown channel.
     shutdown_channel: Mutex<Option<oneshot::Sender<()>>>,
     /// Shutdown receiver.
@@ -77,11 +90,6 @@ pub struct SimulatedNode {
 impl SimulatedNode {
     /// Create new simulated node.
     pub fn new(storage: Arc<StorageBackend>, contract_id: B256) -> Self {
-        let key_pair =
-            Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-        let public_key = B256::from(key_pair.public_key_bytes());
-        let signer = InMemorySigner::new(key_pair);
-
         let (command_sender, command_receiver) = mpsc::unbounded();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
@@ -89,8 +97,7 @@ impl SimulatedNode {
             inner: Arc::new(SimulatedNodeInner {
                 contract_id,
                 storage,
-                signer,
-                public_key,
+                identity: Arc::new(SimulatedNodeIdentity::new()),
                 command_channel: command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
                 computation: Mutex::new(None),
@@ -102,13 +109,19 @@ impl SimulatedNode {
 
     /// Get public key for this node.
     pub fn get_public_key(&self) -> B256 {
-        self.inner.public_key.clone()
+        self.get_identity().get_node_signer().get_public_key()
+    }
+
+    /// Get node identity.
+    pub fn get_identity(&self) -> Arc<NodeIdentity> {
+        self.inner.identity.clone()
     }
 
     /// Start simulated node.
     pub fn start(
         &self,
         backend: Arc<ConsensusBackend>,
+        signer: Arc<ConsensusSigner>,
         scheduler: Arc<Scheduler>,
     ) -> BoxFuture<()> {
         // Create a channel for external commands. This is currently required because
@@ -119,7 +132,7 @@ impl SimulatedNode {
             .unwrap()
             .take()
             .expect("start already called");
-        let public_key = self.inner.public_key;
+        let public_key = self.get_public_key();
 
         // Fetch current committee to get our role.
         let role = scheduler
@@ -142,6 +155,7 @@ impl SimulatedNode {
         let event_processor: BoxFuture<()> = {
             let shared_inner = self.inner.clone();
             let backend = backend.clone();
+            let signer = signer.clone();
 
             Box::new(backend.get_events(self.inner.contract_id).for_each(
                 move |event| -> BoxFuture<()> {
@@ -157,11 +171,9 @@ impl SimulatedNode {
                                 }
                             };
 
-                            let reveal = Reveal::new(
-                                &shared_inner.signer,
-                                &computation.nonce,
-                                &computation.block.header,
-                            );
+                            let reveal = signer
+                                .sign_reveal(&computation.block.header, &computation.nonce)
+                                .unwrap();
 
                             // Send reveal.
                             backend.reveal(shared_inner.contract_id, reveal)
@@ -183,6 +195,7 @@ impl SimulatedNode {
         let command_processor: BoxFuture<()> = {
             let shared_inner = self.inner.clone();
             let backend = backend.clone();
+            let signer = signer.clone();
 
             Box::new(
                 receiver
@@ -201,18 +214,22 @@ impl SimulatedNode {
 
                                 let shared_inner = shared_inner.clone();
                                 let backend = backend.clone();
+                                let signer = signer.clone();
 
-                                Box::new(latest_block.and_then(move |block| {
+                                Box::new(latest_block.and_then(move |child| {
                                     // Start new computation with some dummy output state.
-                                    let computation =
-                                        SimulatedComputationBatch::new(block, &output);
+                                    let mut block = Block::new_parent_of(&child);
+                                    // We currently just assume that the computation group is fixed.
+                                    block.computation_group = child.computation_group;
+                                    block.header.input_hash = empty_hash();
+                                    block.header.output_hash = empty_hash();
+                                    block.header.state_root = hash_storage_key(&output);
+                                    block.update();
 
                                     // Generate commitment.
-                                    let commitment = Commitment::new(
-                                        &shared_inner.signer,
-                                        &computation.nonce,
-                                        &computation.block.header,
-                                    );
+                                    let (commitment, nonce) =
+                                        signer.sign_commitment(&block.header).unwrap();
+                                    let computation = SimulatedComputationBatch { block, nonce };
 
                                     // Store computation.
                                     {

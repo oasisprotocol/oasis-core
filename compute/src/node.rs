@@ -4,7 +4,7 @@ use std::sync::Arc;
 use grpcio;
 
 use ekiden_compute_api;
-use ekiden_consensus_base::ConsensusBackend;
+use ekiden_consensus_base::{ConsensusBackend, ConsensusSigner};
 use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
 use ekiden_core::environment::Environment;
@@ -71,6 +71,7 @@ impl ComputeNode {
         let scheduler = container.inject::<Scheduler>()?;
         let storage_backend = container.inject::<StorageBackend>()?;
         let consensus_backend = container.inject::<ConsensusBackend>()?;
+        let consensus_signer = container.inject::<ConsensusSigner>()?;
 
         // Register entity with the registry.
         // TODO: This should probably be done independently?
@@ -147,8 +148,8 @@ impl ComputeNode {
             worker.clone(),
             computation_group.clone(),
             consensus_backend.clone(),
+            consensus_signer.clone(),
             storage_backend.clone(),
-            node_identity.get_node_signer(),
         ));
 
         // Create compute node gRPC server.

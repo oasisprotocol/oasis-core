@@ -15,7 +15,7 @@ use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
 
-use ekiden_consensus_base::{Commitment, Header, Reveal};
+use ekiden_consensus_base::{Commitment, Reveal};
 
 /// Signature context used for batch submission.
 const SUBMIT_BATCH_SIGNATURE_CONTEXT: B64 = B64(*b"EkCgBaSu");
@@ -35,7 +35,7 @@ enum Command {
     /// Submit a commit to the leader for aggregation.
     SubmitAggCommit(Commitment),
     /// Submit a reveal to the leader for aggregation.
-    SubmitAggReveal(Reveal<Header>),
+    SubmitAggReveal(Reveal),
 }
 
 struct Inner {
@@ -332,7 +332,7 @@ impl ComputationGroup {
     }
 
     /// Handle submission of a single reveal to the leader for aggregation.
-    fn handle_submit_agg_reveal(inner: Arc<Inner>, reveal: Reveal<Header>) -> BoxFuture<()> {
+    fn handle_submit_agg_reveal(inner: Arc<Inner>, reveal: Reveal) -> BoxFuture<()> {
         trace!("Submitting aggregate reveal to leader");
 
         // Sign reveal.
@@ -396,7 +396,7 @@ impl ComputationGroup {
     /// Submit a reveal to the leader for aggregation.
     ///
     /// Returns the current leader of the computation group.
-    pub fn submit_agg_reveal(&self, reveal: Reveal<Header>) -> CommitteeNode {
+    pub fn submit_agg_reveal(&self, reveal: Reveal) -> CommitteeNode {
         self.inner
             .command_sender
             .unbounded_send(Command::SubmitAggReveal(reveal))
@@ -467,10 +467,7 @@ impl ComputationGroup {
         ))
     }
 
-    pub fn open_agg_reveal(
-        &self,
-        signed_reveal: Signed<Reveal<Header>>,
-    ) -> Result<(Reveal<Header>, Role)> {
+    pub fn open_agg_reveal(&self, signed_reveal: Signed<Reveal>) -> Result<(Reveal, Role)> {
         // Check if reveal was signed by a worker and that we're the
         // current leader, drop otherwise.  Also note that the leader and
         // backup workers also count as workers.

@@ -6,7 +6,6 @@ extern crate protobuf;
 
 mod generated;
 
-use ekiden_common_api as common;
 use ekiden_scheduler_api as scheduler;
 
 pub use generated::consensus::*;

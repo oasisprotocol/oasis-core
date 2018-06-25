@@ -11,7 +11,7 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::node::Node;
 use ekiden_common::protobuf::RepeatedField;
 use ekiden_consensus_api as api;
-use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Header, Reveal};
+use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
 
 /// Consensus client implements the Consensus interface.
 pub struct ConsensusClient(api::ConsensusClient);
@@ -91,7 +91,7 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()> {
+    fn reveal(&self, contract_id: B256, reveal: Reveal) -> BoxFuture<()> {
         let mut req = api::RevealRequest::new();
         req.set_contract_id(contract_id.to_vec());
         req.set_reveal(reveal.into());
@@ -115,7 +115,7 @@ impl ConsensusBackend for ConsensusClient {
         }
     }
 
-    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal<Header>>) -> BoxFuture<()> {
+    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal>) -> BoxFuture<()> {
         let mut req = api::RevealManyRequest::new();
 
         req.set_contract_id(contract_id.to_vec());

@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 
 use serde_cbor;
 
-use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Header, Reveal};
+use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, ConsensusSigner, Event, Nonce,
+                            Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::environment::Environment;
@@ -16,7 +17,7 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::hash::{empty_hash, EncodedHash};
-use ekiden_core::signature::{Signed, Signer};
+use ekiden_core::signature::Signed;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
@@ -39,7 +40,7 @@ enum Command {
     /// Process commit for aggregation from node with given role.
     ProcessAggCommit(Commitment, Role),
     /// Process reveal for aggregation from node with given role.
-    ProcessAggReveal(Reveal<Header>, Role),
+    ProcessAggReveal(Reveal, Role),
 }
 
 /// State of the consensus frontend.
@@ -59,7 +60,7 @@ enum State {
     ProcessingBatch(Role, Arc<CallBatch>),
     /// We have committed to a specific batch in the current consensus round and are
     /// waiting for the consensus backend to notify us to send reveals.
-    ProposedBatch(Role, Arc<CallBatch>, B256, Block),
+    ProposedBatch(Role, Arc<CallBatch>, Nonce, Block),
     /// We have submitted a reveal for the committed batch in the current consensus
     /// round and are waiting ro the consensus backend to finalize the block.
     WaitingForFinalize(Role, Arc<CallBatch>, Block),
@@ -200,10 +201,10 @@ struct Inner {
     environment: Arc<Environment>,
     /// Consensus backend.
     backend: Arc<ConsensusBackend>,
+    /// Consensus signer.
+    signer: Arc<ConsensusSigner>,
     /// Storage backend.
     storage: Arc<StorageBackend>,
-    /// Signer for the compute node.
-    signer: Arc<Signer>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -227,9 +228,9 @@ struct Inner {
     /// Commits from backup workers waiting to be sent as an aggregation to the backend.
     agg_backup_commits: Mutex<Vec<Commitment>>,
     /// Reveals from workers or leader waiting to be sent as an aggregation to the backend.
-    agg_reveals: Mutex<Vec<Reveal<Header>>>,
+    agg_reveals: Mutex<Vec<Reveal>>,
     /// Reveals from backup workers waiting to be sent as an aggregation to the backend.
-    agg_backup_reveals: Mutex<Vec<Reveal<Header>>>,
+    agg_backup_reveals: Mutex<Vec<Reveal>>,
     /// Notify incoming queue.
     incoming_queue_notified: AtomicBool,
 }
@@ -279,8 +280,8 @@ impl ConsensusFrontend {
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
+        signer: Arc<ConsensusSigner>,
         storage: Arc<StorageBackend>,
-        signer: Arc<Signer>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
@@ -290,8 +291,8 @@ impl ConsensusFrontend {
                 contract_id,
                 environment,
                 backend,
-                storage,
                 signer,
+                storage,
                 worker,
                 computation_group,
                 command_sender,
@@ -540,7 +541,15 @@ impl ConsensusFrontend {
         info!("Submitting reveal");
 
         // Generate and submit reveal.
-        let reveal = Reveal::new(&inner.signer, &nonce, &block.header);
+        let reveal = match inner.signer.sign_reveal(&block.header, &nonce) {
+            Ok(reveal) => reveal,
+            Err(error) => {
+                return Self::fail_batch(
+                    inner,
+                    format!("error while signing reveal: {}", error.message),
+                );
+            }
+        };
 
         Self::transition(inner.clone(), State::WaitingForFinalize(role, batch, block));
 
@@ -751,7 +760,7 @@ impl ConsensusFrontend {
     }
 
     /// Handle reveal for aggregation command.
-    fn handle_agg_reveal(inner: Arc<Inner>, reveal: Reveal<Header>, role: Role) -> BoxFuture<()> {
+    fn handle_agg_reveal(inner: Arc<Inner>, reveal: Reveal, role: Role) -> BoxFuture<()> {
         require_state_ignore!(
             inner,
             State::ProposedBatch(Role::Leader, ..) | State::WaitingForFinalize(Role::Leader, ..)
@@ -762,7 +771,7 @@ impl ConsensusFrontend {
         // Select appropriate queue based on the role of the node that sent
         // us the reveal.  Also calculate how many reveals we need before we
         // can send all the aggregated reveals to the backend.
-        let mut agg_reveals: MutexGuard<Vec<Reveal<Header>>>;
+        let mut agg_reveals: MutexGuard<Vec<Reveal>>;
         let needed_reveals: usize;
         let agg_queue: AggregationQueueType;
 
@@ -1043,8 +1052,15 @@ impl ConsensusFrontend {
         );
 
         // Generate commitment.
-        let nonce = B256::random();
-        let commitment = Commitment::new(&inner.signer, &nonce, &block.header);
+        let (commitment, nonce) = match inner.signer.sign_commitment(&block.header) {
+            Ok(result) => result,
+            Err(error) => {
+                return Self::fail_batch(
+                    inner,
+                    format!("error while signing commitment: {}", error.message),
+                );
+            }
+        };
 
         Self::transition(
             inner.clone(),
@@ -1154,7 +1170,7 @@ impl ConsensusFrontend {
     }
 
     /// Process a reveal for aggregation.
-    pub fn process_agg_reveal(&self, signed_reveal: Signed<Reveal<Header>>) -> Result<()> {
+    pub fn process_agg_reveal(&self, signed_reveal: Signed<Reveal>) -> Result<()> {
         // Open the signed reveal, verifying that it was signed by a
         // worker and that the leader matches.
         let (reveal, role) = self.inner.computation_group.open_agg_reveal(signed_reveal)?;
