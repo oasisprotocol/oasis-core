@@ -12,7 +12,7 @@ ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha"
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-consensus-api = { path = "../api", version = "0.2.0-alpha" }
 protobuf = "~2.0"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
 serde = "=1.0.59"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"
