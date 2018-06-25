@@ -1,5 +1,4 @@
 //! Local epoch time implementation
-#[cfg(not(target_env = "sgx"))]
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 #[allow(unused_imports)]
@@ -7,17 +6,12 @@ use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_di;
 use interface::*;
-#[cfg(not(target_env = "sgx"))]
 use std::mem;
 use std::sync::{Arc, Mutex};
-#[cfg(not(target_env = "sgx"))]
 use std::sync::{Once, ONCE_INIT};
-#[cfg(not(target_env = "sgx"))]
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, TimeZone, Utc};
-
-#[cfg(not(target_env = "sgx"))]
 use futures_timer::{Interval, TimerHandle};
 
 fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
@@ -274,7 +268,6 @@ pub struct LocalTime {
 /// Get the system-used local time instance.
 // Follows the singleton pattern from
 // https://stackoverflow.com/questions/27791532/how-do-i-create-a-global-mutable-singleton
-#[cfg(not(target_env = "sgx"))]
 pub fn get_local_time() -> LocalTime {
     static mut LOCALTIME: *const LocalTime = 0 as *const LocalTime;
     static ONCE: Once = ONCE_INIT;
@@ -293,7 +286,6 @@ pub fn get_local_time() -> LocalTime {
 }
 
 // Register for dependency injection.
-#[cfg(not(target_env = "sgx"))]
 create_component!(
     system,
     "time-source-notifier",
@@ -351,7 +343,6 @@ create_component!(
 );
 
 pub struct MockTimeRpcNotifier {}
-#[cfg(not(target_env = "sgx"))]
 create_component!(
     mockrpc,
     "time-source-notifier",
@@ -392,7 +383,6 @@ create_component!(
 );
 
 pub struct MockTimeNotifier {}
-#[cfg(not(target_env = "sgx"))]
 create_component!(
     mock,
     "time-source-notifier",

@@ -87,7 +87,6 @@ impl DummyBackend {
 
         let server_builder = ServerBuilder::new(grpc_environment.clone());
 
-        //let time_service = create_time_source(EpochTimeService::new(time_source.clone()));
         let beacon_service = create_beacon(BeaconService::new(random_beacon.clone()));
         let contract_service =
             create_contract_registry(ContractRegistryService::new(contract_registry.clone()));
@@ -116,7 +115,6 @@ impl DummyBackend {
                     .build_args(),
             )
             .bind("0.0.0.0", config.port)
-            //.register_service(time_service)
             .register_service(beacon_service)
             .register_service(contract_service)
             .register_service(entity_service)
