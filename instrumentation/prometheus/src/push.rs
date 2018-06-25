@@ -1,13 +1,14 @@
-//! Prometheus metric pusher.
+//! Prometheus metric push.
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use prometheus;
+
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
-use futures_timer::Interval;
-use prometheus;
-use std::sync::Arc;
-use std::time::Duration;
+use ekiden_common::tokio::timer::Interval;
 
-/// Prometheus metrics endpoint.
 fn push_metrics(address: &str) -> Result<()> {
     prometheus::push_metrics(
         "ekiden_push", // TODO: Add optional arguemnt for Job name.
@@ -21,12 +22,12 @@ fn push_metrics(address: &str) -> Result<()> {
 /// Start an task for pushing Prometheus metrics.
 pub fn start(environment: Arc<Environment>, address: String, period: Duration) {
     let push = Box::new(
-        Interval::new(period)
+        Interval::new(Instant::now(), period)
             .map_err(|error| Error::from(error))
             .for_each(move |_| push_metrics(&address))
             .then(|_| future::ok(())),
     );
 
-    info!("Starting Prometheus metrics pusher!");
+    info!("Starting Prometheus metrics push!");
     environment.spawn(push);
 }
