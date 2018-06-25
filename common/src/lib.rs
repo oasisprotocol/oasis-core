@@ -72,4 +72,6 @@ pub mod environment;
 pub mod identity;
 pub mod subscribers;
 pub mod testing;
+pub mod usize_iterable_hashmap;
+pub mod usize_iterable_hashset;
 pub mod x509;

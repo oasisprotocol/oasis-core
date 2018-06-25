@@ -6,7 +6,7 @@ fn main() {
     // Must be done first to create src/generated directory
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
-        &["common", "scheduler"],
+        &["scheduler"],
         &["consensus", "consensus_grpc"],
     );
 
@@ -14,10 +14,6 @@ fn main() {
     protoc_grpcio::compile_grpc_protos(&["consensus.proto"], &["src", "../../"], "src/generated")
         .expect("failed to compile gRPC definitions");
 
-    println!(
-        "cargo:rerun-if-changed={}",
-        "../../common/api/src/common.proto"
-    );
     println!(
         "cargo:rerun-if-changed={}",
         "../../scheduler/api/src/scheduler.proto"

@@ -18,6 +18,7 @@ ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
 ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
+ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
@@ -40,7 +41,6 @@ grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", fe
 lru-cache = "0.1.1"
 log = "0.4"
 pretty_env_logger = "0.2"
-futures-timer = "0.1.1"
 serde_cbor = "0.8.2"
 
 [build-dependencies]

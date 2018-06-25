@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::bytes::H256;
-use ekiden_common::error::Error;
+use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::futures::{future, BoxFuture, Future, FutureExt};
 use ekiden_common::signature::Signer;
@@ -26,7 +26,7 @@ pub struct ContractClient<Backend: RpcClientBackend + 'static> {
     /// Shutdown signal (receiver).
     shutdown_receiver: future::Shared<oneshot::Receiver<()>>,
     /// Shutdown signal (sender).
-    shutdown_sender: oneshot::Sender<()>,
+    shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
 }
 
 impl<Backend> ContractClient<Backend>
@@ -42,37 +42,30 @@ where
             rpc: RpcClient::new(backend, mr_enclave, false),
             signer,
             shutdown_receiver: shutdown_receiver.shared(),
-            shutdown_sender,
+            shutdown_sender: Mutex::new(Some(shutdown_sender)),
         }
     }
 
-    /// Queue a contract call.
-    pub fn call<C, O>(&self, method: &str, arguments: C) -> BoxFuture<O>
+    /// Queue a raw contract call.
+    pub fn call_raw<C>(&self, signed_call: C) -> BoxFuture<Vec<u8>>
     where
         C: Serialize,
-        O: DeserializeOwned + Send + 'static,
     {
         let backend = self.backend.clone();
-        let call = SignedContractCall::sign(&self.signer, method, arguments);
 
         self.rpc
-            .call(protocol::METHOD_CONTRACT_SUBMIT, call)
+            .call(protocol::METHOD_CONTRACT_SUBMIT, signed_call)
             .and_then(move |call_id: H256| {
                 // Subscribe to contract call so we will know when the call is done.
                 backend.wait_contract_call(call_id).and_then(|output| {
                     // TODO: Submit proof of publication, get decryption.
-
-                    let output: ContractOutput<O> = serde_cbor::from_slice(&output)?;
-                    match output {
-                        ContractOutput::Success(data) => Ok(data),
-                        ContractOutput::Error(error) => Err(Error::new(error)),
-                    }
+                    Ok(output)
                 })
             })
             .select(
                 self.shutdown_receiver
                     .clone()
-                    .then(|_result| -> BoxFuture<O> {
+                    .then(|_result| -> BoxFuture<Vec<u8>> {
                         // However the shutdown receiver future completes, we need to abort as
                         // it has either been dropped or an explicit shutdown signal was sent.
                         future::err(Error::new("contract client closed")).into_box()
@@ -83,8 +76,38 @@ where
             .into_box()
     }
 
-    /// Cancel all pending contract calls and consume itself.
-    pub fn shutdown(self) {
-        drop(self.shutdown_sender.send(()));
+    /// Queue a contract call.
+    pub fn call<C, O>(&self, method: &str, arguments: C) -> BoxFuture<O>
+    where
+        C: Serialize,
+        O: DeserializeOwned + Send + 'static,
+    {
+        let call = SignedContractCall::sign(&self.signer, method, arguments);
+
+        self.call_raw(call)
+            .and_then(|output| parse_call_output(output))
+            .into_box()
+    }
+
+    /// Cancel all pending contract calls.
+    pub fn shutdown(&self) {
+        let shutdown_sender = self.shutdown_sender
+            .lock()
+            .unwrap()
+            .take()
+            .expect("shutdown already called");
+        drop(shutdown_sender.send(()));
+    }
+}
+
+/// Parse contract call output.
+pub fn parse_call_output<O>(output: Vec<u8>) -> Result<O>
+where
+    O: DeserializeOwned,
+{
+    let output: ContractOutput<O> = serde_cbor::from_slice(&output)?;
+    match output {
+        ContractOutput::Success(data) => Ok(data),
+        ContractOutput::Error(error) => Err(Error::new(error)),
     }
 }

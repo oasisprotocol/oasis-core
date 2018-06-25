@@ -1,139 +1,208 @@
 syntax = "proto3";
 
-// This is the escrow service.  Entities deposit stake, and can create
-// escrow accounts for which the service acts as the escrow account
-// holder to enforce the (simple) escrow scenario: the ``target'' of
-// the escrow account and the stakeholder has some contract
-// (unspecified), and the target will, at the end of the contract,
-// release some, none, or all of the escrowed amount back to the
-// stakeholder, with the difference going to the target.  The
-// assumption is that the stakeholder will not create an escrow
-// account for a target unless the stakeholder knows (via code
-// auditing) that the target will not take the escrowed coins
-// arbitrarily.
+// This is the stake token and escrow service.  The stake token aspect
+// of the service is ERC20 compliant.  Entities hold/transfer/burn
+// stake tokens, and can create escrow accounts for which the service
+// acts as the escrow agent to enforce the (simple) escrow scenario:
+// the ``target'' of the escrow account and the stakeholder has some
+// agreement (unspecified), and the target will, at the conclusion of
+// the agreement, close the escrow account, claiming some, none, or
+// all of the escrowed tokens as forfeiture, with the remainder, if
+// any, returned to the stakeholder.  The assumption is that the
+// stakeholder will not create an escrow account for a target unless
+// the stakeholder knows (via code auditing) that the target will not
+// claim the escrowed tokens arbitrarily.
 
-package escrow;
+package stake;
 
 service Stake {
-  rpc DepositStake (DepositStakeRequest)
-    returns (DepositStakeResponse) {}
+  rpc GetName (GetNameRequest)
+    returns (GetNameResponse) {}
+  rpc GetSymbol (GetSymbolRequest)
+    returns (GetSymbolResponse) {}
+  rpc GetDecimals (GetDecimalsRequest)
+    returns (GetDecimalsResponse) {}
+  rpc GetTotalSupply (GetTotalSupplyRequest)
+    returns (GetTotalSupplyResponse) {}
   rpc GetStakeStatus (GetStakeStatusRequest)
     returns (GetStakeStatusResponse) {}
-  rpc TransferStake (TransferStakeRequest)
-    returns (TransferStakeResponse) {}
-  rpc WithdrawStake (WithdrawStakeRequest)
-    returns (WithdrawStakeResponse) {}
+  rpc BalanceOf (BalanceOfRequest)
+    returns (BalanceOfResponse) {}
+  rpc Transfer (TransferRequest)
+    returns (TransferResponse) {}
+  rpc TransferFrom (TransferFromRequest)
+    returns (TransferFromResponse) {}
+  rpc Approve (ApproveRequest)
+    returns (ApproveResponse) {}
+  rpc ApproveAndCall(ApproveAndCallRequest) // cannot make calls in dummy impl
+    returns (ApproveAndCallResponse) {}
+  rpc Allowance (AllowanceRequest)
+    returns (AllowanceResponse) {}
+  rpc Burn (BurnRequest)
+    returns (BurnResponse) {}
+  rpc BurnFrom (BurnFromRequest)
+    returns (BurnFromResponse) {}
   rpc AllocateEscrow (AllocateEscrowRequest)
     returns (AllocateEscrowResponse) {}
-  rpc ListActiveEscrows (ListActiveEscrowsRequest)
-    returns (ListActiveEscrowsResponse) {}
+  rpc ListActiveEscrowsIterator (ListActiveEscrowsIteratorRequest)
+    returns (ListActiveEscrowsIteratorResponse) {}
+  rpc ListActiveEscrowsGet(ListActiveEscrowsGetRequest)
+    returns (ListActiveEscrowsGetResponse) {}
   rpc FetchEscrowById (FetchEscrowByIdRequest)
     returns (FetchEscrowByIdResponse) {}
   rpc TakeAndReleaseEscrow (TakeAndReleaseEscrowRequest)
     returns (TakeAndReleaseEscrowResponse) {}
 }
 
-// Message fields annotated with $$ is where conceptually
-// cryptocurrency tokens are transferred.
-
 // The RPCs should go over a secured channel so that authentication
 // for msg_sender is provided (out-of-band in the communication
 // security layer, so the explicit field can be removed), message
 // authenticity and freshness is guaranteed, with message
-// confidentiality being optional.
+// confidentiality being optional.  The RPC context has this info.
 
-// uint64 types used for stake quantities in this API.  This must
+message GetNameRequest {
+}
+
+message GetNameResponse {
+  string name = 1;
+}
+
+message GetSymbolRequest {
+}
+
+message GetSymbolResponse {
+  string symbol = 1;
+}
+
+message GetDecimalsRequest {
+}
+
+message GetDecimalsResponse {
+  uint32 decimals = 1;  // uint8
+}
+
+message GetTotalSupplyRequest {
+}
+
+message GetTotalSupplyResponse {
+  bytes total_supply = 1;  // AmountType
+}
+
+// uint256 is used for stake quantities in this API.  This must
 // match the definition of AmountType in the base backend trait
-// definition.  TODO: figure out whether we can define it as a type in
-// the proto file that is exported into the generated code.
+// definition.
 
 // Per-caller state:
-//  uint64 amount:  total stake amount
-//  uint64 escrowed:  amount of stake in escrow
-//  map<uint128, pair<entity, uint64>> escrow_map:  map from
-//    uuid for in-flight escrows and the entity and amount of the escrow
+//  uint256 amount:  total stake amount
+//  uint256 escrowed:  amount of stake in escrow
+//  map<uint256, pair<uint256, uint256>> escrow_map:  map from
+//    uuid for escrow accounts to the target address and amount of the escrow
 
 // Invariants:
 //
-// 0 <= escrowed <= amount <= MAX_UINT64
+// 0 <= escrowed <= amount <= MAX_UINT256
 //
-// \sum_{\forall (uuid, escrow) in escrow_map} escrow.second <= MAX_UINT64
+// \sum_{\forall (uuid, escrow) in escrow_map} escrow.second <= MAX_UINT256
 //   (i.e., sum calculation does not overflow)
 //
 // \sum_{\forall (uuid, escrow) in escrow_map} escrow.second = escrowed
-
-message DepositStakeRequest {
-  // Deposit an additional |amount| into the caller's bond/escrow account.
-  bytes msg_sender = 1;
-  // This corresponds to msg.sender in Solidity; it should be an
-  // address, which could be the SHA1 hash of a public key (external
-  // address) or a contract address (blockchain address) [addresses
-  // are 160 bit values].  In the context of grpc, this would be
-  // RpcContext's auth_context()'s GetPeerIdentity(), which probably
-  // would come from the identity in a JWT.
-  uint64 amount = 2;  // $$
-}
-// Post: caller.amount <= caller.amount'  (new amount is at least previous)
-// If caller.amount + DepositStakeRequest.amount <= MAX_UINT64,
-// caller.amount' = caller.amount + DepositStakeRequest.amount
-// else caller.amount' = caller.amount and the call returns
-// with Err(StakeWouldOverflow)
-
-message DepositStakeResponse {
-  // Other than some internal error (out of memory? out of gas for
-  // processing the request?) which should be handled by the Rust/grpc
-  // framework, the only possible reason for failure is integer
-  // overflow.  Handled via Err(...) which propagates through the
-  // grpc layer.
-}
 
 // The authenticated caller can get their own stake information.  For
 // now, we do not expect it to be useful/desirable to query for other
 // entity's stake availability etc, though that could change.
 message GetStakeStatusRequest {
-  bytes msg_sender = 1;
+  bytes owner = 1;
 }
 
 message GetStakeStatusResponse {
-  uint64 total_stake = 1;
-  uint64 escrowed_stake = 2;
+  bytes total_stake = 1;
+  bytes escrowed_stake = 2;
 }
 // Available stake for withdrawal is total_stake - escrowed_stake.
+
+message BalanceOfRequest {
+  bytes owner = 1;
+}
+
+message BalanceOfResponse {
+  bytes available_balance = 1;
+}
 
 // Transfer |amount| stake from the stake account belonging to
 // |msg_sender| to that belonging to |target|.  If no account exists
 // for |target|, it is automatically created.
-message TransferStakeRequest {
-  bytes msg_sender = 1;
-  bytes target = 2;
-  uint64 amount = 3;
+message TransferRequest {
+  bytes msg_sender = 1; // should be RpcContext info
+  bytes destination_address = 2;
+  bytes value = 3;
 }
 
 // If there is no overflow in adding to the target account, or
 // underflow in deducting from the msg_sender account, then the null
 // response would indicate success.  Otherwise an error would be
 // reported.
-message TransferStakeResponse {
+message TransferResponse {
+  bool success = 1;
 }
 
-// The authenticated caller can withdrawl up to the available stake for
-// withdrawal.
-//
-// If WithdrawStakeRequest.amount_requested <= caller.amount -
-// caller.escrowed then
-//   caller.amount' = caller.amount - WithdrawStakeRequested.amount_requested
-//   amount_returned = WithdrawStakeRequest.amount_requested
-//   failure_code = 0 (OK(()));
-// otherwise
-//   caller state unchanged
-//   failure_code = Err(InsufficientFunds)
-message WithdrawStakeRequest {
-  bytes msg_sender = 1;
-  uint64 amount_requested = 2;
+message TransferFromRequest {
+  bytes msg_sender = 1; // should be RpcContext info
+  bytes source_address = 2;
+  bytes destination_address = 3;
+  bytes value = 4;
 }
 
-message WithdrawStakeResponse {
-  uint64 amount_returned = 1;  // $$
+message TransferFromResponse {
+  bool success = 1;
+}
+
+message ApproveRequest {
+  bytes msg_sender = 1; // should be RpcContext info
+  bytes spender_address = 2;
+  bytes value = 3;
+}
+
+message ApproveResponse {
+  bool success = 1;
+}
+
+message ApproveAndCallRequest {
+  bytes msg_sender = 1; // should be RpcContext info
+  bytes spender_address = 2;
+  bytes value = 3;
+  bytes extra_data = 4;
+}
+
+message ApproveAndCallResponse {
+  bool success = 1;
+}
+
+message AllowanceRequest {
+  bytes owner_address = 1;
+  bytes spender_address = 2;
+}
+
+message AllowanceResponse {
+  bytes remaining = 1;
+}
+
+message BurnRequest {
+  bytes msg_sender = 1; // should be RpcContext info
+  bytes value = 2;
+}
+
+message BurnResponse {
+  bool success = 1;
+}
+
+message BurnFromRequest {
+  bytes msg_sender = 1; // should be RpcContext info
+  bytes owner_address = 2;
+  bytes value = 3;
+}
+
+message BurnFromResponse {
+  bool success = 1;
 }
 
 // The authenticated caller takes some portion of their available
@@ -176,33 +245,44 @@ message AllocateEscrowRequest {
   // - TakeAndReleaseEscrow (escrow_id, n)  n <= amount, amount-n is released.
   //   (To release entire escrow, use n=0.)
   bytes target = 2;
-  uint64 escrow_amount = 3;
+  bytes escrow_amount = 3;
+  bytes aux = 4;
 }
 
 message AllocateEscrowResponse {
   // Failure reasons: Err(InsufficientFunds).
-  bytes escrow_id = 1;  // Should be uuid, so no two the same.
+  bytes escrow_id = 1;
 }
 // The returned escrow id is an identifier and not an authenticator,
 // and instead of a randomly chosen uuid (i.e., version 4, with 122
 // random bits), this could be non-RFC 4122 compliant sequence number
 // to make this deterministic.
 
-message EscrowData {
+message ListActiveEscrowsIteratorRequest {
+  bytes owner = 1;
+}
+
+message ListActiveEscrowsIteratorResponse {
+  bool has_next = 1;
+  // EscrowAccountIterator's owner field is omitted
+  bytes state = 2; // opaque
+}
+
+message ListActiveEscrowsGetRequest {
+  // EscrowAccountIterator's has_next field is omitted
+  bytes owner = 1;
+  bytes state = 2;
+}
+
+message ListActiveEscrowsGetResponse {
   bytes escrow_id = 1;
-  bytes entity = 2;
-  uint64 amount = 3;
+  bytes target = 2;
+  bytes amount = 3;
+  bytes aux = 4;
+  bool has_next = 5;
+  bytes state = 6;
 }
-
-// This is useful for the msg.sender to know what escrows are still
-// outstanding.
-message ListActiveEscrowsRequest {
-  bytes msg_sender = 1;
-}
-
-message ListActiveEscrowsResponse {
-  repeated EscrowData escrows = 1;
-}
+  
 
 // Rather than sending the entity and amount information, we just
 // allow querying by the escrow id.  The caller (library) can verify
@@ -215,7 +295,10 @@ message FetchEscrowByIdRequest {
 
 message FetchEscrowByIdResponse {
   // Possible errors: Err(NoSuchEscrowId)
-  EscrowData escrow = 1;
+  bytes escrow_id = 1;
+  bytes target = 2;
+  bytes amount = 3;
+  bytes aux = 4;
 }
 
 // The authenticated caller indicates that he transactions for which
@@ -230,12 +313,12 @@ message FetchEscrowByIdResponse {
 message TakeAndReleaseEscrowRequest {
   bytes msg_sender = 1;
   bytes escrow_id = 2;
-  uint64 amount_requested = 3;
+  bytes amount_requested = 3;
 }
 
 message TakeAndReleaseEscrowResponse {
   // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
-  uint64 amount_taken = 1;
+  bytes amount_taken = 1;
   // amount transferred to target (caller)'s stake account.  If there
   // is no Err(..), amount_taken should always equal amount_requested
   // in the request message.  If there is escrow any left over, it is

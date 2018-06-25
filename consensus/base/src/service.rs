@@ -10,7 +10,6 @@ use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::{ConsensusBackend, Event};
 use commitment::{Commitment, Reveal};
-use header::Header;
 
 #[derive(Clone)]
 pub struct ConsensusService {
@@ -221,7 +220,7 @@ impl api::Consensus for ConsensusService {
     ) {
         let f = move || -> Result<_> {
             let contract_id = B256::try_from(req.get_contract_id())?;
-            let mut reveals: Vec<Reveal<Header>> = Vec::new();
+            let mut reveals: Vec<Reveal> = Vec::new();
 
             for r in req.get_reveals() {
                 let reveal = Reveal::try_from(r.clone())?;

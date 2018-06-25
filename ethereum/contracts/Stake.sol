@@ -77,7 +77,7 @@ contract Stake is ERC20Interface {
     revert();
   }
 
-  function _addNewStakeEscrowInfo(address _addr, uint _amount, uint _escrowed) private
+  function _addNewStakeEscrowInfo(address _addr, uint256 _amount, uint256 _escrowed) private
     returns (uint ix_) {
     require(stakes[_addr] == 0);
     StakeEscrowInfo memory entry;

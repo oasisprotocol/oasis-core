@@ -5,7 +5,6 @@
 extern crate sgx_types;
 
 extern crate base64;
-extern crate futures_timer;
 extern crate grpcio;
 #[macro_use]
 extern crate log;
@@ -43,6 +42,7 @@ extern crate clap;
 extern crate pretty_env_logger;
 
 extern crate ekiden_consensus_client;
+extern crate ekiden_consensus_dummy;
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
@@ -76,6 +76,7 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_storage_frontend::StorageClient::register(known_components);
     // Consensus.
     ekiden_consensus_client::ConsensusClient::register(known_components);
+    ekiden_consensus_dummy::DummyConsensusSigner::register(known_components);
     // Scheduler.
     ekiden_scheduler_client::SchedulerClient::register(known_components);
     // Entity registry.
