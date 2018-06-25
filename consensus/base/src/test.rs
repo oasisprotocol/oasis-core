@@ -58,16 +58,20 @@ struct SimulatedNodeInner {
     /// Public key for the simulated node.
     public_key: B256,
     /// Shutdown channel.
-    shutdown_channel: Option<oneshot::Sender<()>>,
+    shutdown_channel: Mutex<Option<oneshot::Sender<()>>>,
+    /// Shutdown receiver.
+    shutdown_signal: Mutex<Option<oneshot::Receiver<()>>>,
     /// Command channel.
-    command_channel: Option<mpsc::UnboundedSender<Command>>,
+    command_channel: mpsc::UnboundedSender<Command>,
+    /// Command receiver.
+    command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
     /// Current simulated computation.
-    computation: Option<SimulatedComputationBatch>,
+    computation: Mutex<Option<SimulatedComputationBatch>>,
 }
 
 /// A simulated node.
 pub struct SimulatedNode {
-    inner: Arc<Mutex<SimulatedNodeInner>>,
+    inner: Arc<SimulatedNodeInner>,
 }
 
 impl SimulatedNode {
@@ -78,23 +82,27 @@ impl SimulatedNode {
         let public_key = B256::from(key_pair.public_key_bytes());
         let signer = InMemorySigner::new(key_pair);
 
+        let (command_sender, command_receiver) = mpsc::unbounded();
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
         Self {
-            inner: Arc::new(Mutex::new(SimulatedNodeInner {
+            inner: Arc::new(SimulatedNodeInner {
                 contract_id,
                 storage,
                 signer,
                 public_key,
-                command_channel: None,
-                computation: None,
-                shutdown_channel: None,
-            })),
+                command_channel: command_sender,
+                command_receiver: Mutex::new(Some(command_receiver)),
+                computation: Mutex::new(None),
+                shutdown_channel: Mutex::new(Some(shutdown_sender)),
+                shutdown_signal: Mutex::new(Some(shutdown_receiver)),
+            }),
         }
     }
 
     /// Get public key for this node.
     pub fn get_public_key(&self) -> B256 {
-        let inner = self.inner.lock().unwrap();
-        inner.public_key.clone()
+        self.inner.public_key.clone()
     }
 
     /// Start simulated node.
@@ -105,14 +113,13 @@ impl SimulatedNode {
     ) -> BoxFuture<()> {
         // Create a channel for external commands. This is currently required because
         // there is no service discovery backend which we could subscribe to.
-        let (sender, receiver) = mpsc::unbounded();
-        let (contract_id, public_key) = {
-            let mut inner = self.inner.lock().unwrap();
-            assert!(inner.command_channel.is_none());
-            inner.command_channel.get_or_insert(sender);
-
-            (inner.contract_id, inner.public_key)
-        };
+        let receiver = self.inner
+            .command_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .expect("start already called");
+        let public_key = self.inner.public_key;
 
         // Fetch current committee to get our role.
         let role = scheduler
@@ -136,47 +143,46 @@ impl SimulatedNode {
             let shared_inner = self.inner.clone();
             let backend = backend.clone();
 
-            Box::new(
-                backend
-                    .get_events(contract_id)
-                    .for_each(move |event| -> BoxFuture<()> {
-                        let mut inner = shared_inner.lock().unwrap();
+            Box::new(backend.get_events(self.inner.contract_id).for_each(
+                move |event| -> BoxFuture<()> {
+                    match event {
+                        Event::CommitmentsReceived(_) => {
+                            // Generate reveal.
+                            let computation = {
+                                let mut computation = shared_inner.computation.lock().unwrap();
 
-                        match event {
-                            Event::CommitmentsReceived(_) => {
-                                // Generate reveal.
-                                let computation = match inner.computation.take() {
+                                match computation.take() {
                                     Some(computation) => computation,
                                     None => return future::ok(()).into_box(),
-                                };
+                                }
+                            };
 
-                                let reveal = Reveal::new(
-                                    &inner.signer,
-                                    &computation.nonce,
-                                    &computation.block.header,
-                                );
+                            let reveal = Reveal::new(
+                                &shared_inner.signer,
+                                &computation.nonce,
+                                &computation.block.header,
+                            );
 
-                                // Send reveal.
-                                backend.reveal(inner.contract_id, reveal)
-                            }
-                            Event::RoundFailed(error) => {
-                                // Round has failed, so the test should abort.
-                                panic!("round failed: {}", error);
-                            }
-                            Event::DiscrepancyDetected(_) => {
-                                // Discrepancy has been detected.
-                                panic!("unexpected discrepancy detected during test");
-                            }
+                            // Send reveal.
+                            backend.reveal(shared_inner.contract_id, reveal)
                         }
-                    }),
-            )
+                        Event::RoundFailed(error) => {
+                            // Round has failed, so the test should abort.
+                            panic!("round failed: {}", error);
+                        }
+                        Event::DiscrepancyDetected(_) => {
+                            // Discrepancy has been detected.
+                            panic!("unexpected discrepancy detected during test");
+                        }
+                    }
+                },
+            ))
         };
 
         // Process commands.
         let command_processor: BoxFuture<()> = {
             let shared_inner = self.inner.clone();
             let backend = backend.clone();
-            let contract_id = contract_id.clone();
 
             Box::new(
                 receiver
@@ -190,42 +196,46 @@ impl SimulatedNode {
                                 }
 
                                 // Fetch latest block.
-                                let latest_block = backend.get_latest_block(contract_id);
+                                let latest_block =
+                                    backend.get_latest_block(shared_inner.contract_id);
 
                                 let shared_inner = shared_inner.clone();
                                 let backend = backend.clone();
-                                let contract_id = contract_id.clone();
 
                                 Box::new(latest_block.and_then(move |block| {
-                                    let mut inner = shared_inner.lock().unwrap();
-
                                     // Start new computation with some dummy output state.
                                     let computation =
                                         SimulatedComputationBatch::new(block, &output);
 
                                     // Generate commitment.
                                     let commitment = Commitment::new(
-                                        &inner.signer,
+                                        &shared_inner.signer,
                                         &computation.nonce,
                                         &computation.block.header,
                                     );
 
                                     // Store computation.
-                                    assert!(inner.computation.is_none());
-                                    inner.computation.get_or_insert(computation);
+                                    {
+                                        let mut current_computation =
+                                            shared_inner.computation.lock().unwrap();
+                                        assert!(current_computation.is_none());
+                                        current_computation.get_or_insert(computation);
+                                    }
 
                                     if !output.is_empty() {
                                         // Insert dummy result to storage and commit.
-                                        inner
+                                        shared_inner
                                             .storage
                                             .insert(output, 7)
                                             .and_then(move |_| {
-                                                backend.commit(contract_id, commitment)
+                                                backend.commit(shared_inner.contract_id, commitment)
                                             })
                                             .into_box()
                                     } else {
                                         // Output is empty, no need to insert to storage.
-                                        backend.commit(contract_id, commitment).into_box()
+                                        backend
+                                            .commit(shared_inner.contract_id, commitment)
+                                            .into_box()
                                     }
                                 }))
                             }
@@ -244,13 +254,12 @@ impl SimulatedNode {
         };
 
         // Create shutdown channel.
-        let (sender, receiver) = oneshot::channel();
-        {
-            let mut inner = self.inner.lock().unwrap();
-            assert!(inner.shutdown_channel.is_none());
-            inner.shutdown_channel.get_or_insert(sender);
-        }
-
+        let receiver = self.inner
+            .shutdown_signal
+            .lock()
+            .unwrap()
+            .take()
+            .expect("start already called");
         let shutdown = Box::new(receiver.then(|_| Err(Error::new("shutdown"))));
 
         let tasks =
@@ -261,17 +270,15 @@ impl SimulatedNode {
 
     /// Simulate delivery of a new computation.
     pub fn compute(&self, output: &[u8]) {
-        let inner = self.inner.lock().unwrap();
-        let channel = inner.command_channel.as_ref().unwrap();
-        channel
+        self.inner
+            .command_channel
             .unbounded_send(Command::Compute(output.to_vec()))
             .unwrap();
     }
 
     /// Shutdown node.
     pub fn shutdown(&self) {
-        let mut inner = self.inner.lock().unwrap();
-        let channel = inner.shutdown_channel.take().unwrap();
+        let channel = self.inner.shutdown_channel.lock().unwrap().take().unwrap();
         drop(channel.send(()));
     }
 }
