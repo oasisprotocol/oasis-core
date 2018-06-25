@@ -1,5 +1,6 @@
 //! Ethereum signatures.
 use std::result::Result as StdResult;
+use std::sync::Arc;
 
 use constant_time_eq::constant_time_eq;
 use ekiden_common::bytes::{B256, B520, H160, H256};
@@ -8,12 +9,42 @@ use ekiden_common::futures::Future;
 use secp256k1::key::{PublicKey, SecretKey};
 use secp256k1::{Error as SecpError, Message, RecoverableSignature, RecoveryId, SECP256K1};
 use tiny_keccak::{keccak256, Keccak};
+use web3;
+use web3::api::Web3;
+use web3::Transport;
 
 const ETH_SIGNATURE_PREFIX: &[u8] = b"\x19Ethereum Signed Message:\n32";
 const ETH_V_ADJ: u8 = 27;
 
 /// Ethereum signature size in bytes.
 pub const SIGNATURE_SIZE: usize = 520 / 8;
+
+// Ethereum web3 delegated signature signer.
+pub struct Web3Signer<T: Transport + Sync + Send> {
+    client: Arc<Web3<T>>,
+    identity: web3::types::H160,
+}
+
+impl<T: 'static + Transport + Sync + Send> Web3Signer<T>
+where
+    <T as web3::Transport>::Out: Send,
+{
+    /// Create a new Signer from a web3 client and address.
+    pub fn new(client: Arc<Web3<T>>, address: &H160) -> Self {
+        Self {
+            client,
+            identity: web3::types::H160(address.0),
+        }
+    }
+
+    /// Sign given 256-bit digest, and return a web3/geth compatible signature.
+    pub fn sign(&self, data: &H256) -> B520 {
+        let data = web3::types::Bytes(data.to_vec());
+        let f = self.client.eth().sign(self.identity, data);
+
+        B520(f.wait().unwrap().0) // Should be near instant, API disconnect.
+    }
+}
 
 // Ethereum signature signer.
 pub struct Signer {
