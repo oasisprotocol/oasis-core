@@ -13,7 +13,7 @@ use ekiden_core::futures::Future;
 use ekiden_core::signature::{Signature, Signed};
 
 use super::super::consensus::ConsensusFrontend;
-use ekiden_consensus_base::{Commitment, Header, Reveal};
+use ekiden_consensus_base::{Commitment, Reveal};
 
 struct Inner {
     /// Consensus frontend.
@@ -107,7 +107,7 @@ impl ComputationGroup for ComputationGroupService {
         measure_counter_inc!("submit_agg_reveal_calls");
 
         let mut f = || -> Result<()> {
-            let reveal = Reveal::<Header>::try_from(request.get_reveal().clone())?;
+            let reveal = Reveal::try_from(request.get_reveal().clone())?;
             let signature = Signature::try_from(request.take_signature())?;
             let signed_reveal = Signed::from_parts(reveal, signature);
 

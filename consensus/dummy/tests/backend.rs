@@ -24,7 +24,7 @@ use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
 use ekiden_consensus_base::test::generate_simulated_nodes;
 use ekiden_consensus_base::ConsensusBackend;
-use ekiden_consensus_dummy::DummyConsensusBackend;
+use ekiden_consensus_dummy::{DummyConsensusBackend, DummyConsensusSigner};
 use ekiden_epochtime::interface::EPOCH_INTERVAL;
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_registry_base::test::populate_entity_registry;
@@ -116,7 +116,10 @@ fn test_dummy_backend_two_rounds() {
     let mut tasks = vec![];
     tasks.append(&mut nodes
         .iter()
-        .map(|n| n.start(backend.clone(), scheduler.clone()))
+        .map(|node| {
+            let signer = Arc::new(DummyConsensusSigner::new(node.get_identity()));
+            node.start(backend.clone(), signer, scheduler.clone())
+        })
         .collect());
 
     // Send compute requests to all nodes.

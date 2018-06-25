@@ -8,8 +8,6 @@ use ekiden_common::error::Error;
 use ekiden_common::hash::EncodedHash;
 use ekiden_common::uint::U256;
 
-use super::commitment::Commitable;
-
 /// Block header.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Header {
@@ -39,8 +37,6 @@ impl Header {
         self.previous_hash == child.get_encoded_hash()
     }
 }
-
-impl Commitable for Header {}
 
 impl TryFrom<api::Header> for Header {
     type Error = Error;

@@ -1,5 +1,6 @@
-//! Ekiden dummy consensus backend.
+//! Dummy consensus backend.
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::{B256, H256};
@@ -10,9 +11,12 @@ use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_common::hash::empty_hash;
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_common::uint::U256;
-use ekiden_consensus_base::*;
+use ekiden_consensus_base::{Block, Commitment as OpaqueCommitment, ConsensusBackend, Event,
+                            Header, Reveal as OpaqueReveal};
 use ekiden_scheduler_base::{Committee, CommitteeNode, CommitteeType, Role, Scheduler};
 use ekiden_storage_base::StorageBackend;
+
+use super::commitment::{Commitment, Reveal};
 
 /// Round state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -415,9 +419,12 @@ impl Round {
         block.header = header;
         block.computation_group = self.committee.members.clone();
         for node in &self.committee.members {
-            block
-                .commitments
-                .push(self.commitments.get(&node.public_key).cloned());
+            block.commitments.push(
+                self.commitments
+                    .get(&node.public_key)
+                    .cloned()
+                    .map(|commitment| commitment.into()),
+            );
         }
         block.update();
 
@@ -780,26 +787,48 @@ impl ConsensusBackend for DummyConsensusBackend {
             .into_box()
     }
 
-    fn commit(&self, contract_id: B256, commitment: Commitment) -> BoxFuture<()> {
+    fn commit(&self, contract_id: B256, commitment: OpaqueCommitment) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
+        let commitment = match commitment.try_into() {
+            Ok(commitment) => commitment,
+            Err(error) => return future::err(error).into_box(),
+        };
+
         self.send_command(Command::Commit(contract_id, commitment, sender), receiver)
     }
 
-    fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()> {
+    fn reveal(&self, contract_id: B256, reveal: OpaqueReveal) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
+        let reveal = match reveal.try_into() {
+            Ok(reveal) => reveal,
+            Err(error) => return future::err(error).into_box(),
+        };
+
         self.send_command(Command::Reveal(contract_id, reveal, sender), receiver)
     }
 
-    fn commit_many(&self, contract_id: B256, commitments: Vec<Commitment>) -> BoxFuture<()> {
+    fn commit_many(
+        &self,
+        contract_id: B256,
+        mut commitments: Vec<OpaqueCommitment>,
+    ) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
+        let commitments = commitments
+            .drain(..)
+            .filter_map(|commitment| commitment.try_into().ok())
+            .collect();
         self.send_command(
             Command::CommitMany(contract_id, commitments, sender),
             receiver,
         )
     }
 
-    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal<Header>>) -> BoxFuture<()> {
+    fn reveal_many(&self, contract_id: B256, mut reveals: Vec<OpaqueReveal>) -> BoxFuture<()> {
         let (sender, receiver) = oneshot::channel();
+        let reveals = reveals
+            .drain(..)
+            .filter_map(|reveal| reveal.try_into().ok())
+            .collect();
         self.send_command(Command::RevealMany(contract_id, reveals, sender), receiver)
     }
 }
