@@ -9,10 +9,10 @@ use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::tokio::timer::Interval;
 
-fn push_metrics(address: &str) -> Result<()> {
+fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()> {
     prometheus::push_metrics(
-        "ekiden_push", // TODO: Add optional arguemnt for Job name.
-        labels!{}, // TODO: Add optional arguments for labels: labels!{"instance".to_owned() => "HAL-9000".to_owned(),},
+        job_name,
+        labels!{"instance".to_owned() => instance_name.to_owned(),},
         address,
         prometheus::gather(),
     ).unwrap();
@@ -20,11 +20,11 @@ fn push_metrics(address: &str) -> Result<()> {
 }
 
 /// Start an task for pushing Prometheus metrics.
-pub fn start(environment: Arc<Environment>, address: String, period: Duration) {
+pub fn start(environment: Arc<Environment>, address: String, period: Duration, job_name: String, instance_name: String) {
     let push = Box::new(
         Interval::new(Instant::now(), period)
             .map_err(|error| Error::from(error))
-            .for_each(move |_| push_metrics(&address))
+            .for_each(move |_| push_metrics(&address, &job_name, &instance_name))
             .then(|_| future::ok(())),
     );
 
