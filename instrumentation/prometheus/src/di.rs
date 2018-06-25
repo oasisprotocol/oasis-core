@@ -31,8 +31,8 @@ create_component!(
                 Ok(PROMETHEUS_MODE_PUSH) => {
                     if let Ok(address) = value_t!(args, "prometheus-metrics-addr", String) {
                         let interval = value_t!(args, "prometheus-push-interval", u64).unwrap_or(5);
-                        let job = value_t!(args, "prometheus-push-job", String).unwrap();
-                        let instance = value_t!(args, "prometheus-push-instance", String).unwrap();
+                        let job = value_t!(args, "prometheus-push-job-name", String).unwrap();
+                        let instance = value_t!(args, "prometheus-push-instance-label", String).unwrap();
                         push::start(environment, address, Duration::from_secs(interval), job, instance);
                     }
                 }
@@ -49,20 +49,20 @@ create_component!(
             .takes_value(true),
         Arg::with_name("prometheus-push-interval")
             .long("prometheus-push-interval")
-            .help("Push period in seconds, if using 'push' mode.")
+            .help("Push interval in seconds (only used if using push mode).")
             .takes_value(true),
-        Arg::with_name("prometheus-push-job")
-            .long("prometheus-push-job")
+        Arg::with_name("prometheus-push-job-name")
+            .long("prometheus-push-job-name")
             .help("Prometheus `job` name used if using push mode.")
             .required_if("prometheus-mode", PROMETHEUS_MODE_PUSH)
             .takes_value(true),
-        Arg::with_name("prometheus-push-instance")
-            .long("prometheus-push-instance")
+        Arg::with_name("prometheus-push-instance-label")
+            .long("prometheus-push-instance-label")
             .help("Prometheus `instance` label used if using push mode.")
-            .required_if("prometheus_mode", PROMETHEUS_MODE_PUSH)
+            .required_if("prometheus-mode", PROMETHEUS_MODE_PUSH)
             .takes_value(true),
         Arg::with_name("prometheus-metrics-addr")
-            .long("metrics-addr")
+            .long("prometheus-metrics-addr")
             .help("If pull mode: A SocketAddr (as a string) from which to serve metrics to Prometheus. If push mode: prometheus 'pushgateway' address.")
             .takes_value(true)
     ]
