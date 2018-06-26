@@ -69,7 +69,8 @@ fn test_dummy_stake_backend() {
 
     let initial_total_tokens = AmountType::from(1);
     let expected_decimals = 18u8;
-    let initial_total_supply = initial_total_tokens * AmountType::from(1_000_000_000_000_000_000u64);
+    let initial_total_supply =
+        initial_total_tokens * AmountType::from(1_000_000_000_000_000_000u64);
 
     let backend = Arc::new(DummyStakeEscrowBackend::new(
         oasis,
@@ -411,16 +412,18 @@ fn test_dummy_stake_backend() {
 
     // excessive approve, allowance
     let excessive_approval = AmountType::from(1_000_000_000);
-    assert!(backend.approve(alice, bob, excessive_approval).wait().unwrap());
+    assert!(
+        backend
+            .approve(alice, bob, excessive_approval)
+            .wait()
+            .unwrap()
+    );
 
     let excessive_burn = AmountType::from(2_000_000_000);
     match backend.burn_from(bob, alice, excessive_burn).wait() {
         Err(e) => {
             debug!("Got error {}", e.message);
-            assert_eq!(
-                e.message,
-                ErrorCodes::InsufficientFunds.to_string()
-            );
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
         }
         Ok(b) => {
             if b {
@@ -434,13 +437,26 @@ fn test_dummy_stake_backend() {
 
     // approve, allowance, burn_from
     let reasonable_approval = AmountType::from(10);
-    assert!(backend.approve(alice, bob, reasonable_approval).wait().unwrap());
+    assert!(
+        backend
+            .approve(alice, bob, reasonable_approval)
+            .wait()
+            .unwrap()
+    );
     let reasonable_burn = AmountType::from(6);
-    assert!(backend.burn_from(bob, alice, reasonable_burn).wait().unwrap());
+    assert!(
+        backend
+            .burn_from(bob, alice, reasonable_burn)
+            .wait()
+            .unwrap()
+    );
     let remaining_allowance = backend.allowance(alice, bob).wait().unwrap();
     assert_eq!(remaining_allowance, reasonable_approval - reasonable_burn);
 
-    assert_eq!(backend.balance_of(alice).wait().unwrap(), alice_balance - reasonable_burn);
+    assert_eq!(
+        backend.balance_of(alice).wait().unwrap(),
+        alice_balance - reasonable_burn
+    );
     let alice_balance = alice_balance - reasonable_burn;
 
     // burn too much
@@ -461,13 +477,13 @@ fn test_dummy_stake_backend() {
 
     // transfer_from
     let excessive_transfer = remaining_allowance + AmountType::from(1);
-    match backend.transfer_from(bob, alice, carol, excessive_transfer).wait() {
+    match backend
+        .transfer_from(bob, alice, carol, excessive_transfer)
+        .wait()
+    {
         Err(e) => {
             debug!("Got error {}", e.message);
-            assert_eq!(
-                e.message,
-                ErrorCodes::InsufficientAllowance.to_string()
-            );
+            assert_eq!(e.message, ErrorCodes::InsufficientAllowance.to_string());
         }
         Ok(b) => {
             if b {
@@ -479,13 +495,13 @@ fn test_dummy_stake_backend() {
     assert_eq!(backend.balance_of(alice).wait().unwrap(), alice_balance);
 
     let excessive_transfer = alice_balance + AmountType::from(1);
-    match backend.transfer_from(bob, alice, carol, excessive_transfer).wait() {
+    match backend
+        .transfer_from(bob, alice, carol, excessive_transfer)
+        .wait()
+    {
         Err(e) => {
             debug!("Got error {}", e.message);
-            assert_eq!(
-                e.message,
-                ErrorCodes::InsufficientFunds.to_string()
-            );
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
         }
         Ok(b) => {
             if b {
@@ -496,14 +512,14 @@ fn test_dummy_stake_backend() {
     }
 
     let ok_transfer = alice_balance;
-    debug!("ok_transfer = {}, alice_balance = {}", ok_transfer, alice_balance);
+    debug!(
+        "ok_transfer = {}, alice_balance = {}",
+        ok_transfer, alice_balance
+    );
     match backend.transfer_from(bob, alice, carol, ok_transfer).wait() {
         Err(e) => {
             debug!("Got error {}", e.message);
-            assert_eq!(
-                e.message,
-                ErrorCodes::InsufficientAllowance.to_string()
-            );
+            assert_eq!(e.message, ErrorCodes::InsufficientAllowance.to_string());
         }
         Ok(b) => {
             if b {
@@ -513,8 +529,19 @@ fn test_dummy_stake_backend() {
         }
     }
     assert!(backend.approve(alice, bob, ok_transfer).wait().unwrap());
-    assert!(backend.transfer_from(bob, alice, carol, ok_transfer).wait().unwrap());
+    assert!(
+        backend
+            .transfer_from(bob, alice, carol, ok_transfer)
+            .wait()
+            .unwrap()
+    );
 
-    assert_eq!(backend.balance_of(alice).wait().unwrap(), AmountType::from(0));
-    assert_eq!(backend.balance_of(carol).wait().unwrap(), carol_stake + ok_transfer);
+    assert_eq!(
+        backend.balance_of(alice).wait().unwrap(),
+        AmountType::from(0)
+    );
+    assert_eq!(
+        backend.balance_of(carol).wait().unwrap(),
+        carol_stake + ok_transfer
+    );
 }
