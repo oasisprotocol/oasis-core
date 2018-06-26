@@ -39,8 +39,7 @@ jobs:
           for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
             mkdir ../cov/$bin
             kcov \
-              --exclude-pattern=$HOME/.cargo,/usr/lib \
-              --skip-solibs \
+              --include-pattern=$HOME/project \
               --verify \
               ../cov/$bin \
               ./$bin \
