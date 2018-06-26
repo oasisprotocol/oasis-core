@@ -1,7 +1,6 @@
 //! Ekiden dummy stake backend.
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::process::abort;
 use std::sync::{Arc, Mutex};
 
@@ -38,7 +37,7 @@ struct DummyStakeEscrowInfo {
     // account id, keys for escrow_map below.  \forall a \in accounts:
     // escrow_map[a].owner is stakeholder (key to this instance in
     // stakes below)
-    allowances: HashMap<EscrowAccountIdType, AmountType>,
+    allowances: HashMap<B256, AmountType>,
 }
 
 impl DummyStakeEscrowInfo {
@@ -266,46 +265,125 @@ impl DummyStakeEscrowBackendInner {
         &mut self,
         msg_sender: B256,
         owner: B256,
-        destination: B256,
+        destination_address: B256,
         value: AmountType,
     ) -> Result<bool, Error> {
-        unimplemented!();
+        let allowed: AmountType;
+        {
+            let entry = match self.stakes.get_mut(&owner) {
+                None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
+                Some(e) => e,
+            };
+            if entry.amount - entry.escrowed < value {
+                return Err(Error::new(ErrorCodes::InsufficientFunds.to_string()));
+            }
+            allowed = match entry.allowances.get(&msg_sender) {
+                None => AmountType::from(0),
+                Some(a) => *a,
+            };
+            if value > allowed {
+                return Err(Error::new(ErrorCodes::InsufficientAllowance.to_string()));
+            }
+        }
+        {
+            let target = self.stakes
+                .entry(destination_address)
+                .or_insert_with(|| DummyStakeEscrowInfo::new());
+            if target.amount > !AmountType::from(0) - value {
+                return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
+            }
+            target.amount = target.amount + value;
+        }
+        let entry = match self.stakes.get_mut(&owner) {
+            None => return Err(Error::new(ErrorCodes::InternalError.to_string())),
+            Some(e) => e,
+        };
+        entry.amount = entry.amount - value;
+        entry.allowances.insert(msg_sender, allowed - value);
+        Ok(true)
     }
 
     pub fn approve(
-        &self,
+        &mut self,
         msg_sender: B256,
         spender_address: B256,
         value: AmountType,
     ) -> Result<bool, Error> {
-        unimplemented!();
+        // Create an entry if msg_sender does not already have a stakes account...
+        let entry = self.stakes
+            .entry(msg_sender)
+            .or_insert_with(|| DummyStakeEscrowInfo::new());
+        // ... since allowances are unchecked wrt available balance,
+        // it is okay to over-promise.  The caller _could_ fund the
+        // account after the approve invocation.
+        entry.allowances.insert(spender_address, value);
+        return Ok(true);
     }
 
     pub fn approve_and_call(
-        &self,
+        &mut self,
         msg_sender: B256,
         spender_address: B256,
         value: AmountType,
-        extra_data: Vec<u8>,
+        _extra_data: Vec<u8>,
     ) -> Result<bool, Error> {
+        self.approve(msg_sender, spender_address, value)?;
+        // How do we call the spender_address contract?
         unimplemented!();
     }
 
     pub fn allowance(&self, owner: B256, spender: B256) -> Result<AmountType, Error> {
-        unimplemented!();
+        let entry = match self.stakes.get(&owner) {
+            None => return Ok(AmountType::from(0)),
+            Some(e) => e,
+        };
+        let amt = match entry.allowances.get(&spender) {
+            None => return Ok(AmountType::from(0)),
+            Some(amt) => *amt,
+        };
+        return Ok(amt);
     }
 
-    pub fn burn(&self, msg_sender: B256, value: AmountType) -> Result<bool, Error> {
-        unimplemented!();
+    pub fn burn(&mut self, msg_sender: B256, value: AmountType) -> Result<bool, Error> {
+        let entry = match self.stakes.get_mut(&msg_sender) {
+            None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
+            Some(e) => e,
+        };
+        if value > entry.amount - entry.escrowed {
+            return Err(Error::new(ErrorCodes::InsufficientFunds.to_string()));
+        }
+        entry.amount = entry.amount - value;
+        self.total_supply = self.total_supply - value;
+        Ok(true)
     }
 
     pub fn burn_from(
-        &self,
+        &mut self,
         msg_sender: B256,
         owner: B256,
         value: AmountType,
     ) -> Result<bool, Error> {
-        unimplemented!();
+        let entry = match self.stakes.get_mut(&owner) {
+            None => return Err(Error::new(ErrorCodes::NoStakeAccount.to_string())),
+            Some(e) => e,
+        };
+        if value > entry.amount - entry.escrowed {
+            return Err(Error::new(ErrorCodes::InsufficientFunds.to_string()));
+        }
+        // Allow burn_from of zero.  In Solidity, if there is no
+        // allowance, the mapping object would return 0, and a
+        // burn_from of 0 would be considered allowed.
+        let allowed = match entry.allowances.get(&msg_sender) {
+            None => AmountType::from(0),
+            Some(a) => *a,
+        };
+        if value > allowed {
+            return Err(Error::new(ErrorCodes::InsufficientAllowance.to_string()));
+        }
+        entry.amount = entry.amount - value;
+        self.total_supply = self.total_supply - value;
+        entry.allowances.insert(msg_sender, allowed - value);
+        Ok(true)
     }
 
     pub fn allocate_escrow(
@@ -352,13 +430,10 @@ impl DummyStakeEscrowBackendInner {
         &self,
         owner: B256,
     ) -> Result<EscrowAccountIterator, Error> {
-        let entry = match self.stakes.get(&owner) {
+        match self.stakes.get(&owner) {
             None => return Ok(EscrowAccountIterator::new(false, owner, B256::zero())),
-            Some(e) => {
-                return Ok(EscrowAccountIterator::new(true, owner, B256::zero()));
-            }
-        };
-        Err(Error::new(ErrorCodes::NoEscrowAccount.to_string()))
+            Some(_e) => return Ok(EscrowAccountIterator::new(true, owner, B256::zero())),
+        }
     }
 
     pub fn list_active_escrows_get(
@@ -603,7 +678,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
     fn allowance(&self, owner: B256, spender: B256) -> BoxFuture<AmountType> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
+            let inner = inner.lock().unwrap();
             inner.allowance(owner, spender)
         }))
     }
@@ -641,7 +716,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
     fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
+            let inner = inner.lock().unwrap();
             inner.list_active_escrows_iterator(owner)
         }))
     }
@@ -652,7 +727,7 @@ impl StakeEscrowBackend for DummyStakeEscrowBackend {
     ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
-            let mut inner = inner.lock().unwrap();
+            let inner = inner.lock().unwrap();
             inner.list_active_escrows_get(iter)
         }))
     }
