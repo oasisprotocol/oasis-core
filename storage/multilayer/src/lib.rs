@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::ops::Deref;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -288,11 +289,10 @@ fn di_factory(
         .wait()
         .unwrap()
         .chain_err(|| "Couldn't create rector core")?;
-    let sled = Arc::new(PersistentStorageBackend::new(
-        Box::new(ekiden_epochtime::local::SystemTimeSource {}),
-        args.value_of("storage-multilayer-sled-storage-base")
-            .unwrap(),
-    ).map_err(|e| {
+    let sled = Arc::new(PersistentStorageBackend::new(Path::new(args.value_of(
+        "storage-multilayer-sled-storage-base",
+    ).unwrap()))
+        .map_err(|e| {
         // Can't use chain_error because ekiden_common Error doesn't implement std Error.
         ekiden_di::error::Error::from(format!("Couldn't create sled layer: {:?}", e))
     })?);
@@ -347,8 +347,10 @@ create_component!(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+    use std::sync::Arc;
+
     use ekiden_common;
-    use ekiden_epochtime::local::SystemTimeSource;
     use ekiden_storage_base;
     use ekiden_storage_base::BatchStorage;
     use ekiden_storage_base::StorageBackend;
@@ -358,7 +360,6 @@ mod tests {
     use log::warn;
     use rusoto_core;
     use rusoto_core::ProvideAwsCredentials;
-    use std::sync::Arc;
     use tokio_core;
 
     use MultilayerBackend;
@@ -375,10 +376,8 @@ mod tests {
         }
 
         let sled = Arc::new(
-            PersistentStorageBackend::new(
-                Box::new(SystemTimeSource {}),
-                "/tmp/ekiden-test-storage-persistent/",
-            ).unwrap(),
+            PersistentStorageBackend::new(Path::new("/tmp/ekiden-test-storage-persistent/"))
+                .unwrap(),
         );
         let aws = Arc::new(DynamoDbBackend::new(
             core.remote(),

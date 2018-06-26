@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use lru_cache::LruCache;
 use serde_cbor;
 
 use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, ConsensusSigner, Event, Nonce,
@@ -221,6 +222,8 @@ struct Inner {
     max_batch_timeout: Duration,
     /// Call subscribers (call id -> list of subscribers).
     call_subscribers: Mutex<HashMap<H256, Vec<oneshot::Sender<Vec<u8>>>>>,
+    /// Recently confirmed call outputs.
+    recent_confirmed_calls: Mutex<LruCache<H256, Vec<u8>>>,
     /// Test-only configuration.
     test_only_config: ConsensusTestOnlyConfiguration,
     /// Commits from workers or leader waiting to be sent as an aggregation to the backend.
@@ -301,6 +304,7 @@ impl ConsensusFrontend {
                 max_batch_size: config.max_batch_size,
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 call_subscribers: Mutex::new(HashMap::new()),
+                recent_confirmed_calls: Mutex::new(LruCache::new(config.max_batch_size * 10)),
                 test_only_config: config.test_only.clone(),
                 agg_commits: Mutex::new(Vec::new()),
                 agg_backup_commits: Mutex::new(Vec::new()),
@@ -635,6 +639,8 @@ impl ConsensusFrontend {
                     .and_then(move |(inputs, outputs)| {
                         let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
                         let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
+                        let mut recent_confirmed_calls =
+                            inner.recent_confirmed_calls.lock().unwrap();
                         let mut call_subscribers = inner.call_subscribers.lock().unwrap();
 
                         for (input, output) in inputs.iter().zip(outputs.iter()) {
@@ -646,6 +652,9 @@ impl ConsensusFrontend {
                                     drop(sender.send(output.clone()));
                                 }
                             }
+
+                            // Store output to recently confirmed calls cache.
+                            recent_confirmed_calls.insert(call_id, output.clone());
                         }
 
                         Ok(())
@@ -1192,6 +1201,15 @@ impl ConsensusFrontend {
     pub fn subscribe_call(&self, call_id: H256) -> oneshot::Receiver<Vec<u8>> {
         let (response_sender, response_receiver) = oneshot::channel();
         if self.inner.computation_group.is_leader() {
+            // Check if outputs to this call were recently confirmed.
+            {
+                let mut recent_confirmed_calls = self.inner.recent_confirmed_calls.lock().unwrap();
+                if let Some(output) = recent_confirmed_calls.get_mut(&call_id) {
+                    response_sender.send(output.clone()).unwrap();
+                    return response_receiver;
+                }
+            }
+
             let mut call_subscribers = self.inner.call_subscribers.lock().unwrap();
             match call_subscribers.entry(call_id) {
                 Entry::Occupied(mut entry) => {
