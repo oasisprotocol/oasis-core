@@ -122,7 +122,6 @@ impl WorkerInner {
         self.storage.start_batch();
 
         // Run in storage context.
-        #[feature(coerce_unsized)]
         let (new_state_root, outputs) =
             self.contract
                 .with_storage(self.storage.clone(), root_hash, || {

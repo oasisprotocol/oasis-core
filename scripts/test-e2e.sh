@@ -137,6 +137,7 @@ scenario_discrepancy_leader() {
 
 scenario_multilayer() {
     run_compute_node_storage_multilayer 1
+    # Give the first compute node some time to register.
     sleep 1
     run_compute_node_storage_multilayer 2
     sleep 1

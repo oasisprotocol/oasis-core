@@ -18,12 +18,8 @@
   node key pair format in a backward-incompatible way.
 * **BACKWARD INCOMPATIBLE:** Make commitment and reveal message format consensus backend
   dependent and introduce `ConsensusSigner` interface to generate them
-* **BACKWARD INCOMPATIBLE:** Compute node now requires `--storage-backend BACKEND` option.
-  Use backend `remote` for original behavior.
-* **BACKWARD INCOMPATIBLE:** Compute node now uses a higher level batch storage interface.
-  Use `--batch-storage immediate_remote` and `--batch-storage-immediate-client-host` and
-  `--batch-storage-immediate-client-port` instead of `--storage-backend remote` and
-  `--storage-client-host` and `--storage-client-port` for original behavior.
+* **BACKWARD INCOMPATIBLE:** Compute node now requires `--batch-storage IMPL` option. Use
+  `--batch-storage immediate_remote` for original behavior.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
