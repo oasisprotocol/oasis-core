@@ -20,9 +20,12 @@ import subprocess
 import sys
 import os
 import json
+import atexit
+import signal
 
 
 PROMETHEUS_IMAGE_TAG = "quay.io/prometheus/prometheus:latest"
+PROMETHEUS_PUSHGATEWAY_IMAGE_TAG = "prom/pushgateway:latest"
 
 
 def get_container_id(name):
@@ -87,11 +90,23 @@ def cleanup_container(container_name):
         subprocess.check_call(['docker', 'rm', output])
 
 
-def run_prometheus(container_name, network_name, exposed_port, prometheus_config_path):
+def run_prometheus(container_name, network_name,
+                   exposed_port, prometheus_config_path):
     cleanup_container(container_name)
     command = ['docker', 'run', '--name', container_name, '--network={}'.format(network_name), '--network-alias', 'prometheus', '-p',
                '{}:9090'.format(exposed_port), "-v", "{}:/etc/prometheus/prometheus.yml".format(prometheus_config_path), PROMETHEUS_IMAGE_TAG]
     subprocess.check_call(command)
+
+
+def run_pushgateway(container_name, network_name):
+    cleanup_container(container_name)
+    # Starts pushgateway in background.
+    if not container_running(container_name):
+        command = ['docker', 'run', '--name', container_name, '--network={}'.format(network_name), '--network-alias', 'pushgateway',
+                   PROMETHEUS_PUSHGATEWAY_IMAGE_TAG]
+        pid = subprocess.Popen(command).pid
+
+        atexit.register(lambda: os.kill(pid, signal.SIGTERM))
 
 
 if __name__ == '__main__':
@@ -109,6 +124,9 @@ if __name__ == '__main__':
                           help="Netowrk name for prometheus-ekiden container connection. Default: prometheus-ekiden")
     optional.add_argument('--port', type=str, default='9090',
                           help="Localhost port exposing prometheus web interface. Default: 9090")
+    optional.add_argument('--push-gateway', action='store_true', default=False,
+                          help="If present, starts push-gateway instance as well.")
+
     parser._action_groups.append(optional)
     args = parser.parse_args()
 
@@ -117,6 +135,8 @@ if __name__ == '__main__':
     prometheus_container = args.name
     exposed_port = args.port
     prometheus_config = args.config
+
+    push_gateway = args.push_gateway
 
     if not os.path.isfile(prometheus_config):
         print("ERROR: Prometheus config file not found: '{}'".format(
@@ -135,6 +155,11 @@ if __name__ == '__main__':
 
     # Connect ekiden container to network (if not yet connected).
     connect_container(network_name, ekiden_container)
+
+    print("Pushgateway:")
+    print(push_gateway)
+    if push_gateway:
+        run_pushgateway("prometheus-pushgateway", network_name)
 
     # Check if prometheus is allready running
     if not container_running(prometheus_container):

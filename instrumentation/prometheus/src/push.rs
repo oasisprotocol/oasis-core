@@ -9,6 +9,7 @@ use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::tokio::timer::Interval;
 
+/// Pushes metrics to Prometheus pushgateway.
 fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()> {
     prometheus::push_metrics(
         job_name,
