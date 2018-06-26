@@ -102,7 +102,7 @@ macro_rules! wrap_uint_type {
                 loop {
                     let d = num % ten;
                     num = num / ten;
-                    digits.push(format!("{:02x}", d.0.low_u32()));
+                    digits.push(format!("{}", d.0.low_u32()));
                     if num.is_zero() {
                         break;
                     }
