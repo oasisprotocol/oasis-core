@@ -9,7 +9,9 @@ extern crate pretty_env_logger;
 extern crate ekiden_common;
 extern crate ekiden_di;
 use ekiden_di::Component;
+extern crate ekiden_beacon_dummy;
 extern crate ekiden_epochtime;
+extern crate ekiden_ethereum;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
@@ -17,18 +19,12 @@ extern crate ekiden_storage_dynamodb;
 extern crate ekiden_storage_persistent;
 
 use std::process::exit;
-use std::sync::Arc;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
 use ekiden_common::environment::Environment;
-use ekiden_epochtime::local::{MockTimeSource, SystemTimeSource};
-use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration, TimeSourceImpl};
-
-const TIME_SOURCE_MOCK: &'static str = "mock";
-const TIME_SOURCE_MOCK_RPC: &'static str = "mockrpc";
-const TIME_SOURCE_SYSTEM: &'static str = "system";
+use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration};
 
 fn main() {
     let mut known_components = ekiden_di::KnownComponents::new();
@@ -36,6 +32,15 @@ fn main() {
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
+    ekiden_beacon_dummy::InsecureDummyRandomBeacon::register(&mut known_components);
+    ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
+    ekiden_ethereum::identity::EthereumEntityIdentity::register(&mut known_components);
+    ekiden_epochtime::local::LocalTimeSourceNotifier::register(&mut known_components);
+    ekiden_epochtime::local::MockTimeNotifier::register(&mut known_components);
+    ekiden_epochtime::local::MockTimeRpcNotifier::register(&mut known_components);
+    ekiden_ethereum::EthereumMockTime::register(&mut known_components);
+    ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(&mut known_components);
+
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(&mut known_components);
 
     let matches = App::new("Ekiden Dummy Shared Backend Node")
@@ -50,34 +55,6 @@ fn main() {
                 .default_value("42261")
                 .display_order(1),
         )
-        .arg(
-            Arg::with_name("time-source")
-                .long("time-source")
-                .help("Epoch Time implementation.")
-                .default_value(TIME_SOURCE_SYSTEM)
-                .possible_values(&[TIME_SOURCE_MOCK, TIME_SOURCE_MOCK_RPC, TIME_SOURCE_SYSTEM])
-                .takes_value(true)
-                .display_order(3),
-        )
-        .arg(
-            Arg::with_name("mock-epoch-interval")
-                .long("mock-epoch-interval")
-                .help("Mock time epoch interval in seconds.")
-                .default_value("600")
-                .required_ifs(&[
-                    ("time-source", TIME_SOURCE_MOCK),
-                    ("time-source", TIME_SOURCE_MOCK_RPC),
-                ])
-                .takes_value(true)
-                .display_order(4),
-        )
-        .arg(
-            Arg::with_name("time-rpc-wait")
-                .long("time-rpc-wait")
-                .help("Wait on an RPC call before starting MockTime timer.")
-                .requires_if("time-source", TIME_SOURCE_MOCK)
-                .display_order(1),
-        )
         .args(&known_components.get_arguments())
         .get_matches();
 
@@ -88,6 +65,9 @@ fn main() {
         .filter(Some("mio"), LevelFilter::Warn)
         .filter(Some("tokio_threadpool"), LevelFilter::Warn)
         .filter(Some("tokio_reactor"), LevelFilter::Warn)
+        .filter(Some("tokio_io"), LevelFilter::Warn)
+        .filter(Some("tokio_core"), LevelFilter::Warn)
+        .filter(Some("web3"), LevelFilter::Info)
         .filter(Some("hyper"), LevelFilter::Warn)
         .init();
 
@@ -99,26 +79,11 @@ fn main() {
 
     // Setup the backends and gRPC service.
     trace!("Initializing backends/gRPC service.");
-    let mock_epoch_interval = value_t!(matches, "mock-epoch-interval", u64).unwrap_or(600);
-    let time_source_impl = match matches.value_of("time-source").unwrap() {
-        TIME_SOURCE_MOCK => {
-            let ts = Arc::new(MockTimeSource::new());
-            let should_wait = matches.is_present("time-rpc-wait");
-            TimeSourceImpl::Mock((ts, mock_epoch_interval, should_wait))
-        }
-        TIME_SOURCE_MOCK_RPC => {
-            let ts = Arc::new(MockTimeSource::new());
-            TimeSourceImpl::MockRPC((ts, mock_epoch_interval))
-        }
-        TIME_SOURCE_SYSTEM => TimeSourceImpl::System(Arc::new(SystemTimeSource {})),
-        _ => panic!("Invalid time source specified."),
-    };
 
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
             port: value_t!(matches, "port", u16).unwrap(),
         },
-        time_source_impl,
         container,
     ) {
         Ok(backends) => backends,
