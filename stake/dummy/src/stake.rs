@@ -329,6 +329,26 @@ impl DummyStakeEscrowBackendInner {
     ) -> Result<bool, Error> {
         self.approve(msg_sender, spender_address, value)?;
         // How do we call the spender_address contract?
+        //
+        // The issue is this: in Solidity, the spender_address is cast
+        // to a `tokenRecipient` (see ethereum/contracts/Stake.sol)
+        // and the `receiveApproval` function invoked after the
+        // approval is done.
+        //
+        // Here we are implementing Rust interfaces to talk over gRPC
+        // to different contract backends, so that a mix of dummy and
+        // real Solidity contract implementations can be used.  It is
+        // unclear how the cast operation could be done: (1) we need
+        // to have a way to look up, via the address, the gRPC
+        // endpoint (IP-port); (2) the protobuf request/response
+        // encoding would have to be the same (this is probably
+        // easiest, by requiring that a standard proto file be used);
+        // (3) inject in, without the gRPC auto-generated client stub,
+        // the call to the ReceiveApproval gRPC method, if the
+        // spender_address also yields the gRPC service endpoint path
+        // ("/stake.Stake/ApproveAndCall" in the case of Stake.proto).
+        // What about Solidity contracts for which a gRPC interface
+        // hasn't been built?
         unimplemented!();
     }
 
