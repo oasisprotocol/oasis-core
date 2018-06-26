@@ -8,17 +8,18 @@ extern crate ekiden_storage_persistent;
 extern crate test;
 
 use std::fs;
+use std::path::Path;
+
 use test::Bencher;
 
 use ekiden_common::futures::Future;
-use ekiden_epochtime::local::SystemTimeSource;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_persistent::PersistentStorageBackend;
 
 #[test]
 fn test_persistent_backend() {
-    let db_path = String::from("./db/");
-    let backend = PersistentStorageBackend::new(Box::new(SystemTimeSource {}), &db_path);
+    let db_path = Path::new("./db/");
+    let backend = PersistentStorageBackend::new(db_path);
     assert!(!backend.is_err());
     let backend = backend.unwrap();
     let key = hash_storage_key(b"value");
@@ -34,8 +35,8 @@ fn test_persistent_backend() {
 fn bench_persistent_speed(b: &mut Bencher) {
     use ekiden_storage_base::StorageBackend;
 
-    let db_path = String::from("./db/");
-    let backend = PersistentStorageBackend::new(Box::new(SystemTimeSource {}), &db_path);
+    let db_path = Path::new("./db/");
+    let backend = PersistentStorageBackend::new(db_path);
     assert!(!backend.is_err());
     let backend = backend.unwrap();
 
