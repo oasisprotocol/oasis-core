@@ -36,6 +36,7 @@ pub enum ErrorCodes {
     CallerNotEscrowTarget,
     WouldOverflow,
     InsufficientFunds,
+    InsufficientAllowance,
     RequestExceedsEscrowedFunds,
     InvalidIterator,
 }

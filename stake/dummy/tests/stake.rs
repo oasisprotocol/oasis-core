@@ -67,14 +67,22 @@ fn test_dummy_stake_backend() {
     let mut id_generator = IdGenerator::new();
     let oasis = id_generator.gen_id();
 
+    let initial_total_tokens = AmountType::from(1);
+    let expected_decimals = 18u8;
+    let initial_total_supply =
+        initial_total_tokens * AmountType::from(1_000_000_000_000_000_000u64);
+
     let backend = Arc::new(DummyStakeEscrowBackend::new(
         oasis,
         "EkidenStake".to_string(),
         "E$".to_string(),
-        AmountType::from(1),
+        initial_total_tokens,
     ));
 
     let alice = id_generator.gen_id();
+
+    let decimals = backend.get_decimals().wait().unwrap();
+    assert_eq!(decimals, expected_decimals);
 
     // backend.deposit_stake(alice, AmountType::from(100)).wait().unwrap();
     backend
@@ -268,6 +276,8 @@ fn test_dummy_stake_backend() {
     assert_eq!(ss.total_stake, AmountType::from(5));
     assert_eq!(ss.escrowed, AmountType::from(0));
 
+    let carol_stake = ss.total_stake;
+
     debug!("transfer from alice to bob -- should be insufficient");
     match backend
         .transfer(alice, bob, AmountType::from(100 - 10 - 5 - 13 + 1))
@@ -387,4 +397,151 @@ fn test_dummy_stake_backend() {
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
     assert_eq!(ss.escrowed, AmountType::from(13));
+
+    let alice_balance = backend.balance_of(alice).wait().unwrap();
+    assert_eq!(alice_balance, ss.total_stake - ss.escrowed);
+
+    // total_supply, burn
+    let total_supply = backend.get_total_supply().wait().unwrap();
+    assert_eq!(total_supply, initial_total_supply);
+    let burn_amount = AmountType::from(1_000);
+    let expected_supply = initial_total_supply - burn_amount;
+    assert!(backend.burn(oasis, burn_amount).wait().unwrap());
+    let total_supply = backend.get_total_supply().wait().unwrap();
+    assert_eq!(total_supply, expected_supply);
+
+    // excessive approve, allowance
+    let excessive_approval = AmountType::from(1_000_000_000);
+    assert!(
+        backend
+            .approve(alice, bob, excessive_approval)
+            .wait()
+            .unwrap()
+    );
+
+    let excessive_burn = AmountType::from(2_000_000_000);
+    match backend.burn_from(bob, alice, excessive_burn).wait() {
+        Err(e) => {
+            debug!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
+        }
+        Ok(b) => {
+            if b {
+                error!("Got result {} when request should have failed.", b);
+                assert!(!b);
+            }
+        }
+    }
+    let allowance = backend.allowance(alice, bob).wait().unwrap();
+    assert_eq!(allowance, excessive_approval);
+
+    // approve, allowance, burn_from
+    let reasonable_approval = AmountType::from(10);
+    assert!(
+        backend
+            .approve(alice, bob, reasonable_approval)
+            .wait()
+            .unwrap()
+    );
+    let reasonable_burn = AmountType::from(6);
+    assert!(
+        backend
+            .burn_from(bob, alice, reasonable_burn)
+            .wait()
+            .unwrap()
+    );
+    let remaining_allowance = backend.allowance(alice, bob).wait().unwrap();
+    assert_eq!(remaining_allowance, reasonable_approval - reasonable_burn);
+
+    assert_eq!(
+        backend.balance_of(alice).wait().unwrap(),
+        alice_balance - reasonable_burn
+    );
+    let alice_balance = alice_balance - reasonable_burn;
+
+    // burn too much
+    let excessive_burn = remaining_allowance + AmountType::from(1);
+    match backend.burn_from(bob, alice, excessive_burn).wait() {
+        Err(e) => {
+            debug!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientAllowance.to_string());
+        }
+        Ok(b) => {
+            if b {
+                error!("Got result {} when request should have failed.", b);
+                assert!(!b);
+            }
+        }
+    }
+    assert_eq!(backend.balance_of(alice).wait().unwrap(), alice_balance);
+
+    // transfer_from
+    let excessive_transfer = remaining_allowance + AmountType::from(1);
+    match backend
+        .transfer_from(bob, alice, carol, excessive_transfer)
+        .wait()
+    {
+        Err(e) => {
+            debug!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientAllowance.to_string());
+        }
+        Ok(b) => {
+            if b {
+                error!("Got result {} when request should have failed.", b);
+                assert!(!b);
+            }
+        }
+    }
+    assert_eq!(backend.balance_of(alice).wait().unwrap(), alice_balance);
+
+    let excessive_transfer = alice_balance + AmountType::from(1);
+    match backend
+        .transfer_from(bob, alice, carol, excessive_transfer)
+        .wait()
+    {
+        Err(e) => {
+            debug!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientFunds.to_string());
+        }
+        Ok(b) => {
+            if b {
+                error!("Got result {} when request should have failed.", b);
+                assert!(!b);
+            }
+        }
+    }
+
+    let ok_transfer = alice_balance;
+    debug!(
+        "ok_transfer = {}, alice_balance = {}",
+        ok_transfer, alice_balance
+    );
+    match backend.transfer_from(bob, alice, carol, ok_transfer).wait() {
+        Err(e) => {
+            debug!("Got error {}", e.message);
+            assert_eq!(e.message, ErrorCodes::InsufficientAllowance.to_string());
+        }
+        Ok(b) => {
+            if b {
+                error!("Got result {} when request should have failed.", b);
+                assert!(!b);
+            }
+        }
+    }
+    assert!(backend.approve(alice, bob, ok_transfer).wait().unwrap());
+    assert!(
+        backend
+            .transfer_from(bob, alice, carol, ok_transfer)
+            .wait()
+            .unwrap()
+    );
+
+    assert_eq!(
+        backend.balance_of(alice).wait().unwrap(),
+        AmountType::from(0)
+    );
+    assert_eq!(
+        backend.balance_of(carol).wait().unwrap(),
+        carol_stake + ok_transfer
+    );
 }
