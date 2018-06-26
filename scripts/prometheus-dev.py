@@ -156,8 +156,6 @@ if __name__ == '__main__':
     # Connect ekiden container to network (if not yet connected).
     connect_container(network_name, ekiden_container)
 
-    print("Pushgateway:")
-    print(push_gateway)
     if push_gateway:
         run_pushgateway("prometheus-pushgateway", network_name)
 

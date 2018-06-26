@@ -63,6 +63,7 @@ create_component!(
             .takes_value(true),
         Arg::with_name("prometheus-metrics-addr")
             .long("prometheus-metrics-addr")
+            .requires("prometheus-mode")
             .help("If pull mode: A SocketAddr (as a string) from which to serve metrics to Prometheus. If push mode: prometheus 'pushgateway' address.")
             .takes_value(true)
     ]

@@ -16,11 +16,15 @@ fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()
         labels!{"instance".to_owned() => instance_name.to_owned(),},
         address,
         prometheus::gather(),
-    ).unwrap();
+    ).or_else::<prometheus::Error, _>(|err| {
+        warn!("Cannot push prometheus metrics: {}", err);
+        Ok(())
+    })
+        .unwrap();
     Ok(())
 }
 
-/// Start an task for pushing Prometheus metrics.
+/// Start a task for pushing Prometheus metrics.
 pub fn start(
     environment: Arc<Environment>,
     address: String,
