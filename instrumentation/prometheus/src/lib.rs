@@ -5,14 +5,15 @@
 #[cfg_attr(test, macro_use)]
 extern crate ekiden_instrumentation;
 
-#[cfg(feature = "server")]
+#[cfg(any(feature = "server", feature = "push"))]
 extern crate ekiden_common;
-#[cfg(feature = "server")]
+#[cfg(any(feature = "server", feature = "push"))]
 extern crate futures;
 #[cfg(feature = "server")]
 extern crate http;
 #[cfg(feature = "server")]
 extern crate hyper;
+#[macro_use]
 extern crate prometheus;
 #[cfg(feature = "server")]
 #[macro_use]
@@ -27,6 +28,10 @@ extern crate clap;
 pub mod di;
 #[cfg(feature = "server")]
 pub mod server;
+
+#[cfg(feature = "push")]
+#[macro_use]
+pub mod push;
 
 use std::collections::HashMap;
 use std::sync::RwLock;

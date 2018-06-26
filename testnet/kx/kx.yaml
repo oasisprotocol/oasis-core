@@ -84,8 +84,10 @@ spec:
             - ekiden-compute
           args:
             - --no-persist-identity
-            - --metrics-addr
+            - --prometheus-metrics-addr
             - "0.0.0.0:3000"
+            - --prometheus-mode
+            - "pull"
             - --consensus-client-host
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
             - --consensus-client-port
