@@ -21,7 +21,13 @@ fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()
 }
 
 /// Start an task for pushing Prometheus metrics.
-pub fn start(environment: Arc<Environment>, address: String, period: Duration, job_name: String, instance_name: String) {
+pub fn start(
+    environment: Arc<Environment>,
+    address: String,
+    period: Duration,
+    job_name: String,
+    instance_name: String,
+) {
     let push = Box::new(
         Interval::new(Instant::now(), period)
             .map_err(|error| Error::from(error))
