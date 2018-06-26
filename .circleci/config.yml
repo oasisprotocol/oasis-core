@@ -40,7 +40,6 @@ jobs:
             mkdir ../cov/$bin
             kcov \
               --exclude-pattern=$HOME/.cargo,/usr/lib \
-              --clang \
               --skip-solibs \
               --verify \
               ../cov/$bin \
@@ -48,7 +47,7 @@ jobs:
               --test-threads 1
           done
       # Upload coverage info.
-      - run: codecov
+      - run: codecov -s target/cov -Z
 
       # Cargo benchmarks. We first fetch the latest benchmark results from master and then
       # compare against them.
