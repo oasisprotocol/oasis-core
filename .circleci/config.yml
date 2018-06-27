@@ -77,6 +77,10 @@ jobs:
       # Check style. This needs to be after everything is built.
       - run: cargo fmt -- --write-mode=check
 
+      # Integration tests.
+      - run: ./scripts/test-e2e.sh
+      - run: ./scripts/test-e2e-ethereum.sh
+
       # Store built files.
       - persist_to_workspace:
           root: .
@@ -91,17 +95,6 @@ jobs:
             - ethereum/build/contracts
             - tests
             - scripts
-
-  # E2E tests.
-  test_e2e:
-    <<: *defaults
-    steps:
-      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
-      - checkout
-      - attach_workspace:
-          at: /workspace
-      # Run tests.
-      - run: /workspace/scripts/test-e2e.sh /workspace
 
   deploy:
     <<: *defaults
@@ -135,16 +128,12 @@ workflows:
   build:
     jobs:
       - build
-      - test_e2e:
-          requires:
-            - build
       - deploy:
           filters:
             branches:
               only: master
           requires:
             - build
-            - test_e2e
 experimental:
   notify:
     branches:
