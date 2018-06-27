@@ -9,6 +9,9 @@ extern crate time;
 
 extern crate ekiden_core;
 extern crate ekiden_di;
+extern crate ekiden_epochtime;
+extern crate ekiden_ethereum;
+extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_base;
