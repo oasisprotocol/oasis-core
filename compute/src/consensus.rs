@@ -66,7 +66,7 @@ enum State {
     /// round and are waiting ro the consensus backend to finalize the block.
     WaitingForFinalize(Role, Arc<CallBatch>, Block),
     /// Computation group has changed.
-    ComputationGroupChanged(Role, Option<Arc<CallBatch>>),
+    ComputationGroupChanged(Option<Role>, Option<Arc<CallBatch>>),
 }
 
 impl State {
@@ -77,7 +77,7 @@ impl State {
             State::ProcessingBatch(role, ..) => Some(role),
             State::ProposedBatch(role, ..) => Some(role),
             State::WaitingForFinalize(role, ..) => Some(role),
-            State::ComputationGroupChanged(role, ..) => Some(role),
+            State::ComputationGroupChanged(role, ..) => role,
             _ => None,
         }
     }
@@ -114,9 +114,10 @@ impl fmt::Display for State {
                 State::ProcessingBatch(role, ..) => format!("ProcessingBatch({:?})", role),
                 State::ProposedBatch(role, ..) => format!("ProposedBatch({:?})", role),
                 State::WaitingForFinalize(role, ..) => format!("WaitingForFinalize({:?})", role),
-                State::ComputationGroupChanged(role, ..) => {
+                State::ComputationGroupChanged(Some(role), ..) => {
                     format!("ComputationGroupChanged({:?})", role)
                 }
+                State::ComputationGroupChanged(None, ..) => "ComputationGroupChanged(None)".into(),
             }
         )
     }
@@ -394,13 +395,7 @@ impl ConsensusFrontend {
                     Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash)) => {
                         Self::handle_discrepancy_detected(inner.clone(), batch_hash)
                     }
-                    Command::UpdateRole(Some(role)) => {
-                        Self::handle_update_role(inner.clone(), role)
-                    }
-                    Command::UpdateRole(None) => Self::fail_batch(
-                        inner.clone(),
-                        "no longer part of computation group".to_string(),
-                    ),
+                    Command::UpdateRole(role) => Self::handle_update_role(inner.clone(), role),
                     Command::ProcessAggCommit(commit, role) => {
                         Self::handle_agg_commit(inner.clone(), commit, role)
                     }
@@ -452,11 +447,11 @@ impl ConsensusFrontend {
 
             // Compute committee can change in any state.
             (_, &State::ComputationGroupChanged(..)) => {}
-            (&State::ComputationGroupChanged(role_a, ..), &State::WaitingForBatch(role_b))
-                if role_a == role_b => {}
-
-            // We can stop being a member of the compute committee from any state.
-            (_, &State::NotReady) => {}
+            (
+                &State::ComputationGroupChanged(Some(role_a), ..),
+                &State::WaitingForBatch(role_b),
+            ) if role_a == role_b => {}
+            (&State::ComputationGroupChanged(None, ..), &State::NotReady) => {}
 
             transition => panic!(
                 "illegal consensus frontend state transition: {:?}",
@@ -469,12 +464,12 @@ impl ConsensusFrontend {
     }
 
     /// Handle update role command.
-    fn handle_update_role(inner: Arc<Inner>, role: Role) -> BoxFuture<()> {
+    fn handle_update_role(inner: Arc<Inner>, role: Option<Role>) -> BoxFuture<()> {
         let mut maybe_batch = inner.state.lock().unwrap().get_batch();
 
         // If we are not a leader, clear the incoming call queue to avoid processing
         // calls which the new leader should process.
-        if role != Role::Leader {
+        if role != Some(Role::Leader) {
             inner.incoming_queue.lock().unwrap().take();
             maybe_batch = None;
         }
