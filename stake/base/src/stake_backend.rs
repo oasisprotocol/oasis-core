@@ -232,9 +232,15 @@ pub trait StakeEscrowBackend: Send + Sync {
         aux: B256,
     ) -> BoxFuture<EscrowAccountIdType>;
 
-    /// Returns a vector of all active escrow accounts created by |msg_sender|.
+    /// Returns an iterator with which the caller can go through all active escrow
+    /// accounts belonging to |owner|.  The iterator is invalidated by operations that
+    /// modify the set of escrow accounts (allocate_escrow, take_and_release_escrow).
     fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator>;
 
+    // If the iterator |iter|'s |has_next| member is true and the iterator has not been
+    // invalidated, then this will return the next |EscrowAccountStatus| object and the
+    // updated iterator.  The iterator input parameter is consumed and should be
+    // considered invalid.
     fn list_active_escrows_get(
         &self,
         iter: EscrowAccountIterator,

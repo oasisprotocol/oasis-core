@@ -33,7 +33,6 @@ run_compute_node() {
     ${WORKDIR}/target/debug/ekiden-compute \
         --no-persist-identity \
         --max-batch-size 1 \
-        --compute-replicas 2 \
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage immediate_remote \
@@ -112,27 +111,36 @@ run_test() {
 }
 
 scenario_basic() {
-    run_compute_node 1
+    run_compute_node 1 --compute-replicas 2
     sleep 1
-    run_compute_node 2
+    run_compute_node 2 --compute-replicas 2
     sleep 1
-    run_compute_node 3
+    run_compute_node 3 --compute-replicas 2
 }
 
 scenario_discrepancy_worker() {
-    run_compute_node 1
+    run_compute_node 1 --compute-replicas 2
     sleep 1
-    run_compute_node 2 --test-inject-discrepancy
+    run_compute_node 2 --compute-replicas 2 --test-inject-discrepancy
     sleep 1
-    run_compute_node 3
+    run_compute_node 3 --compute-replicas 2
 }
 
 scenario_discrepancy_leader() {
-    run_compute_node 1
+    run_compute_node 1 --compute-replicas 2
     sleep 1
-    run_compute_node 2
+    run_compute_node 2 --compute-replicas 2
     sleep 1
-    run_compute_node 3 --test-inject-discrepancy
+    run_compute_node 3 --compute-replicas 2 --test-inject-discrepancy
+}
+
+# Scenario where one node is always idle (not part of computation group).
+scenario_one_idle() {
+    run_compute_node 1 --compute-replicas 1
+    sleep 1
+    run_compute_node 2 --compute-replicas 1
+    sleep 1
+    run_compute_node 3 --compute-replicas 1
 }
 
 scenario_multilayer() {
@@ -148,6 +156,7 @@ run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
 run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
+run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_default
 if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
     run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb
 else
