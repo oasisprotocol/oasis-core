@@ -36,7 +36,9 @@ spec:
           command:
             - ekiden-node-dummy
           args:
-            - --time-source
+            - --random-beacon-backend
+            - dummy
+            - --time-source-notifier
             - mock
             - --mock-epoch-interval
             - "60"
