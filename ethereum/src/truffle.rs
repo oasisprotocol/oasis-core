@@ -84,6 +84,13 @@ pub fn deploy_truffle(cwd: &str) -> HashMap<String, Vec<u8>> {
 
 /// Run truffle test in the current working directory.
 pub fn test_truffle(cwd: &str) {
+    let status = Command::new("npm")
+        .arg("install")
+        .current_dir(cwd)
+        .status()
+        .expect("npm failed");
+    assert!(status.success());
+
     let status = Command::new("truffle")
         .arg("test")
         .arg("--network=test") // The `=` is mandatory, truffle bug?
