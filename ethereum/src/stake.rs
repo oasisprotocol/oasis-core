@@ -43,6 +43,10 @@ fn web3_u256_to_b256(v: web3::types::U256) -> B256 {
     B256::from_slice(&slice)
 }
 
+fn b256_to_web3_address(v: B256) -> web3::types::H160 {
+    web3::types::H160::from_slice(&v.to_vec())
+}
+
 impl<T: 'static + Transport + Sync + Send> EthereumStake<T>
 where
     <T as web3::Transport>::Out: Send,
@@ -124,19 +128,64 @@ where
     }
 
     fn get_symbol(&self) -> BoxFuture<String> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract = contract.lock().unwrap();
+            contract
+                .query("symbol", (), local_eth_address, Options::default(), None)
+                .map_err(|e| Error::new(e.description()))
+        }))
     }
 
     fn get_decimals(&self) -> BoxFuture<u8> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract = contract.lock().unwrap();
+            // web3 parses JSON dictionaries, and there is no type information, so even
+            // though the return type is u8, we can (and have to) use u64 to get the
+            // value.  The u64 type is the smallest integral type for which
+            // web3::contract::tokens::Tokenizable is implemented (as of this writing), so
+            // we use that.  TODO: verify that the web3 interfaces are secure, and that
+            // bad actors cannot have injected in bad values; we drop the high-order bits
+            // here, and we may want to verify that they are all zeros and panic
+            // otherwise.
+            contract
+                .query("decimals", (), local_eth_address, Options::default(), None)
+                .map(|v: u64| v as u8)
+                .map_err(|e| Error::new(e.description()))
+        }))
     }
 
     fn get_total_supply(&self) -> BoxFuture<AmountType> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract = contract.lock().unwrap();
+            contract
+                .query("totalSupply", (), local_eth_address, Options::default(), None)
+                .map(|v| web3_u256_to_amount(v))
+                .map_err(|e| Error::new(e.description()))
+        }))
     }
 
-    fn get_stake_status(&self, _owner: B256) -> BoxFuture<StakeStatus> {
-        unimplemented!();
+    fn get_stake_status(&self, owner: B256) -> BoxFuture<StakeStatus> {
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract = contract.lock().unwrap();
+            let w3_owner = b256_to_web3_address(owner);
+            contract
+                .query("getStakeStatus", w3_owner, local_eth_address, Options::default(), None)
+                .map(|r| {
+                    let (w3_total_stake, w3_escrowed) = r;
+                    let total_stake = web3_u256_to_amount(w3_total_stake);
+                    let escrowed = web3_u256_to_amount(w3_escrowed);
+                    StakeStatus::new(total_stake, escrowed)
+                })
+                .map_err(|e| Error::new(e.description()))
+        }))
     }
 
     fn balance_of(&self, _owner: B256) -> BoxFuture<AmountType> {

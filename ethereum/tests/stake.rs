@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+extern crate bigint;
 extern crate ekiden_stake_base;
 extern crate ekiden_common;
 extern crate ekiden_epochtime;
@@ -11,10 +12,11 @@ extern crate web3;
 #[macro_use]
 extern crate log;
 
-use ekiden_stake_base::StakeEscrowBackend;
+use ekiden_stake_base::{AmountType, StakeEscrowBackend};
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::uint::U256;
 use ekiden_common::testing;
 use ekiden_ethereum::truffle::{deploy_truffle, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumStake;
@@ -41,17 +43,41 @@ fn stake_integration() {
         .get("Stake")
         .expect("could not find contract address");
 
+    let eth_address = H160::from_slice(DEVELOPMENT_ADDRESS);
+
     let stake = EthereumStake::new(
         Arc::new(client),
         Arc::new(Entity {
             id: B256::zero(),
-            eth_address: Some(H160::from_slice(DEVELOPMENT_ADDRESS)),
+            eth_address: Some(eth_address),
         }),
         H160::from_slice(&address),
     ).unwrap();
 
     let name = stake.get_name().wait().unwrap();
     debug!("name = {}", name);
+    assert_eq!(name, "EkidenStake");  // see ../migration/2_deploy_contracts.js
+
+    let symbol = stake.get_symbol().wait().unwrap();
+    debug!("symbol = {}", symbol);
+    assert_eq!(symbol, "E$");
+
+    let decimals = stake.get_decimals().wait().unwrap();
+    debug!("decimals = {}", decimals);
+    assert_eq!(decimals, 18u8);
+
+    let total_supply = stake.get_total_supply().wait().unwrap();
+    debug!("total_supply = {}", total_supply);
+    let scale = U256::from(bigint::uint::U256::exp10(decimals as usize));
+    let expected_supply = U256::from(1000000000) * scale;
+    assert_eq!(total_supply, expected_supply);
+
+    let stake_status = stake.get_stake_status(B256::from_slice(&eth_address.to_vec()))
+        .wait().unwrap();
+    debug!("total_stake = {}", stake_status.total_stake);
+    debug!("escrowed = {}", stake_status.escrowed);
+    assert_eq!(stake_status.total_stake, total_supply);
+    assert_eq!(stake_status.escrowed, AmountType::from(0));
 
     drop(handle);
 }
