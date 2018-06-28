@@ -15,6 +15,7 @@ ekiden-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-epochtime = { path = "../epochtime", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../registry/base", version = "0.2.0-alpha" }
 ekiden-registry-dummy = { path = "../registry/dummy", version = "0.2.0-alpha" }
+ekiden-stake-base = { path = "../stake/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 ethabi = "5.1"
