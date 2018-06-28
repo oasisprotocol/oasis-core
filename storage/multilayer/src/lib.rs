@@ -5,13 +5,14 @@ use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 
 extern crate clap;
 use clap::value_t_or_exit;
 extern crate futures;
-use futures::future::Executor;
 use futures::future::Future;
 use futures::future::Shared;
+use futures::stream::Stream;
 extern crate log;
 use log::log;
 use log::trace;
@@ -21,6 +22,7 @@ extern crate tokio_core;
 
 extern crate ekiden_common;
 use ekiden_common::bytes::H256;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::futures::FutureExt;
@@ -28,6 +30,7 @@ extern crate ekiden_di;
 use ekiden_di::create_component;
 extern crate ekiden_epochtime;
 extern crate ekiden_storage_base;
+use ekiden_storage_base::BatchStorage;
 use ekiden_storage_base::StorageBackend;
 extern crate ekiden_storage_dynamodb;
 use ekiden_storage_dynamodb::DynamoDbBackend;
@@ -58,11 +61,18 @@ enum AccessedItem {
     Writeback(Vec<u8>),
 }
 
+struct WaitSet {
+    error_tx: futures::sync::mpsc::UnboundedSender<Error>,
+    error_rx: futures::sync::mpsc::UnboundedReceiver<Error>,
+}
+
 pub struct MultilayerBackend {
-    /// We do some writeback operations on this separate executor.
-    remote: tokio_core::reactor::Remote,
+    /// We do some writeback operations on the shared executor.
+    env: Arc<Environment>,
     /// This map lets us look up whether we're already accessing an item.
     accessed: Arc<Mutex<BTreeMap<H256, AccessedItem>>>,
+    /// The bookkeeping for batches.
+    batch: RwLock<Option<WaitSet>>,
 
     // Backing layers, as specified in RFC 0004.
     sled: Arc<PersistentStorageBackend>,
@@ -72,14 +82,15 @@ pub struct MultilayerBackend {
 
 impl MultilayerBackend {
     pub fn new(
-        remote: tokio_core::reactor::Remote,
+        env: Arc<Environment>,
         sled: Arc<PersistentStorageBackend>,
         // TODO: remote_sled: Arc<...>,
         aws: Arc<DynamoDbBackend>,
     ) -> Self {
         Self {
-            remote,
+            env,
             accessed: Arc::new(Mutex::new(BTreeMap::new())),
+            batch: RwLock::new(None),
             sled,
             // remote_sled,
             aws,
@@ -104,7 +115,7 @@ impl StorageBackend for MultilayerBackend {
         // TODO: let remote_sled = self.remote_sled.clone();
         let aws = self.aws.clone();
         let accessed = self.accessed.clone();
-        let remote = self.remote.clone();
+        let env = self.env.clone();
         // Get the item from sled.
         let f = self.sled
             .get(key)
@@ -132,19 +143,17 @@ impl StorageBackend for MultilayerBackend {
                                     .unwrap()
                                     .insert(key, AccessedItem::Writeback(v.clone()));
                                 // Start async writeback.
-                                remote
-                                    .execute(sled.insert(v.clone(), 2).then(move |r| {
-                                        if let Err(e) = r {
-                                            warn!(
-                                                "get: unable to persist key {} to sled layer: {:?}",
-                                                key, e
-                                            );
-                                        }
-                                        // Clear writeback accessed item.
-                                        accessed.lock().unwrap().remove(&key);
-                                        Ok(())
-                                    }))
-                                    .unwrap();
+                                env.spawn(Box::new(sled.insert(v.clone(), 2).then(move |r| {
+                                    if let Err(e) = r {
+                                        warn!(
+                                            "get: unable to persist key {} to sled layer: {:?}",
+                                            key, e
+                                        );
+                                    }
+                                    // Clear writeback accessed item.
+                                    accessed.lock().unwrap().remove(&key);
+                                    Ok(())
+                                })));
                                 Ok(v)
                             }
                             Err(e) => {
@@ -185,35 +194,74 @@ impl StorageBackend for MultilayerBackend {
         }
         accessed_guard.insert(key, AccessedItem::Writeback(value.clone()));
         let accessed = self.accessed.clone();
-        self.remote
-            .execute(self.sled.insert(value.clone(), expiry).then(move |r| {
+        let error_tx = self.batch
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|batch| batch.error_tx.clone());
+        self.env
+            .spawn(Box::new(self.sled.insert(value.clone(), expiry).then(
+                move |r| {
+                    if let Err(e) = r {
+                        warn!(
+                            "insert: unable to persist key {} to sled layer: {:?}",
+                            key, e
+                        );
+                    }
+                    // Clear writeback accessed item.
+                    accessed.lock().unwrap().remove(&key);
+                    Ok(())
+                },
+            )));
+        self.env
+            .spawn(Box::new(self.aws.insert(value, expiry).then(move |r| {
                 if let Err(e) = r {
                     warn!(
-                        "insert: unable to persist key {} to sled layer: {:?}",
+                        "insert: unable to back up key {} to aws layer: {:?}",
                         key, e
                     );
+                    if let Some(tx) = error_tx {
+                        drop(tx.unbounded_send(e));
+                    }
                 }
-                // Clear writeback accessed item.
-                accessed.lock().unwrap().remove(&key);
                 Ok(())
-            }))
-            .unwrap();
-        self.remote
-            .execute(self.aws.insert(value, expiry).or_else(move |e| {
-                warn!(
-                    "insert: unable to back up key {} to aws layer: {:?}",
-                    key, e
-                );
-                Ok(())
-            }))
-            .unwrap();
+            })));
         Box::new(futures::future::ok(()))
+    }
+}
+
+impl BatchStorage for MultilayerBackend {
+    fn start_batch(&self) {
+        let mut guard = self.batch.write().unwrap();
+        assert!(guard.is_none());
+        let (error_tx, error_rx) = futures::sync::mpsc::unbounded();
+        *guard = Some(WaitSet { error_tx, error_rx });
+    }
+
+    fn end_batch(&self) -> BoxFuture<()> {
+        self.batch
+            .write()
+            .unwrap()
+            .take()
+            .unwrap()
+            .error_rx
+            .collect()
+            .then(|r| {
+                let errors = r.unwrap();
+                if errors.is_empty() {
+                    Ok(())
+                } else {
+                    Err(Error::new(format!("Some inserts failed: {:?}", errors)))
+                }
+            })
+            .into_box()
     }
 }
 
 fn di_factory(
     container: &mut ekiden_di::Container,
 ) -> ekiden_di::error::Result<Box<std::any::Any>> {
+    let env = container.inject()?;
     let args = container.get_arguments().unwrap();
     let aws_region = value_t_or_exit!(
         args,
@@ -240,7 +288,10 @@ fn di_factory(
         .wait()
         .unwrap()
         .chain_err(|| "Couldn't create rector core")?;
-    let sled = Arc::new(PersistentStorageBackend::new(Path::new("./")).map_err(|e| {
+    let sled = Arc::new(PersistentStorageBackend::new(Path::new(args.value_of(
+        "storage-multilayer-sled-storage-base",
+    ).unwrap()))
+        .map_err(|e| {
         // Can't use chain_error because ekiden_common Error doesn't implement std Error.
         ekiden_di::error::Error::from(format!("Couldn't create sled layer: {:?}", e))
     })?);
@@ -249,8 +300,17 @@ fn di_factory(
         aws_region,
         aws_table_name,
     ));
-    let backend: Arc<StorageBackend> = Arc::new(MultilayerBackend::new(remote, sled, aws));
+    let backend: Arc<BatchStorage> = Arc::new(MultilayerBackend::new(env, sled, aws));
     Ok(Box::new(backend))
+}
+
+fn di_arg_sled_storage_base<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-multilayer-sled-storage-base")
+        .long("storage-multilayer-sled-storage-base")
+        .help("Database path that the sled layer of the RFC 0004 multilayer storage backend should use")
+        .takes_value(true)
+        // TODO: default value
+        .required(true)
 }
 
 fn di_arg_aws_region<'a, 'b>() -> clap::Arg<'a, 'b> {
@@ -273,11 +333,15 @@ fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
 // runs forever.
 create_component!(
     multilayer,
-    "storage-backend",
+    "batch-storage",
     MultilayerBackend,
-    StorageBackend,
+    BatchStorage,
     di_factory,
-    [di_arg_aws_region(), di_arg_aws_table_name()]
+    [
+        di_arg_sled_storage_base(),
+        di_arg_aws_region(),
+        di_arg_aws_table_name()
+    ]
 );
 
 #[cfg(test)]
@@ -286,10 +350,13 @@ mod tests {
     use std::sync::Arc;
 
     use ekiden_common;
+    use ekiden_common::environment::GrpcEnvironment;
     use ekiden_storage_base;
+    use ekiden_storage_base::BatchStorage;
     use ekiden_storage_base::StorageBackend;
     use ekiden_storage_dynamodb::DynamoDbBackend;
     use ekiden_storage_persistent::PersistentStorageBackend;
+    extern crate grpcio;
     use log::log;
     use log::warn;
     use rusoto_core;
@@ -301,6 +368,8 @@ mod tests {
     fn play() {
         ekiden_common::testing::try_init_logging();
         let mut core = tokio_core::reactor::Core::new().unwrap();
+        let grpc_environment = grpcio::EnvBuilder::new().build();
+        let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
 
         if let Err(e) = core.run(rusoto_core::reactor::CredentialsProvider::default().credentials())
         {
@@ -318,7 +387,7 @@ mod tests {
             "us-west-2".parse().unwrap(),
             "test".to_string(),
         ));
-        let storage = MultilayerBackend::new(core.remote(), sled.clone(), aws.clone());
+        let storage = MultilayerBackend::new(environment, sled.clone(), aws.clone());
 
         // Test retrieving item from sled layer.
         let reference_value_sled = b"hello from sled".to_vec();
@@ -342,6 +411,17 @@ mod tests {
         core.run(storage.insert(reference_value.clone(), 55))
             .unwrap();
         let roundtrip_value = core.run(storage.get(reference_key)).unwrap();
-        assert_eq!(roundtrip_value, roundtrip_value);
+        assert_eq!(roundtrip_value, reference_value);
+
+        // Test flush.
+        let reference_value = b"see you online".to_vec();
+        // key base64 should be yv+yNRRnh0p9iWCkKmziz4x7FhqbryDe5egHXcF6/Os=
+        let reference_key = ekiden_storage_base::hash_storage_key(&reference_value);
+        storage.start_batch();
+        core.run(storage.insert(reference_value.clone(), 55))
+            .unwrap();
+        core.run(storage.end_batch()).unwrap();
+        let persisted_value = core.run(aws.get(reference_key)).unwrap();
+        assert_eq!(persisted_value, reference_value);
     }
 }

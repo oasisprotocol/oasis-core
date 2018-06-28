@@ -13,6 +13,7 @@ extern crate tokio_core;
 
 extern crate ekiden_common;
 use ekiden_common::bytes::H256;
+use ekiden_common::error::Error;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::futures::Future;
 extern crate ekiden_di;
@@ -90,11 +91,13 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
                 table_name,
                 ..Default::default()
             })
-        }).then(|result| {
+        }).then(move |result| {
             match result {
                 Ok(output) => Ok(output
                     .item
-                    .expect("DynamoDbBackend: get_item output must have item")
+                    .ok_or_else(move || {
+                        Error::new(format!("DynamoDbBackend: item not present for key {}", key))
+                    })?
                     .remove(ATTRIBUTE_ES_VALUE)
                     .expect("DynamoDbBackend: get_item item must have es_value")
                     .b
