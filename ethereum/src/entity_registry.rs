@@ -27,7 +27,7 @@ use web3::Transport;
 use serde_json;
 
 // TODO: Handle storage expiry.
-const STORAGE_EXPIRY_TIME: u64 = u64::max_value();
+const STORAGE_EXPIRY_TIME: u64 = 90;
 
 const ENTITY_CONTRACT: &[u8] = include_bytes!("../build/contracts/EntityRegistry.json");
 

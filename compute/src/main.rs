@@ -23,6 +23,7 @@ extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
+extern crate ekiden_storage_multilayer;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 #[macro_use]
@@ -73,7 +74,8 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_ethereum::EthereumMockTimeViaWebsocket::register(known_components);
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Storage.
-    ekiden_storage_frontend::StorageClient::register(known_components);
+    ekiden_storage_frontend::ImmediateClient::register(known_components);
+    ekiden_storage_multilayer::MultilayerBackend::register(known_components);
     // Consensus.
     ekiden_consensus_client::ConsensusClient::register(known_components);
     ekiden_consensus_dummy::DummyConsensusSigner::register(known_components);
