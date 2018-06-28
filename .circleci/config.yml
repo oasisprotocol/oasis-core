@@ -106,7 +106,15 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
+      - attach_workspace:
+        at: /workspace
       - setup_remote_docker
+
+      - run:
+        name: Kubectl port forwarding
+        command: kubectl port-forward service/parity 8545:8545
+        background: true
+      - run: cd ethereum && cp -r /workspace/ethereum/build ./build && truffle migrate --reset | grep "ENV_" | ../docker/deployment/set-env.sh
 
       # Build deployment image.
       - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh

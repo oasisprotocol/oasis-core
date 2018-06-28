@@ -26,6 +26,11 @@ ln target/contract/token.so target/docker-deployment/context/lib
 ln target/release/ekiden-compute target/docker-deployment/context/bin
 ln target/release/ekiden-node-dummy target/docker-deployment/context/bin
 ln target/release/ekiden-node-dummy-controller target/docker-deployment/context/bin
-ln docker/deployment/Dockerfile.runtime target/docker-deployment/context/Dockerfile
+if [ -e docker/deployment/Dockerfile.generated ]
+then
+    ln docker/deployment/Dockerfile.generated target/docker-deployment/context/Dockerfile
+else
+    ln docker/deployment/Dockerfile.runtime target/docker-deployment/context/Dockerfile
+fi
 tar cvzhf target/docker-deployment/context.tar.gz -C target/docker-deployment/context .
 rm -rf target/docker-deployment/context
