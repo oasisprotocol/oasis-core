@@ -19,3 +19,6 @@ ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-storage-dynamodb = { path = "../dynamodb", version = "0.2.0-alpha" }
 ekiden-storage-persistent = { path = "../persistent", version = "0.2.0-alpha" }
+
+[dev-dependencies]
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }

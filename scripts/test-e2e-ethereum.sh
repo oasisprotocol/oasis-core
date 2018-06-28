@@ -38,6 +38,7 @@ run_compute_node() {
         --beacon-address ${ENV_RandomBeaconMock} \
         --entity-ethereum-address ${etherid} \
         --web3-host "ws://127.0.0.1:9545" \
+        --batch-storage immediate_remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \

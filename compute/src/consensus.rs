@@ -21,7 +21,7 @@ use ekiden_core::hash::{empty_hash, EncodedHash};
 use ekiden_core::signature::Signed;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_scheduler_base::{CommitteeNode, Role};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, BatchStorage};
 
 use super::group::ComputationGroup;
 use super::worker::{ComputedBatch, Worker};
@@ -206,7 +206,7 @@ struct Inner {
     /// Consensus signer.
     signer: Arc<ConsensusSigner>,
     /// Storage backend.
-    storage: Arc<StorageBackend>,
+    storage: Arc<BatchStorage>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -285,7 +285,7 @@ impl ConsensusFrontend {
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
         signer: Arc<ConsensusSigner>,
-        storage: Arc<StorageBackend>,
+        storage: Arc<BatchStorage>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
@@ -891,7 +891,7 @@ impl ConsensusFrontend {
             }
 
             // Persist batch into storage so that the workers can get it.
-            // TODO: How to handle expiry of these items?
+            // Save it for one epoch so that the current committee can access it.
             let inner = inner.clone();
             let inner_clone = inner.clone();
             let encoded_batch = serde_cbor::to_vec(&batch).unwrap();
@@ -903,9 +903,11 @@ impl ConsensusFrontend {
                 State::ProcessingBatch(Role::Leader, Arc::new(batch.into())),
             );
 
+            inner.storage.start_batch();
             inner
                 .storage
-                .insert(encoded_batch, u64::max_value())
+                .insert(encoded_batch, 1)
+                .join(inner.storage.end_batch())
                 .and_then(move |_| {
                     require_state!(
                         inner,
@@ -1074,9 +1076,12 @@ impl ConsensusFrontend {
         // Store outputs and then commit to block.
         let inner_clone = inner.clone();
 
+        inner.storage.start_batch();
         inner
             .storage
-            .insert(encoded_outputs, u64::max_value())
+            .insert(encoded_outputs, 2)
+            .join(inner.storage.end_batch())
+            .and_then(|((), ())| Ok(()))
             .or_else(|error| {
                 // Failed to store outputs, abort current batch.
                 Self::fail_batch(

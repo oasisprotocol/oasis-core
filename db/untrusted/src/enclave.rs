@@ -7,7 +7,7 @@ use sgx_types::*;
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_enclave_untrusted::Enclave;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::BatchStorage;
 
 use super::ecall_proxy;
 
@@ -16,7 +16,7 @@ thread_local! {
     ///
     /// This will only be set when the current thread is running in a `with_storage` context
     /// and will otherwise be `None`.
-    static STORAGE: RefCell<Option<Arc<StorageBackend>>> = RefCell::new(None);
+    static STORAGE: RefCell<Option<Arc<BatchStorage>>> = RefCell::new(None);
 
     /// Transfer buffer for storage OCALLs.
     static TRANSFER_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![0; 8 * 1024 * 1024]);
@@ -25,7 +25,7 @@ thread_local! {
 struct WithStorageGuard;
 
 impl WithStorageGuard {
-    fn new(backend: Arc<StorageBackend>) -> Self {
+    fn new(backend: Arc<BatchStorage>) -> Self {
         STORAGE.with(|storage| {
             // Set current storage.
             assert!(
@@ -61,7 +61,7 @@ pub trait EnclaveDb {
     /// Use [`current_storage`] to get the storage backend in OCALLs.
     fn with_storage<F: FnOnce() -> R, R>(
         &self,
-        storage: Arc<StorageBackend>,
+        storage: Arc<BatchStorage>,
         root_hash: &H256,
         f: F,
     ) -> Result<(H256, R)>;
@@ -70,7 +70,7 @@ pub trait EnclaveDb {
 impl EnclaveDb for Enclave {
     fn with_storage<F: FnOnce() -> R, R>(
         &self,
-        storage: Arc<StorageBackend>,
+        storage: Arc<BatchStorage>,
         root_hash: &H256,
         f: F,
     ) -> Result<(H256, R)> {
@@ -126,7 +126,7 @@ impl EnclaveDb for Enclave {
 /// # Panics
 ///
 /// If called outside the `with_storage` context, this function will panic.
-pub fn current_storage() -> Arc<StorageBackend> {
+pub fn current_storage() -> Arc<BatchStorage> {
     STORAGE.with(|storage| {
         let storage_ref = storage.borrow();
         let storage = storage_ref
