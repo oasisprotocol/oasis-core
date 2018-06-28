@@ -1,7 +1,82 @@
 # How to look at the metrics
-1. Run the compute node with the metrics serving enabled, by passing a command line argument like `--metrics-addr=0.0.0.0:9091` to specify an address from which to serve them.
-2. Set up Prometheus to scrape from that metrics address. It's done in [yet another yml file](https://prometheus.io/docs/prometheus/latest/getting_started/#configuring-prometheus-to-monitor-the-sample-targets). If you run the compute node in a container and Prometheus in the host, then you need to add a port publish for it.
-3. Run Prometheus and look at [graphs](https://prometheus.io/docs/prometheus/latest/getting_started/#using-the-graphing-interface) or something. The metrics trace in this PR are listed below.
+
+1. Run the compute node with the metrics serving enabled, by passing a command line arguments like `--prometheus-metrics-addr=0.0.0.0:9091 --prometheus-mode pull` to specify an address from which to serve them.
+
+2. Run Prometheus by running (on host):
+
+```
+scripts/prometheus-dev.py \
+  --config path-to-prometheus.yml
+```
+
+The script starts a Prometheus docker container and connects both (Ekiden & Prometheus) containers to a common network. The Ekiden container is accessible on: `ekiden` address (via docker network alias).
+Example of a base `prometheus.yml` file (assumes compute node is exposing metrics on port 9091):
+
+```
+scrape_configs:
+  - job_name: 'ekiden'
+    scrape_interval: 5s
+
+    static_configs:
+      - targets: ['ekiden:9091']
+        labels:
+          group: 'development'
+```
+
+3. Open Prometheus and look at [graphs](https://prometheus.io/docs/prometheus/latest/getting_started/#using-the-graphing-interface) or something. The metrics trace in this PR are listed below.
+
+## Prometheus push mode
+
+Prometheus also supports [push mode](https://prometheus.io/docs/instrumenting/pushing/) where clients (instead of exposing an endpoint to for Prometheus to scrape) can push metrics to the prometheus [pushgateway](https://github.com/prometheus/pushgateway).
+This will be useful when we will have an always running `pushgateway` on the test stack. For now you can still use it locally following the instructions bellow.
+
+### Start compute node in prometheus 'push' mode
+
+1. Run the compute node by passing following arguments:
+- `--prometheus-mode push // starts periodically pushing metrics to the address specified by 'prometheus-metrics-addr'`
+- `--prometheus-metrics-addr // url pointing to prometheus pushgateway`
+- `--prometheus-push-job-name job-name-label // in 'push' mode this has be specified by the clent`
+- `--prometheus-push-instance-label instance-label // same as above`
+- `--prometheus-push-interval 60 // optional, time interval (in seconds) for pushing metrics (default 5)`
+
+2. When developing you can use `scripts/prometheus-dev.py` to start both pushgateway docker container and prometheus docker container.
+
+### Development setup for 'push' mode
+1. Use the following `prometheus.yml` which will scrape `pushgateway` for metrics.
+
+```
+scrape_configs:
+  - job_name: 'ekiden'
+    scrape_interval: 5s
+
+    static_configs:
+      - targets: ['pushgateway:9091']
+        labels:
+          group: 'development'
+```
+
+2. Start prometheus and pushgateway via `prometheus-dev.py` script (on host):
+
+```
+$ scripts/prometheus-dev.py --config /path/to/prometheus.yml --push-gateway
+```
+
+Starts prometheus and pushgateway instances both connected to the same docker network. Also connects running Ekiden container to the same network. Pushgateway is accessible on the docker network at: `prom-push:9091`.
+
+3. Start compute node setup to push prometheus metrics
+
+```
+cargo run -p ekiden-compute -- \
+    --time-source-notifier system \
+    --entity-ethereum-address 0000000000000000000000000000000000000000 \
+    --no-persist-identity \
+    --prometheus-metrics-addr pushgateway:9091 \
+    --prometheus-mode push \
+    --prometheus-push-job-name "ekiden-example" \
+    --prometheus-push-instance-label "ekiden-dev-instance" \
+    target/contract/token.so
+```
+
 
 # Metrics
 ## From GRPC handlers

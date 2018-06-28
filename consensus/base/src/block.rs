@@ -75,7 +75,7 @@ impl TryFrom<api::Block> for Block {
 
         let mut commits = Vec::new();
         for item in a.get_commitments().iter() {
-            if item.get_digest().is_empty() {
+            if item.get_data().is_empty() {
                 commits.push(None);
             } else {
                 commits.push(Some(Commitment::try_from(item.to_owned())?));
@@ -110,37 +110,5 @@ impl Into<api::Block> for Block {
         }
         b.set_commitments(commits.into());
         b
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use ekiden_common::bytes::B256;
-    use ekiden_common::ring::signature::Ed25519KeyPair;
-    use ekiden_common::signature::InMemorySigner;
-    use ekiden_common::untrusted;
-
-    use super::super::*;
-    use super::*;
-
-    #[test]
-    fn test_block_commitment() {
-        let block = Block::default();
-        let nonce = B256::zero();
-        let key_pair =
-            Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-        let signer = InMemorySigner::new(key_pair);
-
-        let header = block.header.clone();
-
-        // Test commitment.
-        let commitment = Commitment::new(&signer, &nonce, &header);
-        assert!(commitment.verify());
-
-        // Test reveal.
-        let reveal = Reveal::new(&signer, &nonce, &header);
-        assert!(reveal.verify());
-        assert!(reveal.verify_commitment(&commitment));
-        assert!(reveal.verify_value(&header));
     }
 }

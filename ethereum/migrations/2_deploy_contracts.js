@@ -53,6 +53,9 @@ const deploy = async function (deployer, network) {
             "Stake": Stake.address,
         };
         console.log("CONTRACT_ADDRESSES: " + JSON.stringify(addrs));
+        Object.keys(addrs).forEach(function (key) {
+            console.log("ENV_" + key + "=\"" + addrs[key].replace("0x", "") + "\"");
+        });
     }
 };
 

@@ -21,9 +21,12 @@ message Block {
   repeated Commitment commitments = 3;
 }
 
+message Nonce {
+  bytes data = 1;
+}
+
 message Commitment {
-  bytes digest = 1;
-  common.Signature signature = 2;
+  bytes data = 1;
 }
 
 message Header {
@@ -39,9 +42,7 @@ message Header {
 }
 
 message Reveal {
-  Header header = 2;
-  bytes nonce = 3;
-  common.Signature signature = 4;
+  bytes data = 1;
 }
 
 message LatestBlockRequest {

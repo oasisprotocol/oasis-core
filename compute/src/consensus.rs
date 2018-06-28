@@ -6,9 +6,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use lru_cache::LruCache;
 use serde_cbor;
 
-use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Header, Reveal};
+use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, ConsensusSigner, Event, Nonce,
+                            Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::environment::Environment;
@@ -16,7 +18,7 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::hash::{empty_hash, EncodedHash};
-use ekiden_core::signature::{Signed, Signer};
+use ekiden_core::signature::Signed;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
@@ -39,7 +41,7 @@ enum Command {
     /// Process commit for aggregation from node with given role.
     ProcessAggCommit(Commitment, Role),
     /// Process reveal for aggregation from node with given role.
-    ProcessAggReveal(Reveal<Header>, Role),
+    ProcessAggReveal(Reveal, Role),
 }
 
 /// State of the consensus frontend.
@@ -59,12 +61,12 @@ enum State {
     ProcessingBatch(Role, Arc<CallBatch>),
     /// We have committed to a specific batch in the current consensus round and are
     /// waiting for the consensus backend to notify us to send reveals.
-    ProposedBatch(Role, Arc<CallBatch>, B256, Block),
+    ProposedBatch(Role, Arc<CallBatch>, Nonce, Block),
     /// We have submitted a reveal for the committed batch in the current consensus
     /// round and are waiting ro the consensus backend to finalize the block.
     WaitingForFinalize(Role, Arc<CallBatch>, Block),
     /// Computation group has changed.
-    ComputationGroupChanged(Role, Option<Arc<CallBatch>>),
+    ComputationGroupChanged(Option<Role>, Option<Arc<CallBatch>>),
 }
 
 impl State {
@@ -75,7 +77,7 @@ impl State {
             State::ProcessingBatch(role, ..) => Some(role),
             State::ProposedBatch(role, ..) => Some(role),
             State::WaitingForFinalize(role, ..) => Some(role),
-            State::ComputationGroupChanged(role, ..) => Some(role),
+            State::ComputationGroupChanged(role, ..) => role,
             _ => None,
         }
     }
@@ -112,9 +114,10 @@ impl fmt::Display for State {
                 State::ProcessingBatch(role, ..) => format!("ProcessingBatch({:?})", role),
                 State::ProposedBatch(role, ..) => format!("ProposedBatch({:?})", role),
                 State::WaitingForFinalize(role, ..) => format!("WaitingForFinalize({:?})", role),
-                State::ComputationGroupChanged(role, ..) => {
+                State::ComputationGroupChanged(Some(role), ..) => {
                     format!("ComputationGroupChanged({:?})", role)
                 }
+                State::ComputationGroupChanged(None, ..) => "ComputationGroupChanged(None)".into(),
             }
         )
     }
@@ -200,10 +203,10 @@ struct Inner {
     environment: Arc<Environment>,
     /// Consensus backend.
     backend: Arc<ConsensusBackend>,
+    /// Consensus signer.
+    signer: Arc<ConsensusSigner>,
     /// Storage backend.
     storage: Arc<StorageBackend>,
-    /// Signer for the compute node.
-    signer: Arc<Signer>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -220,6 +223,8 @@ struct Inner {
     max_batch_timeout: Duration,
     /// Call subscribers (call id -> list of subscribers).
     call_subscribers: Mutex<HashMap<H256, Vec<oneshot::Sender<Vec<u8>>>>>,
+    /// Recently confirmed call outputs.
+    recent_confirmed_calls: Mutex<LruCache<H256, Vec<u8>>>,
     /// Test-only configuration.
     test_only_config: ConsensusTestOnlyConfiguration,
     /// Commits from workers or leader waiting to be sent as an aggregation to the backend.
@@ -227,9 +232,9 @@ struct Inner {
     /// Commits from backup workers waiting to be sent as an aggregation to the backend.
     agg_backup_commits: Mutex<Vec<Commitment>>,
     /// Reveals from workers or leader waiting to be sent as an aggregation to the backend.
-    agg_reveals: Mutex<Vec<Reveal<Header>>>,
+    agg_reveals: Mutex<Vec<Reveal>>,
     /// Reveals from backup workers waiting to be sent as an aggregation to the backend.
-    agg_backup_reveals: Mutex<Vec<Reveal<Header>>>,
+    agg_backup_reveals: Mutex<Vec<Reveal>>,
     /// Notify incoming queue.
     incoming_queue_notified: AtomicBool,
 }
@@ -279,8 +284,8 @@ impl ConsensusFrontend {
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<ConsensusBackend>,
+        signer: Arc<ConsensusSigner>,
         storage: Arc<StorageBackend>,
-        signer: Arc<Signer>,
     ) -> Self {
         let (command_sender, command_receiver) = mpsc::unbounded();
 
@@ -290,8 +295,8 @@ impl ConsensusFrontend {
                 contract_id,
                 environment,
                 backend,
-                storage,
                 signer,
+                storage,
                 worker,
                 computation_group,
                 command_sender,
@@ -300,6 +305,7 @@ impl ConsensusFrontend {
                 max_batch_size: config.max_batch_size,
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 call_subscribers: Mutex::new(HashMap::new()),
+                recent_confirmed_calls: Mutex::new(LruCache::new(config.max_batch_size * 10)),
                 test_only_config: config.test_only.clone(),
                 agg_commits: Mutex::new(Vec::new()),
                 agg_backup_commits: Mutex::new(Vec::new()),
@@ -389,13 +395,7 @@ impl ConsensusFrontend {
                     Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash)) => {
                         Self::handle_discrepancy_detected(inner.clone(), batch_hash)
                     }
-                    Command::UpdateRole(Some(role)) => {
-                        Self::handle_update_role(inner.clone(), role)
-                    }
-                    Command::UpdateRole(None) => Self::fail_batch(
-                        inner.clone(),
-                        "no longer part of computation group".to_string(),
-                    ),
+                    Command::UpdateRole(role) => Self::handle_update_role(inner.clone(), role),
                     Command::ProcessAggCommit(commit, role) => {
                         Self::handle_agg_commit(inner.clone(), commit, role)
                     }
@@ -447,11 +447,11 @@ impl ConsensusFrontend {
 
             // Compute committee can change in any state.
             (_, &State::ComputationGroupChanged(..)) => {}
-            (&State::ComputationGroupChanged(role_a, ..), &State::WaitingForBatch(role_b))
-                if role_a == role_b => {}
-
-            // We can stop being a member of the compute committee from any state.
-            (_, &State::NotReady) => {}
+            (
+                &State::ComputationGroupChanged(Some(role_a), ..),
+                &State::WaitingForBatch(role_b),
+            ) if role_a == role_b => {}
+            (&State::ComputationGroupChanged(None, ..), &State::NotReady) => {}
 
             transition => panic!(
                 "illegal consensus frontend state transition: {:?}",
@@ -464,12 +464,12 @@ impl ConsensusFrontend {
     }
 
     /// Handle update role command.
-    fn handle_update_role(inner: Arc<Inner>, role: Role) -> BoxFuture<()> {
+    fn handle_update_role(inner: Arc<Inner>, role: Option<Role>) -> BoxFuture<()> {
         let mut maybe_batch = inner.state.lock().unwrap().get_batch();
 
         // If we are not a leader, clear the incoming call queue to avoid processing
         // calls which the new leader should process.
-        if role != Role::Leader {
+        if role != Some(Role::Leader) {
             inner.incoming_queue.lock().unwrap().take();
             maybe_batch = None;
         }
@@ -540,7 +540,15 @@ impl ConsensusFrontend {
         info!("Submitting reveal");
 
         // Generate and submit reveal.
-        let reveal = Reveal::new(&inner.signer, &nonce, &block.header);
+        let reveal = match inner.signer.sign_reveal(&block.header, &nonce) {
+            Ok(reveal) => reveal,
+            Err(error) => {
+                return Self::fail_batch(
+                    inner,
+                    format!("error while signing reveal: {}", error.message),
+                );
+            }
+        };
 
         Self::transition(inner.clone(), State::WaitingForFinalize(role, batch, block));
 
@@ -626,6 +634,8 @@ impl ConsensusFrontend {
                     .and_then(move |(inputs, outputs)| {
                         let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
                         let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
+                        let mut recent_confirmed_calls =
+                            inner.recent_confirmed_calls.lock().unwrap();
                         let mut call_subscribers = inner.call_subscribers.lock().unwrap();
 
                         for (input, output) in inputs.iter().zip(outputs.iter()) {
@@ -637,6 +647,9 @@ impl ConsensusFrontend {
                                     drop(sender.send(output.clone()));
                                 }
                             }
+
+                            // Store output to recently confirmed calls cache.
+                            recent_confirmed_calls.insert(call_id, output.clone());
                         }
 
                         Ok(())
@@ -751,7 +764,7 @@ impl ConsensusFrontend {
     }
 
     /// Handle reveal for aggregation command.
-    fn handle_agg_reveal(inner: Arc<Inner>, reveal: Reveal<Header>, role: Role) -> BoxFuture<()> {
+    fn handle_agg_reveal(inner: Arc<Inner>, reveal: Reveal, role: Role) -> BoxFuture<()> {
         require_state_ignore!(
             inner,
             State::ProposedBatch(Role::Leader, ..) | State::WaitingForFinalize(Role::Leader, ..)
@@ -762,7 +775,7 @@ impl ConsensusFrontend {
         // Select appropriate queue based on the role of the node that sent
         // us the reveal.  Also calculate how many reveals we need before we
         // can send all the aggregated reveals to the backend.
-        let mut agg_reveals: MutexGuard<Vec<Reveal<Header>>>;
+        let mut agg_reveals: MutexGuard<Vec<Reveal>>;
         let needed_reveals: usize;
         let agg_queue: AggregationQueueType;
 
@@ -1043,8 +1056,15 @@ impl ConsensusFrontend {
         );
 
         // Generate commitment.
-        let nonce = B256::random();
-        let commitment = Commitment::new(&inner.signer, &nonce, &block.header);
+        let (commitment, nonce) = match inner.signer.sign_commitment(&block.header) {
+            Ok(result) => result,
+            Err(error) => {
+                return Self::fail_batch(
+                    inner,
+                    format!("error while signing commitment: {}", error.message),
+                );
+            }
+        };
 
         Self::transition(
             inner.clone(),
@@ -1154,7 +1174,7 @@ impl ConsensusFrontend {
     }
 
     /// Process a reveal for aggregation.
-    pub fn process_agg_reveal(&self, signed_reveal: Signed<Reveal<Header>>) -> Result<()> {
+    pub fn process_agg_reveal(&self, signed_reveal: Signed<Reveal>) -> Result<()> {
         // Open the signed reveal, verifying that it was signed by a
         // worker and that the leader matches.
         let (reveal, role) = self.inner.computation_group.open_agg_reveal(signed_reveal)?;
@@ -1171,6 +1191,15 @@ impl ConsensusFrontend {
     pub fn subscribe_call(&self, call_id: H256) -> oneshot::Receiver<Vec<u8>> {
         let (response_sender, response_receiver) = oneshot::channel();
         if self.inner.computation_group.is_leader() {
+            // Check if outputs to this call were recently confirmed.
+            {
+                let mut recent_confirmed_calls = self.inner.recent_confirmed_calls.lock().unwrap();
+                if let Some(output) = recent_confirmed_calls.get_mut(&call_id) {
+                    response_sender.send(output.clone()).unwrap();
+                    return response_receiver;
+                }
+            }
+
             let mut call_subscribers = self.inner.call_subscribers.lock().unwrap();
             match call_subscribers.entry(call_id) {
                 Entry::Occupied(mut entry) => {

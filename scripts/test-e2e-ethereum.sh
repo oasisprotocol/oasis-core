@@ -2,28 +2,28 @@
 
 WORKDIR=${1:-$(pwd)}
 
+# TODO: move all the mock services out ot compute
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --random-beacon-backend dummy \
+        --time-source-notifier ethereum \
+        --random-beacon-backend ethereum \
+        --beacon-address ${ENV_RandomBeaconMock} \
+        --web3-host "ws://127.0.0.1:9545" \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --time-source-notifier mockrpc \
         --storage-backend dummy \
         &
 }
 
-run_dummy_node_storage_dynamodb() {
-    ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --time-source-notifier mockrpc \
-        --random-beacon-backend dummy \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend dynamodb \
-        --storage-dynamodb-region us-west-2 \
-        --storage-dynamodb-table-name test \
-        &
+run_ethereum() {
+    #cd ${WORKDIR}/ethereum && ganache-cli -d -m "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat" -p 9545 &
+    cd ${WORKDIR}/ethereum && tail -f /dev/null | truffle develop > /dev/null &
+    eval `cd ${WORKDIR}/ethereum && truffle migrate --reset | grep ENV_ | awk '$0="export "$0'`
 }
 
 run_compute_node() {
     local id=$1
+    shift
+    local etherid=$1
     shift
     local extra_args=$*
 
@@ -33,8 +33,11 @@ run_compute_node() {
     ${WORKDIR}/target/debug/ekiden-compute \
         --no-persist-identity \
         --max-batch-size 1 \
-        --time-source-notifier system \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --compute-replicas 2 \
+        --time-source-notifier ethereum \
+        --beacon-address ${ENV_RandomBeaconMock} \
+        --entity-ethereum-address ${etherid} \
+        --web3-host "ws://127.0.0.1:9545" \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
@@ -71,7 +74,10 @@ run_test() {
     # Advance epoch to elect a new committee.
     for epoch in $(seq $epochs); do
         sleep 2
-        ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch
+        ${WORKDIR}/target/debug/ekiden-mockepoch-controller \
+            --web3-host "ws://127.0.0.1:9545" \
+            --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+            set-epoch --epoch $epoch
     done
 
     # Wait on the client and check its exit status.
@@ -84,45 +90,31 @@ run_test() {
 }
 
 scenario_basic() {
-    run_compute_node 1 --compute-replicas 2
+    run_compute_node 1 f17f52151ebef6c7334fad080c5704d77216b732
     sleep 1
-    run_compute_node 2 --compute-replicas 2
+    run_compute_node 2 c5fdf4076b8f3a5357c5e395ab970b5b54098fef
     sleep 1
-    run_compute_node 3 --compute-replicas 2
+    run_compute_node 3 821aea9a577a9b44299b9c15c88cf3087f3b5544
 }
 
 scenario_discrepancy_worker() {
-    run_compute_node 1 --compute-replicas 2
+    run_compute_node 1 f17f52151ebef6c7334fad080c5704d77216b732
     sleep 1
-    run_compute_node 2 --compute-replicas 2 --test-inject-discrepancy
+    run_compute_node 2 c5fdf4076b8f3a5357c5e395ab970b5b54098fef --test-inject-discrepancy
     sleep 1
-    run_compute_node 3 --compute-replicas 2
+    run_compute_node 3 821aea9a577a9b44299b9c15c88cf3087f3b5544
 }
 
 scenario_discrepancy_leader() {
-    run_compute_node 1 --compute-replicas 2
+    run_compute_node 1 f17f52151ebef6c7334fad080c5704d77216b732
     sleep 1
-    run_compute_node 2 --compute-replicas 2
+    run_compute_node 2 c5fdf4076b8f3a5357c5e395ab970b5b54098fef
     sleep 1
-    run_compute_node 3 --compute-replicas 2 --test-inject-discrepancy
+    run_compute_node 3 821aea9a577a9b44299b9c15c88cf3087f3b5544 --test-inject-discrepancy
 }
 
-# Scenario where one node is always idle (not part of computation group).
-scenario_one_idle() {
-    run_compute_node 1 --compute-replicas 1
-    sleep 1
-    run_compute_node 2 --compute-replicas 1
-    sleep 1
-    run_compute_node 3 --compute-replicas 1
-}
-
+run_ethereum
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
 run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
-run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_default
-if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
-    run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb
-else
-    echo >&2 "Skipping DynamoDB test."
-fi

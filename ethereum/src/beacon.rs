@@ -12,6 +12,7 @@ use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::{mpsc, oneshot};
+use ekiden_common::identity::EntityIdentity;
 use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_di;
 use ekiden_epochtime::interface::{EpochTime, TimeSourceNotifier, EKIDEN_EPOCH_INVALID};
@@ -511,17 +512,17 @@ create_component!(
     (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
         let environment = container.inject()?;
         let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
-        let local_identity = container.inject::<Entity>()?;
+        let local_identity = container.inject::<EntityIdentity>()?;
         let time_notifier = container.inject::<TimeSourceNotifier>()?;
 
         let args = container.get_arguments().unwrap();
         let contract_address = value_t_or_exit!(args, "beacon-address", H160);
 
-        let instance: Arc<EthereumRandomBeaconViaWebsocket> =
+        let instance: Arc<RandomBeacon> =
             Arc::new(EthereumRandomBeacon::new(
                 environment,
                 client,
-                local_identity,
+                Arc::new(local_identity.get_entity()),
                 contract_address,
                 time_notifier,
             ).map_err(|e| ekiden_di::error::Error::from(e.description()))?);

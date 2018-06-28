@@ -1,9 +1,9 @@
 //! Consensus backend interface.
 use ekiden_common::bytes::{B256, H256};
-use ekiden_common::error::Error;
+use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{BoxFuture, BoxStream, Future, Stream};
 
-use super::{Block, Commitment, Header, Reveal};
+use super::{Block, Commitment, Header, Nonce, Reveal};
 
 /// Notification of a protocol event.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,7 +58,7 @@ pub trait ConsensusBackend: Sync + Send {
     fn commit(&self, contract_id: B256, commitment: Commitment) -> BoxFuture<()>;
 
     /// Reveal the block header that was committed to previously using `commit`.
-    fn reveal(&self, contract_id: B256, reveal: Reveal<Header>) -> BoxFuture<()>;
+    fn reveal(&self, contract_id: B256, reveal: Reveal) -> BoxFuture<()>;
 
     /// Commit to results of processing multiple batches of contract invocations.
     ///
@@ -66,5 +66,14 @@ pub trait ConsensusBackend: Sync + Send {
     fn commit_many(&self, contract_id: B256, commitments: Vec<Commitment>) -> BoxFuture<()>;
 
     /// Reveal multiple block headers that were committed to previously using `commit` or `commit_many`.
-    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal<Header>>) -> BoxFuture<()>;
+    fn reveal_many(&self, contract_id: B256, reveals: Vec<Reveal>) -> BoxFuture<()>;
+}
+
+/// Signer for given consensus backend.
+pub trait ConsensusSigner: Sync + Send {
+    /// Sign a commitment for a given header.
+    fn sign_commitment(&self, header: &Header) -> Result<(Commitment, Nonce)>;
+
+    /// Sign a reveal for the given header and commitment.
+    fn sign_reveal(&self, header: &Header, nonce: &Nonce) -> Result<Reveal>;
 }

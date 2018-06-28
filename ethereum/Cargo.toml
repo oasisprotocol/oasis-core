@@ -8,17 +8,20 @@ repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [dependencies]
+ansi_term = "0.11"
 chrono = "0.4.2"
 clap = "2.29.1"
 ekiden-beacon-base = { path = "../beacon/base", version = "0.2.0-alpha" }
 ekiden-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-epochtime = { path = "../epochtime", version = "0.2.0-alpha" }
+ekiden-instrumentation-prometheus = { path = "../instrumentation/prometheus", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../registry/base", version = "0.2.0-alpha" }
 ekiden-registry-dummy = { path = "../registry/dummy", version = "0.2.0-alpha" }
 ekiden-stake-base = { path = "../stake/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 ethabi = "5.1"
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 log = "0.4"
 rustc-hex = "1.0.0"
 serde = "1.0"
@@ -28,7 +31,11 @@ serde_json = "1.0"
 tokio-core = "0.1.17"
 web3 = { git = "https://github.com/ekiden/rust-web3", branch = "0.3.0-ekiden" }
 
+
 [dev-dependencies]
 ekiden-storage-dummy = { path = "../storage/dummy", version = "0.2.0-alpha" }
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
 scopeguard = "0.3.3"
+
+[[bin]]
+name = "ekiden-mockepoch-controller"
+path = "src/bin/mockepoch_controller.rs"

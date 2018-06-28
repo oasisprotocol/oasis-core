@@ -1,43 +1,35 @@
 //! Ekiden storage interface.
-extern crate ekiden_di;
 use std::fs;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::path::Path;
+use std::sync::Arc;
 
-use serde_cbor;
 use sled::{ConfigBuilder, Tree};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::{future, BoxFuture};
-use ekiden_epochtime::interface::TimeSource;
-use ekiden_epochtime::local::SystemTimeSource;
+use ekiden_common::futures::prelude::*;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
-struct PersistentStorageBackendInner {
+struct Inner {
     /// The actual sled database.
     storage: Tree,
-    /// A time source for learning the current epoch.
-    time_source: Box<TimeSource>,
 }
 
 pub struct PersistentStorageBackend {
-    inner: Arc<Mutex<PersistentStorageBackendInner>>,
+    inner: Arc<Inner>,
 }
 
 impl PersistentStorageBackend {
-    pub fn new(time: Box<TimeSource>, storage_base: &str) -> Result<Self> {
-        let pb = PathBuf::from(&storage_base);
-        if !pb.as_path().exists() {
-            fs::create_dir(pb.as_path())?;
+    pub fn new(path: &Path) -> Result<Self> {
+        if !path.exists() {
+            fs::create_dir(path)?;
         }
-        let config = ConfigBuilder::default().path(pb.as_path());
+        let config = ConfigBuilder::default().path(path);
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(PersistentStorageBackendInner {
-                storage: Tree::start(config.build()).unwrap(),
-                time_source: time,
-            })),
+            inner: Arc::new(Inner {
+                storage: Tree::start(config.build())?,
+            }),
         })
     }
 }
@@ -48,39 +40,21 @@ impl StorageBackend for PersistentStorageBackend {
         let inner = self.inner.clone();
         let key = key.to_owned();
 
-        Box::new(future::lazy(move || {
-            let inner = inner.lock().unwrap();
-            match inner.storage.get(&key.to_vec()) {
-                Ok(Some(vec)) => Ok(vec),
-                _ => Err(Error::new("no key found")),
-            }
-        }))
+        future::lazy(move || match inner.storage.get(&key.to_vec()) {
+            Ok(Some(vec)) => Ok(vec),
+            _ => Err(Error::new("no key found")),
+        }).into_box()
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
 
-        Box::new(future::lazy(move || {
-            let inner = inner.lock().unwrap();
-            let now = inner.time_source.get_epoch()?;
-            let expiry_key = format!("expire_{}", now.0 + expiry).into_bytes();
-
-            // Add this item into the expiry accounting.
-            let expiry_value = match inner.storage.get(&expiry_key) {
-                Ok(Some(val)) => {
-                    let mut list: Vec<H256> = serde_cbor::from_slice(&val).unwrap();
-                    list.append(&mut vec![key]);
-                    serde_cbor::to_vec(&list)
-                }
-                _ => serde_cbor::to_vec(&vec![key.clone()]),
-            };
-            inner.storage.set(expiry_key, expiry_value.unwrap())?;
-
+        future::lazy(move || {
             inner.storage.set(key.to_vec(), value)?;
 
             Ok(())
-        }))
+        }).into_box()
     }
 }
 
@@ -91,12 +65,20 @@ create_component!(
     PersistentStorageBackend,
     StorageBackend,
     (|container: &mut Container| -> Result<Box<Any>> {
-        let backend = match PersistentStorageBackend::new(Box::new(SystemTimeSource {}), "./") {
+        let args = container.get_arguments().unwrap();
+        let db_path = args.value_of("storage-path").unwrap();
+
+        let backend = match PersistentStorageBackend::new(Path::new(db_path)) {
             Ok(backend) => backend,
-            Err(e) => return Err(e.message.into()),
+            Err(error) => return Err(error.message.into()),
         };
+
         let instance: Arc<StorageBackend> = Arc::new(backend);
         Ok(Box::new(instance))
     }),
-    []
+    [Arg::with_name("storage-path")
+        .long("storage-path")
+        .help("Path to storage directory")
+        .default_value("persistent_storage")
+        .takes_value(true)]
 );
