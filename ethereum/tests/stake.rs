@@ -14,11 +14,9 @@ extern crate log;
 use ekiden_stake_base::StakeEscrowBackend;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
-use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
-use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
-use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
+use ekiden_ethereum::truffle::{deploy_truffle, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumStake;
 use web3::api::Web3;
 use web3::transports::WebSocket;
@@ -26,9 +24,6 @@ use web3::transports::WebSocket;
 #[test]
 fn stake_integration() {
     testing::try_init_logging();
-
-    let grpc_environment = grpcio::EnvBuilder::new().build();
-    let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
 
     // Spin up truffle.
     let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));

@@ -7,7 +7,6 @@ use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::uint::U256;
 use ekiden_di;
 use ethabi::Token;
 #[allow(unused_imports)]
@@ -16,7 +15,6 @@ use serde_json;
 use web3;
 use web3::api::Web3;
 use web3::contract::{Contract as EthContract, Options};
-use web3::types::BlockNumber;
 use web3::Transport;
 
 use ekiden_stake_base::*;
@@ -24,6 +22,7 @@ use ekiden_stake_base::*;
 const STAKE_CONTRACT: &[u8] = include_bytes!("../build/contracts/Stake.json");
 
 /// Ethereum Stake implementation.
+#[allow(dead_code)]  // client currently unused
 pub struct EthereumStake<T: Transport + Sync + Send> {
     contract: Arc<Mutex<EthContract<T>>>,
     client: Arc<Web3<T>>,
@@ -37,6 +36,7 @@ fn web3_u256_to_amount(v: web3::types::U256) -> AmountType {
 }
 
 // This could go into our bytes.rs, except we'd only want it when web3 types are also imported.
+#[allow(dead_code)]
 fn web3_u256_to_b256(v: web3::types::U256) -> B256 {
     let mut slice = [0u8; 32];
     v.to_little_endian(&mut slice);
@@ -135,86 +135,105 @@ where
         unimplemented!();
     }
 
-    fn get_stake_status(&self, owner: B256) -> BoxFuture<StakeStatus> {
+    fn get_stake_status(&self, _owner: B256) -> BoxFuture<StakeStatus> {
         unimplemented!();
     }
 
-    fn balance_of(&self, owner: B256) -> BoxFuture<AmountType> {
+    fn balance_of(&self, _owner: B256) -> BoxFuture<AmountType> {
         unimplemented!();
     }
 
     fn transfer(
         &self,
-        msg_sender: B256,
-        destination_address: B256,
-        value: AmountType,
+        _msg_sender: B256,
+        _destination_address: B256,
+        _value: AmountType,
     ) -> BoxFuture<bool> {
         unimplemented!();
     }
 
     fn transfer_from(
         &self,
-        msg_sender: B256,
-        source_address: B256,
-        destination_address: B256,
-        value: AmountType,
+        _msg_sender: B256,
+        _source_address: B256,
+        _destination_address: B256,
+        _value: AmountType,
     ) -> BoxFuture<bool> {
         unimplemented!();
     }
 
     fn approve(
         &self,
-        msg_sender: B256,
-        spender_address: B256,
-        value: AmountType,
+        _msg_sender: B256,
+        _spender_address: B256,
+        _value: AmountType,
     ) -> BoxFuture<bool> {
         unimplemented!();
     }
 
     fn approve_and_call(
         &self,
-        msg_sender: B256,
-        spender_address: B256,
-        value: AmountType,
-        extra_data: Vec<u8>,
+        _msg_sender: B256,
+        _spender_address: B256,
+        _value: AmountType,
+        _extra_data: Vec<u8>,
     ) -> BoxFuture<bool> {
         unimplemented!();
     }
 
-    fn allowance(&self, owner: B256, spender: B256) -> BoxFuture<AmountType> {
+    fn allowance(
+        &self,
+        _owner: B256,
+        _spender: B256
+    ) -> BoxFuture<AmountType> {
         unimplemented!();
     }
 
-    fn burn(&self, msg_sender: B256, value: AmountType) -> BoxFuture<bool> {
+    fn burn(
+        &self,
+        _msg_sender: B256,
+        _value: AmountType
+    ) -> BoxFuture<bool> {
         unimplemented!();
     }
 
-    fn burn_from(&self, msg_sender: B256, owner: B256, value: AmountType) -> BoxFuture<bool> {
+    fn burn_from(
+        &self,
+        _msg_sender: B256,
+        _owner: B256, 
+        _value: AmountType
+    ) -> BoxFuture<bool> {
         unimplemented!();
     }
 
     fn allocate_escrow(
         &self,
-        msg_sender: B256,
-        target: B256,
-        escrow_amount: AmountType,
-        aux: B256,
+        _msg_sender: B256,
+        _target: B256,
+        _escrow_amount: AmountType,
+        _aux: B256,
     ) -> BoxFuture<EscrowAccountIdType> {
         unimplemented!();
     }
 
-    fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator> {
+    fn list_active_escrows_iterator(
+        &self,
+        _owner: B256
+    ) -> BoxFuture<EscrowAccountIterator> {
         unimplemented!();
     }
 
     fn list_active_escrows_get(
         &self,
-        iter: EscrowAccountIterator,
+        _iter: EscrowAccountIterator,
     ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
         unimplemented!();
     }
 
-    fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus> {
+    fn fetch_escrow_by_id(
+        &self,
+        escrow_id: EscrowAccountIdType
+    ) -> BoxFuture<EscrowAccountStatus> {
         let contract = self.contract.clone();
         let local_eth_address = self.local_eth_address;
         Box::new(future::lazy(move || {
@@ -247,9 +266,9 @@ where
 
     fn take_and_release_escrow(
         &self,
-        msg_sender: B256,
-        escrow_id: EscrowAccountIdType,
-        amount_requested: AmountType,
+        _msg_sender: B256,
+        _escrow_id: EscrowAccountIdType,
+        _amount_requested: AmountType,
     ) -> BoxFuture<AmountType> {
         unimplemented!();
     }
