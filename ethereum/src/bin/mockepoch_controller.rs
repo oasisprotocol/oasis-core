@@ -20,7 +20,8 @@ use web3::api::Web3;
 use ekiden_common::bytes::H160;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::Future;
+use ekiden_common::futures::sync::oneshot;
+use ekiden_common::futures::{Future, FutureExt};
 use ekiden_common::identity::EntityIdentity;
 use ekiden_di::Component;
 use ekiden_ethereum::EthereumMockTimeViaWebsocket;
@@ -30,6 +31,16 @@ pub fn set_epoch(client: Arc<EthereumMockTimeViaWebsocket>, args: &ArgMatches) -
     client
         .set_mock_time(value_t!(args, "epoch", u64)?, 0)
         .wait()?;
+
+    Ok(())
+}
+
+pub fn mine(client: Arc<Web3<web3::transports::WebSocket>>, env: Arc<Environment>) -> Result<()> {
+    let transport = client.transport().clone();
+    let (s, r) = oneshot::channel::<()>();
+    let fut = ekiden_ethereum::truffle::mine(transport);
+    env.spawn(fut.then(move |_| s.send(())).into_box());
+    let _ = r.wait();
 
     Ok(())
 }
@@ -57,6 +68,7 @@ fn main() {
                         .takes_value(true),
                 ),
         )
+        .subcommand(SubCommand::with_name("mine").about("Mine on a truffle chain"))
         .args(&known_components.get_arguments())
         .get_matches();
 
@@ -80,7 +92,7 @@ fn main() {
 
     let client = Arc::new(
         EthereumMockTimeViaWebsocket::new(
-            web3,
+            web3.clone(),
             Arc::new(local_identity.get_entity()),
             contract_address,
             environment.clone(),
@@ -89,6 +101,7 @@ fn main() {
 
     let result = match matches.subcommand() {
         ("set-epoch", Some(args)) => set_epoch(client, args),
+        ("mine", _) => mine(web3, environment.clone()),
         _ => Err(Error::new("no command specified")),
     };
     match result {

@@ -58,6 +58,12 @@ run_test() {
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT
 
+    # Start miner.
+    ${WORKDIR}/target/debug/ekiden-mockepoch-controller \
+            --web3-host "ws://127.0.0.1:9545" \
+            --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+            mine &
+
     # Start dummy node.
     $dummy_node_runner
     sleep 1
@@ -116,6 +122,3 @@ scenario_discrepancy_leader() {
 
 run_ethereum
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
-run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
