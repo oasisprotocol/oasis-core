@@ -7,6 +7,7 @@ use ekiden_common::bytes::H256;
 use ekiden_common::futures::Future;
 #[cfg(target_env = "sgx")]
 use ekiden_common::futures::FutureExt;
+use ekiden_common::ring::digest;
 use ekiden_storage_base::StorageMapper;
 
 use super::nibble::NibbleVec;
@@ -25,6 +26,11 @@ impl PatriciaTrie {
     /// Construct a new merkle patricia tree backed by given storage.
     pub fn new(storage: Arc<StorageMapper>) -> Self {
         Self { storage }
+    }
+
+    /// Derive internal key from given key.
+    fn derive_key(key: &[u8]) -> NibbleVec {
+        NibbleVec::from_key(digest::digest(&digest::SHA512_256, key).as_ref())
     }
 
     /// Return pointer to root node.
@@ -87,7 +93,7 @@ impl PatriciaTrie {
 
     /// Lookup key.
     pub fn get(&self, root: Option<H256>, key: &[u8]) -> Option<Vec<u8>> {
-        let path = NibbleVec::from_key(key);
+        let path = Self::derive_key(key);
         self.get_path_by_pointer(path, self.get_root_pointer(root))
     }
 
@@ -317,7 +323,7 @@ impl PatriciaTrie {
 
     /// Insert key.
     pub fn insert(&self, root: Option<H256>, key: &[u8], value: &[u8]) -> H256 {
-        let path = NibbleVec::from_key(key);
+        let path = Self::derive_key(key);
         let new_root = self.insert_path_by_pointer(path, value, self.get_root_pointer(root));
         // Old root will be removed once it expires, there is no way to remove it early.
         match new_root {
@@ -505,7 +511,7 @@ impl PatriciaTrie {
             return None;
         }
 
-        let path = NibbleVec::from_key(key);
+        let path = Self::derive_key(key);
         let new_root = self.remove_path_by_pointer(path, self.get_root_pointer(root));
         // Old root will be removed once it expires, there is no way to remove it early.
         match new_root {
@@ -524,15 +530,80 @@ impl PatriciaTrie {
             }
         }
     }
+
+    /// Dereference a node pointer and dump the corresponding node.
+    fn dump_pointer(&self, id: String, max_depth: usize, pointer: NodePointer) {
+        match pointer {
+            NodePointer::Null => {}
+            NodePointer::Pointer(_) => {
+                self.dump_node(id, max_depth, self.deref_node_pointer(pointer));
+            }
+            NodePointer::Embedded(node) => self.dump_node(id, max_depth, node.as_ref().clone()),
+        }
+    }
+
+    /// Dump a trie node to stdout in GraphViz format.
+    ///
+    /// Recursively dumps any child nodes as well, up to the given `max_depth`.
+    fn dump_node(&self, id: String, max_depth: usize, node: Node) {
+        if max_depth == 0 {
+            println!("{} [shape=invhouse, label=\"...\"]", id);
+            return;
+        }
+
+        match node {
+            Node::Branch { children, .. } => {
+                println!("{} [shape=box, label=\"\"]", id);
+                for (index, pointer) in children.iter().enumerate() {
+                    if pointer == &NodePointer::Null {
+                        continue;
+                    }
+
+                    let child_id = format!("{}_{}", id, index);
+                    println!("{} -> {} [label=\"{}\"]", id, child_id, index);
+                    self.dump_pointer(child_id, max_depth - 1, pointer.clone());
+                }
+            }
+
+            Node::Leaf { path, .. } => {
+                println!("{} [shape=circle, label=\"({})\"]", id, path.len());
+            }
+
+            Node::Extension { path, pointer } => {
+                println!("{} [shape=hexagon, label=\"({})\"]", id, path.len());
+
+                let child_id = format!("{}_ext", id);
+                println!("{} -> {}", id, child_id);
+                self.dump_pointer(child_id, max_depth - 1, pointer);
+            }
+        }
+    }
+
+    /// Dump trie to stdout in GraphViz format for debugging purposes.
+    ///
+    /// Only up to `max_depth` levels will be dumped and any additional levels will
+    /// be represented by nodes labelled "...".
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// tree.dump(root_hash, 15);
+    /// ```
+    pub fn dump(&self, root: Option<H256>, max_depth: usize) {
+        println!("digraph trie {{");
+        self.dump_pointer(String::from("root"), max_depth, self.get_root_pointer(root));
+        println!("}}");
+    }
 }
 
 #[cfg(test)]
 mod test {
-    extern crate test as rust_test;
+    extern crate test;
 
     use std::sync::Arc;
 
-    use self::rust_test::Bencher;
+    use self::test::Bencher;
+
     use ekiden_storage_dummy::DummyStorageBackend;
 
     use super::*;
@@ -547,7 +618,7 @@ mod test {
         assert_eq!(tree.get(Some(new_root), b"foo"), Some(b"bar".to_vec()));
         assert_eq!(
             new_root,
-            H256::from("0xbc218e864cca90f1ae20ab1af191ef1aa31ac12b5af51c63ce6e7bdd6199992a")
+            H256::from("0xe6772f39648c428810ed68426da21155dabc79a62f2ab7c9800766ef0414c6cd")
         );
 
         let new_root = tree.insert(Some(new_root), b"hello", b"world");
@@ -555,7 +626,7 @@ mod test {
         assert_eq!(tree.get(Some(new_root), b"hello"), Some(b"world".to_vec()));
         assert_eq!(
             new_root,
-            H256::from("0x44de9699b3aa1e9b94a390899fbada775accd13e3e748d98fc12866d8ae69085")
+            H256::from("0x6c827e77a5905c918a0b50f7298640bade5d49cbc03ef1bfb24376f8e0c83279")
         );
 
         let pairs = [
@@ -578,7 +649,7 @@ mod test {
 
         assert_eq!(
             new_root,
-            H256::from("0x4c859bcb7c7b33365ce1bbd19921a57b0f36b91075630e44d37d8a6c9b7d1ed5")
+            H256::from("0xe05e3f3fcd5bc388e1c430c8efc5b7c7ab758929bc33fb42627a12309f6f6d47")
         );
 
         for &(ref key, _) in pairs.iter() {
@@ -589,7 +660,7 @@ mod test {
         // Should be equal as before all items were inserted.
         assert_eq!(
             new_root,
-            H256::from("0x44de9699b3aa1e9b94a390899fbada775accd13e3e748d98fc12866d8ae69085")
+            H256::from("0x6c827e77a5905c918a0b50f7298640bade5d49cbc03ef1bfb24376f8e0c83279")
         );
 
         assert_eq!(tree.get(Some(new_root), b"foo"), Some(b"bar".to_vec()));
@@ -601,7 +672,7 @@ mod test {
         // Should be equal as before hello was inserted.
         assert_eq!(
             new_root,
-            H256::from("0xbc218e864cca90f1ae20ab1af191ef1aa31ac12b5af51c63ce6e7bdd6199992a")
+            H256::from("0xe6772f39648c428810ed68426da21155dabc79a62f2ab7c9800766ef0414c6cd")
         );
 
         // After removing foo the root should be gone as well.
