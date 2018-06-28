@@ -528,11 +528,12 @@ impl PatriciaTrie {
 
 #[cfg(test)]
 mod test {
-    extern crate test as rust_test;
+    extern crate test;
 
     use std::sync::Arc;
 
-    use self::rust_test::Bencher;
+    use self::test::Bencher;
+
     use ekiden_storage_dummy::DummyStorageBackend;
 
     use super::*;

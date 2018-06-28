@@ -66,7 +66,7 @@ impl BenchmarkResults {
     fn show_result(&self, name: &str, result: &Histogram) {
         println!("{}:", name);
         println!(
-            "    Percentiles: p50: {} ms / p90: {} ms / p99: {} ms / p999: {}",
+            "    Percentiles: p50: {} ms / p90: {} ms / p99: {} ms / p999: {} ms",
             result.percentile(50.0).unwrap(),
             result.percentile(90.0).unwrap(),
             result.percentile(99.0).unwrap(),
@@ -169,14 +169,16 @@ where
     /// and the number of threads as the last two arguments.
     pub fn run(
         &self,
-        init: fn(&mut Factory::Client, usize, usize),
+        init: Option<fn(&mut Factory::Client, usize, usize)>,
         scenario: fn(&mut Factory::Client),
-        finalize: fn(&mut Factory::Client, usize, usize),
+        finalize: Option<fn(&mut Factory::Client, usize, usize)>,
     ) -> BenchmarkResults {
         // Initialize.
         println!("Initializing benchmark...");
         let mut client = self.client_factory.create();
-        init(&mut client, self.runs, self.pool.max_count());
+        if let Some(init) = init {
+            init(&mut client, self.runs, self.pool.max_count());
+        }
 
         println!(
             "Running benchmark with {} threads, each doing {} requests...",
@@ -218,7 +220,9 @@ where
         // Finalize.
         println!("Finalizing benchmark...");
         let mut client = self.client_factory.create();
-        finalize(&mut client, self.runs, self.pool.max_count());
+        if let Some(finalize) = finalize {
+            finalize(&mut client, self.runs, self.pool.max_count());
+        }
 
         // Collect benchmark results.
         BenchmarkResults {
