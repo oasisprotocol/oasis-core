@@ -7,7 +7,7 @@ use sgx_types::*;
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_enclave_untrusted::Enclave;
-use ekiden_storage_base::{BatchStorage, StorageBackend};
+use ekiden_storage_base::BatchStorage;
 
 use super::ecall_proxy;
 
