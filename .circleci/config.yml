@@ -107,7 +107,7 @@ jobs:
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
       - attach_workspace:
-        at: /workspace
+          at: /workspace
       - setup_remote_docker
 
       - run:
