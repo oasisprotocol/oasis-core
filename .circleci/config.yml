@@ -111,9 +111,9 @@ jobs:
       - setup_remote_docker
 
       - run:
-        name: Kubectl port forwarding
-        command: kubectl port-forward service/parity 8545:8545
-        background: true
+          name: Kubectl port forwarding
+          command: kubectl port-forward service/parity 8545:8545
+          background: true
       - run: cd ethereum && cp -r /workspace/ethereum/build ./build && truffle migrate --reset | grep "ENV_" | ../docker/deployment/set-env.sh
 
       # Build deployment image.
