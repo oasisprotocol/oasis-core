@@ -13,6 +13,8 @@ extern crate futures;
 use futures::future::Future;
 use futures::future::Shared;
 use futures::stream::Stream;
+extern crate grpcio;
+use grpcio::ChannelBuilder;
 extern crate log;
 use log::log;
 use log::trace;
@@ -34,6 +36,8 @@ use ekiden_storage_base::BatchStorage;
 use ekiden_storage_base::StorageBackend;
 extern crate ekiden_storage_dynamodb;
 use ekiden_storage_dynamodb::DynamoDbBackend;
+extern crate ekiden_storage_frontend;
+use ekiden_storage_frontend::StorageClient;
 extern crate ekiden_storage_persistent;
 use ekiden_storage_persistent::PersistentStorageBackend;
 
@@ -77,7 +81,7 @@ pub struct MultilayerBackend {
     // Backing layers, as specified in RFC 0004.
     sled: Arc<PersistentStorageBackend>,
     // TODO: remote_sled: Arc<...>,
-    aws: Arc<DynamoDbBackend>,
+    bottom: Arc<StorageBackend>,
 }
 
 impl MultilayerBackend {
@@ -85,7 +89,7 @@ impl MultilayerBackend {
         env: Arc<Environment>,
         sled: Arc<PersistentStorageBackend>,
         // TODO: remote_sled: Arc<...>,
-        aws: Arc<DynamoDbBackend>,
+        bottom: Arc<StorageBackend>,
     ) -> Self {
         Self {
             env,
@@ -93,7 +97,7 @@ impl MultilayerBackend {
             batch: RwLock::new(None),
             sled,
             // remote_sled,
-            aws,
+            bottom,
         }
     }
 }
@@ -113,7 +117,7 @@ impl StorageBackend for MultilayerBackend {
 
         let sled = self.sled.clone();
         // TODO: let remote_sled = self.remote_sled.clone();
-        let aws = self.aws.clone();
+        let bottom = self.bottom.clone();
         let accessed = self.accessed.clone();
         let env = self.env.clone();
         // Get the item from sled.
@@ -130,9 +134,9 @@ impl StorageBackend for MultilayerBackend {
                             key,
                             e
                         );
-                        // Get the item from AWS.
-                        // If there's a thundering herd, God help our AWS bill.
-                        aws.get(key)
+                        // Get the item from last resort.
+                        // If there's a thundering herd, God help us.
+                        bottom.get(key)
                     })
                     .then(move |r| {
                         match r {
@@ -157,7 +161,11 @@ impl StorageBackend for MultilayerBackend {
                                 Ok(v)
                             }
                             Err(e) => {
-                                trace!("get: unable to get key {} from aws layer: {:?}", key, e);
+                                trace!(
+                                    "get: unable to get key {} from last resort layer: {:?}",
+                                    key,
+                                    e
+                                );
                                 // Clear incoming accessed item.
                                 accessed.lock().unwrap().remove(&key);
                                 Err(Error::new("unable to get from any layer"))
@@ -214,10 +222,10 @@ impl StorageBackend for MultilayerBackend {
                 },
             )));
         self.env
-            .spawn(Box::new(self.aws.insert(value, expiry).then(move |r| {
+            .spawn(Box::new(self.bottom.insert(value, expiry).then(move |r| {
                 if let Err(e) = r {
                     warn!(
-                        "insert: unable to back up key {} to aws layer: {:?}",
+                        "insert: unable to back up key {} to last resort layer: {:?}",
                         key, e
                     );
                     if let Some(tx) = error_tx {
@@ -261,33 +269,8 @@ impl BatchStorage for MultilayerBackend {
 fn di_factory(
     container: &mut ekiden_di::Container,
 ) -> ekiden_di::error::Result<Box<std::any::Any>> {
-    let env = container.inject()?;
+    let env: Arc<Environment> = container.inject()?;
     let args = container.get_arguments().unwrap();
-    let aws_region = value_t_or_exit!(
-        args,
-        "storage-multilayer-aws-region",
-        rusoto_core::region::Region
-    );
-    let aws_table_name = args.value_of("storage-multilayer-aws-table-name")
-        .unwrap()
-        .to_string();
-    let (init_tx, init_rx) = futures::sync::oneshot::channel();
-    std::thread::spawn(|| match tokio_core::reactor::Core::new() {
-        Ok(mut core) => {
-            init_tx.send(Ok(core.remote())).unwrap();
-            loop {
-                core.turn(None);
-            }
-        }
-        Err(e) => {
-            init_tx.send(Err(e)).unwrap();
-        }
-    });
-    use ekiden_di::error::ResultExt;
-    let remote = init_rx
-        .wait()
-        .unwrap()
-        .chain_err(|| "Couldn't create rector core")?;
     let sled = Arc::new(PersistentStorageBackend::new(Path::new(args.value_of(
         "storage-multilayer-sled-storage-base",
     ).unwrap()))
@@ -295,12 +278,50 @@ fn di_factory(
         // Can't use chain_error because ekiden_common Error doesn't implement std Error.
         ekiden_di::error::Error::from(format!("Couldn't create sled layer: {:?}", e))
     })?);
-    let aws = Arc::new(DynamoDbBackend::new(
-        remote.clone(),
-        aws_region,
-        aws_table_name,
-    ));
-    let backend: Arc<BatchStorage> = Arc::new(MultilayerBackend::new(env, sled, aws));
+    let bottom: Arc<StorageBackend> =
+        match args.value_of("storage-multilayer-bottom-backend").unwrap() {
+            "dynamodb" => {
+                let aws_region = value_t_or_exit!(
+                    args,
+                    "storage-multilayer-aws-region",
+                    rusoto_core::region::Region
+                );
+                let aws_table_name = args.value_of("storage-multilayer-aws-table-name")
+                    .unwrap()
+                    .to_string();
+                let (init_tx, init_rx) = futures::sync::oneshot::channel();
+                std::thread::spawn(|| match tokio_core::reactor::Core::new() {
+                    Ok(mut core) => {
+                        init_tx.send(Ok(core.remote())).unwrap();
+                        loop {
+                            core.turn(None);
+                        }
+                    }
+                    Err(e) => {
+                        init_tx.send(Err(e)).unwrap();
+                    }
+                });
+                use ekiden_di::error::ResultExt;
+                let remote = init_rx
+                    .wait()
+                    .unwrap()
+                    .chain_err(|| "Couldn't create rector core")?;
+                Arc::new(DynamoDbBackend::new(remote, aws_region, aws_table_name))
+            }
+            "remote" => {
+                let channel = ChannelBuilder::new(env.grpc())
+                    .max_receive_message_len(i32::max_value())
+                    .max_send_message_len(i32::max_value())
+                    .connect(&format!(
+                        "{}:{}",
+                        args.value_of("storage-multilayer-client-host").unwrap(),
+                        args.value_of("storage-multilayer-client-port").unwrap(),
+                    ));
+                Arc::new(StorageClient::new(channel))
+            }
+            bottom_type => panic!("no match branch for last resort layer {}", bottom_type),
+        };
+    let backend: Arc<BatchStorage> = Arc::new(MultilayerBackend::new(env, sled, bottom));
     Ok(Box::new(backend))
 }
 
@@ -313,12 +334,22 @@ fn di_arg_sled_storage_base<'a, 'b>() -> clap::Arg<'a, 'b> {
         .required(true)
 }
 
+fn di_arg_bottom_storage_backend<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-multilayer-bottom-backend")
+        .long("storage-multilayer-bottom-backend")
+        .help("Last resort layer that the RFC 0004 multilayer storage backend should use")
+        .takes_value(true)
+        .possible_values(&["dynamodb", "remote"])
+        .required(true)
+        .default_value("remote")
+}
+
 fn di_arg_aws_region<'a, 'b>() -> clap::Arg<'a, 'b> {
     clap::Arg::with_name("storage-multilayer-aws-region")
         .long("storage-multilayer-aws-region")
         .help("AWS region that the AWS layer of the RFC 0004 multilayer storage backend should use")
         .takes_value(true)
-        .required(true)
+        .required_if("storage-multilayer-storage-backend", "dynamodb")
 }
 
 fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
@@ -326,7 +357,25 @@ fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
         .long("storage-multilayer-aws-table-name")
         .help("DynamoDB table that the AWS layer of the RFC 0004 multilayer storage backend should use")
         .takes_value(true)
-        .required(true)
+        .required_if("storage-multilayer-storage-backend", "dynamodb")
+}
+
+fn di_arg_client_host<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-multilayer-client-host")
+        .long("storage-multilayer-client-host")
+        .help("Host that the RFC 0004 multilayer storage backend should use")
+        .takes_value(true)
+        .required_if("storage-multilayer-storage-backend", "remote")
+        .default_value("127.0.0.1")
+}
+
+fn di_arg_client_port<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("storage-multilayer-client-port")
+        .long("storage-multilayer-client-port")
+        .help("Port that the RFC 0004 multilayer storage backend should use")
+        .takes_value(true)
+        .required_if("storage-multilayer-storage-backend", "remote")
+        .default_value("42261")
 }
 
 // Register for dependency injection. This preparation starts a thread for the reactor core that
@@ -339,8 +388,11 @@ create_component!(
     di_factory,
     [
         di_arg_sled_storage_base(),
+        di_arg_bottom_storage_backend(),
         di_arg_aws_region(),
-        di_arg_aws_table_name()
+        di_arg_aws_table_name(),
+        di_arg_client_host(),
+        di_arg_client_port()
     ]
 );
 
@@ -356,7 +408,7 @@ mod tests {
     use ekiden_storage_base::StorageBackend;
     use ekiden_storage_dynamodb::DynamoDbBackend;
     use ekiden_storage_persistent::PersistentStorageBackend;
-    extern crate grpcio;
+    use grpcio;
     use log::log;
     use log::warn;
     use rusoto_core;
