@@ -39,6 +39,7 @@
   frontend (`ekiden-instrumentation-prometheus`).
 * Added the multilayer storage backend described in RFC 0004.
 * Add aggregating commits and reveals in consensus.
+* You can now configure the last resort layer in the multilayer storage backend.
 
 # 0.1.0
 
