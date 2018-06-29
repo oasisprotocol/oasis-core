@@ -20,6 +20,9 @@ use web3::Transport;
 use ekiden_stake_base::*;
 
 const STAKE_CONTRACT: &[u8] = include_bytes!("../build/contracts/Stake.json");
+const NUM_CONFIRMATIONS: usize = 2;  // Why 2 and not 6?  The Rust gRPC interface does not
+// have the ability to specify confirmations. Nor yield the block number of the most
+// recent block.
 
 /// Ethereum Stake implementation.
 #[allow(dead_code)]  // client currently unused
@@ -30,10 +33,14 @@ pub struct EthereumStake<T: Transport + Sync + Send> {
 }
 
 fn web3_u256_to_amount(v: web3::types::U256) -> AmountType {
-    let mut slice = [0u8;32];
+    let mut slice = [0u8; 32];
     v.to_little_endian(&mut slice);
     AmountType::from_little_endian(&slice)
 }
+
+fn amount_to_web3_u256(v: AmountType) -> web3::types::U256 {
+    web3::types::U256::from_little_endian(&v.to_vec())
+}    
 
 // This could go into our bytes.rs, except we'd only want it when web3 types are also imported.
 #[allow(dead_code)]
@@ -170,7 +177,10 @@ where
         }))
     }
 
-    fn get_stake_status(&self, owner: B256) -> BoxFuture<StakeStatus> {
+    fn get_stake_status(
+        &self,
+        owner: B256,
+    ) -> BoxFuture<StakeStatus> {
         let contract = self.contract.clone();
         let local_eth_address = self.local_eth_address;
         Box::new(future::lazy(move || {
@@ -188,36 +198,124 @@ where
         }))
     }
 
-    fn balance_of(&self, _owner: B256) -> BoxFuture<AmountType> {
-        unimplemented!();
+    fn balance_of(
+        &self,
+        owner: B256,
+    ) -> BoxFuture<AmountType> {
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract = contract.lock().unwrap();
+            let w3_owner = b256_to_web3_address(owner);
+            contract
+                .query("balanceOf", w3_owner, local_eth_address, Options::default(), None)
+                .map(|v| web3_u256_to_amount(v))
+                .map_err(|e| Error::new(e.description()))
+        }))
     }
 
     fn transfer(
         &self,
-        _msg_sender: B256,
-        _destination_address: B256,
-        _value: AmountType,
+        msg_sender: B256,
+        destination_address: B256,
+        value: AmountType,
     ) -> BoxFuture<bool> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
+            let contract = contract.lock().unwrap();
+            let w3_msg_sender = b256_to_web3_address(msg_sender);
+            let w3_destination_address = b256_to_web3_address(destination_address);
+            let w3_value = amount_to_web3_u256(value);
+            contract
+                .call_with_confirmations("transfer",
+                                         (w3_destination_address.clone(), w3_value.clone()),
+                                         w3_msg_sender.clone(),
+                                         Options::default(),
+                                         NUM_CONFIRMATIONS,
+                )
+                .map_err(|e| Error::new(e.description()))
+                .map(|_tr| true)
+/*
+            contract
+                .query("transfer", (w3_destination_address.clone(), w3_value.clone()),
+                       w3_msg_sender.clone(), Options::default(), None)
+                .map_err(|e| Error::new(e.description()))
+                .and_then(move |b| {
+                    let contract = contract_inner.lock().unwrap();
+                    contract
+                        .call_with_confirmations("transfer",
+                                                 (w3_destination_address.clone(), w3_value.clone()),
+                                                 w3_msg_sender.clone(), Options::default(),
+                                                 NUM_CONFIRMATIONS)
+                        .map_err(|e| Error::new(e.description()))
+                        .map(move |_tr| // TODO: do something with the TransactionReceipt object
+                             b)
+                })
+*/
+        }))
     }
 
     fn transfer_from(
         &self,
-        _msg_sender: B256,
-        _source_address: B256,
-        _destination_address: B256,
-        _value: AmountType,
+        msg_sender: B256,
+        source_address: B256,
+        destination_address: B256,
+        value: AmountType,
     ) -> BoxFuture<bool> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
+            let contract = contract.lock().unwrap();
+            let w3_msg_sender = b256_to_web3_address(msg_sender);
+            let w3_source_address = b256_to_web3_address(source_address);
+            let w3_destination_address = b256_to_web3_address(destination_address);
+            let w3_value = amount_to_web3_u256(value);
+            contract
+                .query("transferFrom", (w3_source_address, w3_destination_address, w3_value),
+                      w3_msg_sender, Options::default(), None)
+                .map_err(|e| Error::new(e.description()))
+                .and_then(move |b| {
+                    let contract = contract_inner.lock().unwrap();
+                    contract
+                        .call_with_confirmations("transferFrom",
+                                                 (w3_source_address, w3_destination_address, w3_value),
+                                                 w3_msg_sender, Options::default(), NUM_CONFIRMATIONS)
+                        .map_err(|e| Error::new(e.description()))
+                        .map(move |_tr| // TODO: do something with the TransactionReceipt object
+                             b)
+                })
+        }))
     }
 
     fn approve(
         &self,
-        _msg_sender: B256,
-        _spender_address: B256,
-        _value: AmountType,
+        msg_sender: B256,
+        spender_address: B256,
+        value: AmountType,
     ) -> BoxFuture<bool> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
+            let contract = contract.lock().unwrap();
+            let w3_msg_sender = b256_to_web3_address(msg_sender);
+            let w3_spender_address = b256_to_web3_address(spender_address);
+            let w3_value = amount_to_web3_u256(value);
+            contract
+                .query("approve", (w3_spender_address, w3_value),
+                      w3_msg_sender, Options::default(), None)
+                .map_err(|e| Error::new(e.description()))
+                .and_then(move |b| {
+                    let contract = contract_inner.lock().unwrap();
+                    contract
+                        .call_with_confirmations("approve",
+                                                 (w3_spender_address, w3_value),
+                                                 w3_msg_sender, Options::default(), NUM_CONFIRMATIONS)
+                        .map_err(|e| Error::new(e.description()))
+                        .map(move |_tr| // TODO: do something with the TransactionReceipt object
+                             b)
+                })
+        }))
     }
 
     fn approve_and_call(

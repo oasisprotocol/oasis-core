@@ -18,6 +18,27 @@ use ekiden_common::tokio::timer::Interval;
 pub const DEVELOPMENT_ADDRESS: &'static [u8] =
     b"\x62\x73\x06\x09\x0a\xba\xb3\xa6\xe1\x40\x0e\x93\x45\xbc\x60\xc7\x8a\x8b\xef\x57";
 
+pub fn get_development_address(ix: usize) -> Result<Vec<u8>, Error> {
+    const RAW_DEVELOPMENT_ADDRESS_DATA: &str = include_str!("development-addresses.txt");
+    // format is ((d) 0xhex+\n)* -- but we don't bother to use regex crate.
+    // The result of the splitting etc could be cached, but it's cheap enough to not bother.
+    let mut linenum: usize = 0;
+    for line in RAW_DEVELOPMENT_ADDRESS_DATA.split_terminator('\n') {
+        let p: Vec<_> = line.split(' ').collect();
+        assert_eq!(p.len(), 2); // data error
+        let numstr = p[0];
+        assert_eq!(numstr[1..numstr.len()-1].parse::<usize>().unwrap(), linenum); // data error
+        let hex_str = p[1];
+        assert_eq!(hex_str[0..2].to_string(), "0x");
+        let hex_str = &hex_str[2..];
+        if linenum == ix {
+            return Ok(hex_str.from_hex()?);
+        }
+        linenum = linenum + 1;
+    }
+    Err(Error::new("No entry"))
+}
+
 /// Start at truffle develop instance and return a handle for testing against.
 pub fn start_truffle(cwd: &str) -> Child {
     if env::var("EXTERNAL_BLOCKCHAIN").is_ok() {
