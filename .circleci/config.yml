@@ -115,7 +115,7 @@ jobs:
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
       - run:
           name: Kubectl port forwarding
-          command: kubectl port-forward service/parity 8545:8545
+          command: kubectl port-forward service/parity 9545:8545
           background: true
       - run: cd ethereum && cp -r /workspace/ethereum/build ./build && truffle migrate --reset | grep "ENV_" | ../docker/deployment/set-env.sh
 
