@@ -212,6 +212,9 @@ fn main() {
         .filter(Some("tokio_core"), LevelFilter::Warn)
         .filter(Some("web3"), LevelFilter::Info)
         .filter(Some("hyper"), LevelFilter::Warn)
+        .filter(Some("rusoto_core::request"), LevelFilter::Info)
+        .filter(Some("pagecache::io"), LevelFilter::Debug)
+        .filter(Some("want"), LevelFilter::Debug)
         .init();
 
     // Initialize component container.
