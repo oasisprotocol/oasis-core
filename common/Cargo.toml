@@ -32,14 +32,14 @@ futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
 futures = "0.1"
 futures-timer = "0.1.1"
 get_if_addrs = "~0.5.1"
 env_logger = "0.5.10"
 pretty_env_logger = "0.2"
 clap = "2.29.1"
-openssl = "0.9.24"
+openssl = "0.10.10"
 tokio = "~0.1.7"
 
 [dev-dependencies]

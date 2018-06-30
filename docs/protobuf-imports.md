@@ -36,12 +36,12 @@ index 4937cf6..8efd2a6 100644
 --- a/compute/api/Cargo.toml
 +++ b/compute/api/Cargo.toml
 @@ -9,6 +9,7 @@ build = "build.rs"
- 
+
  [dependencies]
  ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 +ekiden-consensus-api = { path = "../../consensus/api", version = "0.2.0-alpha" }
  protobuf = "~2.0"
- grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+ grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
  futures = "0.1"
 ```
 
@@ -56,15 +56,15 @@ This is as simple as adding an `extern crate` declaration and using it:
 +++ b/compute/api/src/lib.rs
 @@ -3,10 +3,12 @@ extern crate grpcio;
  extern crate protobuf;
- 
+
  extern crate ekiden_common_api;
 +extern crate ekiden_consensus_api;
- 
+
  mod generated;
- 
+
  use ekiden_common_api as common;
 +use ekiden_consensus_api as consensus;
- 
+
  pub use generated::computation_group::*;
  pub use generated::computation_group_grpc::*;
 ```
