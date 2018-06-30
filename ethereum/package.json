@@ -11,6 +11,7 @@
   "repository": "https://github.com/oasislabs/ekiden",
   "dependencies": {
     "truffle-assertions": "^0.3.1",
-    "truffle-hdwallet-provider": "0.0.5"
+    "truffle-hdwallet-provider": "0.0.5",
+    "web3": "^0.18.4"
   }
 }
