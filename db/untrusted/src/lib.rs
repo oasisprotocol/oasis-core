@@ -4,6 +4,8 @@ extern crate sgx_types;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_untrusted;
+#[macro_use]
+extern crate ekiden_instrumentation;
 extern crate ekiden_storage_base;
 
 #[doc(hidden)]
