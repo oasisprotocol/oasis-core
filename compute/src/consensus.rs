@@ -19,6 +19,7 @@ use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::hash::{empty_hash, EncodedHash};
 use ekiden_core::tokio::timer::Interval;
+use ekiden_instrumentation::MetricConfig;
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, BatchStorage};
 
@@ -274,6 +275,10 @@ pub struct ConsensusFrontend {
     inner: Arc<Inner>,
 }
 
+fn measure_configure(name: &str, description: &str, config: MetricConfig) {
+    measure_configure!(name, description, config);
+}
+
 impl ConsensusFrontend {
     /// Create a new consensus frontend.
     pub fn new(
@@ -286,6 +291,21 @@ impl ConsensusFrontend {
         signer: Arc<ConsensusSigner>,
         storage: Arc<BatchStorage>,
     ) -> Self {
+        measure_configure(
+            "batch_insert_size",
+            "Size of values inserted into storage for saving a batch of contract calls.",
+            MetricConfig::Histogram {
+                buckets: vec![0., 1., 4., 16., 64., 256., 1024., 4096., 16384.],
+            },
+        );
+        measure_configure(
+            "outputs_insert_size",
+            "Size of values inserted into storage for saving a batch of contract outputs.",
+            MetricConfig::Histogram {
+                buckets: vec![0., 1., 4., 16., 64., 256., 1024., 4096., 16384.],
+            },
+        );
+
         let (command_sender, command_receiver) = mpsc::unbounded();
 
         let instance = Self {
@@ -903,6 +923,7 @@ impl ConsensusFrontend {
             );
 
             inner.storage.start_batch();
+            measure_histogram!("batch_insert_size", encoded_batch.len());
             inner
                 .storage
                 .insert(encoded_batch, 1)
@@ -1076,6 +1097,7 @@ impl ConsensusFrontend {
         let inner_clone = inner.clone();
 
         inner.storage.start_batch();
+        measure_histogram!("outputs_insert_size", encoded_outputs.len());
         inner
             .storage
             .insert(encoded_outputs, 2)
