@@ -38,7 +38,7 @@ clap = "2.29.1"
 reqwest = "0.8.2"
 base64 = "0.9.0"
 tokio-core = "0.1"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
 lru-cache = "0.1.1"
 log = "0.4"
 pretty_env_logger = "0.2"

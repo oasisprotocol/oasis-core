@@ -3,13 +3,14 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{self, Channel, ChannelBuilder};
+use grpcio::{Channel, ChannelBuilder};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_epochtime::interface::EpochTime;
@@ -24,8 +25,12 @@ impl EntityRegistryClient {
         EntityRegistryClient(api::EntityRegistryClient::new(channel))
     }
 
-    pub fn from_node(node: &Node, environment: Arc<grpcio::Environment>) -> Self {
-        EntityRegistryClient::new(node.connect(environment))
+    pub fn from_node(
+        node: &Node,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> Self {
+        EntityRegistryClient::new(node.connect(environment, identity))
     }
 }
 

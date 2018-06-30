@@ -1,6 +1,5 @@
 syntax = "proto3";
 
-import "common/api/src/common.proto";
 import "consensus/api/src/consensus.proto";
 
 package computation_group;
@@ -16,7 +15,6 @@ service ComputationGroup {
 
 message SubmitBatchRequest {
     bytes batch_hash = 1;
-    common.Signature signature = 2;
 }
 
 message SubmitBatchResponse {
@@ -24,12 +22,10 @@ message SubmitBatchResponse {
 
 message SubmitAggCommitRequest {
     consensus.Commitment commit = 1;
-    common.Signature signature = 2;
 }
 
 message SubmitAggRevealRequest {
     consensus.Reveal reveal = 1;
-    common.Signature signature = 2;
 }
 
 message SubmitAggResponse {

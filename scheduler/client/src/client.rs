@@ -3,12 +3,13 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{self, Channel, ChannelBuilder};
+use grpcio::{Channel, ChannelBuilder};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_scheduler_api as api;
 use ekiden_scheduler_base::{Committee, Scheduler};
@@ -21,8 +22,12 @@ impl SchedulerClient {
         SchedulerClient(api::SchedulerClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
-        SchedulerClient::new(node.connect(env))
+    pub fn from_node(
+        node: &Node,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> Self {
+        SchedulerClient::new(node.connect(environment, identity))
     }
 }
 
