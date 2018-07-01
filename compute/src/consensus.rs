@@ -18,7 +18,6 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::sync::{mpsc, oneshot};
 use ekiden_core::hash::{empty_hash, EncodedHash};
-use ekiden_core::signature::Signed;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, BatchStorage};
@@ -1151,10 +1150,9 @@ impl ConsensusFrontend {
     }
 
     /// Directly process a batch from a remote leader.
-    pub fn process_remote_batch(&self, batch_hash: Signed<H256>) -> Result<()> {
-        // Open signed batch, verifying that it was signed by the leader and that the
-        // committee matches.
-        let (batch_hash, committee) = self.inner.computation_group.open_remote_batch(batch_hash)?;
+    pub fn process_remote_batch(&self, node_id: B256, batch_hash: H256) -> Result<()> {
+        // Check that batch comes from current committee leader.
+        let committee = self.inner.computation_group.check_remote_batch(node_id)?;
 
         self.inner
             .command_sender
@@ -1165,10 +1163,9 @@ impl ConsensusFrontend {
     }
 
     /// Process a commit for aggregation.
-    pub fn process_agg_commit(&self, signed_commit: Signed<Commitment>) -> Result<()> {
-        // Open the signed commit, verifying that it was signed by a
-        // worker and that the leader matches.
-        let (commit, role) = self.inner.computation_group.open_agg_commit(signed_commit)?;
+    pub fn process_agg_commit(&self, node_id: B256, commit: Commitment) -> Result<()> {
+        // Check that commit comes from a worker.
+        let role = self.inner.computation_group.check_aggregated(node_id)?;
 
         self.inner
             .command_sender
@@ -1179,10 +1176,9 @@ impl ConsensusFrontend {
     }
 
     /// Process a reveal for aggregation.
-    pub fn process_agg_reveal(&self, signed_reveal: Signed<Reveal>) -> Result<()> {
-        // Open the signed reveal, verifying that it was signed by a
-        // worker and that the leader matches.
-        let (reveal, role) = self.inner.computation_group.open_agg_reveal(signed_reveal)?;
+    pub fn process_agg_reveal(&self, node_id: B256, reveal: Reveal) -> Result<()> {
+        // Check that reveal comes from a worker.
+        let role = self.inner.computation_group.check_aggregated(node_id)?;
 
         self.inner
             .command_sender

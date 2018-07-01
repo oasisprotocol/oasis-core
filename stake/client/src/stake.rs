@@ -2,11 +2,13 @@
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use grpcio::{Channel, Environment};
+use grpcio::Channel;
 
 use ekiden_common::bytes::B256;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future};
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_stake_api as api;
 use ekiden_stake_base::{AmountType, EscrowAccountIdType, EscrowAccountIterator,
@@ -20,8 +22,12 @@ impl StakeClient {
         StakeClient(api::StakeClient::new(channel))
     }
 
-    pub fn from_node(node: &Node, environment: Arc<Environment>) -> Self {
-        StakeClient::new(node.connect(environment))
+    pub fn from_node(
+        node: &Node,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> Self {
+        StakeClient::new(node.connect(environment, identity))
     }
 }
 

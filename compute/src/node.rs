@@ -136,8 +136,8 @@ impl ComputeNode {
             contract_id,
             scheduler.clone(),
             entity_registry.clone(),
-            node_identity.get_node_signer(),
             environment.clone(),
+            node_identity.clone(),
         ));
 
         // Create consensus frontend.
@@ -153,6 +153,8 @@ impl ComputeNode {
         ));
 
         // Create compute node gRPC server.
+        use grpcio::ClientCertificateRequestType::RequestClientCertificateButDontVerify;
+
         let web3 =
             ekiden_compute_api::create_web3(Web3Service::new(worker, consensus_frontend.clone()));
         let inter_node = ekiden_compute_api::create_computation_group(
@@ -171,6 +173,8 @@ impl ComputeNode {
                 "0.0.0.0",
                 config.port,
                 grpcio::ServerCredentialsBuilder::new()
+                    .root_cert(node_identity.get_tls_certificate().get_pem()?, true)
+                    .client_certificate_request_type(RequestClientCertificateButDontVerify)
                     .add_cert(
                         node_identity.get_tls_certificate().get_pem()?,
                         node_identity.get_tls_private_key().get_pem()?,

@@ -22,6 +22,6 @@ rand = "0.4.2"
 [dev-dependencies]
 ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.2.0-alpha" }
 ekiden-registry-dummy = { path = "../../registry/dummy", version = "0.2.0-alpha" }
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
 serde = "=1.0.59"
 serde_cbor = "0.8.2"

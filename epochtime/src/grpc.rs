@@ -3,7 +3,7 @@ use std::error::Error as StdError;
 use std::sync::Arc;
 
 use grpcio::RpcStatusCode::InvalidArgument;
-use grpcio::{self, Channel, ChannelBuilder, RpcContext, RpcStatus, ServerStreamingSink, UnarySink,
+use grpcio::{Channel, ChannelBuilder, RpcContext, RpcStatus, ServerStreamingSink, UnarySink,
              WriteFlags};
 
 use super::interface::{EpochTime, TimeSource, TimeSourceNotifier};
@@ -11,6 +11,7 @@ use super::local::LocalTimeSourceNotifier;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 
 use ekiden_common_api as api;
@@ -85,8 +86,12 @@ impl TimeSourceClient {
         TimeSourceClient(api::TimeSourceClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
-        TimeSourceClient::new(node.connect(env))
+    pub fn from_node(
+        node: &Node,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> Self {
+        TimeSourceClient::new(node.connect(environment, identity))
     }
 }
 

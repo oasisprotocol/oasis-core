@@ -10,9 +10,14 @@ use ekiden_common_api as api;
 
 use super::address::Address;
 use super::bytes::{B256, H160};
+#[cfg(not(target_env = "sgx"))]
+use super::environment::Environment;
 use super::error::{Error, Result};
-#[allow(unused_imports)]
-use super::x509::{Certificate, CERTIFICATE_COMMON_NAME};
+#[cfg(not(target_env = "sgx"))]
+use super::identity::NodeIdentity;
+use super::x509::Certificate;
+#[cfg(not(target_env = "sgx"))]
+use super::x509::CERTIFICATE_COMMON_NAME;
 
 /// Node.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,14 +92,22 @@ impl Into<api::Node> for Node {
 #[cfg(not(target_env = "sgx"))]
 impl Node {
     /// Construct a channel to given compute node.
-    pub fn connect(&self, environment: Arc<grpcio::Environment>) -> grpcio::Channel {
-        grpcio::ChannelBuilder::new(environment.clone())
+    pub fn connect(
+        &self,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> grpcio::Channel {
+        grpcio::ChannelBuilder::new(environment.grpc())
             .override_ssl_target(CERTIFICATE_COMMON_NAME)
             .secure_connect(
                 // TODO: Configure all addresses instead of just the first one.
                 &format!("{}", self.addresses[0]),
                 grpcio::ChannelCredentialsBuilder::new()
                     .root_cert(self.certificate.get_pem().unwrap())
+                    .cert(
+                        identity.get_tls_certificate().get_pem().unwrap(),
+                        identity.get_tls_private_key().get_pem().unwrap(),
+                    )
                     .build(),
             )
     }
@@ -103,6 +116,8 @@ impl Node {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use super::super::signature::NullSignerVerifier;
 
     #[test]
     fn test_node_conversion() {
@@ -119,7 +134,7 @@ mod test {
         original.entity_id = B256::random();
         original.expiration = 1_000_000_000;
         original.addresses = Address::for_local_port(42).unwrap();
-        original.certificate = Certificate::generate().unwrap().0;
+        original.certificate = Certificate::generate(&NullSignerVerifier).unwrap().0;
         original.stake = vec![42; 10];
 
         let intermediate: api::Node = original.clone().into();

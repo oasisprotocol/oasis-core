@@ -108,6 +108,7 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
             if entity.signature.public_key != entity.get_value_unsafe()?.id {
                 return Err(Error::new("Wrong signature."));
             }
+            measure_counter_inc!("entity_registered_count");
             let entity = entity.open(&REGISTER_ENTITY_SIGNATURE_CONTEXT)?;
             let mut inner = inner.lock().unwrap();
             inner.entities.insert(entity.id, entity.clone());
@@ -128,6 +129,7 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
             if id.signature.public_key != id.get_value_unsafe()? {
                 return Err(Error::new("Wrong signature."));
             }
+            measure_counter_inc!("entity_deregistered_count");
             let id = id.open(&DEREGISTER_ENTITY_SIGNATURE_CONTEXT)?;
 
             let mut inner = inner.lock().unwrap();
@@ -194,6 +196,7 @@ impl EntityRegistryBackend for DummyEntityRegistryBackend {
             if inner.nodeents.get(&node.id) != None {
                 return Err(Error::new("Node already registered."));
             }
+            measure_counter_inc!("node_registered_count");
 
             match inner.nodes.get_mut(&node.entity_id) {
                 Some(map) => {

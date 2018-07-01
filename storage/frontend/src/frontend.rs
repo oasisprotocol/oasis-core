@@ -1,11 +1,11 @@
 //! Storage frontend - a router to be used to access storage.
 use std::sync::{Arc, Mutex};
 
-use grpcio::Environment;
-
 use ekiden_common::bytes::{B256, H256};
+use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, Future};
+use ekiden_common::futures::prelude::*;
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{Committee, CommitteeType, Scheduler};
@@ -13,15 +13,17 @@ use ekiden_storage_base::StorageBackend;
 
 use client::StorageClient;
 
-struct StorageFrontendInner {
+struct Inner {
     /// Contract context for storage operations.
     contract_id: B256,
     /// Notification of committee changes.
     scheduler: Arc<Scheduler>,
     /// Registry of nodes.
     registry: Arc<EntityRegistryBackend>,
-    /// gRPC environment for scheduling execution.
+    /// Environment for scheduling execution.
     environment: Arc<Environment>,
+    /// Node identity.
+    identity: Arc<NodeIdentity>,
     /// How agressively to retry connections to backends before erroring.
     retries: usize,
 }
@@ -32,7 +34,7 @@ pub struct StorageFrontend {
     /// Active connections to storage backends.
     clients: Arc<Mutex<Vec<Arc<StorageClient>>>>,
     /// Shared state associated with the storage frontend.
-    inner: Arc<StorageFrontendInner>,
+    inner: Arc<Inner>,
 }
 
 impl StorageFrontend {
@@ -42,31 +44,31 @@ impl StorageFrontend {
         scheduler: Arc<Scheduler>,
         registry: Arc<EntityRegistryBackend>,
         environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
         retries: usize,
     ) -> Self {
         Self {
             clients: Arc::new(Mutex::new(vec![])),
-            inner: Arc::new(StorageFrontendInner {
-                contract_id: contract_id,
-                scheduler: scheduler.clone(),
-                registry: registry.clone(),
-                environment: environment.clone(),
-                retries: retries,
+            inner: Arc::new(Inner {
+                contract_id,
+                scheduler,
+                registry,
+                environment,
+                identity,
+                retries,
             }),
         }
     }
 
     /// Refreshes the list of active storage connections by polling the scheduler for the active
     /// storage committee for a given contract.
-    fn refresh(
-        cid: B256,
-        registry: Arc<EntityRegistryBackend>,
-        scheduler: Arc<Scheduler>,
-        env: Arc<Environment>,
-    ) -> BoxFuture<Vec<Arc<StorageClient>>> {
+    fn refresh(inner: Arc<Inner>) -> BoxFuture<Vec<Arc<StorageClient>>> {
+        let shared_inner = inner.clone();
+
         Box::new(
-            scheduler
-                .get_committees(cid)
+            inner
+                .scheduler
+                .get_committees(inner.contract_id)
                 .and_then(move |committee: Vec<Committee>| -> BoxFuture<Node> {
                     let committee = committee
                         .iter()
@@ -80,12 +82,13 @@ impl StorageFrontend {
                     // TODO: rather than just looking up one committee member, registry should be queried for each.
                     let storer = &storers[0];
                     // Now look up the storer's ID in the registry.
-                    registry.get_node(storer.public_key)
+                    inner.registry.get_node(storer.public_key)
                 })
                 .and_then(move |node| -> BoxFuture<Vec<Arc<StorageClient>>> {
-                    let env = env.clone();
                     Box::new(future::ok(vec![Arc::new(StorageClient::from_node(
-                        node, env,
+                        &node,
+                        shared_inner.environment.clone(),
+                        shared_inner.identity.clone(),
                     ))]))
                 }),
         )
@@ -106,21 +109,16 @@ impl StorageFrontend {
                 match nodes.first() {
                     None => {
                         let known_storage = shared_storage.clone();
-                        return Box::new(
-                            StorageFrontend::refresh(
-                                this_inner.contract_id,
-                                this_inner.registry.clone(),
-                                this_inner.scheduler.clone(),
-                                this_inner.environment.clone(),
-                            ).then(move |response| match response {
+                        return Box::new(StorageFrontend::refresh(this_inner).then(
+                            move |response| match response {
                                 Ok(mut clients) => {
                                     let mut nodes = known_storage.lock().unwrap();
                                     nodes.append(&mut clients);
                                     Ok(future::Loop::Continue(retries - 1))
                                 }
                                 Err(e) => Err(e),
-                            }),
-                        );
+                            },
+                        ));
                     }
                     Some(client) => {
                         let out_client = client.clone();
