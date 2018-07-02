@@ -27,7 +27,10 @@ pub fn get_development_address(ix: usize) -> Result<Vec<u8>, Error> {
         let p: Vec<_> = line.split(' ').collect();
         assert_eq!(p.len(), 2); // data error
         let numstr = p[0];
-        assert_eq!(numstr[1..numstr.len()-1].parse::<usize>().unwrap(), linenum); // data error
+        assert_eq!(
+            numstr[1..numstr.len() - 1].parse::<usize>().unwrap(),
+            linenum
+        ); // data error
         let hex_str = p[1];
         assert_eq!(hex_str[0..2].to_string(), "0x");
         let hex_str = &hex_str[2..];
