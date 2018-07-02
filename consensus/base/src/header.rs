@@ -27,8 +27,8 @@ pub struct Header {
     pub output_hash: H256,
     /// State root hash.
     pub state_root: H256,
-    /// Commitments hash.
-    pub commitments_hash: H256,
+    /// Reveals hash.
+    pub reveals_hash: H256,
 }
 
 impl Header {
@@ -50,7 +50,7 @@ impl TryFrom<api::Header> for Header {
             input_hash: H256::try_from(a.get_input_hash())?,
             output_hash: H256::try_from(a.get_output_hash())?,
             state_root: H256::try_from(a.get_state_root())?,
-            commitments_hash: H256::try_from(a.get_commitments_hash())?,
+            reveals_hash: H256::try_from(a.get_reveals_hash())?,
         })
     }
 }
@@ -66,7 +66,7 @@ impl Into<api::Header> for Header {
         h.set_input_hash(self.input_hash.to_vec());
         h.set_output_hash(self.output_hash.to_vec());
         h.set_state_root(self.state_root.to_vec());
-        h.set_commitments_hash(self.commitments_hash.to_vec());
+        h.set_reveals_hash(self.reveals_hash.to_vec());
         h
     }
 }

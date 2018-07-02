@@ -171,12 +171,16 @@ impl SimulatedNode {
                                 }
                             };
 
-                            let reveal = signer
-                                .sign_reveal(&computation.block.header, &computation.nonce)
-                                .unwrap();
+                            // Sign and send reveal.
+                            let backend = backend.clone();
+                            let shared_inner = shared_inner.clone();
 
-                            // Send reveal.
-                            backend.reveal(shared_inner.contract_id, reveal)
+                            signer
+                                .sign_reveal(&computation.block.header, &computation.nonce)
+                                .and_then(move |reveal| {
+                                    backend.reveal(shared_inner.contract_id, reveal)
+                                })
+                                .into_box()
                         }
                         Event::RoundFailed(error) => {
                             // Round has failed, so the test should abort.
@@ -227,33 +231,40 @@ impl SimulatedNode {
                                     block.update();
 
                                     // Generate commitment.
-                                    let (commitment, nonce) =
-                                        signer.sign_commitment(&block.header).unwrap();
-                                    let computation = SimulatedComputationBatch { block, nonce };
+                                    signer
+                                        .sign_commitment(&block.header)
+                                        .and_then(|(commitment, nonce)| {
+                                            let computation =
+                                                SimulatedComputationBatch { block, nonce };
 
-                                    // Store computation.
-                                    {
-                                        let mut current_computation =
-                                            shared_inner.computation.lock().unwrap();
-                                        assert!(current_computation.is_none());
-                                        current_computation.get_or_insert(computation);
-                                    }
+                                            // Store computation.
+                                            {
+                                                let mut current_computation =
+                                                    shared_inner.computation.lock().unwrap();
+                                                assert!(current_computation.is_none());
+                                                current_computation.get_or_insert(computation);
+                                            }
 
-                                    if !output.is_empty() {
-                                        // Insert dummy result to storage and commit.
-                                        shared_inner
-                                            .storage
-                                            .insert(output, 7)
-                                            .and_then(move |_| {
-                                                backend.commit(shared_inner.contract_id, commitment)
-                                            })
-                                            .into_box()
-                                    } else {
-                                        // Output is empty, no need to insert to storage.
-                                        backend
-                                            .commit(shared_inner.contract_id, commitment)
-                                            .into_box()
-                                    }
+                                            if !output.is_empty() {
+                                                // Insert dummy result to storage and commit.
+                                                shared_inner
+                                                    .storage
+                                                    .insert(output, 7)
+                                                    .and_then(move |_| {
+                                                        backend.commit(
+                                                            shared_inner.contract_id,
+                                                            commitment,
+                                                        )
+                                                    })
+                                                    .into_box()
+                                            } else {
+                                                // Output is empty, no need to insert to storage.
+                                                backend
+                                                    .commit(shared_inner.contract_id, commitment)
+                                                    .into_box()
+                                            }
+                                        })
+                                        .into_box()
                                 }))
                             }
                         }

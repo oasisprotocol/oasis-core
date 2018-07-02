@@ -539,31 +539,27 @@ impl ConsensusFrontend {
         info!("Submitting reveal");
 
         // Generate and submit reveal.
-        let reveal = match inner.signer.sign_reveal(&block.header, &nonce) {
-            Ok(reveal) => reveal,
-            Err(error) => {
-                return Self::fail_batch(
-                    inner,
-                    format!("error while signing reveal: {}", error.message),
-                );
-            }
-        };
+        inner
+            .signer
+            .sign_reveal(&block.header, &nonce)
+            .and_then(move |reveal| {
+                Self::transition(inner.clone(), State::WaitingForFinalize(role, batch, block));
 
-        Self::transition(inner.clone(), State::WaitingForFinalize(role, batch, block));
+                if role == Role::Leader {
+                    trace!("Commitments received, appending aggregate reveal on leader node (fast path)");
 
-        if role == Role::Leader {
-            trace!("Commitments received, appending aggregate reveal on leader node (fast path)");
+                    // Leader can just append to its own aggregate reveals queue.
+                    Self::handle_agg_reveal(inner.clone(), reveal, role)
+                } else {
+                    trace!("Commitments received, submitting aggregate reveal to leader");
 
-            // Leader can just append to its own aggregate reveals queue.
-            Self::handle_agg_reveal(inner.clone(), reveal, role)
-        } else {
-            trace!("Commitments received, submitting aggregate reveal to leader");
+                    // Submit reveal to leader for aggregation.
+                    inner.computation_group.submit_agg_reveal(reveal);
 
-            // Submit reveal to leader for aggregation.
-            inner.computation_group.submit_agg_reveal(reveal);
-
-            future::ok(()).into_box()
-        }
+                    future::ok(()).into_box()
+                }
+            })
+            .into_box()
     }
 
     /// Handle discrepancy detected event from consensus backend.
@@ -1057,57 +1053,52 @@ impl ConsensusFrontend {
         );
 
         // Generate commitment.
-        let (commitment, nonce) = match inner.signer.sign_commitment(&block.header) {
-            Ok(result) => result,
-            Err(error) => {
-                return Self::fail_batch(
-                    inner,
-                    format!("error while signing commitment: {}", error.message),
-                );
-            }
-        };
-
-        Self::transition(
-            inner.clone(),
-            State::ProposedBatch(role, batch, nonce, block),
-        );
-
-        // Store outputs and then commit to block.
-        let inner_clone = inner.clone();
-
-        inner.storage.start_batch();
         inner
-            .storage
-            .insert(encoded_outputs, 2)
-            .join(inner.storage.end_batch())
-            .and_then(|((), ())| Ok(()))
-            .or_else(|error| {
-                // Failed to store outputs, abort current batch.
-                Self::fail_batch(
-                    inner_clone,
-                    format!("failed to store outputs: {}", error.message),
-                )
-            })
-            .and_then(move |_| {
-                let role = require_state!(inner, State::ProposedBatch(role, ..) => role, "proposing batch");
+            .signer
+            .sign_commitment(&block.header)
+            .and_then(move |(commitment, nonce)| {
+                Self::transition(
+                    inner.clone(),
+                    State::ProposedBatch(role, batch, nonce, block),
+                );
 
-                measure_counter_inc!("proposed_batch_count");
+                // Store outputs and then commit to block.
+                let inner_clone = inner.clone();
 
-                if role == Role::Leader {
-                    trace!(
-                        "In propose_batch, appending aggregate commit on leader node (fast path)"
-                    );
+                inner.storage.start_batch();
+                inner
+                    .storage
+                    .insert(encoded_outputs, 2)
+                    .join(inner.storage.end_batch())
+                    .and_then(|((), ())| Ok(()))
+                    .or_else(|error| {
+                        // Failed to store outputs, abort current batch.
+                        Self::fail_batch(
+                            inner_clone,
+                            format!("failed to store outputs: {}", error.message),
+                        )
+                    })
+                    .and_then(move |_| {
+                        let role = require_state!(inner, State::ProposedBatch(role, ..) => role, "proposing batch");
 
-                    // Leader can just append to its own aggregate commits queue.
-                    Self::handle_agg_commit(inner.clone(), commitment, role)
-                } else {
-                    trace!("In propose_batch, submitting aggregate commit to leader");
+                        measure_counter_inc!("proposed_batch_count");
 
-                    // Submit the commit to leader for aggregation.
-                    inner.computation_group.submit_agg_commit(commitment);
+                        if role == Role::Leader {
+                            trace!(
+                                "In propose_batch, appending aggregate commit on leader node (fast path)"
+                            );
 
-                    future::ok(()).into_box()
-                }
+                            // Leader can just append to its own aggregate commits queue.
+                            Self::handle_agg_commit(inner.clone(), commitment, role)
+                        } else {
+                            trace!("In propose_batch, submitting aggregate commit to leader");
+
+                            // Submit the commit to leader for aggregation.
+                            inner.computation_group.submit_agg_commit(commitment);
+
+                            future::ok(()).into_box()
+                        }
+                    })
             })
             .into_box()
     }

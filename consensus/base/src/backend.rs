@@ -1,6 +1,6 @@
 //! Consensus backend interface.
 use ekiden_common::bytes::{B256, H256};
-use ekiden_common::error::{Error, Result};
+use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream, Future, Stream};
 
 use super::{Block, Commitment, Header, Nonce, Reveal};
@@ -72,8 +72,39 @@ pub trait ConsensusBackend: Sync + Send {
 /// Signer for given consensus backend.
 pub trait ConsensusSigner: Sync + Send {
     /// Sign a commitment for a given header.
-    fn sign_commitment(&self, header: &Header) -> Result<(Commitment, Nonce)>;
+    fn sign_commitment(&self, header: &Header) -> BoxFuture<(Commitment, Nonce)>;
 
-    /// Sign a reveal for the given header and commitment.
-    fn sign_reveal(&self, header: &Header, nonce: &Nonce) -> Result<Reveal>;
+    /// Sign a reveal for the given header and nonce.
+    fn sign_reveal(&self, header: &Header, nonce: &Nonce) -> BoxFuture<Reveal>;
+
+    /// Verify given reveal.
+    fn verify_reveal(&self, node_id: B256, header: &Header, reveal: &Reveal) -> BoxFuture<()>;
+
+    /// Extract header from given reveal.
+    fn get_reveal_header(&self, reveal: &Reveal) -> BoxFuture<Header>;
+}
+
+/// Root hash backend.
+pub trait RootHashBackend: Sync + Send {
+    /// Watch a stream of consensus blocks.
+    fn watch_blocks(&self) -> BoxStream<Block>;
+
+    /// Watch a stream of consensus events.
+    fn watch_events(&self) -> BoxStream<Event>;
+
+    /// Start a dispute procedure.
+    ///
+    /// Passed `reveals` are supplied as a proof of discrepancy showing that discrepancy
+    /// resolution is required.
+    fn dispute(&self, reveals: Vec<Reveal>) -> BoxFuture<()>;
+
+    /// Resolve a dispute.
+    ///
+    /// Passed `reveals` should come from the backup workers.
+    fn resolve_dispute(&self, reveals: Vec<Reveal>) -> BoxFuture<()>;
+
+    /// Commit a root hash and cause committee transition to happen.
+    ///
+    /// Passed `reveals` should all be in agreement.
+    fn transition(&self, reveals: Vec<Reveal>) -> BoxFuture<()>;
 }

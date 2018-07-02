@@ -18,7 +18,7 @@ service Consensus {
 message Block {
   Header header = 1;
   repeated scheduler.CommitteeNode computation_group = 2;
-  repeated Commitment commitments = 3;
+  repeated Reveal reveals = 3;
 }
 
 message Nonce {
@@ -38,7 +38,7 @@ message Header {
   bytes input_hash = 6;
   bytes output_hash = 7;
   bytes state_root = 8;
-  bytes commitments_hash = 9;
+  bytes reveals_hash = 9;
 }
 
 message Reveal {
@@ -111,4 +111,11 @@ message CommitManyRequest {
 message RevealManyRequest {
     bytes contract_id = 1;
     repeated Reveal reveals = 2;
+}
+
+message Content {
+    oneof content {
+        Reveal reveal = 1;
+        Block latest_block = 2;
+    }
 }
