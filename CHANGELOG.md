@@ -17,9 +17,11 @@
 * **BACKWARD INCOMPATIBLE:** Separate node/entity key pair arguments and change serialized
   node key pair format in a backward-incompatible way.
 * **BACKWARD INCOMPATIBLE:** Make commitment and reveal message format consensus backend
-  dependent and introduce `ConsensusSigner` interface to generate them
+  dependent and introduce `ConsensusSigner` interface to generate them.
 * **BACKWARD INCOMPATIBLE:** Compute node now requires `--batch-storage IMPL` option. Use
   `--batch-storage immediate_remote` for original behavior.
+* **BACKWARD INCOMPATIBLE:** Use TLS client authentication for gRPC channels, encode
+  node Ed25519 public key in TLS certificates, remove custom signed RPC arguments.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
@@ -39,6 +41,7 @@
   frontend (`ekiden-instrumentation-prometheus`).
 * Added the multilayer storage backend described in RFC 0004.
 * Add aggregating commits and reveals in consensus.
+* You can now configure the last resort layer in the multilayer storage backend.
 
 # 0.1.0
 

@@ -3,6 +3,8 @@ extern crate ekiden_common;
 #[macro_use]
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
+#[macro_use]
+extern crate ekiden_instrumentation;
 extern crate ekiden_registry_base;
 
 extern crate serde_cbor;

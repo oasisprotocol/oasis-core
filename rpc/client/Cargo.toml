@@ -22,6 +22,6 @@ futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 ekiden-compute-api = { path = "../../compute/api", version = "0.2.0-alpha" }
 byteorder = "1.2.1"
 futures = "0.1"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden1", features = ["openssl"] }
+grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
 rand = "0.4"
 tokio-core = "0.1"

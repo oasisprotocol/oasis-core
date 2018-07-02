@@ -137,9 +137,9 @@ where
 
                             match r {
                                 Ok(result) => {
-                                    let (entropy, epoch, block_number): (
-                                        web3::types::H256,
+                                    let (epoch, entropy, block_number): (
                                         u64,
+                                        web3::types::H256,
                                         web3::types::U256,
                                     ) = result;
                                     let entropy = B256::from(entropy.0);

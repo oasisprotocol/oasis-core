@@ -1,12 +1,13 @@
 //! Storage gRPC client.
 use std::sync::Arc;
 
-use grpcio::{self, Channel, ChannelBuilder};
+use grpcio::{Channel, ChannelBuilder};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future};
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_storage_api as api;
 use ekiden_storage_base::{BatchStorage, StorageBackend};
@@ -19,8 +20,12 @@ impl StorageClient {
         StorageClient(api::StorageClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
-        StorageClient::new(node.connect(env))
+    pub fn from_node(
+        node: &Node,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> Self {
+        StorageClient::new(node.connect(environment, identity))
     }
 }
 

@@ -2,12 +2,13 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use grpcio::{self, Channel, ChannelBuilder};
+use grpcio::{Channel, ChannelBuilder};
 
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_common::protobuf::RepeatedField;
 use ekiden_consensus_api as api;
@@ -21,8 +22,12 @@ impl ConsensusClient {
         ConsensusClient(api::ConsensusClient::new(channel))
     }
 
-    pub fn from_node(node: Node, env: Arc<grpcio::Environment>) -> Self {
-        ConsensusClient::new(node.connect(env))
+    pub fn from_node(
+        node: &Node,
+        environment: Arc<Environment>,
+        identity: Arc<NodeIdentity>,
+    ) -> Self {
+        ConsensusClient::new(node.connect(environment, identity))
     }
 }
 
