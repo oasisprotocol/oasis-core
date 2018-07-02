@@ -19,7 +19,7 @@ use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
 use ekiden_common::uint::U256;
-use ekiden_ethereum::truffle::{deploy_truffle, get_development_address, mine, start_truffle,
+use ekiden_ethereum::truffle::{deploy_truffle, DevelopmentAddress, mine, start_truffle,
                                DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumStake;
 use ekiden_stake_base::{AmountType, StakeEscrowBackend};
@@ -54,7 +54,8 @@ fn stake_integration() {
     // Run a driver to make some background transactions such that things confirm.
     environment.spawn(mine(transport).discard());
 
-    let eth_address = H160::from_slice(DEVELOPMENT_ADDRESS);
+    let dev_addresses = DevelopmentAddress::new(&client).unwrap();
+    let eth_address = H160::from_slice(&dev_addresses.get_address(0).unwrap().to_vec());
     let oasis = B256::from_slice(&eth_address.to_vec());
 
     let stake = EthereumStake::new(
@@ -103,7 +104,7 @@ fn stake_integration() {
         "initial amount escrowed should be zero"
     );
 
-    let oasis_addr = get_development_address(0).expect("should have gotten address 0");
+    let oasis_addr = dev_addresses.get_address(0).expect("should have gotten address 0").to_vec();
     debug!("oasis_addr          = {:02x}", oasis_addr.iter().format(""));
     debug!(
         "DEVELOPMENT_ADDRESS = {:02x}",
@@ -114,13 +115,15 @@ fn stake_integration() {
         "truffle framework test data bad?"
     );
 
-    let alice_addr = get_development_address(1).expect("should have gotten address 1");
+    let alice_addr = dev_addresses.get_address(1).expect("should have gotten address 1").to_vec();
     debug!("alice_addr          = {:02x}", alice_addr.iter().format(""));
     let alice = B256::from_slice(&alice_addr);
-    let bob_addr = get_development_address(2).expect("should have gotten address 2");
+
+    let bob_addr = dev_addresses.get_address(2).expect("should have gotten address 2").to_vec();
     debug!("bob_addr          = {:02x}", bob_addr.iter().format(""));
     let bob = B256::from_slice(&bob_addr);
-    let carol_addr = get_development_address(3).expect("should have gotten address 3");
+
+    let carol_addr = dev_addresses.get_address(3).expect("should have gotten address 3").to_vec();
     debug!("carol_addr          = {:02x}", carol_addr.iter().format(""));
     let carol = B256::from_slice(&carol_addr);
 
