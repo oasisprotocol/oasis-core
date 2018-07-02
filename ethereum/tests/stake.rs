@@ -19,8 +19,7 @@ use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
 use ekiden_common::uint::U256;
-use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DevelopmentAddress,
-                               DEVELOPMENT_ADDRESS};
+use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DevelopmentAddress};
 use ekiden_ethereum::EthereumStake;
 use ekiden_stake_base::{AmountType, StakeEscrowBackend};
 use itertools::Itertools;
@@ -28,7 +27,7 @@ use web3::api::Web3;
 use web3::transports::WebSocket;
 
 #[test]
-fn stake_integration() {
+fn stake_erc20() {
     testing::try_init_logging();
 
     let grpc_environment = grpcio::EnvBuilder::new().build();
@@ -88,36 +87,6 @@ fn stake_integration() {
     let expected_supply = U256::from(1_000_000_000) * scale;
     assert_eq!(total_supply, expected_supply, "initial supply wrong");
 
-    let stake_status = stake
-        .get_stake_status(oasis)
-        .wait()
-        .expect("getStakeStatus should work");
-    debug!("total_stake = {}", stake_status.total_stake);
-    debug!("escrowed = {}", stake_status.escrowed);
-    assert_eq!(
-        stake_status.total_stake, total_supply,
-        "initial total_stake should be total supply"
-    );
-    assert_eq!(
-        stake_status.escrowed,
-        AmountType::from(0),
-        "initial amount escrowed should be zero"
-    );
-
-    let oasis_addr = dev_addresses
-        .get_address(0)
-        .expect("should have gotten address 0")
-        .to_vec();
-    debug!("oasis_addr          = {:02x}", oasis_addr.iter().format(""));
-    debug!(
-        "DEVELOPMENT_ADDRESS = {:02x}",
-        DEVELOPMENT_ADDRESS.iter().format("")
-    );
-    assert_eq!(
-        oasis_addr, DEVELOPMENT_ADDRESS,
-        "truffle framework test data bad?"
-    );
-
     let alice_addr = dev_addresses
         .get_address(1)
         .expect("should have gotten address 1")
@@ -171,13 +140,13 @@ fn stake_integration() {
         "post-transfer Alice balance wrong"
     );
 
+    let expected_oasis_balance = oasis_balance - oasis_to_alice_transfer_amt;
     let oasis_balance = stake
         .balance_of(oasis)
         .wait()
         .expect("balanceOf(oasis) should work");
     assert_eq!(
-        oasis_balance,
-        total_supply - oasis_to_alice_transfer_amt,
+        oasis_balance, expected_oasis_balance,
         "post-transfer Oasis balance wrong"
     );
 
@@ -301,12 +270,141 @@ fn stake_integration() {
         .expect("total_supply after burn_from should work");
     assert_eq!(total_supply, expected_total_supply);
 
+    drop(handle);
+}
+
+#[test]
+fn stake_escrow() {
+    testing::try_init_logging();
+
+    let grpc_environment = grpcio::EnvBuilder::new().build();
+    let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
+
+    // Spin up truffle.
+    let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
+    defer! {{
+        drop(truffle.kill());
+    }};
+
+    // Connect to truffle.
+    let (handle, transport) =
+        WebSocket::new("ws://localhost:9545").expect("WebSocket creation should work");
+    let client = Web3::new(transport.clone());
+
+    // Make sure our contracts are deployed.
+    let addresses = deploy_truffle(env!("CARGO_MANIFEST_DIR"));
+    let address = addresses
+        .get("Stake")
+        .expect("could not find contract address");
+
+    // Run a driver to make some background transactions such that things confirm.
+    environment.spawn(mine(transport).discard());
+
+    let dev_addresses = DevelopmentAddress::new(&client).unwrap();
+    let eth_address = H160::from_slice(&dev_addresses.get_address(0).unwrap().to_vec());
+    let oasis = B256::from_slice(&eth_address.to_vec());
+
+    let oasis_addr = dev_addresses
+        .get_address(0)
+        .expect("should have gotten address 0")
+        .to_vec();
+    debug!("oasis_addr          = {:02x}", oasis_addr.iter().format(""));
+
+    let alice_addr = dev_addresses
+        .get_address(1)
+        .expect("should have gotten address 1")
+        .to_vec();
+    debug!("alice_addr          = {:02x}", alice_addr.iter().format(""));
+    let alice = B256::from_slice(&alice_addr);
+
+    let bob_addr = dev_addresses
+        .get_address(2)
+        .expect("should have gotten address 2")
+        .to_vec();
+    debug!("bob_addr          = {:02x}", bob_addr.iter().format(""));
+    let bob = B256::from_slice(&bob_addr);
+
+    let carol_addr = dev_addresses
+        .get_address(3)
+        .expect("should have gotten address 3")
+        .to_vec();
+    debug!("carol_addr          = {:02x}", carol_addr.iter().format(""));
+    let carol = B256::from_slice(&carol_addr);
+
+    let stake = EthereumStake::new(
+        Arc::new(client),
+        Arc::new(Entity {
+            id: B256::zero(),
+            eth_address: Some(eth_address),
+        }),
+        H160::from_slice(&address),
+    ).unwrap();
+
+    let total_supply = stake
+        .get_total_supply()
+        .wait()
+        .expect("totalSupply should work");
+
+    let stake_status = stake
+        .get_stake_status(oasis)
+        .wait()
+        .expect("getStakeStatus should work");
+    debug!("total_stake = {}", stake_status.total_stake);
+    debug!("escrowed = {}", stake_status.escrowed);
+    assert_eq!(
+        stake_status.total_stake, total_supply,
+        "initial total_stake should be total supply"
+    );
+    assert_eq!(
+        stake_status.escrowed,
+        AmountType::from(0),
+        "initial amount escrowed should be zero"
+    );
+
     let alice_to_bob_escrow_amount = AmountType::from(17);
     let alice_to_bob_aux = B256::from_slice(&[4u8; 32]);
     let alice_to_carol_escrow_amount = AmountType::from(23);
     let alice_to_carol_aux = B256::from_slice(&[5u8; 32]);
 
+    let alice_balance = stake
+        .balance_of(alice)
+        .wait()
+        .expect("balanceOf(alice) should work");
     debug!("alice account balance = {}", alice_balance);
+    let bob_balance = stake
+        .balance_of(bob)
+        .wait()
+        .expect("balanceOf(bob) should work");
+    match stake
+        .allocate_escrow(alice, bob, alice_to_bob_escrow_amount, alice_to_bob_aux)
+        .wait() {
+            Ok(id) => {
+                debug!("allocate escrow returned {}", id);
+                assert!(false, "should not be able to allocate escrow when balance is zero");
+            },
+            Err(e) => {
+                debug!("allocate escrow failed: {}", e.description());
+            }
+        }
+
+    let oasis_to_alice_transfer_amt = AmountType::from(1000);
+
+    let b = stake
+        .transfer(oasis, alice, oasis_to_alice_transfer_amt)
+        .wait()
+        .expect("transfer from Oasis to Alice should work");
+    debug!("transfer to alice: {}", b);
+    assert!(b);
+
+    let alice_balance = stake
+        .balance_of(alice)
+        .wait()
+        .expect("balanceOf(alice) should work");
+    assert_eq!(
+        alice_balance, oasis_to_alice_transfer_amt,
+        "post-transfer Alice balance wrong"
+    );
+
     let alice_to_bob_escrow_id = stake
         .allocate_escrow(alice, bob, alice_to_bob_escrow_amount, alice_to_bob_aux)
         .wait()
