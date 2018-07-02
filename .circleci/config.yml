@@ -123,10 +123,10 @@ jobs:
       - run: cd ethereum && npm install && cp -r /workspace/ethereum/build ./build
       - run:
           name: Drive Block Mining
-          command: node test/web3.js http://localhost:8545/ 1000
+          command: cd ethereum && node test/web3.js http://localhost:8545/ 1000
           background: true
       - run: |
-          truffle migrate --network=testnet --reset | grep "ENV_" | ../docker/deployment/set-env.sh
+          cd ethereum && truffle migrate --network=testnet --reset | grep "ENV_" | ../docker/deployment/set-env.sh
           killall node
 
       # Build deployment image.
