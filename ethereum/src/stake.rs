@@ -477,13 +477,7 @@ where
             let w3_msg_sender = b256_to_web3_address(msg_sender);
             let w3_value = amount_to_web3_u256(value);
             contract
-                .query(
-                    "burn",
-                    w3_value,
-                    w3_msg_sender,
-                    Options::default(),
-                    None,
-                )
+                .query("burn", w3_value, w3_msg_sender, Options::default(), None)
                 .map_err(|e| Error::new(e.description()))
                 .and_then(move |b: bool| {
                     if !b {
@@ -580,10 +574,10 @@ where
                 .map_err(|e| Error::new(e.description()))
                 .and_then(move |id: web3::types::U256| {
                     let contract = contract_inner.lock().unwrap();
-            debug!("w3_msg_sender {}", w3_msg_sender);
-            debug!("w3_target {}", w3_target);
-            debug!("w3_escrow_amount {}", w3_escrow_amount);
-            debug!("w3_aux {:?}", w3_aux);
+                    debug!("w3_msg_sender {}", w3_msg_sender);
+                    debug!("w3_target {}", w3_target);
+                    debug!("w3_escrow_amount {}", w3_escrow_amount);
+                    debug!("w3_aux {:?}", w3_aux);
                     contract
                         .call_with_confirmations(
                             "allocateEscrow",
