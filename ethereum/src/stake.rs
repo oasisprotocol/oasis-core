@@ -63,13 +63,21 @@ fn web3_address_to_b256(v: web3::types::H160) -> B256 {
     B256::from_slice(&v.to_vec())
 }
 
-fn b256_to_web3_bytes(v: B256) -> Vec<u8> {
-    v.to_vec()
+fn b256_to_web3_bytes32(v: B256) -> web3::types::H256 {
+    web3::types::H256::from_slice(&v.to_vec())
 }
 
-fn web3_bytes_to_b256(b: Vec<u8>) -> B256 {
-    B256::from_slice(&b)
+fn web3_bytes32_to_b256(b: web3::types::H256) -> B256 {
+    B256::from_slice(&b.to_vec())
 }
+
+// fn b256_to_web3_bytes32(v: B256) -> Vec<u8> {
+//     v.to_vec()
+// }
+
+// fn web3_bytes32_to_b256(b: Vec<u8>) -> B256 {
+//     B256::from_slice(&b)
+// }
 
 fn web3_u256_to_b256(v: web3::types::U256) -> B256 {
     let mut slice = [0u8; 32];
@@ -556,7 +564,11 @@ where
             let w3_msg_sender = b256_to_web3_address(msg_sender);
             let w3_target = b256_to_web3_address(target);
             let w3_escrow_amount = amount_to_web3_u256(escrow_amount);
-            let w3_aux = b256_to_web3_bytes(aux);
+            let w3_aux = b256_to_web3_bytes32(aux);
+            debug!("w3_msg_sender {}", w3_msg_sender);
+            debug!("w3_target {}", w3_target);
+            debug!("w3_escrow_amount {}", w3_escrow_amount);
+            debug!("w3_aux {:?}", w3_aux);
             contract
                 .query(
                     "allocateEscrow",
@@ -568,6 +580,10 @@ where
                 .map_err(|e| Error::new(e.description()))
                 .and_then(move |id: web3::types::U256| {
                     let contract = contract_inner.lock().unwrap();
+            debug!("w3_msg_sender {}", w3_msg_sender);
+            debug!("w3_target {}", w3_target);
+            debug!("w3_escrow_amount {}", w3_escrow_amount);
+            debug!("w3_aux {:?}", w3_aux);
                     contract
                         .call_with_confirmations(
                             "allocateEscrow",
@@ -613,42 +629,8 @@ where
         &self,
         iter: EscrowAccountIterator,
     ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
-        let contract = self.contract.clone();
-        let local_eth_address = self.local_eth_address;
-        Box::new(future::lazy(move || {
-            if !iter.has_next {
-                return Err(Error::new("no next escrow account"));
-            }
-            let contract = contract.lock().unwrap();
-            let w3_owner = b256_to_web3_address(iter.owner);
-            let w3_state = b256_to_web3_u256(iter.state);
-            contract
-                .query(
-                    "listActiveEscrowsGet",
-                    (w3_owner, w3_state),
-                    local_eth_address,
-                    Options::default(),
-                    None,
-                )
-                .map_err(|e| Error::new(e.description()))
-                .map(move |result| {
-                    let (w3_escrow_id, w3_target, w3_amount, w3_aux, has_next, w3_state): (
-                        web3::types::U256, // id_: uint
-                        web3::types::H160, // target_: address
-                        web3::types::U256, // amount_: uint256
-                        Vec<u8>, // aux_: bytes32
-                        bool, // has_next_: bool
-                        web3::types::U256, // next_state_: uint
-                    ) = result;
-                    let escrow_id = web3_u256_to_escrow_account_id(w3_escrow_id);
-                    let target = web3_address_to_b256(w3_target);
-                    let amount = web3_u256_to_amount(w3_amount);
-                    let aux = web3_bytes_to_b256(w3_aux);
-                    let state = web3_u256_to_b256(w3_state);
-                    (EscrowAccountStatus::new(escrow_id, target, amount, aux),
-                     EscrowAccountIterator::new(has_next, iter.owner, state))
-                })
-        }))
+        // web3 can only decode up to 5 contract call results
+        unimplemented!();
     }
 
     fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus> {
@@ -658,7 +640,7 @@ where
             let contract = contract.lock().unwrap();
             contract
                 .query(
-                    "fetch_escrow_by_id",
+                    "fetchEscrowById",
                     escrow_account_id_to_web_u256(escrow_id),
                     local_eth_address,
                     Options::default(),
@@ -672,12 +654,12 @@ where
                                 web3::types::H160, // address
                                 web3::types::H160, // address
                                 web3::types::U256,
-                                Vec<u8>, // bytes32
+                                web3::types::H256, // bytes32
                             ) = result;
                             // let owner = B256::from_slice(&owner.to_vec());
                             let target = web3_address_to_b256(target);
                             let amount = web3_u256_to_amount(amount);
-                            let aux = web3_bytes_to_b256(aux);
+                            let aux = web3_bytes32_to_b256(aux);
                             Ok(EscrowAccountStatus::new(escrow_id, target, amount, aux))
                         }
                         Err(e) => return Err(e),

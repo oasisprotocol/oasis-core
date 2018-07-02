@@ -191,5 +191,34 @@ fn stake_integration() {
     let total_supply = stake.get_total_supply().wait().expect("total_supply after burn_from should work");
     assert_eq!(total_supply, expected_total_supply);
 
+    let alice_to_bob_escrow_amount = AmountType::from(17);
+    let alice_to_bob_aux = B256::from_slice(&[4u8; 32]);
+    let alice_to_carol_escrow_amount = AmountType::from(23);
+    let alice_to_carol_aux = B256::from_slice(&[5u8; 32]);
+
+    debug!("alice account balance = {}", alice_balance);
+    let alice_to_bob_escrow_id = stake.allocate_escrow(alice, bob, alice_to_bob_escrow_amount, alice_to_bob_aux)
+        .wait().expect("allocate_escrow(alice, bob, ...) should work");
+    let alice_to_carol_escrow_id = stake.allocate_escrow(alice, carol, alice_to_carol_escrow_amount, alice_to_carol_aux)
+        .wait().expect("allocate_escrow(alice, carol, ...) should work");
+
+    debug!("alice->bob escrow: {}", alice_to_bob_escrow_id);
+    debug!("alice->carol escrow: {}", alice_to_carol_escrow_id);
+
+    let alice_bob_status = stake.fetch_escrow_by_id(alice_to_bob_escrow_id).wait().expect("fetch_escrow_by_id should work");
+    debug!("id {}", alice_bob_status.id);
+    debug!("target {}", alice_bob_status.target);
+    debug!("amount {}", alice_bob_status.amount);
+    debug!("aux {}", alice_bob_status.aux);
+    assert_eq!(alice_bob_status.id, alice_to_bob_escrow_id);
+    assert_eq!(alice_bob_status.target, bob);
+    assert_eq!(alice_bob_status.amount, alice_to_bob_escrow_amount);
+    assert_eq!(alice_bob_status.aux, alice_to_bob_aux);
+
+    let it = stake.list_active_escrows_iterator(alice).wait().expect("list_active_escrows_iterator(alice) should work");
+    debug!("it.has_next {}", it.has_next);
+    debug!("it.owner {}", it.owner);
+    debug!("it.state {}", it.state);
+
     drop(handle);
 }
