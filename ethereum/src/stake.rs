@@ -676,8 +676,7 @@ where
                     NUM_CONFIRMATIONS,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .map(move |_|
-                     amount_requested)
+                .map(move |_| amount_requested)
         }))
     }
 }
