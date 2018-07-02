@@ -7,7 +7,6 @@ use ekiden_common::entity::Entity;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_di;
-use ethabi::Token;
 #[allow(unused_imports)]
 use rustc_hex::FromHex;
 use serde_json;
@@ -71,20 +70,14 @@ fn web3_bytes32_to_b256(b: web3::types::H256) -> B256 {
     B256::from_slice(&b.to_vec())
 }
 
-// fn b256_to_web3_bytes32(v: B256) -> Vec<u8> {
-//     v.to_vec()
-// }
-
-// fn web3_bytes32_to_b256(b: Vec<u8>) -> B256 {
-//     B256::from_slice(&b)
-// }
-
 fn web3_u256_to_b256(v: web3::types::U256) -> B256 {
     let mut slice = [0u8; 32];
     v.to_little_endian(&mut slice);
     B256::from_slice(&slice)
 }
 
+// We will need this once we get web3 to decode 6 outputs
+#[allow(dead_code)]
 fn b256_to_web3_u256(v: B256) -> web3::types::U256 {
     web3::types::U256::from_little_endian(&v.to_vec())
 }
@@ -621,7 +614,7 @@ where
 
     fn list_active_escrows_get(
         &self,
-        iter: EscrowAccountIterator,
+        _iter: EscrowAccountIterator,
     ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
         // web3 can only decode up to 5 contract call results
         unimplemented!();
@@ -664,11 +657,28 @@ where
 
     fn take_and_release_escrow(
         &self,
-        _msg_sender: B256,
-        _escrow_id: EscrowAccountIdType,
-        _amount_requested: AmountType,
+        msg_sender: B256,
+        escrow_id: EscrowAccountIdType,
+        amount_requested: AmountType,
     ) -> BoxFuture<AmountType> {
-        unimplemented!();
+        let contract = self.contract.clone();
+        Box::new(future::lazy(move || {
+            let contract = contract.lock().unwrap();
+            let w3_msg_sender = b256_to_web3_address(msg_sender);
+            let w3_escrow_id = escrow_account_id_to_web_u256(escrow_id);
+            let w3_amount = amount_to_web3_u256(amount_requested);
+            contract
+                .call_with_confirmations(
+                    "takeAndReleaseEscrow",
+                    (w3_escrow_id, w3_amount),
+                    w3_msg_sender,
+                    Options::with(|v| v.gas = Some(1_000_000.into())),
+                    NUM_CONFIRMATIONS,
+                )
+                .map_err(|e| Error::new(e.description()))
+                .map(move |_|
+                     amount_requested)
+        }))
     }
 }
 

@@ -16,7 +16,6 @@ extern crate itertools;
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::{Environment, GrpcEnvironment};
-use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
 use ekiden_common::uint::U256;
@@ -330,6 +329,26 @@ fn stake_integration() {
     debug!("it.has_next {}", it.has_next);
     debug!("it.owner {}", it.owner);
     debug!("it.state {}", it.state);
+
+    let alice_bob_escrow_take = AmountType::from(7);
+    let taken = stake.take_and_release_escrow(bob, alice_to_bob_escrow_id, alice_bob_escrow_take).wait()
+        .expect("take_and_release_escrow should work");
+    assert_eq!(taken, alice_bob_escrow_take);
+    let expected_bob_balance = bob_balance + alice_bob_escrow_take;
+    let bob_balance = stake
+        .balance_of(bob)
+        .wait()
+        .expect("balanceOf(bob) should work");
+    assert_eq!(bob_balance, expected_bob_balance, "post-take Bob balance wrong");
+    let expected_alice_balance = alice_balance - alice_to_carol_escrow_amount - taken;
+    let alice_balance = stake
+        .balance_of(alice)
+        .wait()
+        .expect("balanceOf(alice) should work");
+    assert_eq!(
+        alice_balance, expected_alice_balance,
+        "post-take Alice balance wrong"
+    );
 
     drop(handle);
 }
