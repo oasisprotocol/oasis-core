@@ -11,6 +11,9 @@ service ComputationGroup {
     rpc SubmitAggCommit (SubmitAggCommitRequest) returns (SubmitAggResponse) {}
     // Submit a reveal to the leader for aggregation.
     rpc SubmitAggReveal (SubmitAggRevealRequest) returns (SubmitAggResponse) {}
+
+    // Gossip consensus messages
+    rpc ConsensusGossip (ConsensusGossipRequest) returns (ConsensusGossipResponse) {}
 }
 
 message SubmitBatchRequest {
@@ -30,4 +33,11 @@ message SubmitAggRevealRequest {
 
 message SubmitAggResponse {
     bytes receipt = 1;
+}
+
+message ConsensusGossipRequest {
+    consensus.Content content = 1;
+}
+
+message ConsensusGossipResponse {
 }

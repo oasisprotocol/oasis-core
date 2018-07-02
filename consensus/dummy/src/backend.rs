@@ -419,11 +419,11 @@ impl Round {
         block.header = header;
         block.computation_group = self.committee.members.clone();
         for node in &self.committee.members {
-            block.commitments.push(
-                self.commitments
+            block.reveals.push(
+                self.reveals
                     .get(&node.public_key)
                     .cloned()
-                    .map(|commitment| commitment.into()),
+                    .map(|reveal| reveal.into()),
             );
         }
         block.update();
@@ -602,10 +602,10 @@ impl DummyConsensusBackend {
                 input_hash: empty_hash(),
                 output_hash: empty_hash(),
                 state_root: empty_hash(),
-                commitments_hash: H256::zero(),
+                reveals_hash: H256::zero(),
             },
             computation_group: vec![],
-            commitments: vec![],
+            reveals: vec![],
         };
 
         block.update();

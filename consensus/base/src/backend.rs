@@ -77,3 +77,28 @@ pub trait ConsensusSigner: Sync + Send {
     /// Sign a reveal for the given header and commitment.
     fn sign_reveal(&self, header: &Header, nonce: &Nonce) -> Result<Reveal>;
 }
+
+/// Root hash backend.
+pub trait RootHashBackend: Sync + Send {
+    /// Watch a stream of consensus blocks.
+    fn watch_blocks(&self) -> BoxStream<Block>;
+
+    /// Watch a stream of consensus events.
+    fn watch_events(&self) -> BoxStream<Event>;
+
+    /// Start a dispute procedure.
+    ///
+    /// Passed `reveals` are supplied as a proof of discrepancy showing that discrepancy
+    /// resolution is required.
+    fn dispute(&self, reveals: Vec<Reveal>) -> BoxFuture<()>;
+
+    /// Resolve a dispute.
+    ///
+    /// Passed `reveals` should come from the backup workers.
+    fn resolve_dispute(&self, reveals: Vec<Reveal>) -> BoxFuture<()>;
+
+    /// Commit a root hash and cause committee transition to happen.
+    ///
+    /// Passed `reveals` should all be in agreement.
+    fn transition(&self, reveals: Vec<Reveal>) -> BoxFuture<()>;
+}
