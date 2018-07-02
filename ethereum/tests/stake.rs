@@ -19,7 +19,7 @@ use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
 use ekiden_common::uint::U256;
-use ekiden_ethereum::truffle::{deploy_truffle, DevelopmentAddress, mine, start_truffle,
+use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DevelopmentAddress,
                                DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumStake;
 use ekiden_stake_base::{AmountType, StakeEscrowBackend};
@@ -104,7 +104,10 @@ fn stake_integration() {
         "initial amount escrowed should be zero"
     );
 
-    let oasis_addr = dev_addresses.get_address(0).expect("should have gotten address 0").to_vec();
+    let oasis_addr = dev_addresses
+        .get_address(0)
+        .expect("should have gotten address 0")
+        .to_vec();
     debug!("oasis_addr          = {:02x}", oasis_addr.iter().format(""));
     debug!(
         "DEVELOPMENT_ADDRESS = {:02x}",
@@ -115,15 +118,24 @@ fn stake_integration() {
         "truffle framework test data bad?"
     );
 
-    let alice_addr = dev_addresses.get_address(1).expect("should have gotten address 1").to_vec();
+    let alice_addr = dev_addresses
+        .get_address(1)
+        .expect("should have gotten address 1")
+        .to_vec();
     debug!("alice_addr          = {:02x}", alice_addr.iter().format(""));
     let alice = B256::from_slice(&alice_addr);
 
-    let bob_addr = dev_addresses.get_address(2).expect("should have gotten address 2").to_vec();
+    let bob_addr = dev_addresses
+        .get_address(2)
+        .expect("should have gotten address 2")
+        .to_vec();
     debug!("bob_addr          = {:02x}", bob_addr.iter().format(""));
     let bob = B256::from_slice(&bob_addr);
 
-    let carol_addr = dev_addresses.get_address(3).expect("should have gotten address 3").to_vec();
+    let carol_addr = dev_addresses
+        .get_address(3)
+        .expect("should have gotten address 3")
+        .to_vec();
     debug!("carol_addr          = {:02x}", carol_addr.iter().format(""));
     let carol = B256::from_slice(&carol_addr);
 

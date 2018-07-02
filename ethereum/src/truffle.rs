@@ -26,7 +26,9 @@ pub struct DevelopmentAddress {
 
 impl DevelopmentAddress {
     pub fn new<T: web3::Transport>(client: &web3::api::Web3<T>) -> Result<Self, Error> {
-        Ok(Self { addresses: client.eth().accounts().wait()? })
+        Ok(Self {
+            addresses: client.eth().accounts().wait()?,
+        })
     }
 
     pub fn get_address(&self, ix: usize) -> Result<web3::types::H160, Error> {
