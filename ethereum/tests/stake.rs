@@ -95,17 +95,42 @@ impl TruffleTestEnv {
     }
 }
 
+struct InnerTestRunner {
+}
+
+impl InnerTestRunner {
+    fn run_test(&self, contract_name: &str, tester: fn(&TruffleTestEnv) -> ()) -> () {
+        let tte = TruffleTestEnv::new(contract_name).unwrap();
+        tester(&tte)
+    }
+}
+
+pub struct TestRunner {
+    inner: Arc<Mutex<InnerTestRunner>>,
+}
+
+impl TestRunner {
+    pub fn new() -> Self {
+        Self { inner: Arc::new(Mutex::new(InnerTestRunner{})) }
+    }
+
+    pub fn run_test(&self, contract_name: &str, tester: fn(&TruffleTestEnv) -> ()) -> () {
+        let inner = self.inner.lock().unwrap();
+        inner.run_test(contract_name, tester)
+    }
+}
+
 // This is our singleton.
 lazy_static! {
-    static ref TTEW: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref TEST_RUNNER: TestRunner = TestRunner::new();
 }
 
 #[test]
 fn stake_erc20() {
-    let ref mut _guard = TTEW.lock().unwrap(); // Gross.  Should yield a new TruffleTestEnv to use.
-    
-    let tte = TruffleTestEnv::new("Stake").unwrap();
+    TEST_RUNNER.run_test("Stake", stake_erc20_body);
+}
 
+fn stake_erc20_body(tte: &TruffleTestEnv) {
     let oasis = B256::from_slice(&tte.eth_address.to_vec());
 
     let stake = EthereumStake::new(
@@ -324,9 +349,10 @@ fn stake_erc20() {
 
 #[test]
 fn stake_escrow() {
-    let ref mut guard = TTEW.lock().unwrap();
-    let tte = TruffleTestEnv::new("Stake").unwrap();
+    TEST_RUNNER.run_test("Stake", stake_escrow_body);
+}
 
+fn stake_escrow_body(tte: &TruffleTestEnv) {
     let oasis = B256::from_slice(&tte.eth_address.to_vec());
 
     let oasis_addr = tte.dev_addresses
