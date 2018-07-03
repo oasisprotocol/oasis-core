@@ -11,10 +11,10 @@ extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
 
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::process::Child;
 use std::sync::{Arc, Mutex};
-use itertools::Itertools;
 use web3::api::Web3;
 use web3::transports::WebSocket;
 
@@ -37,7 +37,7 @@ use ekiden_stake_base::{AmountType, StakeEscrowBackend};
 // applied to the blockchain in a non-determinstic order (if the tests were run in
 // "parallel" but competed for access via a mutex).
 pub struct TruffleTestEnv {
-    _environment: Arc<GrpcEnvironment>,  // dropping this causes the truffle grpcio to wedge
+    _environment: Arc<GrpcEnvironment>, // dropping this causes the truffle grpcio to wedge
     pub truffle: Child,
     pub handle: web3::transports::EventLoopHandle,
     pub client: web3::api::Web3<web3::transports::WebSocket>,
@@ -95,8 +95,7 @@ impl TruffleTestEnv {
     }
 }
 
-struct InnerTestRunner {
-}
+struct InnerTestRunner {}
 
 impl InnerTestRunner {
     fn run_test(&self, contract_name: &str, tester: fn(&TruffleTestEnv) -> ()) -> () {
@@ -111,7 +110,9 @@ pub struct TestRunner {
 
 impl TestRunner {
     pub fn new() -> Self {
-        Self { inner: Arc::new(Mutex::new(InnerTestRunner{})) }
+        Self {
+            inner: Arc::new(Mutex::new(InnerTestRunner {})),
+        }
     }
 
     pub fn run_test(&self, contract_name: &str, tester: fn(&TruffleTestEnv) -> ()) -> () {
@@ -428,15 +429,19 @@ fn stake_escrow_body(tte: &TruffleTestEnv) {
         .expect("balanceOf(bob) should work");
     match stake
         .allocate_escrow(alice, bob, alice_to_bob_escrow_amount, alice_to_bob_aux)
-        .wait() {
-            Ok(id) => {
-                debug!("allocate escrow returned {}", id);
-                assert!(false, "should not be able to allocate escrow when balance is zero");
-            },
-            Err(e) => {
-                debug!("allocate escrow failed: {}", e.description());
-            }
+        .wait()
+    {
+        Ok(id) => {
+            debug!("allocate escrow returned {}", id);
+            assert!(
+                false,
+                "should not be able to allocate escrow when balance is zero"
+            );
         }
+        Err(e) => {
+            debug!("allocate escrow failed: {}", e.description());
+        }
+    }
 
     let oasis_to_alice_transfer_amt = AmountType::from(1000);
 

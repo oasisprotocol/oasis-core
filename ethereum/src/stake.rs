@@ -18,7 +18,7 @@ use web3::Transport;
 use ekiden_stake_base::*;
 
 const STAKE_CONTRACT: &[u8] = include_bytes!("../build/contracts/Stake.json");
-const NUM_CONFIRMATIONS: usize = 2; 
+const NUM_CONFIRMATIONS: usize = 2;
 // This value is arbitrary. Could be exposed as part of the call interfaces.
 
 /// Ethereum Stake implementation.
