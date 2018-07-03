@@ -1,9 +1,11 @@
 //! Computation group structures.
 use std::sync::{Arc, Mutex};
 
+use ekiden_common::futures::Sink;
 use ekiden_compute_api::{ComputationGroupClient, SubmitAggCommitRequest, SubmitAggRevealRequest,
                          SubmitBatchRequest};
 use ekiden_consensus_base::{Commitment, Reveal};
+use ekiden_core::bytes::B64;
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
@@ -13,15 +15,19 @@ use ekiden_core::identity::NodeIdentity;
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
 use ekiden_core::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::EpochTime;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
+use ekiden_storage_base::hash_storage_key;
+use ekiden_storage_base::StorageBackend;
+use ekiden_storage_frontend::StorageClient;
 
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
     /// Submit batch to workers.
     Submit(H256),
     /// Update committee.
-    UpdateCommittee(Vec<CommitteeNode>),
+    UpdateCommittee(EpochTime, Vec<CommitteeNode>),
     /// Submit a commit to the leader for aggregation.
     SubmitAggCommit(Commitment),
     /// Submit a reveal to the leader for aggregation.
@@ -57,7 +63,6 @@ struct Inner {
 
 impl Inner {
     /// Get local node's role in the committee.
-    ///
     /// May be `None` in case the local node is not part of the computation group.
     fn get_role(&self) -> Option<Role> {
         let committee = self.committee.lock().unwrap();
@@ -120,7 +125,7 @@ impl ComputationGroup {
                 .watch_committees()
                 .filter(|committee| committee.kind == CommitteeType::Compute)
                 .filter(move |committee| committee.contract.id == contract_id)
-                .map(|committee| Command::UpdateCommittee(committee.members))
+                .map(|committee| Command::UpdateCommittee(committee.valid_for, committee.members))
                 .into_box(),
         );
 
@@ -146,10 +151,10 @@ impl ComputationGroup {
                 "Unexpected error while processing group commands",
                 move |command| match command {
                     Command::Submit(batch_hash) => Self::handle_submit(inner.clone(), batch_hash),
-                    Command::UpdateCommittee(members) => {
+                    Command::UpdateCommittee(epoch, members) => {
                         measure_counter_inc!("committee_updates_count");
 
-                        Self::handle_update_committee(inner.clone(), members)
+                        Self::handle_update_committee(inner.clone(), epoch, members)
                     }
                     Command::SubmitAggCommit(commit) => {
                         Self::handle_submit_agg_commit(inner.clone(), commit)
@@ -163,7 +168,11 @@ impl ComputationGroup {
     }
 
     /// Handle committee update.
-    fn handle_update_committee(inner: Arc<Inner>, members: Vec<CommitteeNode>) -> BoxFuture<()> {
+    fn handle_update_committee(
+        inner: Arc<Inner>,
+        epoch: EpochTime,
+        members: Vec<CommitteeNode>,
+    ) -> BoxFuture<()> {
         info!("Starting update of computation group committee");
 
         // Clear previous group.
@@ -215,9 +224,25 @@ impl ComputationGroup {
             })
             .collect();
 
+        let cur_epoch = epoch;
+        trace!("Current epoch is {}", cur_epoch);
+
+        let cur_nodes = inner.entity_registry.get_nodes(cur_epoch);
+        //      trace!("Current get_nodes list is {:?}", cur_nodes.wait().unwrap());
+
+        let pre_nodes_handle: BoxFuture<Vec<Node>>;
+        let mut pre_epoch = 1;
+        if epoch > 1 {
+            pre_epoch = epoch - 1;
+        }
+        trace!("Previous epoch is {}", pre_epoch);
+
+        pre_nodes_handle = inner.entity_registry.get_nodes(pre_epoch);
+
         Box::new(
             future::join_all(nodes)
-                .and_then(move |nodes| {
+                .join(pre_nodes_handle)
+                .and_then(move |(nodes, pre_nodes_handle)| {
                     // Update group.
                     for (node, committee_node) in nodes {
                         let channel =
@@ -243,6 +268,15 @@ impl ComputationGroup {
                     }
 
                     info!("Update of computation group committee finished");
+
+                    if epoch > 1 {
+                        let pre_nodes_unwrap = pre_nodes_handle;
+                        let client = StorageClient::from_node(
+                            &pre_nodes_unwrap[0].clone(),
+                            inner.environment.clone(),
+                            inner.identity.clone(),
+                        );
+                    }
 
                     Ok(())
                 })
