@@ -1,69 +1,118 @@
-use std::sync::Arc;
-
 extern crate bigint;
 extern crate ekiden_common;
 extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
 extern crate ekiden_stake_base;
-#[macro_use(defer)]
-extern crate scopeguard;
 extern crate grpcio;
 extern crate web3;
 #[macro_use]
 extern crate log;
 extern crate itertools;
+#[macro_use]
+extern crate lazy_static;
+
+use std::collections::HashMap;
+use std::process::Child;
+use std::sync::{Arc, Mutex};
+use itertools::Itertools;
+use web3::api::Web3;
+use web3::transports::WebSocket;
 
 use ekiden_common::bytes::{B256, H160};
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::{Environment, GrpcEnvironment};
+use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
 use ekiden_common::uint::U256;
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DevelopmentAddress};
 use ekiden_ethereum::EthereumStake;
 use ekiden_stake_base::{AmountType, StakeEscrowBackend};
-use itertools::Itertools;
-use web3::api::Web3;
-use web3::transports::WebSocket;
+
+// A truffle-based test is pretty heavy weight and not really a unittest, since it
+// involves starting a blockchain and a miner.  Furthermore, since the blockchain runs at
+// a fixed address, the tests cannot be run in parallel.  We create an environment where
+// we keep track of the resources, since this is common between all such tests.  We do not
+// try to re-use the environment, since per-test state changes to the blockchain would be
+// applied to the blockchain in a non-determinstic order (if the tests were run in
+// "parallel" but competed for access via a mutex).
+pub struct TruffleTestEnv {
+    pub truffle: Child,
+    pub handle: web3::transports::EventLoopHandle,
+    pub client: web3::api::Web3<web3::transports::WebSocket>,
+    pub addresses: HashMap<String, Vec<u8>>,
+    pub dev_addresses: DevelopmentAddress,
+    pub eth_address: H160, // dev_addresses[0] converted to H160
+    pub contract_address: Vec<u8>,
+}
+
+impl Drop for TruffleTestEnv {
+    fn drop(&mut self) {
+        drop(self.truffle.kill());
+    }
+}
+
+impl TruffleTestEnv {
+    pub fn new(contract_name: &str) -> Result<Self, Error> {
+        testing::try_init_logging();
+
+        let grpc_environment = grpcio::EnvBuilder::new().build();
+        let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
+
+        // Spin up truffle.
+        let truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
+
+        // Connect to truffle.
+        let (handle, transport) =
+            WebSocket::new("ws://localhost:9545").expect("WebSocket creation should work");
+        let client = Web3::new(transport.clone());
+
+        // Make sure our contracts are deployed.
+        let addresses = deploy_truffle(env!("CARGO_MANIFEST_DIR"));
+
+        // Run a driver to make some background transactions such that things confirm.
+        environment.spawn(mine(transport).discard());
+
+        let dev_addresses = DevelopmentAddress::new(&client).unwrap();
+        let eth_address = H160::from_slice(&dev_addresses.get_address(0).unwrap().to_vec());
+
+        let contract_addr = match addresses.get(contract_name) {
+            Some(v) => v.to_vec(),
+            None => return Err(Error::new("contract name not found")),
+        };
+
+        Ok(Self {
+            truffle: truffle,
+            handle: handle,
+            client: client,
+            addresses: addresses,
+            dev_addresses: dev_addresses,
+            eth_address: eth_address,
+            contract_address: contract_addr,
+        })
+    }
+}
+
+// This is our singleton.
+lazy_static! {
+    static ref TTEW: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+}
 
 #[test]
 fn stake_erc20() {
-    testing::try_init_logging();
+    let ref mut _guard = TTEW.lock().unwrap(); // Gross.  Should yield a new TruffleTestEnv to use.
+    
+    let tte = TruffleTestEnv::new("Stake").unwrap();
 
-    let grpc_environment = grpcio::EnvBuilder::new().build();
-    let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
-
-    // Spin up truffle.
-    let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
-    defer! {{
-        drop(truffle.kill());
-    }};
-
-    // Connect to truffle.
-    let (handle, transport) =
-        WebSocket::new("ws://localhost:9545").expect("WebSocket creation should work");
-    let client = Web3::new(transport.clone());
-
-    // Make sure our contracts are deployed.
-    let addresses = deploy_truffle(env!("CARGO_MANIFEST_DIR"));
-    let address = addresses
-        .get("Stake")
-        .expect("could not find contract address");
-
-    // Run a driver to make some background transactions such that things confirm.
-    environment.spawn(mine(transport).discard());
-
-    let dev_addresses = DevelopmentAddress::new(&client).unwrap();
-    let eth_address = H160::from_slice(&dev_addresses.get_address(0).unwrap().to_vec());
-    let oasis = B256::from_slice(&eth_address.to_vec());
+    let oasis = B256::from_slice(&tte.eth_address.to_vec());
 
     let stake = EthereumStake::new(
-        Arc::new(client),
+        Arc::new(tte.client.clone()),
         Arc::new(Entity {
             id: B256::zero(),
-            eth_address: Some(eth_address),
+            eth_address: Some(tte.eth_address.clone()),
         }),
-        H160::from_slice(&address),
+        H160::from_slice(&tte.contract_address),
     ).unwrap();
 
     let name = stake.get_name().wait().expect("name should work");
@@ -87,21 +136,21 @@ fn stake_erc20() {
     let expected_supply = U256::from(1_000_000_000) * scale;
     assert_eq!(total_supply, expected_supply, "initial supply wrong");
 
-    let alice_addr = dev_addresses
+    let alice_addr = tte.dev_addresses
         .get_address(1)
         .expect("should have gotten address 1")
         .to_vec();
     debug!("alice_addr          = {:02x}", alice_addr.iter().format(""));
     let alice = B256::from_slice(&alice_addr);
 
-    let bob_addr = dev_addresses
+    let bob_addr = tte.dev_addresses
         .get_address(2)
         .expect("should have gotten address 2")
         .to_vec();
     debug!("bob_addr          = {:02x}", bob_addr.iter().format(""));
     let bob = B256::from_slice(&bob_addr);
 
-    let carol_addr = dev_addresses
+    let carol_addr = tte.dev_addresses
         .get_address(3)
         .expect("should have gotten address 3")
         .to_vec();
@@ -269,62 +318,36 @@ fn stake_erc20() {
         .wait()
         .expect("total_supply after burn_from should work");
     assert_eq!(total_supply, expected_total_supply);
-
-    drop(handle);
 }
 
-#[test]
+// #[test]
 fn stake_escrow() {
-    testing::try_init_logging();
+    let ref mut guard = TTEW.lock().unwrap();
+    let tte = TruffleTestEnv::new("Stake").unwrap();
 
-    let grpc_environment = grpcio::EnvBuilder::new().build();
-    let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
+    let oasis = B256::from_slice(&tte.eth_address.to_vec());
 
-    // Spin up truffle.
-    let mut truffle = start_truffle(env!("CARGO_MANIFEST_DIR"));
-    defer! {{
-        drop(truffle.kill());
-    }};
-
-    // Connect to truffle.
-    let (handle, transport) =
-        WebSocket::new("ws://localhost:9545").expect("WebSocket creation should work");
-    let client = Web3::new(transport.clone());
-
-    // Make sure our contracts are deployed.
-    let addresses = deploy_truffle(env!("CARGO_MANIFEST_DIR"));
-    let address = addresses
-        .get("Stake")
-        .expect("could not find contract address");
-
-    // Run a driver to make some background transactions such that things confirm.
-    environment.spawn(mine(transport).discard());
-
-    let dev_addresses = DevelopmentAddress::new(&client).unwrap();
-    let eth_address = H160::from_slice(&dev_addresses.get_address(0).unwrap().to_vec());
-    let oasis = B256::from_slice(&eth_address.to_vec());
-
-    let oasis_addr = dev_addresses
+    let oasis_addr = tte.dev_addresses
         .get_address(0)
         .expect("should have gotten address 0")
         .to_vec();
     debug!("oasis_addr          = {:02x}", oasis_addr.iter().format(""));
 
-    let alice_addr = dev_addresses
+    let alice_addr = tte.dev_addresses
         .get_address(1)
         .expect("should have gotten address 1")
         .to_vec();
     debug!("alice_addr          = {:02x}", alice_addr.iter().format(""));
     let alice = B256::from_slice(&alice_addr);
 
-    let bob_addr = dev_addresses
+    let bob_addr = tte.dev_addresses
         .get_address(2)
         .expect("should have gotten address 2")
         .to_vec();
     debug!("bob_addr          = {:02x}", bob_addr.iter().format(""));
     let bob = B256::from_slice(&bob_addr);
 
-    let carol_addr = dev_addresses
+    let carol_addr = tte.dev_addresses
         .get_address(3)
         .expect("should have gotten address 3")
         .to_vec();
@@ -332,12 +355,12 @@ fn stake_escrow() {
     let carol = B256::from_slice(&carol_addr);
 
     let stake = EthereumStake::new(
-        Arc::new(client),
+        Arc::new(tte.client.clone()),
         Arc::new(Entity {
             id: B256::zero(),
-            eth_address: Some(eth_address),
+            eth_address: Some(tte.eth_address.clone()),
         }),
-        H160::from_slice(&address),
+        H160::from_slice(&tte.contract_address),
     ).unwrap();
 
     let total_supply = stake
@@ -467,6 +490,4 @@ fn stake_escrow() {
         alice_balance, expected_alice_balance,
         "post-take Alice balance wrong"
     );
-
-    drop(handle);
 }

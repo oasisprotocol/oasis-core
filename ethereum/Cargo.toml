@@ -35,6 +35,7 @@ tokio-core = "0.1.17"
 web3 = { git = "https://github.com/ekiden/rust-web3", branch = "0.3.0-ekiden" }
 bigint = { version = "~4.3", features = ["std"] }
 itertools = "0.7.8"
+lazy_static = "1.0.1"
 
 [dev-dependencies]
 ekiden-storage-dummy = { path = "../storage/dummy", version = "0.2.0-alpha" }
