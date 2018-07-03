@@ -20,6 +20,7 @@ use ekiden_stake_base::*;
 const STAKE_CONTRACT: &[u8] = include_bytes!("../build/contracts/Stake.json");
 const NUM_CONFIRMATIONS: usize = 2;
 // This value is arbitrary. Could be exposed as part of the call interfaces.
+const DEFAULT_GAS: u64 = 1_000_000;
 
 /// Ethereum Stake implementation.
 pub struct EthereumStake<T: Transport + Sync + Send> {
@@ -255,7 +256,7 @@ where
                             "transfer",
                             (w3_destination_address, w3_value),
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -303,7 +304,7 @@ where
                             "transferFrom",
                             (w3_source_address, w3_destination_address, w3_value),
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -349,7 +350,7 @@ where
                             "approve",
                             (w3_spender_address, w3_value),
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -397,7 +398,7 @@ where
                             "approveAndCall",
                             (w3_spender_address, w3_value, extra_data),
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -451,7 +452,7 @@ where
                             "burn",
                             w3_value,
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -492,7 +493,7 @@ where
                             "burnFrom",
                             (w3_owner, w3_value),
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -545,7 +546,7 @@ where
                             "allocateEscrow",
                             (w3_target, w3_escrow_amount, w3_aux),
                             w3_msg_sender,
-                            Options::with(|v| v.gas = Some(1_000_000.into())),
+                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
@@ -641,7 +642,7 @@ where
                     "takeAndReleaseEscrow",
                     (w3_escrow_id, w3_amount),
                     w3_msg_sender,
-                    Options::with(|v| v.gas = Some(1_000_000.into())),
+                    Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                     NUM_CONFIRMATIONS,
                 )
                 .map_err(|e| Error::new(e.description()))
