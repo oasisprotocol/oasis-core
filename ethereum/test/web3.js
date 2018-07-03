@@ -13,7 +13,7 @@ var pause = async function (timeout) {
 var makeTxn = function (client) {
     return new Promise(function (resolve, _reject) {
         client.eth.sendTransaction({
-            from: "627306090abab3a6e1400e9345bc60c78a8bef57",
+            from: "1cca28600d7491365520b31b466f88647b9839ec",
             gas: 100000,
             gasPrice: 0
         }, resolve);
@@ -24,7 +24,7 @@ var makeTxn = function (client) {
 if (require.main === module) {
     let HDWalletProvider = require("truffle-hdwallet-provider");
     let web3 = require('web3');
-    let mnemonic = "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
+    let mnemonic = 'patient oppose cotton portion chair gentle jelly dice supply salmon blast priority';
 
     if (process.argv.length < 4) {
         console.warn("Usage: web3.js <provider> <interval-ms>");
