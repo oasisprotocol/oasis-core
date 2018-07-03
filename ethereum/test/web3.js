@@ -6,11 +6,11 @@
 
 var pause = async function (timeout) {
     return new Promise(function (resolve, _reject) {
-        setInterval(resolve, timeout);
+        setTimeout(resolve, timeout);
     });
 };
 
-var makeTxn = async function (client) {
+var makeTxn = function (client) {
     return new Promise(function (resolve, _reject) {
         client.eth.sendTransaction({
             from: "627306090abab3a6e1400e9345bc60c78a8bef57",
@@ -20,27 +20,26 @@ var makeTxn = async function (client) {
     });
 };
 
+// Only run if directly executed.
 if (require.main === module) {
-    var HDWalletProvider = require("truffle-hdwallet-provider");
-    var web3 = require('web3');
-    var mnemonic = "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
+    let HDWalletProvider = require("truffle-hdwallet-provider");
+    let web3 = require('web3');
+    let mnemonic = "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
 
     if (process.argv.length < 4) {
         console.warn("Usage: web3.js <provider> <interval-ms>");
         process.exit(0);
     }
 
-    let startup = async function () {
-        var provider = new HDWalletProvider(mnemonic, process.argv[2]);
-        var client = new web3();
+    let run = async function () {
+        let provider = new HDWalletProvider(mnemonic, process.argv[2]);
+        let client = new web3();
         await client.setProvider(provider);
-        return client;
+        while (true) {
+            await pause(process.argv[3]);
+            await makeTxn(client);
+        }
     };
-    let loop = async function (client) {
-        await pause(process.argv[3]);
-        await makeTxn(client);
-        return loop(client);
-    }
 
-    startup().then(loop);
+    run();
 }
