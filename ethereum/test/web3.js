@@ -4,26 +4,42 @@
  * send 0-value transactions to itself at a fixed interval.
  */
 
-var HDWalletProvider = require("truffle-hdwallet-provider");
-var web3 = require('web3');
-var mnemonic = "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
-
-var makeTxn = function () {
-    client.eth.sendTransaction({
-        from: "627306090abab3a6e1400e9345bc60c78a8bef57",
-        gas: 100000,
-        gasPrice: 0
+var pause = async function (timeout) {
+    return new Promise(function (resolve, _reject) {
+        setTimeout(resolve, timeout);
     });
 };
 
-// If directly executed.
+var makeTxn = function (client) {
+    return new Promise(function (resolve, _reject) {
+        client.eth.sendTransaction({
+            from: "627306090abab3a6e1400e9345bc60c78a8bef57",
+            gas: 100000,
+            gasPrice: 0
+        }, resolve);
+    });
+};
+
+// Only run if directly executed.
 if (require.main === module) {
+    let HDWalletProvider = require("truffle-hdwallet-provider");
+    let web3 = require('web3');
+    let mnemonic = "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
+
     if (process.argv.length < 4) {
         console.warn("Usage: web3.js <provider> <interval-ms>");
-        exit(0);
+        process.exit(0);
     }
-    var provider = new HDWalletProvider(mnemonic, process.argv[2]);
-    var client = new web3();
-    client.setProvider(provider);
-    setInterval(makeTxn.bind(client), process.argv[3]);
+
+    let run = async function () {
+        let provider = new HDWalletProvider(mnemonic, process.argv[2]);
+        let client = new web3();
+        await client.setProvider(provider);
+        while (true) {
+            await pause(process.argv[3]);
+            await makeTxn(client);
+        }
+    };
+
+    run();
 }
