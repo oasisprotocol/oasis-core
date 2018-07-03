@@ -246,12 +246,12 @@ where
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |b: bool| {
+                .and_then(move |b: bool| -> BoxFuture<bool> {
                     if !b {
-                        return future::ok(false);
+                        return Box::new(future::ok(b));
                     }
                     let contract = contract_inner.lock().unwrap();
-                    contract
+                    Box::new(contract
                         .call_with_confirmations(
                             "transfer",
                             (w3_destination_address, w3_value),
@@ -260,12 +260,7 @@ where
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(b),
-                        )
-                        .wait()
-                        .unwrap()
+                        .map(move |_tr| b)) // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
@@ -294,12 +289,12 @@ where
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |b: bool| {
+                .and_then(move |b: bool| -> BoxFuture<bool> {
                     if !b {
-                        return future::ok(false);
+                        return Box::new(future::ok(false));
                     }
                     let contract = contract_inner.lock().unwrap();
-                    contract
+                    Box::new(contract
                         .call_with_confirmations(
                             "transferFrom",
                             (w3_source_address, w3_destination_address, w3_value),
@@ -308,12 +303,7 @@ where
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(b),
-                        )
-                        .wait()
-                        .unwrap()
+                        .map(move |_tr| b)) // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
@@ -340,12 +330,12 @@ where
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |b: bool| {
+                .and_then(move |b: bool| -> BoxFuture<bool> {
                     if !b {
-                        return future::ok(false);
+                        return Box::new(future::ok(false));
                     }
                     let contract = contract_inner.lock().unwrap();
-                    contract
+                    Box::new(contract
                         .call_with_confirmations(
                             "approve",
                             (w3_spender_address, w3_value),
@@ -354,12 +344,7 @@ where
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(b),
-                        )
-                        .wait()
-                        .unwrap()
+                        .map(move |_tr| b)) // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
@@ -388,12 +373,12 @@ where
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |b: bool| {
+                .and_then(move |b: bool| -> BoxFuture<bool> {
                     if !b {
-                        return future::ok(false);
+                        return Box::new(future::ok(false));
                     }
                     let contract = contract_inner.lock().unwrap();
-                    contract
+                    Box::new(contract
                         .call_with_confirmations(
                             "approveAndCall",
                             (w3_spender_address, w3_value, extra_data),
@@ -402,12 +387,7 @@ where
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(b),
-                        )
-                        .wait()
-                        .unwrap()
+                        .map(move |_tr| b)) // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
@@ -442,12 +422,12 @@ where
             contract
                 .query("burn", w3_value, w3_msg_sender, Options::default(), None)
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |b: bool| {
+                .and_then(move |b: bool| -> BoxFuture<bool> {
                     if !b {
-                        return future::ok(false);
+                        return Box::new(future::ok(false));
                     }
                     let contract = contract_inner.lock().unwrap();
-                    contract
+                    Box::new(contract
                         .call_with_confirmations(
                             "burn",
                             w3_value,
@@ -456,12 +436,7 @@ where
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(b),
-                        )
-                        .wait()
-                        .unwrap()
+                        .map(move |_tr| b)) // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
@@ -483,12 +458,12 @@ where
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |b: bool| {
+                .and_then(move |b: bool| -> BoxFuture<bool> {
                     if !b {
-                        return future::ok(false);
+                        return Box::new(future::ok(false));
                     }
                     let contract = contract_inner.lock().unwrap();
-                    contract
+                    Box::new(contract
                         .call_with_confirmations(
                             "burnFrom",
                             (w3_owner, w3_value),
@@ -497,12 +472,7 @@ where
                             NUM_CONFIRMATIONS,
                         )
                         .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(b),
-                        )
-                        .wait()
-                        .unwrap()
+                        .map(move |_tr| b)) // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
@@ -535,27 +505,23 @@ where
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .and_then(move |id: web3::types::U256| {
+                .and_then(move |id: web3::types::U256| -> BoxFuture<EscrowAccountIdType> {
                     let contract = contract_inner.lock().unwrap();
                     debug!("w3_msg_sender {}", w3_msg_sender);
                     debug!("w3_target {}", w3_target);
                     debug!("w3_escrow_amount {}", w3_escrow_amount);
                     debug!("w3_aux {:?}", w3_aux);
-                    contract
-                        .call_with_confirmations(
-                            "allocateEscrow",
-                            (w3_target, w3_escrow_amount, w3_aux),
-                            w3_msg_sender,
-                            Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
-                            NUM_CONFIRMATIONS,
-                        )
-                        .map_err(|e| Error::new(e.description()))
-                        .map(
-                            move |_tr| // TODO: do something with the TransactionReceipt object
-                             future::ok(web3_u256_to_escrow_account_id(id)),
-                        )
-                        .wait()
-                        .unwrap()
+                    Box::new(contract
+                             .call_with_confirmations(
+                                 "allocateEscrow",
+                                 (w3_target, w3_escrow_amount, w3_aux),
+                                 w3_msg_sender,
+                                 Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
+                                 NUM_CONFIRMATIONS,
+                             )
+                             .map_err(|e| Error::new(e.description()))
+                             .map(move |_tr| web3_u256_to_escrow_account_id(id)))
+                    // TODO: do something with the TransactionReceipt object
                 })
         }))
     }
