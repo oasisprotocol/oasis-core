@@ -18,22 +18,18 @@ use web3::Transport;
 use ekiden_stake_base::*;
 
 const STAKE_CONTRACT: &[u8] = include_bytes!("../build/contracts/Stake.json");
-const NUM_CONFIRMATIONS: usize = 2; // Why 2 and not 6?  The Rust gRPC interface does not
-                                    // have the ability to specify confirmations. Nor yield the block number of the most
-                                    // recent block.
+const NUM_CONFIRMATIONS: usize = 2; 
+// This value is arbitrary. Could be exposed as part of the call interfaces.
 
 /// Ethereum Stake implementation.
-#[allow(dead_code)] // client currently unused
 pub struct EthereumStake<T: Transport + Sync + Send> {
     contract: Arc<Mutex<EthContract<T>>>,
-    client: Arc<Web3<T>>,
     local_eth_address: web3::types::H160,
 }
 
-// These probably should return Result<...> in case the web3/JSON glue comes unstuck.  Do
-// we trust this interface?  Could an adversary cause the JSON strings to be malformed?
-// TODO(bsy): harden this interface, once the API etc settles down.
-
+// The web3 code uses the loopback interface to talk to the blockchain implementation, so
+// the (string) values in the JSON RPC should be well-formatted, except if/when there are
+// bugs in the blockchain or web3 code.
 fn web3_u256_to_amount(v: web3::types::U256) -> AmountType {
     let mut slice = [0u8; 32];
     v.to_little_endian(&mut slice);
@@ -111,39 +107,12 @@ where
             &contract_abi,
         )?;
 
-        let ctor_future = client
-            .eth()
-            .code(contract_address, None)
-            .map_err(|e| Error::new(e.description()))
-            .and_then(move |code| {
-                let actual_str = serde_json::to_string(&code).unwrap_or("".to_string());
-                // let expected_str = serde_json::to_string(&contract_dfn["deployedBytecode"])
-                //     .unwrap_or("".to_string());
-                // If both actual_str and expected_str are "" due to unwrap_or, what happens?
-                // The solidity compiler should have generated a valid json file, but it's
-                // probably better to force it to succeed.
-                let expected_str = serde_json::to_string(&contract_dfn["deployedBytecode"])?;
-                // The Stake code is linked against UintSet, so the expected code from
-                // contract_dfn is going to differ due to the linkage.
-                if false && actual_str != expected_str {
-                    // Why do we care if the version deployed might be slightly different
-                    // from the version which existed when this source file was compiled?
-                    // We don't have semantic versioning, so we don't know if the other
-                    // version supports exactly the same API as this code expects.
-                    warn!("actual_str:   {}", actual_str);
-                    warn!("expected_str: {}", expected_str);
-                    return Err(Error::new("Contract not deployed at specified address."));
-                }
-                let instance = Self {
-                    contract: Arc::new(Mutex::new(contract)),
-                    client: client,
-                    local_eth_address: local_eth_address,
-                };
+        let instance = Self {
+            contract: Arc::new(Mutex::new(contract)),
+            local_eth_address: local_eth_address,
+        };
 
-                Ok(instance)
-            });
-
-        ctor_future.wait()
+        Ok(instance)
     }
 }
 
