@@ -37,6 +37,7 @@ use ekiden_stake_base::{AmountType, StakeEscrowBackend};
 // applied to the blockchain in a non-determinstic order (if the tests were run in
 // "parallel" but competed for access via a mutex).
 pub struct TruffleTestEnv {
+    _environment: Arc<GrpcEnvironment>,  // dropping this causes the truffle grpcio to wedge
     pub truffle: Child,
     pub handle: web3::transports::EventLoopHandle,
     pub client: web3::api::Web3<web3::transports::WebSocket>,
@@ -82,6 +83,7 @@ impl TruffleTestEnv {
         };
 
         Ok(Self {
+            _environment: environment,
             truffle: truffle,
             handle: handle,
             client: client,
@@ -320,7 +322,7 @@ fn stake_erc20() {
     assert_eq!(total_supply, expected_total_supply);
 }
 
-// #[test]
+#[test]
 fn stake_escrow() {
     let ref mut guard = TTEW.lock().unwrap();
     let tte = TruffleTestEnv::new("Stake").unwrap();
