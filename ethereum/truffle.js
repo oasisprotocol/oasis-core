@@ -14,7 +14,7 @@ module.exports = {
     testnet: {
       provider: new HDWalletProvider(mnemonic, "http://localhost:8545/"),
       network_id: "*",
-      gas: 4712388,
+      gas: 4600000,
       gasPrice: 0
     }
   }
