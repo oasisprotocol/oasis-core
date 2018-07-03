@@ -1,11 +1,9 @@
 //! Computation group structures.
 use std::sync::{Arc, Mutex};
 
-use ekiden_common::futures::Sink;
 use ekiden_compute_api::{ComputationGroupClient, SubmitAggCommitRequest, SubmitAggRevealRequest,
                          SubmitBatchRequest};
 use ekiden_consensus_base::{Commitment, Reveal};
-use ekiden_core::bytes::B64;
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
@@ -18,7 +16,6 @@ use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_epochtime::interface::EpochTime;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
-use ekiden_storage_base::hash_storage_key;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_frontend::StorageClient;
 
@@ -227,7 +224,7 @@ impl ComputationGroup {
         let cur_epoch = epoch;
         trace!("Current epoch is {}", cur_epoch);
 
-        let cur_nodes = inner.entity_registry.get_nodes(cur_epoch);
+        let _cur_nodes = inner.entity_registry.get_nodes(cur_epoch);
         //      trace!("Current get_nodes list is {:?}", cur_nodes.wait().unwrap());
 
         let pre_nodes_handle: BoxFuture<Vec<Node>>;
@@ -271,7 +268,7 @@ impl ComputationGroup {
 
                     if epoch > 1 {
                         let pre_nodes_unwrap = pre_nodes_handle;
-                        let client = StorageClient::from_node(
+                        let _client = StorageClient::from_node(
                             &pre_nodes_unwrap[0].clone(),
                             inner.environment.clone(),
                             inner.identity.clone(),

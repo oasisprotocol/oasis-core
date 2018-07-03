@@ -53,12 +53,8 @@ extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::net::SocketAddr;
-use std::path::Path;
 
+use std::path::Path;
 use clap::{App, Arg};
 use log::LevelFilter;
 
@@ -71,9 +67,7 @@ use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
 use self::worker::WorkerConfiguration;
 
-use ekiden_common::futures::Future;
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_persistent::PersistentStorageBackend;
 
 /// Register known components for dependency injection.
