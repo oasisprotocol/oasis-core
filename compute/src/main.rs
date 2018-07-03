@@ -54,9 +54,9 @@ extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
-use std::path::Path;
 use clap::{App, Arg};
 use log::LevelFilter;
+use std::path::Path;
 
 use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
