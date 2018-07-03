@@ -6,9 +6,7 @@ fn main() {
         .arg("compile")
         .status()
         .expect("truffle failed to build");
-    if !status.success() {
-        panic!("truffle failed to build");
-    }
+    assert!(status.success());
 
     println!(
         "cargo:rerun-if-changed={}",
