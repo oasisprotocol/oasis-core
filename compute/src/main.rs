@@ -60,6 +60,7 @@ use log::LevelFilter;
 use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
 use ekiden_di::{Component, KnownComponents};
+use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
 use self::ias::{IASConfiguration, SPID};
@@ -221,6 +222,12 @@ fn main() {
     let mut container = known_components
         .build_with_arguments(&matches)
         .expect("failed to initialize component container");
+
+    // Initialize metric collector.
+    let metrics = container
+        .inject_owned::<MetricCollector>()
+        .expect("failed to inject MetricCollector");
+    set_boxed_metric_collector(metrics).unwrap();
 
     let environment = container.inject::<Environment>().unwrap();
 

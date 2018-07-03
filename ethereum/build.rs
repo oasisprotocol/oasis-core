@@ -2,10 +2,11 @@ use std::process::Command;
 
 fn main() {
     // Generate contracts.
-    Command::new("truffle")
+    let status = Command::new("truffle")
         .arg("compile")
         .status()
         .expect("truffle failed to build");
+    assert!(status.success());
 
     println!(
         "cargo:rerun-if-changed={}",
