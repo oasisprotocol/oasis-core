@@ -165,7 +165,7 @@ impl ComputeNode {
         let web3 =
             ekiden_compute_api::create_web3(Web3Service::new(worker, consensus_frontend.clone()));
         let inter_node = ekiden_compute_api::create_computation_group(
-            ComputationGroupService::new(consensus_frontend.clone()),
+            ComputationGroupService::new(consensus_frontend.clone(), computation_group.clone()),
         );
 
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())

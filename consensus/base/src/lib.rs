@@ -19,6 +19,7 @@ pub mod backend;
 pub mod block;
 pub mod commitment;
 pub mod header;
+pub mod network;
 pub mod service;
 
 pub use backend::*;

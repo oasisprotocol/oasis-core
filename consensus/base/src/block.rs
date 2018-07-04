@@ -9,7 +9,7 @@ use ekiden_scheduler_base::CommitteeNode;
 
 use ekiden_consensus_api as api;
 
-use super::commitment::Commitment;
+use super::commitment::Reveal;
 use super::header::Header;
 
 /// Block.
@@ -19,8 +19,8 @@ pub struct Block {
     pub header: Header,
     /// Designated computation group.
     pub computation_group: Vec<CommitteeNode>,
-    /// Commitments from compute nodes in the same order as in the computation group.
-    pub commitments: Vec<Option<Commitment>>,
+    /// Reveals from compute nodes in the same order as in the computation group.
+    pub reveals: Vec<Option<Reveal>>,
 }
 
 impl Block {
@@ -36,10 +36,10 @@ impl Block {
                 input_hash: H256::zero(),
                 output_hash: H256::zero(),
                 state_root: H256::zero(),
-                commitments_hash: H256::zero(),
+                reveals_hash: H256::zero(),
             },
             computation_group: vec![],
-            commitments: vec![],
+            reveals: vec![],
         };
 
         block.update();
@@ -49,17 +49,17 @@ impl Block {
     /// Update header based on current block content.
     pub fn update(&mut self) {
         self.header.group_hash = self.computation_group.get_encoded_hash();
-        self.header.commitments_hash = self.commitments.get_encoded_hash();
+        self.header.reveals_hash = self.reveals.get_encoded_hash();
     }
 
     /// Check if block is internally consistent.
     ///
     /// This checks the following:
     ///   * Computation group matches the hash in the header.
-    ///   * Commitments list matches the hash in the header.
+    ///   * Reveals list matches the hash in the header.
     pub fn is_internally_consistent(&self) -> bool {
         self.computation_group.get_encoded_hash() == self.header.group_hash
-            && self.commitments.get_encoded_hash() == self.header.commitments_hash
+            && self.reveals.get_encoded_hash() == self.header.reveals_hash
     }
 }
 
@@ -73,18 +73,18 @@ impl TryFrom<api::Block> for Block {
             computation.push(CommitteeNode::try_from(item.to_owned())?);
         }
 
-        let mut commits = Vec::new();
-        for item in a.get_commitments().iter() {
+        let mut reveals = Vec::new();
+        for item in a.get_reveals().iter() {
             if item.get_data().is_empty() {
-                commits.push(None);
+                reveals.push(None);
             } else {
-                commits.push(Some(Commitment::try_from(item.to_owned())?));
+                reveals.push(Some(Reveal::try_from(item.to_owned())?));
             }
         }
         Ok(Block {
             header: header,
             computation_group: computation,
-            commitments: commits,
+            reveals: reveals,
         })
     }
 }
@@ -101,14 +101,14 @@ impl Into<api::Block> for Block {
         }
         b.set_computation_group(groups.into());
 
-        let mut commits = Vec::new();
-        for item in self.commitments {
+        let mut reveals = Vec::new();
+        for item in self.reveals {
             match item {
-                Some(item) => commits.push(item.into()),
-                None => commits.push(api::Commitment::new()),
+                Some(item) => reveals.push(item.into()),
+                None => reveals.push(api::Reveal::new()),
             }
         }
-        b.set_commitments(commits.into());
+        b.set_reveals(reveals.into());
         b
     }
 }

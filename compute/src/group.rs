@@ -1,8 +1,8 @@
 //! Computation group structures.
 use std::sync::{Arc, Mutex};
 
-use ekiden_compute_api::{ComputationGroupClient, SubmitAggCommitRequest, SubmitAggRevealRequest,
-                         SubmitBatchRequest};
+use ekiden_compute_api as api;
+use ekiden_consensus_base::network::{ConsensusNetwork, Content, Message, Recipient};
 use ekiden_consensus_base::{Commitment, Reveal};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::environment::Environment;
@@ -29,6 +29,8 @@ enum Command {
     SubmitAggCommit(Commitment),
     /// Submit a reveal to the leader for aggregation.
     SubmitAggReveal(Reveal),
+    /// Submit consensus gossip.
+    SubmitConsensusGossip(Recipient, Content),
 }
 
 struct Inner {
@@ -39,7 +41,7 @@ struct Inner {
     /// Entity registry.
     entity_registry: Arc<EntityRegistryBackend>,
     /// Computation node group.
-    node_group: NodeGroup<ComputationGroupClient, CommitteeNode>,
+    node_group: NodeGroup<api::ComputationGroupClient, CommitteeNode>,
     /// Computation committee metadata.
     committee: Mutex<Vec<CommitteeNode>>,
     /// Compute node's public key.
@@ -56,6 +58,8 @@ struct Inner {
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
     /// Role subscribers.
     role_subscribers: StreamSubscribers<Option<Role>>,
+    /// Message subscribers.
+    message_subscribers: StreamSubscribers<Message>,
 }
 
 impl Inner {
@@ -101,6 +105,7 @@ impl ComputationGroup {
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
                 role_subscribers: StreamSubscribers::new(),
+                message_subscribers: StreamSubscribers::new(),
             }),
         };
         instance.start();
@@ -158,6 +163,9 @@ impl ComputationGroup {
                     }
                     Command::SubmitAggReveal(reveal) => {
                         Self::handle_submit_agg_reveal(inner.clone(), reveal)
+                    }
+                    Command::SubmitConsensusGossip(recipient, content) => {
+                        Self::handle_submit_consensus_gossip(inner.clone(), recipient, content)
                     }
                 },
             )
@@ -244,7 +252,7 @@ impl ComputationGroup {
                     for (node, committee_node) in nodes {
                         let channel =
                             node.connect(inner.environment.clone(), inner.identity.clone());
-                        let client = ComputationGroupClient::new(channel);
+                        let client = api::ComputationGroupClient::new(channel);
                         inner.node_group.add_node(client, committee_node);
                     }
 
@@ -292,7 +300,7 @@ impl ComputationGroup {
         trace!("Submitting batch to workers");
 
         // Submit batch.
-        let mut request = SubmitBatchRequest::new();
+        let mut request = api::SubmitBatchRequest::new();
         request.set_batch_hash(batch_hash.to_vec());
 
         inner
@@ -318,7 +326,7 @@ impl ComputationGroup {
         trace!("Submitting aggregate commit to leader");
 
         // Submit commit.
-        let mut request = SubmitAggCommitRequest::new();
+        let mut request = api::SubmitAggCommitRequest::new();
         request.set_commit(commit.into());
 
         inner
@@ -349,7 +357,7 @@ impl ComputationGroup {
         trace!("Submitting aggregate reveal to leader");
 
         // Submit reveal.
-        let mut request = SubmitAggRevealRequest::new();
+        let mut request = api::SubmitAggRevealRequest::new();
         request.set_reveal(reveal.into());
 
         inner
@@ -365,6 +373,41 @@ impl ComputationGroup {
                     if let Err(error) = result {
                         error!(
                             "Failed to submit aggregate reveal to node: {}",
+                            error.message
+                        );
+                    }
+                }
+
+                Ok(())
+            })
+            .into_box()
+    }
+
+    /// Handle submission of a consensus gossip message.
+    fn handle_submit_consensus_gossip(
+        inner: Arc<Inner>,
+        recipient: Recipient,
+        content: Content,
+    ) -> BoxFuture<()> {
+        // Prepare request.
+        let mut request = api::ConsensusGossipRequest::new();
+        request.set_content(content.into());
+
+        inner
+            .node_group
+            .call_filtered(
+                |_, node| match recipient {
+                    Recipient::Node(node_id) => node.public_key == node_id,
+                    Recipient::OnlyRole(role) => node.role == role,
+                    Recipient::AllNodes => true,
+                },
+                move |client, _| client.consensus_gossip_async(&request),
+            )
+            .and_then(|results| {
+                for result in results {
+                    if let Err(error) = result {
+                        error!(
+                            "Failed to submit consensus gossip to node: {}",
                             error.message
                         );
                     }
@@ -501,5 +544,38 @@ impl ComputationGroup {
     /// Check if the local node is a leader of the computation group.
     pub fn is_leader(&self) -> bool {
         self.get_role() == Some(Role::Leader)
+    }
+
+    /// Deliver incoming consensus gossip from network backend.
+    pub fn deliver_incoming_consensus_gossip(&self, message: Message) {
+        // Ensure that message comes from a committee member.
+        {
+            let committee = self.inner.committee.lock().unwrap();
+            if !committee
+                .iter()
+                .any(|node| node.public_key == message.sender)
+            {
+                warn!(
+                    "Dropping incoming message from non-committee member {:?}",
+                    message.sender
+                );
+                return;
+            }
+        }
+
+        self.inner.message_subscribers.notify(&message);
+    }
+}
+
+impl ConsensusNetwork for ComputationGroup {
+    fn watch_messages(&self) -> BoxStream<Message> {
+        self.inner.message_subscribers.subscribe().1
+    }
+
+    fn send(&self, recipient: Recipient, content: Content) {
+        self.inner
+            .command_sender
+            .unbounded_send(Command::SubmitConsensusGossip(recipient, content))
+            .unwrap();
     }
 }

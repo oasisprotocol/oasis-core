@@ -26,6 +26,7 @@ members = [
     "consensus/base",
     "consensus/client",
     "consensus/dummy",
+    "consensus/optimistic",
 
     # Storage interface.
     "storage/api",
