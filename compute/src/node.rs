@@ -1,8 +1,11 @@
 //! Compute node.
+extern crate ekiden_storage_api;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use grpcio;
 
+use self::ekiden_storage_api::create_storage;
 use ekiden_compute_api;
 use ekiden_consensus_base::{ConsensusBackend, ConsensusSigner};
 use ekiden_core::bytes::B256;
@@ -13,11 +16,13 @@ use ekiden_core::futures::Future;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
+use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
 use ekiden_scheduler_base::Scheduler;
 use ekiden_storage_base::BatchStorage;
+use ekiden_storage_base::{StorageBackend, StorageService};
 use ekiden_tools::get_contract_identity;
 
 use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
@@ -55,6 +60,8 @@ pub struct ComputeNodeConfiguration {
 
 /// Compute node.
 pub struct ComputeNode {
+    ///strorage
+    storage: Arc<StorageBackend>,
     /// gRPC server.
     server: grpcio::Server,
 }
@@ -69,6 +76,8 @@ impl ComputeNode {
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
         let scheduler = container.inject::<Scheduler>()?;
         let storage_backend = container.inject::<BatchStorage>()?;
+        let storage = container.inject::<StorageBackend>()?;
+        let storage_service = create_storage(StorageService::new(storage.clone()));
         let consensus_backend = container.inject::<ConsensusBackend>()?;
         let consensus_signer = container.inject::<ConsensusSigner>()?;
 
@@ -138,7 +147,6 @@ impl ComputeNode {
             environment.clone(),
             node_identity.clone(),
         ));
-
         // Create consensus frontend.
         let consensus_frontend = Arc::new(ConsensusFrontend::new(
             config.consensus,
@@ -159,6 +167,7 @@ impl ComputeNode {
         let inter_node = ekiden_compute_api::create_computation_group(
             ComputationGroupService::new(consensus_frontend.clone()),
         );
+
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
             .channel_args(
                 grpcio::ChannelBuilder::new(grpc_environment.clone())
@@ -168,6 +177,7 @@ impl ComputeNode {
             )
             .register_service(web3)
             .register_service(inter_node)
+            .register_service(storage_service)
             .bind_secure(
                 "0.0.0.0",
                 config.port,
@@ -182,7 +192,11 @@ impl ComputeNode {
             )
             .build()?;
 
-        Ok(Self { server })
+        // Initialize metric collector.
+        let metrics = container.inject_owned::<MetricCollector>()?;
+        set_boxed_metric_collector(metrics).unwrap();
+
+        Ok(Self { server, storage })
     }
 
     /// Start compute node.
