@@ -18,6 +18,27 @@ use ekiden_common::tokio::timer::Interval;
 pub const DEVELOPMENT_ADDRESS: &'static [u8] =
     b"\x62\x73\x06\x09\x0a\xba\xb3\xa6\xe1\x40\x0e\x93\x45\xbc\x60\xc7\x8a\x8b\xef\x57";
 
+// DevelopmentAddress -- caches all development addresses to which the web3 truffle
+// transport has access.
+pub struct DevelopmentAddress {
+    addresses: Vec<web3::types::H160>,
+}
+
+impl DevelopmentAddress {
+    pub fn new<T: web3::Transport>(client: &web3::api::Web3<T>) -> Result<Self, Error> {
+        Ok(Self {
+            addresses: client.eth().accounts().wait()?,
+        })
+    }
+
+    pub fn get_address(&self, ix: usize) -> Result<web3::types::H160, Error> {
+        if ix >= self.addresses.len() {
+            return Err(Error::new("No such address"));
+        }
+        Ok(self.addresses[ix].clone())
+    }
+}
+
 /// Start at truffle develop instance and return a handle for testing against.
 pub fn start_truffle(cwd: &str) -> Child {
     if env::var("EXTERNAL_BLOCKCHAIN").is_ok() {
