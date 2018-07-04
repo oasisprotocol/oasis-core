@@ -20,6 +20,9 @@ jobs:
           name: Checking if all Ekiden crates have the same version
           command: test `find . -name "Cargo.toml" -print0 | xargs -0 grep '^version = "' | cut -d'"' -f2 | sort | uniq | wc -l` == 1
 
+      # Install the NPM truffle dependencies
+      - run: cd ethereum && npm install
+
       # Cargo tests. Some tests are excluded as they currently don't compile.
       # Heuristic glob to detect what test binaries that cargo builds.
       # If that gets too janky, try `cargo test --message-format=json`
@@ -115,9 +118,16 @@ jobs:
           echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
       - run:
           name: Kubectl port forwarding
-          command: kubectl port-forward service/parity 9545:8545
+          command: kubectl port-forward service/parity 8545:8545
           background: true
-      - run: cd ethereum && cp -r /workspace/ethereum/build ./build && truffle migrate --reset | grep "ENV_" | ../docker/deployment/set-env.sh
+      - run: cd ethereum && npm install && cp -r /workspace/ethereum/build ./build
+      - run:
+          name: Drive Block Mining
+          command: cd ethereum && node test/web3.js http://localhost:8545/ 1000
+          background: true
+      - run: |
+          cd ethereum && truffle migrate --network=testnet --reset | grep "ENV_" | ../docker/deployment/set-env.sh
+          pkill node
 
       # Build deployment image.
       - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh

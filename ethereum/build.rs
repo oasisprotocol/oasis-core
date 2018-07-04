@@ -1,11 +1,19 @@
 use std::process::Command;
 
 fn main() {
+    // Ensure truffle dependencies are present.
+    let status = Command::new("npm")
+        .arg("install")
+        .status()
+        .expect("npm failed");
+    assert!(status.success());
+
     // Generate contracts.
-    Command::new("truffle")
+    let status = Command::new("truffle")
         .arg("compile")
         .status()
         .expect("truffle failed to build");
+    assert!(status.success());
 
     println!(
         "cargo:rerun-if-changed={}",
