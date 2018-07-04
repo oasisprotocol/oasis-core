@@ -25,7 +25,6 @@ run_compute_node() {
         --max-batch-size 20 \
         --max-batch-timeout 100 \
         --compute-replicas 1 \
-        --storage-backend persistent \
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --port ${port} \

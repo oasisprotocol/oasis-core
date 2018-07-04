@@ -144,7 +144,6 @@ impl DummySchedulerBackendInner {
         let epoch = self.current_epoch;
         let entropy = self.beacon_cache.get(&epoch).unwrap();
         let nodes = self.entity_cache.get(&epoch).unwrap();
-
         let compute = make_committee_impl(
             contract.clone(),
             &nodes,
