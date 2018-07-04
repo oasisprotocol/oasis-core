@@ -18,7 +18,7 @@ use ekiden_storage_persistent::PersistentStorageBackend;
 
 #[test]
 fn test_persistent_backend() {
-    let db_path = Path::new("./db/");
+    let db_path = Path::new("./test-db/");
     let backend = PersistentStorageBackend::new(db_path);
     assert!(!backend.is_err());
     let backend = backend.unwrap();
@@ -35,7 +35,7 @@ fn test_persistent_backend() {
 fn bench_persistent_speed(b: &mut Bencher) {
     use ekiden_storage_base::StorageBackend;
 
-    let db_path = Path::new("./db/");
+    let db_path = Path::new("./test-db/");
     let backend = PersistentStorageBackend::new(db_path);
     assert!(!backend.is_err());
     let backend = backend.unwrap();
