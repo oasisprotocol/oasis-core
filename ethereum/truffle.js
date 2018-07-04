@@ -13,7 +13,7 @@ module.exports = {
     },
     testnet: {
       provider: function () {
-        return new HDWalletProvider(mnemonic, "http://localhost:8545/")
+        return new HDWalletProvider(mnemonic, "http://localhost:8545/");
       },
       network_id: "*",
       gas: 4600000,
