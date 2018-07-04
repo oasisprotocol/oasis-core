@@ -49,7 +49,8 @@ const deploy = async function (deployer, network) {
             "EntityRegistryMock": instance_addrs[3],
             "ContractRegistryOasis": instance_addrs[4],
             "ContractRegistryMock": instance_addrs[5],
-            "MockEpoch": MockEpoch.address
+            "MockEpoch": MockEpoch.address,
+            "Stake": Stake.address,
         };
         console.log("CONTRACT_ADDRESSES: " + JSON.stringify(addrs));
         Object.keys(addrs).forEach(function (key) {
