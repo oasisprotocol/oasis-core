@@ -12,7 +12,9 @@ module.exports = {
       gasPrice: 0
     },
     testnet: {
-      provider: new HDWalletProvider(mnemonic, "http://localhost:8545/"),
+      provider: function () {
+        return new HDWalletProvider(mnemonic, "http://localhost:8545/")
+      },
       network_id: "*",
       gas: 4600000,
       gasPrice: 0
