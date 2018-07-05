@@ -6,6 +6,7 @@ var ContractRegistry = artifacts.require("./ContractRegistry.sol")
 var EntityRegistry = artifacts.require("./EntityRegistry.sol");
 var UintSet = artifacts.require("./UintSet.sol");
 var Stake = artifacts.require("./Stake.sol");
+var DisputeResolution = artifacts.require("./DisputeResolution");
 
 const deploy = async function (deployer, network) {
     if (network == "test") {
@@ -20,6 +21,7 @@ const deploy = async function (deployer, network) {
         await deployer.deploy(UintSet);
         await deployer.link(UintSet, Stake);
         await deployer.deploy(Stake, 1, "EkidenStake", "E$");
+        await deployer.deploy(DisputeResolution);
     } else {
         // truffle does not really support deploying more than 1 instance
         // of a given contract all that well yet, so this uses a nasty kludge
@@ -34,6 +36,7 @@ const deploy = async function (deployer, network) {
             instance.oasis_contract_registry.call(),
             instance.mock_contract_registry.call()
         ]);
+        await deployer.deploy(DisputeResolution);
 
         // Stake
         await deployer.deploy(UintSet);
@@ -51,6 +54,7 @@ const deploy = async function (deployer, network) {
             "ContractRegistryMock": instance_addrs[5],
             "MockEpoch": MockEpoch.address,
             "Stake": Stake.address,
+            "DisputeResolution": DisputeResolution.address
         };
         console.log("CONTRACT_ADDRESSES: " + JSON.stringify(addrs));
         Object.keys(addrs).forEach(function (key) {
