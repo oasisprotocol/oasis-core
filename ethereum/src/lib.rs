@@ -8,6 +8,8 @@ extern crate ekiden_common;
 #[macro_use]
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
+#[macro_use]
+extern crate ekiden_instrumentation;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_dummy;
 extern crate ekiden_stake_base;
