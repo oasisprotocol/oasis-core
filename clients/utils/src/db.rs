@@ -9,7 +9,6 @@ use ekiden_core::bytes::B256;
 use ekiden_core::bytes::H256;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
-use ekiden_core::futures::future::Either;
 use ekiden_core::futures::Future;
 use ekiden_core::futures::Stream;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
@@ -56,8 +55,8 @@ pub struct Manager {
     root_hash: Arc<Mutex<Option<H256>>>,
     /// The storage mapper that we give to snapshots.
     mapper: Arc<StorageMapper>,
-    /// This kills our consensus follower task when when we drop the manager.
-    _drop_tx: ekiden_core::futures::sync::oneshot::Sender<()>,
+    /// For killing our consensus follower task.
+    blocks_kill_handle: ekiden_core::futures::KillHandle,
 }
 
 impl Manager {
@@ -68,40 +67,34 @@ impl Manager {
         mapper: Arc<StorageMapper>,
     ) -> Self {
         let root_hash = Arc::new(Mutex::new(None));
-        let (drop_tx, drop_rx) = ekiden_core::futures::sync::oneshot::channel();
-        let manager = Self {
-            root_hash: root_hash.clone(),
+        let root_hash_2 = root_hash.clone();
+        let (watch_blocks, blocks_kill_handle) = ekiden_core::futures::killable(
+            consensus.get_blocks(contract_id).for_each(move |block| {
+                let mut guard = root_hash.lock().unwrap();
+                *guard = Some(block.header.state_root);
+                Ok(())
+            }),
+        );
+        env.spawn(Box::new(watch_blocks.then(|r| {
+            match r {
+                // Block stream ended.
+                Ok(Ok(())) => {
+                    warn!("manager block stream ended");
+                }
+                // Kill handle dropped.
+                Ok(Err(_ /* ekiden_core::futures::killable::Killed */)) => {}
+                // Block stream errored.
+                Err(e) => {
+                    error!("manager block stream error: {}", e);
+                }
+            }
+            Ok(())
+        })));
+        Self {
+            root_hash: root_hash_2,
             mapper,
-            _drop_tx: drop_tx,
-        };
-        env.spawn(Box::new(
-            consensus
-                .get_blocks(contract_id)
-                .for_each(move |block| {
-                    let mut guard = root_hash.lock().unwrap();
-                    *guard = Some(block.header.state_root);
-                    Ok(())
-                })
-                .select2(drop_rx)
-                .then(|r| {
-                    match r {
-                        // Block stream ended.
-                        Ok(Either::A(((), _))) => {
-                            warn!("manager block stream ended");
-                        }
-                        // Drop channel resolved.
-                        Ok(Either::B(((), _))) => unreachable!(),
-                        // Block stream errored.
-                        Err(Either::A((e, _))) => {
-                            error!("manager block stream error: {}", e);
-                        }
-                        // Drop channel canceled.
-                        Err(Either::B((ekiden_core::futures::Canceled, _))) => {}
-                    }
-                    Ok(())
-                }),
-        ));
-        manager
+            blocks_kill_handle,
+        }
     }
 
     /// Make a `Manager` from an injected `ConsensusBackend` and an identity map over an injected
@@ -124,6 +117,12 @@ impl Manager {
             root_hash: self.root_hash.lock().unwrap().clone(),
             trie: PatriciaTrie::new(self.mapper.clone()),
         }
+    }
+}
+
+impl Drop for Manager {
+    fn drop(&mut self) {
+        self.blocks_kill_handle.kill();
     }
 }
 
