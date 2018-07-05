@@ -5,6 +5,7 @@ use std::sync::{Mutex, MutexGuard};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_common::hash::empty_hash;
+use ekiden_storage_base::mapper::BackendIdentityMapper;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_storage_dummy::DummyStorageBackend;
 use ekiden_storage_lru::LruCacheStorageBackend;
@@ -41,12 +42,14 @@ impl DatabaseHandle {
         let backend = Arc::new(DummyStorageBackend::new());
         #[cfg(target_env = "sgx")]
         let backend = Arc::new(UntrustedStorageBackend::new());
+        let cached_backend = Arc::new(LruCacheStorageBackend::new(
+            backend,
+            Self::STORAGE_CACHE_SIZE,
+        ));
+        let mapper = Arc::new(BackendIdentityMapper::new(cached_backend));
 
         DatabaseHandle {
-            state: PatriciaTrie::new(Arc::new(LruCacheStorageBackend::new(
-                backend,
-                Self::STORAGE_CACHE_SIZE,
-            ))),
+            state: PatriciaTrie::new(mapper),
             root_hash: None,
         }
     }
