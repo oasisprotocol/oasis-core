@@ -1,4 +1,5 @@
 //! DI components for use in clients.
+use ekiden_consensus_client;
 use ekiden_core;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_epochtime;
@@ -6,6 +7,7 @@ use ekiden_ethereum;
 use ekiden_instrumentation_prometheus;
 use ekiden_registry_client;
 use ekiden_scheduler_client;
+use ekiden_storage_frontend;
 
 /// Register known components for dependency injection.
 pub fn register_components(known_components: &mut KnownComponents) {
@@ -26,6 +28,10 @@ pub fn register_components(known_components: &mut KnownComponents) {
     ekiden_scheduler_client::SchedulerClient::register(known_components);
     // Entity registry.
     ekiden_registry_client::EntityRegistryClient::register(known_components);
+    // Consensus.
+    ekiden_consensus_client::ConsensusClient::register(known_components);
+    // Storage.
+    ekiden_storage_frontend::StorageClient::register(known_components);
 }
 
 /// Create known component registry.

@@ -604,6 +604,7 @@ mod test {
 
     use self::test::Bencher;
 
+    use ekiden_storage_base::BackendIdentityMapper;
     use ekiden_storage_dummy::DummyStorageBackend;
 
     use super::*;
@@ -611,7 +612,8 @@ mod test {
     #[test]
     fn test_basic_ops() {
         let storage = Arc::new(DummyStorageBackend::new());
-        let tree = PatriciaTrie::new(storage);
+        let mapper = Arc::new(BackendIdentityMapper::new(storage));
+        let tree = PatriciaTrie::new(mapper);
 
         assert_eq!(tree.get(None, b"foo"), None);
         let new_root = tree.insert(None, b"foo", b"bar");
@@ -683,7 +685,8 @@ mod test {
     #[test]
     fn test_feather() {
         let storage = Arc::new(DummyStorageBackend::new());
-        let tree = PatriciaTrie::new(storage);
+        let mapper = Arc::new(BackendIdentityMapper::new(storage));
+        let tree = PatriciaTrie::new(mapper);
         let mut root_hash = None;
         let mut key_buf = *b"\x83gStateDbhaccountsx(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let val = b"don't embed don't embed don't embed don't embed don't embed";
@@ -702,7 +705,8 @@ mod test {
     #[bench]
     fn bench_feather(b: &mut Bencher) {
         let storage = Arc::new(DummyStorageBackend::new());
-        let tree = PatriciaTrie::new(storage);
+        let mapper = Arc::new(BackendIdentityMapper::new(storage));
+        let tree = PatriciaTrie::new(mapper);
         let mut root_hash = None;
         let mut key_buf = *b"\x83gStateDbhaccountsx(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let val = b"don't embed don't embed don't embed don't embed don't embed";
