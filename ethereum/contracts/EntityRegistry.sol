@@ -12,8 +12,8 @@ contract EntityRegistry {
     Stake stake_source;
 
     address[] public nodes;
-    // The reverse-map into nodes, to allow for efficient deletion.
-    // Note: one-indexed, because 0-values are the same as unset.
+    // The reverse-map into nodes, to support efficient deletion.
+    // Note: stores (index+1), because nodes is 0-indexed, but 0 is special.
     mapping(address => uint64) node_idxs;
 
     constructor(address epoch_addr, address stake_addr) public {
@@ -23,6 +23,10 @@ contract EntityRegistry {
 
     function() public {
         revert();
+    }
+
+    function is_registered(address node) public view returns (bool member_) {
+        member_ = (node_idxs[node] != 0);
     }
 
     function register(bytes32 id) public {
@@ -39,9 +43,9 @@ contract EntityRegistry {
         uint64 offset = node_idxs[msg.sender];
         if (offset != 0) {
             nodes[offset - 1] = nodes[nodes.length - 1];
+            node_idxs[nodes[offset - 1]] = offset;
             delete nodes[nodes.length - 1];
             nodes.length--;
-            node_idxs[nodes[offset - 1]] = offset;
             node_idxs[msg.sender] = 0;
         }
         emit Dereg(msg.sender, id, epoch);
