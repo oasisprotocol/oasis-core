@@ -1,4 +1,6 @@
 //! Storage mapper interface.
+use std::sync::Arc;
+
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_common::futures::{future, BoxFuture, Future};
@@ -62,9 +64,20 @@ pub trait StorageMapper: Sync + Send {
     }
 }
 
-// Each storage backend trivially implements the storage mapper interface.
-impl<T: StorageBackend> StorageMapper for T {
+/// An "identity" mapper, which forwards operations to a shared storage backend without altering
+/// the content.
+pub struct BackendIdentityMapper {
+    backend: Arc<StorageBackend>,
+}
+
+impl BackendIdentityMapper {
+    pub fn new(backend: Arc<StorageBackend>) -> Self {
+        Self { backend }
+    }
+}
+
+impl StorageMapper for BackendIdentityMapper {
     fn backend(&self) -> &StorageBackend {
-        self
+        self.backend.as_ref()
     }
 }

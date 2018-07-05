@@ -27,16 +27,18 @@ fn test_dummy_backend() {
 
 #[test]
 fn test_dummy_storage_mapper() {
+    use std::sync::Arc;
     // Import the StorageMapper trait to use the mapper get/insert.
-    use ekiden_storage_base::StorageMapper;
+    use ekiden_storage_base::{BackendIdentityMapper, StorageMapper};
 
-    let backend = DummyStorageBackend::new();
+    let backend = Arc::new(DummyStorageBackend::new());
+    let mapper = BackendIdentityMapper::new(backend);
     let key = hash_storage_key(b"value");
 
-    assert!(backend.get(key).wait().is_err());
-    let key_result = backend.insert(b"value".to_vec(), 10).wait().unwrap();
+    assert!(mapper.get(key).wait().is_err());
+    let key_result = mapper.insert(b"value".to_vec(), 10).wait().unwrap();
     assert_eq!(key, key_result);
-    assert_eq!(backend.get(key).wait(), Ok(b"value".to_vec()));
+    assert_eq!(mapper.get(key).wait(), Ok(b"value".to_vec()));
 }
 
 #[bench]
