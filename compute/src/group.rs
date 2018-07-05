@@ -227,10 +227,11 @@ impl ComputationGroup {
         let _cur_nodes = inner.entity_registry.get_nodes(cur_epoch);
 
         let pre_nodes_handle: BoxFuture<Vec<Node>>;
-        let mut pre_epoch = 1;
-        if epoch > 1 {
-            pre_epoch = epoch - 1;
-        }
+        let pre_epoch = if epoch > 1 {
+            epoch - 1
+        } else {
+            1
+        };
         trace!("Previous epoch is {}", pre_epoch);
 
         pre_nodes_handle = inner.entity_registry.get_nodes(pre_epoch);

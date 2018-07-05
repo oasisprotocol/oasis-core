@@ -81,7 +81,7 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_storage_frontend::ImmediateClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
     ekiden_storage_frontend::StorageClient::register(known_components);
-    //Storage persistent.
+    // Storage persistent.
     ekiden_storage_persistent::PersistentStorageBackend::register(known_components);
     // Consensus.
     ekiden_consensus_client::ConsensusClient::register(known_components);
