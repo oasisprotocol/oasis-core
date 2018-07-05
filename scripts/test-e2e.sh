@@ -36,7 +36,8 @@ run_compute_node() {
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage immediate_remote \
-        --port ${port} \
+	--storage-backend persistent \
+	--port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
@@ -59,6 +60,7 @@ run_compute_node_storage_multilayer() {
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage multilayer \
+	--storage-backend persistent \
         --storage-multilayer-sled-storage-base "$db_dir" \
         --storage-multilayer-bottom-backend dynamodb \
         --storage-multilayer-aws-region us-west-2 \
@@ -86,6 +88,7 @@ run_compute_node_storage_multilayer_remote() {
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage multilayer \
+	--storage-backend persistent \
         --storage-multilayer-sled-storage-base "$db_dir" \
         --storage-multilayer-bottom-backend remote \
         --port ${port} \

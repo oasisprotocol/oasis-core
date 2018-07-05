@@ -34,7 +34,8 @@ run_compute_node() {
         --no-persist-identity \
         --max-batch-size 1 \
         --compute-replicas 2 \
-        --time-source-notifier ethereum \
+	--storage-backend persistent \
+	--time-source-notifier ethereum \
         --beacon-address ${ENV_RandomBeaconMock} \
         --entity-ethereum-address ${etherid} \
         --web3-host "ws://127.0.0.1:9545" \
