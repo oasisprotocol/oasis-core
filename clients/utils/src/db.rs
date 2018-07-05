@@ -3,16 +3,15 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use futures;
-use futures::future::Either;
-use futures::Future;
-use futures::Stream;
-
-use ekiden_common::bytes::B256;
-use ekiden_common::bytes::H256;
-use ekiden_common::environment::Environment;
-use ekiden_common::error::Result;
 use ekiden_consensus_base::ConsensusBackend;
+use ekiden_core;
+use ekiden_core::bytes::B256;
+use ekiden_core::bytes::H256;
+use ekiden_core::environment::Environment;
+use ekiden_core::error::Result;
+use ekiden_core::futures::future::Either;
+use ekiden_core::futures::Future;
+use ekiden_core::futures::Stream;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::Database;
 use ekiden_di::Container;
@@ -58,7 +57,7 @@ pub struct Manager {
     /// The storage mapper that we give to snapshots.
     mapper: Arc<StorageMapper>,
     /// This kills our consensus follower task when when we drop the manager.
-    _drop_tx: futures::sync::oneshot::Sender<()>,
+    _drop_tx: ekiden_core::futures::sync::oneshot::Sender<()>,
 }
 
 impl Manager {
@@ -69,7 +68,7 @@ impl Manager {
         mapper: Arc<StorageMapper>,
     ) -> Self {
         let root_hash = Arc::new(Mutex::new(None));
-        let (drop_tx, drop_rx) = futures::sync::oneshot::channel();
+        let (drop_tx, drop_rx) = ekiden_core::futures::sync::oneshot::channel();
         let manager = Self {
             root_hash: root_hash.clone(),
             mapper,
@@ -97,7 +96,7 @@ impl Manager {
                             error!("manager block stream error: {}", e);
                         }
                         // Drop channel canceled.
-                        Err(Either::B((futures::Canceled, _))) => {}
+                        Err(Either::B((ekiden_core::futures::Canceled, _))) => {}
                     }
                     Ok(())
                 }),
@@ -135,20 +134,20 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    use futures;
-    use futures::Stream;
     extern crate grpcio;
 
-    use ekiden_common::bytes::B256;
-    use ekiden_common::environment::GrpcEnvironment;
-    use ekiden_common::futures::BoxFuture;
-    use ekiden_common::futures::BoxStream;
     use ekiden_consensus_base::backend::ConsensusBackend;
     use ekiden_consensus_base::backend::Event;
     use ekiden_consensus_base::block::Block;
     use ekiden_consensus_base::commitment::Commitment;
     use ekiden_consensus_base::commitment::Reveal;
     use ekiden_consensus_base::header::Header;
+    use ekiden_core;
+    use ekiden_core::bytes::B256;
+    use ekiden_core::environment::GrpcEnvironment;
+    use ekiden_core::futures::BoxFuture;
+    use ekiden_core::futures::BoxStream;
+    use ekiden_core::futures::Stream;
     use ekiden_db_trusted::patricia_trie::PatriciaTrie;
     use ekiden_db_trusted::Database;
     use ekiden_storage_base::mapper::BackendIdentityMapper;
@@ -157,7 +156,7 @@ mod tests {
 
     /// A ConsensusBackend that adapts a simple `Block` stream.
     struct MockConsensus {
-        blocks_rx: Mutex<Option<futures::sync::mpsc::UnboundedReceiver<Block>>>,
+        blocks_rx: Mutex<Option<ekiden_core::futures::sync::mpsc::UnboundedReceiver<Block>>>,
     }
 
     impl ConsensusBackend for MockConsensus {
@@ -199,7 +198,7 @@ mod tests {
         let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
         let contract_id = B256::from(*b"dummy contract------------------");
         let storage = Arc::new(DummyStorageBackend::new());
-        let (blocks_tx, blocks_rx) = futures::sync::mpsc::unbounded();
+        let (blocks_tx, blocks_rx) = ekiden_core::futures::sync::mpsc::unbounded();
         let consensus = Arc::new(MockConsensus {
             blocks_rx: Mutex::new(Some(blocks_rx)),
         });

@@ -14,7 +14,6 @@ threadpool = { version = "1.7.1", optional = true }
 time = { version = "0.1", optional = true }
 histogram = { version = "0.6.8", optional = true }
 grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
-ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha" }
 ekiden-consensus-client = { path = "../../consensus/client", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
@@ -30,10 +29,8 @@ ekiden-storage-frontend = { path = "../../storage/frontend", version = "0.2.0-al
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 ekiden-registry-client = { path = "../../registry/client", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../../rpc/client", version = "0.2.0-alpha" }
-futures = "0.1"
 pretty_env_logger = "0.2"
 log = "0.4"
-tokio = "0.1.7"
 
 [dev-dependencies]
 ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.2.0-alpha" }

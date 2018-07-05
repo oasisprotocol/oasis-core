@@ -1,4 +1,3 @@
-extern crate futures;
 #[cfg(feature = "benchmark")]
 extern crate histogram;
 #[macro_use]
@@ -8,9 +7,7 @@ extern crate pretty_env_logger;
 extern crate threadpool;
 #[cfg(feature = "benchmark")]
 extern crate time;
-extern crate tokio;
 
-extern crate ekiden_common;
 extern crate ekiden_consensus_base;
 extern crate ekiden_consensus_client;
 extern crate ekiden_core;
