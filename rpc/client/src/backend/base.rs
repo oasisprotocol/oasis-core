@@ -17,6 +17,7 @@ pub trait RpcClientBackend: Send + Sync {
     fn call_raw(&self, request: Vec<u8>) -> ClientFuture<Vec<u8>>;
 
     /// Wait for given contract call outputs to become available.
+    /// Deprecated: We're moving this functionality into the client.
     fn wait_contract_call(&self, call_id: H256) -> ClientFuture<Vec<u8>>;
 
     /// Get credentials.
