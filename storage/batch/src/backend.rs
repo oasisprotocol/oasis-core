@@ -53,7 +53,7 @@ impl BatchStorageBackend {
             std::mem::replace(&mut *inserts, vec![])
         };
 
-        println!("committed key-expire is: {:?}",inserts);
+        println!("committed key-expire is: {:?}", inserts);
         // Iterate over log and insert all values, with retry.
         let retries = self.inner.retries;
         let always_available = self.inner.always_available.clone();
@@ -97,6 +97,7 @@ impl StorageBackend for BatchStorageBackend {
             .insert(value, expiry)
             .and_then(move |_| {
                 let mut inserts = inner.inserts.lock().unwrap();
+                println!("Key list is: {:?}", inserts);
                 inserts.push((key, expiry));
                 Ok(())
             })
@@ -106,7 +107,7 @@ impl StorageBackend for BatchStorageBackend {
     fn get_key_list(&self, expiry: u64) {
         let inner = self.inner.clone();
         let inserts = inner.inserts.lock().unwrap();
-        println!("Key list is: {:?}",inserts);
+        println!("Key list is: {:?}", inserts);
         println!("Return Key List");
     }
 }

@@ -237,7 +237,7 @@ impl StorageBackend for MultilayerBackend {
         Box::new(futures::future::ok(()))
     }
 
-    fn get_key_list(&self, expiry: u64){
+    fn get_key_list(&self, expiry: u64) {
         println!("Return Key List");
     }
 }

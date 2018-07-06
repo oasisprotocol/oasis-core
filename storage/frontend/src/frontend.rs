@@ -147,7 +147,7 @@ impl StorageBackend for StorageFrontend {
         )
     }
 
-    fn get_key_list(&self, expiry: u64){
+    fn get_key_list(&self, expiry: u64) {
         println!("Return Key List");
     }
 }

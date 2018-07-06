@@ -53,8 +53,8 @@ impl StorageBackend for DummyStorageBackend {
             Ok(())
         }))
     }
-    
-    fn get_key_list(&self, expiry: u64){
+
+    fn get_key_list(&self, expiry: u64) {
         println!("Return Key List");
     }
 }

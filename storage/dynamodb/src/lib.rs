@@ -144,10 +144,9 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
         }))
     }
 
-    fn get_key_list(&self, expiry: u64){
+    fn get_key_list(&self, expiry: u64) {
         println!("Return Key List");
     }
-
 }
 
 fn di_factory(

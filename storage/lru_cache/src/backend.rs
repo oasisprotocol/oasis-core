@@ -76,7 +76,7 @@ impl StorageBackend for LruCacheStorageBackend {
             .into_box()
     }
 
-    fn get_key_list(&self, expiry: u64){
+    fn get_key_list(&self, expiry: u64) {
         println!("Return Key List");
     }
 }

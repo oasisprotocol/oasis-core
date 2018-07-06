@@ -56,10 +56,9 @@ impl StorageBackend for StorageClient {
         }
     }
 
-    fn get_key_list(&self, expiry: u64){
+    fn get_key_list(&self, expiry: u64) {
         println!("Return Key List");
     }
-
 }
 
 // Register for dependency injection.
@@ -115,6 +114,10 @@ impl StorageBackend for ImmediateClient {
 
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         self.0.insert(value, expiry)
+    }
+
+    fn get_key_list(&self, expiry: u64) {
+        println!("Return Key List");
     }
 }
 
