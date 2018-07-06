@@ -141,6 +141,7 @@ where
             let sender = sender.clone();
             let (epoch, _) = notify;
             let current_block = beacon.get_block_for_epoch(epoch).unwrap();
+            // TODO: replace catchup of all blocks with state of contract.
             let filter = web3::types::FilterBuilder::default()
                 .from_block(BlockNumber::Number(last_block))
                 .to_block(BlockNumber::Number(current_block - 1))
@@ -197,6 +198,7 @@ where
         debug!("Log Received: {:?}", log);
         match format!("0x{:#x}", log.topics[0]).as_str() {
             ENTITY_EVENT_HASH => {
+                measure_counter_inc!("entity_log", 1);
                 //let eth_address = log.topics[1];
                 let storage_hash = log.topics[2];
                 storage
@@ -213,6 +215,7 @@ where
                     .into_box()
             }
             DEREG_EVENT_HASH => {
+                measure_counter_inc!("entity_log", -1);
                 let storage_hash = log.topics[2];
                 storage
                     .get(bytes::H256(storage_hash.0))
@@ -226,6 +229,7 @@ where
                     .into_box()
             }
             NODE_EVENT_HASH => {
+                measure_counter_inc!("node_log", 1);
                 let storage_hash = log.topics[2];
                 storage
                     .get(bytes::H256(storage_hash.0))
