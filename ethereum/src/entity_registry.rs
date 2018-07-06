@@ -1,6 +1,7 @@
 //! Ekiden ethereum registry backend.
 use std::error::Error as StdError;
 use std::mem;
+use std::result::Result as StdResult;
 use std::sync::{Arc, Mutex};
 
 use ekiden_beacon_base::RandomBeacon;
@@ -10,8 +11,10 @@ use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, FutureExt, Stream};
+use ekiden_common::identity::EntityIdentity;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
+use ekiden_di;
 use ekiden_epochtime::interface::EpochTime;
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_registry_base::*;
@@ -401,3 +404,38 @@ where
         cache.watch_node_list()
     }
 }
+
+pub type EthereumEntityRegistryViaWebsocket =
+    EthereumEntityRegistryBackend<web3::transports::WebSocket>;
+create_component!(
+    ethereum,
+    "entity-registry-backend",
+    EthereumEntityRegistryViaWebsocket,
+    EntityRegistryBackend,
+    (|container: &mut Container| -> StdResult<Box<Any>, ekiden_di::error::Error> {
+        let environment = container.inject()?;
+        let client = container.inject::<Web3<web3::transports::WebSocket>>()?;
+        let local_identity = container.inject::<EntityIdentity>()?;
+        let storage = container.inject::<StorageBackend>()?;
+        let beacon = container.inject::<RandomBeacon>()?;
+
+        let args = container.get_arguments().unwrap();
+        let contract_address = value_t_or_exit!(args, "entity-registry-address", H160);
+
+        let instance: Arc<EntityRegistryBackend> =
+            Arc::new(EthereumEntityRegistryBackend::new(
+                client,
+                Arc::new(local_identity.get_entity()),
+                contract_address,
+                storage,
+                beacon,
+                environment,
+            ).map_err(|e| ekiden_di::error::Error::from(e.description()))?);
+        Ok(Box::new(instance))
+    }),
+    [Arg::with_name("entity-registry-address")
+        .long("entity-registry-address")
+        .env("ENV_EntityRegistryOasis")
+        .help("Ethereum address at which the entity registry has been deployed")
+        .takes_value(true)]
+);
