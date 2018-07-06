@@ -75,6 +75,8 @@ macro_rules! contract_client {
             $container.inject().unwrap(),
             $container.inject().unwrap(),
             $signer,
+            $container.inject().unwrap(),
+            $container.inject().unwrap(),
         )
     }};
     ($signer:ident, $contract:ident) => {{
