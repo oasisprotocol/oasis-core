@@ -13,11 +13,11 @@ contract ContractDeployer {
     address public oasis_contract_registry;
     address public mock_contract_registry;
 
-    constructor(address oasis_addr, address mock_addr) public {
+    constructor(address oasis_addr, address mock_addr, address stake_addr) public {
         oasis_beacon = new RandomBeacon(oasis_addr);
         mock_beacon = new RandomBeacon(mock_addr);
-        oasis_entity_registry = new EntityRegistry(oasis_addr);
-        mock_entity_registry = new EntityRegistry(mock_addr);
+        oasis_entity_registry = new EntityRegistry(oasis_addr, stake_addr);
+        mock_entity_registry = new EntityRegistry(mock_addr, stake_addr);
         oasis_contract_registry = new ContractRegistry(oasis_addr);
         mock_contract_registry = new ContractRegistry(mock_addr);
     }

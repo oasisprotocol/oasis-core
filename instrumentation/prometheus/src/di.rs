@@ -33,7 +33,13 @@ create_component!(
                         let interval = value_t!(args, "prometheus-push-interval", u64).unwrap_or(5);
                         let job = value_t!(args, "prometheus-push-job-name", String).unwrap();
                         let instance = value_t!(args, "prometheus-push-instance-label", String).unwrap();
-                        push::start(environment, address, Duration::from_secs(interval), job, instance);
+                        push::start(
+                            environment,
+                            address,
+                            Duration::from_secs(interval),
+                            job,
+                            instance,
+                        );
                     }
                 }
                 _ => (),
