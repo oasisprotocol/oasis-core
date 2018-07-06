@@ -11,6 +11,8 @@ pub trait StorageBackend: Sync + Send {
     /// Store a specific value into storage. It can be later retrieved by its hash.
     /// Expiry represents a number of Epochs for which the value should remain available.
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()>;
+
+    fn get_key_list(&self,expiry: u64);
 }
 
 /// The hash algorithm used to generate a key from a value.

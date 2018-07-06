@@ -53,6 +53,7 @@ impl BatchStorageBackend {
             std::mem::replace(&mut *inserts, vec![])
         };
 
+        println!("committed key-expire is: {:?}",inserts);
         // Iterate over log and insert all values, with retry.
         let retries = self.inner.retries;
         let always_available = self.inner.always_available.clone();
@@ -101,6 +102,13 @@ impl StorageBackend for BatchStorageBackend {
             })
             .into_box()
     }
+
+    fn get_key_list(&self, expiry: u64) {
+        let inner = self.inner.clone();
+        let inserts = inner.inserts.lock().unwrap();
+        println!("Key list is: {:?}",inserts);
+        println!("Return Key List");
+    }
 }
 
 #[cfg(test)]
@@ -125,6 +133,9 @@ mod test {
         // Commit.
         batch.commit().wait().unwrap();
         assert_eq!(committed.get(key).wait(), Ok(b"value".to_vec()));
+
+        // Get key list.
+        committed.get_key_list(10);
 
         // Insert directly to committed and expect the backend to find it.
         let key = hash_storage_key(b"another");

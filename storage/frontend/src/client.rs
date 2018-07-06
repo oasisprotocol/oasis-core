@@ -55,6 +55,11 @@ impl StorageBackend for StorageClient {
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
     }
+
+    fn get_key_list(&self, expiry: u64){
+        println!("Return Key List");
+    }
+
 }
 
 // Register for dependency injection.

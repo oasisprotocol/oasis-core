@@ -143,6 +143,11 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
             Err(e) => Err(e.into()),
         }))
     }
+
+    fn get_key_list(&self, expiry: u64){
+        println!("Return Key List");
+    }
+
 }
 
 fn di_factory(
