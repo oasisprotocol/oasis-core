@@ -8,6 +8,8 @@ extern crate ekiden_common;
 #[macro_use]
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
+#[macro_use]
+extern crate ekiden_instrumentation;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_dummy;
 extern crate ekiden_stake_base;
@@ -38,6 +40,6 @@ pub mod web3_di;
 
 pub use beacon::{EthereumRandomBeacon, EthereumRandomBeaconViaWebsocket};
 pub use contract_registry::EthereumContractRegistryBackend;
-pub use entity_registry::EthereumEntityRegistryBackend;
+pub use entity_registry::{EthereumEntityRegistryBackend, EthereumEntityRegistryViaWebsocket};
 pub use mockepoch::{EthereumMockTime, EthereumMockTimeViaWebsocket};
-pub use stake::EthereumStake;
+pub use stake::{EthereumStake, EthereumStakeViaWebsocket};
