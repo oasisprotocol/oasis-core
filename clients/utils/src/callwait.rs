@@ -12,12 +12,14 @@ use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::contract::batch::OutputBatch;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Error;
+use ekiden_core::error::Result;
 use ekiden_core::futures::BoxFuture;
 use ekiden_core::futures::BoxStream;
 use ekiden_core::futures::Future;
 use ekiden_core::futures::Stream;
 use ekiden_core::hash::EncodedHash;
 use ekiden_core::subscribers::StreamSubscribers;
+use ekiden_di::di::Container;
 use ekiden_storage_base::backend::StorageBackend;
 
 type SharedCommitInfo = Arc<HashMap<H256, Vec<u8>>>;
@@ -121,6 +123,19 @@ impl Manager {
             commit_sub: commit_sub_2,
             blocks_kill_handle,
         }
+    }
+
+    /// Make a `Manager` from an injected `ConsensusBackend` and an injected `StorageBackend`.
+    pub fn new_from_injected(contract_id: B256, container: &mut Container) -> Result<Self> {
+        let env: Arc<Environment> = container.inject()?;
+        let consensus: Arc<ConsensusBackend> = container.inject()?;
+        let storage: Arc<StorageBackend> = container.inject()?;
+        Ok(Self::new(
+            env.as_ref(),
+            contract_id,
+            consensus.as_ref(),
+            storage,
+        ))
     }
 
     pub fn create_wait(&self) -> Wait {
