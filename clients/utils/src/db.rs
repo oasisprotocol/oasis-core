@@ -81,7 +81,7 @@ impl Manager {
                 Ok(Ok(())) => {
                     warn!("manager block stream ended");
                 }
-                // Kill handle dropped.
+                // Manager dropped.
                 Ok(Err(_ /* ekiden_core::futures::killable::Killed */)) => {}
                 // Block stream errored.
                 Err(e) => {

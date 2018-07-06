@@ -108,7 +108,7 @@ impl Manager {
                 Ok(Ok(())) => {
                     warn!("manager block stream ended");
                 }
-                // Kill handle dropped.
+                // Manager dropped.
                 Ok(Err(_ /* ekiden_core::futures::killable::Killed */)) => {}
                 // Block stream errored.
                 Err(e) => {
@@ -126,6 +126,8 @@ impl Manager {
     pub fn create_wait(&self) -> Wait {
         // Some calls from earlier blocks may come through too (e.g., if we are fetching the
         // inputs/outputs from storage when we subscribe). That won't break things though.
+        // The subscription has an unbounded buffer for holding commit info maps, so that we can
+        // hold on to a `Wait`, and the notifier doesn't have to block.
         let (_init, stockpile) = self.commit_sub.subscribe();
         Wait { stockpile }
     }
