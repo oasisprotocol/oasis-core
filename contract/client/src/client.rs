@@ -57,6 +57,7 @@ where
             .call(protocol::METHOD_CONTRACT_SUBMIT, signed_call)
             .and_then(move |call_id: H256| {
                 // Subscribe to contract call so we will know when the call is done.
+                // %%% here's the callsite
                 backend.wait_contract_call(call_id).and_then(|output| {
                     // TODO: Submit proof of publication, get decryption.
                     Ok(output)

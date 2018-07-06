@@ -2,14 +2,6 @@
 
 ## Interfaces
 
-### Compute node gRPC interface
-
-These methods must be invoked over the gRPC connection to the compute node:
-
-* `wait_contract_call(call_id: H256) -> encrypted_outputs`
-  Blocks until the given contract call outputs become available. The `call_id` is a
-  unique identifier of the contract call as returned by `contract_submit`.
-
 ### RPC interface
 
 These methods must be invoked over a pre-established secure [RPC channel](rpc.md).

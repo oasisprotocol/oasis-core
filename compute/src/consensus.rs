@@ -636,6 +636,7 @@ impl ConsensusFrontend {
                 .unwrap();
         }
 
+        // %%% take code from here
         if block.header.input_hash != empty_hash() {
             // Check if any subscribed transactions have been included in a block. To do that
             // we need to fetch transactions from storage first. Do this in a separate task
@@ -1206,6 +1207,7 @@ impl ConsensusFrontend {
     }
 
     /// Subscribe to being notified when specific call is included in a block.
+    // %%% here's the implementation
     pub fn subscribe_call(&self, call_id: H256) -> oneshot::Receiver<Vec<u8>> {
         let (response_sender, response_receiver) = oneshot::channel();
         if self.inner.computation_group.is_leader() {

@@ -22,6 +22,7 @@ extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_frontend;
+extern crate grpcio;
 
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
@@ -31,4 +32,5 @@ pub mod components;
 #[macro_use]
 pub mod macros;
 
+pub mod callwait;
 pub mod db;
