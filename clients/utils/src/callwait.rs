@@ -24,11 +24,15 @@ use ekiden_storage_base::backend::StorageBackend;
 
 type SharedCommitInfo = Arc<HashMap<H256, Vec<u8>>>;
 
+/// A temporary collection of incoming blocks, which you'll use when you need to wait for a call to
+/// be committed, but you don't know the call ID yet.
 pub struct Wait {
     stockpile: BoxStream<SharedCommitInfo>,
 }
 
 impl Wait {
+    /// Call this when you know the call ID to wait for. You get a future that resolves with the
+    /// call's output when it is committed.
     pub fn wait_for(self, call_id: H256) -> BoxFuture<Vec<u8>> {
         Box::new(
             self.stockpile
