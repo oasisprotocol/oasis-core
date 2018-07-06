@@ -653,7 +653,7 @@ create_component!(
     }),
     [Arg::with_name("stake-address")
         .long("stake-address")
-        .env("STAKE_ADDRESS")
+        .env("ENV_Stake")
         .help("Ethereum address at which the stake contract has been deployed")
         .takes_value(true)]
 );

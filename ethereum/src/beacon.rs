@@ -530,7 +530,7 @@ create_component!(
     }),
     [Arg::with_name("beacon-address")
         .long("beacon-address")
-        .env("BEACON_ADDRESS")
+        .env("ENV_RandomBeaconOasis")
         .help("Ethereum address at which the random beacon has been deployed")
         .takes_value(true)]
 );
