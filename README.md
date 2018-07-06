@@ -2,40 +2,33 @@
 
 [![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
 
-## Dependencies
 
-Here is a brief list of system dependencies currently used for development:
-- [rustc](https://www.rust-lang.org/en-US/)
-- [cargo](http://doc.crates.io/)
-- [xargo](https://github.com/japaric/xargo)
-- [docker](https://www.docker.com/)
-- [protoc](https://github.com/google/protobuf/releases)
+## Developing, building and using Ekiden
 
-## Developing, building and running external contracts
-
-For instructions on building contracts, you should check out the documentation of the
+If you are interested in developing contracts in the ekiden runtime, you should check out the documentation of the
 [hello world contract](https://github.com/oasislabs/contract-helloworld).
 
-## Setting up the development environment
+## Developing and building the Ekiden system
 
-The easiest way to build SGX code is to use the provided scripts, which run a Docker
-container with all the included tools.
+The canonical development environment is defined by our development Docker container.
+This is done for two reasons: First it ensures good code hygene by replicating the expectations of an SGX development environment.
+Second, it provides the expected dependencies and tools, which are relatively complex to replicate in a local environment.
 
 On MacOS, the ekiden docker setup needs more than 10 GB memory and at least 4 CPU cores. Make sure to have the correct docker settings before starting the ekiden container or you might experience build failures.
 
-If you haven't installed the ekiden cargo extension, it relies on the nightly rust toolchain.
+To enter the ekiden docker environment, use the ekiden cargo extension. It relies on the nightly rust toolchain.
 ```
 $ rustup install nightly
 $ cargo +nightly install --force --path tools
 ```
 
-To start the SGX development container:
+To start the development container:
 ```
 $ cargo ekiden shell
 ```
 
-All the following commands should be run in the container and not on
-the host.  The actual prompt from the bash shell running in the
+All the following commands should be run in this container and not on
+your host.  The actual prompt from the bash shell running in the
 container will look like `root@xxxx:/code#` where `xxxx` is the docker
 container id; in the text below, we will just use `#`.
 
@@ -129,13 +122,25 @@ We welcome anyone to fork and submit a pull request! Please make sure to run `ru
 ```
 
 ## Packages
-- `core`: Core external-facing libraries (aggregates `common`, `enclave`, `rpc`, `db`, etc.)
+- `beacon`: Random beacon for preventing predictability
 - `common`: Common functionality like error handling
-- `enclave`: Enclave loader and identity attestation
-- `rpc`: RPC functionality for use in enclaves
-- `db`: Database functionality for use in enclaves
 - `compute`: Ekiden compute node
 - `consensus`: Ekiden consensus interface and backends
-- `contracts`: Core contracts (`key-manager`, `token`)
-- `tools`: Build tools
+- `contracts`: Example and mangaement code to run in the Ekiden runtime (`key-manager`, `token`)
+- `core`: Core external-facing libraries (aggregates `common`, `enclave`, `rpc`, `db`, etc.)
+- `db`: Database functionality for use in enclaves
+- `di`: Dependency Injection for runtime selection of components
+- `docker`: Docker environment definitions
+- `enclave`: Enclave loader and identity attestation
+- `epochtime`: Time synchronization
+- `ethereum`: Contract definitions of the `beacon`, `consensus`, `epochtime`, `registry`, and `stake` components
+- `instrumentation`: Metric collection and instrumentation utilities
+- `node`: Centralized "backend" for centralized implemnetations of APIs (e.g. a location to use as a pretend AWS)
+- `registry`: Management of which hosts are online in the system
+- `rpc`: RPC functionality for use in enclaves
+- `scheduler`: Algorithms for assigning nodes to committees
 - `scripts`: Bash scripts for development
+- `stake`: ERC20 integration and API - economics of participation
+- `storage`: Persistance and integration with DB and network file stores
+- `testnet`: Scripts of deployment and Ops of the system
+- `tools`: Build tools

@@ -16,18 +16,24 @@ const deploy = async function (deployer, network) {
         // The tests only use the standard epoch timesource anyway.
         await deployer.deploy([OasisEpoch, MockEpoch]);
         await deployer.deploy(RandomBeacon, OasisEpoch.address);
-        await deployer.deploy(ContractRegistry, OasisEpoch.address);
-        await deployer.deploy(EntityRegistry, OasisEpoch.address);
         await deployer.deploy(UintSet);
         await deployer.link(UintSet, Stake);
         await deployer.deploy(Stake, 1, "EkidenStake", "E$");
+        await deployer.deploy(ContractRegistry, OasisEpoch.address);
+        await deployer.deploy(EntityRegistry, OasisEpoch.address, Stake.address);
         await deployer.deploy(DisputeResolution);
     } else {
         // truffle does not really support deploying more than 1 instance
         // of a given contract all that well yet, so this uses a nasty kludge
         // to deploy the RandomBeacon for each time source.
         await deployer.deploy([OasisEpoch, MockEpoch]);
-        let instance = await deployer.deploy(ContractDeployer, OasisEpoch.address, MockEpoch.address);
+
+        // Stake
+        await deployer.deploy(UintSet);
+        await deployer.link(UintSet, Stake);
+        await deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
+
+        let instance = await deployer.deploy(ContractDeployer, OasisEpoch.address, MockEpoch.address, Stake.address);
         let instance_addrs = await Promise.all([
             instance.oasis_beacon.call(),
             instance.mock_beacon.call(),
@@ -38,10 +44,6 @@ const deploy = async function (deployer, network) {
         ]);
         await deployer.deploy(DisputeResolution);
 
-        // Stake
-        await deployer.deploy(UintSet);
-        await deployer.link(UintSet, Stake);
-        await deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
 
         // Pass all the contract addresses to truffle_deploy in the rust
         // side as a simple JSON formatted dictionary.
