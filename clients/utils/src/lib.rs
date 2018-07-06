@@ -3,6 +3,7 @@ extern crate histogram;
 #[macro_use]
 extern crate log;
 extern crate pretty_env_logger;
+extern crate serde_cbor;
 #[cfg(feature = "benchmark")]
 extern crate threadpool;
 #[cfg(feature = "benchmark")]
