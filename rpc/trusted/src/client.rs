@@ -2,7 +2,6 @@
 
 use futures::future::{self, Future};
 
-use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_enclave_trusted::identity;
 use ekiden_rpc_client::backend::{RpcClientBackend, RpcClientCredentials};
@@ -56,11 +55,6 @@ impl RpcClientBackend for OcallRpcClientBackend {
                 client_request,
             )?)
         }))
-    }
-
-    /// Wait for given contract call outputs to become available.
-    fn wait_contract_call(&self, _call_id: H256) -> ClientFuture<Vec<u8>> {
-        unimplemented!();
     }
 
     /// Get credentials.

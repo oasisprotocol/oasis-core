@@ -1,23 +1,20 @@
 //! Consensus frontend.
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use lru_cache::LruCache;
 use serde_cbor;
 
 use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, ConsensusSigner, Event, Nonce,
                             Reveal};
 use ekiden_core::bytes::{B256, H256};
-use ekiden_core::contract::batch::{CallBatch, OutputBatch};
+use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
-use ekiden_core::futures::sync::{mpsc, oneshot};
-use ekiden_core::hash::{empty_hash, EncodedHash};
+use ekiden_core::futures::sync::mpsc;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, BatchStorage};
@@ -220,10 +217,6 @@ struct Inner {
     max_batch_size: usize,
     /// Maximum batch timeout.
     max_batch_timeout: Duration,
-    /// Call subscribers (call id -> list of subscribers).
-    call_subscribers: Mutex<HashMap<H256, Vec<oneshot::Sender<Vec<u8>>>>>,
-    /// Recently confirmed call outputs.
-    recent_confirmed_calls: Mutex<LruCache<H256, Vec<u8>>>,
     /// Test-only configuration.
     test_only_config: ConsensusTestOnlyConfiguration,
     /// Commits from workers or leader waiting to be sent as an aggregation to the backend.
@@ -318,8 +311,6 @@ impl ConsensusFrontend {
                 incoming_queue: Mutex::new(None),
                 max_batch_size: config.max_batch_size,
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
-                call_subscribers: Mutex::new(HashMap::new()),
-                recent_confirmed_calls: Mutex::new(LruCache::new(config.max_batch_size * 10)),
                 test_only_config: config.test_only.clone(),
                 agg_commits: Mutex::new(Vec::new()),
                 agg_backup_commits: Mutex::new(Vec::new()),
@@ -634,50 +625,6 @@ impl ConsensusFrontend {
                 .command_sender
                 .unbounded_send(Command::ProcessIncomingQueue)
                 .unwrap();
-        }
-
-        // %%% take code from here
-        if block.header.input_hash != empty_hash() {
-            // Check if any subscribed transactions have been included in a block. To do that
-            // we need to fetch transactions from storage first. Do this in a separate task
-            // to not block command processing.
-            spawn(
-                inner
-                    .storage
-                    .get(block.header.input_hash)
-                    .join(inner.storage.get(block.header.output_hash))
-                    .and_then(move |(inputs, outputs)| {
-                        let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
-                        let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
-                        let mut recent_confirmed_calls =
-                            inner.recent_confirmed_calls.lock().unwrap();
-                        let mut call_subscribers = inner.call_subscribers.lock().unwrap();
-
-                        for (input, output) in inputs.iter().zip(outputs.iter()) {
-                            let call_id = input.get_encoded_hash();
-
-                            if let Some(senders) = call_subscribers.remove(&call_id) {
-                                for sender in senders {
-                                    // Explicitly ignore send errors as the receiver may have gone.
-                                    drop(sender.send(output.clone()));
-                                }
-                            }
-
-                            // Store output to recently confirmed calls cache.
-                            recent_confirmed_calls.insert(call_id, output.clone());
-                        }
-
-                        Ok(())
-                    })
-                    .or_else(|error| {
-                        error!(
-                            "Failed to fetch transactions from storage: {}",
-                            error.message
-                        );
-
-                        Ok(())
-                    }),
-            );
         }
 
         future::ok(()).into_box()
@@ -1204,38 +1151,5 @@ impl ConsensusFrontend {
             .unwrap();
 
         Ok(())
-    }
-
-    /// Subscribe to being notified when specific call is included in a block.
-    // %%% here's the implementation
-    pub fn subscribe_call(&self, call_id: H256) -> oneshot::Receiver<Vec<u8>> {
-        panic!("Entered deprecated subscribe_call %%%");
-        let (response_sender, response_receiver) = oneshot::channel();
-        if self.inner.computation_group.is_leader() {
-            // Check if outputs to this call were recently confirmed.
-            {
-                let mut recent_confirmed_calls = self.inner.recent_confirmed_calls.lock().unwrap();
-                if let Some(output) = recent_confirmed_calls.get_mut(&call_id) {
-                    response_sender.send(output.clone()).unwrap();
-                    return response_receiver;
-                }
-            }
-
-            let mut call_subscribers = self.inner.call_subscribers.lock().unwrap();
-            match call_subscribers.entry(call_id) {
-                Entry::Occupied(mut entry) => {
-                    entry.get_mut().push(response_sender);
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(vec![response_sender]);
-                }
-            }
-        } else {
-            // If we are not a leader, do not accept subscribers.
-            warn!("Denying subscribe_call as we are not the leader");
-            drop(response_sender);
-        }
-
-        response_receiver
     }
 }

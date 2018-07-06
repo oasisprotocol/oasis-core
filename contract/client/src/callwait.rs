@@ -107,6 +107,7 @@ impl Manager {
                 },
             ));
         env.spawn(Box::new(watch_blocks.then(|r| {
+            // TODO: propagate giveup-ness to waiting futures
             match r {
                 // Block stream ended.
                 Ok(Ok(())) => {
@@ -118,7 +119,7 @@ impl Manager {
                 Err(e) => {
                     error!("manager block stream error: {}", e);
                 }
-            }
+            };
             Ok(())
         })));
         Self {

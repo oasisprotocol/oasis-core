@@ -459,16 +459,4 @@ impl ComputationGroup {
             .filter(|node| node.role == Role::BackupWorker)
             .count()
     }
-
-    /// Get local node's role in the committee.
-    ///
-    /// May be `None` in case the local node is not part of the computation group.
-    pub fn get_role(&self) -> Option<Role> {
-        self.inner.get_role()
-    }
-
-    /// Check if the local node is a leader of the computation group.
-    pub fn is_leader(&self) -> bool {
-        self.get_role() == Some(Role::Leader)
-    }
 }
