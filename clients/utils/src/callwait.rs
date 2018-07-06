@@ -52,12 +52,11 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(
-        env: Arc<Environment>,
+        env: &Environment,
         contract_id: B256,
         consensus: &ConsensusBackend,
         storage: Arc<StorageBackend>,
     ) -> Self {
-        let env_2 = env.clone();
         let commit_sub = Arc::new(StreamSubscribers::new());
         let commit_sub_2 = commit_sub.clone();
         let (watch_blocks, blocks_kill_handle) =
@@ -73,7 +72,7 @@ impl Manager {
                     // anything. We might be able to save this if we add functionality to
                     // `StreamSubscriber` to check if there are no subscriptions.
                     let commit_sub_3 = commit_sub.clone();
-                    env.spawn(Box::new(
+                    ekiden_core::futures::spawn(
                         storage
                             .get(block.header.input_hash)
                             .join(storage.get(block.header.output_hash))
@@ -99,11 +98,11 @@ impl Manager {
 
                                 Ok(())
                             }),
-                    ));
+                    );
                     Ok(())
                 },
             ));
-        env_2.spawn(Box::new(watch_blocks.then(|r| {
+        env.spawn(Box::new(watch_blocks.then(|r| {
             match r {
                 // Block stream ended.
                 Ok(Ok(())) => {
