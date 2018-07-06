@@ -30,6 +30,7 @@ extern crate log;
 
 mod beacon;
 mod contract_registry;
+mod dispute_resolution;
 mod entity_registry;
 pub mod identity;
 mod mockepoch;
@@ -40,6 +41,7 @@ pub mod web3_di;
 
 pub use beacon::{EthereumRandomBeacon, EthereumRandomBeaconViaWebsocket};
 pub use contract_registry::EthereumContractRegistryBackend;
+pub use dispute_resolution::EthereumDisputeResolution;
 pub use entity_registry::{EthereumEntityRegistryBackend, EthereumEntityRegistryViaWebsocket};
 pub use mockepoch::{EthereumMockTime, EthereumMockTimeViaWebsocket};
 pub use stake::{EthereumStake, EthereumStakeViaWebsocket};

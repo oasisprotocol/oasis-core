@@ -292,6 +292,19 @@ contract DisputeResolution {
 		));
 	}
 
+	// Query the current contract state.
+	//
+	// Redundant in light of the auto-generated accesors, but this saves
+	// some of the Rust futures/web3 pain.
+	function contract_state() public view returns(
+		uint64 serial_,
+		uint64 state_,
+		bytes32 dispute_batch_hash_) {
+		serial_ = committee.serial;
+		state_ = uint64(state);
+		dispute_batch_hash_ = committee.dispute_batch_hash;
+	}
+
 	function _is_member(address _addr) internal view returns (bool ok_) {
 		ok_ = _is_worker(_addr) || _is_backup(_addr);
 	}
