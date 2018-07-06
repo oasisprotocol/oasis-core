@@ -1209,6 +1209,7 @@ impl ConsensusFrontend {
     /// Subscribe to being notified when specific call is included in a block.
     // %%% here's the implementation
     pub fn subscribe_call(&self, call_id: H256) -> oneshot::Receiver<Vec<u8>> {
+        panic!("Entered deprecated subscribe_call %%%");
         let (response_sender, response_receiver) = oneshot::channel();
         if self.inner.computation_group.is_leader() {
             // Check if outputs to this call were recently confirmed.

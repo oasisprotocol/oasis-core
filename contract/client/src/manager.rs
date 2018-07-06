@@ -12,10 +12,12 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signer;
+use ekiden_consensus_base::backend::ConsensusBackend;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_rpc_client::backend::Web3RpcClientBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
+use ekiden_storage_base::backend::StorageBackend;
 
 use super::client::ContractClient;
 
@@ -42,6 +44,8 @@ struct Inner {
     environment: Arc<Environment>,
     /// Signer.
     signer: Arc<Signer>,
+    /// Shared service for waiting for contract calls.
+    call_wait_manager: Arc<super::callwait::Manager>,
     /// Current computation group leader.
     leader: RwLock<Option<Arc<Leader>>>,
     /// Future for waiting for the leader in case there is no leader yet.
@@ -66,7 +70,15 @@ impl ContractClientManager {
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
         signer: Arc<Signer>,
+        consensus: &ConsensusBackend,
+        storage: Arc<StorageBackend>,
     ) -> Self {
+        let call_wait_manager = Arc::new(super::callwait::Manager::new(
+            environment.as_ref(),
+            contract_id,
+            consensus,
+            storage,
+        ));
         let (leader_notify, future_leader) = oneshot::channel();
 
         let manager = Self {
@@ -78,6 +90,7 @@ impl ContractClientManager {
                 scheduler,
                 entity_registry,
                 signer,
+                call_wait_manager,
                 leader: RwLock::new(None),
                 future_leader: future_leader.shared(),
                 leader_notify: Mutex::new(Some(leader_notify)),
@@ -150,6 +163,7 @@ impl ContractClientManager {
                                     Arc::new(backend),
                                     inner.mr_enclave,
                                     inner.signer.clone(),
+                                    inner.call_wait_manager.clone(),
                                 );
 
                                 // Change the leader.
