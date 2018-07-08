@@ -108,5 +108,8 @@ members = [
 
     # Ethereum backend components.
     "ethereum",
+
+    # Tendermint backend components.
+    "tendermint",
 ]
 exclude = [ "thirdparty" ]

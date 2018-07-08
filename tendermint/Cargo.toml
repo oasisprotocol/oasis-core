@@ -1,0 +1,26 @@
+[package]
+name = "ekiden-tendermint"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden Tendermint backends"
+keywords = ["ekiden", "tendermint"]
+repository = "https://github.com/oasislabs/ekiden"
+build = "build.rs"
+
+[dependencies]
+ekiden-common = { path = "../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../di", version = "0.2.0-alpha" }
+protobuf = "~2.0"
+serde = "=1.0.59"
+serde_json = "1.0"
+bytes = "~0.4"
+integer-encoding = "~1.0"
+tokio-codec = "~0.1"
+log = "~0.4"
+tokio-tungstenite = { git = "https://github.com/snapview/tokio-tungstenite" }
+tungstenite = "~0.5.3"
+jsonrpc-core = "~8.0.1"
+base64 = "0.9.0"
+
+[build-dependencies]
+ekiden-tools = { path = "../tools", version = "0.2.0-alpha" }
