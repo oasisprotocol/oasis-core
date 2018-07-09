@@ -10,9 +10,12 @@ build = "build.rs"
 [dependencies]
 ekiden-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../di", version = "0.2.0-alpha" }
+ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 serde = "=1.0.59"
+serde_derive = "1.0"
 serde_json = "1.0"
+serde_cbor = "0.8.2"
 bytes = "~0.4"
 integer-encoding = "~1.0"
 tokio-codec = "~0.1"
