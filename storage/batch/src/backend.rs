@@ -53,7 +53,6 @@ impl BatchStorageBackend {
             std::mem::replace(&mut *inserts, vec![])
         };
 
-        println!("committed key-expire is: {:?}", inserts);
         // Iterate over log and insert all values, with retry.
         let retries = self.inner.retries;
         let always_available = self.inner.always_available.clone();
@@ -97,18 +96,18 @@ impl StorageBackend for BatchStorageBackend {
             .insert(value, expiry)
             .and_then(move |_| {
                 let mut inserts = inner.inserts.lock().unwrap();
-                println!("Key list is: {:?}", inserts);
                 inserts.push((key, expiry));
                 Ok(())
             })
             .into_box()
     }
 
-    fn get_key_list(&self, expiry: u64) {
+    fn get_key_list(&self, expiry: u64) -> Vec<(H256, u64)> {
         let inner = self.inner.clone();
         let inserts = inner.inserts.lock().unwrap();
-        println!("Key list is: {:?}", inserts);
-        println!("Return Key List");
+        println!("Get Key List is: {:?}", *inserts);
+        let key_list = inserts.to_owned();
+        return key_list;
     }
 }
 
@@ -124,19 +123,20 @@ mod test {
         let batch = BatchStorageBackend::new(committed.clone(), 1);
 
         let key = hash_storage_key(b"value");
+        let key2 = hash_storage_key(b"value2");
 
         assert!(batch.get(key).wait().is_err());
         batch.insert(b"value".to_vec(), 10).wait().unwrap();
+        batch.insert(b"value2".to_vec(), 5).wait().unwrap();
         assert_eq!(batch.get(key).wait(), Ok(b"value".to_vec()));
+        assert_eq!(batch.get(key2).wait(), Ok(b"value2".to_vec()));
+        // Get key list.
+        batch.get_key_list(10);
         // Test that key has not been inserted into committed backend.
         assert!(committed.get(key).wait().is_err());
-
         // Commit.
         batch.commit().wait().unwrap();
         assert_eq!(committed.get(key).wait(), Ok(b"value".to_vec()));
-
-        // Get key list.
-        committed.get_key_list(10);
 
         // Insert directly to committed and expect the backend to find it.
         let key = hash_storage_key(b"another");

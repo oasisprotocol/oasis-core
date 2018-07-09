@@ -93,6 +93,14 @@ impl StorageBackend for UntrustedStorageBackend {
             Ok(())
         }))
     }
+
+    fn get_key_list(&self, expiry: u64) -> Vec<(H256, u64)> {
+        println!("Return Key List in dummy backend");
+        let key = hash_storage_key(b"value");
+        let mut x = Vec::new();
+        x.push((key, 10));
+        return x;
+    }
 }
 
 /// Setup transfer buffer used for OCALLs to untrusted storage backend.
