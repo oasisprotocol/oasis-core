@@ -72,7 +72,7 @@ macro_rules! create_contract_client {
                             scheduler,
                             entity_registry,
                             signer,
-                            consensus.as_ref(),
+                            consensus,
                             storage,
                         ),
                     }

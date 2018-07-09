@@ -70,11 +70,11 @@ impl ContractClientManager {
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
         signer: Arc<Signer>,
-        consensus: &ConsensusBackend,
+        consensus: Arc<ConsensusBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let call_wait_manager = Arc::new(super::callwait::Manager::new(
-            environment.as_ref(),
+            environment.clone(),
             contract_id,
             consensus,
             storage,

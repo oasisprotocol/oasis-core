@@ -48,6 +48,10 @@ impl Wait {
 }
 
 pub struct Manager {
+    /// Keep the environment alive.
+    _env: Arc<Environment>,
+    /// Keep the consensus backend alive.
+    _consensus: Arc<ConsensusBackend>,
     /// We distribute commitment information here.
     commit_sub: Arc<StreamSubscribers<SharedCommitInfo>>,
     /// For killing our consensus follower task.
@@ -56,9 +60,9 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(
-        env: &Environment,
+        env: Arc<Environment>,
         contract_id: B256,
-        consensus: &ConsensusBackend,
+        consensus: Arc<ConsensusBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let commit_sub = Arc::new(StreamSubscribers::new());
@@ -123,6 +127,8 @@ impl Manager {
             Ok(())
         })));
         Self {
+            _env: env,
+            _consensus: consensus,
             commit_sub: commit_sub_2,
             blocks_kill_handle,
         }

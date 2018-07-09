@@ -51,6 +51,10 @@ impl Database for Snapshot {
 /// A holder of a (i) a consensus backend and (ii) a storage mapper, the two of which it uses to
 /// create `Snapshot`s of recent (best-effort) states on demand.
 pub struct Manager {
+    /// Keep the environment alive.
+    _env: Arc<Environment>,
+    /// Keep the consensus backend alive.
+    _consensus: Arc<ConsensusBackend>,
     /// The latest root hash that we're aware of.
     root_hash: Arc<Mutex<Option<H256>>>,
     /// The storage mapper that we give to snapshots.
@@ -61,9 +65,9 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(
-        env: &Environment,
+        env: Arc<Environment>,
         contract_id: B256,
-        consensus: &ConsensusBackend,
+        consensus: Arc<ConsensusBackend>,
         mapper: Arc<StorageMapper>,
     ) -> Self {
         let root_hash = Arc::new(Mutex::new(None));
@@ -91,6 +95,8 @@ impl Manager {
             Ok(())
         })));
         Self {
+            _env: env,
+            _consensus: consensus,
             root_hash: root_hash_2,
             mapper,
             blocks_kill_handle,
@@ -105,9 +111,9 @@ impl Manager {
         let storage: Arc<StorageBackend> = container.inject()?;
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
         Ok(Self::new(
-            env.as_ref(),
+            env,
             contract_id,
-            consensus.as_ref(),
+            consensus,
             mapper,
         ))
     }
@@ -204,9 +210,9 @@ mod tests {
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
         let trie = PatriciaTrie::new(mapper.clone());
         let manager = super::Manager::new(
-            environment.as_ref(),
+            environment,
             contract_id,
-            consensus.as_ref(),
+            consensus,
             mapper,
         );
 
