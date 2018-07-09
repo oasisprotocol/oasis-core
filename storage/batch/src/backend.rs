@@ -102,7 +102,7 @@ impl StorageBackend for BatchStorageBackend {
             .into_box()
     }
 
-    fn get_key_list(&self, expiry: u64) -> Vec<(H256, u64)> {
+    fn get_key_list(&self) -> Vec<(H256, u64)> {
         let inner = self.inner.clone();
         let inserts = inner.inserts.lock().unwrap();
         println!("Get Key List is: {:?}", *inserts);
@@ -131,7 +131,7 @@ mod test {
         assert_eq!(batch.get(key).wait(), Ok(b"value".to_vec()));
         assert_eq!(batch.get(key2).wait(), Ok(b"value2".to_vec()));
         // Get key list.
-        batch.get_key_list(10);
+        batch.get_key_list();
         // Test that key has not been inserted into committed backend.
         assert!(committed.get(key).wait().is_err());
         // Commit.

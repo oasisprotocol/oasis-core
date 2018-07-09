@@ -76,7 +76,7 @@ impl StorageBackend for LruCacheStorageBackend {
             .into_box()
     }
 
-    fn get_key_list(&self, expiry: u64) -> Vec<(H256, u64)> {
+    fn get_key_list(&self) -> Vec<(H256, u64)> {
         println!("Return Key List in dummy backend");
         let key = hash_storage_key(b"value");
         let mut x = Vec::new();
