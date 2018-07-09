@@ -51,6 +51,7 @@ extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
+extern crate ekiden_tendermint;
 
 use std::path::Path;
 
@@ -301,6 +302,13 @@ fn main() {
 
     // Start compute node.
     node.start();
+
+    // XXX: Only for initial testing.
+    let app = ::std::sync::Arc::new(ekiden_tendermint::application::Application::new());
+    environment.spawn(ekiden_tendermint::abci::server::start(
+        &"127.0.0.1:26658".parse().unwrap(),
+        app,
+    ));
 
     // Start the environment.
     environment.start();
