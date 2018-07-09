@@ -110,12 +110,7 @@ impl Manager {
         let consensus: Arc<ConsensusBackend> = container.inject()?;
         let storage: Arc<StorageBackend> = container.inject()?;
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
-        Ok(Self::new(
-            env,
-            contract_id,
-            consensus,
-            mapper,
-        ))
+        Ok(Self::new(env, contract_id, consensus, mapper))
     }
 
     pub fn get_snapshot(&self) -> Snapshot {
@@ -209,12 +204,7 @@ mod tests {
         });
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
         let trie = PatriciaTrie::new(mapper.clone());
-        let manager = super::Manager::new(
-            environment,
-            contract_id,
-            consensus,
-            mapper,
-        );
+        let manager = super::Manager::new(environment, contract_id, consensus, mapper);
 
         let root_hash_before = trie.insert(None, b"changeme", b"before");
         blocks_tx
