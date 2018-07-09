@@ -11,7 +11,6 @@ use ekiden_core::error::Result;
 use ekiden_di;
 use ekiden_epochtime;
 use ekiden_epochtime::interface::TimeSourceNotifier;
-use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_node_dummy_api::create_dummy_debug;
 use ekiden_registry_api::{create_contract_registry, create_entity_registry};
 use ekiden_registry_base::{ContractRegistryBackend, ContractRegistryService,
@@ -123,10 +122,6 @@ impl DummyBackend {
             .register_service(consensus_service)
             .register_service(debug_service)
             .build()?;
-
-        // Initialize metric collector.
-        let metrics = di_container.inject_owned::<MetricCollector>()?;
-        set_boxed_metric_collector(metrics).unwrap();
 
         Ok(Self {
             time_notifier,

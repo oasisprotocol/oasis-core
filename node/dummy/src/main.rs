@@ -6,12 +6,12 @@ extern crate grpcio;
 extern crate log;
 extern crate pretty_env_logger;
 
+extern crate ekiden_beacon_dummy;
 extern crate ekiden_common;
 extern crate ekiden_di;
-use ekiden_di::Component;
-extern crate ekiden_beacon_dummy;
 extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
+extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_node_dummy;
 extern crate ekiden_storage_dummy;
@@ -24,6 +24,8 @@ use clap::{App, Arg};
 use log::LevelFilter;
 
 use ekiden_common::environment::Environment;
+use ekiden_di::Component;
+use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_node_dummy::backend::{DummyBackend, DummyBackendConfiguration};
 
 fn main() {
@@ -78,6 +80,12 @@ fn main() {
         .build_with_arguments(&matches)
         .expect("failed to initialize component container");
 
+    // Initialize metric collector.
+    let metrics = container
+        .inject_owned::<MetricCollector>()
+        .expect("failed to inject MetricCollector");
+    set_boxed_metric_collector(metrics).unwrap();
+
     let environment = container.inject::<Environment>().unwrap();
 
     // Setup the backends and gRPC service.
@@ -97,7 +105,7 @@ fn main() {
     };
 
     // Start all the things.
-    trace!("Starting all workers.");
+    trace!("Starting node services.");
     backends.start();
 
     // Start the environment.
