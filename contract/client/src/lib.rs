@@ -6,7 +6,6 @@ extern crate serde_cbor;
 extern crate ekiden_common;
 extern crate ekiden_consensus_base;
 extern crate ekiden_contract_common;
-extern crate ekiden_di;
 extern crate ekiden_enclave_common;
 extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;

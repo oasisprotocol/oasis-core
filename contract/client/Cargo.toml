@@ -10,7 +10,6 @@ repository = "https://github.com/ekiden/ekiden"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha" }
 ekiden-contract-common = { path = "../common", version = "0.2.0-alpha" }
-ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../../rpc/client", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
