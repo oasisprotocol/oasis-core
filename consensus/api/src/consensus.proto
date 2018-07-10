@@ -10,7 +10,6 @@ service Consensus {
   rpc GetBlocks (BlockRequest) returns (stream BlockResponse) {}
   rpc GetEvents (EventRequest) returns (stream EventResponse) {}
   rpc Commit (CommitRequest) returns (CommitResponse) {}
-  rpc Reveal (RevealRequest) returns (RevealResponse) {}
 }
 
 message Block {
@@ -37,10 +36,6 @@ message Header {
   bytes output_hash = 7;
   bytes state_root = 8;
   bytes commitments_hash = 9;
-}
-
-message Reveal {
-  bytes data = 1;
 }
 
 message LatestBlockRequest {
@@ -75,9 +70,8 @@ message Event {
   }
 
   oneof event {
-    CommitmentsReceived commitments_received = 1;
-    RoundFailed round_failed = 2;
-    DiscrepancyDetected discrepancy_detected = 3;
+    RoundFailed round_failed = 1;
+    DiscrepancyDetected discrepancy_detected = 2;
   }
 }
 
@@ -91,12 +85,4 @@ message CommitRequest {
 }
 
 message CommitResponse {
-}
-
-message RevealRequest {
-  bytes contract_id = 1;
-  Reveal reveal = 2;
-}
-
-message RevealResponse {
 }

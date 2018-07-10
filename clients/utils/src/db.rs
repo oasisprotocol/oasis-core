@@ -140,7 +140,6 @@ mod tests {
     use ekiden_consensus_base::backend::Event;
     use ekiden_consensus_base::block::Block;
     use ekiden_consensus_base::commitment::Commitment;
-    use ekiden_consensus_base::commitment::Reveal;
     use ekiden_consensus_base::header::Header;
     use ekiden_core;
     use ekiden_core::bytes::B256;
@@ -176,10 +175,6 @@ mod tests {
         }
 
         fn commit(&self, _contract_id: B256, _commitment: Commitment) -> BoxFuture<()> {
-            unimplemented!()
-        }
-
-        fn reveal(&self, _contract_id: B256, _reveal: Reveal) -> BoxFuture<()> {
             unimplemented!()
         }
     }

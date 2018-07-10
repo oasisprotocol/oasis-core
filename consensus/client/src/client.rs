@@ -11,7 +11,7 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_consensus_api as api;
-use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event, Reveal};
+use ekiden_consensus_base::{Block, Commitment, ConsensusBackend, Event};
 
 /// Consensus client implements the Consensus interface.
 pub struct ConsensusClient(api::ConsensusClient);
@@ -63,11 +63,7 @@ impl ConsensusBackend for ConsensusClient {
                 Ok(r) => {
                     let event = r.get_event();
 
-                    if event.has_commitments_received() {
-                        Ok(Event::CommitmentsReceived(
-                            event.get_commitments_received().get_discrepancy(),
-                        ))
-                    } else if event.has_round_failed() {
+                    if event.has_round_failed() {
                         Ok(Event::RoundFailed(Error::new(
                             event.get_round_failed().get_error().to_owned(),
                         )))
@@ -90,16 +86,6 @@ impl ConsensusBackend for ConsensusClient {
         req.set_contract_id(contract_id.to_vec());
         req.set_commitment(commitment.into());
         match self.0.commit_async(&req) {
-            Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
-            Err(e) => Box::new(future::err(e.into())),
-        }
-    }
-
-    fn reveal(&self, contract_id: B256, reveal: Reveal) -> BoxFuture<()> {
-        let mut req = api::RevealRequest::new();
-        req.set_contract_id(contract_id.to_vec());
-        req.set_reveal(reveal.into());
-        match self.0.reveal_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),
             Err(e) => Box::new(future::err(e.into())),
         }
