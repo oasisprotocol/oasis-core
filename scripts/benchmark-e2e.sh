@@ -27,6 +27,33 @@ run_compute_node() {
         --compute-replicas 1 \
         --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --batch-storage immediate_remote \
+        --port ${port} \
+        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        ${extra_args} \
+        ${WORKDIR}/target/contract/token.so 2>${LOGDIR}/compute${id}.log &
+}
+
+run_compute_node_storage_multilayer_remote() {
+    local id=$1
+    shift
+    local extra_args=$*
+
+    local db_dir=/tmp/ekiden-test-storage-multilayer-sled-$id
+    # Generate port number.
+    let "port=id + 10000"
+
+    ${WORKDIR}/target/debug/ekiden-compute \
+        --no-persist-identity \
+        --max-batch-size 20 \
+        --max-batch-timeout 100 \
+        --compute-replicas 1 \
+        --time-source-notifier system \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --batch-storage multilayer \
+        --storage-multilayer-sled-storage-base "$db_dir" \
+        --storage-multilayer-bottom-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
@@ -87,4 +114,12 @@ scenario_basic() {
     sleep 1
 }
 
+scenario_multilayer_remote() {
+    run_compute_node_storage_multilayer_remote 1
+    sleep 1
+    run_compute_node_storage_multilayer_remote 2
+    sleep 1
+}
+
 run_benchmark scenario_basic "e2e-benchmark" benchmark 1 run_dummy_node_default
+run_benchmark scenario_multilayer_remote "e2e-benchmark-multilayer-remote" benchmark 1 run_dummy_node_default
