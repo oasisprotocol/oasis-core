@@ -24,11 +24,31 @@ var makeTxn = function (client) {
 if (require.main === module) {
     let HDWalletProvider = require("truffle-hdwallet-provider");
     let web3 = require('web3');
+    const client = require('prom-client');
+    const txncount = new client.Counter({
+        name: 'txncount',
+        help: 'Number of web3 transactions made'
+    });
+    const txnlatency = new client.Histogram({
+        name: 'txnlatency',
+        help: 'Latency of web3 transactions',
+        buckets: client.exponentialBuckets(0.01, 2, 15)
+    });
     let mnemonic = 'patient oppose cotton portion chair gentle jelly dice supply salmon blast priority';
 
     if (process.argv.length < 4) {
-        console.warn("Usage: web3.js <provider> <interval-ms>");
+        console.warn("Usage: web3.js <provider> <interval-ms> [metrics pushgateway]");
         process.exit(0);
+    }
+    let gateway = null;
+    if (process.argv.length < 5) {
+        let http = require('http');
+        let server = http.createServer((req, res) => {
+            res.end(client.register.metrics());
+        });
+        server.listen(3000);
+    } else {
+        gateway = new client.Pushgateway(process.argv[4]);
     }
 
     let run = async function () {
@@ -37,7 +57,13 @@ if (require.main === module) {
         await client.setProvider(provider);
         while (true) {
             await pause(process.argv[3]);
+            const end = txnlatency.startTimer();
             await makeTxn(client);
+            end();
+            txncount.inc();
+            if (gateway != null) {
+                gateway.pushAdd({ jobName: 'web3-txn' });
+            }
         }
     };
 
