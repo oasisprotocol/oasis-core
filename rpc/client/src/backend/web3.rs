@@ -9,12 +9,11 @@ use futures::future::{self, Future};
 use protobuf;
 use protobuf::Message;
 
-use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
 use ekiden_rpc_common::api;
 
-use ekiden_compute_api::{CallContractRequest, WaitContractCallRequest, Web3Client};
+use ekiden_compute_api::{CallContractRequest, Web3Client};
 
 use super::super::future::ClientFuture;
 use super::{RpcClientBackend, RpcClientCredentials};
@@ -276,17 +275,6 @@ impl RpcClientBackend for Web3RpcClientBackend {
         Box::new(self.call_available_node(move |client| {
             client.call_contract_async_opt(&rpc_request, create_call_opt(timeout))
         }).map(|mut response| response.take_payload()))
-    }
-
-    /// Wait for given contract call outputs to become available.
-    fn wait_contract_call(&self, call_id: H256) -> ClientFuture<Vec<u8>> {
-        let mut rpc_request = WaitContractCallRequest::new();
-        rpc_request.set_call_id(call_id.to_vec());
-        let timeout = self.timeout;
-
-        Box::new(self.call_available_node(move |client| {
-            client.wait_contract_call_async_opt(&rpc_request, create_call_opt(timeout))
-        }).map(|mut response| response.take_output()))
     }
 
     /// Get credentials.
