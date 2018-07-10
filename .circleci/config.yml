@@ -174,7 +174,7 @@ workflows:
           filters:
             branches:
               only: master
-          require:
+          requires:
             - build
       - deployclient:
           requires:
