@@ -25,6 +25,7 @@ if (require.main === module) {
     let HDWalletProvider = require("truffle-hdwallet-provider");
     let web3 = require('web3');
     const client = require('prom-client');
+    client.collectDefaultMetrics();
     const txncount = new client.Counter({
         name: 'txncount',
         help: 'Number of web3 transactions made'
@@ -42,7 +43,7 @@ if (require.main === module) {
     }
     let gateway = null;
     if (process.argv.length < 5) {
-        let http = require('http');
+        const http = require('http');
         let server = http.createServer((req, res) => {
             res.end(client.register.metrics());
         });
