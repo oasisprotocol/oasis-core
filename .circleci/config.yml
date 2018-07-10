@@ -169,6 +169,16 @@ workflows:
               only: master
           requires:
             - build
+      - request-deploy:
+          type: approval
+          filters:
+            branches:
+              only: master
+          require:
+            - build
+      - deployclient:
+          requires:
+            - request-deploy
 experimental:
   notify:
     branches:
