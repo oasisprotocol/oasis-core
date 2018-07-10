@@ -437,8 +437,6 @@ impl Round {
 enum Command {
     Commit(B256, Commitment, oneshot::Sender<Result<()>>),
     Reveal(B256, Reveal<Header>, oneshot::Sender<Result<()>>),
-    CommitMany(B256, Vec<Commitment>, oneshot::Sender<Result<()>>),
-    RevealMany(B256, Vec<Reveal<Header>>, oneshot::Sender<Result<()>>),
 }
 
 struct Inner {
@@ -540,16 +538,6 @@ impl DummyConsensusBackend {
                             contract_id,
                             sender,
                             Box::new(move |round| Round::add_reveals(round, vec![reveal.clone()])),
-                        ),
-                        Command::CommitMany(contract_id, commitments, sender) => (
-                            contract_id,
-                            sender,
-                            Box::new(move |round| Round::add_commitments(round, &commitments)),
-                        ),
-                        Command::RevealMany(contract_id, reveals, sender) => (
-                            contract_id,
-                            sender,
-                            Box::new(move |round| Round::add_reveals(round, reveals.clone())),
                         ),
                     };
 
@@ -805,31 +793,6 @@ impl ConsensusBackend for DummyConsensusBackend {
         };
 
         self.send_command(Command::Reveal(contract_id, reveal, sender), receiver)
-    }
-
-    fn commit_many(
-        &self,
-        contract_id: B256,
-        mut commitments: Vec<OpaqueCommitment>,
-    ) -> BoxFuture<()> {
-        let (sender, receiver) = oneshot::channel();
-        let commitments = commitments
-            .drain(..)
-            .filter_map(|commitment| commitment.try_into().ok())
-            .collect();
-        self.send_command(
-            Command::CommitMany(contract_id, commitments, sender),
-            receiver,
-        )
-    }
-
-    fn reveal_many(&self, contract_id: B256, mut reveals: Vec<OpaqueReveal>) -> BoxFuture<()> {
-        let (sender, receiver) = oneshot::channel();
-        let reveals = reveals
-            .drain(..)
-            .filter_map(|reveal| reveal.try_into().ok())
-            .collect();
-        self.send_command(Command::RevealMany(contract_id, reveals, sender), receiver)
     }
 }
 

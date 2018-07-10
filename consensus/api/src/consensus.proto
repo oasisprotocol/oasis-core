@@ -11,8 +11,6 @@ service Consensus {
   rpc GetEvents (EventRequest) returns (stream EventResponse) {}
   rpc Commit (CommitRequest) returns (CommitResponse) {}
   rpc Reveal (RevealRequest) returns (RevealResponse) {}
-  rpc CommitMany (CommitManyRequest) returns (CommitResponse) {}
-  rpc RevealMany (RevealManyRequest) returns (RevealResponse) {}
 }
 
 message Block {
@@ -101,14 +99,4 @@ message RevealRequest {
 }
 
 message RevealResponse {
-}
-
-message CommitManyRequest {
-    bytes contract_id = 1;
-    repeated Commitment commitments = 2;
-}
-
-message RevealManyRequest {
-    bytes contract_id = 1;
-    repeated Reveal reveals = 2;
 }
