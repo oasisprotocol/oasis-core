@@ -6,6 +6,8 @@ use ekiden_common::bytes::H256;
 use ekiden_common::futures::{self, stream, BoxFuture, Future, FutureExt, Stream};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_dummy::DummyStorageBackend;
+use ekiden_epochtime::interface::{EpochTime,TimeSourceNotifier};
+use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 
 struct Inner {
     /// Always-available backend to store uncommitted data.
@@ -16,6 +18,10 @@ struct Inner {
     inserts: Mutex<Vec<(H256, u64)>>,
     /// Maximum number of retries.
     retries: usize,
+    /// Epoch information.
+    time_notifier: Arc<TimeSourceNotifier>,
+    /// Active key list.
+    key_list: Mutex<Vec<(H256,u64)>>,
 }
 
 /// Virtual storage backend which processes a batch of inserts.
@@ -33,7 +39,7 @@ pub struct BatchStorageBackend {
 }
 
 impl BatchStorageBackend {
-    pub fn new(committed: Arc<StorageBackend>, retries: usize) -> Self {
+    pub fn new(committed: Arc<StorageBackend>, retries: usize, time_notifier: Arc<TimeSourceNotifier> ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 // TODO: Should we use persistent storage instead of holding a batch in memory?
@@ -41,6 +47,8 @@ impl BatchStorageBackend {
                 committed,
                 inserts: Mutex::new(vec![]),
                 retries,
+                time_notifier,
+                key_list: Mutex::new(vec![]),
             }),
         }
     }
@@ -102,12 +110,29 @@ impl StorageBackend for BatchStorageBackend {
             .into_box()
     }
 
-    fn get_key_list(&self) -> Vec<(H256, u64)> {
+    fn get_key_list(&self) -> Vec<(H256, u64)>{
         let inner = self.inner.clone();
         let inserts = inner.inserts.lock().unwrap();
         println!("Get Key List is: {:?}", *inserts);
-        let key_list = inserts.to_owned();
-        return key_list;
+        
+        let time_notifier = inner.time_notifier.clone();
+        let epoch_stream = time_notifier.watch_epochs();
+
+        let mut key_list = inner.key_list.lock().unwrap();
+        epoch_stream
+            .for_each(move|_| {
+                key_list.clear();
+                let len = inserts.to_owned().len();
+//                let mut key_list = inner.key_list.lock().unwrap();
+                for i in 0..len {
+                    println!("tracked key is {:?}",inserts.to_owned()[i]);
+                    let key_pair = &mut inserts.to_owned()[i];
+                    &mut key_list.push(key_pair.to_owned());
+                }
+                Ok(())
+            });
+
+        return key_list.to_owned(); 
     }
 }
 
@@ -119,8 +144,10 @@ mod test {
 
     #[test]
     fn test_batch() {
+        let time_source = Arc::new(MockTimeSource::new());
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let committed = Arc::new(DummyStorageBackend::new());
-        let batch = BatchStorageBackend::new(committed.clone(), 1);
+        let batch = BatchStorageBackend::new(committed.clone(), 1, time_notifier.clone());
 
         let key = hash_storage_key(b"value");
         let key2 = hash_storage_key(b"value2");
