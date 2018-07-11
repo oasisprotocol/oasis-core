@@ -14,11 +14,15 @@ run_dummy_node_storage_dummy() {
 }
 
 run_dummy_node_storage_persistent() {
+    local db_dir="/tmp/ekiden-benchmark-storage-persistent"
+    rm -rf ${db_dir}
+
     ${WORKDIR}/target/release/ekiden-node-dummy \
         --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend persistent \
+        --storage-path ${db_dir} \
         2>${LOGDIR}/dummy.log &
 }
 
@@ -51,6 +55,8 @@ run_compute_node_storage_multilayer_remote() {
     local extra_args=$*
 
     local db_dir=/tmp/ekiden-test-storage-multilayer-sled-$id
+    rm -rf ${db_dir}
+
     # Generate port number.
     let "port=id + 10000"
 
@@ -108,6 +114,7 @@ run_benchmark() {
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \
         --output-format ${OUTPUT_FORMAT} \
+        --output-title-prefix "${description}" \
         2>${LOGDIR}/client.log &
     client_pid=$!
 
@@ -115,7 +122,9 @@ run_benchmark() {
     wait ${client_pid}
 
     # Cleanup.
-    echo "Cleaning up."
+    if [[ "${OUTPUT_FORMAT}" == "text" ]]; then
+        echo "Cleaning up."
+    fi
     pkill -P $$
     wait || true
 }

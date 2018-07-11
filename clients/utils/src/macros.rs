@@ -133,6 +133,13 @@ macro_rules! benchmark_app {
                         .takes_value(true)
                         .default_value("text"),
                 )
+                .arg(
+                    Arg::with_name("output-title-prefix")
+                        .long("output-title-prefix")
+                        .help("Output title prefix")
+                        .takes_value(true)
+                        .default_value(""),
+                )
                 .args(&known_components.get_arguments())
                 .get_matches(),
         );
@@ -161,6 +168,13 @@ macro_rules! benchmark_client {
             "json" => OutputFormat::Json,
             _ => unreachable!(),
         };
+
+        let title = if let Some(title_prefix) = args.value_of("output-title-prefix") {
+            format!("{} - {}", title_prefix, stringify!($scenario))
+        } else {
+            format!("{}", stringify!($scenario))
+        };
+
         let benchmark = $crate::benchmark::Benchmark::new(
             value_t!(args, "benchmark-runs", usize).unwrap_or_else(|e| e.exit()),
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
@@ -180,7 +194,8 @@ macro_rules! benchmark_client {
             $finalize,
             output_format == OutputFormat::Text,
         );
-        results.show(stringify!($scenario), output_format);
+
+        results.show(&title, output_format);
     }};
 }
 
