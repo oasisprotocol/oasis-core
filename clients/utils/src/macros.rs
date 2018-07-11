@@ -3,6 +3,8 @@ pub use log::LevelFilter;
 pub use pretty_env_logger::formatted_builder;
 
 pub use ekiden_core::enclave::quote::MrEnclave;
+pub use ekiden_instrumentation::set_boxed_metric_collector;
+pub use ekiden_instrumentation::MetricCollector;
 
 #[macro_export]
 macro_rules! default_app {
@@ -89,6 +91,12 @@ macro_rules! contract_client {
         let mut container = known_components
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
+
+        // Initialize metric collector.
+        let metrics = container
+            .inject_owned::<$crate::macros::MetricCollector>()
+            .expect("failed to inject MetricCollector");
+        $crate::macros::set_boxed_metric_collector(metrics).unwrap();
 
         contract_client!($signer, $contract, args, container)
     }};

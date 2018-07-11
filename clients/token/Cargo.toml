@@ -13,6 +13,7 @@ benchmark = ["client-utils/benchmark"]
 client-utils = { path = "../utils" }
 ekiden-core = { path = "../../core/common" }
 ekiden-contract-client = { path = "../../contract/client" }
+ekiden-instrumentation = { path = "../../instrumentation" }
 ekiden-rpc-client = { path = "../../rpc/client" }
 token-api = { path = "../../contracts/token/api" }
 clap = "2.29.1"
