@@ -182,14 +182,6 @@ mod tests {
         fn reveal(&self, _contract_id: B256, _reveal: Reveal) -> BoxFuture<()> {
             unimplemented!()
         }
-
-        fn commit_many(&self, _contract_id: B256, _commitments: Vec<Commitment>) -> BoxFuture<()> {
-            unimplemented!()
-        }
-
-        fn reveal_many(&self, _contract_id: B256, _reveals: Vec<Reveal>) -> BoxFuture<()> {
-            unimplemented!()
-        }
     }
 
     #[test]

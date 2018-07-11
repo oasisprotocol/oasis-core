@@ -186,9 +186,27 @@ scenario_multilayer_remote() {
     run_compute_node_storage_multilayer_remote 3
 }
 
+scenario_fail_worker_after_registration() {
+    run_compute_node 1 --compute-replicas 2 --compute-allowed-stragglers 1
+    sleep 1
+    run_compute_node 2 --compute-replicas 2 --compute-allowed-stragglers 1 --test-fail-after-registration
+    sleep 1
+    run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 1
+}
+
+scenario_fail_worker_after_commit() {
+    run_compute_node 1 --compute-replicas 2 --compute-allowed-stragglers 1
+    sleep 1
+    run_compute_node 2 --compute-replicas 2 --compute-allowed-stragglers 1 --test-fail-after-commit
+    sleep 1
+    run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 1
+}
+
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
+run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_default
+run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_default
 run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
 run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_default
 if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then

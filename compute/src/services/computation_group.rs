@@ -1,19 +1,16 @@
 //! Inter-node service.
-use std::convert::TryFrom;
 use std::sync::Arc;
 
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
-use ekiden_compute_api::{ComputationGroup, SubmitAggCommitRequest, SubmitAggResponse,
-                         SubmitAggRevealRequest, SubmitBatchRequest, SubmitBatchResponse};
+use ekiden_compute_api::{ComputationGroup, SubmitBatchRequest, SubmitBatchResponse};
 use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::x509::get_node_id;
 
 use super::super::consensus::ConsensusFrontend;
-use ekiden_consensus_base::{Commitment, Reveal};
 
 struct Inner {
     /// Consensus frontend.
@@ -57,66 +54,6 @@ impl ComputationGroup for ComputationGroupService {
 
         let f = match f() {
             Ok(()) => sink.success(SubmitBatchResponse::new()),
-            Err(error) => sink.fail(RpcStatus::new(
-                RpcStatusCode::Internal,
-                Some(error.description().to_owned()),
-            )),
-        };
-        ctx.spawn(f.map_err(|_error| ()));
-    }
-
-    fn submit_agg_commit(
-        &self,
-        ctx: grpcio::RpcContext,
-        request: SubmitAggCommitRequest,
-        sink: grpcio::UnarySink<SubmitAggResponse>,
-    ) {
-        measure_histogram_timer!("submit_agg_commit_time");
-        measure_counter_inc!("submit_agg_commit_calls");
-
-        let f = || -> Result<()> {
-            let node_id = get_node_id(&ctx)?;
-            let commitment = Commitment::try_from(request.get_commit().clone())?;
-
-            self.inner
-                .consensus_frontend
-                .process_agg_commit(node_id, commitment)?;
-
-            Ok(())
-        };
-
-        let f = match f() {
-            Ok(()) => sink.success(SubmitAggResponse::new()),
-            Err(error) => sink.fail(RpcStatus::new(
-                RpcStatusCode::Internal,
-                Some(error.description().to_owned()),
-            )),
-        };
-        ctx.spawn(f.map_err(|_error| ()));
-    }
-
-    fn submit_agg_reveal(
-        &self,
-        ctx: grpcio::RpcContext,
-        request: SubmitAggRevealRequest,
-        sink: grpcio::UnarySink<SubmitAggResponse>,
-    ) {
-        measure_histogram_timer!("submit_agg_reveal_time");
-        measure_counter_inc!("submit_agg_reveal_calls");
-
-        let f = || -> Result<()> {
-            let node_id = get_node_id(&ctx)?;
-            let reveal = Reveal::try_from(request.get_reveal().clone())?;
-
-            self.inner
-                .consensus_frontend
-                .process_agg_reveal(node_id, reveal)?;
-
-            Ok(())
-        };
-
-        let f = match f() {
-            Ok(()) => sink.success(SubmitAggResponse::new()),
             Err(error) => sink.fail(RpcStatus::new(
                 RpcStatusCode::Internal,
                 Some(error.description().to_owned()),

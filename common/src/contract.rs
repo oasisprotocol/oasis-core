@@ -33,6 +33,8 @@ pub struct Contract {
     pub replica_group_size: u64,
     /// The size of the discrepancy resolution replica group.
     pub replica_group_backup_size: u64,
+    /// The allowed number of stragglers.
+    pub replica_allowed_stragglers: u64,
 
     /// The size of the storage grou pthis contract will use.
     pub storage_group_size: u64,
@@ -63,6 +65,7 @@ impl TryFrom<api::Contract> for Contract {
             advertisement_rate: a.advertisement_rate,
             replica_group_size: a.replica_group_size,
             replica_group_backup_size: a.replica_group_backup_size,
+            replica_allowed_stragglers: a.replica_allowed_stragglers,
             storage_group_size: a.storage_group_size,
         })
     }
@@ -85,6 +88,7 @@ impl Into<api::Contract> for Contract {
         c.set_advertisement_rate(self.advertisement_rate);
         c.set_replica_group_size(self.replica_group_size);
         c.set_replica_group_backup_size(self.replica_group_backup_size);
+        c.set_replica_allowed_stragglers(self.replica_allowed_stragglers);
         c.set_storage_group_size(self.storage_group_size);
         c
     }

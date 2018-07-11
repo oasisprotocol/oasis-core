@@ -1,4 +1,6 @@
 //! Compute node.
+#[cfg(feature = "testing")]
+use std::process::abort;
 use std::sync::Arc;
 
 use grpcio;
@@ -31,6 +33,8 @@ use super::worker::{Worker, WorkerConfiguration};
 pub struct ComputeNodeTestOnlyConfiguration {
     /// Override contract identifier.
     pub contract_id: Option<B256>,
+    /// Fail after registration.
+    pub fail_after_registration: bool,
 }
 
 /// Compute node configuration.
@@ -43,6 +47,9 @@ pub struct ComputeNodeConfiguration {
     /// Number of compute backup replicas.
     // TODO: Remove this once we have independent contract registration.
     pub compute_backup_replicas: u64,
+    /// Number of allowed stragglers.
+    // TODO: Remove this once we have independent contract registration.
+    pub compute_allowed_stragglers: u64,
     /// Consensus configuration.
     pub consensus: ConsensusConfiguration,
     /// IAS configuration.
@@ -101,6 +108,7 @@ impl ComputeNode {
             contract.id = contract_id;
             contract.replica_group_size = config.compute_replicas;
             contract.replica_group_backup_size = config.compute_backup_replicas;
+            contract.replica_allowed_stragglers = config.compute_allowed_stragglers;
             contract.storage_group_size = 1;
 
             contract
@@ -122,6 +130,15 @@ impl ComputeNode {
         info!("Registering compute node with the registry");
         entity_registry.register_node(signed_node).wait()?;
         info!("Compute node registration done");
+
+        // Test mode: crash after registration.
+        #[cfg(feature = "testing")]
+        {
+            if config.test_only.fail_after_registration {
+                error!("TEST MODE: crashing after registration");
+                abort();
+            }
+        }
 
         // Environment.
         let environment = container.inject::<Environment>()?;
