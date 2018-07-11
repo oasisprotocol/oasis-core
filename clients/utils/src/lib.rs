@@ -19,6 +19,7 @@ extern crate ekiden_db_trusted;
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
+extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_client;

@@ -90,6 +90,12 @@ macro_rules! contract_client {
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
 
+        // Initialize metric collector.
+        let metrics = container
+            .inject_owned::<ekiden_instrumentation::MetricCollector>()
+            .expect("failed to inject MetricCollector");
+        ekiden_instrumentation::set_boxed_metric_collector(metrics).unwrap();
+
         contract_client!($signer, $contract, args, container)
     }};
 }

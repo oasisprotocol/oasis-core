@@ -9,6 +9,8 @@ extern crate rand;
 extern crate client_utils;
 extern crate ekiden_contract_client;
 extern crate ekiden_core;
+#[macro_use]
+extern crate ekiden_instrumentation;
 extern crate ekiden_rpc_client;
 
 extern crate token_api;
@@ -75,6 +77,7 @@ fn scenario(client: &mut token::Client) {
         })
         .wait()
         .unwrap();
+    measure_counter_inc!("value_transferred", 3);
 
     // Check balances.
     let response = client
