@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use serde_cbor;
 
-use ekiden_consensus_base::{Block, ConsensusBackend, ConsensusSigner, Event, Nonce};
+use ekiden_consensus_base::{Block, ConsensusBackend, ConsensusSigner, Event};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::environment::Environment;
@@ -53,10 +53,7 @@ enum State {
     /// A batch has been dispatched to the worker for processing.
     ProcessingBatch(Role, Arc<CallBatch>),
     /// We have committed to a specific batch in the current consensus round and are
-    /// waiting for the consensus backend to notify us to send reveals.
-    ProposedBatch(Role, Arc<CallBatch>, Nonce, Block),
-    /// We have submitted a reveal for the committed batch in the current consensus
-    /// round and are waiting ro the consensus backend to finalize the block.
+    /// waiting for the consensus backend to finalize the block.
     WaitingForFinalize(Role, Arc<CallBatch>, Block),
     /// Computation group has changed.
     ComputationGroupChanged(Option<Role>, Option<Arc<CallBatch>>),
@@ -68,7 +65,6 @@ impl State {
         match *self {
             State::WaitingForBatch(role) => Some(role),
             State::ProcessingBatch(role, ..) => Some(role),
-            State::ProposedBatch(role, ..) => Some(role),
             State::WaitingForFinalize(role, ..) => Some(role),
             State::ComputationGroupChanged(role, ..) => role,
             _ => None,
@@ -79,7 +75,6 @@ impl State {
     pub fn get_batch(&self) -> Option<Arc<CallBatch>> {
         match *self {
             State::ProcessingBatch(_, ref batch) => Some(batch.clone()),
-            State::ProposedBatch(_, ref batch, ..) => Some(batch.clone()),
             State::WaitingForFinalize(_, ref batch, ..) => Some(batch.clone()),
             State::ComputationGroupChanged(_, ref maybe_batch) => maybe_batch.as_ref().cloned(),
             _ => None,
@@ -105,7 +100,6 @@ impl fmt::Display for State {
                 State::NotReady => "NotReady".into(),
                 State::WaitingForBatch(role, ..) => format!("WaitingForBatch({:?})", role),
                 State::ProcessingBatch(role, ..) => format!("ProcessingBatch({:?})", role),
-                State::ProposedBatch(role, ..) => format!("ProposedBatch({:?})", role),
                 State::WaitingForFinalize(role, ..) => format!("WaitingForFinalize({:?})", role),
                 State::ComputationGroupChanged(Some(role), ..) => {
                     format!("ComputationGroupChanged({:?})", role)
@@ -367,9 +361,6 @@ impl ConsensusFrontend {
                         Self::check_and_process_incoming_queue(inner.clone())
                     }
                     Command::ProcessBlock(block) => Self::handle_block(inner.clone(), block),
-                    Command::ProcessEvent(Event::CommitmentsReceived(discrepancy)) => {
-                        Self::handle_commitments_received(inner.clone(), discrepancy)
-                    }
                     Command::ProcessEvent(Event::RoundFailed(error)) => {
                         Self::fail_batch(inner.clone(), format!("round failed: {}", error.message))
                     }
@@ -400,21 +391,13 @@ impl ConsensusFrontend {
             (&State::WaitingForBatch(role_a, ..), &State::WaitingForBatch(role_b, ..))
                 if role_a != role_b => {}
 
-            // Transitions from ProcessingBatch state. We can either transition to proposing
-            // a batch (commit to batch) in the same role, abort the current batch and return
-            // to waiting for a batch in the same role or switch roles in case the committee
-            // changes.
-            (&State::ProcessingBatch(role_a, ..), &State::ProposedBatch(role_b, ..))
-                if role_a == role_b => {}
-            (&State::ProcessingBatch(..), &State::WaitingForBatch(_)) => {}
-
-            // Transitions from the ProposedBatch state. We can either transition to submitting
-            // a reveal and waiting for round finalization in the same role, abort the current
+            // Transitions from the ProcessingBatch state. We can either transition to submitting
+            // a commit and waiting for round finalization in the same role, abort the current
             // batch and return to waiting for a batch in the same role or switch roles in case
             // the committee changes.
-            (&State::ProposedBatch(role_a, ..), &State::WaitingForFinalize(role_b, ..))
+            (&State::ProcessingBatch(role_a, ..), &State::WaitingForFinalize(role_b, ..))
                 if role_a == role_b => {}
-            (&State::ProposedBatch(..), &State::WaitingForBatch(_)) => {}
+            (&State::ProcessingBatch(..), &State::WaitingForBatch(_)) => {}
 
             // Transitions from WaitingForFinalize state. We can transition to waiting for new
             // batches in either the current role or switch roles in case the committee changes.
@@ -499,41 +482,6 @@ impl ConsensusFrontend {
                 );
 
                 Ok(())
-            })
-            .into_box()
-    }
-
-    /// Handle commitments received event from consensus backend.
-    fn handle_commitments_received(inner: Arc<Inner>, discrepancy: bool) -> BoxFuture<()> {
-        let (role, batch, nonce, block) = require_state_ignore!(
-            inner,
-            State::ProposedBatch(role, batch, nonce, block) => (role, batch, nonce, block)
-        );
-
-        assert!(!discrepancy || role == Role::BackupWorker);
-
-        info!("Submitting reveal");
-
-        // Generate and submit reveal.
-        let reveal = match inner.signer.sign_reveal(&block.header, &nonce) {
-            Ok(reveal) => reveal,
-            Err(error) => {
-                return Self::fail_batch(
-                    inner,
-                    format!("error while signing reveal: {}", error.message),
-                );
-            }
-        };
-
-        Self::transition(inner.clone(), State::WaitingForFinalize(role, batch, block));
-
-        let inner = inner.clone();
-        inner
-            .backend
-            .reveal(inner.contract_id, reveal)
-            .or_else(|error| {
-                // Failed to submit reveal, abort current batch.
-                Self::fail_batch(inner, format!("Failed to reveal block: {}", error.message))
             })
             .into_box()
     }
@@ -795,7 +743,7 @@ impl ConsensusFrontend {
         );
 
         // Generate commitment.
-        let (commitment, nonce) = match inner.signer.sign_commitment(&block.header) {
+        let commitment = match inner.signer.sign_commitment(&block.header) {
             Ok(result) => result,
             Err(error) => {
                 return Self::fail_batch(
@@ -805,10 +753,7 @@ impl ConsensusFrontend {
             }
         };
 
-        Self::transition(
-            inner.clone(),
-            State::ProposedBatch(role, batch, nonce, block),
-        );
+        Self::transition(inner.clone(), State::WaitingForFinalize(role, batch, block));
 
         // Store outputs and then commit to block.
         let inner_clone = inner.clone();
@@ -828,7 +773,7 @@ impl ConsensusFrontend {
                 )
             })
             .and_then(move |_| {
-                require_state!(inner, State::ProposedBatch(..), "proposing batch");
+                require_state!(inner, State::WaitingForFinalize(..), "proposing batch");
 
                 measure_counter_inc!("proposed_batch_count");
 
