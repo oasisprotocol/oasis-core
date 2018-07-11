@@ -117,6 +117,14 @@ macro_rules! benchmark_app {
                         .takes_value(true)
                         .default_value("1000"),
                 )
+                .arg(
+                    Arg::with_name("output-format")
+                        .long("output-format")
+                        .help("Output format")
+                        .possible_values(&["text", "json"])
+                        .takes_value(true)
+                        .default_value("text"),
+                )
                 .args(&known_components.get_arguments())
                 .get_matches(),
         );
@@ -135,9 +143,16 @@ macro_rules! benchmark_app {
 #[macro_export]
 macro_rules! benchmark_client {
     ($app:ident, $signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+        use $crate::benchmark::OutputFormat;
+
         let (args, container) = ($app.0.clone(), $app.1.clone());
         let signer = $signer.clone();
 
+        let output_format = match args.value_of("output-format").unwrap() {
+            "text" => OutputFormat::Text,
+            "json" => OutputFormat::Json,
+            _ => unreachable!(),
+        };
         let benchmark = $crate::benchmark::Benchmark::new(
             value_t!(args, "benchmark-runs", usize).unwrap_or_else(|e| e.exit()),
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
@@ -151,9 +166,22 @@ macro_rules! benchmark_client {
             },
         );
 
-        let results = benchmark.run($init, $scenario, $finalize);
-        println!("------ {} ------", stringify!($scenario));
-        results.show();
-        println!("");
+        let results = benchmark.run(
+            $init,
+            $scenario,
+            $finalize,
+            output_format == OutputFormat::Text,
+        );
+        results.show(stringify!($scenario), output_format);
     }};
+}
+
+#[cfg(feature = "benchmark")]
+#[macro_export]
+macro_rules! benchmark_multiple {
+    ($app:ident, $signer:ident, $contract:ident, [$($scenario:expr),*]) => {
+        $(
+            benchmark_client!($app, $signer, $contract, None, $scenario, None);
+        )*
+    }
 }
