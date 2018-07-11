@@ -1,14 +1,24 @@
 #!/bin/bash -e
 
-WORKDIR=${1:-$(pwd)}
+OUTPUT_FORMAT=${1:-text}
+WORKDIR=${2:-$(pwd)}
 LOGDIR=/tmp/ekiden-benchmarks
 
-run_dummy_node_default() {
+run_dummy_node_storage_dummy() {
     ${WORKDIR}/target/release/ekiden-node-dummy \
         --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend dummy \
+        2>${LOGDIR}/dummy.log &
+}
+
+run_dummy_node_storage_persistent() {
+    ${WORKDIR}/target/release/ekiden-node-dummy \
+        --random-beacon-backend dummy \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --time-source-notifier mockrpc \
+        --storage-backend persistent \
         2>${LOGDIR}/dummy.log &
 }
 
@@ -68,7 +78,9 @@ run_benchmark() {
     local epochs=$4
     local dummy_node_runner=$5
 
-    echo "RUNNING BENCHMARK: ${description}"
+    if [[ "${OUTPUT_FORMAT}" == "text" ]]; then
+        echo "RUNNING BENCHMARK: ${description}"
+    fi
 
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT
@@ -95,6 +107,7 @@ run_benchmark() {
         --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \
+        --output-format ${OUTPUT_FORMAT} \
         2>${LOGDIR}/client.log &
     client_pid=$!
 
@@ -121,5 +134,6 @@ scenario_multilayer_remote() {
     sleep 1
 }
 
-run_benchmark scenario_basic "e2e-benchmark" benchmark 1 run_dummy_node_default
-run_benchmark scenario_multilayer_remote "e2e-benchmark-multilayer-remote" benchmark 1 run_dummy_node_default
+run_benchmark scenario_basic "e2e-benchmark" benchmark 1 run_dummy_node_storage_dummy
+run_benchmark scenario_basic "e2e-benchmark-persistent" benchmark 1 run_dummy_node_storage_persistent
+run_benchmark scenario_multilayer_remote "e2e-benchmark-multilayer-remote" benchmark 1 run_dummy_node_storage_dummy

@@ -69,30 +69,16 @@ fn main() {
     let app = benchmark_app!();
     let signer = create_key_pair();
 
-    benchmark_client!(app, signer, token, None, scenario_null, None);
-    benchmark_client!(
+    benchmark_multiple!(
         app,
         signer,
         token,
-        None,
-        scenario_null_storage_insert_1,
-        None
+        [
+            scenario_null,
+            scenario_null_storage_insert_1,
+            scenario_null_storage_insert_2,
+            scenario_null_storage_insert_10,
+            scenario_list_storage_insert
+        ]
     );
-    benchmark_client!(
-        app,
-        signer,
-        token,
-        None,
-        scenario_null_storage_insert_2,
-        None
-    );
-    benchmark_client!(
-        app,
-        signer,
-        token,
-        None,
-        scenario_null_storage_insert_10,
-        None
-    );
-    benchmark_client!(app, signer, token, None, scenario_list_storage_insert, None);
 }
