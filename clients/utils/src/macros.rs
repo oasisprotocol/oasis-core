@@ -55,11 +55,10 @@ macro_rules! contract_client {
     ($signer:ident, $contract:ident, $args:ident, $container:ident) => {{
         use $crate::macros::*;
 
-        // Initialize metric collector.
-        let metrics = $container
-            .inject_owned::<$crate::macros::MetricCollector>()
-            .expect("failed to inject MetricCollector");
-        $crate::macros::set_boxed_metric_collector(metrics).unwrap();
+        // Initialize metric collector (if not already initialized).
+        if let Ok(metrics) = $container.inject_owned::<$crate::macros::MetricCollector>() {
+            $crate::macros::set_boxed_metric_collector(metrics).unwrap();
+        }
 
         // Determine contract identifier.
         let contract_id = if $args.is_present("test-contract-id") {
@@ -145,9 +144,16 @@ macro_rules! benchmark_app {
         );
 
         // Initialize component container.
-        let container = known_components
+        let mut container = known_components
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
+
+        // Initialize metric collector.
+        let metrics = container
+            .inject_owned::<$crate::macros::MetricCollector>()
+            .expect("failed to inject MetricCollector");
+        $crate::macros::set_boxed_metric_collector(metrics).unwrap();
+
         let container = Arc::new(Mutex::new(container));
 
         (args, container)
