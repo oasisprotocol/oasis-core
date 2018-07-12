@@ -9,9 +9,16 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     autoconf automake libtool ocaml ocamlbuild \
     # for SGX PSW
     libssl-dev libcurl4-openssl-dev \
+    # for rocksdb
+    libsnappy-dev librocksdb-dev \
     # convenience
     golang && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*
+
+# Required because librocksdb5.8 doesn't provide it
+COPY librocksdb.pc /usr/lib/x86_64-linux-gnu/pkgconfig/librocksdb.pc
+# Required because rocksdb bindings search with lib prefix
+RUN cp /usr/lib/x86_64-linux-gnu/pkgconfig/snappy.pc /usr/lib/x86_64-linux-gnu/pkgconfig/libsnappy.pc
 
 ENV HOME="/root"
 ENV PATH="${HOME}/.cargo/bin:${PATH}"
