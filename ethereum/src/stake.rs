@@ -41,36 +41,8 @@ fn amount_to_web3_u256(v: AmountType) -> web3::types::U256 {
     web3::types::U256::from_little_endian(&v.to_vec())
 }
 
-fn web3_u256_to_escrow_account_id(v: web3::types::U256) -> EscrowAccountIdType {
-    let mut slice = [0u8; 32];
-    v.to_little_endian(&mut slice);
-    EscrowAccountIdType::from_slice(&slice).unwrap()
-}
-
-fn escrow_account_id_to_web_u256(v: EscrowAccountIdType) -> web3::types::U256 {
-    web3::types::U256::from_little_endian(&v.to_vec())
-}
-
 fn b256_to_web3_address(v: B256) -> web3::types::H160 {
     web3::types::H160::from_slice(&v.to_vec())
-}
-
-fn web3_address_to_b256(v: web3::types::H160) -> B256 {
-    B256::from_slice(&v.to_vec())
-}
-
-fn b256_to_web3_bytes32(v: B256) -> web3::types::H256 {
-    web3::types::H256::from_slice(&v.to_vec())
-}
-
-fn web3_bytes32_to_b256(b: web3::types::H256) -> B256 {
-    B256::from_slice(&b.to_vec())
-}
-
-fn web3_u256_to_b256(v: web3::types::U256) -> B256 {
-    let mut slice = [0u8; 32];
-    v.to_little_endian(&mut slice);
-    B256::from_slice(&slice)
 }
 
 // We will need this once we get web3 to decode 6 outputs
@@ -121,6 +93,80 @@ impl<T: 'static + Transport + Sync + Send> StakeEscrowBackend for EthereumStake<
 where
     <T as web3::Transport>::Out: Send,
 {
+    fn link_to_dispute_resolution(&self, address: B256) -> BoxFuture<bool> {
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
+            let contract = contract.lock().unwrap();
+            let w3_address = b256_to_web3_address(address);
+            contract
+                .query(
+                    "linkToDisputeResolution",
+                    w3_address.clone(),
+                    local_eth_address.clone(),
+                    Options::default(),
+                    None,
+                )
+                .map_err(|e| Error::new(e.description()))
+                .and_then(move |b: bool| -> BoxFuture<bool> {
+                    if !b {
+                        return Box::new(future::ok(b));
+                    }
+                    let contract = contract_inner.lock().unwrap();
+                    Box::new(
+                        contract
+                            .call_with_confirmations(
+                                "linkToDisputeResolution",
+                                w3_address,
+                                local_eth_address,
+                                Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
+                                NUM_CONFIRMATIONS,
+                            )
+                            .map_err(|e| Error::new(e.description()))
+                            .map(move |_tr| b),
+                    ) // TODO: do something with the TransactionReceipt object
+                })
+        }))
+    }
+
+    fn link_to_entity_registry(&self, address: B256) -> BoxFuture<bool> {
+        let contract = self.contract.clone();
+        let local_eth_address = self.local_eth_address;
+        Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
+            let contract = contract.lock().unwrap();
+            let w3_address = b256_to_web3_address(address);
+            contract
+                .query(
+                    "linkToEntityRegistry",
+                    w3_address.clone(),
+                    local_eth_address.clone(),
+                    Options::default(),
+                    None,
+                )
+                .map_err(|e| Error::new(e.description()))
+                .and_then(move |b: bool| -> BoxFuture<bool> {
+                    if !b {
+                        return Box::new(future::ok(b));
+                    }
+                    let contract = contract_inner.lock().unwrap();
+                    Box::new(
+                        contract
+                            .call_with_confirmations(
+                                "linkToEntityRegistry",
+                                w3_address,
+                                local_eth_address,
+                                Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
+                                NUM_CONFIRMATIONS,
+                            )
+                            .map_err(|e| Error::new(e.description()))
+                            .map(move |_tr| b),
+                    ) // TODO: do something with the TransactionReceipt object
+                })
+        }))
+    }
+
     fn get_name(&self) -> BoxFuture<String> {
         let contract = self.contract.clone();
         let local_eth_address = self.local_eth_address;
@@ -489,52 +535,40 @@ where
         }))
     }
 
-    fn allocate_escrow(
-        &self,
-        msg_sender: B256,
-        target: B256,
-        escrow_amount: AmountType,
-        aux: B256,
-    ) -> BoxFuture<EscrowAccountIdType> {
+    fn add_escrow(&self, msg_sender: B256, escrow_amount: AmountType) -> BoxFuture<AmountType> {
         let contract = self.contract.clone();
         Box::new(future::lazy(move || {
             let contract_inner = contract.clone();
             let contract = contract.lock().unwrap();
             let w3_msg_sender = b256_to_web3_address(msg_sender);
-            let w3_target = b256_to_web3_address(target);
             let w3_escrow_amount = amount_to_web3_u256(escrow_amount);
-            let w3_aux = b256_to_web3_bytes32(aux);
             debug!("w3_msg_sender {}", w3_msg_sender);
-            debug!("w3_target {}", w3_target);
             debug!("w3_escrow_amount {}", w3_escrow_amount);
-            debug!("w3_aux {:?}", w3_aux);
             contract
                 .query(
-                    "allocateEscrow",
-                    (w3_target, w3_escrow_amount, w3_aux.clone()),
+                    "addEscrow",
+                    w3_escrow_amount,
                     w3_msg_sender,
                     Options::default(),
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
                 .and_then(
-                    move |id: web3::types::U256| -> BoxFuture<EscrowAccountIdType> {
+                    move |total_escrow_so_far: web3::types::U256| -> BoxFuture<AmountType> {
                         let contract = contract_inner.lock().unwrap();
                         debug!("w3_msg_sender {}", w3_msg_sender);
-                        debug!("w3_target {}", w3_target);
                         debug!("w3_escrow_amount {}", w3_escrow_amount);
-                        debug!("w3_aux {:?}", w3_aux);
                         Box::new(
                             contract
                                 .call_with_confirmations(
-                                    "allocateEscrow",
-                                    (w3_target, w3_escrow_amount, w3_aux),
+                                    "addEscrow",
+                                    w3_escrow_amount,
                                     w3_msg_sender,
                                     Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
                                     NUM_CONFIRMATIONS,
                                 )
                                 .map_err(|e| Error::new(e.description()))
-                                .map(move |_tr| web3_u256_to_escrow_account_id(id)),
+                                .map(move |_tr| web3_u256_to_amount(total_escrow_so_far)),
                         )
                         // TODO: do something with the TransactionReceipt object
                     },
@@ -542,93 +576,108 @@ where
         }))
     }
 
-    fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator> {
-        let contract = self.contract.clone();
-        let local_eth_address = self.local_eth_address;
-        Box::new(future::lazy(move || {
-            let contract = contract.lock().unwrap();
-            let w3_owner = b256_to_web3_address(owner);
-            contract
-                .query(
-                    "listActiveEscrowsIterator",
-                    w3_owner,
-                    local_eth_address,
-                    Options::default(),
-                    None,
-                )
-                .map_err(|e| Error::new(e.description()))
-                .map(move |result| {
-                    let (has_next, state): (bool, web3::types::U256) = result;
-                    EscrowAccountIterator::new(has_next, owner, web3_u256_to_b256(state))
-                })
-        }))
-    }
-
-    fn list_active_escrows_get(
-        &self,
-        _iter: EscrowAccountIterator,
-    ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)> {
-        // web3 can only decode up to 5 contract call results
-        unimplemented!();
-    }
-
-    fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus> {
+    fn fetch_escrow_amount(&self, owner: B256) -> BoxFuture<AmountType> {
         let contract = self.contract.clone();
         let local_eth_address = self.local_eth_address;
         Box::new(future::lazy(move || {
             let contract = contract.lock().unwrap();
             contract
                 .query(
-                    "fetchEscrowById",
-                    escrow_account_id_to_web_u256(escrow_id),
+                    "fetchEscrowAmount",
+                    b256_to_web3_address(owner),
                     local_eth_address,
                     Options::default(),
                     None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .then(move |r| {
-                    match r {
-                        Ok(result) => {
-                            let (_owner, target, amount, aux): (
-                                web3::types::H160, // address
-                                web3::types::H160, // address
-                                web3::types::U256,
-                                web3::types::H256, // bytes32
-                            ) = result;
-                            // let owner = B256::from_slice(&owner.to_vec());
-                            let target = web3_address_to_b256(target);
-                            let amount = web3_u256_to_amount(amount);
-                            let aux = web3_bytes32_to_b256(aux);
-                            Ok(EscrowAccountStatus::new(escrow_id, target, amount, aux))
-                        }
-                        Err(e) => return Err(e),
+                .then(move |r| match r {
+                    Ok(result) => {
+                        let amount: web3::types::U256 = result;
+                        let amount = web3_u256_to_amount(amount);
+                        Ok(amount)
                     }
+                    Err(e) => return Err(e),
                 })
         }))
     }
 
-    fn take_and_release_escrow(
+    fn take_escrow(
         &self,
         msg_sender: B256,
-        escrow_id: EscrowAccountIdType,
+        owner: B256,
         amount_requested: AmountType,
     ) -> BoxFuture<AmountType> {
         let contract = self.contract.clone();
         Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
             let contract = contract.lock().unwrap();
             let w3_msg_sender = b256_to_web3_address(msg_sender);
-            let w3_escrow_id = escrow_account_id_to_web_u256(escrow_id);
+            let w3_owner = b256_to_web3_address(owner);
             let w3_amount = amount_to_web3_u256(amount_requested);
             contract
-                .call_with_confirmations(
-                    "takeAndReleaseEscrow",
-                    (w3_escrow_id, w3_amount),
+                .query(
+                    "takeEscrow",
+                    (w3_owner, w3_amount),
                     w3_msg_sender,
-                    Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
-                    NUM_CONFIRMATIONS,
+                    Options::default(),
+                    None,
                 )
                 .map_err(|e| Error::new(e.description()))
-                .map(move |_| amount_requested)
+                .and_then(
+                    move |amount_taken: web3::types::U256| -> BoxFuture<AmountType> {
+                        let contract = contract_inner.lock().unwrap();
+                        Box::new(
+                            contract
+                                .call_with_confirmations(
+                                    "takeEscrow",
+                                    (w3_owner, w3_amount),
+                                    w3_msg_sender,
+                                    Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
+                                    NUM_CONFIRMATIONS,
+                                )
+                                .map_err(|e| Error::new(e.description()))
+                                .map(move |_tr| web3_u256_to_amount(amount_taken)),
+                        )
+                        // TODO: do something with the TransactionReceipt object
+                    },
+                )
+        }))
+    }
+
+    fn release_escrow(&self, msg_sender: B256, owner: B256) -> BoxFuture<AmountType> {
+        let contract = self.contract.clone();
+        Box::new(future::lazy(move || {
+            let contract_inner = contract.clone();
+            let contract = contract.lock().unwrap();
+            let w3_msg_sender = b256_to_web3_address(msg_sender);
+            let w3_owner = b256_to_web3_address(owner);
+            contract
+                .query(
+                    "releaseEscrow",
+                    w3_owner,
+                    w3_msg_sender,
+                    Options::default(),
+                    None,
+                )
+                .map_err(|e| Error::new(e.description()))
+                .and_then(
+                    move |amount_returned: web3::types::U256| -> BoxFuture<AmountType> {
+                        let contract = contract_inner.lock().unwrap();
+                        Box::new(
+                            contract
+                                .call_with_confirmations(
+                                    "releaseEscrow",
+                                    w3_owner,
+                                    w3_msg_sender,
+                                    Options::with(|v| v.gas = Some(DEFAULT_GAS.into())),
+                                    NUM_CONFIRMATIONS,
+                                )
+                                .map_err(|e| Error::new(e.description()))
+                                .map(move |_tr| web3_u256_to_amount(amount_returned)),
+                        )
+                        // TODO: do something with the TransactionReceipt object
+                    },
+                )
         }))
     }
 }

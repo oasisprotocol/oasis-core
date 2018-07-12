@@ -2,7 +2,6 @@
 use std::fmt;
 
 use ekiden_common::bytes::B256;
-use ekiden_common::error::Error;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::uint::U256;
 
@@ -29,16 +28,13 @@ pub enum ErrorCodes {
     BadProtoSpender,
     BadProtoTarget,
     BadProtoState,
-    BadProtoAux,
-    BadEscrowId,
+    BadProtoAddress,
     NoStakeAccount,
-    NoEscrowAccount,
-    CallerNotEscrowTarget,
     WouldOverflow,
     InsufficientFunds,
     InsufficientAllowance,
     RequestExceedsEscrowedFunds,
-    InvalidIterator,
+    AddressAlreadySet,
 }
 
 impl fmt::Display for ErrorCodes {
@@ -59,54 +55,6 @@ pub struct EscrowAccountIdType {
     id: U256,
 }
 
-// The new() and incr_mut methods are really only used from the dummy impl.
-impl EscrowAccountIdType {
-    pub fn new() -> Self {
-        // In EVM, the zero value is often special, since mapping
-        // default value is zero.  The Solidity contract does not use
-        // zero as a escrow account id, and we adhere to that
-        // convention here.
-        Self { id: U256::from(1) }
-    }
-
-    pub fn from_vec(id: Vec<u8>) -> Result<EscrowAccountIdType, Error> {
-        if id.len() != 32 {
-            return Err(Error::new(ErrorCodes::BadEscrowId.to_string()));
-        }
-        Ok(EscrowAccountIdType {
-            id: U256::from_little_endian(&id),
-        })
-    }
-
-    pub fn from_slice(slice: &[u8]) -> Result<EscrowAccountIdType, Error> {
-        if slice.len() != 32 {
-            return Err(Error::new(ErrorCodes::BadEscrowId.to_string()));
-        }
-        Ok(EscrowAccountIdType {
-            id: U256::from_little_endian(slice),
-        })
-    }
-
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.id.to_vec()
-    }
-
-    pub fn incr_mut(&mut self) -> Result<(), Error> {
-        let next_id = self.id + U256::from(1);
-        if next_id == U256::from(0) {
-            return Err(Error::new(ErrorCodes::WouldOverflow.to_string()));
-        }
-        self.id = next_id;
-        Ok(())
-    }
-}
-
-impl fmt::Display for EscrowAccountIdType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.id)
-    }
-}
-
 pub struct StakeStatus {
     pub total_stake: AmountType, // Total stake deposited...
     pub escrowed: AmountType,    // ... of which this much is tied up in escrow.
@@ -121,47 +69,16 @@ impl StakeStatus {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct EscrowAccountStatus {
-    pub id: EscrowAccountIdType,
-    pub target: B256,
-    pub amount: AmountType,
-    pub aux: B256,
-}
-
-impl EscrowAccountStatus {
-    pub fn new(id: EscrowAccountIdType, target: B256, amount: AmountType, aux: B256) -> Self {
-        Self {
-            id,
-            target,
-            amount,
-            aux,
-        }
-    }
-}
-
-pub struct EscrowAccountIterator {
-    pub has_next: bool,
-    pub owner: B256,
-    pub state: B256,
-}
-
-impl EscrowAccountIterator {
-    pub fn new(has_next: bool, owner: B256, state: B256) -> Self {
-        Self {
-            has_next,
-            owner,
-            state,
-        }
-    }
-}
-
 /// Stake escrow backend implementing the Ekiden stake/escrow
 /// interface.  The AmountType parameters marked ($$) are intended to
 /// represent actual token transfers; the other AmountType parameters
 /// are requests for values, or status, and do not represent token
 /// transfers.
 pub trait StakeEscrowBackend: Send + Sync {
+    fn link_to_dispute_resolution(&self, address: B256) -> BoxFuture<bool>;
+
+    fn link_to_entity_registry(&self, address: B256) -> BoxFuture<bool>;
+
     fn get_name(&self) -> BoxFuture<String>;
 
     fn get_symbol(&self) -> BoxFuture<String>;
@@ -219,49 +136,28 @@ pub trait StakeEscrowBackend: Send + Sync {
 
     fn burn_from(&self, msg_sender: B256, owner: B256, value: AmountType) -> BoxFuture<bool>;
 
-    /// Allocates |escrow_amount| from the caller (|msg_sender|)'s
-    /// stake account to create a new stake account with |target| as
-    /// the escrow target.  The stake/escrow service will keep the
-    /// funds in escrow until |target| invokes take_and_release_escrow
-    /// on the escrow account id returned by this call.
-    fn allocate_escrow(
+    /// Adds |escrow_amount| from the caller (|msg_sender|'s) stake
+    /// into escrow.  The stake/escrow service will keep the
+    /// funds in escrow until the EntityRegistry invokes release_escrow.
+    /// Returns the total amount of tokens in escrow so far.
+    fn add_escrow(&self, msg_sender: B256, escrow_amount: AmountType) -> BoxFuture<AmountType>;
+
+    /// Returns the escrow amount associated with a given |owner|.
+    fn fetch_escrow_amount(&self, owner: B256) -> BoxFuture<AmountType>;
+
+    /// Transfers |amount_requested| of the escrowed amount to the
+    /// caller's stake account (stake forfeiture).
+    /// Only the DisputeResolution can take escrows.
+    /// Returns the amount taken (should be equal to |amount_requested|).
+    fn take_escrow(
         &self,
         msg_sender: B256,
-        target: B256,
-        escrow_amount: AmountType,
-        aux: B256,
-    ) -> BoxFuture<EscrowAccountIdType>;
-
-    /// Returns an iterator with which the caller can go through all active escrow
-    /// accounts belonging to |owner|.  The iterator is invalidated by operations that
-    /// modify the set of escrow accounts (allocate_escrow, take_and_release_escrow).
-    fn list_active_escrows_iterator(&self, owner: B256) -> BoxFuture<EscrowAccountIterator>;
-
-    // If the iterator |iter|'s |has_next| member is true and the iterator has not been
-    // invalidated, then this will return the next |EscrowAccountStatus| object and the
-    // updated iterator.  The iterator input parameter is consumed and should be
-    // considered invalid.
-    fn list_active_escrows_get(
-        &self,
-        iter: EscrowAccountIterator,
-    ) -> BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>;
-
-    /// Returns the escrow account data associated with a given |escrow_id|.
-    fn fetch_escrow_by_id(&self, escrow_id: EscrowAccountIdType) -> BoxFuture<EscrowAccountStatus>;
-
-    /// Dissolves the escrow account |escrow_id|: the |msg_sender|
-    /// must be the target of the escrow account, and
-    /// |amount_requested| of the escrow amount is transferred to the
-    /// caller's stake account (e.g., stake forfeiture).  Any
-    /// remaining amount is marked as available in the stake account
-    /// of the creator of the escrow account, i.e., it is released
-    /// from escrow and returned back to the owner.  It is an error to
-    /// refer to |escrow_id| after this succeeds, since the escrow
-    /// account will have been destroyed.
-    fn take_and_release_escrow(
-        &self,
-        msg_sender: B256,
-        escrow_id: EscrowAccountIdType,
+        owner: B256,
         amount_requested: AmountType,
     ) -> BoxFuture<AmountType>;
+
+    /// Releases the remainder of the escrowed amount to the owner.
+    /// Only the EntityRegistry can release escrows.
+    /// Returns the amount of tokens that was released.
+    fn release_escrow(&self, msg_sender: B256, owner: B256) -> BoxFuture<AmountType>;
 }

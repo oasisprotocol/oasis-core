@@ -3,52 +3,40 @@ pragma solidity ^0.4.23;
 interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData) external; }
 
 import "./ERC20Interface.sol";
-import "./UintSet.sol";
 
 // The Ekiden Stake token.  It is ERC20 compatible, but also includes
-// the notion of escrow accounts in addition to allowances.  Escrow
-// Accounts hold tokens that the stakeholder cannot use until the
-// escrow account is closed.
+// the notion of escrow in addition to allowances.  Escrow holds tokens
+// that the stakeholder cannot use until the escrow is closed.
 contract Stake is ERC20Interface {
-  using UintSet for UintSet.Data;
   // The convention used here is that contract input parameters are
   // prefixed with an underscore, and output parameters (in returns
   // list) are suffixed with an underscore.
+
+  // Maximum amount of stake that an account can hold.
   uint256 constant AMOUNT_MAX = ~uint256(0);
 
   event Burn(address indexed from, uint256 value);
-  event EscrowCreate(uint indexed escrow_id,
-		     address indexed owner,
-		     address indexed target,
-		     uint256 escrow_amount,
-		     bytes32 aux);
-  event EscrowClose(uint indexed escrow_id, bytes32 aux,
-		    address indexed owner, uint256 value_returned,
-		    address indexed target, uint256 value_claimed);
+
+  // This event is emitted when new escrow is added for the given owner.
+  event EscrowAdd(address indexed owner,
+                  uint256 amount_added);
+  // This event is emitted when a part of the escrow is taken away from the owner.
+  event EscrowTake(address indexed owner,
+                   uint256 amount_taken);
+  // This event is emitted when the remaining escrow is released back to the owner.
+  event EscrowRelease(address indexed owner,
+                      uint256 amount_returned);
 
   struct StakeEscrowInfo {
     uint256 amount;  // Total stake, including inaccessible tokens
-		     // that are in escrow.
-    uint256 escrowed;  // sum_{a \in accounts} escrow_map[a].amount
+                     // that are in escrow.
+    uint256 escrowed;  // Tokens in escrow.
 
-    UintSet.Data escrows;  // Set containing all the escrow account
-			   // ids created by the stakeholder.
-
-    // ERC20 allowances.  Unlike escrows, these permit an address to
+    // ERC20 allowances.  Unlike escrow, these permit an address to
     // transfer an amount without setting the tokens aside, so there
     // is no guarantee that the allowance amount would actually be
     // available when the entity with the allowance needs it.
     mapping(address => uint) allowances;
-  }
-
-  // Currently only the target may close the escrow account,
-  // claiming/taking an amount that is at most the amount deposited
-  // into the escrow account.
-  struct EscrowAccount {
-    address owner;
-    address target;
-    uint256 amount;
-    bytes32 aux;  // what the escrow account is used for?
   }
 
   // ERC20 public variables; set once, at constract instantiation.
@@ -58,23 +46,51 @@ contract Stake is ERC20Interface {
   uint256 public totalSupply;
 
   StakeEscrowInfo[] accounts;  // zero index is never used (mapping default)
-  EscrowAccount[] escrows;  // zero index is never used
 
+  // Mapping `stakes` maps Ethereum address to index in `accounts` array.
   mapping(address => uint) stakes;
+
+  // Hardcoded addresses for the DisputeResolution and EntityRegistry contracts.
+  // Only the DisputeResolution can call `takeEscrow` and only the
+  // EntityRegistry can call `releaseEscrow`, so we need to have their
+  // addresses to check that.
+  address dr_contract_addr;
+  address registry_contract_addr;
 
   constructor(uint256 _initial_supply, string _tokenName, string _tokenSymbol) public {
     StakeEscrowInfo memory dummy_stake;
     accounts.push(dummy_stake); // fill in zero index
-    EscrowAccount memory dummy_escrow;
-    escrows.push(dummy_escrow); // fill in zero index
     totalSupply = _initial_supply * 10 ** uint256(decimals);
     _depositStake(msg.sender, totalSupply);
     name = _tokenName;
     symbol = _tokenSymbol;
+
+    // At initialization, the DisputeResolution and EntityRegistry contracts
+    // also depend on us being already initialized, so we can't have their
+    // addresses here, but they have to be set later using
+    // `linkToDisputeResolution` and `linkToEntityRegistry`.
+    dr_contract_addr = 0;
+    registry_contract_addr = 0;
   }
 
   function() public {
     revert();
+  }
+
+  // Tell the Stake contract on which address the DisputeResolution contract
+  // was deployed on.  This can only be done once.
+  function linkToDisputeResolution(address _dr_contract_addr) public returns (bool success_) {
+    require(dr_contract_addr == 0);
+    dr_contract_addr = _dr_contract_addr;
+    success_ = true;
+  }
+
+  // Tell the Stake contract on which address the EntityRegistry contract
+  // was deployed on.  This can only be done once.
+  function linkToEntityRegistry(address _registry_contract_addr) public returns (bool success_) {
+    require(registry_contract_addr == 0);
+    registry_contract_addr = _registry_contract_addr;
+    success_ = true;
   }
 
   function _addNewStakeEscrowInfo(address _addr, uint256 _amount, uint256 _escrowed) private
@@ -86,7 +102,6 @@ contract Stake is ERC20Interface {
     ix_ = accounts.length;
     stakes[_addr] = ix_;
     accounts.push(entry);
-    accounts[ix_].escrows.init();  // init must be called when in storage
   }
 
   function _depositStake(address _owner, uint256 _additional_stake) private {
@@ -281,14 +296,12 @@ contract Stake is ERC20Interface {
     success_ = true;
   }
 
-  function allocateEscrow(address _target, uint256 _amount, bytes32 _aux) external
-    returns (uint escrow_id_) {
-    escrow_id_ = _allocateEscrow(msg.sender, _target, _amount, _aux);
-    emit EscrowCreate(escrow_id_, msg.sender, _target, _amount, _aux);
+  function addEscrow(uint256 _amount) external returns (uint256 total_escrow_so_far_) {
+    total_escrow_so_far_ = _addEscrow(msg.sender, _amount);
+    emit EscrowAdd(msg.sender, _amount);
   }
 
-  function _allocateEscrow(address _owner, address _target, uint256 _amount, bytes32 _aux)
-    private returns (uint escrow_id_) {
+  function _addEscrow(address _owner, uint256 _amount) private returns (uint256 total_escrow_so_far_) {
     uint owner_ix = stakes[_owner];
     require (owner_ix != 0);
     // NoStakeAccount
@@ -296,101 +309,64 @@ contract Stake is ERC20Interface {
     // InsufficientFunds
 
     accounts[owner_ix].escrowed += _amount;
-    EscrowAccount memory ea;
-    ea.owner = _owner;
-    ea.target = _target;
-    ea.amount = _amount;
-    ea.aux = _aux;
-    escrow_id_ = escrows.length;
-    escrows.push(ea);  // copies to storage
-    accounts[owner_ix].escrows.addEntry(escrow_id_);
+
+    total_escrow_so_far_ = accounts[owner_ix].escrowed;
   }
 
   // The information is publicly available in the blockchain, so we
   // might as well allow the public to get the information via an API
   // call, instead of reconstructing it from the blockchain.
-  function listActiveEscrowsIterator(address owner) external view
-    returns (bool has_next_, uint state_) {
-    uint owner_ix = stakes[owner];
-    if (owner_ix == 0) {
-      has_next_ = false;
-    } else {
-      has_next_ = accounts[owner_ix].escrows.size() != 0;
-    }
-    state_ = 0;
-  }
-
-  function listActiveEscrowsGet(address _owner, uint _state) external view
-    returns (uint id_, address target_, uint256 amount_, bytes32 aux_,
-	     bool has_next_, uint next_state_) {
+  function fetchEscrowAmount(address _owner) external view returns (uint256 total_escrow_so_far_) {
     uint owner_ix = stakes[_owner];
     require(owner_ix != 0);
-    require(_state < accounts[owner_ix].escrows.size());
-    uint escrow_ix = accounts[owner_ix].escrows.get(_state);
-    assert(escrow_ix != 0);
-    assert(escrow_ix < escrows.length);
-    EscrowAccount memory ea = escrows[escrow_ix];
-    assert(ea.owner == _owner);
 
-    id_ = escrow_ix;
-    target_ = ea.target;
-    amount_ = ea.amount;
-    aux_ = ea.aux;
-
-    next_state_ = _state + 1;
-    has_next_ = next_state_ < accounts[owner_ix].escrows.size();
+    total_escrow_so_far_ = accounts[owner_ix].escrowed;
   }
 
-  function fetchEscrowById(uint _escrow_id) external view
-    returns (address owner_, address target_, uint256 amount_, bytes32 aux_) {
-    require(_escrow_id != 0);
-    EscrowAccount memory ea = escrows[_escrow_id]; // copy to memory
-    require(ea.owner != 0x0); // deleted escrow account will have zero address
-    owner_ = ea.owner; // out
-    target_ = ea.target; // out
-    amount_ = ea.amount; // out
-    aux_ = ea.aux;
-  }
+  function takeEscrow(address _owner, uint256 _amount_requested) external returns (uint256 amount_taken_) {
+    // Only the DisputeResolution contract may take escrow.
+    require(msg.sender == dr_contract_addr);
 
-  function takeAndReleaseEscrow(uint _escrow_id, uint256 _amount_requested) external {
-    require(_escrow_id != 0);
-    EscrowAccount memory ea = escrows[_escrow_id];
-    require(ea.owner != 0x0);  // deleted escrow account will have zero address
-    address owner = ea.owner;  // NoEscrowAccount if previously deleted
-    uint owner_ix = stakes[owner];
-    require(owner_ix != 0);  // NoStakeAccount
-    require(_amount_requested <= ea.amount); // RequestExceedsEscrowedFunds
-    uint amount_to_return = ea.amount - _amount_requested;
-    require(msg.sender == ea.target); // CallerNotEscrowTarget
-
-    uint sender_ix = stakes[msg.sender];
-    if (sender_ix == 0) {
-      sender_ix = _addNewStakeEscrowInfo(msg.sender, 0, 0);
+    // Set up a stake account for DisputeResolution if it doesn't have one yet.
+    uint dispute_resolution_ix = stakes[msg.sender];
+    if (dispute_resolution_ix == 0) {
+      dispute_resolution_ix = _addNewStakeEscrowInfo(msg.sender, 0, 0);
     }
 
-    // check some invariants
-    require(ea.amount <= accounts[owner_ix].escrowed);
+    uint owner_ix = stakes[_owner];
+    require(owner_ix != 0);
+    require(_amount_requested <= accounts[owner_ix].escrowed); // RequestExceedsEscrowedFunds
+
+    // Check invariants.
+    require(accounts[owner_ix].escrowed <= accounts[owner_ix].amount);
+    require(accounts[dispute_resolution_ix].amount <= AMOUNT_MAX - _amount_requested); // WouldOverflow
+
+    // Take the escrowed stake from the owner's account and deposit it
+    // in the DisputeResolution contract's account.
+    accounts[owner_ix].amount -= _amount_requested;
+    accounts[owner_ix].escrowed -= _amount_requested;
+    accounts[dispute_resolution_ix].amount += _amount_requested;
+
+    amount_taken_ = _amount_requested;
+    emit EscrowTake(_owner, _amount_requested);
+  }
+
+  function releaseEscrow(address _owner) external returns (uint256 amount_returned_) {
+    // Only the EntityRegistry contract may release escrow.
+    require(msg.sender == registry_contract_addr);
+
+    uint owner_ix = stakes[_owner];
+    require(owner_ix != 0);
+
+    // Check invariants.
     require(accounts[owner_ix].escrowed <= accounts[owner_ix].amount);
 
-    // require(amount_requested <= accounts[owner_ix].amount );
-    // implies by
-    //   _amount_requested <= ea.amount
-    //                     <= accounts[owner_ix].escrowed
-    //                     <= accounts[owner_ix].amount
+    // The remainder of the escrow is released back to the owner.
+    uint256 amount_returned = accounts[owner_ix].escrowed;
+    accounts[owner_ix].escrowed = 0;
 
-    require(accounts[sender_ix].amount <= AMOUNT_MAX - _amount_requested);
-    // WouldOverflow
-
-    accounts[owner_ix].amount -= _amount_requested;
-    accounts[owner_ix].escrowed -= ea.amount;
-    accounts[owner_ix].escrows.removeEntry(_escrow_id);
-    accounts[sender_ix].amount += _amount_requested;
-
-    // delete escrows[_escrow_id];
-    escrows[_escrow_id].owner = 0x0;
-    escrows[_escrow_id].target = 0x0;
-    escrows[_escrow_id].amount = 0;
-    emit EscrowClose(_escrow_id, ea.aux, owner, amount_to_return, msg.sender, _amount_requested);
+    amount_returned_ = amount_returned;
+    emit EscrowRelease(_owner, amount_returned);
   }
 }
 

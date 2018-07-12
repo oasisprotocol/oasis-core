@@ -2,16 +2,16 @@ syntax = "proto3";
 
 // This is the stake token and escrow service.  The stake token aspect
 // of the service is ERC20 compliant.  Entities hold/transfer/burn
-// stake tokens, and can create escrow accounts for which the service
-// acts as the escrow agent to enforce the (simple) escrow scenario:
-// the ``target'' of the escrow account and the stakeholder has some
-// agreement (unspecified), and the target will, at the conclusion of
-// the agreement, close the escrow account, claiming some, none, or
-// all of the escrowed tokens as forfeiture, with the remainder, if
-// any, returned to the stakeholder.  The assumption is that the
-// stakeholder will not create an escrow account for a target unless
-// the stakeholder knows (via code auditing) that the target will not
-// claim the escrowed tokens arbitrarily.
+// stake tokens.  Escrow is used only in interaction with the DisputeResolution
+// and EntityRegistry services.
+//
+// Each entity (stakeholder) has a single pot of escrowed tokens that it
+// can add to using `AddEscrow`.  Only the DisputeResolution/Consensus service
+// can take away escrowed tokens (as forfeiture) with `TakeEscrow` and only
+// the EntityRegistry can return the remainder of the escrow (or all of it if
+// there were no forfeitures) to the stakeholder with `ReleaseEscrow`.
+// The current amount of escrowed tokens for a given entity can be seen with
+// `FetchEscrowAmount`.
 
 package stake;
 
@@ -42,16 +42,18 @@ service Stake {
     returns (BurnResponse) {}
   rpc BurnFrom (BurnFromRequest)
     returns (BurnFromResponse) {}
-  rpc AllocateEscrow (AllocateEscrowRequest)
-    returns (AllocateEscrowResponse) {}
-  rpc ListActiveEscrowsIterator (ListActiveEscrowsIteratorRequest)
-    returns (ListActiveEscrowsIteratorResponse) {}
-  rpc ListActiveEscrowsGet(ListActiveEscrowsGetRequest)
-    returns (ListActiveEscrowsGetResponse) {}
-  rpc FetchEscrowById (FetchEscrowByIdRequest)
-    returns (FetchEscrowByIdResponse) {}
-  rpc TakeAndReleaseEscrow (TakeAndReleaseEscrowRequest)
-    returns (TakeAndReleaseEscrowResponse) {}
+  rpc AddEscrow (AddEscrowRequest)
+    returns (AddEscrowResponse) {}
+  rpc FetchEscrowAmount (FetchEscrowAmountRequest)
+    returns (FetchEscrowAmountResponse) {}
+  rpc TakeEscrow (TakeEscrowRequest)
+    returns (TakeEscrowResponse) {}
+  rpc ReleaseEscrow (ReleaseEscrowRequest)
+    returns (ReleaseEscrowResponse) {}
+  rpc LinkToDisputeResolution (LinkToDisputeResolutionRequest)
+    returns (LinkToDisputeResolutionResponse) {}
+  rpc LinkToEntityRegistry (LinkToEntityRegistryRequest)
+    returns (LinkToEntityRegistryResponse) {}
 }
 
 // The RPCs should go over a secured channel so that authentication
@@ -95,18 +97,11 @@ message GetTotalSupplyResponse {
 // Per-caller state:
 //  uint256 amount:  total stake amount
 //  uint256 escrowed:  amount of stake in escrow
-//  map<uint256, pair<uint256, uint256>> escrow_map:  map from
-//    uuid for escrow accounts to the target address and amount of the escrow
 
 // Invariants:
 //
 // 0 <= escrowed <= amount <= MAX_UINT256
 //
-// \sum_{\forall (uuid, escrow) in escrow_map} escrow.second <= MAX_UINT256
-//   (i.e., sum calculation does not overflow)
-//
-// \sum_{\forall (uuid, escrow) in escrow_map} escrow.second = escrowed
-
 // The authenticated caller can get their own stake information.  For
 // now, we do not expect it to be useful/desirable to query for other
 // entity's stake availability etc, though that could change.
@@ -205,123 +200,84 @@ message BurnFromResponse {
   bool success = 1;
 }
 
-// The authenticated caller takes some portion of their available
-// stake and create an escrow for use with a named target entity.  If
-// the target entity decides that the caller has not met their
-// obligation in a transaction, the target may take this escrow
-// amount; on the other hand, if all is well, the target may release
-// it back to the caller.
+// The authenticated caller takes some portion of their available stake
+// and adds it to escrow.  If the caller misbehaves, a part of the escrow
+// is taken away during dispute resolution.  When the caller wants to leave
+// the computation group, the remainder of the escrow is returned.
 //
-// *TODO*: do escrows expire?  If the entity to which the escrow was
-// made via AllocateEscrow disappears (becomes inaccessible), would
-// all funds escrowed to it also disappear (also become inaccessible)?
-// If escrow includes a time limit, then we need some security
-// guarantees about the validity of time, so that an attacker could
-// not trick the stake escrow service to expire an escrow earlier than
-// it should.  (Multisig time service ought to work, since setting the
-// clock back via replaying old messages doesn't help the attacker in
-// this situation.  Releasing escrowed funds a little later than we
-// should is just another denial-of-service attack.)
-//
-// If caller.stake - caller.escrowed >= AllocateEscrowRequest.escrow_amount
+// If caller.stake - caller.escrowed >= AddEscrowRequest.escrow_amount
 // then
-//   uuid = generate_id()
-//   caller.escrow_map[uuid] = pair(entity, escrow_amount)
-//   caller.escrowed += AllocateEscrowRequest.escrow_amount
-//   failure_code = Ok(())
+//   caller.escrowed += AddEscrowRequest.escrow_amount
+//   failure_code = Ok(caller.escrowed)
 // otherwise
 //   caller state unchanged
 //   failure_code = Err(WouldOverflow)
-message AllocateEscrowRequest {
+message AddEscrowRequest {
   bytes msg_sender = 1;
-  // Set aside from the caller's deposited bond for use with
-  // transactions with |entity| the |escrow_amount|, with an
-  // |escrow_id| uuid returned.
-  //
-  // The set-aside values are split apart from the total
-  // bond remaining, and |entity| can do the following operations:
-  //
-  // - FetchEscrowById (escrow_id, entity, escrow_amount) tuple is valid.
-  // - TakeAndReleaseEscrow (escrow_id, n)  n <= amount, amount-n is released.
-  //   (To release entire escrow, use n=0.)
-  bytes target = 2;
   bytes escrow_amount = 3;
-  bytes aux = 4;
 }
 
-message AllocateEscrowResponse {
-  // Failure reasons: Err(InsufficientFunds).
-  bytes escrow_id = 1;
+message AddEscrowResponse {
+  // Failure reasons: Err(NoStakeAccount), Err(InsufficientFunds).
+  bytes total_escrow_so_far = 1; // AmountType
 }
-// The returned escrow id is an identifier and not an authenticator,
-// and instead of a randomly chosen uuid (i.e., version 4, with 122
-// random bits), this could be non-RFC 4122 compliant sequence number
-// to make this deterministic.
 
-message ListActiveEscrowsIteratorRequest {
+message FetchEscrowAmountRequest {
   bytes owner = 1;
 }
 
-message ListActiveEscrowsIteratorResponse {
-  bool has_next = 1;
-  // EscrowAccountIterator's owner field is omitted
-  bytes state = 2; // opaque
-}
-
-message ListActiveEscrowsGetRequest {
-  // EscrowAccountIterator's has_next field is omitted
-  bytes owner = 1;
-  bytes state = 2;
-}
-
-message ListActiveEscrowsGetResponse {
-  bytes escrow_id = 1;
-  bytes target = 2;
+message FetchEscrowAmountResponse {
+  // Possible errors: Err(NoStakeAccount).
   bytes amount = 3;
-  bytes aux = 4;
-  bool has_next = 5;
-  bytes state = 6;
 }
-  
-
-// Rather than sending the entity and amount information, we just
-// allow querying by the escrow id.  The caller (library) can verify
-// that entity address matches and that the amount that was set aside
-// is sufficent.  TODO: do we want to allow this only by the
-// stakeholder/owner of the escrow account or the escrow target?
-message FetchEscrowByIdRequest {
-  bytes escrow_id = 1;
-}
-
-message FetchEscrowByIdResponse {
-  // Possible errors: Err(NoSuchEscrowId)
-  bytes escrow_id = 1;
-  bytes target = 2;
-  bytes amount = 3;
-  bytes aux = 4;
-}
-
-// The authenticated caller indicates that he transactions for which
-// the escrow was created is done, and the escrow account identified
-// by |escrow_id| should be liquidated.  If the escrow account owner
-// has met their obligations, the |amount_requested| could be zero,
-// and the balance would be returned to the creator of the escrow
-// account.  Otherwise, the entire amount specified by |escrow_id|
-// could be forefeited and claimed by |msg_sender|.
 
 // msg_sender should have an account, or one will be created for it.
-message TakeAndReleaseEscrowRequest {
+message TakeEscrowRequest {
   bytes msg_sender = 1;
-  bytes escrow_id = 2;
+  bytes owner = 2;
   bytes amount_requested = 3;
 }
 
-message TakeAndReleaseEscrowResponse {
-  // Possible failures: Err(NoSuchEscrowId), Err(InsufficentFunds)
+message TakeEscrowResponse {
+  // Possible failures: Err(NoStakeAccount), Err(RequestExceedsEscrowedFunds).
   bytes amount_taken = 1;
   // amount transferred to target (caller)'s stake account.  If there
   // is no Err(..), amount_taken should always equal amount_requested
-  // in the request message.  If there is escrow any left over, it is
-  // released into the stakeholder's account and available for
-  // withdrawal via WithdrawStakeRequest
+  // in the request message.
+}
+
+message ReleaseEscrowRequest {
+  bytes msg_sender = 1;
+  bytes owner = 2;
+}
+
+message ReleaseEscrowResponse {
+  // Possible failures: Err(NoStakeAccount).
+  bytes amount_returned = 1;
+}
+
+// The LinkToDisputeResolution and LinkToEntityRegistry calls notify the Stake
+// about the deployment addresses of those two, so it can properly check if
+// TakeEscrow calls are issued only by the DisputeResolution and ReleaseEscrow
+// only by the EntityRegistry.  These addresses can only be set once, right
+// after the Stake, the DisputeResolution, and the EntityRegistry are all
+// initialized and have known addresses.  We can't do this at Stake
+// initialization time, since the other two depend on Stake, but Stake depends
+// on the other two (but only for escrows).
+message LinkToDisputeResolutionRequest {
+  bytes address = 1;
+}
+
+message LinkToDisputeResolutionResponse {
+  // Possible failures: Err(AddressAlreadySet).
+  bool success = 1;
+}
+
+message LinkToEntityRegistryRequest {
+  bytes address = 1;
+}
+
+message LinkToEntityRegistryResponse {
+  // Possible failures: Err(AddressAlreadySet).
+  bool success = 1;
 }
