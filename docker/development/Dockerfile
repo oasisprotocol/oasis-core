@@ -37,8 +37,8 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     rustup component add rust-src && \
     # rustfmt-nightly is crazily unstable, with no versions appearing to exist that
     # work with the 3-16 nightly.
-    rustup update nightly && \
-    cargo +nightly install rustfmt-nightly --version 0.6.1 --force && \
+    rustup update nightly-2018-05-25 && \
+    cargo +nightly-2018-05-25 install rustfmt-nightly --version 0.6.1 --force && \
     cargo install xargo
 
 # install node / npm / truffle.
