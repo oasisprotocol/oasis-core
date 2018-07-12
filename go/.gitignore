@@ -1,0 +1,10 @@
+*.swp
+*~
+
+Gopkg.lock
+ekiden/ekiden
+vendor/
+
+# Ignore output from protoc created via `go generate`.
+grpc/common/common.pb.go
+grpc/dummydebug/dummy_debug.pb.go

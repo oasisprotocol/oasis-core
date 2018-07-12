@@ -108,7 +108,8 @@ jobs:
           cd protoc-gen-go && \
           go install
       - run: cd go && dep ensure
-      - run: cd go && go build -v
+      - run: cd go && go generate ./...
+      - run: cd go && go build -v -o ./ekiden/ekiden ./ekiden
       - run: cd go && go test -v ./...
       - save_cache:
           key: go-cache
