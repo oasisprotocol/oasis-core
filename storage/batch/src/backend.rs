@@ -3,8 +3,7 @@ use std;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::H256;
-use ekiden_common::futures::{self, stream, BoxFuture, Future, FutureExt, Stream};
-use ekiden_common::futures::prelude::*;
+use ekiden_common::futures::{self, stream, future, BoxFuture, Future, FutureExt, Stream};
 use ekiden_common::environment::Environment;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_dummy::DummyStorageBackend;
@@ -23,6 +22,8 @@ struct Inner {
     time_notifier: Arc<TimeSourceNotifier>,
     /// Active key list.
     key_list: Mutex<Vec<(H256,u64)>>,
+    /// Accumulated key list.
+    accu_key_list: Mutex<Vec<(H256,u64)>>,
 }
 
 /// Virtual storage backend which processes a batch of inserts.
@@ -50,14 +51,15 @@ impl BatchStorageBackend {
                 retries,
                 time_notifier,
                 key_list: Mutex::new(vec![]),
+                accu_key_list: Mutex::new(vec![]),
             }),
         };
-        instance.get_keys(environment);
+        instance.start(environment);
         instance
     }
 
-    /// Get active key list.
-    pub fn get_keys(&self, environment: Arc<Environment>){
+    /// Start tracking accumulated key list in each epoch.
+    fn start(&self, environment: Arc<Environment>){
         environment.spawn({
             let shared_inner = self.inner.clone();
             Box::new(
@@ -65,12 +67,13 @@ impl BatchStorageBackend {
                 .time_notifier
                 .watch_epochs()
                 .for_each(move |_|{
-                        let inserts = shared_inner.inserts.lock().unwrap();
+                        let accu_key_list = shared_inner.accu_key_list.lock().unwrap();
                         let mut key_list = shared_inner.key_list.lock().unwrap();
-                        let len = inserts.to_owned().len();
+                        key_list.clear();
+                        let len = accu_key_list.to_owned().len();
                         for i in 0..len{
-                            let key_pair = &mut inserts.to_owned()[i];
-                            println!("tracked key is {:?}",key_pair);
+                            let key_pair = &mut accu_key_list.to_owned()[i];
+                            trace!("tracked key is {:?}",key_pair);
                             key_list.push(key_pair.to_owned());
                         }
                 Ok(())
@@ -79,6 +82,13 @@ impl BatchStorageBackend {
             )
 
         })
+    }
+
+    /// Get the active key list.
+    pub fn get_key_list(&self) -> Vec<(H256,u64)>{
+        let inner = self.inner.clone();
+        let key_list = inner.key_list.lock().unwrap();
+        return key_list.to_owned();
     }
 
     /// Commit all inserts to the committed backend.
@@ -133,6 +143,8 @@ impl StorageBackend for BatchStorageBackend {
             .and_then(move |_| {
                 let mut inserts = inner.inserts.lock().unwrap();
                 inserts.push((key, expiry));
+                let mut accu_key_list = inner.accu_key_list.lock().unwrap();
+                accu_key_list.push((key,expiry));
                 Ok(())
             })
             .into_box()
@@ -161,6 +173,7 @@ mod test {
         let key = hash_storage_key(b"value");
         let delay = time::Duration::from_millis(1000);
 
+        // Force progression of epoch.
         time_source.set_mock_time(0, EPOCH_INTERVAL).unwrap();
         time_notifier.notify_subscribers().unwrap();
         thread::sleep(delay);
@@ -169,6 +182,7 @@ mod test {
         batch.insert(b"value".to_vec(), 10).wait().unwrap();
         assert_eq!(batch.get(key).wait(), Ok(b"value".to_vec()));
 
+        // Force progression of epoch.
         time_source.set_mock_time(1, EPOCH_INTERVAL).unwrap();
         time_notifier.notify_subscribers().unwrap();
         thread::sleep(delay);
