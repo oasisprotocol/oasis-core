@@ -70,12 +70,8 @@ impl BatchStorageBackend {
                         let accu_key_list = shared_inner.accu_key_list.lock().unwrap();
                         let mut key_list = shared_inner.key_list.lock().unwrap();
                         key_list.clear();
-                        let len = accu_key_list.to_owned().len();
-                        for i in 0..len{
-                            let key_pair = &mut accu_key_list.to_owned()[i];
-                            trace!("tracked key is {:?}",key_pair);
-                            key_list.push(key_pair.to_owned());
-                        }
+                        // Get active key list.
+                        *key_list = std::mem::replace(&mut accu_key_list.to_owned(), vec![]);                       
                 Ok(())
                 })
                 .then(|_| future::ok(())),
