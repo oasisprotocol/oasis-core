@@ -1,0 +1,5 @@
+*.swp
+*~
+
+ekiden-node/ekiden-node
+vendor/
