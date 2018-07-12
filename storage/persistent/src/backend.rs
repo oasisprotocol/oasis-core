@@ -1,9 +1,8 @@
 //! Ekiden storage interface.
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use sled::{ConfigBuilder, Tree};
+use exonum_rocksdb::DB;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
@@ -11,8 +10,8 @@ use ekiden_common::futures::prelude::*;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 struct Inner {
-    /// The actual sled database.
-    storage: Tree,
+    /// LevelDB database.
+    db: DB,
 }
 
 pub struct PersistentStorageBackend {
@@ -21,14 +20,9 @@ pub struct PersistentStorageBackend {
 
 impl PersistentStorageBackend {
     pub fn new(path: &Path) -> Result<Self> {
-        if !path.exists() {
-            fs::create_dir(path)?;
-        }
-        let config = ConfigBuilder::default().path(path);
-
         Ok(Self {
             inner: Arc::new(Inner {
-                storage: Tree::start(config.build())?,
+                db: DB::open_default(path)?,
             }),
         })
     }
@@ -40,8 +34,8 @@ impl StorageBackend for PersistentStorageBackend {
         let inner = self.inner.clone();
         let key = key.to_owned();
 
-        future::lazy(move || match inner.storage.get(&key.to_vec()) {
-            Ok(Some(vec)) => Ok(vec),
+        future::lazy(move || match inner.db.get(&key) {
+            Ok(Some(vec)) => Ok(vec.to_vec()),
             _ => Err(Error::new("no key found")),
         }).into_box()
     }
@@ -51,7 +45,7 @@ impl StorageBackend for PersistentStorageBackend {
         let key = hash_storage_key(&value);
 
         future::lazy(move || {
-            inner.storage.set(key.to_vec(), value)?;
+            inner.db.put(&key, &value)?;
 
             Ok(())
         }).into_box()
