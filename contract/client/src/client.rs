@@ -17,12 +17,12 @@ use ekiden_rpc_client::RpcClient;
 
 /// Contract client.
 pub struct ContractClient<Backend: RpcClientBackend + 'static> {
-    /// RPC backend.
-    backend: Arc<Backend>,
     /// Underlying RPC client.
     rpc: RpcClient<Backend>,
     /// Signer used for signing contract calls.
     signer: Arc<Signer>,
+    /// Shared service for waiting for contract calls.
+    call_wait_manager: Arc<super::callwait::Manager>,
     /// Shutdown signal (receiver).
     shutdown_receiver: future::Shared<oneshot::Receiver<()>>,
     /// Shutdown signal (sender).
@@ -34,13 +34,18 @@ where
     Backend: RpcClientBackend + 'static,
 {
     /// Create new client instance.
-    pub fn new(backend: Arc<Backend>, mr_enclave: MrEnclave, signer: Arc<Signer>) -> Self {
+    pub fn new(
+        backend: Arc<Backend>,
+        mr_enclave: MrEnclave,
+        signer: Arc<Signer>,
+        call_wait_manager: Arc<super::callwait::Manager>,
+    ) -> Self {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         ContractClient {
-            backend: backend.clone(),
             rpc: RpcClient::new(backend, mr_enclave, false),
             signer,
+            call_wait_manager,
             shutdown_receiver: shutdown_receiver.shared(),
             shutdown_sender: Mutex::new(Some(shutdown_sender)),
         }
@@ -51,13 +56,12 @@ where
     where
         C: Serialize,
     {
-        let backend = self.backend.clone();
-
+        // Subscribe to contract call so we will know when the call is done.
+        let call_wait = self.call_wait_manager.create_wait();
         self.rpc
             .call(protocol::METHOD_CONTRACT_SUBMIT, signed_call)
             .and_then(move |call_id: H256| {
-                // Subscribe to contract call so we will know when the call is done.
-                backend.wait_contract_call(call_id).and_then(|output| {
+                call_wait.wait_for(call_id).and_then(|output| {
                     // TODO: Submit proof of publication, get decryption.
                     Ok(output)
                 })

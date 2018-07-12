@@ -63,6 +63,8 @@ message Contract {
     uint64 storage_group_size = 9;
 
     uint64 replica_group_backup_size = 10;
+
+    uint64 replica_allowed_stragglers = 11;
 }
 
 service TimeSource {

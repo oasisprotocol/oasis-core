@@ -9,7 +9,7 @@ use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::{ConsensusBackend, Event};
-use commitment::{Commitment, Reveal};
+use super::commitment::Commitment;
 
 #[derive(Clone)]
 pub struct ConsensusService {
@@ -93,11 +93,6 @@ impl api::Consensus for ConsensusService {
             Ok(f) => f.map(|response| -> (api::EventResponse, WriteFlags) {
                 let mut event = api::Event::new();
                 match response {
-                    Event::CommitmentsReceived(discrepancy) => {
-                        let mut args = api::Event_CommitmentsReceived::new();
-                        args.set_discrepancy(discrepancy);
-                        event.set_commitments_received(args);
-                    }
                     Event::RoundFailed(error) => {
                         let mut args = api::Event_RoundFailed::new();
                         args.set_error(error.message.to_owned());
@@ -137,102 +132,6 @@ impl api::Consensus for ConsensusService {
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(()) => Ok(api::CommitResponse::new()),
-                Err(e) => Err(e),
-            }),
-            Err(error) => {
-                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |response| match response {
-            Ok(response) => sink.success(response),
-            Err(error) => invalid_rpc!(sink, Internal, error),
-        }).map_err(|_error| ()));
-    }
-
-    fn reveal(
-        &self,
-        ctx: RpcContext,
-        req: api::RevealRequest,
-        sink: UnarySink<api::RevealResponse>,
-    ) {
-        let f = move || -> Result<_> {
-            let contract_id = B256::try_from(req.get_contract_id())?;
-            let reveal = Reveal::try_from(req.get_reveal().clone())?;
-
-            Ok(self.inner.reveal(contract_id, reveal))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|response| match response {
-                Ok(()) => Ok(api::RevealResponse::new()),
-                Err(e) => Err(e),
-            }),
-            Err(error) => {
-                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |response| match response {
-            Ok(response) => sink.success(response),
-            Err(error) => invalid_rpc!(sink, Internal, error),
-        }).map_err(|_error| ()));
-    }
-
-    fn commit_many(
-        &self,
-        ctx: RpcContext,
-        req: api::CommitManyRequest,
-        sink: UnarySink<api::CommitResponse>,
-    ) {
-        let f = move || -> Result<_> {
-            let contract_id = B256::try_from(req.get_contract_id())?;
-            let mut commitments: Vec<Commitment> = Vec::new();
-
-            for c in req.get_commitments() {
-                let commitment = Commitment::try_from(c.clone())?;
-
-                commitments.push(commitment);
-            }
-
-            Ok(self.inner.commit_many(contract_id, commitments))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok(()) => Ok(api::CommitResponse::new()),
-                Err(e) => Err(e),
-            }),
-            Err(error) => {
-                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |response| match response {
-            Ok(response) => sink.success(response),
-            Err(error) => invalid_rpc!(sink, Internal, error),
-        }).map_err(|_error| ()));
-    }
-
-    fn reveal_many(
-        &self,
-        ctx: RpcContext,
-        req: api::RevealManyRequest,
-        sink: UnarySink<api::RevealResponse>,
-    ) {
-        let f = move || -> Result<_> {
-            let contract_id = B256::try_from(req.get_contract_id())?;
-            let mut reveals: Vec<Reveal> = Vec::new();
-
-            for r in req.get_reveals() {
-                let reveal = Reveal::try_from(r.clone())?;
-
-                reveals.push(reveal);
-            }
-
-            Ok(self.inner.reveal_many(contract_id, reveals))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|response| match response {
-                Ok(()) => Ok(api::RevealResponse::new()),
                 Err(e) => Err(e),
             }),
             Err(error) => {

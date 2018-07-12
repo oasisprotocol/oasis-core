@@ -1,6 +1,5 @@
 use futures::Future;
 
-use ekiden_common::bytes::H256;
 use ekiden_rpc_common::api;
 
 use super::super::future::ClientFuture;
@@ -15,9 +14,6 @@ pub trait RpcClientBackend: Send + Sync {
 
     /// Call contract with raw data.
     fn call_raw(&self, request: Vec<u8>) -> ClientFuture<Vec<u8>>;
-
-    /// Wait for given contract call outputs to become available.
-    fn wait_contract_call(&self, call_id: H256) -> ClientFuture<Vec<u8>>;
 
     /// Get credentials.
     ///

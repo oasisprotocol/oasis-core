@@ -513,6 +513,7 @@ mod tests {
             advertisement_rate: 0,
             replica_group_size: 3,
             replica_group_backup_size: 3,
+            replica_allowed_stragglers: 0,
             storage_group_size: 5,
         };
         let contract_signer = InMemorySigner::new(contract_sk);

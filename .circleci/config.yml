@@ -141,6 +141,22 @@ jobs:
           REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
+  deployclient:
+    <<: *defaults
+    resource_class: large
+    steps:
+      # Set up
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - checkout
+      - setup_remote_docker
+
+      # Build image.
+      - run: |
+          docker build --rm --force-rm -t oasislabs/transactionclient -f docker/transactionclient/Dockerfile .
+      # Push image.
+      - run: |
+          echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          docker push oasislabs/transactionclient:latest
 
 workflows:
   version: 2
@@ -153,6 +169,16 @@ workflows:
               only: master
           requires:
             - build
+      - request-deploy:
+          type: approval
+          filters:
+            branches:
+              only: master
+          requires:
+            - build
+      - deployclient:
+          requires:
+            - request-deploy
 experimental:
   notify:
     branches:

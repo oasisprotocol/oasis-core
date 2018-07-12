@@ -8,10 +8,12 @@ repository = "https://github.com/ekiden/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha" }
 ekiden-contract-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../../rpc/client", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 serde = "=1.0.59"
 serde_cbor = "0.8.2"

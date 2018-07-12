@@ -3,10 +3,12 @@ pub use ekiden_common::bytes::B256;
 pub use ekiden_common::environment::Environment;
 pub use ekiden_common::futures::{BoxFuture, Future};
 pub use ekiden_common::signature::Signer;
+pub use ekiden_consensus_base::backend::ConsensusBackend;
 pub use ekiden_enclave_common::quote;
 pub use ekiden_registry_base::EntityRegistryBackend;
 pub use ekiden_rpc_client::backend::RpcClientBackend;
 pub use ekiden_scheduler_base::Scheduler;
+pub use ekiden_storage_base::backend::StorageBackend;
 
 /// Create a contract client for a given API.
 ///
@@ -57,7 +59,9 @@ macro_rules! create_contract_client {
                     environment: Arc<Environment>,
                     scheduler: Arc<Scheduler>,
                     entity_registry: Arc<EntityRegistryBackend>,
-                    signer: Arc<Signer>
+                    signer: Arc<Signer>,
+                    consensus: Arc<ConsensusBackend>,
+                    storage: Arc<StorageBackend>,
                 ) -> Self {
                     Client {
                         manager: ContractClientManager::new(
@@ -68,6 +72,8 @@ macro_rules! create_contract_client {
                             scheduler,
                             entity_registry,
                             signer,
+                            consensus,
+                            storage,
                         ),
                     }
                 }

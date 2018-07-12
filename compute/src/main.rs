@@ -160,6 +160,14 @@ fn main() {
                 .takes_value(true)
                 .default_value("1"),
         )
+        // TODO: Remove this once we have independent contract registration.
+        .arg(
+            Arg::with_name("compute-allowed-stragglers")
+                .long("compute-allowed-stragglers")
+                .help("Number of allowed stragglers in the computation group")
+                .takes_value(true)
+                .default_value("0"),
+        )
         .arg(
             Arg::with_name("max-batch-size")
                 .long("max-batch-size")
@@ -205,6 +213,24 @@ fn main() {
                 .takes_value(true)
                 .hidden(true)
         )
+        .arg(
+            Arg::with_name("test-fail-after-registration")
+                .long("test-fail-after-registration")
+                .help("TEST ONLY OPTION: fail after registration")
+                .hidden(true)
+        )
+        .arg(
+            Arg::with_name("test-fail-after-commit")
+                .long("test-fail-after-commit")
+                .help("TEST ONLY OPTION: fail after commit")
+                .hidden(true)
+        )
+        .arg(
+            Arg::with_name("test-fail-after-reveal")
+                .long("test-fail-after-reveal")
+                .help("TEST ONLY OPTION: fail after reveal")
+                .hidden(true)
+        )
         .args(&known_components.get_arguments())
         .get_matches();
 
@@ -247,12 +273,17 @@ fn main() {
             // TODO: Remove this once we have independent contract registration.
             compute_backup_replicas: value_t!(matches, "compute-backup-replicas", u64)
                 .unwrap_or_else(|e| e.exit()),
+            // TODO: Remove this once we have independent contract registration.
+            compute_allowed_stragglers: value_t!(matches, "compute-allowed-stragglers", u64)
+                .unwrap_or_else(|e| e.exit()),
             // Consensus configuration.
             consensus: ConsensusConfiguration {
                 max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
                 max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
                 test_only: ConsensusTestOnlyConfiguration {
                     inject_discrepancy: matches.is_present("test-inject-discrepancy"),
+                    fail_after_commit: matches.is_present("test-fail-after-commit"),
+                    fail_after_reveal: matches.is_present("test-fail-after-reveal"),
                 },
             },
             // IAS configuration.
@@ -300,6 +331,7 @@ fn main() {
                 } else {
                     None
                 },
+                fail_after_registration: matches.is_present("test-fail-after-registration"),
             },
         },
         container,

@@ -51,6 +51,10 @@ impl Database for Snapshot {
 /// A holder of a (i) a consensus backend and (ii) a storage mapper, the two of which it uses to
 /// create `Snapshot`s of recent (best-effort) states on demand.
 pub struct Manager {
+    /// Keep the environment alive.
+    _env: Arc<Environment>,
+    /// Keep the consensus backend alive.
+    _consensus: Arc<ConsensusBackend>,
     /// The latest root hash that we're aware of.
     root_hash: Arc<Mutex<Option<H256>>>,
     /// The storage mapper that we give to snapshots.
@@ -61,9 +65,9 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(
-        env: &Environment,
+        env: Arc<Environment>,
         contract_id: B256,
-        consensus: &ConsensusBackend,
+        consensus: Arc<ConsensusBackend>,
         mapper: Arc<StorageMapper>,
     ) -> Self {
         let root_hash = Arc::new(Mutex::new(None));
@@ -81,7 +85,7 @@ impl Manager {
                 Ok(Ok(())) => {
                     warn!("manager block stream ended");
                 }
-                // Kill handle dropped.
+                // Manager dropped.
                 Ok(Err(_ /* ekiden_core::futures::killable::Killed */)) => {}
                 // Block stream errored.
                 Err(e) => {
@@ -91,6 +95,8 @@ impl Manager {
             Ok(())
         })));
         Self {
+            _env: env,
+            _consensus: consensus,
             root_hash: root_hash_2,
             mapper,
             blocks_kill_handle,
@@ -104,12 +110,7 @@ impl Manager {
         let consensus: Arc<ConsensusBackend> = container.inject()?;
         let storage: Arc<StorageBackend> = container.inject()?;
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
-        Ok(Self::new(
-            env.as_ref(),
-            contract_id,
-            consensus.as_ref(),
-            mapper,
-        ))
+        Ok(Self::new(env, contract_id, consensus, mapper))
     }
 
     pub fn get_snapshot(&self) -> Snapshot {
@@ -139,7 +140,6 @@ mod tests {
     use ekiden_consensus_base::backend::Event;
     use ekiden_consensus_base::block::Block;
     use ekiden_consensus_base::commitment::Commitment;
-    use ekiden_consensus_base::commitment::Reveal;
     use ekiden_consensus_base::header::Header;
     use ekiden_core;
     use ekiden_core::bytes::B256;
@@ -177,18 +177,6 @@ mod tests {
         fn commit(&self, _contract_id: B256, _commitment: Commitment) -> BoxFuture<()> {
             unimplemented!()
         }
-
-        fn reveal(&self, _contract_id: B256, _reveal: Reveal) -> BoxFuture<()> {
-            unimplemented!()
-        }
-
-        fn commit_many(&self, _contract_id: B256, _commitments: Vec<Commitment>) -> BoxFuture<()> {
-            unimplemented!()
-        }
-
-        fn reveal_many(&self, _contract_id: B256, _reveals: Vec<Reveal>) -> BoxFuture<()> {
-            unimplemented!()
-        }
     }
 
     #[test]
@@ -203,12 +191,7 @@ mod tests {
         });
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
         let trie = PatriciaTrie::new(mapper.clone());
-        let manager = super::Manager::new(
-            environment.as_ref(),
-            contract_id,
-            consensus.as_ref(),
-            mapper,
-        );
+        let manager = super::Manager::new(environment, contract_id, consensus, mapper);
 
         let root_hash_before = trie.insert(None, b"changeme", b"before");
         blocks_tx

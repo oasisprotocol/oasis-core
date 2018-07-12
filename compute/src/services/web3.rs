@@ -5,9 +5,7 @@ use std::sync::Arc;
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
-use ekiden_compute_api::{CallContractRequest, CallContractResponse, WaitContractCallRequest,
-                         WaitContractCallResponse, Web3};
-use ekiden_core::bytes::H256;
+use ekiden_compute_api::{CallContractRequest, CallContractResponse, Web3};
 use ekiden_core::futures::Future;
 
 use super::super::consensus::ConsensusFrontend;
@@ -66,45 +64,6 @@ impl Web3 for Web3Service {
                 RpcStatusCode::Internal,
                 Some(error.description().to_owned()),
             )),
-            Err(error) => sink.fail(RpcStatus::new(
-                RpcStatusCode::Internal,
-                Some(error.description().to_owned()),
-            )),
-        });
-        ctx.spawn(f.map_err(|_error| ()));
-    }
-
-    fn wait_contract_call(
-        &self,
-        ctx: grpcio::RpcContext,
-        request: WaitContractCallRequest,
-        sink: grpcio::UnarySink<WaitContractCallResponse>,
-    ) {
-        measure_histogram_timer!("wait_contract_call_time");
-        measure_counter_inc!("wait_contract_call_calls");
-
-        let call_id = request.get_call_id();
-        if call_id.len() != H256::LENGTH {
-            ctx.spawn(
-                sink.fail(RpcStatus::new(RpcStatusCode::InvalidArgument, None))
-                    .map_err(|_error| ()),
-            );
-            return;
-        }
-
-        // Send command to worker thread.
-        let response_receiver = self.inner
-            .consensus_frontend
-            .subscribe_call(H256::from(request.get_call_id()));
-
-        // Prepare response future.
-        let f = response_receiver.then(|result| match result {
-            Ok(response) => {
-                let mut rpc_response = WaitContractCallResponse::new();
-                rpc_response.set_output(response);
-
-                sink.success(rpc_response)
-            }
             Err(error) => sink.fail(RpcStatus::new(
                 RpcStatusCode::Internal,
                 Some(error.description().to_owned()),

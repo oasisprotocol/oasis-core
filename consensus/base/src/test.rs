@@ -23,14 +23,6 @@ pub enum Command {
     Compute(Vec<u8>),
 }
 
-/// Simulated batch of contract invocations.
-pub struct SimulatedComputationBatch {
-    /// Block produced by the computation batch.
-    block: Block,
-    /// Nonce used for commitment.
-    nonce: Nonce,
-}
-
 struct SimulatedNodeIdentity {
     signer: Arc<InMemorySigner>,
 }
@@ -78,8 +70,6 @@ struct SimulatedNodeInner {
     command_channel: mpsc::UnboundedSender<Command>,
     /// Command receiver.
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
-    /// Current simulated computation.
-    computation: Mutex<Option<SimulatedComputationBatch>>,
 }
 
 /// A simulated node.
@@ -100,7 +90,6 @@ impl SimulatedNode {
                 identity: Arc::new(SimulatedNodeIdentity::new()),
                 command_channel: command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
-                computation: Mutex::new(None),
                 shutdown_channel: Mutex::new(Some(shutdown_sender)),
                 shutdown_signal: Mutex::new(Some(shutdown_receiver)),
             }),
@@ -153,31 +142,9 @@ impl SimulatedNode {
 
         // Subscribe to new events.
         let event_processor: BoxFuture<()> = {
-            let shared_inner = self.inner.clone();
-            let backend = backend.clone();
-            let signer = signer.clone();
-
             Box::new(backend.get_events(self.inner.contract_id).for_each(
                 move |event| -> BoxFuture<()> {
                     match event {
-                        Event::CommitmentsReceived(_) => {
-                            // Generate reveal.
-                            let computation = {
-                                let mut computation = shared_inner.computation.lock().unwrap();
-
-                                match computation.take() {
-                                    Some(computation) => computation,
-                                    None => return future::ok(()).into_box(),
-                                }
-                            };
-
-                            let reveal = signer
-                                .sign_reveal(&computation.block.header, &computation.nonce)
-                                .unwrap();
-
-                            // Send reveal.
-                            backend.reveal(shared_inner.contract_id, reveal)
-                        }
                         Event::RoundFailed(error) => {
                             // Round has failed, so the test should abort.
                             panic!("round failed: {}", error);
@@ -227,17 +194,7 @@ impl SimulatedNode {
                                     block.update();
 
                                     // Generate commitment.
-                                    let (commitment, nonce) =
-                                        signer.sign_commitment(&block.header).unwrap();
-                                    let computation = SimulatedComputationBatch { block, nonce };
-
-                                    // Store computation.
-                                    {
-                                        let mut current_computation =
-                                            shared_inner.computation.lock().unwrap();
-                                        assert!(current_computation.is_none());
-                                        current_computation.get_or_insert(computation);
-                                    }
+                                    let commitment = signer.sign_commitment(&block.header).unwrap();
 
                                     if !output.is_empty() {
                                         // Insert dummy result to storage and commit.
