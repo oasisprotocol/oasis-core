@@ -60,7 +60,7 @@ run_compute_node_storage_multilayer_remote() {
     # Generate port number.
     let "port=id + 10000"
 
-    ${WORKDIR}/target/debug/ekiden-compute \
+    ${WORKDIR}/target/release/ekiden-compute \
         --no-persist-identity \
         --max-batch-size 20 \
         --max-batch-timeout 100 \
