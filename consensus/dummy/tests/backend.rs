@@ -12,6 +12,7 @@ extern crate ekiden_storage_dummy;
 extern crate grpcio;
 
 use std::collections::HashMap;
+use std::fs::remove_dir_all;
 use std::sync::Arc;
 
 use ekiden_beacon_dummy::InsecureDummyRandomBeacon;
@@ -36,8 +37,7 @@ use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
 use ekiden_storage_dummy::DummyStorageBackend;
 
-#[test]
-fn test_dummy_backend_two_rounds() {
+fn do_test_two_rounds(state_storage_path: Option<&str>, remove_state: bool) {
     testing::try_init_logging();
 
     // Number of simulated nodes to create.
@@ -107,12 +107,20 @@ fn test_dummy_backend_two_rounds() {
 
     let nodes = Arc::new(nodes);
 
+    if let Some(state_storage_path) = state_storage_path {
+        if remove_state {
+            // Remove any possible leftover local storage DB.
+            drop(remove_dir_all(state_storage_path));
+        }
+    }
+
     // Create dummy consensus backend.
     let backend = Arc::new(DummyConsensusBackend::new(
         env.clone(),
         scheduler.clone(),
         storage,
         contract_registry.clone(),
+        state_storage_path,
     ));
 
     // Pump the time source.
@@ -178,6 +186,23 @@ fn test_dummy_backend_two_rounds() {
 
     // Wait for all tasks to finish.
     future::join_all(tasks).wait().unwrap();
+}
+
+#[test]
+fn test_dummy_backend_two_rounds() {
+    do_test_two_rounds(None, false);
+}
+
+#[test]
+fn test_recover_latest_block() {
+    do_test_two_rounds(
+        Some("/tmp/dummy_consensus_backend_recover_latest_block"),
+        true,
+    );
+    do_test_two_rounds(
+        Some("/tmp/dummy_consensus_backend_recover_latest_block"),
+        false,
+    );
 }
 
 #[test]
@@ -257,6 +282,7 @@ fn test_failing_node() {
         scheduler.clone(),
         storage,
         contract_registry.clone(),
+        None,
     ));
 
     // Pump the time source.
