@@ -1,0 +1,11 @@
+prefix=/usr
+exec_prefix=${prefix}
+libdir=/usr/lib/x86_64-linux-gnu
+includedir=${prefix}/include
+
+Name: RocksDB
+Description: persistent Key-Value Store for Flash and RAM Storage
+Version: 5.8.8
+Libs: -L${libdir} -lrocksdb
+Cflags: -I${includedir}
+

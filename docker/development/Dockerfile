@@ -9,9 +9,18 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     autoconf automake libtool ocaml ocamlbuild \
     # for SGX PSW
     libssl-dev libcurl4-openssl-dev \
+    # for rocksdb
+    libsnappy-dev librocksdb-dev \
+    # for benchmarks
+    python3-prometheus-client \
     # convenience
     golang && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*
+
+# Required because librocksdb5.8 doesn't provide it
+COPY librocksdb.pc /usr/lib/x86_64-linux-gnu/pkgconfig/librocksdb.pc
+# Required because rocksdb bindings search with lib prefix
+RUN cp /usr/lib/x86_64-linux-gnu/pkgconfig/snappy.pc /usr/lib/x86_64-linux-gnu/pkgconfig/libsnappy.pc
 
 ENV HOME="/root"
 ENV PATH="${HOME}/.cargo/bin:${PATH}"
@@ -37,8 +46,8 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     rustup component add rust-src && \
     # rustfmt-nightly is crazily unstable, with no versions appearing to exist that
     # work with the 3-16 nightly.
-    rustup update nightly && \
-    cargo +nightly install rustfmt-nightly --version 0.6.1 --force && \
+    rustup update nightly-2018-05-25 && \
+    cargo +nightly-2018-05-25 install rustfmt-nightly --version 0.6.1 --force && \
     cargo install xargo
 
 # install node / npm / truffle.

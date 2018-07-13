@@ -1,4 +1,4 @@
-FROM docker.io/ekiden/development:0.1.0
+FROM docker.io/ekiden/development:0.2.0
 
 # This is the release of tendermint to pull in.
 ENV TM_VERSION 0.13.0

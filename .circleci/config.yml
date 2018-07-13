@@ -1,6 +1,6 @@
 defaults: &defaults
   docker:
-    - image: ekiden/testing:0.1.0
+    - image: ekiden/testing:0.2.0
 
 version: 2
 jobs:
@@ -51,22 +51,6 @@ jobs:
       # Upload coverage info.
       - run: codecov -s target/cov -Z
 
-      # Cargo benchmarks. We first fetch the latest benchmark results from master and then
-      # compare against them.
-      - run: |
-          set +e
-          set +o pipefail
-          wget -q -O - "https://circleci.com/api/v1.1/project/github/oasislabs/ekiden/latest/artifacts/?branch=master&circle-token=${CIRCLE_TOKEN}" | grep -o 'https://[^"]*' | xargs -P4 -I % wget -q -O /tmp/benchmarks-master.json %?circle-token=${CIRCLE_TOKEN}
-      - run: |
-          ./scripts/benchmark.py \
-              ekiden-rpc-trusted \
-              ekiden-db-trusted \
-              --output /tmp/benchmarks.json \
-              --compare-to /tmp/benchmarks-master.json
-      - store_artifacts:
-          path: /tmp/benchmarks.json
-          destination: benchmarks
-
       # Install ekiden-tools.
       - run: cargo install --force --path tools
       # Build token contract.
@@ -98,6 +82,33 @@ jobs:
             - ethereum/build/contracts
             - tests
             - scripts
+
+  benchmark:
+    <<: *defaults
+    resource_class: large
+    steps:
+      # Set up
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
+      - checkout
+
+      # Build everything in release mode for benchmarks.
+      - run: cargo build --release
+      # Install ekiden-tools.
+      - run: CARGO_TARGET_DIR=target cargo install --force --path tools
+      # Build token contract.
+      - run:
+          command: cargo ekiden build-contract --release --output-identity
+          working_directory: contracts/token
+
+      # Run all benchmarks.
+      - run: |
+          ./scripts/benchmark.py \
+              --crate ekiden-rpc-trusted \
+              --crate ekiden-db-trusted \
+              --e2e
 
   deploy:
     <<: *defaults
@@ -179,6 +190,12 @@ workflows:
       - deployclient:
           requires:
             - request-deploy
+  benchmark:
+    jobs:
+      - benchmark:
+          filters:
+            branches:
+              only: master
 experimental:
   notify:
     branches:
