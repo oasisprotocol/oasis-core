@@ -29,6 +29,7 @@ macro_rules! create_client_rpc {
         }
 
         $(
+            $(#[$($attribute:tt)*])*
             rpc $method_name: ident ( $request_type: ty ) -> $response_type: ty ;
         )*
     ) => {
