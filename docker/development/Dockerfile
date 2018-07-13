@@ -11,6 +11,8 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     libssl-dev libcurl4-openssl-dev \
     # for rocksdb
     libsnappy-dev librocksdb-dev \
+    # for benchmarks
+    python3-prometheus-client \
     # convenience
     golang && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*

@@ -94,22 +94,6 @@ jobs:
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
 
-      # Cargo benchmarks. We first fetch the latest benchmark results from master and then
-      # compare against them.
-      - run: |
-          set +e
-          set +o pipefail
-          wget -q -O - "https://circleci.com/api/v1.1/project/github/oasislabs/ekiden/latest/artifacts/?branch=master&circle-token=${CIRCLE_TOKEN}" | grep -o 'https://[^"]*' | xargs -P4 -I % wget -q -O /tmp/benchmarks-master.json %?circle-token=${CIRCLE_TOKEN}
-      - run: |
-          ./scripts/benchmark.py \
-              ekiden-rpc-trusted \
-              ekiden-db-trusted \
-              --output /tmp/benchmarks.json \
-              --compare-to /tmp/benchmarks-master.json
-      - store_artifacts:
-          path: /tmp/benchmarks.json
-          destination: benchmarks
-
       # Build everything in release mode for benchmarks.
       - run: cargo build --release
       # Install ekiden-tools.
@@ -119,9 +103,12 @@ jobs:
           command: cargo ekiden build-contract --release --output-identity
           working_directory: contracts/token
 
-      # Run E2E benchmarks.
-      - run: ./scripts/benchmark-e2e.sh json
-      # TODO: Report benchmark results to GitHub.
+      # Run all benchmarks.
+      - run: |
+          ./scripts/benchmark.py \
+              --crate ekiden-rpc-trusted \
+              --crate ekiden-db-trusted \
+              --e2e
 
   deploy:
     <<: *defaults

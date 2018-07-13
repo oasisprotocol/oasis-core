@@ -89,7 +89,7 @@ run_benchmark() {
     fi
 
     # Ensure cleanup on exit.
-    trap 'kill -- -0' EXIT
+    trap "pkill -P $$ || true" EXIT
 
     # Re-create log directory.
     rm -rf ${LOGDIR}
