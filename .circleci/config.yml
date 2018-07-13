@@ -192,7 +192,10 @@ workflows:
             - request-deploy
   benchmark:
     jobs:
-      - benchmark
+      - benchmark:
+          filters:
+            branches:
+              only: master
 experimental:
   notify:
     branches:
