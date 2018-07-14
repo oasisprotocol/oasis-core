@@ -13,5 +13,5 @@ ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 chrono = "0.4.2"
 clap = "2.29.1"
 futures-timer = "0.1.1"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 log = "0.4"

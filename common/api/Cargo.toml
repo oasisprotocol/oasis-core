@@ -11,7 +11,7 @@ build = "build.rs"
 protobuf = "~2.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 futures = "0.1"
 
 [build-dependencies]
