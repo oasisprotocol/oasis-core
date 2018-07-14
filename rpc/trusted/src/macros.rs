@@ -19,6 +19,7 @@ macro_rules! create_enclave_rpc {
         }
 
         $(
+            $(#[$($attribute:tt)*])*
             rpc $method_name:ident ( $request_type:ty ) -> $response_type:ty ;
         )*
     ) => {
@@ -35,9 +36,23 @@ macro_rules! create_enclave_rpc {
                 $(
                     dispatcher.add_method(
                         EnclaveMethod::new(
-                            ApiMethodDescriptor {
-                                name: stringify!($method_name).to_owned(),
-                                client_attestation_required: $client_attestation_required,
+                            {
+                                // Generate default descriptor.
+                                let mut descriptor = ApiMethodDescriptor {
+                                    name: stringify!($method_name).to_owned(),
+                                    client_attestation_required: $client_attestation_required,
+                                };
+
+                                // Allow per-method override of method attributes.
+                                $(
+                                    create_enclave_rpc!(
+                                        @descriptor
+                                        descriptor
+                                        #[$($attribute)*]
+                                    );
+                                )*
+
+                                descriptor
                             },
                             |request: &Request<$request_type>| -> Result<$response_type> {
                                 $method_name(request)
@@ -47,5 +62,13 @@ macro_rules! create_enclave_rpc {
                 )*
             }
         }
-    }
+    };
+
+    (
+        @descriptor
+        $descriptor:ident
+        #[client_attestation($value:expr)]
+    ) => {
+        $descriptor.client_attestation_required = $value;
+    };
 }
