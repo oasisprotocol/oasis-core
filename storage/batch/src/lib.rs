@@ -2,7 +2,8 @@
 extern crate ekiden_common;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_dummy;
-
+extern crate ekiden_epochtime;
+extern crate grpcio;
 #[macro_use]
 extern crate log;
 

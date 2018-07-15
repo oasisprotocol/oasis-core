@@ -50,6 +50,14 @@ impl StorageBackend for PersistentStorageBackend {
             Ok(())
         }).into_box()
     }
+
+    fn get_key_list(&self) -> Vec<(H256, u64)> {
+        println!("Return Key List in dummy backend");
+        let key = hash_storage_key(b"value");
+        let mut x = Vec::new();
+        x.push((key, 10));
+        return x;
+    }
 }
 
 // Register for dependency injection.

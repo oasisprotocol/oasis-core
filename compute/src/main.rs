@@ -15,15 +15,18 @@ extern crate serde_cbor;
 extern crate thread_local;
 
 extern crate ekiden_beacon_base;
+extern crate ekiden_common;
 extern crate ekiden_compute_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
 extern crate ekiden_registry_base;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
+extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
 extern crate ekiden_storage_multilayer;
+extern crate ekiden_storage_persistent;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 #[macro_use]
@@ -52,15 +55,15 @@ extern crate ekiden_registry_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
-use std::path::Path;
-
 use clap::{App, Arg};
 use log::LevelFilter;
+use std::path::Path;
 
 use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
+use ekiden_storage_persistent::PersistentStorageBackend;
 
 use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
 use self::ias::{IASConfiguration, SPID};
@@ -77,6 +80,9 @@ fn register_components(known_components: &mut KnownComponents) {
     // Storage.
     ekiden_storage_frontend::ImmediateClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
+    ekiden_storage_frontend::StorageClient::register(known_components);
+    // Storage persistent.
+    ekiden_storage_persistent::PersistentStorageBackend::register(known_components);
     // Consensus.
     ekiden_consensus_client::ConsensusClient::register(known_components);
     ekiden_consensus_dummy::DummyConsensusSigner::register(known_components);

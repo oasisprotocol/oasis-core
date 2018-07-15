@@ -11,15 +11,17 @@ use ekiden_core::identity::NodeIdentity;
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
 use ekiden_core::subscribers::StreamSubscribers;
+use ekiden_epochtime::interface::EpochTime;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
+use ekiden_storage_frontend::StorageClient;
 
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
     /// Submit batch to workers.
     Submit(H256),
     /// Update committee.
-    UpdateCommittee(Vec<CommitteeNode>),
+    UpdateCommittee(EpochTime, Vec<CommitteeNode>),
 }
 
 struct Inner {
@@ -114,7 +116,7 @@ impl ComputationGroup {
                 .watch_committees()
                 .filter(|committee| committee.kind == CommitteeType::Compute)
                 .filter(move |committee| committee.contract.id == contract_id)
-                .map(|committee| Command::UpdateCommittee(committee.members))
+                .map(|committee| Command::UpdateCommittee(committee.valid_for, committee.members))
                 .into_box(),
         );
 
@@ -140,10 +142,10 @@ impl ComputationGroup {
                 "Unexpected error while processing group commands",
                 move |command| match command {
                     Command::Submit(batch_hash) => Self::handle_submit(inner.clone(), batch_hash),
-                    Command::UpdateCommittee(members) => {
+                    Command::UpdateCommittee(epoch, members) => {
                         measure_counter_inc!("committee_updates_count");
 
-                        Self::handle_update_committee(inner.clone(), members)
+                        Self::handle_update_committee(inner.clone(), epoch, members)
                     }
                 },
             )
@@ -151,7 +153,11 @@ impl ComputationGroup {
     }
 
     /// Handle committee update.
-    fn handle_update_committee(inner: Arc<Inner>, members: Vec<CommitteeNode>) -> BoxFuture<()> {
+    fn handle_update_committee(
+        inner: Arc<Inner>,
+        epoch: EpochTime,
+        members: Vec<CommitteeNode>,
+    ) -> BoxFuture<()> {
         info!("Starting update of computation group committee");
 
         // Clear previous group.
@@ -203,9 +209,21 @@ impl ComputationGroup {
             })
             .collect();
 
+        let cur_epoch = epoch;
+        trace!("Current epoch is {}", cur_epoch);
+
+        let _cur_nodes = inner.entity_registry.get_nodes(cur_epoch);
+
+        let pre_nodes_handle: BoxFuture<Vec<Node>>;
+        let pre_epoch = if epoch > 1 { epoch - 1 } else { 1 };
+        trace!("Previous epoch is {}", pre_epoch);
+
+        pre_nodes_handle = inner.entity_registry.get_nodes(pre_epoch);
+
         Box::new(
             future::join_all(nodes)
-                .and_then(move |nodes| {
+                .join(pre_nodes_handle)
+                .and_then(move |(nodes, pre_nodes_handle)| {
                     // Update group.
                     for (node, committee_node) in nodes {
                         let channel =
@@ -231,6 +249,15 @@ impl ComputationGroup {
                     }
 
                     info!("Update of computation group committee finished");
+
+                    if epoch > 1 {
+                        let pre_nodes_unwrap = pre_nodes_handle;
+                        let _client = StorageClient::from_node(
+                            &pre_nodes_unwrap[0].clone(),
+                            inner.environment.clone(),
+                            inner.identity.clone(),
+                        );
+                    }
 
                     Ok(())
                 })

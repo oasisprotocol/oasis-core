@@ -9,6 +9,7 @@ use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{Committee, CommitteeType, Scheduler};
+extern crate ekiden_storage_base;
 use ekiden_storage_base::StorageBackend;
 
 use client::StorageClient;
@@ -145,5 +146,13 @@ impl StorageBackend for StorageFrontend {
             self.get_storage(self.inner.retries)
                 .and_then(move |s| s.insert(value, expiry)),
         )
+    }
+
+    fn get_key_list(&self) -> Vec<(H256, u64)> {
+        println!("Return Key List in frontend backend");
+        let key = ekiden_storage_base::hash_storage_key(b"value");
+        let mut x = Vec::new();
+        x.push((key, 10));
+        return x;
     }
 }

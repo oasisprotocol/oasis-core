@@ -24,6 +24,10 @@ ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
 ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
 ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
+ekiden-storage-api = { path = "../storage/api", version = "0.2.0-alpha" }
+ekiden-storage-persistent = { path = "../storage/persistent", version = "0.2.0-alpha" }
+ekiden-storage-dummy = { path = "../storage/dummy", version = "0.2.0-alpha" }
+ekiden-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
 ekiden-storage-multilayer = { path = "../storage/multilayer", version = "0.2.0-alpha" }

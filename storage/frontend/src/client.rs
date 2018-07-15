@@ -10,6 +10,7 @@ use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_storage_api as api;
+extern crate ekiden_storage_base;
 use ekiden_storage_base::{BatchStorage, StorageBackend};
 
 /// Storage client implements the storage interface.  It exposes storage calls across a gRPC channel.
@@ -54,6 +55,14 @@ impl StorageBackend for StorageClient {
             ),
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
+    }
+
+    fn get_key_list(&self) -> Vec<(H256, u64)> {
+        println!("Return Key List in frontend client backend");
+        let key = ekiden_storage_base::hash_storage_key(b"value");
+        let mut x = Vec::new();
+        x.push((key, 10));
+        return x;
     }
 }
 
@@ -110,6 +119,14 @@ impl StorageBackend for ImmediateClient {
 
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         self.0.insert(value, expiry)
+    }
+
+    fn get_key_list(&self) -> Vec<(H256, u64)> {
+        println!("Return Key List in frontend client backend");
+        let key = ekiden_storage_base::hash_storage_key(b"value");
+        let mut x = Vec::new();
+        x.push((key, 10));
+        return x;
     }
 }
 
