@@ -66,7 +66,6 @@ jobs:
 
       # Integration tests.
       - run: ./scripts/test-e2e.sh
-      - run: ./scripts/test-e2e-ethereum.sh
 
       # Store built files.
       - persist_to_workspace:
