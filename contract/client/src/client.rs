@@ -1,51 +1,50 @@
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use grpcio;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
-use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
-use ekiden_common::futures::{future, BoxFuture, Future, FutureExt};
+use ekiden_common::hash::EncodedHash;
 use ekiden_common::signature::Signer;
+use ekiden_compute_api;
 use ekiden_contract_common::call::{ContractOutput, SignedContractCall};
-use ekiden_contract_common::protocol;
-use ekiden_enclave_common::quote::MrEnclave;
-use ekiden_rpc_client::backend::RpcClientBackend;
-use ekiden_rpc_client::RpcClient;
 
 /// Contract client.
-pub struct ContractClient<Backend: RpcClientBackend + 'static> {
-    /// Underlying RPC client.
-    rpc: RpcClient<Backend>,
+pub struct ContractClient {
+    /// Underlying gRPC client.
+    rpc: ekiden_compute_api::ContractClient,
     /// Signer used for signing contract calls.
     signer: Arc<Signer>,
     /// Shared service for waiting for contract calls.
     call_wait_manager: Arc<super::callwait::Manager>,
+    /// Optional call timeout.
+    timeout: Option<Duration>,
     /// Shutdown signal (receiver).
     shutdown_receiver: future::Shared<oneshot::Receiver<()>>,
     /// Shutdown signal (sender).
     shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
 }
 
-impl<Backend> ContractClient<Backend>
-where
-    Backend: RpcClientBackend + 'static,
-{
+impl ContractClient {
     /// Create new client instance.
     pub fn new(
-        backend: Arc<Backend>,
-        mr_enclave: MrEnclave,
+        rpc: ekiden_compute_api::ContractClient,
         signer: Arc<Signer>,
         call_wait_manager: Arc<super::callwait::Manager>,
+        timeout: Option<Duration>,
     ) -> Self {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         ContractClient {
-            rpc: RpcClient::new(backend, mr_enclave, false),
+            rpc,
             signer,
             call_wait_manager,
+            timeout,
             shutdown_receiver: shutdown_receiver.shared(),
             shutdown_sender: Mutex::new(Some(shutdown_sender)),
         }
@@ -56,28 +55,46 @@ where
     where
         C: Serialize,
     {
+        let mut request = ekiden_compute_api::SubmitTxRequest::new();
+        match serde_cbor::to_vec(&signed_call) {
+            Ok(data) => request.set_data(data),
+            Err(_) => return future::err(Error::new("call serialize failed")).into_box(),
+        }
+
         // Subscribe to contract call so we will know when the call is done.
         let call_wait = self.call_wait_manager.create_wait();
-        self.rpc
-            .call(protocol::METHOD_CONTRACT_SUBMIT, signed_call)
-            .and_then(move |call_id: H256| {
-                call_wait.wait_for(call_id).and_then(|output| {
-                    // TODO: Submit proof of publication, get decryption.
-                    Ok(output)
-                })
-            })
-            .select(
-                self.shutdown_receiver
-                    .clone()
-                    .then(|_result| -> BoxFuture<Vec<u8>> {
-                        // However the shutdown receiver future completes, we need to abort as
-                        // it has either been dropped or an explicit shutdown signal was sent.
-                        future::err(Error::new("contract client closed")).into_box()
-                    }),
-            )
-            .map(|(result, _)| result)
-            .map_err(|(error, _)| error)
-            .into_box()
+        let call_id = request.get_data().get_encoded_hash();
+
+        // Set timeout if configured.
+        let mut options = grpcio::CallOption::default();
+        if let Some(timeout) = self.timeout {
+            options = options.timeout(timeout);
+        }
+
+        match self.rpc.submit_tx_async_opt(&request, options) {
+            Ok(call) => {
+                call.map_err(|error| error.into())
+                    .and_then(move |_| {
+                        call_wait.wait_for(call_id).and_then(|output| {
+                            // TODO: Submit proof of publication, get decryption.
+                            Ok(output)
+                        })
+                    })
+                    .select(
+                        self.shutdown_receiver
+                            .clone()
+                            .then(|_result| -> BoxFuture<Vec<u8>> {
+                                // However the shutdown receiver future completes, we need to abort as
+                                // it has either been dropped or an explicit shutdown signal was sent.
+                                future::err(Error::new("contract client closed")).into_box()
+                            }),
+                    )
+                    .map(|(result, _)| result)
+                    .map_err(|(error, _)| error)
+                    .into_box()
+            }
+            Err(error) => future::err(error.into()).into_box(),
+        }
     }
 
     /// Queue a contract call.
@@ -86,6 +103,7 @@ where
         C: Serialize,
         O: DeserializeOwned + Send + 'static,
     {
+        // TODO: Handle encrypted calls.
         let call = SignedContractCall::sign(&self.signer, method, arguments);
 
         self.call_raw(call)

@@ -12,10 +12,10 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signer;
+use ekiden_compute_api;
 use ekiden_consensus_base::backend::ConsensusBackend;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
-use ekiden_rpc_client::backend::NetworkRpcClientBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 
@@ -26,14 +26,12 @@ struct Leader {
     /// Node descriptor.
     node: Node,
     /// Contract client.
-    client: ContractClient<NetworkRpcClientBackend>,
+    client: ContractClient,
 }
 
 struct Inner {
     /// Contract identifier.
     contract_id: B256,
-    /// Enclave identifier.
-    mr_enclave: MrEnclave,
     /// Optional call timeout.
     timeout: Option<Duration>,
     /// Scheduler.
@@ -64,7 +62,7 @@ pub struct ContractClientManager {
 impl ContractClientManager {
     pub fn new(
         contract_id: B256,
-        mr_enclave: MrEnclave,
+        _mr_enclave: MrEnclave,
         timeout: Option<Duration>,
         environment: Arc<Environment>,
         scheduler: Arc<Scheduler>,
@@ -84,7 +82,6 @@ impl ContractClientManager {
         let manager = Self {
             inner: Arc::new(Inner {
                 contract_id,
-                mr_enclave,
                 timeout,
                 environment,
                 scheduler,
@@ -151,19 +148,14 @@ impl ContractClientManager {
                             .get_node(new_leader)
                             .and_then(move |node| {
                                 // Create new client to the leader node.
-                                let address = node.addresses[0];
-                                let backend = NetworkRpcClientBackend::new(
-                                    inner.environment.clone(),
-                                    inner.timeout,
-                                    &format!("{}", address.ip()),
-                                    address.port(),
-                                    node.certificate.clone(),
-                                )?;
+                                let rpc = ekiden_compute_api::ContractClient::new(
+                                    node.connect_without_identity(inner.environment.clone()),
+                                );
                                 let client = ContractClient::new(
-                                    Arc::new(backend),
-                                    inner.mr_enclave,
+                                    rpc,
                                     inner.signer.clone(),
                                     inner.call_wait_manager.clone(),
+                                    inner.timeout.clone(),
                                 );
 
                                 // Change the leader.
