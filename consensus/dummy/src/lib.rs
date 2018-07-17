@@ -16,6 +16,9 @@ extern crate ekiden_di;
 extern crate ekiden_registry_base;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
+#[macro_use]
+extern crate ekiden_instrumentation;
+extern crate ekiden_instrumentation_prometheus;
 
 mod backend;
 mod commitment;

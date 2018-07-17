@@ -408,6 +408,7 @@ impl Round {
 
                 if discrepancy_detected {
                     warn!("Discrepancy detected, at least one node reported different results");
+                    measure_counter_inc!("detected_discrepancies");
 
                     // Activate the backup workers.
                     let input_hash = header.input_hash;
@@ -471,6 +472,7 @@ impl Round {
         block.update();
 
         info!("Round has been finalized");
+        measure_counter_inc!("finalized_rounds");
         future::ok(FinalizationResult::Finalized(block)).into_box()
     }
 }
@@ -621,6 +623,7 @@ impl DummyConsensusBackend {
                 Ok(_) => {
                     // Unclean shutdown, recover round state!
                     warn!("Node wasn't cleanly shut down, recovering round state");
+                    measure_counter_inc!("crashes");
 
                     match state_storage.get("round_state") {
                         Ok(rs) => {
@@ -648,6 +651,7 @@ impl DummyConsensusBackend {
                         }
                         _ => {
                             error!("Failed to recover round state!");
+                            measure_counter_inc!("failed_crash_recoveries");
                         }
                     }
 
@@ -956,6 +960,7 @@ impl DummyConsensusBackend {
                     // Still waiting for some round participants.
                     Round::start_timer(round.clone(), ROUND_AFTER_COMMIT_TIMEOUT, move || {
                         warn!("Commit timer expired, forcing finalization");
+                        measure_counter_inc!("commit_timer_expired_count");
                         Self::try_finalize(inner, round.clone())
                     });
                 }
@@ -971,6 +976,7 @@ impl DummyConsensusBackend {
                 Err(error) => {
                     // Round has failed.
                     error!("Round has failed: {:?}", error);
+                    measure_counter_inc!("failed_rounds");
 
                     {
                         let mut round = round.lock().unwrap();
