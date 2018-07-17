@@ -1,4 +1,5 @@
 // This is re-exported here only so it can be used in macros under a common name.
+pub use ekiden_common::futures::prelude::*;
 pub use ekiden_enclave_common::quote;
 
 /// Create an RPC client for a given API.
@@ -38,6 +39,7 @@ macro_rules! create_client_rpc {
 
             use $crate::*;
             use $crate::backend::RpcClientBackend;
+            use $crate::macros::*;
 
             pub use $api_module::*;
 
@@ -64,7 +66,7 @@ macro_rules! create_client_rpc {
                 ///
                 /// If this method is not called, secure channel is automatically initialized
                 /// when making the first request.
-                pub fn init_secure_channel(&self) -> ClientFuture<()> {
+                pub fn init_secure_channel(&self) -> BoxFuture<()> {
                     self.client.init_secure_channel()
                 }
 
@@ -72,7 +74,7 @@ macro_rules! create_client_rpc {
                 ///
                 /// If this method is not called, secure channel is automatically closed in
                 /// a blocking fashion when the client is dropped.
-                pub fn close_secure_channel(&self) -> ClientFuture<()> {
+                pub fn close_secure_channel(&self) -> BoxFuture<()> {
                     self.client.close_secure_channel()
                 }
 
@@ -81,7 +83,7 @@ macro_rules! create_client_rpc {
                     pub fn $method_name(
                         &self,
                         request: $request_type
-                    ) -> ClientFuture<$response_type> {
+                    ) -> BoxFuture<$response_type> {
                         self.client.call(stringify!($method_name), request)
                     }
                 )*

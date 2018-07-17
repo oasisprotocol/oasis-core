@@ -153,7 +153,7 @@ impl ContractClientManager {
                                 // Create new client to the leader node.
                                 let address = node.addresses[0];
                                 let backend = NetworkRpcClientBackend::new(
-                                    inner.environment.grpc(),
+                                    inner.environment.clone(),
                                     inner.timeout,
                                     &format!("{}", address.ip()),
                                     address.port(),
