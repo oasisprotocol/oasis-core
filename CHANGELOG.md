@@ -22,6 +22,7 @@
   `--batch-storage immediate_remote` for original behavior.
 * **BACKWARD INCOMPATIBLE:** Use TLS client authentication for gRPC channels, encode
   node Ed25519 public key in TLS certificates, remove custom signed RPC arguments.
+* **BACKWARD INCOMPATIBLE:** Rename `build-contract` to `build-enclave`.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.

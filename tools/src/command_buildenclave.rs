@@ -1,4 +1,4 @@
-//! Tool subcommand for building contracts.
+//! Tool subcommand for building enclaves.
 extern crate clap;
 
 use std::env;
@@ -9,16 +9,16 @@ use std::path::{Path, PathBuf};
 use self::clap::ArgMatches;
 
 use super::cargo;
-use super::contract::ContractBuilder;
+use super::enclave::{EnclaveBuilder, TARGET_ENCLAVE_DIR};
 use super::error::Result;
 
 use utils::{get_contract_identity, SgxMode};
 
-/// Build an Ekiden contract.
-pub fn build_contract(args: &ArgMatches) -> Result<()> {
+/// Build an Ekiden enclave.
+pub fn build_enclave(args: &ArgMatches) -> Result<()> {
     let cargo_addendum = args.value_of("cargo-addendum").map(|s| PathBuf::from(s));
-    let mut builder = match args.value_of("contract-crate") {
-        Some(crate_name) => ContractBuilder::new(
+    let mut builder = match args.value_of("enclave-crate") {
+        Some(crate_name) => EnclaveBuilder::new(
             // Crate name.
             crate_name.to_owned(),
             // Output directory.
@@ -31,7 +31,7 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                 Some(dir) => Some(Path::new(dir).canonicalize()?),
                 None => None,
             },
-            // Contract crate source.
+            // Enclave crate source.
             {
                 if let Some(version) = args.value_of("version") {
                     Box::new(cargo::VersionSource { version: version })
@@ -53,7 +53,7 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
             cargo_addendum,
         )?,
         None => {
-            // Invoke contract-build in the current project directory.
+            // Invoke enclave-build in the current project directory.
             let project = cargo::ProjectRoot::discover()?;
             let package = match project.get_package() {
                 Some(package) => package,
@@ -71,9 +71,9 @@ pub fn build_contract(args: &ArgMatches) -> Result<()> {
                     .into());
             }
 
-            ContractBuilder::new(
+            EnclaveBuilder::new(
                 package.name.clone(),
-                project.get_target_path().join("contract"),
+                project.get_target_path().join(TARGET_ENCLAVE_DIR),
                 match args.value_of("target-dir") {
                     Some(dir) => Some(Path::new(dir).canonicalize()?),
                     None => Some(project.get_target_path()),
