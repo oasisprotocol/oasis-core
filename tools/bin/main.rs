@@ -9,7 +9,7 @@ use ansi_term::Colour::Red;
 use clap::{App, Arg, SubCommand};
 use std::process::exit;
 
-use ekiden_tools::command_buildcontract::build_contract;
+use ekiden_tools::command_buildenclave::build_enclave;
 use ekiden_tools::command_shell::{cleanup_shell, shell};
 
 fn main() {
@@ -20,11 +20,11 @@ fn main() {
                 .author(crate_authors!())
                 .version(crate_version!())
                 .subcommand(
-                    SubCommand::with_name("build-contract")
-                        .about("Build an Ekiden contract")
+                    SubCommand::with_name("build-enclave")
+                        .about("Build an Ekiden enclave")
                         .arg(
-                            Arg::with_name("contract-crate")
-                                .help("Name of the Cargo crate containing the contract")
+                            Arg::with_name("enclave-crate")
+                                .help("Name of the Cargo crate containing the enclave")
                                 .takes_value(true),
                         )
                         .arg(
@@ -87,7 +87,7 @@ fn main() {
                         .arg(
                             Arg::with_name("release")
                                 .long("release")
-                                .help("Build contract in release mode, with optimizations"),
+                                .help("Build enclave in release mode, with optimizations"),
                         )
                         .arg(
                             Arg::with_name("sgx-mode")
@@ -115,13 +115,13 @@ fn main() {
                         )
                         .arg(
                             Arg::with_name("output")
-                                .help("Contract output directory")
+                                .help("Enclave output directory")
                                 .long("output")
                                 .takes_value(true),
                         )
                         .arg(
                             Arg::with_name("output-identity")
-                                .help("Should a contract identity file be generated")
+                                .help("Should a enclave identity file be generated")
                                 .long("output-identity"),
                         )
                         .arg(
@@ -206,7 +206,7 @@ fn main() {
 
     if let Some(ref ekiden_matches) = matches.subcommand_matches("ekiden") {
         let result = match ekiden_matches.subcommand() {
-            ("build-contract", Some(build_args)) => build_contract(build_args),
+            ("build-enclave", Some(build_args)) => build_enclave(build_args),
             ("shell", Some(shell_args)) => shell(shell_args),
             ("clean", Some(clean_args)) => cleanup_shell(clean_args),
             _ => Err("no command specified".into()),

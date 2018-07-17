@@ -1,4 +1,4 @@
-//! Ekiden contract builder.
+//! Ekiden enclave builder.
 use std;
 use std::env;
 use std::fs::{DirBuilder, File};
@@ -25,10 +25,10 @@ static ENCLAVE_CONFIG: &'static str = include_str!("../../core/edl/src/enclave.x
 static ENCLAVE_SIGNING_KEY: &'static str = include_str!("../../keys/private.pem");
 
 /// Name of subdirectory in the target directory.
-const TARGET_CONTRACT_DIR: &'static str = "contract";
+pub const TARGET_ENCLAVE_DIR: &'static str = "enclave";
 
-/// Contract build configuration.
-pub struct ContractBuilder<'a> {
+/// Enclave build configuration.
+pub struct EnclaveBuilder<'a> {
     /// Name of the crate being built.
     crate_name: String,
     /// Output directory path.
@@ -58,7 +58,7 @@ pub struct ContractBuilder<'a> {
     cargo_args: Vec<&'a str>,
 }
 
-impl<'a> ContractBuilder<'a> {
+impl<'a> EnclaveBuilder<'a> {
     pub fn new(
         crate_name: String,
         output_path: PathBuf,
@@ -69,7 +69,7 @@ impl<'a> ContractBuilder<'a> {
         let build_temporary_dir = Temp::new_dir()?;
         let build_path = build_temporary_dir.to_path_buf();
 
-        Ok(ContractBuilder {
+        Ok(EnclaveBuilder {
             crate_name,
             output_path,
             build_path: build_path.clone(),
@@ -111,9 +111,9 @@ impl<'a> ContractBuilder<'a> {
         &self.build_path
     }
 
-    /// Get contract target path.
-    pub fn get_contract_target_path(&self) -> PathBuf {
-        self.target_path.join(TARGET_CONTRACT_DIR)
+    /// Get enclave target path.
+    pub fn get_enclave_target_path(&self) -> PathBuf {
+        self.target_path.join(TARGET_ENCLAVE_DIR)
     }
 
     /// Set builder verbosity.
@@ -176,18 +176,18 @@ impl<'a> ContractBuilder<'a> {
         );
     }
 
-    /// Prepare and build the contract static library crate.
+    /// Prepare and build the enclave static library crate.
     ///
     /// This generates a temporary directory with a new crate that lists only
-    /// the source contract crate as a dependency. It is made so that it
+    /// the source enclave crate as a dependency. It is made so that it
     /// generates a static library when built.
-    pub fn build_contract_crate(&self) -> Result<()> {
+    pub fn build_enclave_crate(&self) -> Result<()> {
         self.report_stage("Preparing");
 
         // Prepare dummy crate.
         let mut cargo_toml = File::create(&self.build_path.join("Cargo.toml"))?;
         writeln!(&mut cargo_toml, "[package]")?;
-        writeln!(&mut cargo_toml, "name = \"contract_enclave\"")?;
+        writeln!(&mut cargo_toml, "name = \"ekiden_enclave\"")?;
         writeln!(&mut cargo_toml, "version = \"0.0.0\"")?;
         writeln!(&mut cargo_toml, "")?;
         writeln!(&mut cargo_toml, "[lib]")?;
@@ -280,10 +280,10 @@ impl<'a> ContractBuilder<'a> {
             self.target_path.join("x86_64-unknown-linux-sgx/debug")
         };
 
-        // Ensure contract target path is available.
+        // Ensure enclave target path is available.
         DirBuilder::new()
             .recursive(true)
-            .create(&self.get_contract_target_path())?;
+            .create(&self.get_enclave_target_path())?;
 
         let gcc_status = Command::new("g++")
             .arg("-Wl,--no-undefined")
@@ -303,7 +303,7 @@ impl<'a> ContractBuilder<'a> {
             .arg("-lsgx_tcrypto")
             .arg("-lsgx_tkey_exchange")
             .arg(&format!("-l{}", service_library_name))
-            .arg("-lcontract_enclave")
+            .arg("-lekiden_enclave")
             .arg("-Wl,--end-group")
             .arg("-Wl,-Bstatic")
             .arg("-Wl,-Bsymbolic")
@@ -317,7 +317,7 @@ impl<'a> ContractBuilder<'a> {
             .arg(&format!("-Wl,--version-script={}", enclave_lds_path.to_str().unwrap()))
             .arg("-O2")
             .arg("-o")
-            .arg(self.get_contract_target_path()
+            .arg(self.get_enclave_target_path()
                 .join(format!("{}.unsigned.so", self.crate_name)).to_str().unwrap())
             .current_dir(&self.build_path)
             .status()?;
@@ -359,7 +359,7 @@ impl<'a> ContractBuilder<'a> {
             }
         };
 
-        // Ensure contract output path is available.
+        // Ensure enclave output path is available.
         DirBuilder::new().recursive(true).create(&self.output_path)?;
 
         let signer_status = Command::new(signer_path)
@@ -367,7 +367,7 @@ impl<'a> ContractBuilder<'a> {
             .arg("-key")
             .arg(&key_path)
             .arg("-enclave")
-            .arg(&self.get_contract_target_path()
+            .arg(&self.get_enclave_target_path()
                 .join(format!("{}.unsigned.so", self.crate_name)))
             .arg("-out")
             .arg(&self.output_path.join(format!("{}.so", self.crate_name)))
@@ -384,9 +384,9 @@ impl<'a> ContractBuilder<'a> {
         Ok(())
     }
 
-    /// Performs all the contract build steps.
+    /// Performs all the enclave build steps.
     pub fn build(&self) -> Result<()> {
-        self.build_contract_crate()?;
+        self.build_enclave_crate()?;
         self.link_enclave()?;
         self.sign_enclave()?;
 

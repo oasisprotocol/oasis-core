@@ -47,10 +47,10 @@ For building contracts we have our own Cargo extension which should be installed
 To build the token contract:
 ```
 # cd contracts/token
-# cargo ekiden build-contract
+# cargo ekiden build-enclave
 ```
 
-The built contract will be stored under `target/contract/token.so`.
+The built contract will be stored under `target/enclave/token.so`.
 
 To build the client token contract:
 ```
@@ -81,7 +81,7 @@ To start the compute node for the token contract (you need to start two):
     --entity-ethereum-address 0000000000000000000000000000000000000000 \
     --batch-storage immediate_remote \
     --no-persist-identity \
-    target/contract/token.so
+    target/enclave/token.so
 ```
 
 After starting the nodes, to manually advance the epoch in the shared dummy node:

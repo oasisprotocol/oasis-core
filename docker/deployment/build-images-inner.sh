@@ -16,13 +16,13 @@ fi
 
 # Build all Ekiden binaries and resources.
 cargo install --force --path tools
-(cd contracts/token && cargo ekiden build-contract --release)
+(cd contracts/token && cargo ekiden build-enclave --release)
 (cd compute && cargo build --release)
 (cd node/dummy && cargo build --release)
 
 # Package all binaries and resources.
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
-ln target/contract/token.so target/docker-deployment/context/lib
+ln target/enclave/token.so target/docker-deployment/context/lib
 ln target/release/ekiden-compute target/docker-deployment/context/bin
 ln target/release/ekiden-node-dummy target/docker-deployment/context/bin
 ln target/release/ekiden-node-dummy-controller target/docker-deployment/context/bin

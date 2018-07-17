@@ -55,7 +55,7 @@ jobs:
       - run: cargo install --force --path tools
       # Build token contract.
       - run:
-          command: cargo ekiden build-contract --output-identity
+          command: cargo ekiden build-enclave --output-identity
           working_directory: contracts/token
       # Run token contract tests.
       - run: cargo test -p token
@@ -76,8 +76,8 @@ jobs:
             - target/debug/ekiden-compute
             - target/debug/token-client
             - target/debug/test-long-term-client
-            - target/contract/token.so
-            - target/contract/token.mrenclave
+            - target/enclave/token.so
+            - target/enclave/token.mrenclave
             - ethereum/build/contracts
             - tests
             - scripts
@@ -99,7 +99,7 @@ jobs:
       - run: CARGO_TARGET_DIR=target cargo install --force --path tools
       # Build token contract.
       - run:
-          command: cargo ekiden build-contract --release --output-identity
+          command: cargo ekiden build-enclave --release --output-identity
           working_directory: contracts/token
 
       # Run all benchmarks.

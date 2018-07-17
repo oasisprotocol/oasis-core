@@ -16,9 +16,9 @@ extern crate sgx_edl;
 extern crate toml;
 
 pub mod cargo;
-pub mod command_buildcontract;
+pub mod command_buildenclave;
 pub mod command_shell;
-pub mod contract;
+pub mod enclave;
 pub mod error;
 pub mod utils;
 pub use utils::*;
