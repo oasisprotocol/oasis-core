@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
+	// TODO(willscott): wire in node for connectivity
+	_ "github.com/oasislabs/ekiden/go/common/node"
 	"github.com/spf13/viper"
 )
 
