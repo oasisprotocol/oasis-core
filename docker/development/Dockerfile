@@ -23,7 +23,8 @@ COPY librocksdb.pc /usr/lib/x86_64-linux-gnu/pkgconfig/librocksdb.pc
 RUN cp /usr/lib/x86_64-linux-gnu/pkgconfig/snappy.pc /usr/lib/x86_64-linux-gnu/pkgconfig/libsnappy.pc
 
 ENV HOME="/root"
-ENV PATH="${HOME}/.cargo/bin:${PATH}"
+ENV GOPATH="/go"
+ENV PATH="${HOME}/.cargo/bin:/go/bin:${PATH}"
 
 # install protobuf (apt system v3.0 fails to compile our protos)
 RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
@@ -58,3 +59,10 @@ RUN . $NVM_DIR/nvm.sh && \
     nvm use lts/carbon && \
     nvm alias default node && \
     npm install -g truffle@4.1
+
+# install golang
+RUN mkdir -p /go/bin && \
+    curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && \
+    go get -u github.com/golang/protobuf/protoc-gen-go && \
+    go get -u github.com/alecthomas/gometalinter && \
+    gometalinter --install
