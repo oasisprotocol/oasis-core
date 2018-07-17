@@ -4,15 +4,15 @@ use ekiden_rpc_common::api;
 
 use super::super::future::ClientFuture;
 
-/// Contract client backend.
+/// RPC client backend.
 pub trait RpcClientBackend: Send + Sync {
     /// Spawn future using an executor.
     fn spawn<F: Future<Item = (), Error = ()> + Send + 'static>(&self, future: F);
 
-    /// Call contract.
+    /// Call enclave.
     fn call(&self, client_request: api::ClientRequest) -> ClientFuture<api::ClientResponse>;
 
-    /// Call contract with raw data.
+    /// Call enclave with raw data.
     fn call_raw(&self, request: Vec<u8>) -> ClientFuture<Vec<u8>>;
 
     /// Get credentials.

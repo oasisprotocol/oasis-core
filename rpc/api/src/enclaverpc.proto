@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package enclaverpc;
+
+service EnclaveRpc {
+    // RPC interface.
+    rpc CallEnclave (CallEnclaveRequest) returns (CallEnclaveResponse) {}
+}
+
+message CallEnclaveRequest {
+    // Raw request payload that will be passed to the enclave.
+    bytes payload = 1;
+    // Enclave routing key for cases where a single node supports multiple enclaves.
+    string enclave_id = 2;
+}
+
+message CallEnclaveResponse {
+    // Raw response payload from enclave.
+    bytes payload = 1;
+}

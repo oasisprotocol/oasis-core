@@ -1,4 +1,4 @@
-//! gRPC client backend.
+//! Network enclave RPC client backend.
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -11,15 +11,14 @@ use protobuf::Message;
 
 use ekiden_common::error::{Error, Result};
 use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
+use ekiden_rpc_api::{CallEnclaveRequest, EnclaveRpcClient};
 use ekiden_rpc_common::api;
-
-use ekiden_compute_api::{CallContractRequest, Web3Client};
 
 use super::super::future::ClientFuture;
 use super::{RpcClientBackend, RpcClientCredentials};
 
-/// Address of a compute node.
-pub struct ComputeNodeAddress {
+/// Address of a remote enclave host.
+pub struct Address {
     /// Compute node hostname.
     pub host: String,
     /// Compute node port.
@@ -28,23 +27,23 @@ pub struct ComputeNodeAddress {
     pub certificate: Certificate,
 }
 
-struct ComputeNode {
+struct Node {
     /// gRPC client for the given node.
-    client: Web3Client,
+    client: EnclaveRpcClient,
     /// Failed flag.
     failed: bool,
 }
 
 #[derive(Default)]
-struct ComputeNodes {
+struct Nodes {
     /// Active nodes.
-    nodes: Arc<Mutex<Vec<ComputeNode>>>,
+    nodes: Arc<Mutex<Vec<Node>>>,
 }
 
-impl ComputeNodes {
+impl Nodes {
     /// Construct new pool of compute nodes.
-    fn new(environment: Arc<grpcio::Environment>, nodes: &[ComputeNodeAddress]) -> Result<Self> {
-        let instance = ComputeNodes::default();
+    fn new(environment: Arc<grpcio::Environment>, nodes: &[Address]) -> Result<Self> {
+        let instance = Nodes::default();
 
         for node in nodes {
             instance.add_node(environment.clone(), node)?;
@@ -54,11 +53,7 @@ impl ComputeNodes {
     }
 
     /// Add a new compute node.
-    fn add_node(
-        &self,
-        environment: Arc<grpcio::Environment>,
-        address: &ComputeNodeAddress,
-    ) -> Result<()> {
+    fn add_node(&self, environment: Arc<grpcio::Environment>, address: &Address) -> Result<()> {
         let channel = grpcio::ChannelBuilder::new(environment)
             .max_receive_message_len(i32::max_value())
             .max_send_message_len(i32::max_value())
@@ -69,10 +64,10 @@ impl ComputeNodes {
                     .root_cert(address.certificate.get_pem()?)
                     .build(),
             );
-        let client = Web3Client::new(channel);
+        let client = EnclaveRpcClient::new(channel);
 
         let mut nodes = self.nodes.lock().unwrap();
-        nodes.push(ComputeNode {
+        nodes.push(Node {
             client,
             failed: false,
         });
@@ -83,7 +78,7 @@ impl ComputeNodes {
     /// Call the first available compute node.
     fn call_available_node<F, Rs>(&self, method: F, max_retries: usize) -> ClientFuture<Rs>
     where
-        F: Fn(&Web3Client) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
+        F: Fn(&EnclaveRpcClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
             + Clone
             + Send
             + Sync
@@ -167,7 +162,7 @@ impl ComputeNodes {
 }
 
 /// gRPC client backend.
-pub struct Web3RpcClientBackend {
+pub struct NetworkRpcClientBackend {
     /// Concurrency environment for gRPC communication.
     environment: Arc<grpcio::Environment>,
     /// Completion queue for executing futures. This is an instance of Client because
@@ -177,10 +172,10 @@ pub struct Web3RpcClientBackend {
     /// this, we abort it and mark the node as failing.
     timeout: Option<Duration>,
     /// Pool of compute nodes that the client can use.
-    nodes: ComputeNodes,
+    nodes: Nodes,
 }
 
-impl Web3RpcClientBackend {
+impl NetworkRpcClientBackend {
     /// Construct new Web3 contract client backend.
     pub fn new(
         environment: Arc<grpcio::Environment>,
@@ -192,7 +187,7 @@ impl Web3RpcClientBackend {
         Self::new_pool(
             environment,
             timeout,
-            &[ComputeNodeAddress {
+            &[Address {
                 host: host.to_string(),
                 port: port,
                 certificate,
@@ -204,29 +199,29 @@ impl Web3RpcClientBackend {
     pub fn new_pool(
         environment: Arc<grpcio::Environment>,
         timeout: Option<Duration>,
-        nodes: &[ComputeNodeAddress],
+        nodes: &[Address],
     ) -> Result<Self> {
-        Ok(Web3RpcClientBackend {
+        Ok(NetworkRpcClientBackend {
             // Create a dummy channel, needed for executing futures. This is required because
             // the API for doing this directly using an Executor is not exposed.
             completion_queue: grpcio::Client::new(
                 grpcio::ChannelBuilder::new(environment.clone()).connect(""),
             ),
             timeout,
-            nodes: ComputeNodes::new(environment.clone(), &nodes)?,
+            nodes: Nodes::new(environment.clone(), &nodes)?,
             environment,
         })
     }
 
     /// Add a new compute node for this client.
-    pub fn add_node(&self, address: &ComputeNodeAddress) -> Result<()> {
+    pub fn add_node(&self, address: &Address) -> Result<()> {
         self.nodes.add_node(self.environment.clone(), &address)
     }
 
     /// Perform a raw contract call via gRPC.
     fn call_available_node<F, Rs>(&self, method: F) -> ClientFuture<Rs>
     where
-        F: Fn(&Web3Client) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
+        F: Fn(&EnclaveRpcClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
             + Clone
             + Send
             + Sync
@@ -246,13 +241,11 @@ fn create_call_opt(timeout: Option<Duration>) -> grpcio::CallOption {
     opts
 }
 
-impl RpcClientBackend for Web3RpcClientBackend {
-    /// Spawn future using an executor.
+impl RpcClientBackend for NetworkRpcClientBackend {
     fn spawn<F: Future<Item = (), Error = ()> + Send + 'static>(&self, future: F) {
         self.completion_queue.spawn(future)
     }
 
-    /// Call contract.
     fn call(&self, client_request: api::ClientRequest) -> ClientFuture<api::ClientResponse> {
         let result = self.call_raw(match client_request.write_to_bytes() {
             Ok(request) => request,
@@ -266,18 +259,16 @@ impl RpcClientBackend for Web3RpcClientBackend {
         Box::new(result)
     }
 
-    /// Call contract with raw data.
     fn call_raw(&self, client_request: Vec<u8>) -> ClientFuture<Vec<u8>> {
-        let mut rpc_request = CallContractRequest::new();
+        let mut rpc_request = CallEnclaveRequest::new();
         rpc_request.set_payload(client_request);
         let timeout = self.timeout;
 
         Box::new(self.call_available_node(move |client| {
-            client.call_contract_async_opt(&rpc_request, create_call_opt(timeout))
+            client.call_enclave_async_opt(&rpc_request, create_call_opt(timeout))
         }).map(|mut response| response.take_payload()))
     }
 
-    /// Get credentials.
     fn get_credentials(&self) -> Option<RpcClientCredentials> {
         None
     }

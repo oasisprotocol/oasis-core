@@ -7,20 +7,14 @@ fn main() {
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
         &[],
-        &[
-            "computation_group",
-            "computation_group_grpc",
-            "web3",
-            "web3_grpc",
-        ],
+        &["computation_group", "computation_group_grpc"],
     );
 
     protoc_grpcio::compile_grpc_protos(
-        &["src/web3.proto", "src/computation_group.proto"],
+        &["src/computation_group.proto"],
         &["src", "../../"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/web3.proto");
     println!("cargo:rerun-if-changed={}", "src/computation_group.proto");
 }

@@ -18,6 +18,7 @@ ekiden-epochtime = { path = "../epochtime", version = "0.2.0-alpha" }
 ekiden-instrumentation = { path = "../instrumentation", version = "0.2.0-alpha" }
 ekiden-instrumentation-prometheus = { path = "../instrumentation/prometheus", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
+ekiden-rpc-api = { path = "../rpc/api", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }

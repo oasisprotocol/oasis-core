@@ -19,9 +19,8 @@ serde_cbor = "0.8.2"
 futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-ekiden-compute-api = { path = "../../compute/api", version = "0.2.0-alpha" }
+ekiden-rpc-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 byteorder = "1.2.1"
 futures = "0.1"
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 rand = "0.4"
-tokio-core = "0.1"

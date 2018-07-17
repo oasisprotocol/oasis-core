@@ -18,6 +18,7 @@ use ekiden_di::Container;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
+use ekiden_rpc_api;
 use ekiden_scheduler_base::Scheduler;
 use ekiden_storage_base::BatchStorage;
 use ekiden_tools::get_contract_identity;
@@ -26,7 +27,7 @@ use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::group::ComputationGroup;
 use super::ias::{IASConfiguration, IAS};
 use super::services::computation_group::ComputationGroupService;
-use super::services::web3::Web3Service;
+use super::services::enclaverpc::EnclaveRpcService;
 use super::worker::{Worker, WorkerConfiguration};
 
 /// Compute node test-only configuration.
@@ -171,8 +172,10 @@ impl ComputeNode {
         // Create compute node gRPC server.
         use grpcio::ClientCertificateRequestType::RequestClientCertificateButDontVerify;
 
-        let web3 =
-            ekiden_compute_api::create_web3(Web3Service::new(worker, consensus_frontend.clone()));
+        let enclaverpc = ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(
+            worker,
+            consensus_frontend.clone(),
+        ));
         let inter_node = ekiden_compute_api::create_computation_group(
             ComputationGroupService::new(consensus_frontend.clone()),
         );
@@ -183,7 +186,7 @@ impl ComputeNode {
                     .max_send_message_len(i32::max_value())
                     .build_args(),
             )
-            .register_service(web3)
+            .register_service(enclaverpc)
             .register_service(inter_node)
             .bind_secure(
                 "0.0.0.0",

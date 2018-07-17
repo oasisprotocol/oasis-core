@@ -47,6 +47,7 @@ members = [
     "epochtime",
 
     # RPC.
+    "rpc/api",
     "rpc/common",
     "rpc/client",
     "rpc/untrusted",
