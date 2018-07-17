@@ -1,12 +1,5 @@
 enclave {
     trusted {
-        // Check if the enclave has a batch ready for execution and copy it over.
-        public void contract_take_batch(
-            [user_check] uint8_t *call_batch_data,
-            size_t call_batch_capacity,
-            [out] size_t *call_batch_length
-        );
-
         // Process batch of contract calls.
         public void contract_call_batch(
             [user_check] const uint8_t *call_batch_data,

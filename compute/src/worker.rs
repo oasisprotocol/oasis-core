@@ -23,7 +23,6 @@ use ekiden_core::rpc::api;
 use ekiden_storage_base::BatchStorage;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
-use super::consensus::ConsensusFrontend;
 use super::ias::IAS;
 
 /// Result bytes.
@@ -47,7 +46,7 @@ pub struct ComputedBatch {
 /// Command sent to the worker thread.
 enum Command {
     /// RPC call from a client.
-    RpcCall(Vec<u8>, BytesSender, Arc<ConsensusFrontend>),
+    RpcCall(Vec<u8>, BytesSender),
     /// Contract call batch process request.
     ContractCallBatch(CallBatch, Block, oneshot::Sender<Result<ComputedBatch>>),
 }
@@ -193,38 +192,15 @@ impl WorkerInner {
         }
     }
 
-    /// Check if the most recent RPC call produced any contract calls and queue them
-    /// in the current call batch.
-    fn check_and_append_contract_batch(&self, consensus_frontend: Arc<ConsensusFrontend>) {
-        // Check if the most recent RPC call produced any contract calls.
-        match self.contract.contract_take_batch() {
-            Ok(batch) => {
-                // We got a batch of calls, send it to consensus frontend for batching.
-                if !batch.is_empty() {
-                    consensus_frontend.append_batch(batch);
-                }
-            }
-            Err(error) => {
-                error!(
-                    "Failed to take contract batch from contract: {}",
-                    error.message
-                );
-            }
-        }
-    }
-
     /// Process requests from a receiver until the channel closes.
     fn work(&mut self, command_receiver: Receiver<Command>) {
         // Block for the next call.
         while let Ok(command) = command_receiver.recv() {
             match command {
-                Command::RpcCall(request, sender, consensus_frontend) => {
+                Command::RpcCall(request, sender) => {
                     // Process (stateless) RPC call.
                     let result = self.handle_rpc_call(request);
                     sender.send(result).unwrap();
-
-                    // Check if RPC call produced a batch of requests.
-                    self.check_and_append_contract_batch(consensus_frontend);
 
                     measure_counter_inc!("rpc_call_processed");
                 }
@@ -286,20 +262,12 @@ impl Worker {
     /// Queue an RPC call with the worker.
     ///
     /// Returns a receiver that will be used to deliver the response.
-    pub fn rpc_call(
-        &self,
-        request: Vec<u8>,
-        consensus_frontend: Arc<ConsensusFrontend>,
-    ) -> oneshot::Receiver<BytesResult> {
+    pub fn rpc_call(&self, request: Vec<u8>) -> oneshot::Receiver<BytesResult> {
         measure_counter_inc!("rpc_call_request");
 
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
-            .send(Command::RpcCall(
-                request,
-                response_sender,
-                consensus_frontend,
-            ))
+            .send(Command::RpcCall(request, response_sender))
             .unwrap();
 
         response_receiver

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package contract;
+
+service Contract {
+    // Submit a transaction to leader.
+    rpc SubmitTx (SubmitTxRequest) returns (SubmitTxResponse) {}
+}
+
+message SubmitTxRequest {
+    // Encoded transaction.
+    bytes data = 1;
+}
+
+message SubmitTxResponse {
+}

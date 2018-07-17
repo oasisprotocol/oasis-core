@@ -9,4 +9,3 @@ pub mod batch;
 pub mod call;
 #[macro_use]
 pub mod macros;
-pub mod protocol;

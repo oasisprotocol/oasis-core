@@ -27,6 +27,7 @@ use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::group::ComputationGroup;
 use super::ias::{IASConfiguration, IAS};
 use super::services::computation_group::ComputationGroupService;
+use super::services::contract::ContractService;
 use super::services::enclaverpc::EnclaveRpcService;
 use super::worker::{Worker, WorkerConfiguration};
 
@@ -172,11 +173,11 @@ impl ComputeNode {
         // Create compute node gRPC server.
         use grpcio::ClientCertificateRequestType::RequestClientCertificateButDontVerify;
 
-        let enclaverpc = ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(
-            worker,
-            consensus_frontend.clone(),
-        ));
-        let inter_node = ekiden_compute_api::create_computation_group(
+        let enclave_rpc_service =
+            ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(worker));
+        let contract_service =
+            ekiden_compute_api::create_contract(ContractService::new(consensus_frontend.clone()));
+        let inter_node_service = ekiden_compute_api::create_computation_group(
             ComputationGroupService::new(consensus_frontend.clone()),
         );
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
@@ -186,8 +187,9 @@ impl ComputeNode {
                     .max_send_message_len(i32::max_value())
                     .build_args(),
             )
-            .register_service(enclaverpc)
-            .register_service(inter_node)
+            .register_service(enclave_rpc_service)
+            .register_service(inter_node_service)
+            .register_service(contract_service)
             .bind_secure(
                 "0.0.0.0",
                 config.port,

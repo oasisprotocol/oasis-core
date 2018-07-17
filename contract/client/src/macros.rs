@@ -6,7 +6,6 @@ pub use ekiden_common::signature::Signer;
 pub use ekiden_consensus_base::backend::ConsensusBackend;
 pub use ekiden_enclave_common::quote;
 pub use ekiden_registry_base::EntityRegistryBackend;
-pub use ekiden_rpc_client::backend::RpcClientBackend;
 pub use ekiden_scheduler_base::Scheduler;
 pub use ekiden_storage_base::backend::StorageBackend;
 
