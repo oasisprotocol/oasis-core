@@ -4,7 +4,7 @@ defaults: &defaults
 
 version: 2
 jobs:
-  build:
+  build-rust:
     <<: *defaults
     resource_class: large
     steps:
@@ -14,6 +14,9 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
+      - run:
+          name: Checking if rust code has changed
+          command: ./scripts/ci-changed.sh beacon clients common compute consensus contract contracts core db di enclave epochtime ehtereum instrumentation keys node registry rpc scheduler stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
@@ -81,6 +84,27 @@ jobs:
             - ethereum/build/contracts
             - tests
             - scripts
+  build-go:
+    working_directory: /go/src/github.com/oasislabs/ekiden
+    docker:
+      - image: circleci/golang:1.10
+    steps:
+      - checkout
+      - run: 
+          name: Checking if go code has changed
+          command: ./scripts/ci-changed.sh go
+      - restore_cache:
+          keys:
+            - go-cache
+      - run: cd go && dep ensure
+      - run: cd go && go build -v
+      - run: cd go && go test -v ./...
+      - save_cache:
+          key: go-cache
+          paths:
+            - "/go/pkg"          
+
+
 
   benchmark:
     <<: *defaults
@@ -172,20 +196,23 @@ workflows:
   version: 2
   build:
     jobs:
-      - build
+      - build-rust
+      - build-go
       - deploy:
           filters:
             branches:
               only: master
           requires:
-            - build
+            - build-rust
+            - build-go
       - request-deploy:
           type: approval
           filters:
             branches:
               only: master
           requires:
-            - build
+            - build-rust
+            - build-go
       - deployclient:
           requires:
             - request-deploy
