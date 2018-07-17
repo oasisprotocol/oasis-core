@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 
 	cfgABCIAddr = "abci.address"
 	cfgABCIPort = "abci.port"
+	cfgGRPCPort = "grpc.port"
 )
 
 var (
@@ -34,6 +36,8 @@ var (
 
 	abciAddr net.IP
 	abciPort uint16
+
+	grpcPort uint16
 
 	rootCmd = &cobra.Command{
 		Use:     "ekiden-node",
@@ -70,6 +74,17 @@ func rootMain(cmd *cobra.Command, args []string) {
 	// XXX: Generate/Load the node identity.
 	// Except tendermint does this on it's own, sigh.
 
+	// Initialze the gRPC server.
+	rootLog.Debug("gRPC Server Params", "port", grpcPort)
+	grpcSrv, err := newGrpcService(grpcPort)
+	if err != nil {
+		rootLog.Error("failed to initialize gRPC server",
+			"err", err,
+		)
+		return
+	}
+	cleanupFns = append(cleanupFns, grpcSrv.Cleanup)
+
 	// Initialize the ABCI multiplexer.
 	abciSockAddr := net.JoinHostPort(abciAddr.String(), strconv.Itoa(int(abciPort)))
 	rootLog.Debug("ABCI Multiplexer Params", "addr", abciSockAddr)
@@ -94,6 +109,14 @@ func rootMain(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Start the gRPC server.
+	if err = grpcSrv.Start(); err != nil {
+		rootLog.Error("failed to start gRPC server",
+			"err", err,
+		)
+		return
+	}
+
 	// TODO: Spin up the tendermint node.
 	// This should be in-process rather than fork() + exec() based.
 
@@ -103,14 +126,68 @@ func rootMain(cmd *cobra.Command, args []string) {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-sigCh:
+		grpcSrv.Stop()
 		mux.Stop()
 		break
 	case <-mux.Quit():
+		grpcSrv.Stop()
+		break
+	case <-grpcSrv.Quit():
+		mux.Stop()
 		break
 	}
+}
 
-	// Cleanup the mux (and mux-ed service) state.
-	mux.Cleanup()
+type grpcService struct {
+	ln     net.Listener
+	s      *grpc.Server
+	quitCh chan struct{}
+}
+
+func (s *grpcService) Start() error {
+	go func() {
+		var ln net.Listener
+		ln, s.ln = s.ln, nil
+		err := s.s.Serve(ln)
+		if err != nil {
+			rootLog.Error("gRPC Server terminated uncleanly",
+				"err", err,
+			)
+		}
+		s.s = nil
+		close(s.quitCh)
+	}()
+	return nil
+}
+
+func (s *grpcService) Quit() <-chan struct{} {
+	return s.quitCh
+}
+
+func (s *grpcService) Stop() {
+	if s.s != nil {
+		s.s.GracefulStop()
+		s.s = nil
+	}
+}
+
+func (s *grpcService) Cleanup() {
+	if s.ln != nil {
+		_ = s.ln.Close()
+		s.ln = nil
+	}
+}
+
+func newGrpcService(port uint16) (*grpcService, error) {
+	ln, err := net.Listen("tcp", strconv.Itoa(int(port)))
+	if err != nil {
+		return nil, err
+	}
+	return &grpcService{
+		ln:     ln,
+		s:      grpc.NewServer(),
+		quitCh: make(chan struct{}),
+	}, nil
 }
 
 // nolint: errcheck
@@ -137,10 +214,12 @@ func init() {
 	// Flags specific to the root command.
 	rootCmd.Flags().IPVar(&abciAddr, cfgABCIAddr, net.IPv4(127, 0, 0, 1), "ABCI server IP address")
 	rootCmd.Flags().Uint16Var(&abciPort, cfgABCIPort, 26658, "ABCI server port")
+	rootCmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 26659, "gRPC server port")
 
 	for _, v := range []string{
 		cfgABCIAddr,
 		cfgABCIPort,
+		cfgGRPCPort,
 	} {
 		viper.BindPFlag(v, rootCmd.Flags().Lookup(v))
 	}
