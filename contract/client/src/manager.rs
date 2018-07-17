@@ -15,7 +15,7 @@ use ekiden_common::signature::Signer;
 use ekiden_consensus_base::backend::ConsensusBackend;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
-use ekiden_rpc_client::backend::Web3RpcClientBackend;
+use ekiden_rpc_client::backend::NetworkRpcClientBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 
@@ -26,7 +26,7 @@ struct Leader {
     /// Node descriptor.
     node: Node,
     /// Contract client.
-    client: ContractClient<Web3RpcClientBackend>,
+    client: ContractClient<NetworkRpcClientBackend>,
 }
 
 struct Inner {
@@ -152,8 +152,8 @@ impl ContractClientManager {
                             .and_then(move |node| {
                                 // Create new client to the leader node.
                                 let address = node.addresses[0];
-                                let backend = Web3RpcClientBackend::new(
-                                    inner.environment.grpc(),
+                                let backend = NetworkRpcClientBackend::new(
+                                    inner.environment.clone(),
                                     inner.timeout,
                                     &format!("{}", address.ip()),
                                     address.port(),

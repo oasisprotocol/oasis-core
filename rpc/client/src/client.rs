@@ -4,12 +4,6 @@ use std::sync::Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 
-use futures::future::{self, Future};
-#[cfg(not(target_env = "sgx"))]
-use futures::sync::{mpsc, oneshot};
-#[cfg(not(target_env = "sgx"))]
-use futures::Stream;
-
 use protobuf;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -18,13 +12,13 @@ use serde_cbor;
 use ekiden_common::error::Error;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::error::Result;
+use ekiden_common::futures::prelude::*;
+#[cfg(not(target_env = "sgx"))]
+use ekiden_common::futures::sync::{mpsc, oneshot};
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_rpc_common::api;
 
 use super::backend::RpcClientBackend;
-use super::future::ClientFuture;
-#[cfg(target_env = "sgx")]
-use super::future::FutureExtra;
 use super::secure_channel::SecureChannelContext;
 
 /// Commands sent to the processing task.
@@ -52,7 +46,7 @@ struct RpcClientContext<Backend: RpcClientBackend + 'static> {
 
 /// Helper for running client commands.
 #[cfg(not(target_env = "sgx"))]
-fn run_command<F, R>(cmd: F, response_tx: oneshot::Sender<Result<R>>) -> ClientFuture<()>
+fn run_command<F, R>(cmd: F, response_tx: oneshot::Sender<Result<R>>) -> BoxFuture<()>
 where
     F: Future<Item = R, Error = Error> + Send + 'static,
     R: Send + 'static,
@@ -77,12 +71,12 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     fn process_commands(
         context: Arc<Mutex<Self>>,
         request_rx: mpsc::UnboundedReceiver<Command>,
-    ) -> ClientFuture<()> {
+    ) -> BoxFuture<()> {
         // Process all requests in order. The stream processing ends when the sender
         // handle (request_tx) in RpcClient is dropped.
         let result = request_rx
             .map_err(|_| Error::new("Command channel closed"))
-            .for_each(move |command| -> ClientFuture<()> {
+            .for_each(move |command| -> BoxFuture<()> {
                 match command {
                     Command::Call(request, response_tx) => {
                         run_command(Self::call_raw(context.clone(), request), response_tx)
@@ -103,14 +97,14 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     fn call_raw(
         context: Arc<Mutex<Self>>,
         plain_request: api::PlainClientRequest,
-    ) -> ClientFuture<Vec<u8>> {
+    ) -> BoxFuture<Vec<u8>> {
         // Ensure secure channel is initialized before making the request.
         let init_sc = Self::init_secure_channel(context.clone());
 
         // Context moved into the closure (renamed for clarity).
         let shared_context = context;
 
-        let result = init_sc.and_then(move |_| -> ClientFuture<Vec<u8>> {
+        let result = init_sc.and_then(move |_| -> BoxFuture<Vec<u8>> {
             // Clone method for use in later future.
             let cloned_method = plain_request.get_method().to_owned();
 
@@ -139,77 +133,75 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
             };
 
             // After the backend call is done, handle the response.
-            let result = backend_call.and_then(
-                move |mut client_response| -> ClientFuture<Vec<u8>> {
-                    let mut plain_response = {
-                        let mut context = shared_context.lock().unwrap();
+            let result = backend_call.and_then(move |mut client_response| -> BoxFuture<Vec<u8>> {
+                let mut plain_response = {
+                    let mut context = shared_context.lock().unwrap();
 
-                        let mut plain_response = {
-                            if client_response.has_encrypted_response() {
-                                // Encrypted response.
-                                match context
-                                    .secure_channel
-                                    .open_response_box(&client_response.get_encrypted_response())
-                                {
-                                    Ok(response) => response,
-                                    Err(error) => return Box::new(future::err(error)),
+                    let mut plain_response = {
+                        if client_response.has_encrypted_response() {
+                            // Encrypted response.
+                            match context
+                                .secure_channel
+                                .open_response_box(&client_response.get_encrypted_response())
+                            {
+                                Ok(response) => response,
+                                Err(error) => return Box::new(future::err(error)),
+                            }
+                        } else {
+                            // Plain-text response.
+                            client_response.take_plain_response()
+                        }
+                    };
+
+                    if context.secure_channel.must_encrypt()
+                        && !client_response.has_encrypted_response()
+                    {
+                        match plain_response.get_code() {
+                            api::PlainClientResponse_Code::ERROR_SECURE_CHANNEL => {
+                                // Request the secure channel to be reset.
+                                // NOTE: This opens us up to potential adversarial interference as an
+                                //       adversarial compute node can force the channel to be reset by
+                                //       crafting a non-authenticated response. But a compute node can
+                                //       always deny service or prevent the secure channel from being
+                                //       established in the first place, so this is not really an issue.
+                                if cloned_method != api::METHOD_CHANNEL_INIT {
+                                    context.secure_channel.close();
+
+                                    // Channel will reset on the next request.
+                                    return Box::new(future::err(Error::new(
+                                        "Secure channel closed",
+                                    )));
                                 }
-                            } else {
-                                // Plain-text response.
-                                client_response.take_plain_response()
+                            }
+                            _ => {}
+                        }
+
+                        return Box::new(future::err(Error::new(
+                            "Contract returned plain response for encrypted request",
+                        )));
+                    }
+
+                    plain_response
+                };
+
+                // Validate response code.
+                match plain_response.get_code() {
+                    api::PlainClientResponse_Code::SUCCESS => {}
+                    _ => {
+                        // Deserialize error.
+                        let mut error: api::Error = {
+                            match protobuf::parse_from_bytes(&plain_response.take_payload()) {
+                                Ok(error) => error,
+                                _ => return Box::new(future::err(Error::new("Unknown error"))),
                             }
                         };
 
-                        if context.secure_channel.must_encrypt()
-                            && !client_response.has_encrypted_response()
-                        {
-                            match plain_response.get_code() {
-                                api::PlainClientResponse_Code::ERROR_SECURE_CHANNEL => {
-                                    // Request the secure channel to be reset.
-                                    // NOTE: This opens us up to potential adversarial interference as an
-                                    //       adversarial compute node can force the channel to be reset by
-                                    //       crafting a non-authenticated response. But a compute node can
-                                    //       always deny service or prevent the secure channel from being
-                                    //       established in the first place, so this is not really an issue.
-                                    if cloned_method != api::METHOD_CHANNEL_INIT {
-                                        context.secure_channel.close();
+                        return Box::new(future::err(Error::new(error.get_message())));
+                    }
+                };
 
-                                        // Channel will reset on the next request.
-                                        return Box::new(future::err(Error::new(
-                                            "Secure channel closed",
-                                        )));
-                                    }
-                                }
-                                _ => {}
-                            }
-
-                            return Box::new(future::err(Error::new(
-                                "Contract returned plain response for encrypted request",
-                            )));
-                        }
-
-                        plain_response
-                    };
-
-                    // Validate response code.
-                    match plain_response.get_code() {
-                        api::PlainClientResponse_Code::SUCCESS => {}
-                        _ => {
-                            // Deserialize error.
-                            let mut error: api::Error = {
-                                match protobuf::parse_from_bytes(&plain_response.take_payload()) {
-                                    Ok(error) => error,
-                                    _ => return Box::new(future::err(Error::new("Unknown error"))),
-                                }
-                            };
-
-                            return Box::new(future::err(Error::new(error.get_message())));
-                        }
-                    };
-
-                    Box::new(future::ok(plain_response.take_payload()))
-                },
-            );
+                Box::new(future::ok(plain_response.take_payload()))
+            });
 
             Box::new(result)
         });
@@ -218,7 +210,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     }
 
     /// Call a contract method.
-    fn call<Rq, Rs>(context: Arc<Mutex<Self>>, method: &str, request: Rq) -> ClientFuture<Rs>
+    fn call<Rq, Rs>(context: Arc<Mutex<Self>>, method: &str, request: Rq) -> BoxFuture<Rs>
     where
         Rq: Serialize,
         Rs: DeserializeOwned + Send + 'static,
@@ -242,7 +234,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     ///
     /// If the channel has already been initialized the future returned by this method
     /// will immediately resolve.
-    fn init_secure_channel(context: Arc<Mutex<Self>>) -> ClientFuture<()> {
+    fn init_secure_channel(context: Arc<Mutex<Self>>) -> BoxFuture<()> {
         // Context moved into the closure (renamed for clarity).
         let shared_context = context;
 
@@ -347,11 +339,11 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     ///
     /// If this method is not called, secure channel is automatically closed in
     /// a blocking fashion when the client is dropped.
-    fn close_secure_channel(context: Arc<Mutex<Self>>) -> ClientFuture<()> {
+    fn close_secure_channel(context: Arc<Mutex<Self>>) -> BoxFuture<()> {
         // Context moved into the closure (renamed for clarity).
         let shared_context = context;
 
-        let result = future::lazy(move || -> ClientFuture<()> {
+        let result = future::lazy(move || -> BoxFuture<()> {
             {
                 let context = shared_context.lock().unwrap();
 
@@ -395,6 +387,7 @@ pub struct RpcClient<Backend: RpcClientBackend + 'static> {
 
 impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     /// Constructs a new contract client.
+    ///
     /// The client API macro calls this.
     pub fn new(backend: Arc<Backend>, mr_enclave: MrEnclave, client_authentication: bool) -> Self {
         // Create request processing channel.
@@ -421,7 +414,8 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
             let context = client.context.lock().unwrap();
             context
                 .backend
-                .spawn(request_processor.then(|_| future::ok(())));
+                .get_environment()
+                .spawn(request_processor.discard());
         }
 
         client
@@ -429,7 +423,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
 
     /// Call a contract method.
     #[cfg(target_env = "sgx")]
-    pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> ClientFuture<Rs>
+    pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> BoxFuture<Rs>
     where
         Rq: Serialize,
         Rs: DeserializeOwned + Send + 'static,
@@ -439,7 +433,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
 
     /// Call a contract method.
     #[cfg(not(target_env = "sgx"))]
-    pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> ClientFuture<Rs>
+    pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> BoxFuture<Rs>
     where
         Rq: Serialize,
         Rs: DeserializeOwned + Send + 'static,
@@ -476,7 +470,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     /// If this method is not called, secure channel is automatically initialized
     /// when making the first request.
     #[cfg(target_env = "sgx")]
-    pub fn init_secure_channel(&self) -> ClientFuture<()> {
+    pub fn init_secure_channel(&self) -> BoxFuture<()> {
         RpcClientContext::init_secure_channel(self.context.clone())
     }
 
@@ -485,7 +479,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     /// If this method is not called, secure channel is automatically initialized
     /// when making the first request.
     #[cfg(not(target_env = "sgx"))]
-    pub fn init_secure_channel(&self) -> ClientFuture<()> {
+    pub fn init_secure_channel(&self) -> BoxFuture<()> {
         let (call_tx, call_rx) = oneshot::channel();
 
         if let Err(_) = self.request_tx
@@ -507,7 +501,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     /// If this method is not called, secure channel is automatically closed in
     /// a blocking fashion when the client is dropped.
     #[cfg(target_env = "sgx")]
-    pub fn close_secure_channel(&self) -> ClientFuture<()> {
+    pub fn close_secure_channel(&self) -> BoxFuture<()> {
         RpcClientContext::close_secure_channel(self.context.clone())
     }
 
@@ -516,7 +510,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     /// If this method is not called, secure channel is automatically closed in
     /// a blocking fashion when the client is dropped.
     #[cfg(not(target_env = "sgx"))]
-    pub fn close_secure_channel(&self) -> ClientFuture<()> {
+    pub fn close_secure_channel(&self) -> BoxFuture<()> {
         let (call_tx, call_rx) = oneshot::channel();
 
         if let Err(_) = self.request_tx

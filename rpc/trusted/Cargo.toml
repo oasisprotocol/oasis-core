@@ -1,7 +1,7 @@
 [package]
 name = "ekiden-rpc-trusted"
 version = "0.2.0-alpha"
-authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden RPC (trusted part)"
 keywords = ["ekiden"]
 repository = "https://github.com/ekiden/ekiden"

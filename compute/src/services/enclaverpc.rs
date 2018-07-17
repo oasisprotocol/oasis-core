@@ -5,13 +5,13 @@ use std::sync::Arc;
 use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 
-use ekiden_compute_api::{CallContractRequest, CallContractResponse, Web3};
 use ekiden_core::futures::Future;
+use ekiden_rpc_api::{CallEnclaveRequest, CallEnclaveResponse, EnclaveRpc};
 
 use super::super::consensus::ConsensusFrontend;
 use super::super::worker::Worker;
 
-struct Web3ServiceInner {
+struct EnclaveRpcServiceInner {
     /// Worker.
     worker: Arc<Worker>,
     /// Consensus frontend.
@@ -19,15 +19,15 @@ struct Web3ServiceInner {
 }
 
 #[derive(Clone)]
-pub struct Web3Service {
-    inner: Arc<Web3ServiceInner>,
+pub struct EnclaveRpcService {
+    inner: Arc<EnclaveRpcServiceInner>,
 }
 
-impl Web3Service {
+impl EnclaveRpcService {
     /// Create new compute server instance.
     pub fn new(worker: Arc<Worker>, consensus_frontend: Arc<ConsensusFrontend>) -> Self {
-        Web3Service {
-            inner: Arc::new(Web3ServiceInner {
+        EnclaveRpcService {
+            inner: Arc::new(EnclaveRpcServiceInner {
                 worker,
                 consensus_frontend,
             }),
@@ -35,15 +35,17 @@ impl Web3Service {
     }
 }
 
-impl Web3 for Web3Service {
-    fn call_contract(
+impl EnclaveRpc for EnclaveRpcService {
+    fn call_enclave(
         &self,
         ctx: grpcio::RpcContext,
-        mut rpc_request: CallContractRequest,
-        sink: grpcio::UnarySink<CallContractResponse>,
+        mut rpc_request: CallEnclaveRequest,
+        sink: grpcio::UnarySink<CallEnclaveResponse>,
     ) {
         measure_histogram_timer!("call_contract_time");
         measure_counter_inc!("call_contract_calls");
+
+        // TODO: Support routing to multiple enclaves based on enclave_id.
 
         // Send command to worker thread and request any generated batches to be handled
         // by our consensus frontend.
@@ -55,7 +57,7 @@ impl Web3 for Web3Service {
         // Prepare response future.
         let f = response_receiver.then(|result| match result {
             Ok(Ok(response)) => {
-                let mut rpc_response = CallContractResponse::new();
+                let mut rpc_response = CallEnclaveResponse::new();
                 rpc_response.set_payload(response);
 
                 sink.success(rpc_response)

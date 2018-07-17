@@ -9,10 +9,15 @@ use std::sync::SgxMutexGuard as MutexGuard;
 use std::sync::{Mutex, MutexGuard};
 
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures::prelude::*;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_key_manager_api::with_api;
-use ekiden_rpc_client::{create_client_rpc, FutureExtra};
+#[cfg(not(target_env = "sgx"))]
+use ekiden_rpc_client::backend::network::NetworkRpcClientBackend;
+use ekiden_rpc_client::create_client_rpc;
+#[cfg(target_env = "sgx")]
 use ekiden_rpc_common::client::ClientEndpoint;
+#[cfg(target_env = "sgx")]
 use ekiden_rpc_trusted::client::OcallRpcClientBackend;
 
 // Create API client for the key manager.
@@ -25,7 +30,10 @@ pub struct KeyManager {
     /// Key manager contract MRENCLAVE.
     mr_enclave: Option<MrEnclave>,
     /// Internal API client.
+    #[cfg(target_env = "sgx")]
     client: Option<key_manager::Client<OcallRpcClientBackend>>,
+    #[cfg(not(target_env = "sgx"))]
+    client: Option<key_manager::Client<NetworkRpcClientBackend>>,
     /// Local key cache.
     cache: HashMap<String, Vec<u8>>,
 }
@@ -64,13 +72,22 @@ impl KeyManager {
             return Ok(());
         }
 
-        let backend = match OcallRpcClientBackend::new(ClientEndpoint::KeyManager) {
-            Ok(backend) => backend,
-            _ => return Err(Error::new("Failed to create key manager client backend")),
-        };
+        #[cfg(target_env = "sgx")]
+        {
+            let backend = match OcallRpcClientBackend::new(ClientEndpoint::KeyManager) {
+                Ok(backend) => backend,
+                _ => return Err(Error::new("Failed to create key manager client backend")),
+            };
 
-        let client = key_manager::Client::new(Arc::new(backend), mr_enclave);
-        self.client.get_or_insert(client);
+            let client = key_manager::Client::new(Arc::new(backend), mr_enclave);
+            self.client.get_or_insert(client);
+        }
+
+        #[cfg(not(target_env = "sgx"))]
+        {
+            drop(mr_enclave);
+            unimplemented!("key manager client not implemented outside SGX");
+        }
 
         Ok(())
     }

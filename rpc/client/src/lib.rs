@@ -12,14 +12,13 @@ extern crate serde_cbor;
 extern crate sodalite;
 
 extern crate ekiden_common;
-#[cfg(not(target_env = "sgx"))]
-extern crate ekiden_compute_api;
 extern crate ekiden_enclave_common;
+#[cfg(not(target_env = "sgx"))]
+extern crate ekiden_rpc_api;
 extern crate ekiden_rpc_common;
 
 pub mod backend;
 mod client;
-mod future;
 mod secure_channel;
 
 #[doc(hidden)]
@@ -28,4 +27,3 @@ pub mod macros;
 
 // Re-export.
 pub use client::RpcClient;
-pub use future::{ClientFuture, FutureExtra};

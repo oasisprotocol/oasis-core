@@ -19,6 +19,7 @@ extern crate ekiden_compute_api;
 extern crate ekiden_consensus_base;
 extern crate ekiden_core;
 extern crate ekiden_registry_base;
+extern crate ekiden_rpc_api;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
