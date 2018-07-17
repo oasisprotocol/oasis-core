@@ -8,7 +8,7 @@ fi
 IFS="|"
 MATCH="$*"
 if [[ $(git diff --name-only master | grep -P "^($MATCH)") ]]; then
-  echo "Branch matches. Running CI Job"
+  echo "Repo diverged from master. Running CI Job"
   exit 0
 else
   circleci step halt

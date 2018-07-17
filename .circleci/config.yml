@@ -16,7 +16,7 @@ jobs:
       - checkout
       - run:
           name: Checking if rust code has changed
-          command: ./scripts/ci-changed.sh beacon clients common compute consensus contract contracts core db di enclave epochtime ehtereum instrumentation keys node registry rpc scheduler stake storage tools
+          command: ./scripts/ci-changed.sh beacon clients common compute consensus contract contracts core db di enclave epochtime ehtereum instrumentation keys node registry rpc scheduler stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
@@ -89,7 +89,6 @@ jobs:
     docker:
       - image: circleci/golang:1.10
     steps:
-      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - checkout
       - run: 
           name: Checking if go code has changed
