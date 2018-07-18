@@ -110,7 +110,8 @@ jobs:
       - run: cd go && dep ensure
       - run: cd go && go generate ./...
       - run: cd go && go build -v -o ./ekiden/ekiden ./ekiden
-      - run: cd go && go test -v ./...
+      - run: cd go && go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
+      - run: bash <(curl -s https://codecov.io/bash) -Z
       - save_cache:
           key: go-cache
           paths:
