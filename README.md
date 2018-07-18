@@ -125,7 +125,7 @@ We welcome anyone to fork and submit a pull request! Please make sure to run `ru
 - `beacon`: Random beacon for preventing predictability
 - `common`: Common functionality like error handling
 - `compute`: Ekiden compute node
-- `consensus`: Ekiden consensus interface and backends
+- `roothash`: Ekiden root hash interface and backends
 - `contracts`: Example and mangaement code to run in the Ekiden runtime (`key-manager`, `token`)
 - `core`: Core external-facing libraries (aggregates `common`, `enclave`, `rpc`, `db`, etc.)
 - `db`: Database functionality for use in enclaves
@@ -133,7 +133,7 @@ We welcome anyone to fork and submit a pull request! Please make sure to run `ru
 - `docker`: Docker environment definitions
 - `enclave`: Enclave loader and identity attestation
 - `epochtime`: Time synchronization
-- `ethereum`: Contract definitions of the `beacon`, `consensus`, `epochtime`, `registry`, and `stake` components
+- `ethereum`: Contract definitions of the `beacon`, `roothash`, `epochtime`, `registry`, and `stake` components
 - `instrumentation`: Metric collection and instrumentation utilities
 - `node`: Centralized "backend" for centralized implemnetations of APIs (e.g. a location to use as a pretend AWS)
 - `registry`: Management of which hosts are online in the system

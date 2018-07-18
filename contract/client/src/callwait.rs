@@ -14,10 +14,10 @@ use ekiden_common::futures::Future;
 use ekiden_common::futures::Stream;
 use ekiden_common::hash::EncodedHash;
 use ekiden_common::subscribers::StreamSubscribers;
-use ekiden_consensus_base::backend::ConsensusBackend;
-use ekiden_consensus_base::block::Block;
 use ekiden_contract_common::batch::CallBatch;
 use ekiden_contract_common::batch::OutputBatch;
+use ekiden_roothash_base::backend::RootHashBackend;
+use ekiden_roothash_base::block::Block;
 use ekiden_storage_base::backend::StorageBackend;
 
 type SharedCommitInfo = Arc<HashMap<H256, Vec<u8>>>;
@@ -50,11 +50,11 @@ impl Wait {
 pub struct Manager {
     /// Keep the environment alive.
     _env: Arc<Environment>,
-    /// Keep the consensus backend alive.
-    _consensus: Arc<ConsensusBackend>,
+    /// Keep the root hash backend alive.
+    _roothash: Arc<RootHashBackend>,
     /// We distribute commitment information here.
     commit_sub: Arc<StreamSubscribers<SharedCommitInfo>>,
-    /// For killing our consensus follower task.
+    /// For killing our root hash follower task.
     blocks_kill_handle: ekiden_common::futures::KillHandle,
 }
 
@@ -62,13 +62,13 @@ impl Manager {
     pub fn new(
         env: Arc<Environment>,
         contract_id: B256,
-        consensus: Arc<ConsensusBackend>,
+        roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let commit_sub = Arc::new(StreamSubscribers::new());
         let commit_sub_2 = commit_sub.clone();
         let (watch_blocks, blocks_kill_handle) =
-            ekiden_common::futures::killable(consensus.get_blocks(contract_id).for_each(
+            ekiden_common::futures::killable(roothash.get_blocks(contract_id).for_each(
                 move |block: Block| {
                     if block.header.input_hash == ekiden_common::hash::empty_hash() {
                         return Ok(());
@@ -128,7 +128,7 @@ impl Manager {
         })));
         Self {
             _env: env,
-            _consensus: consensus,
+            _roothash: roothash,
             commit_sub: commit_sub_2,
             blocks_kill_handle,
         }

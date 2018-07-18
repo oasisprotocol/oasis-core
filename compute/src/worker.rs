@@ -11,7 +11,6 @@ use protobuf;
 use protobuf::Message;
 use thread_local::ThreadLocal;
 
-use ekiden_consensus_base::Block;
 use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
@@ -20,6 +19,7 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::Future;
 use ekiden_core::rpc::api;
+use ekiden_roothash_base::Block;
 use ekiden_storage_base::BatchStorage;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
@@ -174,7 +174,7 @@ impl WorkerInner {
 
         match result {
             Ok((outputs, new_state_root)) => {
-                // No errors, hand over the batch to consensus.
+                // No errors, hand over the batch to root hash frontend.
                 sender
                     .send(Ok(ComputedBatch {
                         block,

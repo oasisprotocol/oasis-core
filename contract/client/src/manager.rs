@@ -13,9 +13,9 @@ use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signer;
 use ekiden_compute_api;
-use ekiden_consensus_base::backend::ConsensusBackend;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
+use ekiden_roothash_base::backend::RootHashBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 
@@ -68,13 +68,13 @@ impl ContractClientManager {
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
         signer: Arc<Signer>,
-        consensus: Arc<ConsensusBackend>,
+        roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let call_wait_manager = Arc::new(super::callwait::Manager::new(
             environment.clone(),
             contract_id,
-            consensus,
+            roothash,
             storage,
         ));
         let (leader_notify, future_leader) = oneshot::channel();

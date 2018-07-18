@@ -1,0 +1,14 @@
+[package]
+name = "ekiden-roothash-client"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden root hash RPC client"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
+ekiden-roothash-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../base", version = "0.2.0-alpha" }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }

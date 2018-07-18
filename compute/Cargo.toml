@@ -21,9 +21,9 @@ ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
 ekiden-rpc-api = { path = "../rpc/api", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
-ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
-ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
-ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../roothash/base", version = "0.2.0-alpha" }
+ekiden-roothash-client = { path = "../roothash/client", version = "0.2.0-alpha" }
+ekiden-roothash-dummy = { path = "../roothash/dummy", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }

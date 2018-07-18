@@ -152,7 +152,7 @@ The protocol uses NaCl primitives (e.g. the authenticated encryption is implemen
 
 ### RPC types
 
-Making a call to a contract moves the method name, arguments, response code, return value, and state through several messages between the client, compute node, consensus node, and contract enclave.
+Making a call to a contract moves the method name, arguments, response code, return value, and state through several messages between the client, compute node, and contract enclave.
 See the diagram below for a summary of these types.
 
 ![It's complicated](rpc.svg)
