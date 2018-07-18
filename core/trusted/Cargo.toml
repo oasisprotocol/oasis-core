@@ -11,4 +11,4 @@ ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.2.0-alph
 ekiden-rpc-trusted = { path = "../../rpc/trusted", version = "0.2.0-alpha" }
 ekiden-db-trusted = { path = "../../db/trusted", version = "0.2.0-alpha" }
 ekiden-contract-trusted = { path = "../../contract/trusted", version = "0.2.0-alpha" }
-ekiden-key-manager-client = { path = "../../contracts/key-manager/client", version = "0.2.0-alpha" }
+ekiden-keymanager-client = { path = "../../key-manager/client", version = "0.2.0-alpha" }

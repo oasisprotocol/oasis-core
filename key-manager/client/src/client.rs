@@ -7,11 +7,15 @@ use std::sync::SgxMutex as Mutex;
 use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
+use std::time::Duration;
 
+#[cfg(not(target_env = "sgx"))]
+use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
+use ekiden_common::x509::Certificate;
 use ekiden_enclave_common::quote::MrEnclave;
-use ekiden_key_manager_api::with_api;
+use ekiden_keymanager_api::with_api;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_rpc_client::backend::network::NetworkRpcClientBackend;
 use ekiden_rpc_client::create_client_rpc;
@@ -20,9 +24,13 @@ use ekiden_rpc_common::client::ClientEndpoint;
 #[cfg(target_env = "sgx")]
 use ekiden_rpc_trusted::client::OcallRpcClientBackend;
 
+use ekiden_keymanager_common::{ContractId, ContractKey, PrivateKeyType, PublicKeyType,
+                               StateKeyType};
+use serde_cbor;
+
 // Create API client for the key manager.
 with_api! {
-    create_client_rpc!(key_manager, ekiden_key_manager_api, api);
+    create_client_rpc!(key_manager, ekiden_keymanager_api, api);
 }
 
 /// Key manager client interface.
@@ -34,8 +42,26 @@ pub struct KeyManager {
     client: Option<key_manager::Client<OcallRpcClientBackend>>,
     #[cfg(not(target_env = "sgx"))]
     client: Option<key_manager::Client<NetworkRpcClientBackend>>,
+    #[cfg(not(target_env = "sgx"))]
+    backend_config: Option<NetworkRpcClientBackendConfig>,
     /// Local key cache.
-    cache: HashMap<String, Vec<u8>>,
+    cache: HashMap<ContractId, ContractKey>,
+}
+
+/// gRPC client backend configuration
+#[cfg(not(target_env = "sgx"))]
+#[derive(Clone)]
+pub struct NetworkRpcClientBackendConfig {
+    /// environment
+    pub environment: Arc<Environment>,
+    /// gRPC timeout
+    pub timeout: Option<Duration>,
+    /// host
+    pub host: String,
+    /// port
+    pub port: u16,
+    /// certificate of the key manager node
+    pub certificate: Certificate,
 }
 
 lazy_static! {
@@ -49,8 +75,16 @@ impl KeyManager {
         KeyManager {
             mr_enclave: None,
             client: None,
+            #[cfg(not(target_env = "sgx"))]
+            backend_config: None,
             cache: HashMap::new(),
         }
+    }
+
+    /// Set the backend
+    #[cfg(not(target_env = "sgx"))]
+    pub fn configure_backend(&mut self, config: NetworkRpcClientBackendConfig) {
+        self.backend_config.get_or_insert(config);
     }
 
     /// Establish a connection with the key manager contract.
@@ -73,21 +107,35 @@ impl KeyManager {
         }
 
         #[cfg(target_env = "sgx")]
-        {
-            let backend = match OcallRpcClientBackend::new(ClientEndpoint::KeyManager) {
+        let backend = {
+            match OcallRpcClientBackend::new(ClientEndpoint::KeyManager) {
                 Ok(backend) => backend,
                 _ => return Err(Error::new("Failed to create key manager client backend")),
-            };
-
-            let client = key_manager::Client::new(Arc::new(backend), mr_enclave, Some(true));
-            self.client.get_or_insert(client);
-        }
+            }
+        };
 
         #[cfg(not(target_env = "sgx"))]
-        {
-            drop(mr_enclave);
-            unimplemented!("key manager client not implemented outside SGX");
-        }
+        let backend = {
+            match self.backend_config {
+                None => return Err(Error::new("Backend not configured yet")),
+                Some(ref config) => {
+                    let backend = match NetworkRpcClientBackend::new(
+                        config.environment.clone(),
+                        config.timeout.clone(),
+                        &config.host.clone(),
+                        config.port.clone(),
+                        config.certificate.clone(),
+                    ) {
+                        Ok(backend) => backend,
+                        _ => return Err(Error::new("Failed to create key manager client backend")),
+                    };
+                    backend
+                }
+            }
+        };
+
+        let client = key_manager::Client::new(Arc::new(backend), mr_enclave, Some(false));
+        self.client.get_or_insert(client);
 
         Ok(())
     }
@@ -119,35 +167,61 @@ impl KeyManager {
     /// If the key does not yet exist, the key manager will generate one. If
     /// the key has already been cached locally, it will be retrieved from
     /// cache.
-    pub fn get_or_create_key(&mut self, name: &str, size: usize) -> Result<Vec<u8>> {
+    pub fn get_or_create_secret_keys(
+        &mut self,
+        contract_id: ContractId,
+    ) -> Result<(PrivateKeyType, StateKeyType)> {
         // Ensure manager is connected.
         self.connect()?;
 
         // Check cache first.
-        match self.cache.entry(name.to_string()) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
+        match self.cache.entry(contract_id) {
+            Entry::Occupied(entry) => {
+                let keys = entry.get().clone();
+                Ok((keys.input_keypair.get_sk(), keys.state_key))
+            }
             Entry::Vacant(entry) => {
                 // No entry in cache, fetch from key manager.
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
-                request.set_name(name.to_string());
-                request.set_size(size as u32);
-
+                request.set_contract_id(serde_cbor::to_vec(&contract_id)?);
+                // make a RPC
                 let mut response = match self.client
                     .as_mut()
                     .unwrap()
-                    .get_or_create_key(request)
+                    .get_or_create_keys(request)
                     .wait()
                 {
                     Ok(response) => response,
                     Err(error) => {
-                        return Err(Error::new(format!(
-                            "Failed to call key manager: {}",
-                            error.message
-                        )))
+                        return Err(Error::new(error.description()));
                     }
                 };
+                let keys: ContractKey = serde_cbor::from_slice(&response.take_key())?;
+                // Cache all keys locally
+                entry.insert(keys.clone());
+                Ok((keys.input_keypair.get_sk(), keys.state_key))
+            }
+        }
+    }
 
-                Ok(entry.insert(response.take_key()).clone())
+    pub fn get_public_key(&mut self, contract_id: ContractId) -> Result<PublicKeyType> {
+        self.connect()?;
+
+        match self.cache.entry(contract_id) {
+            Entry::Occupied(entry) => Ok(entry.get().clone().input_keypair.get_pk()),
+            Entry::Vacant(entry) => {
+                let mut request = key_manager::GetOrCreateKeyRequest::new();
+                request.set_contract_id(serde_cbor::to_vec(&contract_id)?);
+                // make a RPC
+                let mut response =
+                    match self.client.as_mut().unwrap().get_public_key(request).wait() {
+                        Ok(r) => r,
+                        Err(e) => return Err(Error::new(e.description())),
+                    };
+
+                let public_key: PublicKeyType = serde_cbor::from_slice(&response.take_key())?;
+                entry.insert(ContractKey::from_public_key(public_key));
+                Ok(public_key)
             }
         }
     }
