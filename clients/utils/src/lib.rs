@@ -12,8 +12,6 @@ extern crate threadpool;
 #[cfg(feature = "benchmark")]
 extern crate time;
 
-extern crate ekiden_consensus_base;
-extern crate ekiden_consensus_client;
 extern crate ekiden_core;
 extern crate ekiden_db_trusted;
 extern crate ekiden_di;
@@ -23,6 +21,8 @@ extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_base;
 extern crate ekiden_registry_client;
+extern crate ekiden_roothash_base;
+extern crate ekiden_roothash_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_base;

@@ -4,9 +4,6 @@ use std::sync::Arc;
 use ekiden_beacon_api::create_beacon;
 use ekiden_beacon_base::{BeaconService, RandomBeacon};
 use ekiden_common::environment::Environment;
-use ekiden_consensus_api::create_consensus;
-use ekiden_consensus_base::{ConsensusBackend, ConsensusService};
-use ekiden_consensus_dummy::DummyConsensusBackend;
 use ekiden_core::error::Result;
 use ekiden_di;
 use ekiden_epochtime;
@@ -16,6 +13,9 @@ use ekiden_registry_api::{create_contract_registry, create_entity_registry};
 use ekiden_registry_base::{ContractRegistryBackend, ContractRegistryService,
                            EntityRegistryBackend, EntityRegistryService};
 use ekiden_registry_dummy::{DummyContractRegistryBackend, DummyEntityRegistryBackend};
+use ekiden_roothash_api::create_root_hash;
+use ekiden_roothash_base::{RootHashBackend, RootHashService};
+use ekiden_roothash_dummy::DummyRootHashBackend;
 use ekiden_scheduler_api::create_scheduler;
 use ekiden_scheduler_base::{Scheduler, SchedulerService};
 use ekiden_scheduler_dummy::DummySchedulerBackend;
@@ -48,8 +48,8 @@ pub struct DummyBackend {
     pub scheduler: Arc<Scheduler>,
     /// Storage.
     pub storage: Arc<StorageBackend>,
-    /// Consensus.
-    pub consensus: Arc<ConsensusBackend>,
+    /// Root hash.
+    pub roothash: Arc<RootHashBackend>,
 
     grpc_server: Server,
 }
@@ -80,7 +80,7 @@ impl DummyBackend {
 
         let storage = di_container.inject::<StorageBackend>()?;
 
-        let consensus = Arc::new(DummyConsensusBackend::new(
+        let roothash = Arc::new(DummyRootHashBackend::new(
             env.clone(),
             scheduler.clone(),
             storage.clone(),
@@ -97,7 +97,7 @@ impl DummyBackend {
             create_entity_registry(EntityRegistryService::new(entity_registry.clone()));
         let scheduler_service = create_scheduler(SchedulerService::new(scheduler.clone()));
         let storage_service = create_storage(StorageService::new(storage.clone()));
-        let consensus_service = create_consensus(ConsensusService::new(consensus.clone()));
+        let roothash_service = create_root_hash(RootHashService::new(roothash.clone()));
 
         let localtime = ekiden_epochtime::local::get_local_time();
         let debug_service = {
@@ -123,7 +123,7 @@ impl DummyBackend {
             .register_service(entity_service)
             .register_service(scheduler_service)
             .register_service(storage_service)
-            .register_service(consensus_service)
+            .register_service(roothash_service)
             .register_service(debug_service)
             .build()?;
 
@@ -134,7 +134,7 @@ impl DummyBackend {
             entity_registry,
             scheduler,
             storage,
-            consensus,
+            roothash,
             grpc_server: server,
         })
     }

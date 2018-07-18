@@ -14,8 +14,8 @@ threadpool = { version = "1.7.1", optional = true }
 time = { version = "0.1", optional = true }
 histogram = { version = "0.6.8", optional = true }
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
-ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha" }
-ekiden-consensus-client = { path = "../../consensus/client", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
+ekiden-roothash-client = { path = "../../roothash/client", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-db-trusted = { path = "../../db/trusted", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }

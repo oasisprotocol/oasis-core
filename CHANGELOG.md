@@ -23,6 +23,8 @@
 * **BACKWARD INCOMPATIBLE:** Use TLS client authentication for gRPC channels, encode
   node Ed25519 public key in TLS certificates, remove custom signed RPC arguments.
 * **BACKWARD INCOMPATIBLE:** Rename `build-contract` to `build-enclave`.
+* **BACKWARD INCOMPATIBLE:** Rename consensus backend to root hash backend to make it more
+  clear what its role is.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.

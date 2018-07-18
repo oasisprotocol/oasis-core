@@ -3,7 +3,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use ekiden_consensus_base::ConsensusBackend;
 use ekiden_core;
 use ekiden_core::bytes::B256;
 use ekiden_core::bytes::H256;
@@ -14,6 +13,7 @@ use ekiden_core::futures::Stream;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::Database;
 use ekiden_di::Container;
+use ekiden_roothash_base::RootHashBackend;
 use ekiden_storage_base::BackendIdentityMapper;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_base::StorageMapper;
@@ -48,18 +48,18 @@ impl Database for Snapshot {
     }
 }
 
-/// A holder of a (i) a consensus backend and (ii) a storage mapper, the two of which it uses to
+/// A holder of a (i) a root hash backend and (ii) a storage mapper, the two of which it uses to
 /// create `Snapshot`s of recent (best-effort) states on demand.
 pub struct Manager {
     /// Keep the environment alive.
     _env: Arc<Environment>,
-    /// Keep the consensus backend alive.
-    _consensus: Arc<ConsensusBackend>,
+    /// Keep the root hash backend alive.
+    _roothash: Arc<RootHashBackend>,
     /// The latest root hash that we're aware of.
     root_hash: Arc<Mutex<Option<H256>>>,
     /// The storage mapper that we give to snapshots.
     mapper: Arc<StorageMapper>,
-    /// For killing our consensus follower task.
+    /// For killing our root hash follower task.
     blocks_kill_handle: ekiden_core::futures::KillHandle,
 }
 
@@ -67,13 +67,13 @@ impl Manager {
     pub fn new(
         env: Arc<Environment>,
         contract_id: B256,
-        consensus: Arc<ConsensusBackend>,
+        roothash: Arc<RootHashBackend>,
         mapper: Arc<StorageMapper>,
     ) -> Self {
         let root_hash = Arc::new(Mutex::new(None));
         let root_hash_2 = root_hash.clone();
         let (watch_blocks, blocks_kill_handle) = ekiden_core::futures::killable(
-            consensus.get_blocks(contract_id).for_each(move |block| {
+            roothash.get_blocks(contract_id).for_each(move |block| {
                 let mut guard = root_hash.lock().unwrap();
                 *guard = Some(block.header.state_root);
                 Ok(())
@@ -96,21 +96,21 @@ impl Manager {
         })));
         Self {
             _env: env,
-            _consensus: consensus,
+            _roothash: roothash,
             root_hash: root_hash_2,
             mapper,
             blocks_kill_handle,
         }
     }
 
-    /// Make a `Manager` from an injected `ConsensusBackend` and an identity map over an injected
+    /// Make a `Manager` from an injected `RootHashBackend` and an identity map over an injected
     /// `StorageBackend`.
     pub fn new_from_injected(contract_id: B256, container: &mut Container) -> Result<Self> {
         let env: Arc<Environment> = container.inject()?;
-        let consensus: Arc<ConsensusBackend> = container.inject()?;
+        let roothash: Arc<RootHashBackend> = container.inject()?;
         let storage: Arc<StorageBackend> = container.inject()?;
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
-        Ok(Self::new(env, contract_id, consensus, mapper))
+        Ok(Self::new(env, contract_id, roothash, mapper))
     }
 
     pub fn get_snapshot(&self) -> Snapshot {
@@ -136,11 +136,6 @@ mod tests {
 
     extern crate grpcio;
 
-    use ekiden_consensus_base::backend::ConsensusBackend;
-    use ekiden_consensus_base::backend::Event;
-    use ekiden_consensus_base::block::Block;
-    use ekiden_consensus_base::commitment::Commitment;
-    use ekiden_consensus_base::header::Header;
     use ekiden_core;
     use ekiden_core::bytes::B256;
     use ekiden_core::environment::GrpcEnvironment;
@@ -149,23 +144,28 @@ mod tests {
     use ekiden_core::futures::Stream;
     use ekiden_db_trusted::patricia_trie::PatriciaTrie;
     use ekiden_db_trusted::Database;
+    use ekiden_roothash_base::backend::Event;
+    use ekiden_roothash_base::backend::RootHashBackend;
+    use ekiden_roothash_base::block::Block;
+    use ekiden_roothash_base::commitment::Commitment;
+    use ekiden_roothash_base::header::Header;
     use ekiden_storage_base::mapper::BackendIdentityMapper;
     extern crate ekiden_storage_dummy;
     use self::ekiden_storage_dummy::DummyStorageBackend;
 
-    /// A ConsensusBackend that adapts a simple `Block` stream.
-    struct MockConsensus {
+    /// A RootHashBackend that adapts a simple `Block` stream.
+    struct MockRootHashBackend {
         blocks_rx: Mutex<Option<ekiden_core::futures::sync::mpsc::UnboundedReceiver<Block>>>,
     }
 
-    impl ConsensusBackend for MockConsensus {
+    impl RootHashBackend for MockRootHashBackend {
         fn get_blocks(&self, _contract_id: B256) -> BoxStream<Block> {
             Box::new(
                 self.blocks_rx
                     .lock()
                     .unwrap()
                     .take()
-                    .expect("MockConsensus only supports one block stream")
+                    .expect("MockRootHashBackend only supports one block stream")
                     .map_err(|()| unimplemented!()),
             )
         }
@@ -186,12 +186,12 @@ mod tests {
         let contract_id = B256::from(*b"dummy contract------------------");
         let storage = Arc::new(DummyStorageBackend::new());
         let (blocks_tx, blocks_rx) = ekiden_core::futures::sync::mpsc::unbounded();
-        let consensus = Arc::new(MockConsensus {
+        let roothash = Arc::new(MockRootHashBackend {
             blocks_rx: Mutex::new(Some(blocks_rx)),
         });
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
         let trie = PatriciaTrie::new(mapper.clone());
-        let manager = super::Manager::new(environment, contract_id, consensus, mapper);
+        let manager = super::Manager::new(environment, contract_id, roothash, mapper);
 
         let root_hash_before = trie.insert(None, b"changeme", b"before");
         blocks_tx

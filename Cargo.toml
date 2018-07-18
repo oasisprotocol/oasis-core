@@ -21,11 +21,11 @@ members = [
     "beacon/base",
     "beacon/dummy",
 
-    # Consensus interface.
-    "consensus/api",
-    "consensus/base",
-    "consensus/client",
-    "consensus/dummy",
+    # Root hash interface.
+    "roothash/api",
+    "roothash/base",
+    "roothash/client",
+    "roothash/dummy",
 
     # Storage interface.
     "storage/api",

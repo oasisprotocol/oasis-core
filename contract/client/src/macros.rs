@@ -3,9 +3,9 @@ pub use ekiden_common::bytes::B256;
 pub use ekiden_common::environment::Environment;
 pub use ekiden_common::futures::{BoxFuture, Future};
 pub use ekiden_common::signature::Signer;
-pub use ekiden_consensus_base::backend::ConsensusBackend;
 pub use ekiden_enclave_common::quote;
 pub use ekiden_registry_base::EntityRegistryBackend;
+pub use ekiden_roothash_base::backend::RootHashBackend;
 pub use ekiden_scheduler_base::Scheduler;
 pub use ekiden_storage_base::backend::StorageBackend;
 
@@ -59,7 +59,7 @@ macro_rules! create_contract_client {
                     scheduler: Arc<Scheduler>,
                     entity_registry: Arc<EntityRegistryBackend>,
                     signer: Arc<Signer>,
-                    consensus: Arc<ConsensusBackend>,
+                    roothash: Arc<RootHashBackend>,
                     storage: Arc<StorageBackend>,
                 ) -> Self {
                     Client {
@@ -71,7 +71,7 @@ macro_rules! create_contract_client {
                             scheduler,
                             entity_registry,
                             signer,
-                            consensus,
+                            roothash,
                             storage,
                         ),
                     }
