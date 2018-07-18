@@ -40,8 +40,8 @@ pub trait RootHashBackend: Sync + Send {
 
     /// Return a stream of blocks.
     ///
-    /// Blocks will get pushed into the stream as they are confirmed by the root hash
-    /// backend.
+    /// The latest block will get pushed into the stream. Then, subsequent blocks will get pushed
+    /// into the stream as they are confirmed by the root hash backend.
     fn get_blocks(&self, contract_id: B256) -> BoxStream<Block>;
 
     /// Return a stream of events.
