@@ -10,3 +10,10 @@ development docker environment:
 * [go metalinter](https://github.com/alecthomas/gometalinter)
 * [protoc](https://github.com/google/protobuf)
 * [protobuf](https://github.com/golang/protobuf) Version 1.0.0
+
+The following steps are used for compilation:
+```
+dep ensure
+go generate ./...
+go build -v -o ./ekiden/ekiden ./ekiden
+```
