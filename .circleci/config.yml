@@ -96,6 +96,17 @@ jobs:
       - restore_cache:
           keys:
             - go-cache
+      - run: |
+          wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
+          sudo unzip protoc-3.5.1-linux-x86_64.zip -x readme.txt -d /usr && \
+          rm protoc-3.5.1-linux-x86_64.zip && \
+          sudo chmod a+rx /usr/bin/protoc
+      - run: |
+          go get -d github.com/golang/protobuf/protoc-gen-go && \
+          cd $GOPATH/src/github.com/golang/protobuf && \
+          git checkout v1.0.0 && \
+          cd protoc-gen-go && \
+          go install
       - run: cd go && dep ensure
       - run: cd go && go build -v
       - run: cd go && go test -v ./...
