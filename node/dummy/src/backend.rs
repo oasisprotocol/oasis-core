@@ -27,9 +27,11 @@ use grpcio::{ChannelBuilder, Server, ServerBuilder};
 use super::service::DebugService;
 
 /// Dummy Backend configuration.
-pub struct DummyBackendConfiguration {
+pub struct DummyBackendConfiguration<'a> {
     /// gRPC server port.
     pub port: u16,
+    /// Path to local state storage for the roothash backend.
+    pub roothash_storage_path: Option<&'a str>,
 }
 
 /// Random Beacon, Consensus, Registry and Storage backends.
@@ -83,6 +85,7 @@ impl DummyBackend {
             scheduler.clone(),
             storage.clone(),
             contract_registry.clone(),
+            config.roothash_storage_path,
         ));
 
         let server_builder = ServerBuilder::new(grpc_environment.clone());

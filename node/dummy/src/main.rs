@@ -57,6 +57,13 @@ fn main() {
                 .default_value("42261")
                 .display_order(1),
         )
+        .arg(
+            Arg::with_name("roothash-storage-path")
+                .long("roothash-storage-path")
+                .short("S")
+                .takes_value(true)
+                .display_order(2),
+        )
         .args(&known_components.get_arguments())
         .get_matches();
 
@@ -94,6 +101,7 @@ fn main() {
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
             port: value_t!(matches, "port", u16).unwrap(),
+            roothash_storage_path: matches.value_of("roothash-storage-path"),
         },
         container,
     ) {

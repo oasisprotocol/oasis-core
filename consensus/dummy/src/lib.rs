@@ -5,6 +5,7 @@
 extern crate log;
 #[macro_use]
 extern crate serde_derive;
+extern crate exonum_rocksdb;
 extern crate serde;
 extern crate serde_cbor;
 
@@ -19,6 +20,8 @@ extern crate ekiden_storage_base;
 mod backend;
 mod commitment;
 mod signer;
+mod state_storage;
 
 pub use backend::DummyConsensusBackend;
 pub use signer::DummyConsensusSigner;
+pub use state_storage::StateStorage;

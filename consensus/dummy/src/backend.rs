@@ -1,8 +1,12 @@
 //! Dummy consensus backend.
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::path::Path;
+use std::process::abort;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use serde_cbor;
 
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::contract::Contract;
@@ -20,12 +24,13 @@ use ekiden_scheduler_base::{Committee, CommitteeNode, CommitteeType, Role, Sched
 use ekiden_storage_base::StorageBackend;
 
 use super::commitment::Commitment;
+use super::state_storage::StateStorage;
 
 /// Hard time limit for a round after at least one node has sent a commitment.
 const ROUND_AFTER_COMMIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Round state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 enum State {
     WaitingCommitments,
     DiscrepancyWaitingCommitments,
@@ -39,10 +44,9 @@ enum FinalizationResult {
     DiscrepancyDetected(H256),
 }
 
-/// State needed for managing a protocol round.
-struct Round {
-    /// Storage backend.
-    storage: Arc<StorageBackend>,
+/// Serializable state needed for managing a protocol round.
+#[derive(Serialize, Deserialize)]
+struct RoundState {
     /// Contract metadata.
     contract: Contract,
     /// Computation committee.
@@ -55,6 +59,14 @@ struct Round {
     current_block: Block,
     /// Round state.
     state: State,
+}
+
+/// Wrapper for the state with extra stuff we need at runtime.
+struct Round {
+    /// Round state.
+    round_state: RoundState,
+    /// Storage backend.
+    storage: Arc<StorageBackend>,
     /// Current round timer handle.
     timer_handle: Option<KillHandle>,
     /// Timeout flag.
@@ -76,13 +88,25 @@ impl Round {
         }
 
         Self {
+            round_state: RoundState {
+                contract,
+                committee,
+                computation_group,
+                commitments: HashMap::new(),
+                current_block: block,
+                state: State::WaitingCommitments,
+            },
             storage,
-            contract,
-            committee,
-            computation_group,
-            commitments: HashMap::new(),
-            current_block: block,
-            state: State::WaitingCommitments,
+            timer_handle: None,
+            timeout: false,
+        }
+    }
+
+    /// Create new round descriptor with existing internal state.
+    fn new_with_state(storage: Arc<StorageBackend>, round_state: RoundState) -> Self {
+        Self {
+            round_state,
+            storage,
             timer_handle: None,
             timeout: false,
         }
@@ -90,8 +114,8 @@ impl Round {
 
     /// Reset round.
     fn reset(&mut self) {
-        self.commitments.clear();
-        self.state = State::WaitingCommitments;
+        self.round_state.commitments.clear();
+        self.round_state.state = State::WaitingCommitments;
         self.timeout = false;
         if let Some(timer_handle) = self.timer_handle.take() {
             timer_handle.kill();
@@ -114,7 +138,7 @@ impl Round {
             // Ensure each commitment is from a valid compute node and that we are in correct state.
             let node_id = commitment.get_public_key();
             {
-                let node = match round.computation_group.get(&node_id) {
+                let node = match round.round_state.computation_group.get(&node_id) {
                     Some(node) => node,
                     None => {
                         results.push(
@@ -125,7 +149,7 @@ impl Round {
                     }
                 };
 
-                match (node.role, round.state) {
+                match (node.role, round.round_state.state) {
                     (Role::Worker, State::WaitingCommitments)
                     | (Role::Leader, State::WaitingCommitments) => {}
 
@@ -152,13 +176,13 @@ impl Round {
             };
 
             // Ensure node did not already submit a commitment.
-            if round.commitments.contains_key(&node_id) {
+            if round.round_state.commitments.contains_key(&node_id) {
                 results.push(future::err(Error::new("node already sent commitment")).into_box());
                 continue;
             }
 
             // Check if block is based on the previous block.
-            if !header.is_parent_of(&round.current_block.header) {
+            if !header.is_parent_of(&round.round_state.current_block.header) {
                 results.push(
                     future::err(Error::new(
                         "submitted header is not based on previous block",
@@ -207,7 +231,7 @@ impl Round {
                 future::join_all(storage_checks)
                     .and_then(move |_| {
                         let mut round = shared_round.lock().unwrap();
-                        round.commitments.insert(node_id, commitment);
+                        round.round_state.commitments.insert(node_id, commitment);
 
                         Ok(())
                     })
@@ -231,10 +255,11 @@ impl Round {
     where
         F: Fn(&CommitteeNode) -> bool,
     {
-        let num_sent = self.commitments
+        let num_sent = self.round_state
+            .commitments
             .iter()
             .filter(|&(id, _)| {
-                let node = self.computation_group.get(id).unwrap();
+                let node = self.round_state.computation_group.get(id).unwrap();
                 filter(node)
             })
             .count() as u64;
@@ -249,7 +274,8 @@ impl Round {
 
     /// Return the number of primary (leader, worker) nodes in the computation group.
     fn get_primary_node_count(&self) -> u64 {
-        self.computation_group
+        self.round_state
+            .computation_group
             .iter()
             .filter(|&(_, node)| node.role == Role::Worker || node.role == Role::Leader)
             .count() as u64
@@ -257,7 +283,8 @@ impl Round {
 
     /// Return the number of backup nodes (backup worker) in the computation group.
     fn get_backup_node_count(&self) -> u64 {
-        self.computation_group
+        self.round_state
+            .computation_group
             .iter()
             .filter(|&(_, node)| node.role == Role::BackupWorker)
             .count() as u64
@@ -268,7 +295,7 @@ impl Round {
         // While a timer is running, all nodes are required to answer. After a timeout
         // we allow some stragglers.
         if self.timeout {
-            self.get_primary_node_count() - self.contract.replica_allowed_stragglers
+            self.get_primary_node_count() - self.round_state.contract.replica_allowed_stragglers
         } else {
             self.get_primary_node_count()
         }
@@ -279,7 +306,7 @@ impl Round {
         // While a timer is running, all nodes are required to answer. After a timeout
         // we allow some stragglers.
         if self.timeout {
-            self.get_backup_node_count() - self.contract.replica_allowed_stragglers
+            self.get_backup_node_count() - self.round_state.contract.replica_allowed_stragglers
         } else {
             self.get_backup_node_count()
         }
@@ -323,7 +350,7 @@ impl Round {
     /// Try to finalize the round.
     fn try_finalize(&mut self) -> BoxFuture<FinalizationResult> {
         // Check if all nodes sent commitments.
-        match self.state {
+        match self.round_state.state {
             State::WaitingCommitments => {
                 let required_primary_count = self.get_required_primary_count();
                 if let Some(result) = self.check_commitments(
@@ -347,19 +374,19 @@ impl Round {
         self.cancel_timer();
 
         // Everything is ready, try to finalize round.
-        let header = match self.state {
+        let header = match self.round_state.state {
             State::WaitingCommitments => {
                 info!("Attempting to finalize round");
 
                 // Check for discrepancies between computed results.
                 let mut header = None;
                 let mut discrepancy_detected = false;
-                for (node_id, node) in self.computation_group.iter() {
+                for (node_id, node) in self.round_state.computation_group.iter() {
                     if node.role == Role::BackupWorker {
                         continue;
                     }
 
-                    let commitment = match self.commitments.get(node_id) {
+                    let commitment = match self.round_state.commitments.get(node_id) {
                         Some(commitment) => commitment,
                         None => continue,
                     };
@@ -384,7 +411,7 @@ impl Round {
 
                     // Activate the backup workers.
                     let input_hash = header.input_hash;
-                    self.state = State::DiscrepancyWaitingCommitments;
+                    self.round_state.state = State::DiscrepancyWaitingCommitments;
                     return future::ok(FinalizationResult::DiscrepancyDetected(input_hash))
                         .into_box();
                 }
@@ -397,12 +424,12 @@ impl Round {
                 // Tally votes.
                 let mut votes: HashMap<Header, u64> = HashMap::new();
 
-                for (node_id, node) in self.computation_group.iter() {
+                for (node_id, node) in self.round_state.computation_group.iter() {
                     if node.role != Role::BackupWorker {
                         continue;
                     }
 
-                    let commitment = self.commitments.get(node_id).unwrap();
+                    let commitment = self.round_state.commitments.get(node_id).unwrap();
                     let vote = commitment
                         .open()
                         .expect("commitment to be verified by add_commitments");
@@ -429,12 +456,13 @@ impl Round {
         };
 
         // Generate final block.
-        let mut block = Block::new_parent_of(&self.current_block);
+        let mut block = Block::new_parent_of(&self.round_state.current_block);
         block.header = header;
-        block.computation_group = self.committee.members.clone();
-        for node in &self.committee.members {
+        block.computation_group = self.round_state.committee.members.clone();
+        for node in &self.round_state.committee.members {
             block.commitments.push(
-                self.commitments
+                self.round_state
+                    .commitments
                     .get(&node.public_key)
                     .cloned()
                     .map(|commitment| commitment.into()),
@@ -477,6 +505,8 @@ struct Inner {
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
+    /// Local persistent state storage (for crash recovery).
+    state_storage: Option<Arc<StateStorage>>,
 }
 
 /// A dummy consensus backend which simulates consensus in memory.
@@ -494,10 +524,31 @@ impl DummyConsensusBackend {
         scheduler: Arc<Scheduler>,
         storage: Arc<StorageBackend>,
         contract_registry: Arc<ContractRegistryBackend>,
+        local_db_path: Option<&str>,
     ) -> Self {
         // Create channels.
         let (command_sender, command_receiver) = mpsc::unbounded();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+        let mut state_storage = None;
+
+        if let Some(path) = local_db_path {
+            info!(
+                "Setting up local state storage for the dummy root hash backend at '{}'",
+                path
+            );
+
+            // Open or create a new local state storage DB.
+            state_storage = Some(Arc::new(match StateStorage::new(Path::new(path)) {
+                Ok(ls) => ls,
+                Err(e) => {
+                    error!("Can't init local state storage: {}", e);
+                    abort();
+                }
+            }));
+        } else {
+            info!("Not setting up local state storage for the dummy root hash backend");
+        }
 
         let instance = Self {
             inner: Arc::new(Inner {
@@ -513,6 +564,7 @@ impl DummyConsensusBackend {
                 shutdown_receiver: Mutex::new(Some(shutdown_receiver)),
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
+                state_storage,
             }),
         };
         instance.start();
@@ -521,6 +573,97 @@ impl DummyConsensusBackend {
     }
 
     fn start(&self) {
+        if let Some(state_storage) = self.inner.state_storage.clone() {
+            let state_storage = state_storage.clone();
+
+            // Always load latest block from DB if present.
+            match state_storage.get("latest_block_hash") {
+                Ok(lbh) => {
+                    let latest_block_hash: B256 = serde_cbor::from_slice(&lbh)
+                        .expect("error deserializing latest block hash");
+
+                    // The "latest_block_hash" key only stores the hash of the
+                    // latest block, so we need to get to the actual block now.
+                    let latest_block_key = format!("block_{}", latest_block_hash);
+
+                    match state_storage.get(&latest_block_key) {
+                        Ok(b) => {
+                            let block: Vec<Block> = serde_cbor::from_slice(&b)
+                                .expect("error deserializing latest block");
+
+                            self.inner
+                                .blocks
+                                .lock()
+                                .unwrap()
+                                .insert(latest_block_hash, block);
+                            info!("Loaded latest block from storage!");
+                        }
+                        _ => {
+                            error!(
+	                            "INTERNAL ERROR: Latest block pointer points to a nonexistent block!"
+	                        );
+                            abort();
+                            // TODO: It might be a better idea to just nuke and
+                            //       reinitialize the database here, since this
+                            //       can only happen if there's DB corruption.
+                        }
+                    }
+                }
+                _ => {
+                    // This isn't an error, since it's quite possible that the
+                    // node simply didn't process any blocks yet or this is the
+                    // very first run and we have a fresh DB.
+                }
+            }
+
+            // Check whether our last shutdown was clean.
+            match state_storage.get("node_running") {
+                Ok(_) => {
+                    // Unclean shutdown, recover round state!
+                    warn!("Node wasn't cleanly shut down, recovering round state");
+
+                    match state_storage.get("round_state") {
+                        Ok(rs) => {
+                            let mut rs: RoundState = serde_cbor::from_slice(&rs)
+                                .expect("error deserializing round state");
+
+                            // Fix the Arc<Contract> in Committee struct.
+                            // We don't ser/des that, so we need to fill it in
+                            // before it's used anywhere!
+                            rs.committee.contract = Arc::new(rs.contract.clone());
+
+                            let recovered_round =
+                                Round::new_with_state(self.inner.storage.clone(), rs);
+                            let contract_id = recovered_round.round_state.contract.id;
+
+                            let mut rounds = self.inner.rounds.lock().unwrap();
+                            rounds.insert(contract_id, Arc::new(Mutex::new(recovered_round)));
+
+                            // Call try_finalize to resolve any outstanding issues
+                            // (e.g. timeouts and state changes).
+                            Self::try_finalize(
+                                self.inner.clone(),
+                                rounds.get(&contract_id).unwrap().clone(),
+                            );
+                        }
+                        _ => {
+                            error!("Failed to recover round state!");
+                        }
+                    }
+
+                    // NB: We can't also store and restore the event and block
+                    //     subscribers, since they include channels for submitting
+                    //     results back, so all subscribers should resubscribe!
+                }
+                _ => {
+                    // Clean shutdown or first run.
+                    state_storage
+                        .insert("node_running", vec![1])
+                        .expect("local storage DB error");
+                }
+            }
+        }
+
         info!("Starting dummy consensus backend");
 
         // Create command processing channel.
@@ -585,6 +728,16 @@ impl DummyConsensusBackend {
 
     pub fn shutdown(&self) {
         info!("Shutting down dummy consensus backend");
+
+        if let Some(state_storage) = self.inner.state_storage.clone() {
+            // Mark that we've cleanly shut down.
+            state_storage
+                .remove("node_running")
+                .expect("local storage DB error");
+
+            // Remove any lingering round_state.
+            drop(state_storage.remove("round_state"));
+        }
 
         if let Some(shutdown_sender) = self.inner.shutdown_sender.lock().unwrap().take() {
             drop(shutdown_sender.send(()));
@@ -653,6 +806,22 @@ impl DummyConsensusBackend {
                                 let block = Self::get_genesis_block(contract_id);
                                 blocks.insert(contract_id.clone(), vec![block.clone()]);
 
+                                if let Some(state_storage) = inner.state_storage.clone() {
+                                    // Save block to local storage for recovery.
+                                    state_storage
+                                        .insert(
+                                            &format!("block_{}", &contract_id),
+                                            serde_cbor::to_vec(&vec![block.clone()]).unwrap(),
+                                        )
+                                        .expect("local storage DB error");
+                                    state_storage
+                                        .insert(
+                                            "latest_block_hash",
+                                            serde_cbor::to_vec(&contract_id).unwrap(),
+                                        )
+                                        .expect("local storage DB error");
+                                }
+
                                 block
                             }
                         };
@@ -665,7 +834,9 @@ impl DummyConsensusBackend {
                             let shared_round = rounds.get(&contract_id).unwrap();
                             let round = shared_round.lock().unwrap();
 
-                            if round.current_block == block && round.committee == committee {
+                            if round.round_state.current_block == block
+                                && round.round_state.committee == committee
+                            {
                                 // Existing round is the same.
                                 Some(shared_round.clone())
                             } else {
@@ -678,7 +849,20 @@ impl DummyConsensusBackend {
                         };
 
                         match existing_round {
-                            Some(round) => future::ok(round).into_box(),
+                            Some(round) => {
+                                if let Some(state_storage) = inner.state_storage.clone() {
+                                    // Save round state to local storage for recovery.
+                                    state_storage
+                                        .insert(
+                                            "round_state",
+                                            serde_cbor::to_vec(&round.lock().unwrap().round_state)
+                                                .unwrap(),
+                                        )
+                                        .expect("local storage DB error");
+                                }
+
+                                future::ok(round).into_box()
+                            }
                             None => {
                                 // Fetch contract metadata and then create a new round.
                                 let inner = inner.clone();
@@ -695,6 +879,18 @@ impl DummyConsensusBackend {
                                             block,
                                         )));
                                         rounds.insert(contract_id, new_round.clone());
+
+                                        if let Some(state_storage) = inner.state_storage.clone() {
+                                            // Save round state to local storage for recovery.
+                                            state_storage
+	                                            .insert(
+	                                                "round_state",
+	                                                serde_cbor::to_vec(
+	                                                    &new_round.lock().unwrap().round_state,
+	                                                ).unwrap(),
+	                                            )
+                                                .expect("local storage DB error");
+                                        }
 
                                         Ok(new_round)
                                     })
@@ -715,7 +911,12 @@ impl DummyConsensusBackend {
         let round_clone = round.clone();
         let mut round_guard = round_clone.lock().unwrap();
         let inner = inner.clone();
-        let contract_id = round_guard.current_block.header.namespace.clone();
+        let contract_id = round_guard
+            .round_state
+            .current_block
+            .header
+            .namespace
+            .clone();
 
         Box::new(round_guard.try_finalize().then(move |result| {
             match result {
@@ -728,6 +929,28 @@ impl DummyConsensusBackend {
                     }
 
                     inner.block_subscribers.notify(&block);
+
+                    if let Some(state_storage) = inner.state_storage.clone() {
+                        // Save blockchain to local storage for recovery.
+                        state_storage
+                            .insert(
+                                &format!("block_{}", &contract_id),
+                                serde_cbor::to_vec(&inner
+                                    .blocks
+                                    .lock()
+                                    .unwrap()
+                                    .get(&contract_id)
+                                    .unwrap())
+                                    .unwrap(),
+                            )
+                            .expect("local storage DB error");
+                        state_storage
+                            .insert(
+                                "latest_block_hash",
+                                serde_cbor::to_vec(&contract_id).unwrap(),
+                            )
+                            .expect("local storage DB error");
+                    }
                 }
                 Ok(FinalizationResult::StillWaiting(done_count)) if done_count >= 1 => {
                     // Still waiting for some round participants.
@@ -752,6 +975,16 @@ impl DummyConsensusBackend {
                     {
                         let mut round = round.lock().unwrap();
                         round.reset();
+
+                        if let Some(state_storage) = inner.state_storage.clone() {
+                            // Save round state to local storage for recovery.
+                            state_storage
+                                .insert(
+                                    "round_state",
+                                    serde_cbor::to_vec(&round.round_state).unwrap(),
+                                )
+                                .expect("local storage DB error");
+                        }
                     }
 
                     inner
@@ -777,6 +1010,22 @@ impl ConsensusBackend for DummyConsensusBackend {
                 // No blockchain yet for this contract. Create a new one.
                 let block = Self::get_genesis_block(contract_id);
                 blocks.insert(contract_id.clone(), vec![block.clone()]);
+
+                if let Some(state_storage) = self.inner.state_storage.clone() {
+                    // Save block to local storage for recovery.
+                    state_storage
+                        .insert(
+                            &format!("block_{}", &contract_id),
+                            serde_cbor::to_vec(&vec![block.clone()]).unwrap(),
+                        )
+                        .expect("local storage DB error");
+                    state_storage
+                        .insert(
+                            "latest_block_hash",
+                            serde_cbor::to_vec(&contract_id).unwrap(),
+                        )
+                        .expect("local storage DB error");
+                }
 
                 block
             };
@@ -816,10 +1065,28 @@ create_component!(
     "consensus-backend",
     DummyConsensusBackend,
     ConsensusBackend,
-    [
-        Environment,
-        Scheduler,
-        StorageBackend,
-        ContractRegistryBackend
-    ]
+    (|container: &mut Container| -> Result<Box<Any>> {
+        let environment = container.inject()?;
+        let scheduler = container.inject()?;
+        let storage = container.inject()?;
+        let contract_registry = container.inject()?;
+
+        let args = container.get_arguments().unwrap();
+        let local_db_path = args.value_of("roothash-storage-path");
+
+        let backend = DummyConsensusBackend::new(
+            environment,       // Environment
+            scheduler,         // Scheduler
+            storage,           // StorageBackend
+            contract_registry, // ContractRegistryBackend
+            local_db_path,     // Optional local persistent storage DB path
+        );
+
+        let instance: Arc<ConsensusBackend> = Arc::new(backend);
+        Ok(Box::new(instance))
+    }),
+    [Arg::with_name("roothash-storage-path")
+        .long("roothash-storage-path")
+        .help("Path to local state storage directory for root hash backend crash recovery")
+        .takes_value(true)]
 );
