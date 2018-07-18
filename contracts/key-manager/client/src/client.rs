@@ -79,7 +79,7 @@ impl KeyManager {
                 _ => return Err(Error::new("Failed to create key manager client backend")),
             };
 
-            let client = key_manager::Client::new(Arc::new(backend), mr_enclave);
+            let client = key_manager::Client::new(Arc::new(backend), mr_enclave, Some(true));
             self.client.get_or_insert(client);
         }
 
