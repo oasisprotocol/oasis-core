@@ -66,72 +66,90 @@ impl Manager {
         storage: Arc<StorageBackend>,
     ) -> Self {
         let commit_sub = Arc::new(StreamSubscribers::new());
-        let commit_sub_2 = commit_sub.clone();
-        let (watch_blocks, blocks_kill_handle) =
-            ekiden_common::futures::killable(roothash.get_blocks(contract_id).for_each(
-                move |block: Block| {
-                    if block.header.input_hash == ekiden_common::hash::empty_hash() {
-                        return Ok(());
-                    }
-
-                    // Check what transactions are included in the block. To do that we need to
-                    // fetch transactions from storage first.
-                    // This wastes local work and storage network effort if we aren't waiting for
-                    // anything. We might be able to save this if we add functionality to
-                    // `StreamSubscriber` to check if there are no subscriptions.
-                    let commit_sub_3 = commit_sub.clone();
-                    ekiden_common::futures::spawn(
-                        storage
-                            .get(block.header.input_hash)
-                            .join(storage.get(block.header.output_hash))
-                            .and_then(move |(inputs, outputs)| {
-                                let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
-                                let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
-                                let mut commit_info = HashMap::with_capacity(inputs.len());
-
-                                for (input, output) in inputs.iter().zip(outputs.0.into_iter()) {
-                                    let call_id = input.get_encoded_hash();
-
-                                    commit_info.insert(call_id, output);
+        let commit_sub_blocks = commit_sub.clone();
+        roothash
+            .get_blocks(contract_id)
+            .into_future()
+            .then(|r| {
+                match r {
+                    Ok((_latest_block, blocks)) => {
+                        trace!("manager connected");
+                        let (watch_blocks, blocks_kill_handle) = ekiden_common::futures::killable(
+                            blocks.for_each(move |block: Block| {
+                                if block.header.input_hash == ekiden_common::hash::empty_hash() {
+                                    return Ok(());
                                 }
-                                commit_sub_3.notify(&Arc::new(commit_info));
 
-                                Ok(())
-                            })
-                            .or_else(|error| {
-                                error!(
-                                    "Failed to fetch transactions from storage: {}",
-                                    error.message
+                                // Check what transactions are included in the block. To do that we need to
+                                // fetch transactions from storage first.
+                                // This wastes local work and storage network effort if we aren't waiting for
+                                // anything. We might be able to save this if we add functionality to
+                                // `StreamSubscriber` to check if there are no subscriptions.
+                                let commit_sub_block = commit_sub_blocks.clone();
+                                ekiden_common::futures::spawn(
+                                    storage
+                                        .get(block.header.input_hash)
+                                        .join(storage.get(block.header.output_hash))
+                                        .and_then(move |(inputs, outputs)| {
+                                            let inputs: CallBatch =
+                                                serde_cbor::from_slice(&inputs)?;
+                                            let outputs: OutputBatch =
+                                                serde_cbor::from_slice(&outputs)?;
+                                            let mut commit_info =
+                                                HashMap::with_capacity(inputs.len());
+
+                                            for (input, output) in
+                                                inputs.iter().zip(outputs.0.into_iter())
+                                            {
+                                                let call_id = input.get_encoded_hash();
+
+                                                commit_info.insert(call_id, output);
+                                            }
+                                            commit_sub_block.notify(&Arc::new(commit_info));
+
+                                            Ok(())
+                                        })
+                                        .or_else(|error| {
+                                            error!(
+                                                "Failed to fetch transactions from storage: {}",
+                                                error.message
+                                            );
+
+                                            Ok(())
+                                        }),
                                 );
-
                                 Ok(())
                             }),
-                    );
-                    Ok(())
-                },
-            ));
-        env.spawn(Box::new(watch_blocks.then(|r| {
-            // TODO: propagate giveup-ness to waiting futures
-            match r {
-                // Block stream ended.
-                Ok(Ok(())) => {
-                    warn!("manager block stream ended");
+                        );
+                        env.spawn(Box::new(watch_blocks.then(|r| {
+                            // TODO: propagate giveup-ness to waiting futures
+                            match r {
+                                // Block stream ended.
+                                Ok(Ok(())) => {
+                                    warn!("manager block stream ended");
+                                }
+                                // Manager dropped.
+                                Ok(Err(_ /* ekiden_common::futures::killable::Killed */)) => {}
+                                // Block stream errored.
+                                Err(e) => {
+                                    error!("manager block stream error: {}", e);
+                                }
+                            };
+                            Ok(())
+                        })));
+                        Ok(Self {
+                            _env: env,
+                            _roothash: roothash,
+                            commit_sub,
+                            blocks_kill_handle,
+                        })
+                    }
+                    Err((e, _blocks)) => Err(e),
                 }
-                // Manager dropped.
-                Ok(Err(_ /* ekiden_common::futures::killable::Killed */)) => {}
-                // Block stream errored.
-                Err(e) => {
-                    error!("manager block stream error: {}", e);
-                }
-            };
-            Ok(())
-        })));
-        Self {
-            _env: env,
-            _roothash: roothash,
-            commit_sub: commit_sub_2,
-            blocks_kill_handle,
-        }
+            })
+            // TODO: maybe async startup and propagate errors
+            .wait()
+            .unwrap()
     }
 
     pub fn create_wait(&self) -> Wait {
