@@ -88,8 +88,8 @@ fn register_components(known_components: &mut KnownComponents) {
     // Contract registry.
     ekiden_registry_client::ContractRegistryClient::register(known_components);
     // Local identities.
-    ekiden_ethereum::identity::EthereumEntityIdentity::register(known_components);
-    ekiden_ethereum::identity::EthereumNodeIdentity::register(known_components);
+    ekiden_core::identity::LocalEntityIdentity::register(known_components);
+    ekiden_core::identity::LocalNodeIdentity::register(known_components);
     // Ethereum services.
     ekiden_ethereum::web3_di::Web3Factory::register(known_components);
     ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(known_components);

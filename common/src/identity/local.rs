@@ -1,4 +1,4 @@
-//! Dependency Injection for the local node's identity
+//! Local node identity implementation.
 use std::fs::File;
 use std::net::SocketAddr;
 use std::result::Result as StdResult;
@@ -7,21 +7,19 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
-use web3;
-use web3::Web3;
 
-use ekiden_common::address::Address;
-use ekiden_common::bytes::H160;
-use ekiden_common::entity::Entity;
+use super::super::address::Address;
+use super::super::bytes::H160;
+use super::super::entity::Entity;
 #[allow(unused_imports)]
-use ekiden_common::futures::Future;
-use ekiden_common::identity::{EntityIdentity, NodeIdentity};
-use ekiden_common::node::Node;
-use ekiden_common::ring::rand::SystemRandom;
-use ekiden_common::ring::signature::Ed25519KeyPair;
-use ekiden_common::signature::{InMemorySigner, Signer};
-use ekiden_common::untrusted;
-use ekiden_common::x509;
+use super::super::futures::Future;
+use super::super::identity::{EntityIdentity, NodeIdentity};
+use super::super::node::Node;
+use super::super::ring::rand::SystemRandom;
+use super::super::ring::signature::Ed25519KeyPair;
+use super::super::signature::{InMemorySigner, Signer};
+use super::super::untrusted;
+use super::super::x509;
 use ekiden_di::error::Error as DiError;
 
 /// Persistent key pair.
@@ -84,21 +82,21 @@ where
     key_pair
 }
 
-/// Ethereum-based entity identity.
-pub struct EthereumEntityIdentity {
+/// Local entity identity.
+pub struct LocalEntityIdentity {
     /// Entity descriptor.
     entity: Entity,
     /// Signer for the entity.
     signer: Arc<Signer>,
 }
 
-impl EthereumEntityIdentity {
+impl LocalEntityIdentity {
     pub fn new(entity: Entity, signer: Arc<Signer>) -> Self {
         Self { entity, signer }
     }
 }
 
-impl EntityIdentity for EthereumEntityIdentity {
+impl EntityIdentity for LocalEntityIdentity {
     fn get_entity(&self) -> Entity {
         self.entity.clone()
     }
@@ -127,40 +125,25 @@ impl KeyPair for EntityKeyPair {
     }
 }
 
-/// Dependency Injection factory for a local `EntityIdentity`. The identity persists
-/// and allows user configuration of the entity's long term keypair and ethereum
-/// address.
+/// Dependency injection factory for a local `EntityIdentity`. The identity persists
+/// and allows user configuration of the entity's long term keypair.
 create_component!(
-    ethereum_entity,
+    local_entity,
     "entity-identity",
-    EthereumEntityIdentity,
+    LocalEntityIdentity,
     EntityIdentity,
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
-        let has_addr = {
+        let has_address = {
             let args = container.get_arguments().unwrap();
             args.is_present("entity-ethereum-address")
         };
-        let eth_address = if has_addr {
+        let eth_address = if has_address {
             let args = container.get_arguments().unwrap();
             let address = value_t_or_exit!(args, "entity-ethereum-address", H160);
             Some(address)
         } else {
-            info!("No local identity provided. Attempting to auto-discover through web3.");
-            match container.inject::<Web3<web3::transports::WebSocket>>() {
-                Ok(client) => {
-                    // TODO: unfortunate wait to resolve call to get local accts.
-                    let accounts = client.personal().list_accounts().wait();
-                    match accounts {
-                        Ok(accts) => if accts.len() > 0 {
-                            Some(H160(accts[0].0))
-                        } else {
-                            None
-                        },
-                        Err(_) => None,
-                    }
-                }
-                Err(_) => None,
-            }
+            // TODO: If we want ethereum address autodiscovery this should be handled separately.
+            None
         };
 
         // Setup key pair.
@@ -171,7 +154,7 @@ create_component!(
 
         let signer = key_pair.to_signer();
 
-        let entity_identity: Arc<EntityIdentity> = Arc::new(EthereumEntityIdentity::new(
+        let entity_identity: Arc<EntityIdentity> = Arc::new(LocalEntityIdentity::new(
             Entity {
                 id: signer.get_public_key(),
                 eth_address,
@@ -193,8 +176,8 @@ create_component!(
     ]
 );
 
-/// Ethereum-based node identity.
-pub struct EthereumNodeIdentity {
+/// Local node identity.
+pub struct LocalNodeIdentity {
     /// Node descriptor.
     node: Node,
     /// Signer for the node.
@@ -205,7 +188,7 @@ pub struct EthereumNodeIdentity {
     tls_private_key: x509::PrivateKey,
 }
 
-impl EthereumNodeIdentity {
+impl LocalNodeIdentity {
     pub fn new(
         node: Node,
         signer: Arc<Signer>,
@@ -221,7 +204,7 @@ impl EthereumNodeIdentity {
     }
 }
 
-impl NodeIdentity for EthereumNodeIdentity {
+impl NodeIdentity for LocalNodeIdentity {
     fn get_node(&self) -> Node {
         self.node.clone()
     }
@@ -275,13 +258,13 @@ fn validate_addr_port(v: String) -> Result<(), String> {
     }
 }
 
-/// Dependency Injection factory for a local `NodeIdentity`. The identity persists
+/// Dependency injection factory for a local `NodeIdentity`. The identity persists
 /// and allows user configuration of the entity's long term keypair and ethereum
 /// address.
 create_component!(
-    ethereum_node,
+    local_node,
     "node-identity",
-    EthereumNodeIdentity,
+    LocalNodeIdentity,
     NodeIdentity,
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
         // Setup key pair.
@@ -321,9 +304,9 @@ create_component!(
             stake: vec![],
         };
 
-        info!("Registering compute node addresses: {:?}", node.addresses);
+        info!("Registering node addresses: {:?}", node.addresses);
 
-        let node_identity: Arc<NodeIdentity> = Arc::new(EthereumNodeIdentity::new(
+        let node_identity: Arc<NodeIdentity> = Arc::new(LocalNodeIdentity::new(
             node,
             signer,
             key_pair.tls_certificate,
