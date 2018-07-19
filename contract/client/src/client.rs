@@ -6,20 +6,18 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
+use ekiden_common::bytes::B256;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::hash::EncodedHash;
-use ekiden_common::signature::Signer;
 use ekiden_compute_api;
-use ekiden_contract_common::call::{ContractOutput, SignedContractCall};
+use ekiden_contract_common::call::{ContractCall, ContractOutput};
 
 /// Contract client.
 pub struct ContractClient {
     /// Underlying gRPC client.
     rpc: ekiden_compute_api::ContractClient,
-    /// Signer used for signing contract calls.
-    signer: Arc<Signer>,
     /// Shared service for waiting for contract calls.
     call_wait_manager: Arc<super::callwait::Manager>,
     /// Optional call timeout.
@@ -34,7 +32,6 @@ impl ContractClient {
     /// Create new client instance.
     pub fn new(
         rpc: ekiden_compute_api::ContractClient,
-        signer: Arc<Signer>,
         call_wait_manager: Arc<super::callwait::Manager>,
         timeout: Option<Duration>,
     ) -> Self {
@@ -42,7 +39,6 @@ impl ContractClient {
 
         ContractClient {
             rpc,
-            signer,
             call_wait_manager,
             timeout,
             shutdown_receiver: shutdown_receiver.shared(),
@@ -51,12 +47,12 @@ impl ContractClient {
     }
 
     /// Queue a raw contract call.
-    pub fn call_raw<C>(&self, signed_call: C) -> BoxFuture<Vec<u8>>
+    pub fn call_raw<C>(&self, call: C) -> BoxFuture<Vec<u8>>
     where
         C: Serialize,
     {
         let mut request = ekiden_compute_api::SubmitTxRequest::new();
-        match serde_cbor::to_vec(&signed_call) {
+        match serde_cbor::to_vec(&call) {
             Ok(data) => request.set_data(data),
             Err(_) => return future::err(Error::new("call serialize failed")).into_box(),
         }
@@ -104,7 +100,11 @@ impl ContractClient {
         O: DeserializeOwned + Send + 'static,
     {
         // TODO: Handle encrypted calls.
-        let call = SignedContractCall::sign(&self.signer, method, arguments);
+        let call = ContractCall {
+            id: B256::random(),
+            method: method.to_owned(),
+            arguments,
+        };
 
         self.call_raw(call)
             .and_then(|output| parse_call_output(output))

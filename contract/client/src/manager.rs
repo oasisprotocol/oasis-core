@@ -11,7 +11,6 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
-use ekiden_common::signature::Signer;
 use ekiden_compute_api;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
@@ -40,8 +39,6 @@ struct Inner {
     entity_registry: Arc<EntityRegistryBackend>,
     /// Environment.
     environment: Arc<Environment>,
-    /// Signer.
-    signer: Arc<Signer>,
     /// Shared service for waiting for contract calls.
     call_wait_manager: Arc<super::callwait::Manager>,
     /// Current computation group leader.
@@ -67,7 +64,6 @@ impl ContractClientManager {
         environment: Arc<Environment>,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
-        signer: Arc<Signer>,
         roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
@@ -86,7 +82,6 @@ impl ContractClientManager {
                 environment,
                 scheduler,
                 entity_registry,
-                signer,
                 call_wait_manager,
                 leader: RwLock::new(None),
                 future_leader: future_leader.shared(),
@@ -153,7 +148,6 @@ impl ContractClientManager {
                                 );
                                 let client = ContractClient::new(
                                     rpc,
-                                    inner.signer.clone(),
                                     inner.call_wait_manager.clone(),
                                     inner.timeout.clone(),
                                 );
