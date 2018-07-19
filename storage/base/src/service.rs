@@ -4,6 +4,7 @@ use ekiden_common::futures::{BoxFuture, Future};
 use ekiden_storage_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, UnarySink};
+use protobuf::RepeatedField;
 
 use super::backend::StorageBackend;
 use ekiden_common::bytes::H256;
@@ -40,10 +41,12 @@ impl api::Storage for StorageService {
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid_rpc!(sink, Internal, e),
-        }).map_err(|_e| ()));
+        ctx.spawn(
+            f.then(move |r| match r {
+                Ok(ret) => sink.success(ret),
+                Err(e) => invalid_rpc!(sink, Internal, e),
+            }).map_err(|_e| ()),
+        );
     }
 
     fn insert(
@@ -65,12 +68,55 @@ impl api::Storage for StorageService {
                 return;
             }
         };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(error) => {
-                error!("Failed to insert data to storage backend: {:?}", error);
-                invalid_rpc!(sink, Internal, error)
+        ctx.spawn(
+            f.then(move |r| match r {
+                Ok(ret) => sink.success(ret),
+                Err(error) => {
+                    error!("Failed to insert data to storage backend: {:?}", error);
+                    invalid_rpc!(sink, Internal, error)
+                }
+            }).map_err(|_e| ()),
+        );
+    }
+
+    fn get_keys(
+        &self,
+        ctx: RpcContext,
+        _req: api::GetKeysRequest,
+        sink: UnarySink<api::GetKeysResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<Arc<Vec<(H256, u64)>>>, Error> {
+            Ok(self.inner.get_keys())
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(items) => {
+                    let mut resp = api::GetKeysResponse::new();
+                    let mut keys = Vec::new();
+                    let mut expiry = Vec::new();
+                    for item in items.iter() {
+                        keys.push(item.0.to_vec());
+                        expiry.push(item.1);
+                    }
+                    resp.set_keys(RepeatedField::from_vec(keys));
+                    resp.set_expiry(expiry);
+                    Ok(resp)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
             }
-        }).map_err(|_e| ()));
+        };
+        ctx.spawn(
+            f.then(move |r| match r {
+                Ok(ret) => sink.success(ret),
+                Err(error) => {
+                    error!("Failed to insert data to storage backend: {:?}", error);
+                    invalid_rpc!(sink, Internal, error)
+                }
+            }).map_err(|_e| ()),
+        );
     }
 }

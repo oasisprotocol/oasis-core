@@ -56,6 +56,10 @@ impl StorageBackend for PersistentStorageBackend {
             Ok(())
         }).into_box()
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        unimplemented!();
+    }
 }
 
 // Register for dependency injection.

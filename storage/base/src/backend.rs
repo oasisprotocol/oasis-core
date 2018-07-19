@@ -3,6 +3,8 @@ use ekiden_common::bytes::H256;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::ring::digest;
 
+use std::sync::Arc;
+
 /// Storage backend implementing the Ekiden storage interface.
 pub trait StorageBackend: Sync + Send {
     /// Fetch the value for a specific immutable key.
@@ -11,6 +13,9 @@ pub trait StorageBackend: Sync + Send {
     /// Store a specific value into storage. It can be later retrieved by its hash.
     /// Expiry represents a number of Epochs for which the value should remain available.
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()>;
+
+    // Get active keys in the storage database, along with expiratons.
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>>;
 }
 
 /// The hash algorithm used to generate a key from a value.

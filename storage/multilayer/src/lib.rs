@@ -121,7 +121,8 @@ impl StorageBackend for MultilayerBackend {
         let accessed = self.accessed.clone();
         let env = self.env.clone();
         // Get the item from sled.
-        let f = self.sled
+        let f = self
+            .sled
             .get(key)
             .or_else(move |e| {
                 trace!("get: unable to get key {} from sled layer: {:?}", key, e);
@@ -202,7 +203,8 @@ impl StorageBackend for MultilayerBackend {
         }
         accessed_guard.insert(key, AccessedItem::Writeback(value.clone()));
         let accessed = self.accessed.clone();
-        let error_tx = self.batch
+        let error_tx = self
+            .batch
             .read()
             .unwrap()
             .as_ref()
@@ -235,6 +237,10 @@ impl StorageBackend for MultilayerBackend {
                 Ok(())
             })));
         Box::new(futures::future::ok(()))
+    }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        self.sled.get_keys()
     }
 }
 
@@ -271,10 +277,10 @@ fn di_factory(
 ) -> ekiden_di::error::Result<Box<std::any::Any>> {
     let env: Arc<Environment> = container.inject()?;
     let args = container.get_arguments().unwrap();
-    let sled = Arc::new(PersistentStorageBackend::new(Path::new(args.value_of(
-        "storage-multilayer-sled-storage-base",
-    ).unwrap()))
-        .map_err(|e| {
+    let sled = Arc::new(PersistentStorageBackend::new(Path::new(
+        args.value_of("storage-multilayer-sled-storage-base")
+            .unwrap(),
+    )).map_err(|e| {
         // Can't use chain_error because ekiden_common Error doesn't implement std Error.
         ekiden_di::error::Error::from(format!("Couldn't create sled layer: {:?}", e))
     })?);
@@ -286,7 +292,8 @@ fn di_factory(
                     "storage-multilayer-aws-region",
                     rusoto_core::region::Region
                 );
-                let aws_table_name = args.value_of("storage-multilayer-aws-table-name")
+                let aws_table_name = args
+                    .value_of("storage-multilayer-aws-table-name")
                     .unwrap()
                     .to_string();
                 let (init_tx, init_rx) = futures::sync::oneshot::channel();
