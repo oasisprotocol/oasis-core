@@ -3,7 +3,9 @@ use std;
 use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::H256;
-use ekiden_common::futures::{self, stream, BoxFuture, Future, FutureExt, Stream};
+use ekiden_common::environment::Environment;
+use ekiden_common::futures::{self, future, stream, BoxFuture, Future, FutureExt, Stream};
+use ekiden_epochtime::interface::TimeSourceNotifier;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 use ekiden_storage_dummy::DummyStorageBackend;
 
@@ -16,6 +18,12 @@ struct Inner {
     inserts: Mutex<Vec<(H256, u64)>>,
     /// Maximum number of retries.
     retries: usize,
+    /// Epoch information.
+    time_notifier: Arc<TimeSourceNotifier>,
+    /// Active key list.
+    key_list: Mutex<Vec<(H256, u64)>>,
+    /// Accumulated key list.
+    accu_key_list: Mutex<Vec<(H256, u64)>>,
 }
 
 /// Virtual storage backend which processes a batch of inserts.
@@ -33,16 +41,54 @@ pub struct BatchStorageBackend {
 }
 
 impl BatchStorageBackend {
-    pub fn new(committed: Arc<StorageBackend>, retries: usize) -> Self {
-        Self {
+    pub fn new(
+        committed: Arc<StorageBackend>,
+        retries: usize,
+        time_notifier: Arc<TimeSourceNotifier>,
+        environment: Arc<Environment>,
+    ) -> Self {
+        let instance = Self {
             inner: Arc::new(Inner {
                 // TODO: Should we use persistent storage instead of holding a batch in memory?
                 always_available: Arc::new(DummyStorageBackend::new()),
                 committed,
                 inserts: Mutex::new(vec![]),
                 retries,
+                time_notifier,
+                key_list: Mutex::new(vec![]),
+                accu_key_list: Mutex::new(vec![]),
             }),
-        }
+        };
+        instance.start(environment);
+        instance
+    }
+
+    /// Start tracking accumulated key list in each epoch.
+    fn start(&self, environment: Arc<Environment>) {
+        environment.spawn({
+            let shared_inner = self.inner.clone();
+            Box::new(
+                self.inner
+                    .time_notifier
+                    .watch_epochs()
+                    .for_each(move |_| {
+                        let mut accu_key_list = shared_inner.accu_key_list.lock().unwrap();
+                        let mut key_list = shared_inner.key_list.lock().unwrap();
+                        key_list.clear();
+                        // Get active key list.
+                        *key_list = std::mem::replace(&mut *accu_key_list, vec![]);
+                        Ok(())
+                    })
+                    .then(|_| future::ok(())),
+            )
+        })
+    }
+
+    /// Get the active key list.
+    pub fn get_key_list(&self) -> Vec<(H256, u64)> {
+        let inner = self.inner.clone();
+        let key_list = inner.key_list.lock().unwrap();
+        return key_list.to_owned();
     }
 
     /// Commit all inserts to the committed backend.
@@ -97,6 +143,8 @@ impl StorageBackend for BatchStorageBackend {
             .and_then(move |_| {
                 let mut inserts = inner.inserts.lock().unwrap();
                 inserts.push((key, expiry));
+                let mut accu_key_list = inner.accu_key_list.lock().unwrap();
+                accu_key_list.push((key, expiry));
                 Ok(())
             })
             .into_box()
@@ -105,26 +153,54 @@ impl StorageBackend for BatchStorageBackend {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
+    extern crate grpcio;
     use super::*;
+    use ekiden_common::environment::GrpcEnvironment;
+    use ekiden_epochtime::interface::EPOCH_INTERVAL;
+    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
+    use std::sync::Arc;
+    use std::{thread, time};
 
     #[test]
     fn test_batch() {
+        let grpc_environment = grpcio::EnvBuilder::new().build();
+        let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
+        let time_source = Arc::new(MockTimeSource::new());
+        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
         let committed = Arc::new(DummyStorageBackend::new());
-        let batch = BatchStorageBackend::new(committed.clone(), 1);
+        let batch = BatchStorageBackend::new(
+            committed.clone(),
+            1,
+            time_notifier.clone(),
+            environment.clone(),
+        );
 
         let key = hash_storage_key(b"value");
+        let delay = time::Duration::from_millis(1000);
+
+        // Force progression of epoch.
+        time_source.set_mock_time(0, EPOCH_INTERVAL).unwrap();
+        time_notifier.notify_subscribers().unwrap();
+        thread::sleep(delay);
 
         assert!(batch.get(key).wait().is_err());
         batch.insert(b"value".to_vec(), 10).wait().unwrap();
         assert_eq!(batch.get(key).wait(), Ok(b"value".to_vec()));
+
+        // Force progression of epoch.
+        time_source.set_mock_time(1, EPOCH_INTERVAL).unwrap();
+        time_notifier.notify_subscribers().unwrap();
+        thread::sleep(delay);
+
         // Test that key has not been inserted into committed backend.
         assert!(committed.get(key).wait().is_err());
 
         // Commit.
         batch.commit().wait().unwrap();
         assert_eq!(committed.get(key).wait(), Ok(b"value".to_vec()));
+        // Get the active key list.
+        let list = batch.get_key_list();
+        println!("Active key list is {:?}", list);
 
         // Insert directly to committed and expect the backend to find it.
         let key = hash_storage_key(b"another");
