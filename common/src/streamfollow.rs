@@ -80,7 +80,7 @@ where
                                 self.last = Some((self.item_to_bookmark)(&first));
                             }
                             self.state = ConnectionState::Forwarding(stream);
-                            // Repeat poll on next state.
+                            return Ok(Async::Ready(Some(first)));
                         }
                         Ok(Async::NotReady) => {
                             self.state = ConnectionState::Connecting(backoff, stream);
