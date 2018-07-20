@@ -25,6 +25,8 @@
 * **BACKWARD INCOMPATIBLE:** Rename `build-contract` to `build-enclave`.
 * **BACKWARD INCOMPATIBLE:** Rename consensus backend to root hash backend to make it more
   clear what its role is.
+* **BACKWARD INCOMPATIBLE:** Move local node identity implementations to `ekiden-common`
+  (previously they were part of `ekiden-ethereum`).
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.

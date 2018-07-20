@@ -7,6 +7,9 @@ use super::node::Node;
 use super::signature::{Signed, Signer};
 use super::x509;
 
+#[cfg(not(target_env = "sgx"))]
+pub mod local;
+
 /// Node identity.
 ///
 /// The local identity contains descriptors and key pairs for the node.
@@ -49,3 +52,7 @@ pub trait EntityIdentity: Sync + Send {
         self.get_entity_signer().get_public_key()
     }
 }
+
+// Re-export.
+#[cfg(not(target_env = "sgx"))]
+pub use self::local::{LocalEntityIdentity, LocalNodeIdentity};

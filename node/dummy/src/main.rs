@@ -36,7 +36,7 @@ fn main() {
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
     ekiden_beacon_dummy::InsecureDummyRandomBeacon::register(&mut known_components);
     ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
-    ekiden_ethereum::identity::EthereumEntityIdentity::register(&mut known_components);
+    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(&mut known_components);
     ekiden_epochtime::local::MockTimeNotifier::register(&mut known_components);
     ekiden_epochtime::local::MockTimeRpcNotifier::register(&mut known_components);
