@@ -1,3 +1,4 @@
+use std;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -115,13 +116,18 @@ impl Manager {
             match r {
                 // Block stream ended.
                 Ok(Ok(())) => {
-                    warn!("manager block stream ended");
+                    // The root hash system has ended the blockchain.
+                    // For now, exit, because no more progress can be made.
+                    error!("manager block stream ended");
+                    std::process::abort();
                 }
                 // Manager dropped.
                 Ok(Err(_ /* ekiden_common::futures::killable::Killed */)) => {}
                 // Block stream errored.
                 Err(e) => {
+                    // Propagate error to service manager (high-velocity implementation).
                     error!("manager block stream error: {}", e);
+                    std::process::abort();
                 }
             };
             Ok(())
