@@ -2,6 +2,7 @@
 *~
 
 Gopkg.lock
+common/crypto/mrae/gen_vectors/gen_vectors
 ekiden/ekiden
 vendor/
 
