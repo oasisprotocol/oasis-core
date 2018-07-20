@@ -9,7 +9,7 @@ import sys
 import prometheus_client
 
 
-def benchmark_crate(crate, registry):
+def benchmark_crate(crate, registry, commit):
     """Run benchmarks for a specific crate and parse results."""
     have_errors = False
 
@@ -37,9 +37,10 @@ def benchmark_crate(crate, registry):
             metric = prometheus_client.Gauge(
                 'benchmarks_crate_{}_{}_median_nsec'.format(crate_id, metric_id),
                 "Crate benchmark results for {} (benchmark {})".format(crate, event['name']),
+                ['commit'],
                 registry=registry,
             )
-            metric.set(event['median'])
+            metric.labels(commit=commit).set(event['median'])
 
             print("{name}: {median} ns / iter, deviation {deviation} ns".format(**event))
         elif event['type'] == 'test' and event['event'] == 'failed':
@@ -52,7 +53,7 @@ def benchmark_crate(crate, registry):
     return have_errors
 
 
-def benchmark_e2e(registry):
+def benchmark_e2e(registry, commit):
     """Run end-to-end benchmarks and parse results."""
     process = subprocess.Popen(
         ['./scripts/benchmark-e2e.sh', 'json'],
@@ -79,9 +80,10 @@ def benchmark_e2e(registry):
                 "E2E benchmark request latency for scenario '{}' ({}th percentile)".format(
                     result['title'], percentile
                 ),
+                ['commit'],
                 registry=registry,
             )
-            latency_percentile.set(result['latency']['p{}'.format(percentile)])
+            latency_percentile.labels(commit=commit).set(result['latency']['p{}'.format(percentile)])
 
         for agg in ('min', 'avg', 'max', 'std_dev'):
             latency = prometheus_client.Gauge(
@@ -89,9 +91,10 @@ def benchmark_e2e(registry):
                 "E2E benchmark request latency for scenario '{}' ({})".format(
                     result['title'], agg
                 ),
+                ['commit'],
                 registry=registry,
             )
-            latency.set(result['latency'][agg])
+            latency.labels(commit=commit).set(result['latency'][agg])
 
         # Throughput.
         throughput = prometheus_client.Gauge(
@@ -99,9 +102,10 @@ def benchmark_e2e(registry):
             "E2E benchmark request throughput (rq / sec) for scenario '{}'".format(
                 result['title']
             ),
+            ['commit'],
             registry=registry,
         )
-        throughput.set(result['throughput']['throughput_per_sec'])
+        throughput.labels(commit=commit).set(result['throughput']['throughput_per_sec'])
 
         print(
             "{title}: avg latency {latency[avg]} ms, "
@@ -113,6 +117,9 @@ def benchmark_e2e(registry):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=None)
+    parser.add_argument('--commit', type=str,
+                        default='<unknown>',
+                        help="Commit hash to label all results with")
     parser.add_argument('--crate', type=str, action='append',
                         default=[],
                         help="Benchmark specific crate (can be specified multiple times)")
@@ -131,7 +138,7 @@ if __name__ == '__main__':
         print("Running per-crate benchmarks...")
 
         for crate in args.crate:
-            if benchmark_crate(crate, registry):
+            if benchmark_crate(crate, registry, args.commit):
                 have_errors = True
 
         print("Crate benchmarks done.")
@@ -140,7 +147,7 @@ if __name__ == '__main__':
     if args.e2e:
         print("Running end-to-end benchmarks...")
 
-        if benchmark_e2e(registry):
+        if benchmark_e2e(registry, args.commit):
             have_errors = True
 
         print("End-to-end benchmarks done.")
