@@ -2,6 +2,7 @@
 pub use log::LevelFilter;
 pub use pretty_env_logger::formatted_builder;
 
+pub use ekiden_core::bytes::B256;
 pub use ekiden_core::enclave::quote::MrEnclave;
 pub use ekiden_instrumentation::set_boxed_metric_collector;
 pub use ekiden_instrumentation::MetricCollector;
@@ -52,7 +53,7 @@ macro_rules! default_app {
 
 #[macro_export]
 macro_rules! contract_client {
-    ($signer:ident, $contract:ident, $args:ident, $container:ident) => {{
+    ($contract:ident, $args:ident, $container:ident) => {{
         use $crate::macros::*;
 
         // Initialize metric collector (if not already initialized).
@@ -81,12 +82,11 @@ macro_rules! contract_client {
             $container.inject().unwrap(),
             $container.inject().unwrap(),
             $container.inject().unwrap(),
-            $signer,
             $container.inject().unwrap(),
             $container.inject().unwrap(),
         )
     }};
-    ($signer:ident, $contract:ident) => {{
+    ($contract:ident) => {{
         let known_components = $crate::components::create_known_components();
         let args = default_app!()
             .args(&known_components.get_arguments())
@@ -97,7 +97,7 @@ macro_rules! contract_client {
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
 
-        contract_client!($signer, $contract, args, container)
+        contract_client!($contract, args, container)
     }};
 }
 
@@ -163,11 +163,10 @@ macro_rules! benchmark_app {
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_client {
-    ($app:ident, $signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+    ($app:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
         use $crate::benchmark::OutputFormat;
 
         let (args, container) = ($app.0.clone(), $app.1.clone());
-        let signer = $signer.clone();
 
         let output_format = match args.value_of("output-format").unwrap() {
             "text" => OutputFormat::Text,
@@ -188,9 +187,8 @@ macro_rules! benchmark_client {
                 let args = args.clone();
                 let shared_container = container.clone();
                 let mut container = shared_container.lock().unwrap();
-                let signer = signer.clone();
 
-                contract_client!(signer, $contract, args, container)
+                contract_client!($contract, args, container)
             },
         );
 
@@ -208,9 +206,9 @@ macro_rules! benchmark_client {
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_multiple {
-    ($app:ident, $signer:ident, $contract:ident, [$($scenario:expr),*]) => {
+    ($app:ident, $contract:ident, [$($scenario:expr),*]) => {
         $(
-            benchmark_client!($app, $signer, $contract, None, $scenario, None);
+            benchmark_client!($app, $contract, None, $scenario, None);
         )*
     }
 }

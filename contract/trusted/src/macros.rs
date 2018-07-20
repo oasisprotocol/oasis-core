@@ -20,7 +20,6 @@ macro_rules! create_contract {
         global_ctors_object! {
             ENCLAVE_CONTRACT_INIT, enclave_contract_init = {
                 use ekiden_core::error::Result;
-                use ekiden_core::contract::call::VerifiedContractCall;
                 use ekiden_trusted::contract::dispatcher::{ContractMethod,
                                                            ContractMethodDescriptor,
                                                            Dispatcher};
@@ -33,7 +32,7 @@ macro_rules! create_contract {
                             ContractMethodDescriptor {
                                 name: stringify!($method_name).to_owned(),
                             },
-                            |args: &VerifiedContractCall<$arguments_type>| -> Result<$output_type> {
+                            |args: &$arguments_type| -> Result<$output_type> {
                                 $method_name(args)
                             },
                         )
