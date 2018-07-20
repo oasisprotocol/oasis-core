@@ -24,6 +24,8 @@ extern crate core;
 #[macro_use]
 extern crate clap;
 #[cfg(not(target_env = "sgx"))]
+extern crate futures_timer;
+#[cfg(not(target_env = "sgx"))]
 extern crate get_if_addrs;
 #[macro_use]
 extern crate log;
