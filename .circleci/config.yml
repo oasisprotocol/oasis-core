@@ -144,7 +144,8 @@ jobs:
           ./scripts/benchmark.py \
               --crate ekiden-rpc-trusted \
               --crate ekiden-db-trusted \
-              --e2e
+              --e2e \
+              --commit $(git rev-parse --short HEAD)
 
   deploy:
     <<: *defaults
