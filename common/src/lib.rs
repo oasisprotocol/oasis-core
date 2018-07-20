@@ -65,6 +65,8 @@ pub mod profiling;
 pub mod protobuf;
 pub mod random;
 pub mod signature;
+#[cfg(not(target_env = "sgx"))]
+pub mod streamfollow;
 #[macro_use]
 pub mod uint;
 #[cfg(not(target_env = "sgx"))]
