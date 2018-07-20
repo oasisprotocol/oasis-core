@@ -7,6 +7,7 @@ use ekiden_common::bytes::H256;
 use ekiden_common::futures::Future;
 #[cfg(target_env = "sgx")]
 use ekiden_common::futures::FutureExt;
+use ekiden_common::hash::empty_hash;
 use ekiden_common::ring::digest;
 use ekiden_storage_base::StorageMapper;
 
@@ -36,6 +37,7 @@ impl PatriciaTrie {
     /// Return pointer to root node.
     fn get_root_pointer(&self, root: Option<H256>) -> NodePointer {
         match root {
+            Some(root) if root == empty_hash() => NodePointer::Null,
             Some(root) => NodePointer::Pointer(root),
             None => NodePointer::Null,
         }
@@ -679,6 +681,21 @@ mod test {
 
         // After removing foo the root should be gone as well.
         assert_eq!(tree.remove(Some(new_root), b"foo"), None);
+    }
+
+    #[test]
+    fn test_empty_hash() {
+        let storage = Arc::new(DummyStorageBackend::new());
+        let mapper = Arc::new(BackendIdentityMapper::new(storage));
+        let tree = PatriciaTrie::new(mapper);
+
+        assert_eq!(tree.get(Some(empty_hash()), b"foo"), None);
+        let new_root = tree.insert(Some(empty_hash()), b"foo", b"bar");
+        assert_eq!(tree.get(Some(new_root), b"foo"), Some(b"bar".to_vec()));
+        assert_eq!(
+            new_root,
+            H256::from("0xe6772f39648c428810ed68426da21155dabc79a62f2ab7c9800766ef0414c6cd")
+        );
     }
 
     /// Test an insertion in a deep node.
