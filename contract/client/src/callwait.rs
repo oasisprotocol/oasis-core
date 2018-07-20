@@ -67,7 +67,7 @@ impl Manager {
         storage: Arc<StorageBackend>,
     ) -> Self {
         let commit_sub = Arc::new(StreamSubscribers::new());
-        let commit_sub_2 = commit_sub.clone();
+        let commit_sub_blocks = commit_sub.clone();
         let (watch_blocks, blocks_kill_handle) =
             ekiden_common::futures::killable(roothash.get_blocks(contract_id).for_each(
                 move |block: Block| {
@@ -80,7 +80,7 @@ impl Manager {
                     // This wastes local work and storage network effort if we aren't waiting for
                     // anything. We might be able to save this if we add functionality to
                     // `StreamSubscriber` to check if there are no subscriptions.
-                    let commit_sub_3 = commit_sub.clone();
+                    let commit_sub_block = commit_sub_blocks.clone();
                     ekiden_common::futures::spawn(
                         storage
                             .get(block.header.input_hash)
@@ -95,7 +95,7 @@ impl Manager {
 
                                     commit_info.insert(call_id, output);
                                 }
-                                commit_sub_3.notify(&Arc::new(commit_info));
+                                commit_sub_block.notify(&Arc::new(commit_info));
 
                                 Ok(())
                             })
@@ -135,7 +135,7 @@ impl Manager {
         Self {
             _env: env,
             _roothash: roothash,
-            commit_sub: commit_sub_2,
+            commit_sub,
             blocks_kill_handle,
         }
     }
