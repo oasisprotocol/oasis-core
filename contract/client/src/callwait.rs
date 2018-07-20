@@ -119,7 +119,7 @@ impl Manager {
                     // The root hash system has ended the blockchain.
                     // For now, exit, because no more progress can be made.
                     error!("manager block stream ended");
-                    std::process::abort();
+                    std::process::exit(1);
                 }
                 // Manager dropped.
                 Ok(Err(_ /* ekiden_common::futures::killable::Killed */)) => {}
@@ -127,7 +127,7 @@ impl Manager {
                 Err(e) => {
                     // Propagate error to service manager (high-velocity implementation).
                     error!("manager block stream error: {}", e);
-                    std::process::abort();
+                    std::process::exit(1);
                 }
             };
             Ok(())
