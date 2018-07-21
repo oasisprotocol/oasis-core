@@ -19,35 +19,60 @@ fn backoff_advance(prev: Duration) -> Duration {
 }
 
 enum ConnectionState<S> {
-    Polling,
+    Invalid,
     Connecting(Duration, S),
     Backoff(Duration, futures_timer::Delay),
     Forwarding(S),
 }
 
-pub struct Follow<S, B, FI, FR, FB, FP> {
-    src_init: FI,
-    src_resume: FR,
-    item_to_bookmark: FB,
-    error_is_permanent: FP,
-    last: Option<B>,
-    state: ConnectionState<S>,
+enum BookmarkState<B, FI, FR> {
+    Invalid,
+    Initializing(FI, FR),
+    Anchored(FR, B),
 }
 
-impl<S, B, FI, FR, FB, FP> Follow<S, B, FI, FR, FB, FP>
+impl<S, B, FI, FR> BookmarkState<B, FI, FR>
 where
     S: Stream,
     FI: Fn() -> S,
     FR: Fn(&B) -> S,
-    FB: Fn(&S::Item) -> B,
-    FP: Fn(&S::Error) -> bool,
+    B: PartialEq + Debug,
 {
     fn connect(&self) -> S {
-        match self.last {
-            None => (self.src_init)(),
-            Some(ref bookmark) => (self.src_resume)(bookmark),
+        match *self {
+            BookmarkState::Invalid => unreachable!(),
+            BookmarkState::Initializing(ref init, ref _resume) => init(),
+            BookmarkState::Anchored(ref resume, ref bookmark) => resume(bookmark),
         }
     }
+
+    fn offer_first(&mut self, b: B) {
+        match std::mem::replace(self, BookmarkState::Invalid) {
+            BookmarkState::Invalid => unreachable!(),
+            BookmarkState::Initializing(_init, resume) => {
+                *self = BookmarkState::Anchored(resume, b);
+            }
+            BookmarkState::Anchored(_resume, bookmark) => {
+                assert_eq!(b, bookmark);
+            }
+        }
+    }
+
+    fn advance(&mut self, b: B) {
+        match std::mem::replace(self, BookmarkState::Invalid) {
+            BookmarkState::Anchored(resume, _bookmark) => {
+                *self = BookmarkState::Anchored(resume, b);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub struct Follow<S, B, FI, FR, FB, FP> {
+    connection_state: ConnectionState<S>,
+    bookmark_state: BookmarkState<B, FI, FR>,
+    item_to_bookmark: FB,
+    error_is_permanent: FP,
 }
 
 impl<S, B, FI, FR, FB, FP> Stream for Follow<S, B, FI, FR, FB, FP>
@@ -57,7 +82,7 @@ where
     FR: Fn(&B) -> S,
     FB: Fn(&S::Item) -> B,
     FP: Fn(&S::Error) -> bool,
-    B: Debug + PartialEq,
+    B: PartialEq + Debug,
     S::Error: Debug,
 {
     type Item = <S as Stream>::Item;
@@ -65,8 +90,8 @@ where
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         loop {
-            match std::mem::replace(&mut self.state, ConnectionState::Polling) {
-                ConnectionState::Polling => unreachable!(),
+            match std::mem::replace(&mut self.connection_state, ConnectionState::Invalid) {
+                ConnectionState::Invalid => unreachable!(),
                 ConnectionState::Connecting(backoff, mut stream) => {
                     match stream.poll() {
                         Ok(Async::Ready(None)) => {
@@ -74,16 +99,13 @@ where
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(first))) => {
-                            if let Some(ref bookmark) = self.last {
-                                assert_eq!(bookmark, &(self.item_to_bookmark)(&first));
-                            } else {
-                                self.last = Some((self.item_to_bookmark)(&first));
-                            }
-                            self.state = ConnectionState::Forwarding(stream);
+                            self.bookmark_state
+                                .offer_first((self.item_to_bookmark)(&first));
+                            self.connection_state = ConnectionState::Forwarding(stream);
                             return Ok(Async::Ready(Some(first)));
                         }
                         Ok(Async::NotReady) => {
-                            self.state = ConnectionState::Connecting(backoff, stream);
+                            self.connection_state = ConnectionState::Connecting(backoff, stream);
                             return Ok(Async::NotReady);
                         }
                         Err(e) => {
@@ -94,7 +116,7 @@ where
                                     "Underlying stream error (early): {:?}; retrying in {:?}",
                                     e, backoff
                                 );
-                                self.state = ConnectionState::Backoff(
+                                self.connection_state = ConnectionState::Backoff(
                                     backoff,
                                     futures_timer::Delay::new(backoff),
                                 );
@@ -106,14 +128,14 @@ where
                 ConnectionState::Backoff(backoff, mut delay) => {
                     match delay.poll().expect("Unhandled timer error") {
                         Async::Ready(()) => {
-                            self.state = ConnectionState::Connecting(
+                            self.connection_state = ConnectionState::Connecting(
                                 backoff_advance(backoff),
-                                self.connect(),
+                                self.bookmark_state.connect(),
                             );
                             // Repeat poll on next state.
                         }
                         Async::NotReady => {
-                            self.state = ConnectionState::Backoff(backoff, delay);
+                            self.connection_state = ConnectionState::Backoff(backoff, delay);
                             return Ok(Async::NotReady);
                         }
                     }
@@ -125,12 +147,12 @@ where
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(item))) => {
-                            self.last = Some((self.item_to_bookmark)(&item));
-                            self.state = ConnectionState::Forwarding(stream);
+                            self.connection_state = ConnectionState::Forwarding(stream);
+                            self.bookmark_state.advance((self.item_to_bookmark)(&item));
                             return Ok(Async::Ready(Some(item)));
                         }
                         Ok(Async::NotReady) => {
-                            self.state = ConnectionState::Forwarding(stream);
+                            self.connection_state = ConnectionState::Forwarding(stream);
                             return Ok(Async::NotReady);
                         }
                         Err(e) => {
@@ -138,8 +160,10 @@ where
                                 return Err(e);
                             } else {
                                 error!("Underlying stream error (late): {:?}; reconnecting", e);
-                                self.state =
-                                    ConnectionState::Connecting(backoff_init(), self.connect());
+                                self.connection_state = ConnectionState::Connecting(
+                                    backoff_init(),
+                                    self.bookmark_state.connect(),
+                                );
                                 // Repeat poll on next state.
                             }
                         }
@@ -151,8 +175,8 @@ where
 }
 
 pub fn follow<S, B, FI, FR, FB, FP>(
-    src_init: FI,
-    src_resume: FR,
+    init: FI,
+    resume: FR,
     item_to_bookmark: FB,
     error_is_permanent: FP,
 ) -> Follow<S, B, FI, FR, FB, FP>
@@ -163,13 +187,12 @@ where
     FB: Fn(&S::Item) -> B,
     FP: Fn(&S::Error) -> bool,
 {
-    let state = ConnectionState::Connecting(backoff_init(), src_init());
+    let connection_state = ConnectionState::Connecting(backoff_init(), init());
+    let bookmark_state = BookmarkState::Initializing(init, resume);
     Follow {
-        src_init,
-        src_resume,
+        connection_state,
+        bookmark_state,
         item_to_bookmark,
         error_is_permanent,
-        last: None,
-        state,
     }
 }
