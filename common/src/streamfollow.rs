@@ -9,19 +9,27 @@ use futures::Future;
 use futures::Poll;
 use futures::Stream;
 
+/// Choose the first duration to use when starting to back off.
 fn backoff_init() -> Duration {
     // TODO: I hear it's better to be random so multiple instances don't all retry at once.
     Duration::from_millis(1000)
 }
 
+/// Choose the next duration to use when backing off.
 fn backoff_advance(prev: Duration) -> Duration {
     std::cmp::min(prev * 2, Duration::from_secs(60))
 }
 
 enum ConnectionState<S> {
+    /// Dummy state for indicating a moved state or that we permanently errored/ended.
     Invalid,
+    /// We've created a stream and we're waiting on the first element/sentinel item to arrive. The
+    /// `Duration` is the amount of time to wait before reconnecting if the stream errors
+    /// nonpermanently.
     Connecting(Duration, S),
+    /// We're waiting before connecting again. The `Duration` is how long *this* wait is.
     Backoff(Duration, futures_timer::Delay),
+    /// We're waiting for more items from a stream to forward as our output.
     Forwarding(S),
 }
 
@@ -174,6 +182,16 @@ where
     }
 }
 
+/// Creates a stream and resume it if the stream errors nonpermanently.
+///
+/// Uses `init` to start the first stream (may be called multiple time if the stream errors) and
+/// `resume` to start subsequent streams from the last received item. Streams should start with a
+/// sentinel item: anything in `init`'s stream or a specified item in `resume`'s stream. `resume`
+/// takes a specification of which item in the form of a "bookmark," obtained by applying
+/// `item_to_bookmark` on an item. Retries `init`/`resume` when an error is encountered, unless
+/// the error is "permanent," as determined by `error_is_permanent`. Propagates permanent errors
+/// and `None` values to the resulting stream. Consecutive retries without receiving a sentinel
+/// item are delayed according to a hardcoded backoff policy.
 pub fn follow<S, B, FI, FR, FB, FP>(
     init: FI,
     resume: FR,
