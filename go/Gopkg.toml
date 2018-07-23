@@ -54,8 +54,12 @@
   branch = "master"
 
 [[override]]
-  name= "golang.org/x/net"
+  name = "golang.org/x/net"
   branch = "master"
+
+[[override]]
+  name = "git.schwanenlied.me/yawning/bsaes.git"
+  source = "https://github.com/yawning/bsaes"
 
 [prune]
   go-tests = true
