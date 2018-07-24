@@ -214,3 +214,41 @@ where
         error_is_permanent,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use futures;
+    use futures::Future;
+    use futures::Stream;
+    use tokio;
+
+    #[test]
+    fn follow_ok() {
+        let s = super::follow(
+            || futures::stream::iter_result(vec![Ok(1), Ok(2), Ok(3)]),
+            |&()| unreachable!(),
+            |_| (),
+            |&()| unreachable!(),
+        );
+        tokio::run(s.collect().then(|r| {
+            assert_eq!(r.unwrap(), vec![1, 2, 3]);
+            Ok(())
+        }));
+    }
+
+    #[test]
+    fn follow_reconnect() {
+        let mut inits = vec![vec![Err(())], vec![Ok(1), Ok(2), Err(())]].into_iter();
+        let mut resumes = vec![vec![Err(())], vec![Ok(2), Err(())], vec![Ok(2), Ok(3)]].into_iter();
+        let s = super::follow(
+            move || futures::stream::iter_result(inits.next().unwrap()),
+            move |&()| futures::stream::iter_result(resumes.next().unwrap()),
+            |_| (),
+            |&()| false,
+        );
+        tokio::run(s.collect().then(|r| {
+            assert_eq!(r.unwrap(), vec![1, 2, 3]);
+            Ok(())
+        }));
+    }
+}
