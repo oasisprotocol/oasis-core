@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use std::time::Duration;
 use std::time::Instant;
 
+use rand;
+use rand::Rng;
 use tokio;
 
 use futures::Async;
@@ -10,26 +12,37 @@ use futures::Future;
 use futures::Poll;
 use futures::Stream;
 
-/// Choose the first duration to use when starting to back off.
-fn backoff_init() -> Duration {
-    // TODO: I hear it's better to be random so multiple instances don't all retry at once.
-    Duration::from_millis(1000)
+struct Backoff {
+    range_ms: u64,
 }
 
-/// Choose the next duration to use when backing off.
-fn backoff_advance(prev: Duration) -> Duration {
-    std::cmp::min(prev * 2, Duration::from_secs(60))
+impl Backoff {
+    /// Choose the first duration to use when starting to back off.
+    fn init() -> Self {
+        Backoff { range_ms: 1000 }
+    }
+
+    /// Increase the backoff after a consecutive failure.
+    fn advance(&mut self) {
+        self.range_ms = std::cmp::min(self.range_ms * 2, 60_000);
+    }
+
+    /// Get a random duration from the current range.
+    fn sample(&self) -> Duration {
+        Duration::from_millis(rand::thread_rng().gen_range(50, self.range_ms))
+    }
 }
 
 enum ConnectionState<S> {
     /// Dummy state for indicating a moved state or that we permanently errored/ended.
     Invalid,
     /// We've created a stream and we're waiting on the first/sentinel item to arrive. The
-    /// `Duration` is the amount of time to wait before reconnecting if the stream errors
+    /// `Backoff` is the range of time to wait before reconnecting if the stream errors
     /// nonpermanently.
-    Connecting(Duration, S),
-    /// We're waiting before connecting again. The `Duration` is how long *this* wait is.
-    Backoff(Duration, tokio::timer::Delay),
+    Connecting(Backoff, S),
+    /// We're waiting before connecting again. The `Backoff` is the one *this* wait was sampled
+    /// from.
+    Backoff(Backoff, tokio::timer::Delay),
     /// We're waiting for more items from a stream to forward as our output.
     Forwarding(S),
 }
@@ -134,26 +147,26 @@ where
                             if (self.error_is_permanent)(&e) {
                                 return Err(e);
                             } else {
+                                let sample = backoff.sample();
                                 error!(
                                     "Underlying stream error (early): {:?}; retrying in {:?}",
-                                    e, backoff
+                                    e, sample
                                 );
                                 self.connection_state = ConnectionState::Backoff(
                                     backoff,
-                                    tokio::timer::Delay::new(Instant::now() + backoff),
+                                    tokio::timer::Delay::new(Instant::now() + sample),
                                 );
                                 // Repeat poll on next state.
                             }
                         }
                     }
                 }
-                ConnectionState::Backoff(backoff, mut delay) => {
+                ConnectionState::Backoff(mut backoff, mut delay) => {
                     match delay.poll().expect("Unhandled timer error") {
                         Async::Ready(()) => {
-                            self.connection_state = ConnectionState::Connecting(
-                                backoff_advance(backoff),
-                                self.bookmark_state.connect(),
-                            );
+                            backoff.advance();
+                            self.connection_state =
+                                ConnectionState::Connecting(backoff, self.bookmark_state.connect());
                             // Repeat poll on next state.
                         }
                         Async::NotReady => {
@@ -186,7 +199,7 @@ where
                             } else {
                                 error!("Underlying stream error (late): {:?}; reconnecting", e);
                                 self.connection_state = ConnectionState::Connecting(
-                                    backoff_init(),
+                                    Backoff::init(),
                                     self.bookmark_state.connect(),
                                 );
                                 // Repeat poll on next state.
@@ -227,7 +240,7 @@ where
     FB: Fn(&S::Item) -> B,
     FP: Fn(&S::Error) -> bool,
 {
-    let connection_state = ConnectionState::Connecting(backoff_init(), init());
+    let connection_state = ConnectionState::Connecting(Backoff::init(), init());
     let bookmark_state = BookmarkState::Initializing(init, resume);
     Follow {
         connection_state,
