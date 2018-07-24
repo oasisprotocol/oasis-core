@@ -42,15 +42,15 @@ enum BookmarkState<B, FI, FR> {
 impl<S, B, FI, FR> BookmarkState<B, FI, FR>
 where
     S: Stream,
-    FI: Fn() -> S,
-    FR: Fn(&B) -> S,
+    FI: FnMut() -> S,
+    FR: FnMut(&B) -> S,
     B: PartialEq + Debug,
 {
-    fn connect(&self) -> S {
+    fn connect(&mut self) -> S {
         match *self {
             BookmarkState::Invalid => unreachable!(),
-            BookmarkState::Initializing(ref init, ref _resume) => init(),
-            BookmarkState::Anchored(ref resume, ref bookmark) => resume(bookmark),
+            BookmarkState::Initializing(ref mut init, ref mut _resume) => init(),
+            BookmarkState::Anchored(ref mut resume, ref bookmark) => resume(bookmark),
         }
     }
 
@@ -86,8 +86,8 @@ pub struct Follow<S, B, FI, FR, FB, FP> {
 impl<S, B, FI, FR, FB, FP> Stream for Follow<S, B, FI, FR, FB, FP>
 where
     S: Stream,
-    FI: Fn() -> S,
-    FR: Fn(&B) -> S,
+    FI: FnMut() -> S,
+    FR: FnMut(&B) -> S,
     FB: Fn(&S::Item) -> B,
     FP: Fn(&S::Error) -> bool,
     B: PartialEq + Debug,
@@ -193,15 +193,15 @@ where
 /// and `None` values to the resulting stream. Consecutive retries without receiving a sentinel
 /// item are delayed according to a hardcoded backoff policy.
 pub fn follow<S, B, FI, FR, FB, FP>(
-    init: FI,
+    mut init: FI,
     resume: FR,
     item_to_bookmark: FB,
     error_is_permanent: FP,
 ) -> Follow<S, B, FI, FR, FB, FP>
 where
     S: Stream,
-    FI: Fn() -> S,
-    FR: Fn(&B) -> S,
+    FI: FnMut() -> S,
+    FR: FnMut(&B) -> S,
     FB: Fn(&S::Item) -> B,
     FP: Fn(&S::Error) -> bool,
 {
