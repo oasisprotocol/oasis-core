@@ -3,6 +3,7 @@ syntax = "proto3";
 // Common message definitions across services.
 
 package common;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/common";
 
 message Address {
     enum Transport {
