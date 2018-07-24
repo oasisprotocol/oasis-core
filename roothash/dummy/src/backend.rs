@@ -1052,7 +1052,7 @@ impl RootHashBackend for DummyRootHashBackend {
                 let blockchain = blocks.get(&contract_id).unwrap();
                 // TODO: check overflow lol
                 let round_usize = round.0.low_u64() as usize;
-                if round_usize >= blockchain.len() - 1 {
+                if round_usize >= blockchain.len() {
                     return stream::once(Err(Error::new(
                         "Dummy root hash backend: don't have this block yet",
                     ))).into_box();
