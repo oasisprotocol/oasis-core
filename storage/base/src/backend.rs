@@ -14,7 +14,7 @@ pub trait StorageBackend: Sync + Send {
     /// Expiry represents a number of Epochs for which the value should remain available.
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()>;
 
-    // Get active keys in the storage database, along with expiratons.
+    // Get keys in the storage database, along with expiratons.
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>>;
 }
 

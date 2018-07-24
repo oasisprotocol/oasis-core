@@ -59,15 +59,13 @@ impl StorageBackend for StorageClient {
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
         let req = api::GetKeysRequest::new();
         match self.0.get_keys_async(&req) {
-            Ok(f) => Box::new(
-                f.map(|resp| -> Arc<Vec<(H256, u64)>> {
-                    let mut items = Vec::new();
-                    for item in (*resp.get_keys()).iter().zip(resp.get_expiry()) {
-                        items.push((H256::from(item.0.as_slice()), *item.1));
-                    }
-                    Arc::new(items)
-                }).map_err(|error| Error::new(format!("{:?}", error))),
-            ),
+            Ok(f) => Box::new(f.map(|resp| -> Arc<Vec<(H256, u64)>> {
+                let mut items = Vec::new();
+                for item in (*resp.get_keys()).iter().zip(resp.get_expiry()) {
+                    items.push((H256::from(item.0.as_slice()), *item.1));
+                }
+                Arc::new(items)
+            }).map_err(|error| Error::new(format!("{:?}", error)))),
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
     }

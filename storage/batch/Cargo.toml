@@ -13,6 +13,3 @@ ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-storage-dummy = { path = "../dummy", version = "0.2.0-alpha" }
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 log = "0.4"
-
-[dev-dependencies]
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }

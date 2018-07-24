@@ -74,25 +74,25 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
         let client = self.client.clone();
         let table_name = self.table_name.clone();
-        Box::new(
-            self.spawn_fn(move || {
-                client.get_item(&rusoto_dynamodb::GetItemInput {
-                    key: {
-                        let mut hm = HashMap::with_capacity(1);
-                        hm.insert(
-                            ATTRIBUTE_ES_KEY.to_string(),
-                            rusoto_dynamodb::AttributeValue {
-                                b: Some(key.to_vec()),
-                                ..Default::default()
-                            },
-                        );
-                        hm
-                    },
-                    projection_expression: Some(ATTRIBUTE_ES_VALUE.to_string()),
-                    table_name,
-                    ..Default::default()
-                })
-            }).then(move |result| match result {
+        Box::new(self.spawn_fn(move || {
+            client.get_item(&rusoto_dynamodb::GetItemInput {
+                key: {
+                    let mut hm = HashMap::with_capacity(1);
+                    hm.insert(
+                        ATTRIBUTE_ES_KEY.to_string(),
+                        rusoto_dynamodb::AttributeValue {
+                            b: Some(key.to_vec()),
+                            ..Default::default()
+                        },
+                    );
+                    hm
+                },
+                projection_expression: Some(ATTRIBUTE_ES_VALUE.to_string()),
+                table_name,
+                ..Default::default()
+            })
+        }).then(move |result| {
+            match result {
                 Ok(output) => Ok(output
                     .item
                     .ok_or_else(move || {
@@ -103,47 +103,45 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
                     .b
                     .expect("DynamoDbBackend: get_item es_value must be bytes")),
                 Err(e) => Err(e.into()),
-            }),
-        )
+            }
+        }))
     }
 
     fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
         let key = ekiden_storage_base::hash_storage_key(&value);
         let client = self.client.clone();
         let table_name = self.table_name.clone();
-        Box::new(
-            self.spawn_fn(move || {
-                client.put_item(&rusoto_dynamodb::PutItemInput {
-                    item: {
-                        let mut item = HashMap::with_capacity(2);
-                        item.insert(
-                            ATTRIBUTE_ES_KEY.to_string(),
-                            rusoto_dynamodb::AttributeValue {
-                                b: Some(key.to_vec()),
-                                ..Default::default()
-                            },
-                        );
-                        item.insert(
-                            ATTRIBUTE_ES_VALUE.to_string(),
-                            rusoto_dynamodb::AttributeValue {
-                                b: Some(value),
-                                ..Default::default()
-                            },
-                        );
-                        // This is intended to store items permanently. But we might want to
-                        // record the creation and expiry history too. We might also want to
-                        // simulate expiraiton on `get`, if the storage backend interface
-                        // recommends it.
-                        item
-                    },
-                    table_name,
-                    ..Default::default()
-                })
-            }).then(|result| match result {
-                Ok(_output) => Ok(()),
-                Err(e) => Err(e.into()),
-            }),
-        )
+        Box::new(self.spawn_fn(move || {
+            client.put_item(&rusoto_dynamodb::PutItemInput {
+                item: {
+                    let mut item = HashMap::with_capacity(2);
+                    item.insert(
+                        ATTRIBUTE_ES_KEY.to_string(),
+                        rusoto_dynamodb::AttributeValue {
+                            b: Some(key.to_vec()),
+                            ..Default::default()
+                        },
+                    );
+                    item.insert(
+                        ATTRIBUTE_ES_VALUE.to_string(),
+                        rusoto_dynamodb::AttributeValue {
+                            b: Some(value),
+                            ..Default::default()
+                        },
+                    );
+                    // This is intended to store items permanently. But we might want to
+                    // record the creation and expiry history too. We might also want to
+                    // simulate expiraiton on `get`, if the storage backend interface
+                    // recommends it.
+                    item
+                },
+                table_name,
+                ..Default::default()
+            })
+        }).then(|result| match result {
+            Ok(_output) => Ok(()),
+            Err(e) => Err(e.into()),
+        }))
     }
 
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
@@ -156,8 +154,7 @@ fn di_factory(
 ) -> ekiden_di::error::Result<Box<std::any::Any>> {
     let args = container.get_arguments().unwrap();
     let region = value_t_or_exit!(args, "storage-dynamodb-region", rusoto_core::region::Region);
-    let table_name = args
-        .value_of("storage-dynamodb-table-name")
+    let table_name = args.value_of("storage-dynamodb-table-name")
         .unwrap()
         .to_string();
     let (init_tx, init_rx) = futures::sync::oneshot::channel();

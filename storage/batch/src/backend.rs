@@ -201,7 +201,7 @@ mod test {
         batch.commit().wait().unwrap();
         assert_eq!(committed.get(key).wait(), Ok(b"value".to_vec()));
         // Get the active key list.
-        let list = batch.get_key_list();
+        let list = batch.get_keys().wait().unwrap();
         println!("Active key list is {:?}", list);
 
         // Insert directly to committed and expect the backend to find it.
