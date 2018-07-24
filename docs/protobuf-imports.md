@@ -6,23 +6,23 @@ doesn't work simply by adding the `import` directive to the `.proto` file
 like this:
 
 ```protobuf
-import "consensus/api/src/consensus.proto";
+import "roothash/api/src/roothash.proto";
 ```
 
-then using the imported messages as, for example, `consensus.Commitment`, etc.
+then using the imported messages as, for example, `roothash.Commitment`, etc.
 
 You may get a similar error message to this one:
 
-    error[E0433]: failed to resolve. Could not find `consensus` in `super`
+    error[E0433]: failed to resolve. Could not find `roothash` in `super`
        --> compute/api/src/generated/computation_group.rs:367:53
         |
-    367 |     pub commit: ::protobuf::SingularPtrField<super::consensus::Commitment>,
-        |                                                     ^^^^^^^^^ Could not find `consensus` in `super`
+    367 |     pub commit: ::protobuf::SingularPtrField<super::roothash::Commitment>,
+        |                                                     ^^^^^^^^^ Could not find `roothash` in `super`
 
 For this to work, you need to add a few additional things.
 
 In the following examples, we will walk through everything that's needed to
-be able to import messages from the `consensus` API into the `compute` API.
+be able to import messages from the `roothash` API into the `compute` API.
 
 
 First, you need to add a dependency for the API you're trying to import into
@@ -39,7 +39,7 @@ index 4937cf6..8efd2a6 100644
 
  [dependencies]
  ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
-+ekiden-consensus-api = { path = "../../consensus/api", version = "0.2.0-alpha" }
++ekiden-roothash-api = { path = "../../roothash/api", version = "0.2.0-alpha" }
  protobuf = "~2.0"
  grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
  futures = "0.1"
@@ -58,12 +58,12 @@ This is as simple as adding an `extern crate` declaration and using it:
  extern crate protobuf;
 
  extern crate ekiden_common_api;
-+extern crate ekiden_consensus_api;
++extern crate ekiden_roothash_api;
 
  mod generated;
 
  use ekiden_common_api as common;
-+use ekiden_consensus_api as consensus;
++use ekiden_roothash_api as roothash;
 
  pub use generated::computation_group::*;
  pub use generated::computation_group_grpc::*;
@@ -89,7 +89,7 @@ index db26226..0e39719 100644
      ekiden_tools::generate_mod_with_imports(
          "src/generated",
 -        &["common"],
-+        &["common", "consensus"],
++        &["common", "roothash"],
          &[
              "computation_group",
              "computation_group_grpc",

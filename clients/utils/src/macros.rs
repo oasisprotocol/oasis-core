@@ -2,6 +2,7 @@
 pub use log::LevelFilter;
 pub use pretty_env_logger::formatted_builder;
 
+pub use ekiden_core::bytes::B256;
 pub use ekiden_core::enclave::quote::MrEnclave;
 pub use ekiden_instrumentation::set_boxed_metric_collector;
 pub use ekiden_instrumentation::MetricCollector;
@@ -52,14 +53,13 @@ macro_rules! default_app {
 
 #[macro_export]
 macro_rules! contract_client {
-    ($signer:ident, $contract:ident, $args:ident, $container:ident) => {{
+    ($contract:ident, $args:ident, $container:ident) => {{
         use $crate::macros::*;
 
-        // Initialize metric collector.
-        let metrics = $container
-            .inject_owned::<$crate::macros::MetricCollector>()
-            .expect("failed to inject MetricCollector");
-        $crate::macros::set_boxed_metric_collector(metrics).unwrap();
+        // Initialize metric collector (if not already initialized).
+        if let Ok(metrics) = $container.inject_owned::<$crate::macros::MetricCollector>() {
+            $crate::macros::set_boxed_metric_collector(metrics).unwrap();
+        }
 
         // Determine contract identifier.
         let contract_id = if $args.is_present("test-contract-id") {
@@ -82,12 +82,11 @@ macro_rules! contract_client {
             $container.inject().unwrap(),
             $container.inject().unwrap(),
             $container.inject().unwrap(),
-            $signer,
             $container.inject().unwrap(),
             $container.inject().unwrap(),
         )
     }};
-    ($signer:ident, $contract:ident) => {{
+    ($contract:ident) => {{
         let known_components = $crate::components::create_known_components();
         let args = default_app!()
             .args(&known_components.get_arguments())
@@ -98,7 +97,7 @@ macro_rules! contract_client {
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
 
-        contract_client!($signer, $contract, args, container)
+        contract_client!($contract, args, container)
     }};
 }
 
@@ -133,14 +132,28 @@ macro_rules! benchmark_app {
                         .takes_value(true)
                         .default_value("text"),
                 )
+                .arg(
+                    Arg::with_name("output-title-prefix")
+                        .long("output-title-prefix")
+                        .help("Output title prefix")
+                        .takes_value(true)
+                        .default_value(""),
+                )
                 .args(&known_components.get_arguments())
                 .get_matches(),
         );
 
         // Initialize component container.
-        let container = known_components
+        let mut container = known_components
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
+
+        // Initialize metric collector.
+        let metrics = container
+            .inject_owned::<$crate::macros::MetricCollector>()
+            .expect("failed to inject MetricCollector");
+        $crate::macros::set_boxed_metric_collector(metrics).unwrap();
+
         let container = Arc::new(Mutex::new(container));
 
         (args, container)
@@ -150,17 +163,23 @@ macro_rules! benchmark_app {
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_client {
-    ($app:ident, $signer:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+    ($app:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
         use $crate::benchmark::OutputFormat;
 
         let (args, container) = ($app.0.clone(), $app.1.clone());
-        let signer = $signer.clone();
 
         let output_format = match args.value_of("output-format").unwrap() {
             "text" => OutputFormat::Text,
             "json" => OutputFormat::Json,
             _ => unreachable!(),
         };
+
+        let title = if let Some(title_prefix) = args.value_of("output-title-prefix") {
+            format!("{} - {}", title_prefix, stringify!($scenario))
+        } else {
+            format!("{}", stringify!($scenario))
+        };
+
         let benchmark = $crate::benchmark::Benchmark::new(
             value_t!(args, "benchmark-runs", usize).unwrap_or_else(|e| e.exit()),
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
@@ -168,9 +187,8 @@ macro_rules! benchmark_client {
                 let args = args.clone();
                 let shared_container = container.clone();
                 let mut container = shared_container.lock().unwrap();
-                let signer = signer.clone();
 
-                contract_client!(signer, $contract, args, container)
+                contract_client!($contract, args, container)
             },
         );
 
@@ -180,16 +198,17 @@ macro_rules! benchmark_client {
             $finalize,
             output_format == OutputFormat::Text,
         );
-        results.show(stringify!($scenario), output_format);
+
+        results.show(&title, output_format);
     }};
 }
 
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_multiple {
-    ($app:ident, $signer:ident, $contract:ident, [$($scenario:expr),*]) => {
+    ($app:ident, $contract:ident, [$($scenario:expr),*]) => {
         $(
-            benchmark_client!($app, $signer, $contract, None, $scenario, None);
+            benchmark_client!($app, $contract, None, $scenario, None);
         )*
     }
 }

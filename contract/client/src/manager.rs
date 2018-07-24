@@ -11,11 +11,10 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
-use ekiden_common::signature::Signer;
-use ekiden_consensus_base::backend::ConsensusBackend;
+use ekiden_compute_api;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
-use ekiden_rpc_client::backend::Web3RpcClientBackend;
+use ekiden_roothash_base::backend::RootHashBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 
@@ -26,14 +25,12 @@ struct Leader {
     /// Node descriptor.
     node: Node,
     /// Contract client.
-    client: ContractClient<Web3RpcClientBackend>,
+    client: ContractClient,
 }
 
 struct Inner {
     /// Contract identifier.
     contract_id: B256,
-    /// Enclave identifier.
-    mr_enclave: MrEnclave,
     /// Optional call timeout.
     timeout: Option<Duration>,
     /// Scheduler.
@@ -42,8 +39,6 @@ struct Inner {
     entity_registry: Arc<EntityRegistryBackend>,
     /// Environment.
     environment: Arc<Environment>,
-    /// Signer.
-    signer: Arc<Signer>,
     /// Shared service for waiting for contract calls.
     call_wait_manager: Arc<super::callwait::Manager>,
     /// Current computation group leader.
@@ -64,19 +59,18 @@ pub struct ContractClientManager {
 impl ContractClientManager {
     pub fn new(
         contract_id: B256,
-        mr_enclave: MrEnclave,
+        _mr_enclave: MrEnclave,
         timeout: Option<Duration>,
         environment: Arc<Environment>,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
-        signer: Arc<Signer>,
-        consensus: Arc<ConsensusBackend>,
+        roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let call_wait_manager = Arc::new(super::callwait::Manager::new(
             environment.clone(),
             contract_id,
-            consensus,
+            roothash,
             storage,
         ));
         let (leader_notify, future_leader) = oneshot::channel();
@@ -84,12 +78,10 @@ impl ContractClientManager {
         let manager = Self {
             inner: Arc::new(Inner {
                 contract_id,
-                mr_enclave,
                 timeout,
                 environment,
                 scheduler,
                 entity_registry,
-                signer,
                 call_wait_manager,
                 leader: RwLock::new(None),
                 future_leader: future_leader.shared(),
@@ -151,19 +143,13 @@ impl ContractClientManager {
                             .get_node(new_leader)
                             .and_then(move |node| {
                                 // Create new client to the leader node.
-                                let address = node.addresses[0];
-                                let backend = Web3RpcClientBackend::new(
-                                    inner.environment.grpc(),
-                                    inner.timeout,
-                                    &format!("{}", address.ip()),
-                                    address.port(),
-                                    node.certificate.clone(),
-                                )?;
+                                let rpc = ekiden_compute_api::ContractClient::new(
+                                    node.connect_without_identity(inner.environment.clone()),
+                                );
                                 let client = ContractClient::new(
-                                    Arc::new(backend),
-                                    inner.mr_enclave,
-                                    inner.signer.clone(),
+                                    rpc,
                                     inner.call_wait_manager.clone(),
+                                    inner.timeout.clone(),
                                 );
 
                                 // Change the leader.

@@ -1,4 +1,5 @@
 // This is re-exported here only so it can be used in macros under a common name.
+pub use ekiden_common::futures::prelude::*;
 pub use ekiden_enclave_common::quote;
 
 /// Create an RPC client for a given API.
@@ -29,6 +30,7 @@ macro_rules! create_client_rpc {
         }
 
         $(
+            $(#[$($attribute:tt)*])*
             rpc $method_name: ident ( $request_type: ty ) -> $response_type: ty ;
         )*
     ) => {
@@ -37,6 +39,7 @@ macro_rules! create_client_rpc {
 
             use $crate::*;
             use $crate::backend::RpcClientBackend;
+            use $crate::macros::*;
 
             pub use $api_module::*;
 
@@ -47,14 +50,24 @@ macro_rules! create_client_rpc {
             #[allow(dead_code)]
             impl<Backend: RpcClientBackend + 'static> Client<Backend> {
                 /// Create new client instance.
-                pub fn new(backend: Arc<Backend>,
-                           mr_enclave: $crate::macros::quote::MrEnclave) -> Self {
-
-                    Client {
+                ///
+                /// If you set `client_authentication` to `None` the default value from the API
+                /// definition will be used. Otherwise this option can be used to override whether
+                /// client authentication is enabled.
+                pub fn new(
+                    backend: Arc<Backend>,
+                    mr_enclave: $crate::macros::quote::MrEnclave,
+                    client_authentication: Option<bool>
+                ) -> Self {
+                    Self {
                         client: RpcClient::new(
                             backend,
                             mr_enclave,
-                            $client_attestation_required,
+                            if let Some(client_authentication) = client_authentication {
+                                client_authentication
+                            } else {
+                                $client_attestation_required
+                            },
                         ),
                     }
                 }
@@ -63,7 +76,7 @@ macro_rules! create_client_rpc {
                 ///
                 /// If this method is not called, secure channel is automatically initialized
                 /// when making the first request.
-                pub fn init_secure_channel(&self) -> ClientFuture<()> {
+                pub fn init_secure_channel(&self) -> BoxFuture<()> {
                     self.client.init_secure_channel()
                 }
 
@@ -71,7 +84,7 @@ macro_rules! create_client_rpc {
                 ///
                 /// If this method is not called, secure channel is automatically closed in
                 /// a blocking fashion when the client is dropped.
-                pub fn close_secure_channel(&self) -> ClientFuture<()> {
+                pub fn close_secure_channel(&self) -> BoxFuture<()> {
                     self.client.close_secure_channel()
                 }
 
@@ -80,7 +93,7 @@ macro_rules! create_client_rpc {
                     pub fn $method_name(
                         &self,
                         request: $request_type
-                    ) -> ClientFuture<$response_type> {
+                    ) -> BoxFuture<$response_type> {
                         self.client.call(stringify!($method_name), request)
                     }
                 )*

@@ -50,7 +50,7 @@ fn main() {
     ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(&mut known_components);
     ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
-    ekiden_ethereum::identity::EthereumEntityIdentity::register(&mut known_components);
+    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
     ekiden_ethereum::EthereumMockTime::register(&mut known_components);
 
     let matches = App::new("Ekiden Mock Epoch Contract Controller")

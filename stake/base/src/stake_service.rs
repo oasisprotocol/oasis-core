@@ -5,9 +5,6 @@ use grpcio::{RpcContext, RpcStatus, UnarySink};
 
 use super::stake_backend::AmountType;
 use super::stake_backend::ErrorCodes;
-use super::stake_backend::EscrowAccountIdType;
-use super::stake_backend::EscrowAccountIterator;
-use super::stake_backend::EscrowAccountStatus;
 use super::stake_backend::StakeEscrowBackend;
 use super::stake_backend::StakeStatus;
 use ekiden_common::bytes::B256;
@@ -39,6 +36,72 @@ impl<T> api::Stake for StakeEscrowService<T>
 where
     T: StakeEscrowBackend,
 {
+    fn link_to_dispute_resolution(
+        &self,
+        ctx: RpcContext,
+        req: api::LinkToDisputeResolutionRequest,
+        sink: UnarySink<api::LinkToDisputeResolutionResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let address = match B256::try_from(req.get_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoAddress.to_string())),
+                Ok(t) => t,
+            };
+            Ok(self.inner.link_to_dispute_resolution(address))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::LinkToDisputeResolutionResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn link_to_entity_registry(
+        &self,
+        ctx: RpcContext,
+        req: api::LinkToEntityRegistryRequest,
+        sink: UnarySink<api::LinkToEntityRegistryResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<bool>, Error> {
+            let address = match B256::try_from(req.get_address()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoAddress.to_string())),
+                Ok(t) => t,
+            };
+            Ok(self.inner.link_to_entity_registry(address))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(b) => {
+                    let mut r = api::LinkToEntityRegistryResponse::new();
+                    r.set_success(b);
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
     fn get_name(
         &self,
         ctx: RpcContext,
@@ -474,186 +537,133 @@ where
         }).map_err(|_e| ()));
     }
 
-    fn allocate_escrow(
+    fn add_escrow(
         &self,
         ctx: RpcContext,
-        req: api::AllocateEscrowRequest,
-        sink: UnarySink<api::AllocateEscrowResponse>,
-    ) {
-        let f = move || -> Result<BoxFuture<EscrowAccountIdType>, Error> {
-            let s = match B256::try_from(req.get_msg_sender()) {
-                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
-                Ok(s) => s,
-            };
-            let t = match B256::try_from(req.get_target()) {
-                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoTarget.to_string())),
-                Ok(t) => t,
-            };
-            let a = AmountType::from_little_endian(req.get_escrow_amount());
-            let aux = match B256::try_from(req.get_aux()) {
-                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoAux.to_string())),
-                Ok(aux) => aux,
-            };
-            Ok(self.inner.allocate_escrow(s, t, a, aux))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok(id) => {
-                    let mut r = api::AllocateEscrowResponse::new();
-                    r.set_escrow_id(id.to_vec());
-                    Ok(r)
-                }
-                Err(e) => Err(e),
-            }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
-    }
-
-    fn list_active_escrows_iterator(
-        &self,
-        ctx: RpcContext,
-        req: api::ListActiveEscrowsIteratorRequest,
-        sink: UnarySink<api::ListActiveEscrowsIteratorResponse>,
-    ) {
-        let f = move || -> Result<BoxFuture<EscrowAccountIterator>, Error> {
-            match B256::try_from(req.get_owner()) {
-                Err(_e) => Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
-                Ok(s) => Ok(self.inner.list_active_escrows_iterator(s)),
-            }
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok(it) => {
-                    let mut r = api::ListActiveEscrowsIteratorResponse::new();
-                    r.set_has_next(it.has_next);
-                    // it.owner == req.get_owner()
-                    r.set_state(it.state.to_vec());
-                    Ok(r)
-                }
-                Err(e) => Err(e),
-            }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
-    }
-
-    fn list_active_escrows_get(
-        &self,
-        ctx: RpcContext,
-        req: api::ListActiveEscrowsGetRequest,
-        sink: UnarySink<api::ListActiveEscrowsGetResponse>,
-    ) {
-        let f =
-            move || -> Result<BoxFuture<(EscrowAccountStatus, EscrowAccountIterator)>, Error> {
-                let owner = match B256::try_from(req.get_owner()) {
-                    Err(_e) => return Err(Error::new(ErrorCodes::BadProtoOwner.to_string())),
-                    Ok(s) => s,
-                };
-                let state = match B256::try_from(req.get_state()) {
-                    Err(_e) => return Err(Error::new(ErrorCodes::BadProtoState.to_string())),
-                    Ok(s) => s,
-                };
-                let it = EscrowAccountIterator::new(true, owner, state);
-                Ok(self.inner.list_active_escrows_get(it))
-            };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok((status, new_it)) => {
-                    let mut r = api::ListActiveEscrowsGetResponse::new();
-                    r.set_escrow_id(status.id.to_vec());
-                    r.set_target(status.target.to_vec());
-                    r.set_amount(status.amount.to_vec());
-                    r.set_aux(status.aux.to_vec());
-                    r.set_has_next(new_it.has_next);
-                    // new_it.owner == it.owner
-                    r.set_state(new_it.state.to_vec());
-                    Ok(r)
-                }
-                Err(e) => Err(e),
-            }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
-    }
-
-    fn fetch_escrow_by_id(
-        &self,
-        ctx: RpcContext,
-        req: api::FetchEscrowByIdRequest,
-        sink: UnarySink<api::FetchEscrowByIdResponse>,
-    ) {
-        let f = move || -> Result<BoxFuture<EscrowAccountStatus>, Error> {
-            let id = match EscrowAccountIdType::from_slice(req.get_escrow_id()) {
-                Err(e) => return Err(e),
-                Ok(i) => i,
-            };
-            Ok(self.inner.fetch_escrow_by_id(id))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
-                Ok(escrow) => {
-                    let mut r = api::FetchEscrowByIdResponse::new();
-                    r.set_escrow_id(escrow.id.to_vec());
-                    r.set_target(escrow.target.to_vec());
-                    r.set_amount(escrow.amount.to_vec());
-                    r.set_aux(escrow.aux.to_vec());
-                    Ok(r)
-                }
-                Err(e) => Err(e),
-            }),
-            Err(e) => {
-                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
-                return;
-            }
-        };
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(e) => invalid!(sink, Internal, e),
-        }).map_err(|_e| ()));
-    }
-
-    fn take_and_release_escrow(
-        &self,
-        ctx: RpcContext,
-        req: api::TakeAndReleaseEscrowRequest,
-        sink: UnarySink<api::TakeAndReleaseEscrowResponse>,
+        req: api::AddEscrowRequest,
+        sink: UnarySink<api::AddEscrowResponse>,
     ) {
         let f = move || -> Result<BoxFuture<AmountType>, Error> {
             let s = match B256::try_from(req.get_msg_sender()) {
                 Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
                 Ok(s) => s,
             };
-            let i = match EscrowAccountIdType::from_slice(req.get_escrow_id()) {
+            let a = AmountType::from_little_endian(req.get_escrow_amount());
+            Ok(self.inner.add_escrow(s, a))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(tesf) => {
+                    let mut r = api::AddEscrowResponse::new();
+                    r.set_total_escrow_so_far(tesf.to_vec());
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn fetch_escrow_amount(
+        &self,
+        ctx: RpcContext,
+        req: api::FetchEscrowAmountRequest,
+        sink: UnarySink<api::FetchEscrowAmountResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
+            let owner = match B256::try_from(req.get_owner()) {
                 Err(e) => return Err(e),
-                Ok(i) => i,
+                Ok(o) => o,
+            };
+            Ok(self.inner.fetch_escrow_amount(owner))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(escrow_amount) => {
+                    let mut r = api::FetchEscrowAmountResponse::new();
+                    r.set_amount(escrow_amount.to_vec());
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn take_escrow(
+        &self,
+        ctx: RpcContext,
+        req: api::TakeEscrowRequest,
+        sink: UnarySink<api::TakeEscrowResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
+            let s = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let owner = match B256::try_from(req.get_owner()) {
+                Err(e) => return Err(e),
+                Ok(o) => o,
             };
             let a = AmountType::from_little_endian(req.get_amount_requested());
-            Ok(self.inner.take_and_release_escrow(s, i, a))
+            Ok(self.inner.take_escrow(s, owner, a))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
                 Ok(amount_taken) => {
-                    let mut r = api::TakeAndReleaseEscrowResponse::new();
+                    let mut r = api::TakeEscrowResponse::new();
                     r.set_amount_taken(amount_taken.to_vec());
+                    Ok(r)
+                }
+                Err(e) => Err(e),
+            }),
+            Err(e) => {
+                ctx.spawn(invalid!(sink, InvalidArgument, e).map_err(|_e| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(e) => invalid!(sink, Internal, e),
+        }).map_err(|_e| ()));
+    }
+
+    fn release_escrow(
+        &self,
+        ctx: RpcContext,
+        req: api::ReleaseEscrowRequest,
+        sink: UnarySink<api::ReleaseEscrowResponse>,
+    ) {
+        let f = move || -> Result<BoxFuture<AmountType>, Error> {
+            let s = match B256::try_from(req.get_msg_sender()) {
+                Err(_e) => return Err(Error::new(ErrorCodes::BadProtoSender.to_string())),
+                Ok(s) => s,
+            };
+            let owner = match B256::try_from(req.get_owner()) {
+                Err(e) => return Err(e),
+                Ok(o) => o,
+            };
+            Ok(self.inner.release_escrow(s, owner))
+        };
+        let f = match f() {
+            Ok(f) => f.then(|res| match res {
+                Ok(amount_returned) => {
+                    let mut r = api::ReleaseEscrowResponse::new();
+                    r.set_amount_returned(amount_returned.to_vec());
                     Ok(r)
                 }
                 Err(e) => Err(e),

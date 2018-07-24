@@ -5,7 +5,6 @@ extern crate ekiden_stake_dummy;
 #[macro_use]
 extern crate log;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use ekiden_common::bytes::B256;
@@ -84,7 +83,6 @@ fn test_dummy_stake_backend() {
     let decimals = backend.get_decimals().wait().unwrap();
     assert_eq!(decimals, expected_decimals);
 
-    // backend.deposit_stake(alice, AmountType::from(100)).wait().unwrap();
     backend
         .transfer(oasis, alice, AmountType::from(100))
         .wait()
@@ -95,62 +93,8 @@ fn test_dummy_stake_backend() {
     assert_eq!(stake_status.escrowed, AmountType::from(0));
 
     let bob = id_generator.gen_id();
-    let bob_aux = id_generator.gen_id();
-
-    let bob_escrow_id = backend
-        .allocate_escrow(alice, bob, AmountType::from(9), bob_aux)
-        .wait()
-        .unwrap();
-
-    debug!("got escrow id {} for bob", bob_escrow_id);
-
-    let stake_status = get_and_show_stake(&backend, alice, "Alice");
-    assert_eq!(stake_status.total_stake, AmountType::from(100));
-    assert_eq!(stake_status.escrowed, AmountType::from(9));
-
     let carol = id_generator.gen_id();
-    let carol_aux = id_generator.gen_id();
-    let carol_escrow_id = backend
-        .allocate_escrow(alice, carol, AmountType::from(13), carol_aux)
-        .wait()
-        .unwrap();
 
-    debug!("got escrow id {} for carol", carol_escrow_id);
-
-    let mut expected = HashSet::new();
-    expected.insert((bob_escrow_id, bob, AmountType::from(9), bob_aux));
-    expected.insert((carol_escrow_id, carol, AmountType::from(13), carol_aux));
-    for entry in &expected {
-        debug!(
-            "expected: ({}, {}, {}, {})",
-            entry.0, entry.1, entry.2, entry.3
-        );
-    }
-
-    let mut iter = backend.list_active_escrows_iterator(alice).wait().unwrap();
-    let mut actual = HashSet::new();
-    while iter.has_next {
-        let (eas, iter_tmp) = backend.list_active_escrows_get(iter).wait().unwrap();
-        // https://github.com/rust-lang/rfcs/issues/372 For now,
-        // destructuring assignments has to be a let, so iter_tmp is
-        // needed.
-        actual.insert((eas.id, eas.target, eas.amount, eas.aux));
-        iter = iter_tmp;
-    }
-
-    let d: HashSet<_> = expected.symmetric_difference(&actual).collect();
-    for entry in &d {
-        debug!("sd: ({}, {}, {}, {})", entry.0, entry.1, entry.2, entry.3);
-    }
-    assert!(d.is_empty());
-
-    // Should we now check that ved is actually sorted?  This is only
-    // a part of the interface to minimize information leak, so maybe
-    // later: we should make the EscrowAccount type public for
-    // testing, convert the ved via a map to that, ....
-
-    // let withdrawn_amount = backend.withdraw_stake(alice, AmountType::from(10)).wait().unwrap();
-    // assert_eq!(withdrawn_amount, AmountType::from(10));
     assert!(
         backend
             .transfer(alice, oasis, AmountType::from(10))
@@ -160,76 +104,14 @@ fn test_dummy_stake_backend() {
 
     let stake_status = backend.get_stake_status(alice).wait().unwrap();
     assert_eq!(stake_status.total_stake, AmountType::from(100 - 10));
-    assert_eq!(stake_status.escrowed, AmountType::from(9 + 13));
+    assert_eq!(stake_status.escrowed, AmountType::from(0));
 
-    let eas = backend.fetch_escrow_by_id(bob_escrow_id).wait().unwrap();
-    assert_eq!(eas.id, bob_escrow_id);
-    assert_eq!(eas.target, bob);
-    assert_eq!(eas.amount, AmountType::from(9));
-
-    debug!("taking 10 -- too much, should fail");
-    match backend
-        .take_and_release_escrow(bob, bob_escrow_id, AmountType::from(10))
-        .wait()
-    {
-        Err(e) => {
-            debug!("Got error {}", e.message);
-            assert_eq!(
-                e.message,
-                ErrorCodes::RequestExceedsEscrowedFunds.to_string()
-            );
-        }
-        Ok(v) => {
-            error!(
-                "Got amount {} when take request should have failed (RequestExceedsEscrowedFunds)",
-                v
-            );
-            assert!(false);
-        }
-    }
-
-    debug!("carol attempts to take 4");
-    match backend
-        .take_and_release_escrow(carol, bob_escrow_id, AmountType::from(4))
-        .wait()
-    {
-        Err(e) => {
-            debug!("Got error {}", e.message);
-            assert_eq!(e.message, ErrorCodes::CallerNotEscrowTarget.to_string());
-        }
-        Ok(amount) => {
-            error!("Got {} instead of failing when Carol attempting to take too much (CallerNotEscrowTarget)", amount);
-            assert!(false);
-        }
-    };
-
-    debug!("bob taking 5");
-    assert_eq!(
+    assert!(
         backend
-            .take_and_release_escrow(bob, bob_escrow_id, AmountType::from(5))
+            .transfer(alice, bob, AmountType::from(5))
             .wait()
-            .unwrap(),
-        AmountType::from(5)
+            .unwrap()
     );
-
-    debug!("escrow id should be invalid");
-    match backend.fetch_escrow_by_id(bob_escrow_id).wait() {
-        Err(e) => {
-            debug!("Got error {}", e.message);
-            assert_eq!(e.message, ErrorCodes::NoEscrowAccount.to_string());
-        }
-        Ok(eas) => {
-            error!(
-                "Found escrow account {} when request should have failed, target {}, amount {} (NoEscrowAccount)",
-                eas.id, eas.target, eas.amount
-            );
-            assert!(false);
-        }
-    }
-
-    let stake_status = backend.get_stake_status(alice).wait().unwrap();
-    assert_eq!(stake_status.total_stake, AmountType::from(100 - 10 - 5));
-    assert_eq!(stake_status.escrowed, AmountType::from(13));
 
     debug!("bob's account should have been credited");
     let ss = get_and_show_stake(&backend, bob, "Bob");
@@ -280,7 +162,7 @@ fn test_dummy_stake_backend() {
 
     debug!("transfer from alice to bob -- should be insufficient");
     match backend
-        .transfer(alice, bob, AmountType::from(100 - 10 - 5 - 13 + 1))
+        .transfer(alice, bob, AmountType::from(100 - 10 - 5 + 1))
         .wait()
     {
         Err(e) => {
@@ -302,7 +184,7 @@ fn test_dummy_stake_backend() {
     // verify amounts
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13));
+    assert_eq!(ss.escrowed, AmountType::from(0));
 
     let ss = get_and_show_stake(&backend, dexter, "Dexter");
     assert_eq!(ss.total_stake, AmountType::from(17));
@@ -338,65 +220,9 @@ fn test_dummy_stake_backend() {
     assert_eq!(ss.total_stake, AmountType::from(17));
     assert_eq!(ss.escrowed, AmountType::from(0));
 
-    // ----------------------------------------------------
-    // Self escrow & release
-    // ----------------------------------------------------
-    debug!("create escrow from alice to alice");
-    let self_19_aux = id_generator.gen_id();
-    let self_escrow_id = backend
-        .allocate_escrow(alice, alice, AmountType::from(19), self_19_aux)
-        .wait()
-        .unwrap();
     let ss = get_and_show_stake(&backend, alice, "Alice");
     assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13 + 19));
-
-    debug!("taking some from self-escrow");
-    backend
-        .take_and_release_escrow(alice, self_escrow_id, AmountType::from(11))
-        .wait()
-        .unwrap();
-    let ss = get_and_show_stake(&backend, alice, "Alice");
-    assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13));
-    // ----------------------------------------------------
-    debug!("create escrow from alice to alice");
-    let self_23_aux = id_generator.gen_id();
-    let self_escrow_id = backend
-        .allocate_escrow(alice, alice, AmountType::from(23), self_23_aux)
-        .wait()
-        .unwrap();
-    let ss = get_and_show_stake(&backend, alice, "Alice");
-    assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13 + 23));
-
-    debug!("taking all from self-escrow");
-    backend
-        .take_and_release_escrow(alice, self_escrow_id, AmountType::from(23))
-        .wait()
-        .unwrap();
-    let ss = get_and_show_stake(&backend, alice, "Alice");
-    assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13));
-    // ----------------------------------------------------
-    debug!("create escrow from alice to alice");
-    let self_29_aux = id_generator.gen_id();
-    let self_escrow_id = backend
-        .allocate_escrow(alice, alice, AmountType::from(29), self_29_aux)
-        .wait()
-        .unwrap();
-    let ss = get_and_show_stake(&backend, alice, "Alice");
-    assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13 + 29));
-
-    debug!("taking none from self-escrow");
-    backend
-        .take_and_release_escrow(alice, self_escrow_id, AmountType::from(0))
-        .wait()
-        .unwrap();
-    let ss = get_and_show_stake(&backend, alice, "Alice");
-    assert_eq!(ss.total_stake, AmountType::from(100 - 10 - 5 - 17));
-    assert_eq!(ss.escrowed, AmountType::from(13));
+    assert_eq!(ss.escrowed, AmountType::from(0));
 
     let alice_balance = backend.balance_of(alice).wait().unwrap();
     assert_eq!(alice_balance, ss.total_stake - ss.escrowed);

@@ -1,10 +1,10 @@
 [package]
 name = "ekiden-rpc-client"
 version = "0.2.0-alpha"
-authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden RPC client"
 keywords = ["ekiden"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
@@ -19,9 +19,8 @@ serde_cbor = "0.8.2"
 futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-ekiden-compute-api = { path = "../../compute/api", version = "0.2.0-alpha" }
+ekiden-rpc-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 byteorder = "1.2.1"
 futures = "0.1"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
 rand = "0.4"
-tokio-core = "0.1"

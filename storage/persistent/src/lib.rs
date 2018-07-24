@@ -5,8 +5,8 @@ extern crate ekiden_di;
 extern crate ekiden_epochtime;
 extern crate ekiden_storage_base;
 
+extern crate exonum_rocksdb;
 extern crate serde_cbor;
-extern crate sled;
 
 mod backend;
 

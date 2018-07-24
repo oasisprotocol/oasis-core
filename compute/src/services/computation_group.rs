@@ -10,11 +10,11 @@ use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::x509::get_node_id;
 
-use super::super::consensus::ConsensusFrontend;
+use super::super::roothash::RootHashFrontend;
 
 struct Inner {
-    /// Consensus frontend.
-    consensus_frontend: Arc<ConsensusFrontend>,
+    /// Root hash frontend.
+    roothash_frontend: Arc<RootHashFrontend>,
 }
 
 #[derive(Clone)]
@@ -24,9 +24,9 @@ pub struct ComputationGroupService {
 
 impl ComputationGroupService {
     /// Create new computation group service.
-    pub fn new(consensus_frontend: Arc<ConsensusFrontend>) -> Self {
+    pub fn new(roothash_frontend: Arc<RootHashFrontend>) -> Self {
         ComputationGroupService {
-            inner: Arc::new(Inner { consensus_frontend }),
+            inner: Arc::new(Inner { roothash_frontend }),
         }
     }
 }
@@ -46,7 +46,7 @@ impl ComputationGroup for ComputationGroupService {
             let batch_hash = H256::try_from(request.get_batch_hash())?;
 
             self.inner
-                .consensus_frontend
+                .roothash_frontend
                 .process_remote_batch(node_id, batch_hash)?;
 
             Ok(())

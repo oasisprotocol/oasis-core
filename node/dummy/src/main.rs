@@ -36,7 +36,7 @@ fn main() {
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
     ekiden_beacon_dummy::InsecureDummyRandomBeacon::register(&mut known_components);
     ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
-    ekiden_ethereum::identity::EthereumEntityIdentity::register(&mut known_components);
+    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(&mut known_components);
     ekiden_epochtime::local::MockTimeNotifier::register(&mut known_components);
     ekiden_epochtime::local::MockTimeRpcNotifier::register(&mut known_components);
@@ -56,6 +56,13 @@ fn main() {
                 .takes_value(true)
                 .default_value("42261")
                 .display_order(1),
+        )
+        .arg(
+            Arg::with_name("roothash-storage-path")
+                .long("roothash-storage-path")
+                .short("S")
+                .takes_value(true)
+                .display_order(2),
         )
         .args(&known_components.get_arguments())
         .get_matches();
@@ -94,6 +101,7 @@ fn main() {
     let mut backends = match DummyBackend::new(
         DummyBackendConfiguration {
             port: value_t!(matches, "port", u16).unwrap(),
+            roothash_storage_path: matches.value_of("roothash-storage-path"),
         },
         container,
     ) {

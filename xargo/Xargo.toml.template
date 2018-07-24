@@ -6,6 +6,7 @@ panic_abort = {}
 [dependencies.compiler_builtins]
 features = ["c", "compiler-builtins"]
 git = "https://github.com/rust-lang-nursery/compiler-builtins"
+rev = "86bf357a14cacb4a4169455e729d409b5ecc1da0"
 stage = 1
 
 [dependencies.std]

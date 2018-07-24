@@ -1,10 +1,10 @@
 [package]
 name = "ekiden-untrusted"
 version = "0.2.0-alpha"
-authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden untrusted library"
 keywords = ["ekiden"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.2.0-alpha" }

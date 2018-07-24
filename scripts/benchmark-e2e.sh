@@ -14,11 +14,15 @@ run_dummy_node_storage_dummy() {
 }
 
 run_dummy_node_storage_persistent() {
+    local db_dir="/tmp/ekiden-benchmark-storage-persistent"
+    rm -rf ${db_dir}
+
     ${WORKDIR}/target/release/ekiden-node-dummy \
         --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend persistent \
+        --storage-path ${db_dir} \
         2>${LOGDIR}/dummy.log &
 }
 
@@ -42,7 +46,7 @@ run_compute_node() {
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
-        ${WORKDIR}/target/contract/token.so 2>${LOGDIR}/compute${id}.log &
+        ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
 }
 
 run_compute_node_storage_multilayer_remote() {
@@ -51,10 +55,12 @@ run_compute_node_storage_multilayer_remote() {
     local extra_args=$*
 
     local db_dir=/tmp/ekiden-test-storage-multilayer-sled-$id
+    rm -rf ${db_dir}
+
     # Generate port number.
     let "port=id + 10000"
 
-    ${WORKDIR}/target/debug/ekiden-compute \
+    ${WORKDIR}/target/release/ekiden-compute \
         --no-persist-identity \
         --max-batch-size 20 \
         --max-batch-timeout 100 \
@@ -68,7 +74,7 @@ run_compute_node_storage_multilayer_remote() {
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
-        ${WORKDIR}/target/contract/token.so 2>${LOGDIR}/compute${id}.log &
+        ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
 }
 
 run_benchmark() {
@@ -83,7 +89,7 @@ run_benchmark() {
     fi
 
     # Ensure cleanup on exit.
-    trap 'kill -- -0' EXIT
+    trap "pkill -P $$ || true" EXIT
 
     # Re-create log directory.
     rm -rf ${LOGDIR}
@@ -104,10 +110,11 @@ run_benchmark() {
 
     # Run the client.
     ${WORKDIR}/target/release/${client}-client \
-        --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
+        --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \
         --output-format ${OUTPUT_FORMAT} \
+        --output-title-prefix "${description}" \
         2>${LOGDIR}/client.log &
     client_pid=$!
 
@@ -115,7 +122,9 @@ run_benchmark() {
     wait ${client_pid}
 
     # Cleanup.
-    echo "Cleaning up."
+    if [[ "${OUTPUT_FORMAT}" == "text" ]]; then
+        echo "Cleaning up."
+    fi
     pkill -P $$
     wait || true
 }

@@ -32,5 +32,7 @@ pub mod secure_channel;
 #[macro_use]
 mod macros;
 
+#[cfg(target_env = "sgx")]
 pub mod client;
+#[cfg(target_env = "sgx")]
 mod untrusted;

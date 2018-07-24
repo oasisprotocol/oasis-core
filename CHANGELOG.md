@@ -22,6 +22,13 @@
   `--batch-storage immediate_remote` for original behavior.
 * **BACKWARD INCOMPATIBLE:** Use TLS client authentication for gRPC channels, encode
   node Ed25519 public key in TLS certificates, remove custom signed RPC arguments.
+* **BACKWARD INCOMPATIBLE:** Rename `build-contract` to `build-enclave`.
+* **BACKWARD INCOMPATIBLE:** Rename consensus backend to root hash backend to make it more
+  clear what its role is.
+* **BACKWARD INCOMPATIBLE:** Move local node identity implementations to `ekiden-common`
+  (previously they were part of `ekiden-ethereum`).
+* **BACKWARD INCOMPATIBLE:** Make raw contract calls unsigned as signatures and encryption
+  should be handled by the runtime.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.
@@ -42,6 +49,7 @@
 * Added the multilayer storage backend described in RFC 0004.
 * You can now configure the last resort layer in the multilayer storage backend.
 * Handle stragglers in dummy consensus backend.
+* Change async contract call submission protocol to avoid the use of enclave RPC.
 
 # 0.1.0
 

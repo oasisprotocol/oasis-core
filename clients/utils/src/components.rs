@@ -1,11 +1,11 @@
 //! DI components for use in clients.
-use ekiden_consensus_client;
 use ekiden_core;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_epochtime;
 use ekiden_ethereum;
 use ekiden_instrumentation_prometheus;
 use ekiden_registry_client;
+use ekiden_roothash_client;
 use ekiden_scheduler_client;
 use ekiden_storage_frontend;
 
@@ -18,8 +18,8 @@ pub fn register_components(known_components: &mut KnownComponents) {
     // Beacon.
     ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(known_components);
     // Local identities.
-    ekiden_ethereum::identity::EthereumEntityIdentity::register(known_components);
-    ekiden_ethereum::identity::EthereumNodeIdentity::register(known_components);
+    ekiden_core::identity::LocalEntityIdentity::register(known_components);
+    ekiden_core::identity::LocalNodeIdentity::register(known_components);
     // Ethereum service.
     ekiden_ethereum::web3_di::Web3Factory::register(known_components);
     // Instrumentation.
@@ -29,7 +29,7 @@ pub fn register_components(known_components: &mut KnownComponents) {
     // Entity registry.
     ekiden_registry_client::EntityRegistryClient::register(known_components);
     // Consensus.
-    ekiden_consensus_client::ConsensusClient::register(known_components);
+    ekiden_roothash_client::RootHashClient::register(known_components);
     // Storage.
     ekiden_storage_frontend::StorageClient::register(known_components);
 }

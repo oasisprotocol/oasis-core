@@ -2,22 +2,7 @@
 use ekiden_contract_common::batch::{CallBatch, OutputBatch};
 use ekiden_enclave_trusted::utils::{read_enclave_request, write_enclave_response};
 
-use super::batch::Batcher;
 use super::dispatcher::Dispatcher;
-
-/// Check if the enclave has a batch ready for execution and copy it over.
-#[no_mangle]
-pub extern "C" fn contract_take_batch(
-    call_batch: *mut u8,
-    call_batch_capacity: usize,
-    call_batch_length: *mut usize,
-) {
-    let mut batcher = Batcher::get();
-    let batch = batcher.take();
-
-    // Copy back call batch.
-    write_enclave_response(&batch, call_batch, call_batch_capacity, call_batch_length);
-}
 
 /// Invoke a contract on a batch of calls and return the (encrypted) outputs.
 #[no_mangle]

@@ -91,7 +91,7 @@ impl Into<api::Node> for Node {
 
 #[cfg(not(target_env = "sgx"))]
 impl Node {
-    /// Construct a channel to given compute node.
+    /// Construct a channel to given node.
     pub fn connect(
         &self,
         environment: Arc<Environment>,
@@ -108,6 +108,19 @@ impl Node {
                         identity.get_tls_certificate().get_pem().unwrap(),
                         identity.get_tls_private_key().get_pem().unwrap(),
                     )
+                    .build(),
+            )
+    }
+
+    /// Construct a channel to given node without a client identity.
+    pub fn connect_without_identity(&self, environment: Arc<Environment>) -> grpcio::Channel {
+        grpcio::ChannelBuilder::new(environment.grpc())
+            .override_ssl_target(CERTIFICATE_COMMON_NAME)
+            .secure_connect(
+                // TODO: Configure all addresses instead of just the first one.
+                &format!("{}", self.addresses[0]),
+                grpcio::ChannelCredentialsBuilder::new()
+                    .root_cert(self.certificate.get_pem().unwrap())
                     .build(),
             )
     }

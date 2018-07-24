@@ -1,0 +1,11 @@
+*.swp
+*~
+
+Gopkg.lock
+common/crypto/mrae/gen_vectors/gen_vectors
+ekiden/ekiden
+vendor/
+
+# Ignore output from protoc created via `go generate`.
+grpc/common/common.pb.go
+grpc/dummydebug/dummy_debug.pb.go

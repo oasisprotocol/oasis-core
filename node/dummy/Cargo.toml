@@ -11,9 +11,9 @@ ekiden-beacon-api = { path = "../../beacon/api", version = "0.2.0-alpha" }
 ekiden-beacon-base = { path = "../../beacon/base", version = "0.2.0-alpha" }
 ekiden-beacon-dummy = { path = "../../beacon/dummy", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
-ekiden-consensus-api = { path = "../../consensus/api", version = "0.2.0-alpha" }
-ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha" }
-ekiden-consensus-dummy = { path = "../../consensus/dummy", version = "0.2.0-alpha" }
+ekiden-roothash-api = { path = "../../roothash/api", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
+ekiden-roothash-dummy = { path = "../../roothash/dummy", version = "0.2.0-alpha" }
 ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
@@ -34,7 +34,7 @@ ekiden-storage-persistent = { path = "../../storage/persistent", version = "0.2.
 ekiden-instrumentation = { path = "../../instrumentation", version = "0.2.0-alpha" }
 ekiden-instrumentation-prometheus = { path = "../../instrumentation/prometheus", version = "0.2.0-alpha" }
 clap = "2.29.1"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 log = "0.4"
 pretty_env_logger = "0.2"
 futures-timer = "0.1.1"

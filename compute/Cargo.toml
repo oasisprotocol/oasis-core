@@ -1,10 +1,10 @@
 [package]
 name = "ekiden-compute"
 version = "0.2.0-alpha"
-authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden compute node"
 keywords = ["ekiden"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [features]
@@ -18,11 +18,12 @@ ekiden-epochtime = { path = "../epochtime", version = "0.2.0-alpha" }
 ekiden-instrumentation = { path = "../instrumentation", version = "0.2.0-alpha" }
 ekiden-instrumentation-prometheus = { path = "../instrumentation/prometheus", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
+ekiden-rpc-api = { path = "../rpc/api", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
-ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
-ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
-ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../roothash/base", version = "0.2.0-alpha" }
+ekiden-roothash-client = { path = "../roothash/client", version = "0.2.0-alpha" }
+ekiden-roothash-dummy = { path = "../roothash/dummy", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
@@ -42,7 +43,7 @@ clap = "2.29.1"
 reqwest = "0.8.2"
 base64 = "0.9.0"
 tokio-core = "0.1"
-grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 lru-cache = "0.1.1"
 log = "0.4"
 pretty_env_logger = "0.2"

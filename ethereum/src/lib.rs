@@ -31,7 +31,6 @@ extern crate log;
 mod beacon;
 mod contract_registry;
 mod entity_registry;
-pub mod identity;
 mod mockepoch;
 pub mod signature;
 pub mod stake;

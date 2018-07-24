@@ -43,7 +43,7 @@ run_compute_node() {
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
-        ${WORKDIR}/target/contract/token.so &
+        ${WORKDIR}/target/enclave/token.so &
 }
 
 run_test() {
@@ -71,7 +71,7 @@ run_test() {
     # Run the client. We run the client first so that we test whether it waits for the
     # committee to be elected and connects to the leader.
     ${WORKDIR}/target/debug/${client}-client \
-        --mr-enclave $(cat ${WORKDIR}/target/contract/token.mrenclave) \
+        --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 &
     client_pid=$!
 

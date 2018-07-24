@@ -1,10 +1,10 @@
 defaults: &defaults
   docker:
-    - image: ekiden/testing:0.1.0
+    - image: ekiden/testing:0.2.0
 
 version: 2
 jobs:
-  build:
+  build-rust:
     <<: *defaults
     resource_class: large
     steps:
@@ -14,6 +14,9 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
+      - run:
+          name: Checking if rust code has changed
+          command: ./scripts/ci-changed.sh beacon clients common compute roothash contract contracts core db di enclave epochtime ehtereum instrumentation keys node registry rpc scheduler stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
@@ -51,27 +54,11 @@ jobs:
       # Upload coverage info.
       - run: codecov -s target/cov -Z
 
-      # Cargo benchmarks. We first fetch the latest benchmark results from master and then
-      # compare against them.
-      - run: |
-          set +e
-          set +o pipefail
-          wget -q -O - "https://circleci.com/api/v1.1/project/github/oasislabs/ekiden/latest/artifacts/?branch=master&circle-token=${CIRCLE_TOKEN}" | grep -o 'https://[^"]*' | xargs -P4 -I % wget -q -O /tmp/benchmarks-master.json %?circle-token=${CIRCLE_TOKEN}
-      - run: |
-          ./scripts/benchmark.py \
-              ekiden-rpc-trusted \
-              ekiden-db-trusted \
-              --output /tmp/benchmarks.json \
-              --compare-to /tmp/benchmarks-master.json
-      - store_artifacts:
-          path: /tmp/benchmarks.json
-          destination: benchmarks
-
       # Install ekiden-tools.
       - run: cargo install --force --path tools
       # Build token contract.
       - run:
-          command: cargo ekiden build-contract --output-identity
+          command: cargo ekiden build-enclave --output-identity
           working_directory: contracts/token
       # Run token contract tests.
       - run: cargo test -p token
@@ -82,7 +69,6 @@ jobs:
 
       # Integration tests.
       - run: ./scripts/test-e2e.sh
-      - run: ./scripts/test-e2e-ethereum.sh
 
       # Store built files.
       - persist_to_workspace:
@@ -93,11 +79,73 @@ jobs:
             - target/debug/ekiden-compute
             - target/debug/token-client
             - target/debug/test-long-term-client
-            - target/contract/token.so
-            - target/contract/token.mrenclave
+            - target/enclave/token.so
+            - target/enclave/token.mrenclave
             - ethereum/build/contracts
             - tests
             - scripts
+  build-go:
+    working_directory: /go/src/github.com/oasislabs/ekiden
+    docker:
+      - image: circleci/golang:1.10
+    steps:
+      - checkout
+      - run:
+          name: Checking if go code has changed
+          command: ./scripts/ci-changed.sh go
+      - restore_cache:
+          keys:
+            - go-cache
+      - run: |
+          wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
+          sudo unzip protoc-3.5.1-linux-x86_64.zip -x readme.txt -d /usr && \
+          rm protoc-3.5.1-linux-x86_64.zip && \
+          sudo chmod a+rx /usr/bin/protoc
+      - run: |
+          go get -d github.com/golang/protobuf/protoc-gen-go && \
+          cd $GOPATH/src/github.com/golang/protobuf && \
+          git checkout v1.0.0 && \
+          cd protoc-gen-go && \
+          go install
+      - run: cd go && dep ensure
+      - run: cd go && go generate ./...
+      - run: cd go && go build -v -o ./ekiden/ekiden ./ekiden
+      - run: cd go && go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
+      - run: bash <(curl -s https://codecov.io/bash) -Z
+      - save_cache:
+          key: go-cache
+          paths:
+            - "/go/pkg"
+
+
+
+  benchmark:
+    <<: *defaults
+    resource_class: large
+    steps:
+      # Set up
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
+      - checkout
+
+      # Build everything in release mode for benchmarks.
+      - run: cargo build --release
+      # Install ekiden-tools.
+      - run: CARGO_TARGET_DIR=target cargo install --force --path tools
+      # Build token contract.
+      - run:
+          command: cargo ekiden build-enclave --release --output-identity
+          working_directory: contracts/token
+
+      # Run all benchmarks.
+      - run: |
+          ./scripts/benchmark.py \
+              --crate ekiden-rpc-trusted \
+              --crate ekiden-db-trusted \
+              --e2e \
+              --commit $(git rev-parse --short HEAD)
 
   deploy:
     <<: *defaults
@@ -162,23 +210,32 @@ workflows:
   version: 2
   build:
     jobs:
-      - build
+      - build-rust
+      - build-go
       - deploy:
           filters:
             branches:
               only: master
           requires:
-            - build
+            - build-rust
+            - build-go
       - request-deploy:
           type: approval
           filters:
             branches:
               only: master
           requires:
-            - build
+            - build-rust
+            - build-go
       - deployclient:
           requires:
             - request-deploy
+  benchmark:
+    jobs:
+      - benchmark:
+          filters:
+            branches:
+              only: master
 experimental:
   notify:
     branches:

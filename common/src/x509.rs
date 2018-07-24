@@ -6,8 +6,11 @@ use grpcio;
 
 use ekiden_common_api as api;
 
-use super::bytes::{B256, B64};
+#[cfg(not(target_env = "sgx"))]
+use super::bytes::B256;
+use super::bytes::B64;
 use super::error::{Error, Result};
+#[cfg(not(target_env = "sgx"))]
 use super::signature::{Signature, Signer};
 
 /// Common name used for generated certificates.

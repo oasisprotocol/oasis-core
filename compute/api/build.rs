@@ -10,17 +10,17 @@ fn main() {
         &[
             "computation_group",
             "computation_group_grpc",
-            "web3",
-            "web3_grpc",
+            "contract",
+            "contract_grpc",
         ],
     );
 
     protoc_grpcio::compile_grpc_protos(
-        &["src/web3.proto", "src/computation_group.proto"],
+        &["src/computation_group.proto", "src/contract.proto"],
         &["src", "../../"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/web3.proto");
+    println!("cargo:rerun-if-changed={}", "src/contract.proto");
     println!("cargo:rerun-if-changed={}", "src/computation_group.proto");
 }

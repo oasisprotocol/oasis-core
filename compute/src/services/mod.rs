@@ -1,4 +1,5 @@
 //! Services exposed via gRPC.
 
 pub mod computation_group;
-pub mod web3;
+pub mod contract;
+pub mod enclaverpc;

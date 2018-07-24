@@ -1,10 +1,10 @@
 [package]
 name = "ekiden-rpc-common"
 version = "0.2.0-alpha"
-authors = ["Ekiden Developers <ekiden-dev@googlegroups.com>"]
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden common RPC functionality"
 keywords = ["ekiden"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [dependencies]

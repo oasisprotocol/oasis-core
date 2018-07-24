@@ -1,11 +1,8 @@
 //! OCALL-based RPC client backend used inside enclaves.
-
-use futures::future::{self, Future};
-
 use ekiden_common::error::Result;
+use ekiden_common::futures::prelude::*;
 use ekiden_enclave_trusted::identity;
 use ekiden_rpc_client::backend::{RpcClientBackend, RpcClientCredentials};
-use ekiden_rpc_client::ClientFuture;
 use ekiden_rpc_common::api;
 use ekiden_rpc_common::client::ClientEndpoint;
 
@@ -28,13 +25,7 @@ impl OcallRpcClientBackend {
 }
 
 impl RpcClientBackend for OcallRpcClientBackend {
-    /// Spawn future using an executor.
-    fn spawn<F: Future + Send + 'static>(&self, _future: F) {
-        panic!("Attempted to spawn future using OCALL backend");
-    }
-
-    /// Call contract.
-    fn call(&self, client_request: api::ClientRequest) -> ClientFuture<api::ClientResponse> {
+    fn call(&self, client_request: api::ClientRequest) -> BoxFuture<api::ClientResponse> {
         let endpoint = self.endpoint.clone();
 
         Box::new(future::lazy(move || {
@@ -45,8 +36,7 @@ impl RpcClientBackend for OcallRpcClientBackend {
         }))
     }
 
-    /// Call contract with raw data.
-    fn call_raw(&self, client_request: Vec<u8>) -> ClientFuture<Vec<u8>> {
+    fn call_raw(&self, client_request: Vec<u8>) -> BoxFuture<Vec<u8>> {
         let endpoint = self.endpoint.clone();
 
         Box::new(future::lazy(move || {
@@ -57,7 +47,6 @@ impl RpcClientBackend for OcallRpcClientBackend {
         }))
     }
 
-    /// Get credentials.
     fn get_credentials(&self) -> Option<RpcClientCredentials> {
         Some(RpcClientCredentials {
             long_term_private_key: identity::get_identity().rpc_key_e_priv,

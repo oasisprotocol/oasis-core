@@ -4,7 +4,6 @@ var MockEpoch = artifacts.require("./MockEpoch.sol");
 var OasisEpoch = artifacts.require("./OasisEpoch.sol");
 var ContractRegistry = artifacts.require("./ContractRegistry.sol")
 var EntityRegistry = artifacts.require("./EntityRegistry.sol");
-var UintSet = artifacts.require("./UintSet.sol");
 var Stake = artifacts.require("./Stake.sol");
 var DisputeResolution = artifacts.require("./DisputeResolution");
 
@@ -16,8 +15,6 @@ const deploy = async function (deployer, network) {
         // The tests only use the standard epoch timesource anyway.
         await deployer.deploy([OasisEpoch, MockEpoch]);
         await deployer.deploy(RandomBeacon, OasisEpoch.address);
-        await deployer.deploy(UintSet);
-        await deployer.link(UintSet, Stake);
         await deployer.deploy(Stake, 1, "EkidenStake", "E$");
         await deployer.deploy(ContractRegistry, OasisEpoch.address);
         await deployer.deploy(EntityRegistry, OasisEpoch.address, Stake.address);
@@ -29,8 +26,6 @@ const deploy = async function (deployer, network) {
         await deployer.deploy([OasisEpoch, MockEpoch]);
 
         // Stake
-        await deployer.deploy(UintSet);
-        await deployer.link(UintSet, Stake);
         await deployer.deploy(Stake, 1000000000, "EkidenStake", "E$");
 
         let instance = await deployer.deploy(ContractDeployer, OasisEpoch.address, MockEpoch.address, Stake.address);
@@ -43,7 +38,6 @@ const deploy = async function (deployer, network) {
             instance.mock_contract_registry.call()
         ]);
         await deployer.deploy(DisputeResolution);
-
 
         // Pass all the contract addresses to truffle_deploy in the rust
         // side as a simple JSON formatted dictionary.
