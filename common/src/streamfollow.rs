@@ -24,7 +24,7 @@ fn backoff_advance(prev: Duration) -> Duration {
 enum ConnectionState<S> {
     /// Dummy state for indicating a moved state or that we permanently errored/ended.
     Invalid,
-    /// We've created a stream and we're waiting on the first element/sentinel item to arrive. The
+    /// We've created a stream and we're waiting on the first/sentinel item to arrive. The
     /// `Duration` is the amount of time to wait before reconnecting if the stream errors
     /// nonpermanently.
     Connecting(Duration, S),
@@ -35,8 +35,11 @@ enum ConnectionState<S> {
 }
 
 enum BookmarkState<B, FI, FR> {
+    /// Dummy state for indicating a moved state.
     Invalid,
+    /// We're waiting for the first item.
     Initializing(FI, FR),
+    /// We have received up to and including the item bookmarked by `self.1`.
     Anchored(FR, B),
 }
 
@@ -47,6 +50,8 @@ where
     FR: FnMut(&B) -> S,
     B: PartialEq + Debug,
 {
+    /// Create a stream appropriate for the bookmark state: init if we haven't seen anything yet,
+    /// or resume if we have a bookmark.
     fn connect(&mut self) -> S {
         match *self {
             BookmarkState::Invalid => unreachable!(),
@@ -55,6 +60,8 @@ where
         }
     }
 
+    /// Process the sentinel item from an underlying stream: transition to
+    /// `BookmarkState::Anchored` or check that the bookmark matches what we expect.
     fn offer_first(&mut self, b: B) {
         match std::mem::replace(self, BookmarkState::Invalid) {
             BookmarkState::Invalid => unreachable!(),
@@ -68,6 +75,7 @@ where
         }
     }
 
+    /// Update the bookmark in a `BookmarkState::Anchored` state.
     fn advance(&mut self, b: B) {
         match std::mem::replace(self, BookmarkState::Invalid) {
             BookmarkState::Anchored(resume, _bookmark) => {
@@ -85,6 +93,8 @@ pub struct Follow<S, B, FI, FR, FB, FP> {
     error_is_permanent: FP,
 }
 
+/// A wrapper for streams that can encounter nonpermanent errors. It handles the retry logic.
+/// This is created by the `follow` function.
 impl<S, B, FI, FR, FB, FP> Stream for Follow<S, B, FI, FR, FB, FP>
 where
     S: Stream,
@@ -115,6 +125,8 @@ where
                             return Ok(Async::Ready(Some(first)));
                         }
                         Ok(Async::NotReady) => {
+                            // Stay in connecting state. (We moved and destructured our state, so
+                            // we have to put it back.)
                             self.connection_state = ConnectionState::Connecting(backoff, stream);
                             return Ok(Async::NotReady);
                         }
@@ -145,6 +157,7 @@ where
                             // Repeat poll on next state.
                         }
                         Async::NotReady => {
+                            // Stay in backoff state.
                             self.connection_state = ConnectionState::Backoff(backoff, delay);
                             return Ok(Async::NotReady);
                         }
@@ -157,11 +170,13 @@ where
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(item))) => {
+                            // Stay in forwarding state.
                             self.connection_state = ConnectionState::Forwarding(stream);
                             self.bookmark_state.advance((self.item_to_bookmark)(&item));
                             return Ok(Async::Ready(Some(item)));
                         }
                         Ok(Async::NotReady) => {
+                            // Stay in forwarding state.
                             self.connection_state = ConnectionState::Forwarding(stream);
                             return Ok(Async::NotReady);
                         }
@@ -188,12 +203,17 @@ where
 ///
 /// Uses `init` to start the first stream (may be called multiple time if the stream errors) and
 /// `resume` to start subsequent streams from the last received item. Streams should start with a
-/// sentinel item: anything in `init`'s stream or a specified item in `resume`'s stream. `resume`
-/// takes a specification of which item in the form of a "bookmark," obtained by applying
-/// `item_to_bookmark` on an item. Retries `init`/`resume` when an error is encountered, unless
-/// the error is "permanent," as determined by `error_is_permanent`. Propagates permanent errors
-/// and `None` values to the resulting stream. Consecutive retries without receiving a sentinel
-/// item are delayed according to a hardcoded backoff policy.
+/// sentinel item: anything in `init`'s stream or a specified item in `resume`'s stream.
+///
+/// `resume` takes a specification of which item in the form of a "bookmark," obtained by applying
+/// `item_to_bookmark` on an item.
+///
+/// Retries `init`/`resume` when an error is encountered, unless the error is "permanent," as
+/// determined by `error_is_permanent`. Propagates permanent errors and `None` values to the
+/// resulting stream.
+///
+/// Consecutive retries without receiving a sentinel item are delayed according to a hardcoded
+/// backoff policy.
 pub fn follow<S, B, FI, FR, FB, FP>(
     mut init: FI,
     resume: FR,
