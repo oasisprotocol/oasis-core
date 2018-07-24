@@ -74,16 +74,19 @@ where
     }
 
     /// Process the sentinel item from an underlying stream: transition to
-    /// `BookmarkState::Anchored` or check that the bookmark matches what we expect.
-    fn offer_first(&mut self, b: B) {
+    /// `BookmarkState::Anchored` or check that the bookmark matches what we expect. Returns
+    /// whether the caller should also forward the item as a sentinel item.
+    fn check_first(&mut self, b: B) -> bool {
         match std::mem::replace(self, BookmarkState::Invalid) {
             BookmarkState::Invalid => unreachable!(),
             BookmarkState::Initializing(_init, resume) => {
                 *self = BookmarkState::Anchored(resume, b);
+                true
             }
             BookmarkState::Anchored(resume, bookmark) => {
                 assert_eq!(b, bookmark);
                 *self = BookmarkState::Anchored(resume, bookmark);
+                false
             }
         }
     }
@@ -132,10 +135,14 @@ where
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(first))) => {
-                            self.bookmark_state
-                                .offer_first((self.item_to_bookmark)(&first));
+                            let forward_sentinel = self.bookmark_state
+                                .check_first((self.item_to_bookmark)(&first));
                             self.connection_state = ConnectionState::Forwarding(stream);
-                            return Ok(Async::Ready(Some(first)));
+                            if forward_sentinel {
+                                return Ok(Async::Ready(Some(first)));
+                            }
+                            // Otherwise, discard sentinel (already emitted from previous stream)
+                            // and repeat poll on next state.
                         }
                         Ok(Async::NotReady) => {
                             // Stay in connecting state. (We moved and destructured our state, so
