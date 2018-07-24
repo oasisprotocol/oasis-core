@@ -1,8 +1,9 @@
 use std;
 use std::fmt::Debug;
 use std::time::Duration;
+use std::time::Instant;
 
-use futures_timer;
+use tokio;
 
 use futures::Async;
 use futures::Future;
@@ -28,7 +29,7 @@ enum ConnectionState<S> {
     /// nonpermanently.
     Connecting(Duration, S),
     /// We're waiting before connecting again. The `Duration` is how long *this* wait is.
-    Backoff(Duration, futures_timer::Delay),
+    Backoff(Duration, tokio::timer::Delay),
     /// We're waiting for more items from a stream to forward as our output.
     Forwarding(S),
 }
@@ -126,7 +127,7 @@ where
                                 );
                                 self.connection_state = ConnectionState::Backoff(
                                     backoff,
-                                    futures_timer::Delay::new(backoff),
+                                    tokio::timer::Delay::new(Instant::now() + backoff),
                                 );
                                 // Repeat poll on next state.
                             }
