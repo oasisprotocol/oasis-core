@@ -260,9 +260,8 @@ where
 #[cfg(test)]
 mod tests {
     use futures;
-    use futures::Future;
     use futures::Stream;
-    use tokio;
+    extern crate tokio_core;
 
     #[test]
     fn follow_ok() {
@@ -272,10 +271,13 @@ mod tests {
             |_| (),
             |&()| unreachable!(),
         );
-        tokio::run(s.collect().then(|r| {
-            assert_eq!(r.unwrap(), vec![1, 2, 3]);
-            Ok(())
-        }));
+        assert_eq!(
+            tokio_core::reactor::Core::new()
+                .unwrap()
+                .run(s.collect())
+                .unwrap(),
+            vec![1, 2, 3]
+        );
     }
 
     #[test]
@@ -288,9 +290,12 @@ mod tests {
             |_| (),
             |&()| false,
         );
-        tokio::run(s.collect().then(|r| {
-            assert_eq!(r.unwrap(), vec![1, 2, 3]);
-            Ok(())
-        }));
+        assert_eq!(
+            tokio_core::reactor::Core::new()
+                .unwrap()
+                .run(s.collect())
+                .unwrap(),
+            vec![1, 2, 3]
+        );
     }
 }

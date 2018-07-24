@@ -43,3 +43,6 @@ tokio = "~0.1.7"
 
 [dev-dependencies]
 serde_json = { git = "https://github.com/ekiden/json" }
+
+[target.'cfg(not(target_env = "sgx"))'.dev-dependencies]
+tokio-core = "0.1.17"
