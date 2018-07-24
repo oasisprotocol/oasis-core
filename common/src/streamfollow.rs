@@ -61,8 +61,9 @@ where
             BookmarkState::Initializing(_init, resume) => {
                 *self = BookmarkState::Anchored(resume, b);
             }
-            BookmarkState::Anchored(_resume, bookmark) => {
+            BookmarkState::Anchored(resume, bookmark) => {
                 assert_eq!(b, bookmark);
+                *self = BookmarkState::Anchored(resume, bookmark);
             }
         }
     }
