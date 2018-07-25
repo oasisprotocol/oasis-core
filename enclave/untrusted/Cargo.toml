@@ -10,10 +10,13 @@ authors = [
 sgx-simulation = []
 
 [dependencies]
+base64 = "0.9.0"
+reqwest = "0.8.2"
 protobuf = "~2.0"
 sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
 sgx_urts = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1", features = ["global_init"] }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../common", version = "0.2.0-alpha" }
 
 [build-dependencies]
