@@ -43,7 +43,7 @@ RUN git clone https://github.com/myelin-ml/linux-sgx.git && cd linux-sgx && \
 # install rust (versions based on those found successful in https://github.com/ekiden/rust-sgx-sdk/blob/v0.9.8-ekiden1/dockerfile/Dockerfile)
 # Note: 03-16 is the officially supported rust for sgx 0.9.8.
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
-    sh rustup.sh -y --default-toolchain nightly-2018-03-16 && \
+    sh rustup.sh -y --default-toolchain nightly-2018-07-16 && \
     rustup component add rust-src && \
     # rustfmt-nightly is crazily unstable, with no versions appearing to exist that
     # work with the 3-16 nightly.
