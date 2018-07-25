@@ -34,7 +34,6 @@ futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
 rand = "0.4.2"
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 futures = "0.1"
-futures-timer = "0.1.1"
 get_if_addrs = "~0.5.1"
 env_logger = "0.5.10"
 pretty_env_logger = "0.2"
@@ -44,3 +43,6 @@ tokio = "~0.1.7"
 
 [dev-dependencies]
 serde_json = { git = "https://github.com/ekiden/json" }
+
+[target.'cfg(not(target_env = "sgx"))'.dev-dependencies]
+tokio-core = "0.1.17"
