@@ -3,12 +3,6 @@ alloc = {}
 panic_unwind = {}
 panic_abort = {}
 
-[dependencies.compiler_builtins]
-features = ["c", "compiler-builtins"]
-git = "https://github.com/rust-lang-nursery/compiler-builtins"
-rev = "b4a3645cfe102a100b6ebecbe76df37bc957eda8"
-stage = 1
-
 [dependencies.std]
 features = ["backtrace", "stdio", "untrusted_time"]
 git = "https://github.com/ekiden/rust-sgx-sdk"
