@@ -1,4 +1,4 @@
-//! Ekiden dummy consensus backend persistent local state storage.
+//! Ekiden persistent local state storage.
 use std::path::Path;
 use std::sync::Arc;
 
