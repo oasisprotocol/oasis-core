@@ -35,6 +35,19 @@ macro_rules! wrap_uint_type {
             pub fn from_little_endian(slice: &[u8]) -> Self {
                 $name(uint::$name::from_little_endian(slice))
             }
+
+            /// Try to convert from a slice.
+            // TODO: Currently this cannot implement the TryFrom trait as it already implements From.
+            pub fn try_from<'a>(bytes: &'a [u8]) -> super::error::Result<Self> {
+                if bytes.len() > $size {
+                    Err(super::error::Error::new(
+                            format!("Cannot convert slice with length {} to {}",
+                                    bytes.len(),
+                                    stringify!($name))))
+                } else {
+                    Ok($name::from(bytes))
+                }
+            }
         }
 
         impl Deref for $name {

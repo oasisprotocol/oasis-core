@@ -88,8 +88,8 @@ impl api::RootHash for RootHashService {
     ) {
         let f = move || -> Result<_> {
             Ok(self.inner.get_blocks_since(
-                B256::from(req.get_contract_id()),
-                U256::from(req.get_round()),
+                B256::try_from(req.get_contract_id())?,
+                U256::try_from(req.get_round())?,
             ))
         };
         let f = match f() {
