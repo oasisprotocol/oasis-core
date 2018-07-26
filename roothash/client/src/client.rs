@@ -10,6 +10,7 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
+use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
 use ekiden_roothash_base::{Block, Commitment, Event, RootHashBackend};
 
@@ -47,6 +48,19 @@ impl RootHashBackend for RootHashClient {
         let mut req = api::BlockRequest::new();
         req.set_contract_id(contract_id.to_vec());
         match self.0.get_blocks(&req) {
+            Ok(s) => Box::new(s.then(|result| match result {
+                Ok(r) => Ok(Block::try_from(r.get_block().to_owned())?),
+                Err(e) => Err(e.into()),
+            })),
+            Err(e) => Box::new(stream::once::<Block, _>(Err(e.into()))),
+        }
+    }
+
+    fn get_blocks_since(&self, contract_id: B256, round: U256) -> BoxStream<Block> {
+        let mut req = api::BlockSinceRequest::new();
+        req.set_contract_id(contract_id.to_vec());
+        req.set_round(round.to_vec());
+        match self.0.get_blocks_since(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => Ok(Block::try_from(r.get_block().to_owned())?),
                 Err(e) => Err(e.into()),

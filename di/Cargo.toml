@@ -11,7 +11,7 @@ default = ["cli"]
 cli = ["clap"]
 
 [dependencies]
-error-chain = "0.11.0"
+error-chain = "0.12.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 clap = { version = "2.29.1", optional = true }

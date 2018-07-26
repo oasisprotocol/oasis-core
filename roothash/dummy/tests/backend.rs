@@ -24,6 +24,7 @@ use ekiden_common::hash::empty_hash;
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::testing;
+use ekiden_common::uint::U256;
 use ekiden_common::untrusted;
 use ekiden_epochtime::interface::EPOCH_INTERVAL;
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
@@ -143,49 +144,56 @@ fn do_test_two_rounds(state_storage_path: Option<&str>, remove_state: bool) {
     }
 
     // Stop when a new block is seen on the chain.
-    let wait_rounds = backend
-        .get_blocks(contract.id)
-        .take(3)
-        .for_each(move |block| {
-            assert!(block.is_internally_consistent());
+    let wait_rounds = backend.get_blocks(contract.id).take(3).for_each(|block| {
+        assert!(block.is_internally_consistent());
 
-            match block.header.round.as_u32() {
-                0 => {}
-                1 => {
-                    assert_eq!(
-                        block.header.state_root,
-                        H256::from(
-                            "0x960b1a85d1de064664429c26be6f23f40004f01f9323a6c0da0ca4d310eb69ba"
-                        )
-                    );
+        match block.header.round.as_u32() {
+            0 => {}
+            1 => {
+                assert_eq!(
+                    block.header.state_root,
+                    H256::from(
+                        "0x960b1a85d1de064664429c26be6f23f40004f01f9323a6c0da0ca4d310eb69ba"
+                    )
+                );
 
-                    // First round has completed, dispatch a new round of work.
-                    for ref node in nodes.iter() {
-                        // Test with empty state.
-                        node.compute(b"");
-                    }
+                // First round has completed, dispatch a new round of work.
+                for ref node in nodes.iter() {
+                    // Test with empty state.
+                    node.compute(b"");
                 }
-                2 => {
-                    assert_eq!(block.header.state_root, empty_hash());
-
-                    // Second round has completed, request all nodes to shutdown.
-                    for ref node in nodes.iter() {
-                        node.shutdown();
-                    }
-
-                    let backend = backend.clone();
-                    backend.shutdown();
-                }
-                round => panic!("incorrect round number: {}", round),
             }
+            2 => {
+                assert_eq!(block.header.state_root, empty_hash());
 
-            Ok(())
-        });
+                // Second round has completed, request all nodes to shutdown.
+                for ref node in nodes.iter() {
+                    node.shutdown();
+                }
+
+                let backend = backend.clone();
+                backend.shutdown();
+            }
+            round => panic!("incorrect round number: {}", round),
+        }
+
+        Ok(())
+    });
 
     tasks.push(Box::new(wait_rounds));
 
     // Wait for all tasks to finish.
     future::join_all(tasks).wait().unwrap();
+
+    // Test resume.
+    let round2 = U256::from(2);
+    let blocks = backend
+        .get_blocks_since(contract.id, round2)
+        .take(1)
+        .collect()
+        .wait()
+        .unwrap();
+    assert_eq!(blocks[0].header.round, U256::from(2));
 }
 
 #[test]

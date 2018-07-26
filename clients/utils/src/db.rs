@@ -142,6 +142,7 @@ mod tests {
     use ekiden_core::futures::BoxFuture;
     use ekiden_core::futures::BoxStream;
     use ekiden_core::futures::Stream;
+    use ekiden_core::uint::U256;
     use ekiden_db_trusted::patricia_trie::PatriciaTrie;
     use ekiden_db_trusted::Database;
     use ekiden_roothash_base::backend::Event;
@@ -168,6 +169,10 @@ mod tests {
                     .expect("MockRootHashBackend only supports one block stream")
                     .map_err(|()| unimplemented!()),
             )
+        }
+
+        fn get_blocks_since(&self, _contract_id: B256, _round: U256) -> BoxStream<Block> {
+            unimplemented!()
         }
 
         fn get_events(&self, _contract_id: B256) -> BoxStream<Event> {

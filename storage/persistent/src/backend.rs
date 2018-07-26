@@ -2,7 +2,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use exonum_rocksdb::DB;
+use exonum_rocksdb::{IteratorMode, DB};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
@@ -48,6 +48,22 @@ impl StorageBackend for PersistentStorageBackend {
             inner.db.put(&key, &value)?;
 
             Ok(())
+        }).into_box()
+    }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        let inner = self.inner.clone();
+
+        future::lazy(move || {
+            let keys = inner
+                .db
+                .iterator(IteratorMode::Start)
+                .map(|entry| {
+                    let key = H256::from(&*entry.0);
+                    (key, 0)
+                })
+                .collect();
+            Ok(Arc::new(keys))
         }).into_box()
     }
 }

@@ -53,6 +53,18 @@ impl StorageBackend for DummyStorageBackend {
             Ok(())
         }))
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        let inner = self.inner.clone();
+        Box::new(future::lazy(move || {
+            let inner = inner.lock().unwrap();
+            let mut keys = Vec::new();
+            for key in inner.storage.keys() {
+                keys.push((key.clone(), 0))
+            }
+            Ok(Arc::new(keys))
+        }))
+    }
 }
 
 // Register for dependency injection.

@@ -236,6 +236,10 @@ impl StorageBackend for MultilayerBackend {
             })));
         Box::new(futures::future::ok(()))
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        self.sled.get_keys()
+    }
 }
 
 impl BatchStorage for MultilayerBackend {

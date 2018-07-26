@@ -75,6 +75,10 @@ impl StorageBackend for LruCacheStorageBackend {
             })
             .into_box()
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        self.inner.backend.get_keys()
+    }
 }
 
 #[cfg(test)]
