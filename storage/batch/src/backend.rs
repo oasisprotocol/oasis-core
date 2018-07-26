@@ -21,7 +21,7 @@ struct Inner {
     /// Epoch information.
     time_notifier: Arc<TimeSourceNotifier>,
     /// Active key list.
-    key_list: Mutex<Vec<(H256, u64)>>,
+    key_list: Mutex<Arc<Vec<(H256, u64)>>>,
     /// Accumulated key list.
     accu_key_list: Mutex<Vec<(H256, u64)>>,
 }
@@ -55,7 +55,7 @@ impl BatchStorageBackend {
                 inserts: Mutex::new(vec![]),
                 retries,
                 time_notifier,
-                key_list: Mutex::new(vec![]),
+                key_list: Mutex::new(Arc::new(vec![])),
                 accu_key_list: Mutex::new(vec![]),
             }),
         };
@@ -74,21 +74,13 @@ impl BatchStorageBackend {
                     .for_each(move |_| {
                         let mut accu_key_list = shared_inner.accu_key_list.lock().unwrap();
                         let mut key_list = shared_inner.key_list.lock().unwrap();
-                        key_list.clear();
                         // Get active key list.
-                        *key_list = std::mem::replace(&mut *accu_key_list, vec![]);
+                        *key_list = Arc::new(std::mem::replace(&mut *accu_key_list, vec![]));
                         Ok(())
                     })
                     .then(|_| future::ok(())),
             )
         })
-    }
-
-    /// Get the active key list.
-    pub fn get_key_list(&self) -> Vec<(H256, u64)> {
-        let inner = self.inner.clone();
-        let key_list = inner.key_list.lock().unwrap();
-        return key_list.to_owned();
     }
 
     /// Commit all inserts to the committed backend.
@@ -149,6 +141,16 @@ impl StorageBackend for BatchStorageBackend {
             })
             .into_box()
     }
+
+    /// Get the active key list.
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        let inner = self.inner.clone();
+
+        Box::new(future::lazy(move || {
+            let key_list = inner.key_list.lock().unwrap();
+            Ok(key_list.clone())
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -199,7 +201,7 @@ mod test {
         batch.commit().wait().unwrap();
         assert_eq!(committed.get(key).wait(), Ok(b"value".to_vec()));
         // Get the active key list.
-        let list = batch.get_key_list();
+        let list = batch.get_keys().wait().unwrap();
         println!("Active key list is {:?}", list);
 
         // Insert directly to committed and expect the backend to find it.
