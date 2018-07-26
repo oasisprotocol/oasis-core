@@ -1,5 +1,6 @@
 # Unreleased
 
+* Update rust-sgx-sdk to v1.0.1 and rustc to 1.29 nightly
 * **BACKWARD INCOMPATIBLE:** Store batches in storage and distribute only signed batch
   hashes to workers.
 * **BACKWARD INCOMPATIBLE:** Remove `transactions` from consensus blocks and only store
