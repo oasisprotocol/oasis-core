@@ -5,14 +5,22 @@ extern crate lazy_static;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_common;
-extern crate ekiden_key_manager_api;
+extern crate ekiden_enclave_logger;
+extern crate ekiden_keymanager_api;
+extern crate ekiden_keymanager_common;
 extern crate ekiden_rpc_client;
 extern crate ekiden_rpc_common;
+#[cfg(target_env = "sgx")]
 extern crate ekiden_rpc_trusted;
+extern crate serde;
+extern crate serde_cbor;
 
 mod client;
 
+// Reexport
 pub use client::KeyManager;
+#[cfg(not(target_env = "sgx"))]
+pub use client::NetworkRpcClientBackendConfig;
 
 /// Helper macro to configure key manager contract identity from a generated file.
 ///

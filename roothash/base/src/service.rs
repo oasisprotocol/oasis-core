@@ -4,6 +4,7 @@ use std::sync::Arc;
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Result;
 use ekiden_common::futures::{future, Future, Stream};
+use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
@@ -63,6 +64,33 @@ impl api::RootHash for RootHashService {
         let f = move || -> Result<_> {
             Ok(self.inner
                 .get_blocks(B256::try_from(req.get_contract_id())?))
+        };
+        let f = match f() {
+            Ok(f) => f.map(|response| -> (api::BlockResponse, WriteFlags) {
+                let mut pb_response = api::BlockResponse::new();
+                pb_response.set_block(response.into());
+
+                (pb_response, WriteFlags::default())
+            }),
+            Err(error) => {
+                ctx.spawn(invalid_rpc!(sink, InvalidArgument, error).map_err(|_error| ()));
+                return;
+            }
+        };
+        ctx.spawn(f.forward(sink).then(|_f| future::ok(())));
+    }
+
+    fn get_blocks_since(
+        &self,
+        ctx: RpcContext,
+        req: api::BlockSinceRequest,
+        sink: ServerStreamingSink<api::BlockResponse>,
+    ) {
+        let f = move || -> Result<_> {
+            Ok(self.inner.get_blocks_since(
+                B256::from(req.get_contract_id()),
+                U256::from(req.get_round()),
+            ))
         };
         let f = match f() {
             Ok(f) => f.map(|response| -> (api::BlockResponse, WriteFlags) {

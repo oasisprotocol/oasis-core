@@ -22,6 +22,6 @@ spec:
             - node
           args:
             - web3.js
-            - http://$(WEB3_CLIENT_SERVICE_HOST):$(WEB3_CLIENT_SERVICE_PORT_WEB3)
+            - http://$(WEB3_GATEWAY_SERVICE_HOST):$(WEB3_GATEWAY_SERVICE_PORT_WEB3)
             # 1 second timeout
             - !!integer 1000

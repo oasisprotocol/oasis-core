@@ -1,0 +1,26 @@
+[package]
+name = "ekiden-keymanager-trusted"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden key manager dummy enclave"
+keywords = ["ekiden", "key management"]
+repository = "https://github.com/oasislabs/ekiden"
+build = "build.rs"
+
+[features]
+default = []
+
+[dependencies]
+ekiden-core = { path = "../../../core/common", version = "0.2.0-alpha" }
+ekiden-trusted = { path = "../../../core/trusted", version = "0.2.0-alpha" }
+ekiden-enclave-logger = { path = "../../../enclave/logger", version = "0.2.0-alpha" }
+ekiden-keymanager-api = { path = "../../api", version = "0.2.0-alpha" }
+ekiden-keymanager-common = { path = "../../common", version = "0.2.0-alpha" }
+lazy_static = { version = "1.0", features = ["spin_no_std"] }
+protobuf = "~2.0"
+sodalite = "0.3.0"
+serde_cbor = "0.8.2"
+
+[build-dependencies]
+ekiden-tools = { path = "../../../tools", version = "0.2.0-alpha" }
+ekiden-edl = { path = "../../../core/edl", version = "0.2.0-alpha" }
