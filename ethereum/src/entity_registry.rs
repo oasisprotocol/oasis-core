@@ -15,7 +15,7 @@ use ekiden_common::identity::EntityIdentity;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_di;
-use ekiden_epochtime::interface::EpochTime;
+use ekiden_epochtime::interface::{EpochTime, EPOCH_INTERVAL};
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_registry_base::*;
 use ekiden_registry_dummy::DummyEntityRegistryBackend;
@@ -94,7 +94,9 @@ where
                     // the responsibility of this object to call `mark_epoch` on the
                     // cache to advance epochs there.
                     let never_notifying_notifier =
-                        LocalTimeSourceNotifier::new(Arc::new(SystemTimeSource {}));
+                        LocalTimeSourceNotifier::new(Arc::new(SystemTimeSource {
+                            interval: EPOCH_INTERVAL,
+                        }));
                     Ok(Self {
                         contract: Arc::new(Mutex::new(contract)),
                         client: client.clone(),
