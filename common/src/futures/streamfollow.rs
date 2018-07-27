@@ -47,7 +47,13 @@ enum ConnectionState<S> {
     Forwarding(S),
 }
 
-enum BookmarkState<B, FI, FR> {
+pub trait BookmarkState<S, B> {
+    fn connect(&mut self) -> S;
+    fn check_first(&mut self, b: B) -> bool;
+    fn advance(&mut self, b: B);
+}
+
+pub enum BookmarkStateResume<B, FI, FR> {
     /// Dummy state for indicating a moved state.
     Invalid,
     /// We're waiting for the first item.
@@ -56,7 +62,7 @@ enum BookmarkState<B, FI, FR> {
     Anchored(FR, B),
 }
 
-impl<S, B, FI, FR> BookmarkState<B, FI, FR>
+impl<S, B, FI, FR> BookmarkState<S, B> for BookmarkStateResume<B, FI, FR>
 where
     S: Stream,
     FI: FnMut() -> S,
@@ -68,55 +74,110 @@ where
     fn connect(&mut self) -> S {
         debug!("Connecting");
         match *self {
-            BookmarkState::Invalid => unreachable!(),
-            BookmarkState::Initializing(ref mut init, ref mut _resume) => init(),
-            BookmarkState::Anchored(ref mut resume, ref bookmark) => resume(bookmark),
+            BookmarkStateResume::Invalid => unreachable!(),
+            BookmarkStateResume::Initializing(ref mut init, ref mut _resume) => init(),
+            BookmarkStateResume::Anchored(ref mut resume, ref bookmark) => resume(bookmark),
         }
     }
 
     /// Process the sentinel item from an underlying stream: transition to
-    /// `BookmarkState::Anchored` or check that the bookmark matches what we expect. Returns
+    /// `BookmarkStateResume::Anchored` or check that the bookmark matches what we expect. Returns
     /// whether the caller should also forward the item as a sentinel item.
     fn check_first(&mut self, b: B) -> bool {
-        match std::mem::replace(self, BookmarkState::Invalid) {
-            BookmarkState::Invalid => unreachable!(),
-            BookmarkState::Initializing(_init, resume) => {
-                *self = BookmarkState::Anchored(resume, b);
+        match std::mem::replace(self, BookmarkStateResume::Invalid) {
+            BookmarkStateResume::Invalid => unreachable!(),
+            BookmarkStateResume::Initializing(_init, resume) => {
+                *self = BookmarkStateResume::Anchored(resume, b);
                 true
             }
-            BookmarkState::Anchored(resume, bookmark) => {
+            BookmarkStateResume::Anchored(resume, bookmark) => {
                 assert_eq!(b, bookmark);
-                *self = BookmarkState::Anchored(resume, bookmark);
+                *self = BookmarkStateResume::Anchored(resume, bookmark);
                 false
             }
         }
     }
 
-    /// Update the bookmark in a `BookmarkState::Anchored` state.
+    /// Update the bookmark in a `BookmarkStateResume::Anchored` state.
     fn advance(&mut self, b: B) {
-        match std::mem::replace(self, BookmarkState::Invalid) {
-            BookmarkState::Anchored(resume, _bookmark) => {
-                *self = BookmarkState::Anchored(resume, b);
+        match std::mem::replace(self, BookmarkStateResume::Invalid) {
+            BookmarkStateResume::Anchored(resume, _bookmark) => {
+                *self = BookmarkStateResume::Anchored(resume, b);
             }
             _ => unreachable!(),
         }
     }
 }
 
-pub struct Follow<S, B, FI, FR, FB, FP> {
+pub enum BookmarkStateSkip<B, FI> {
+    /// Dummy state for indicating a moved state.
+    Invalid,
+    /// We're waiting for the first item.
+    Initializing(FI),
+    /// We have received up to and including the item bookmarked by `self.1`.
+    Anchored(FI, B),
+}
+
+impl<S, B, FI> BookmarkState<S, B> for BookmarkStateSkip<B, FI>
+where
+    S: Stream,
+    FI: FnMut() -> S,
+    B: PartialEq + Debug,
+{
+    /// Connect by calling the init fn.
+    fn connect(&mut self) -> S {
+        debug!("Connecting");
+        match *self {
+            BookmarkStateSkip::Invalid => unreachable!(),
+            BookmarkStateSkip::Initializing(ref mut init) => init(),
+            BookmarkStateSkip::Anchored(ref mut init, ref _bookmark) => init(),
+        }
+    }
+
+    /// Process the sentinel item from an underlying stream: transition to
+    /// `BookmarkStateSkip::Anchored` and forward the sentinel, unless we're reconnecting and the
+    /// bookmark is the same. Returns whether the caller should also forward the item.
+    fn check_first(&mut self, b: B) -> bool {
+        match std::mem::replace(self, BookmarkStateSkip::Invalid) {
+            BookmarkStateSkip::Invalid => unreachable!(),
+            BookmarkStateSkip::Initializing(init) => {
+                *self = BookmarkStateSkip::Anchored(init, b);
+                true
+            }
+            BookmarkStateSkip::Anchored(init, bookmark) => {
+                let forward_sentinel = b != bookmark;
+                *self = BookmarkStateSkip::Anchored(init, bookmark);
+                // If the stream has moved on since we were last connected, forward the sentinel
+                // item from this stream.
+                forward_sentinel
+            }
+        }
+    }
+
+    /// Update the bookmark in a `BookmarkStateSkip::Anchored` state.
+    fn advance(&mut self, b: B) {
+        match std::mem::replace(self, BookmarkStateSkip::Invalid) {
+            BookmarkStateSkip::Anchored(init, _bookmark) => {
+                *self = BookmarkStateSkip::Anchored(init, b);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub struct Follow<S, BS, FB, FP> {
     connection_state: ConnectionState<S>,
-    bookmark_state: BookmarkState<B, FI, FR>,
+    bookmark_state: BS,
     item_to_bookmark: FB,
     error_is_permanent: FP,
 }
 
 /// A wrapper for streams that can encounter nonpermanent errors. It handles the retry logic.
 /// This is created by the `follow` function.
-impl<S, B, FI, FR, FB, FP> Stream for Follow<S, B, FI, FR, FB, FP>
+impl<S, B, BS, FB, FP> Stream for Follow<S, BS, FB, FP>
 where
     S: Stream,
-    FI: FnMut() -> S,
-    FR: FnMut(&B) -> S,
+    BS: BookmarkState<S, B>,
     FB: Fn(&S::Item) -> B,
     FP: Fn(&S::Error) -> bool,
     B: PartialEq + Debug,
@@ -243,7 +304,7 @@ pub fn follow<S, B, FI, FR, FB, FP>(
     resume: FR,
     item_to_bookmark: FB,
     error_is_permanent: FP,
-) -> Follow<S, B, FI, FR, FB, FP>
+) -> Follow<S, BookmarkStateResume<B, FI, FR>, FB, FP>
 where
     S: Stream,
     FI: FnMut() -> S,
@@ -252,7 +313,43 @@ where
     FP: Fn(&S::Error) -> bool,
 {
     let connection_state = ConnectionState::Connecting(Backoff::init(), init());
-    let bookmark_state = BookmarkState::Initializing(init, resume);
+    let bookmark_state = BookmarkStateResume::Initializing(init, resume);
+    Follow {
+        connection_state,
+        bookmark_state,
+        item_to_bookmark,
+        error_is_permanent,
+    }
+}
+
+/// Creates a stream and reconnect it if the stream errors nonpermanently. Compared to `follow`,
+/// this combinator adapts streams that cannot be resumed from an arbitrary point. Skips any items
+/// that would have been delivered while reconnecting.
+///
+/// Uses `init` to start the stream. Streams should start with a sentinel item: the latest item
+/// that would have been sent if subscribed earlier.
+///
+/// Deduplicates the last received item from a stream and the sentinel item from the next stream by
+/// comparing their "bookmarks," obtained by applying `item_to_bookmark` on the items.
+///
+/// Retries `init` when an error is encountered, unless the error is "permanent," as determined by
+/// `error_is_permanent`. Propagates permanent errors and `None` values to the resulting stream.
+///
+/// Consecutive retries without receiving a sentinel item are delayed according to a hardcoded
+/// backoff policy.
+pub fn follow_skip<S, B, FI, FB, FP>(
+    mut init: FI,
+    item_to_bookmark: FB,
+    error_is_permanent: FP,
+) -> Follow<S, BookmarkStateSkip<B, FI>, FB, FP>
+where
+    S: Stream,
+    FI: FnMut() -> S,
+    FB: Fn(&S::Item) -> B,
+    FP: Fn(&S::Error) -> bool,
+{
+    let connection_state = ConnectionState::Connecting(Backoff::init(), init());
+    let bookmark_state = BookmarkStateSkip::Initializing(init);
     Follow {
         connection_state,
         bookmark_state,
@@ -300,6 +397,30 @@ mod tests {
                 .run(s.collect())
                 .unwrap(),
             vec![1, 2, 3]
+        );
+    }
+
+    #[test]
+    fn follow_skip() {
+        let mut inits = vec![
+            vec![Err(())],
+            vec![Ok(1), Ok(2), Err(())],
+            vec![Err(())],
+            vec![Ok(2), Err(())],
+            vec![Ok(2), Ok(3), Err(())],
+            vec![Ok(5)],
+        ].into_iter();
+        let s = super::follow_skip(
+            move || futures::stream::iter_result(inits.next().unwrap()),
+            |v| *v,
+            |&()| false,
+        );
+        assert_eq!(
+            tokio_core::reactor::Core::new()
+                .unwrap()
+                .run(s.collect())
+                .unwrap(),
+            vec![1, 2, 3, 5]
         );
     }
 }
