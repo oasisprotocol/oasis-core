@@ -1,5 +1,6 @@
 //! Storage backend that talks to an external backend outside the enclave.
 use std::slice::from_raw_parts_mut;
+use std::sync::Arc;
 use std::sync::SgxMutex as Mutex;
 
 use sgx_trts::trts::rsgx_raw_is_outside_enclave;
@@ -92,6 +93,10 @@ impl StorageBackend for UntrustedStorageBackend {
 
             Ok(())
         }))
+    }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        unimplemented!();
     }
 }
 

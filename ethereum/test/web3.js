@@ -25,7 +25,6 @@ if (require.main === module) {
     let HDWalletProvider = require("truffle-hdwallet-provider");
     let web3 = require('web3');
     const client = require('prom-client');
-    client.collectDefaultMetrics();
     const txncount = new client.Counter({
         name: 'txncount',
         help: 'Number of web3 transactions made'
@@ -38,18 +37,25 @@ if (require.main === module) {
     let mnemonic = 'patient oppose cotton portion chair gentle jelly dice supply salmon blast priority';
 
     if (process.argv.length < 4) {
-        console.warn("Usage: web3.js <provider> <interval-ms> [metrics pushgateway]");
+        console.warn("Usage: web3.js <provider> <interval-ms> [pushgateway address] [push job prefix] [push instance label]");
         process.exit(0);
     }
     let gateway = null;
+    let pushJobPrefix = "";
+    let pushGroupings = {};
     if (process.argv.length < 5) {
         const http = require('http');
         let server = http.createServer((req, res) => {
             res.end(client.register.metrics());
         });
         server.listen(3000);
-    } else {
+    } else if (process.argv.length == 7) {
         gateway = new client.Pushgateway(process.argv[4]);
+        pushJobPrefix = process.argv[5];
+        pushGroupings['instance'] = process.argv[6];
+    } else {
+        console.warn("Usage: web3.js <provider> <interval-ms> [pushgateway address] [push job prefix] [push instance label]");
+        process.exit(0);
     }
 
     let run = async function () {
@@ -63,7 +69,7 @@ if (require.main === module) {
             end();
             txncount.inc();
             if (gateway != null) {
-                gateway.pushAdd({ jobName: 'web3-txn' });
+                gateway.pushAdd({ jobName: `${pushJobPrefix}-web3-txn`, groupings: pushGroupings }, () => {});
             }
         }
     };

@@ -146,4 +146,11 @@ impl StorageBackend for StorageFrontend {
                 .and_then(move |s| s.insert(value, expiry)),
         )
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        Box::new(
+            self.get_storage(self.inner.retries)
+                .and_then(move |s| s.get_keys()),
+        )
+    }
 }

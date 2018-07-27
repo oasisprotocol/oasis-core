@@ -143,6 +143,10 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
             Err(e) => Err(e.into()),
         }))
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        unimplemented!();
+    }
 }
 
 fn di_factory(

@@ -1,5 +1,3 @@
-#![feature(clone_closures)]
-
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;
 #[cfg(not(target_env = "sgx"))]

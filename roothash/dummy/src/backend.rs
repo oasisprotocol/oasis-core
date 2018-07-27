@@ -1044,6 +1044,39 @@ impl RootHashBackend for DummyRootHashBackend {
             .into_box()
     }
 
+    fn get_blocks_since(&self, contract_id: B256, round: U256) -> BoxStream<Block> {
+        let (sender, receiver) = self.inner.block_subscribers.subscribe();
+        {
+            let blocks = self.inner.blocks.lock().unwrap();
+            if blocks.contains_key(&contract_id) {
+                let blockchain = blocks.get(&contract_id).unwrap();
+                // TODO: check overflow lol
+                let round_usize = round.0.low_u64() as usize;
+                if round_usize >= blockchain.len() {
+                    return stream::once(Err(Error::new(
+                        "Dummy root hash backend: don't have this block yet",
+                    ))).into_box();
+                }
+                let block_slice = &blockchain[round_usize..];
+                assert!(block_slice.len() > 0);
+                assert_eq!(block_slice[0].header.round, round);
+                block_slice.iter().for_each(|block| {
+                    drop(sender.unbounded_send(block.clone()));
+                });
+            } else {
+                // Otherwise, no blockchain yet for this contract.
+                // Could possibly define this to wait until a round and then start.
+                return stream::once(Err(Error::new(
+                    "Dummy root hash backend: don't have this contract",
+                ))).into_box();
+            };
+        }
+
+        receiver
+            .filter(move |block| block.header.namespace == contract_id)
+            .into_box()
+    }
+
     fn get_events(&self, contract_id: B256) -> BoxStream<Event> {
         self.inner
             .event_subscribers

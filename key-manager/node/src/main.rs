@@ -1,5 +1,4 @@
 #![feature(use_extern_macros)]
-#![feature(clone_closures)]
 #![feature(try_from)]
 
 extern crate sgx_types;
