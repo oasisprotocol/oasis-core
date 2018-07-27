@@ -10,6 +10,7 @@ use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::futures::streamfollow;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
 use ekiden_compute_api;
@@ -97,78 +98,82 @@ impl ContractClientManager {
     /// Start contract client manager.
     fn start(&self) {
         self.inner.environment.spawn({
+            let inner_init = self.inner.clone();
             let inner = self.inner.clone();
             let contract_id = self.inner.contract_id;
 
-            self.inner
-                .scheduler
-                .watch_committees()
-                .filter(move |committee| committee.contract.id == contract_id)
-                .filter(|committee| committee.kind == CommitteeType::Compute)
-                .for_each(move |committee| {
-                    // Committee has been updated, check if we need to update the leader.
-                    let new_leader = match committee
-                        .members
-                        .iter()
-                        .filter(|member| member.role == Role::Leader)
-                        .map(|member| member.public_key)
-                        .next()
-                    {
-                        Some(leader) => leader,
-                        None => {
-                            return future::err(Error::new("missing committee leader")).into_box()
-                        }
-                    };
-                    let previous_leader = inner.leader.read().unwrap();
+            streamfollow::follow_skip(
+                move || {
+                    inner_init
+                        .scheduler
+                        .watch_committees()
+                        .filter(move |committee| committee.contract.id == contract_id)
+                        .filter(|committee| committee.kind == CommitteeType::Compute)
+                },
+                |com| com.valid_for,
+                |_| false,
+            ).for_each(move |committee| {
+                // Committee has been updated, check if we need to update the leader.
+                let new_leader = match committee
+                    .members
+                    .iter()
+                    .filter(|member| member.role == Role::Leader)
+                    .map(|member| member.public_key)
+                    .next()
+                {
+                    Some(leader) => leader,
+                    None => return future::err(Error::new("missing committee leader")).into_box(),
+                };
+                let previous_leader = inner.leader.read().unwrap();
 
-                    if let Some(ref previous_leader) = *previous_leader {
-                        if previous_leader.node.id == new_leader {
-                            return future::ok(()).into_box();
-                        }
+                if let Some(ref previous_leader) = *previous_leader {
+                    if previous_leader.node.id == new_leader {
+                        return future::ok(()).into_box();
                     }
+                }
 
-                    info!(
-                        "Compute committee has changed, new leader is: {:?}",
-                        new_leader
-                    );
+                info!(
+                    "Compute committee has changed, new leader is: {:?}",
+                    new_leader
+                );
 
-                    // Need to change the leader.
-                    let inner = inner.clone();
+                // Need to change the leader.
+                let inner = inner.clone();
 
-                    inner
-                        .entity_registry
-                        .get_node(new_leader)
-                        .and_then(move |node| {
-                            // Create new client to the leader node.
-                            let rpc = ekiden_compute_api::ContractClient::new(
-                                node.connect_without_identity(inner.environment.clone()),
-                            );
-                            let client = ContractClient::new(
-                                rpc,
-                                inner.call_wait_manager.clone(),
-                                inner.timeout.clone(),
-                            );
+                inner
+                    .entity_registry
+                    .get_node(new_leader)
+                    .and_then(move |node| {
+                        // Create new client to the leader node.
+                        let rpc = ekiden_compute_api::ContractClient::new(
+                            node.connect_without_identity(inner.environment.clone()),
+                        );
+                        let client = ContractClient::new(
+                            rpc,
+                            inner.call_wait_manager.clone(),
+                            inner.timeout.clone(),
+                        );
 
-                            // Change the leader.
-                            let mut previous_leader = inner.leader.write().unwrap();
-                            let new_leader = Arc::new(Leader { node, client });
-                            if previous_leader.is_none() {
-                                // Notify tasks waiting for the leader. Unwrap is safe as this is only
-                                // needed the first time when there is no leader yet.
-                                let mut leader_notify = inner.leader_notify.lock().unwrap();
-                                let leader_notify = leader_notify.take().unwrap();
-                                drop(leader_notify.send(new_leader.clone()));
-                            }
+                        // Change the leader.
+                        let mut previous_leader = inner.leader.write().unwrap();
+                        let new_leader = Arc::new(Leader { node, client });
+                        if previous_leader.is_none() {
+                            // Notify tasks waiting for the leader. Unwrap is safe as this is only
+                            // needed the first time when there is no leader yet.
+                            let mut leader_notify = inner.leader_notify.lock().unwrap();
+                            let leader_notify = leader_notify.take().unwrap();
+                            drop(leader_notify.send(new_leader.clone()));
+                        }
 
-                            if let Some(previous_leader) = previous_leader.take() {
-                                previous_leader.client.shutdown();
-                            }
-                            *previous_leader = Some(new_leader);
+                        if let Some(previous_leader) = previous_leader.take() {
+                            previous_leader.client.shutdown();
+                        }
+                        *previous_leader = Some(new_leader);
 
-                            Ok(())
-                        })
-                        .into_box()
-                })
+                        Ok(())
+                    })
+                    .into_box()
+            })
                 .then(|r| -> Result<(), ()> {
                     match r {
                         // Committee stream ended.
