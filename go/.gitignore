@@ -7,5 +7,6 @@ ekiden/ekiden
 vendor/
 
 # Ignore output from protoc created via `go generate`.
-grpc/common/common.pb.go
-grpc/dummydebug/dummy_debug.pb.go
+grpc/common/
+grpc/dummydebug/
+grpc/registry/

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/oasislabs/ekiden/go/epochtime"
+	"github.com/oasislabs/ekiden/go/registry"
 
 	"github.com/spf13/cobra"
 )
@@ -33,8 +34,13 @@ func dummyMain(cmd *cobra.Command, args []string) {
 	}
 	svcMgr.Register(grpcSrv)
 
+	// Initialize the various backends.
+	timeSource := epochtime.NewMockTimeSource()
+	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
+
 	// Initialize and register the gRPC services.
-	epochtime.NewMockTimeSourceServer(grpcSrv.s)
+	epochtime.NewTimeSourceServer(grpcSrv.s, timeSource)
+	registry.NewEntityRegistryServer(grpcSrv.s, entityRegistry)
 
 	// Start the gRPC server.
 	if err = grpcSrv.Start(); err != nil {

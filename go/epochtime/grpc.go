@@ -11,20 +11,19 @@ import (
 )
 
 var (
-	_ pb.TimeSourceServer    = (*MockTimeSourceServer)(nil)
-	_ dbgPB.DummyDebugServer = (*MockTimeSourceServer)(nil)
+	_ pb.TimeSourceServer    = (*TimeSourceServer)(nil)
+	_ dbgPB.DummyDebugServer = (*TimeSourceServer)(nil)
 
 	serviceLogger = logging.GetLogger("dummy-debug")
 )
 
-// MockTimeSourceServer is a MockTimeSource exposed over gRPC, to be used
-// for testing with arbitrary duration epochs broadcasted over a test network.
-type MockTimeSourceServer struct {
-	backend *MockTimeSource
+// TimeSourceServer is a TimeSource exposed over gRPC.
+type TimeSourceServer struct {
+	backend TimeSource
 }
 
 // GetEpoch implements the corresponding gRPC call.
-func (s *MockTimeSourceServer) GetEpoch(context.Context, *pb.EpochRequest) (*pb.EpochResponse, error) {
+func (s *TimeSourceServer) GetEpoch(context.Context, *pb.EpochRequest) (*pb.EpochResponse, error) {
 	epoch, elapsed := s.backend.GetEpoch()
 
 	return &pb.EpochResponse{
@@ -34,7 +33,7 @@ func (s *MockTimeSourceServer) GetEpoch(context.Context, *pb.EpochRequest) (*pb.
 }
 
 // WatchEpochs implements the corresponding gRPC call.
-func (s *MockTimeSourceServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource_WatchEpochsServer) error {
+func (s *TimeSourceServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource_WatchEpochsServer) error {
 	epochCh := s.backend.WatchEpochs()
 
 	for {
@@ -54,20 +53,25 @@ func (s *MockTimeSourceServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.
 }
 
 // SetEpoch implements the corresponding gRPC call.
-func (s *MockTimeSourceServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
+func (s *TimeSourceServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
 	epoch := EpochTime(req.GetEpoch())
 	serviceLogger.Debug("set epoch",
 		"epoch", epoch,
 	)
-	s.backend.SetEpoch(epoch, 0)
+
+	mockTS := s.backend.(*MockTimeSource)
+	mockTS.SetEpoch(epoch, 0)
 
 	return &dbgPB.SetEpochResponse{}, nil
 }
 
-// NewMockTimeSourceServer initializes and registers a new MockTimeSourceServer.
-func NewMockTimeSourceServer(srv *grpc.Server) {
-	s := &MockTimeSourceServer{
-		backend: NewMockTimeSource(),
+// NewTimeSourceServer initializes and registers a new TimeSourceServer.
+func NewTimeSourceServer(srv *grpc.Server, timeSource TimeSource) {
+	s := &TimeSourceServer{
+		backend: timeSource,
 	}
-	dbgPB.RegisterDummyDebugServer(srv, s)
+	pb.RegisterTimeSourceServer(srv, s)
+	if _, ok := s.backend.(*MockTimeSource); ok {
+		dbgPB.RegisterDummyDebugServer(srv, s)
+	}
 }
