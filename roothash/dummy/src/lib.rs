@@ -16,6 +16,7 @@ extern crate ekiden_di;
 extern crate ekiden_registry_base;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_base;
+extern crate ekiden_storage_mutablestate;
 #[macro_use]
 extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
@@ -23,8 +24,6 @@ extern crate ekiden_instrumentation_prometheus;
 mod backend;
 mod commitment;
 mod signer;
-mod state_storage;
 
 pub use backend::DummyRootHashBackend;
 pub use signer::DummyRootHashSigner;
-pub use state_storage::StateStorage;

@@ -22,9 +22,9 @@ use ekiden_registry_base::ContractRegistryBackend;
 use ekiden_roothash_base::{Block, Commitment as OpaqueCommitment, Event, Header, RootHashBackend};
 use ekiden_scheduler_base::{Committee, CommitteeNode, CommitteeType, Role, Scheduler};
 use ekiden_storage_base::StorageBackend;
+use ekiden_storage_mutablestate::StateStorage;
 
 use super::commitment::Commitment;
-use super::state_storage::StateStorage;
 
 /// Hard time limit for a round after at least one node has sent a commitment.
 const ROUND_AFTER_COMMIT_TIMEOUT: Duration = Duration::from_secs(10);
