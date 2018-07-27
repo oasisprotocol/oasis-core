@@ -45,12 +45,14 @@ type TimeSource interface {
 type SystemTimeSource struct {
 	logger   *logging.Logger
 	notifier *pubsub.Broker
+
+	interval int64
 }
 
 // GetEpoch returns the current epoch and the number of seconds since the
 // begining of the current epoch.
 func (s *SystemTimeSource) GetEpoch() (epoch EpochTime, elasped uint64) {
-	return getEpochAt(time.Now())
+	return getEpochAt(time.Now(), s.interval)
 }
 
 // WatchEpochs returns a channel that produces a stream of messages on epoch
@@ -75,11 +77,23 @@ func (s *SystemTimeSource) worker() {
 	}
 }
 
-// NewSystemTimeSource constructs a new SystemTimeSource instance.
-func NewSystemTimeSource() TimeSource {
+// NewSystemTimeSource constructs a new SystemTimeSource instance, with
+// the specified epoch interval.
+func NewSystemTimeSource(interval int64) TimeSource {
+	if interval <= 0 {
+		panic("epochtime: invalid epoch interval")
+	}
+
 	s := &SystemTimeSource{
 		logger:   logging.GetLogger("SystemTimeSource"),
 		notifier: pubsub.NewBroker(false),
+		interval: interval,
+	}
+
+	if interval != EpochInterval {
+		s.logger.Debug("non-standard epoch interval",
+			"interval", interval,
+		)
 	}
 
 	go s.worker()
@@ -142,14 +156,14 @@ func NewMockTimeSource() *MockTimeSource {
 	}
 }
 
-func getEpochAt(at time.Time) (epoch EpochTime, elapsed uint64) {
+func getEpochAt(at time.Time, interval int64) (epoch EpochTime, elapsed uint64) {
 	delta := int64(at.Sub(ekidenEpochBase).Seconds())
 	if delta < 0 {
 		panic("epochtime: time predates EkidenEpoch")
 	}
 
-	epoch = EpochTime(delta / EpochInterval)
-	elapsed = uint64(delta % EpochInterval)
+	epoch = EpochTime(delta / interval)
+	elapsed = uint64(delta % interval)
 	return
 }
 
@@ -158,12 +172,14 @@ func subscribeTyped(notifier *pubsub.Broker) <-chan EpochTime {
 	typedCh := make(chan EpochTime)
 
 	go func() {
-		epoch, ok := <-rawCh
-		if !ok {
-			close(typedCh)
-			return
+		for {
+			epoch, ok := <-rawCh
+			if !ok {
+				close(typedCh)
+				return
+			}
+			typedCh <- epoch.(EpochTime)
 		}
-		typedCh <- epoch.(EpochTime)
 	}()
 
 	return typedCh

@@ -33,8 +33,11 @@ func dummyMain(cmd *cobra.Command, args []string) {
 	}
 	svcMgr.Register(grpcSrv)
 
+	// Initialize the various backends.
+	timeSource := epochtime.NewMockTimeSource()
+
 	// Initialize and register the gRPC services.
-	epochtime.NewMockTimeSourceServer(grpcSrv.s)
+	epochtime.NewTimeSourceServer(grpcSrv.s, timeSource)
 
 	// Start the gRPC server.
 	if err = grpcSrv.Start(); err != nil {
