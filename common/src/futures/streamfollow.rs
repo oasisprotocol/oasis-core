@@ -66,6 +66,7 @@ where
     /// Create a stream appropriate for the bookmark state: init if we haven't seen anything yet,
     /// or resume if we have a bookmark.
     fn connect(&mut self) -> S {
+        debug!("Connecting");
         match *self {
             BookmarkState::Invalid => unreachable!(),
             BookmarkState::Initializing(ref mut init, ref mut _resume) => init(),
@@ -135,8 +136,9 @@ where
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(first))) => {
-                            let forward_sentinel = self.bookmark_state
-                                .check_first((self.item_to_bookmark)(&first));
+                            let bookmark = (self.item_to_bookmark)(&first);
+                            debug!("Received sentinel item {:?}", bookmark);
+                            let forward_sentinel = self.bookmark_state.check_first(bookmark);
                             self.connection_state = ConnectionState::Forwarding(stream);
                             if forward_sentinel {
                                 return Ok(Async::Ready(Some(first)));
@@ -190,9 +192,11 @@ where
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(item))) => {
+                            let bookmark = (self.item_to_bookmark)(&item);
+                            trace!("Forwarding item {:?}", bookmark);
                             // Stay in forwarding state.
                             self.connection_state = ConnectionState::Forwarding(stream);
-                            self.bookmark_state.advance((self.item_to_bookmark)(&item));
+                            self.bookmark_state.advance(bookmark);
                             return Ok(Async::Ready(Some(item)));
                         }
                         Ok(Async::NotReady) => {
