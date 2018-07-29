@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -13,6 +14,26 @@ import (
 )
 
 var _ pb.EntityRegistryServer = (*EntityRegistryServer)(nil)
+
+var registryFailures = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "ekiden_registry_failures",
+		Help: "Number of registry failures.",
+	},
+	[]string{"call"},
+)
+var registryNodes = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "ekiden_registry_nodes",
+		Help: "Number of registry nodes.",
+	},
+)
+var registryEntities = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "ekiden_registry_entities",
+		Help: "Number of registry entities.",
+	},
+)
 
 // EntityRegistryServer is an EntityRegistry exposed over gRPC.
 type EntityRegistryServer struct {
@@ -31,9 +52,11 @@ func (s *EntityRegistryServer) RegisterEntity(ctx context.Context, req *pb.Regis
 	}
 
 	if err := s.backend.RegisterEntity(&ent, &sig); err != nil {
+		registryFailures.With(prometheus.Labels{"call": "registerEntity"}).Inc()
 		return nil, err
 	}
 
+	registryEntities.Inc()
 	return &pb.RegisterResponse{}, nil
 }
 
@@ -49,9 +72,11 @@ func (s *EntityRegistryServer) DeregisterEntity(ctx context.Context, req *pb.Der
 	}
 
 	if err := s.backend.DeregisterEntity(id, &sig); err != nil {
+		registryFailures.With(prometheus.Labels{"call": "deregisterEntity"}).Inc()
 		return nil, err
 	}
 
+	registryEntities.Dec()
 	return &pb.DeregisterResponse{}, nil
 }
 
@@ -118,9 +143,11 @@ func (s *EntityRegistryServer) RegisterNode(ctx context.Context, req *pb.Registe
 	}
 
 	if err := s.backend.RegisterNode(&node, &sig); err != nil {
+		registryFailures.With(prometheus.Labels{"call": "registerNode"}).Inc()
 		return nil, err
 	}
 
+	registryNodes.Inc()
 	return &pb.RegisterNodeResponse{}, nil
 }
 
@@ -222,6 +249,10 @@ func (s *EntityRegistryServer) WatchNodeList(req *pb.WatchNodeListRequest, strea
 // NewEntityRegistryServer initializes and registers a new EntityRegisteryServer
 // backed by the provided EntityRegistry.
 func NewEntityRegistryServer(srv *grpc.Server, reg EntityRegistry) {
+	prometheus.MustRegister(registryFailures)
+	prometheus.MustRegister(registryNodes)
+	prometheus.MustRegister(registryEntities)
+
 	s := &EntityRegistryServer{
 		backend: reg,
 	}
