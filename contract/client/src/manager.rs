@@ -110,7 +110,7 @@ impl ContractClientManager {
                         .filter(move |committee| committee.contract.id == contract_id)
                         .filter(|committee| committee.kind == CommitteeType::Compute)
                 },
-                |com| com.valid_for,
+                |committee| committee.valid_for,
                 |_| false,
             ).for_each(move |committee| {
                 // Committee has been updated, check if we need to update the leader.
@@ -174,8 +174,8 @@ impl ContractClientManager {
                     })
                     .into_box()
             })
-                .then(|r| -> Result<(), ()> {
-                    match r {
+                .then(|result| -> Result<(), ()> {
+                    match result {
                         // Committee stream ended.
                         Ok(()) => {
                             // The scheduler has ended the blockchain.
@@ -184,11 +184,11 @@ impl ContractClientManager {
                             std::process::exit(1);
                         }
                         // Committee stream errored.
-                        Err(e) => {
+                        Err(error) => {
                             // Propagate error to service manager (high-velocity implementation).
                             error!(
                                 "Unexpected error while watching scheduler committees: {:?}",
-                                e
+                                error
                             );
                             std::process::exit(1);
                         }
