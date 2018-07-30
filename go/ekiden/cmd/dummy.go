@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/oasislabs/ekiden/go/beacon"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
 
@@ -36,10 +37,12 @@ func dummyMain(cmd *cobra.Command, args []string) {
 
 	// Initialize the various backends.
 	timeSource := epochtime.NewMockTimeSource()
+	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
 	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
 
 	// Initialize and register the gRPC services.
 	epochtime.NewTimeSourceServer(grpcSrv.s, timeSource)
+	beacon.NewRandomBeaconServer(grpcSrv.s, randomBeacon)
 	registry.NewEntityRegistryServer(grpcSrv.s, entityRegistry)
 
 	// Start the gRPC server.

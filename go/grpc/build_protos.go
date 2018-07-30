@@ -28,6 +28,7 @@ var protoFiles = [][]string{
 		"registry/api/src/entity.proto",
 	},
 	[]string{"node/dummy/api/src/dummy_debug.proto"},
+	[]string{"beacon/api/src/beacon.proto"},
 }
 
 //
