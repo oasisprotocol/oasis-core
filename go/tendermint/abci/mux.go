@@ -185,7 +185,7 @@ func NewApplicationServer(addr string, dataDir string) (*ApplicationServer, erro
 		return nil, err
 	}
 	service := server.NewSocketServer(addr, mux)
-	service.SetLogger(&logAdapter{logging.GetLogger("abci-tendermint")})
+	service.SetLogger(&LogAdapter{logging.GetLogger("abci-tendermint")})
 
 	return &ApplicationServer{
 		mux:     mux,
@@ -487,15 +487,15 @@ func newABCIMux(dataDir string) (*abciMux, error) {
 	return mux, nil
 }
 
-type logAdapter struct {
+type LogAdapter struct {
 	*logging.Logger
 }
 
-func (a *logAdapter) With(keyvals ...interface{}) tlog.Logger {
+func (a *LogAdapter) With(keyvals ...interface{}) tlog.Logger {
 	// This is a bit silly, but the Ekiden logging's With returns a
 	// pointer to it's Logger struct rather than the tendermint Logger
 	// interface.
-	return &logAdapter{a.Logger.With(keyvals...)}
+	return &LogAdapter{a.Logger.With(keyvals...)}
 }
 
 // ApplicationState is the overall past, present and future state
