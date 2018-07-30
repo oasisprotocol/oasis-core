@@ -183,7 +183,7 @@ impl KeyManager {
             Entry::Vacant(entry) => {
                 // No entry in cache, fetch from key manager.
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
-                request.set_contract_id(serde_cbor::to_vec(&contract_id)?);
+                request.set_contract_id(contract_id.to_vec());
                 // make a RPC
                 let mut response = match self.client
                     .as_mut()
@@ -211,7 +211,7 @@ impl KeyManager {
             Entry::Occupied(entry) => Ok(entry.get().clone().input_keypair.get_pk()),
             Entry::Vacant(entry) => {
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
-                request.set_contract_id(serde_cbor::to_vec(&contract_id)?);
+                request.set_contract_id(contract_id.to_vec());
                 // make a RPC
                 let mut response =
                     match self.client.as_mut().unwrap().get_public_key(request).wait() {

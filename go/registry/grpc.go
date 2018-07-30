@@ -34,6 +34,11 @@ var registryEntities = prometheus.NewGauge(
 		Help: "Number of registry entities.",
 	},
 )
+var registeryCollectors = []prometheus.Collector{
+	registryFailures,
+	registryNodes,
+	registryEntities,
+}
 
 // EntityRegistryServer is an EntityRegistry exposed over gRPC.
 type EntityRegistryServer struct {
@@ -249,9 +254,7 @@ func (s *EntityRegistryServer) WatchNodeList(req *pb.WatchNodeListRequest, strea
 // NewEntityRegistryServer initializes and registers a new EntityRegisteryServer
 // backed by the provided EntityRegistry.
 func NewEntityRegistryServer(srv *grpc.Server, reg EntityRegistry) {
-	prometheus.MustRegister(registryFailures)
-	prometheus.MustRegister(registryNodes)
-	prometheus.MustRegister(registryEntities)
+	prometheus.MustRegister(registeryCollectors...)
 
 	s := &EntityRegistryServer{
 		backend: reg,
