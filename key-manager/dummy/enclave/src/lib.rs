@@ -14,6 +14,7 @@ extern crate ekiden_trusted;
 extern crate ekiden_enclave_logger;
 
 use ekiden_core::error::Result;
+use ekiden_core::bytes::H256;
 use ekiden_keymanager_api::{with_api, GetOrCreateKeyRequest, GetOrCreateKeyResponse};
 use ekiden_trusted::enclave::enclave_init;
 use ekiden_trusted::rpc::create_enclave_rpc;
@@ -40,7 +41,7 @@ pub fn get_or_create_keys(
         let _mr_enclave = request.get_client_mr_enclave();
 
         let keys =
-            key_store.get_or_create_keys(serde_cbor::from_slice(request.get_contract_id())?)?;
+            key_store.get_or_create_keys(H256::from_slice(request.get_contract_id()))?;
         response.set_key(serde_cbor::to_vec(&keys)?);
     }
 
@@ -52,7 +53,7 @@ pub fn get_public_key(request: &Request<GetOrCreateKeyRequest>) -> Result<GetOrC
     // Query the key store.
     {
         let key_store = KeyStore::get();
-        let keys = key_store.get_public_key(serde_cbor::from_slice(request.get_contract_id())?)?;
+        let keys = key_store.get_public_key(H256::from_slice(request.get_contract_id()))?;
         response.set_key(serde_cbor::to_vec(&keys)?);
     }
 
