@@ -125,7 +125,7 @@ pub trait Scheduler: Send + Sync {
     /// for the current epoch.
     fn get_committees(&self, contract: B256) -> BoxFuture<Vec<Committee>>;
 
-    /// Subscribe to all comittee generation updates.  Upon subscription
+    /// Subscribe to all committee generation updates.  Upon subscription
     /// all committees for the current epoch will be send immediately.
     fn watch_committees(&self) -> BoxStream<Committee>;
 }
