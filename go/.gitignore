@@ -7,6 +7,7 @@ ekiden/ekiden
 vendor/
 
 # Ignore output from protoc created via `go generate`.
+grpc/beacon/
 grpc/common/
 grpc/dummydebug/
 grpc/registry/
