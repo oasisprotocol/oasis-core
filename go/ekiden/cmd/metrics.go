@@ -1,4 +1,3 @@
-// Implements a metrics endpoint for the services.
 package cmd
 
 import (
