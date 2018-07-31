@@ -47,10 +47,10 @@ func (s *grpcService) Cleanup() {
 	}
 }
 
-func newGrpcService() (*grpcService, error) {
+func newGrpcService(port uint16) (*grpcService, error) {
 	rootLog.Debug("gRPC Server Params", "port", grpcPort)
 
-	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(grpcPort)))
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
 		return nil, err
 	}

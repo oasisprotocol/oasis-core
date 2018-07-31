@@ -2,6 +2,7 @@
 package epochtime
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -79,9 +80,9 @@ func (s *SystemTimeSource) worker() {
 
 // NewSystemTimeSource constructs a new SystemTimeSource instance, with
 // the specified epoch interval.
-func NewSystemTimeSource(interval int64) TimeSource {
+func NewSystemTimeSource(interval int64) (TimeSource, error) {
 	if interval <= 0 {
-		panic("epochtime: invalid epoch interval")
+		return nil, fmt.Errorf("epochtime: invalid epoch interval: %v", interval)
 	}
 
 	s := &SystemTimeSource{
@@ -90,15 +91,14 @@ func NewSystemTimeSource(interval int64) TimeSource {
 		interval: interval,
 	}
 
-	if interval != EpochInterval {
-		s.logger.Debug("non-standard epoch interval",
-			"interval", interval,
-		)
-	}
+	s.logger.Debug("initialized",
+		"backend", backendSystem,
+		"interval", interval,
+	)
 
 	go s.worker()
 
-	return s
+	return s, nil
 }
 
 // MockTimeSource is a mock time source that is driven manually
@@ -150,10 +150,16 @@ func (s *MockTimeSource) SetEpoch(epoch EpochTime, elapsed uint64) {
 
 // NewMockTimeSource constructs a new MockTimeSource instance.
 func NewMockTimeSource() *MockTimeSource {
-	return &MockTimeSource{
+	s := &MockTimeSource{
 		logger:   logging.GetLogger("MockTimeSource"),
 		notifier: pubsub.NewBroker(false),
 	}
+
+	s.logger.Debug("initialized",
+		"backend", backendMock,
+	)
+
+	return s
 }
 
 func getEpochAt(at time.Time, interval int64) (epoch EpochTime, elapsed uint64) {

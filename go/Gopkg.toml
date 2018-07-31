@@ -39,7 +39,7 @@
 
 [[constraint]]
   name = "github.com/tendermint/tendermint"
-  version = "=v0.22.5"
+  version = "=v0.22.8"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
@@ -68,7 +68,7 @@
 # iavl as of 2018/07/12 wants `=0.22.0-rc2`, so override it.
 [[override]]
   name = "github.com/tendermint/tendermint"
-  version = "=v0.22.5"
+  version = "=v0.22.8"
 
 [[override]]
   name = "github.com/tendermint/go-amino"

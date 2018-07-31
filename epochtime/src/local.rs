@@ -317,7 +317,7 @@ create_component!(
 
         // drive instance.
         let (now, since) = source.get_epoch().unwrap();
-        let till = EPOCH_INTERVAL - since;
+        let till = source.interval - since;
         trace!("SystemTime: Epoch: {} Till: {}", now, till);
 
         // Note: This assumes that the underlying futures_timer
@@ -330,7 +330,7 @@ create_component!(
         // epoch (eg: once every 60s or so).
 
         let at = Instant::now() + Duration::from_secs(till);
-        let dur = Duration::from_secs(EPOCH_INTERVAL);
+        let dur = Duration::from_secs(source.interval);
         let timer = Interval::new_handle(at, dur, TimerHandle::default());
 
         environment.spawn({
@@ -342,7 +342,7 @@ create_component!(
                     .map_err(|error| Error::from(error))
                     .for_each(move |_| {
                         let (now, since) = source.get_epoch().unwrap();
-                        let till = EPOCH_INTERVAL - since;
+                        let till = source.interval - since;
                         trace!("SystemTime: Epoch: {} Till: {}", now, till);
                         notifier.notify_subscribers()
                     })
