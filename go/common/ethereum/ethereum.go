@@ -4,6 +4,7 @@ package ethereum
 
 import (
 	"encoding"
+	"encoding/hex"
 	"errors"
 )
 
@@ -38,4 +39,9 @@ func (a *Address) UnmarshalBinary(data []byte) error {
 	copy(a[:], data)
 
 	return nil
+}
+
+// String returns a string representation of the Ethereum address.
+func (a *Address) String() string {
+	return hex.EncodeToString(a[:])
 }
