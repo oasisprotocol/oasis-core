@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate clap;
 #[cfg(feature = "benchmark")]
 extern crate histogram;
 #[macro_use]
@@ -36,4 +38,5 @@ pub mod components;
 #[macro_use]
 pub mod macros;
 
+pub mod args;
 pub mod db;
