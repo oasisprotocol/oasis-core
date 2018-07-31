@@ -51,11 +51,14 @@ func initConfig() {
 	// The command line flag values may be missing, but may be specified
 	// from other sources, write back to the common flag vars for
 	// convenience.
+	//
+	// Note: This is only for flags that are common across all
+	// sub-commands, so excludes things such as the gRPC/Metrics/etc
+	// configuration.
 	viper.Set(cfgDataDir, dataDir)
 	logFile = viper.GetString(cfgLogFile)
 	logFmt = viper.GetString(cfgLogFmt)
 	logLevel = viper.GetString(cfgLogLevel)
-	grpcPort = uint16(viper.GetInt(cfgGRPCPort))
 }
 
 func initDataDir() error {

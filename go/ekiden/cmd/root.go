@@ -5,8 +5,12 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/beacon"
+	"github.com/oasislabs/ekiden/go/epochtime"
+	"github.com/oasislabs/ekiden/go/registry"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+
+	"github.com/oasislabs/ekiden/go/common/logging"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -18,33 +22,31 @@ const (
 	cfgLogFmt   = "log.format"
 	cfgLogLevel = "log.level"
 
-	cfgABCIAddr = "abci.address"
-	cfgABCIPort = "abci.port"
-
-	cfgGRPCPort = "grpc.port"
-
+	cfgABCIAddr    = "abci.address"
+	cfgABCIPort    = "abci.port"
+	cfgGRPCPort    = "grpc.port"
 	cfgMetricsPort = "metrics.port"
 )
 
 var (
+	// Common config flags.
 	cfgFile  string
 	dataDir  string
 	logFile  string
 	logFmt   string
 	logLevel string
 
-	abciAddr net.IP
-	abciPort uint16
-
-	grpcPort uint16
-
+	// Root (aka node) command config flags.
+	abciAddr    net.IP
+	abciPort    uint16
+	grpcPort    uint16
 	metricsPort uint16
 
 	rootCmd = &cobra.Command{
 		Use:     "ekiden",
 		Short:   "Ekiden",
 		Version: "0.2.0-alpha",
-		Run:     rootMain,
+		Run:     nodeMain,
 	}
 
 	rootLog = logging.GetLogger("ekiden")
@@ -58,26 +60,37 @@ func Execute() {
 	}
 }
 
-func rootMain(cmd *cobra.Command, args []string) {
-	svcMgr := newBackgroundServiceManager()
-	defer func() { svcMgr.Cleanup() }()
+type nodeEnv struct {
+	svcMgr  *backgroundServiceManager
+	grpcSrv *grpcService
+	abciMux *abci.ApplicationServer
+}
+
+func nodeMain(cmd *cobra.Command, args []string) {
+	env := &nodeEnv{
+		svcMgr: newBackgroundServiceManager(),
+	}
+	defer func() { env.svcMgr.Cleanup() }()
 
 	initCommon()
 
 	rootLog.Info("starting ekiden node")
 
+	var err error
+
 	// XXX: Generate/Load the node identity.
 	// Except tendermint does this on it's own, sigh.
 
 	// Initialize the gRPC server.
-	grpcSrv, err := newGrpcService()
+	grpcPort, _ = cmd.Flags().GetUint16(cfgGRPCPort)
+	env.grpcSrv, err = newGrpcService(grpcPort)
 	if err != nil {
 		rootLog.Error("failed to initialize gRPC server",
 			"err", err,
 		)
 		return
 	}
-	svcMgr.Register(grpcSrv)
+	env.svcMgr.Register(env.grpcSrv)
 
 	// Initialize the metrics server.
 	metricsPort, _ = cmd.Flags().GetUint16(cfgMetricsPort)
@@ -88,7 +101,7 @@ func rootMain(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
-	svcMgr.Register(metrics)
+	env.svcMgr.Register(metrics)
 
 	// Initialize the ABCI multiplexer.
 	abciAddr, _ = cmd.Flags().GetIP(cfgABCIAddr)
@@ -96,29 +109,26 @@ func rootMain(cmd *cobra.Command, args []string) {
 	abciSockAddr := net.JoinHostPort(abciAddr.String(), strconv.Itoa(int(abciPort)))
 	rootLog.Debug("ABCI Multiplexer Params", "addr", abciSockAddr)
 
-	mux, err := abci.NewApplicationServer(abciSockAddr, dataDir)
+	env.abciMux, err = abci.NewApplicationServer(abciSockAddr, dataDir)
 	if err != nil {
 		rootLog.Error("failed to initialize ABCI multiplexer",
 			"err", err,
 		)
 		return
 	}
-	svcMgr.Register(mux)
+	env.svcMgr.Register(env.abciMux)
 
-	// XXX: Register the various services with the ABCI multiplexer.
-	_ = mux
-
-	// Start the ABCI server.
-	if err = mux.Start(); err != nil {
-		rootLog.Error("failed to start ABCI multiplexer",
+	// Initialize the varous node backends.
+	if err = initNode(env); err != nil {
+		rootLog.Error("failed to initialize backends",
 			"err", err,
 		)
 		return
 	}
 
-	// Start the gRPC server.
-	if err = grpcSrv.Start(); err != nil {
-		rootLog.Error("failed to start gRPC server",
+	// Start the ABCI server.
+	if err = env.abciMux.Start(); err != nil {
+		rootLog.Error("failed to start ABCI multiplexer",
 			"err", err,
 		)
 		return
@@ -135,9 +145,35 @@ func rootMain(cmd *cobra.Command, args []string) {
 	// TODO: Spin up the tendermint node.
 	// This should be in-process rather than fork() + exec() based.
 
+	// Start the gRPC server.
+	if err = env.grpcSrv.Start(); err != nil {
+		rootLog.Error("failed to start gRPC server",
+			"err", err,
+		)
+		return
+	}
+
+	rootLog.Info("initialization complete: ready to serve")
+
 	// Wait for the services to catch on fire or otherwise
 	// terminate.
-	svcMgr.Wait()
+	env.svcMgr.Wait()
+}
+
+func initNode(env *nodeEnv) error {
+	// Initialize the various backends.
+	timeSource := epochtime.NewMockTimeSource()
+	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
+	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
+
+	// Initialize and register the gRPC services.
+	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
+	beacon.NewRandomBeaconServer(env.grpcSrv.s, randomBeacon)
+	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
+
+	rootLog.Debug("backends initialized")
+
+	return nil
 }
 
 // nolint: errcheck
@@ -150,8 +186,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logFile, cfgLogFile, "", "log file")
 	rootCmd.PersistentFlags().StringVar(&logFmt, cfgLogFmt, "Logfmt", "log format")
 	rootCmd.PersistentFlags().StringVar(&logLevel, cfgLogLevel, "INFO", "log level")
-	rootCmd.PersistentFlags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
-	rootCmd.PersistentFlags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
 	rootCmd.MarkPersistentFlagRequired(cfgDataDir)
 
 	for _, v := range []string{
@@ -159,8 +193,6 @@ func init() {
 		cfgLogFile,
 		cfgLogFmt,
 		cfgLogLevel,
-		cfgGRPCPort,
-		cfgMetricsPort,
 	} {
 		viper.BindPFlag(v, rootCmd.PersistentFlags().Lookup(v))
 	}
@@ -168,10 +200,14 @@ func init() {
 	// Flags specific to the root command.
 	rootCmd.Flags().IPVar(&abciAddr, cfgABCIAddr, net.IPv4(127, 0, 0, 1), "ABCI server IP address")
 	rootCmd.Flags().Uint16Var(&abciPort, cfgABCIPort, 26658, "ABCI server port")
+	rootCmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
+	rootCmd.Flags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
 
 	for _, v := range []string{
 		cfgABCIAddr,
 		cfgABCIPort,
+		cfgGRPCPort,
+		cfgMetricsPort,
 	} {
 		viper.BindPFlag(v, rootCmd.Flags().Lookup(v))
 	}
