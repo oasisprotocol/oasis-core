@@ -119,7 +119,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(env.abciMux)
 
 	// Initialize the varous node backends.
-	if err = initNode(env); err != nil {
+	if err = initNode(cmd, env); err != nil {
 		rootLog.Error("failed to initialize backends",
 			"err", err,
 		)
@@ -160,9 +160,12 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Wait()
 }
 
-func initNode(env *nodeEnv) error {
+func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	// Initialize the various backends.
-	timeSource := epochtime.NewMockTimeSource()
+	timeSource, err := epochtime.New(cmd)
+	if err != nil {
+		return err
+	}
 	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
 	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
 
@@ -210,5 +213,12 @@ func init() {
 		cfgMetricsPort,
 	} {
 		viper.BindPFlag(v, rootCmd.Flags().Lookup(v))
+	}
+
+	// Backend initialization flags.
+	for _, v := range []func(*cobra.Command){
+		epochtime.RegisterFlags,
+	} {
+		v(rootCmd)
 	}
 }
