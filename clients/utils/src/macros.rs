@@ -61,15 +61,8 @@ macro_rules! contract_client {
             $crate::macros::set_boxed_metric_collector(metrics).unwrap();
         }
 
-        // Determine contract identifier.
-        let contract_id = if $args.is_present("test-contract-id") {
-            value_t_or_exit!($args, "test-contract-id", B256)
-        } else {
-            value_t_or_exit!($args, "mr-enclave", B256)
-        };
-
         $contract::Client::new(
-            contract_id,
+            $crate::args::get_contract_id(&$args),
             value_t_or_exit!($args, "mr-enclave", MrEnclave),
             if $args.is_present("rpc-timeout") {
                 Some(std::time::Duration::new(
