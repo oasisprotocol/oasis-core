@@ -22,6 +22,8 @@ const (
 	cfgABCIPort = "abci.port"
 
 	cfgGRPCPort = "grpc.port"
+
+	cfgMetricsPort = "metrics.port"
 )
 
 var (
@@ -35,6 +37,8 @@ var (
 	abciPort uint16
 
 	grpcPort uint16
+
+	metricsPort uint16
 
 	rootCmd = &cobra.Command{
 		Use:     "ekiden",
@@ -75,6 +79,17 @@ func rootMain(cmd *cobra.Command, args []string) {
 	}
 	svcMgr.Register(grpcSrv)
 
+	// Initialize the metrics server.
+	metricsPort, _ = cmd.Flags().GetUint16(cfgMetricsPort)
+	metrics, err := newMetrics(metricsPort)
+	if err != nil {
+		rootLog.Error("failed to initialize metrics server",
+			"err", err,
+		)
+		return
+	}
+	svcMgr.Register(metrics)
+
 	// Initialize the ABCI multiplexer.
 	abciAddr, _ = cmd.Flags().GetIP(cfgABCIAddr)
 	abciPort, _ = cmd.Flags().GetUint16(cfgABCIPort)
@@ -109,6 +124,14 @@ func rootMain(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Start metric server.
+	if err = metrics.Start(); err != nil {
+		rootLog.Error("failed to start metric server",
+			"err", err,
+		)
+		return
+	}
+
 	// TODO: Spin up the tendermint node.
 	// This should be in-process rather than fork() + exec() based.
 
@@ -128,6 +151,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logFmt, cfgLogFmt, "Logfmt", "log format")
 	rootCmd.PersistentFlags().StringVar(&logLevel, cfgLogLevel, "INFO", "log level")
 	rootCmd.PersistentFlags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
+	rootCmd.PersistentFlags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
 	rootCmd.MarkPersistentFlagRequired(cfgDataDir)
 
 	for _, v := range []string{
@@ -136,6 +160,7 @@ func init() {
 		cfgLogFmt,
 		cfgLogLevel,
 		cfgGRPCPort,
+		cfgMetricsPort,
 	} {
 		viper.BindPFlag(v, rootCmd.PersistentFlags().Lookup(v))
 	}
