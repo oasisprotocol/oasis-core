@@ -7,6 +7,7 @@ use ekiden_core::bytes::{B256, H256};
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
+use ekiden_core::futures::streamfollow;
 use ekiden_core::futures::sync::mpsc;
 use ekiden_core::identity::NodeIdentity;
 use ekiden_core::node::Node;
@@ -115,14 +116,20 @@ impl ComputationGroup {
         let mut event_sources = stream::SelectAll::new();
 
         // Subscribe to computation group formations for given contract and update nodes.
-        let contract_id = self.inner.contract_id;
+        let scheduler_init = self.inner.scheduler.clone();
+        let contract_id = self.inner.contract_id.clone();
+
         event_sources.push(
-            self.inner
-                .scheduler
-                .watch_committees()
-                .filter(|committee| committee.kind == CommitteeType::Compute)
-                .filter(move |committee| committee.contract.id == contract_id)
-                .map(|committee| Command::UpdateCommittee(committee.valid_for, committee.members))
+            streamfollow::follow_skip(
+                move || {
+                    scheduler_init
+                        .watch_committees()
+                        .filter(|committee| committee.kind == CommitteeType::Compute)
+                        .filter(move |committee| committee.contract.id == contract_id)
+                },
+                |committee| committee.valid_for,
+                |_err| false,
+            ).map(|committee| Command::UpdateCommittee(committee.valid_for, committee.members))
                 .into_box(),
         );
 
