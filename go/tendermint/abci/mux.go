@@ -159,6 +159,11 @@ func (a *ApplicationServer) Cleanup() {
 	})
 }
 
+// Mux retrieve the abci Mux (or tendermint application) served by this server.
+func (a *ApplicationServer) Mux() types.Application {
+	return a.mux
+}
+
 // Register registers an Oasis application with the ABCI multiplexer.
 //
 // All registration must be done before Start is called.  ABCI operations

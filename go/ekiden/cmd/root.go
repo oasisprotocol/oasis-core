@@ -83,14 +83,6 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	// XXX: Generate/Load the node identity.
 	// Except tendermint does this on it's own, sigh.
 
-	env.tenderNode, err = newTendermintService()
-	if err != nil {
-		rootLog.Error("failed to initialize tendermint",
-			"err", err,
-		)
-		return
-	}
-
 	// Initialize the gRPC server.
 	grpcPort, _ = cmd.Flags().GetUint16(cfgGRPCPort)
 	env.grpcSrv, err = newGrpcService(grpcPort)
@@ -127,6 +119,14 @@ func nodeMain(cmd *cobra.Command, args []string) {
 		return
 	}
 	env.svcMgr.Register(env.abciMux)
+
+	env.tenderNode, err = newTendermintService(env.abciMux)
+	if err != nil {
+		rootLog.Error("failed to initialize tendermint",
+			"err", err,
+		)
+		return
+	}
 
 	// Initialize the varous node backends.
 	if err = initNode(cmd, env); err != nil {
