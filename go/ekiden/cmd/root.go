@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 
@@ -61,9 +62,10 @@ func Execute() {
 }
 
 type nodeEnv struct {
-	svcMgr  *backgroundServiceManager
-	grpcSrv *grpcService
-	abciMux *abci.ApplicationServer
+	svcMgr     *backgroundServiceManager
+	grpcSrv    *grpcService
+	tenderNode *tendermintAdapter
+	abciMux    *abci.ApplicationServer
 }
 
 func nodeMain(cmd *cobra.Command, args []string) {
@@ -80,6 +82,14 @@ func nodeMain(cmd *cobra.Command, args []string) {
 
 	// XXX: Generate/Load the node identity.
 	// Except tendermint does this on it's own, sigh.
+
+	env.tenderNode, err = newTendermintService()
+	if err != nil {
+		rootLog.Error("failed to initialize tendermint",
+			"err", err,
+		)
+		return
+	}
 
 	// Initialize the gRPC server.
 	grpcPort, _ = cmd.Flags().GetUint16(cfgGRPCPort)
@@ -142,8 +152,12 @@ func nodeMain(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// TODO: Spin up the tendermint node.
-	// This should be in-process rather than fork() + exec() based.
+	if err = env.tenderNode.Start(); err != nil {
+		rootLog.Error("failed to start tendermint server",
+			"err", err,
+		)
+		return
+	}
 
 	// Start the gRPC server.
 	if err = env.grpcSrv.Start(); err != nil {
@@ -218,6 +232,7 @@ func init() {
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
 		epochtime.RegisterFlags,
+		tendermintEntry.AddNodeFlags,
 	} {
 		v(rootCmd)
 	}
