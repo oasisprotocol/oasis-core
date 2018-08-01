@@ -13,7 +13,7 @@ use ekiden_common::entity::Entity;
 use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::{Future, FutureExt, Stream};
 use ekiden_common::testing;
-use ekiden_epochtime::interface::{TimeSource, TimeSourceNotifier};
+use ekiden_epochtime::interface::{TimeSource, TimeSourceNotifier, EPOCH_INTERVAL};
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumMockTime;
 use web3::api::Web3;
@@ -59,7 +59,7 @@ fn mocktime_integration() {
     // Ensure that the cache is coherent and contains the default values.
     let (epoch, till) = TimeSource::get_epoch(&time_source).unwrap();
     assert_eq!(epoch, 0);
-    assert_eq!(till, 0);
+    assert_eq!(till, EPOCH_INTERVAL);
 
     // Subscribe to the time source.
     let get_epochs = time_source.watch_epochs().take(1).collect();
