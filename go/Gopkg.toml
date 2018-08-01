@@ -70,6 +70,26 @@
   name = "github.com/tendermint/tendermint"
   version = "=v0.22.8"
 
+[[override]]
+  name = "github.com/tendermint/go-amino"
+  version = "=v0.10.1"
+
+[[override]]
+    name = "github.com/spf13/viper"
+    version = "=v1.0.2"
+
+[[override]]
+    name = "github.com/spf13/cobra"
+    version = "=v0.0.3"
+
+[[override]]
+  name = "github.com/tendermint/iavl"
+  version = "=v0.9.2"
+
+[[override]]
+  name = "github.com/prometheus/client_golang"
+  revision = "ae27198cdd90bf12cd134ad79d1366a6cf49f632"
+
 # https://github.com/tendermint/tendermint/issues/1777
 [[override]]
   name = "google.golang.org/genproto"
