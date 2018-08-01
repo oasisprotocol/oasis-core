@@ -30,7 +30,6 @@ extern crate ekiden_untrusted;
 extern crate ekiden_instrumentation;
 
 mod group;
-mod ias;
 mod node;
 mod roothash;
 mod services;
@@ -61,6 +60,7 @@ use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
+use ekiden_untrusted::enclave::ias;
 
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
