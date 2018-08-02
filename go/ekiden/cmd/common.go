@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
 
@@ -64,11 +65,12 @@ func initConfig() {
 func initDataDir() error {
 	const permDir = 0700
 
-	fi, err := os.Lstat(dataDir)
+	// Tendermint uses dataDir/config, so we confim or make that subdirectory.
+	fi, err := os.Lstat(path.Join(dataDir, "config"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Make the directory.
-			if err = os.MkdirAll(dataDir, permDir); err == nil {
+			if err = os.MkdirAll(path.Join(dataDir, "config"), permDir); err == nil {
 				return nil
 			}
 		}
