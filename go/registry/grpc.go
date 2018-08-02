@@ -114,7 +114,8 @@ func (s *EntityRegistryServer) GetEntities(ctx context.Context, req *pb.Entities
 
 // WatchEntities implements the corresponding gRPC call.
 func (s *EntityRegistryServer) WatchEntities(req *pb.WatchEntityRequest, stream pb.EntityRegistry_WatchEntitiesServer) error {
-	evCh := s.backend.WatchEntities()
+	evCh, sub := s.backend.WatchEntities()
+	defer sub.Close()
 
 	for {
 		ev, ok := <-evCh
@@ -204,7 +205,8 @@ func (s *EntityRegistryServer) GetNodesForEntity(ctx context.Context, req *pb.En
 
 // WatchNodes implements the corresponding gRPC call.
 func (s *EntityRegistryServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.EntityRegistry_WatchNodesServer) error {
-	evCh := s.backend.WatchNodes()
+	evCh, sub := s.backend.WatchNodes()
+	defer sub.Close()
 
 	for {
 		ev, ok := <-evCh
@@ -228,7 +230,8 @@ func (s *EntityRegistryServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.En
 
 // WatchNodeList implements the corresponding gRPC call.
 func (s *EntityRegistryServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.EntityRegistry_WatchNodeListServer) error {
-	nlCh := s.backend.WatchNodeList()
+	nlCh, sub := s.backend.WatchNodeList()
+	defer sub.Close()
 
 	for {
 		nl, ok := <-nlCh

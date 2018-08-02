@@ -39,7 +39,7 @@ type TimeSource interface {
 
 	// WatchEpochs returns a channel that produces a stream of messages
 	// on epoch transitions.
-	WatchEpochs() <-chan EpochTime
+	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
 }
 
 // SystemTimeSource is a TimeSource based on the system's real time clock.
@@ -58,7 +58,7 @@ func (s *SystemTimeSource) GetEpoch() (epoch EpochTime, elasped uint64) {
 
 // WatchEpochs returns a channel that produces a stream of messages on epoch
 // transitions.
-func (s *SystemTimeSource) WatchEpochs() <-chan EpochTime {
+func (s *SystemTimeSource) WatchEpochs() (<-chan EpochTime, *pubsub.Subscription) {
 	return subscribeTyped(s.notifier)
 }
 
@@ -125,7 +125,7 @@ func (s *MockTimeSource) GetEpoch() (epoch EpochTime, elapsed uint64) {
 
 // WatchEpochs returns a channel that produces a stream of messages on epoch
 // transitions.
-func (s *MockTimeSource) WatchEpochs() <-chan EpochTime {
+func (s *MockTimeSource) WatchEpochs() (<-chan EpochTime, *pubsub.Subscription) {
 	return subscribeTyped(s.notifier)
 }
 
@@ -173,20 +173,10 @@ func getEpochAt(at time.Time, interval int64) (epoch EpochTime, elapsed uint64) 
 	return
 }
 
-func subscribeTyped(notifier *pubsub.Broker) <-chan EpochTime {
-	rawCh := notifier.Subscribe()
+func subscribeTyped(notifier *pubsub.Broker) (<-chan EpochTime, *pubsub.Subscription) {
 	typedCh := make(chan EpochTime)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			epoch, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- epoch.(EpochTime)
-		}
-	}()
-
-	return typedCh
+	return typedCh, sub
 }

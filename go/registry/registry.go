@@ -55,7 +55,7 @@ type EntityRegistry interface {
 
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
-	WatchEntities() <-chan *EntityEvent
+	WatchEntities() (<-chan *EntityEvent, *pubsub.Subscription)
 
 	// RegisterNode registers and or updates a node with the registry.
 	//
@@ -73,7 +73,7 @@ type EntityRegistry interface {
 
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
-	WatchNodes() <-chan *NodeEvent
+	WatchNodes() (<-chan *NodeEvent, *pubsub.Subscription)
 
 	// WatchNodeList returns a channel that produces a stream of NodeList.
 	// Upon subscription, the node list for the current epoch will be sent
@@ -81,7 +81,7 @@ type EntityRegistry interface {
 	//
 	// Each node list will be sorted by node ID in lexographically ascending
 	// order.
-	WatchNodeList() <-chan *NodeList
+	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -117,57 +117,26 @@ func pubKeyToMapID(id signature.PublicKey) registryMapID {
 	return ret
 }
 
-func subscribeTypedEntityEvent(notifier *pubsub.Broker) <-chan *EntityEvent {
-	rawCh := notifier.Subscribe()
+func subscribeTypedEntityEvent(notifier *pubsub.Broker) (<-chan *EntityEvent, *pubsub.Subscription) {
 	typedCh := make(chan *EntityEvent)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			ev, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- ev.(*EntityEvent)
-		}
-	}()
-
-	return typedCh
+	return typedCh, sub
 }
 
-func subscribeTypedNodeEvent(notifier *pubsub.Broker) <-chan *NodeEvent {
-	rawCh := notifier.Subscribe()
+func subscribeTypedNodeEvent(notifier *pubsub.Broker) (<-chan *NodeEvent, *pubsub.Subscription) {
 	typedCh := make(chan *NodeEvent)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			ev, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- ev.(*NodeEvent)
-		}
-	}()
-
-	return typedCh
+	return typedCh, sub
 }
 
-func subscribeTypedNodeList(notifier *pubsub.Broker) <-chan *NodeList {
-	rawCh := notifier.Subscribe()
+func subscribeTypedNodeList(notifier *pubsub.Broker) (<-chan *NodeList, *pubsub.Subscription) {
 	typedCh := make(chan *NodeList)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			l, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- l.(*NodeList)
-		}
-	}()
-
-	return typedCh
-
+	return typedCh, sub
 }

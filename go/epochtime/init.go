@@ -45,6 +45,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgBackend,
 		cfgSystemInterval,
 	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
 	}
 }

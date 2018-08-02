@@ -23,7 +23,7 @@ type RandomBeacon interface {
 	// WatchBeacons returns a channel that produces a stream of
 	// GenerateEvent.  Upon subscription, the most recently generate
 	// beacon will be sent immediately if available.
-	WatchBeacons() <-chan *GenerateEvent
+	WatchBeacons() (<-chan *GenerateEvent, *pubsub.Subscription)
 }
 
 // GenerateEvent is the event that is returned via WatchBeacons to
@@ -33,20 +33,10 @@ type GenerateEvent struct {
 	Beacon []byte
 }
 
-func subscribeTypedGenerateEvent(notifier *pubsub.Broker) <-chan *GenerateEvent {
-	rawCh := notifier.Subscribe()
+func subscribeTypedGenerateEvent(notifier *pubsub.Broker) (<-chan *GenerateEvent, *pubsub.Subscription) {
 	typedCh := make(chan *GenerateEvent)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			ev, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- ev.(*GenerateEvent)
-		}
-	}()
-
-	return typedCh
+	return typedCh, sub
 }

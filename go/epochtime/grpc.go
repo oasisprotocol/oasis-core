@@ -34,7 +34,8 @@ func (s *TimeSourceServer) GetEpoch(context.Context, *pb.EpochRequest) (*pb.Epoc
 
 // WatchEpochs implements the corresponding gRPC call.
 func (s *TimeSourceServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource_WatchEpochsServer) error {
-	epochCh := s.backend.WatchEpochs()
+	epochCh, sub := s.backend.WatchEpochs()
+	defer sub.Close()
 
 	for {
 		epoch, ok := <-epochCh

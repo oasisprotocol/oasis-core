@@ -147,7 +147,7 @@ func (r *MemoryEntityRegistry) GetEntities() []*entity.Entity {
 
 // WatchEntities returns a channel that produces a stream of
 // EntityEvent on entity registration changes.
-func (r *MemoryEntityRegistry) WatchEntities() <-chan *EntityEvent {
+func (r *MemoryEntityRegistry) WatchEntities() (<-chan *EntityEvent, *pubsub.Subscription) {
 	return subscribeTypedEntityEvent(r.registrationNotifier)
 }
 
@@ -223,7 +223,7 @@ func (r *MemoryEntityRegistry) GetNodesForEntity(id signature.PublicKey) []*node
 
 // WatchNodes returns a channel that produces a stream of
 // NodeEvent on node registration changes.
-func (r *MemoryEntityRegistry) WatchNodes() <-chan *NodeEvent {
+func (r *MemoryEntityRegistry) WatchNodes() (<-chan *NodeEvent, *pubsub.Subscription) {
 	return subscribeTypedNodeEvent(r.nodeNotifier)
 }
 
@@ -233,7 +233,7 @@ func (r *MemoryEntityRegistry) WatchNodes() <-chan *NodeEvent {
 //
 // Each node list will be sorted by node ID in lexographically ascending
 // order.
-func (r *MemoryEntityRegistry) WatchNodeList() <-chan *NodeList {
+func (r *MemoryEntityRegistry) WatchNodeList() (<-chan *NodeList, *pubsub.Subscription) {
 	return subscribeTypedNodeList(r.nodeListNotifier)
 }
 
@@ -251,7 +251,8 @@ func (r *MemoryEntityRegistry) getNodesForEntryLocked(id signature.PublicKey) []
 }
 
 func (r *MemoryEntityRegistry) worker(timeSource epochtime.TimeSource) {
-	epochEvents := timeSource.WatchEpochs()
+	epochEvents, sub := timeSource.WatchEpochs()
+	defer sub.Close()
 	for {
 		newEpoch, ok := <-epochEvents
 		if !ok {

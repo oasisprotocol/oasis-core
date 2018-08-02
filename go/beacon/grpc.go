@@ -28,7 +28,8 @@ func (s *RandomBeaconServer) GetBeacon(ctx context.Context, req *pb.BeaconReques
 
 // WatchBeacons implements the corresponding gRPC call.
 func (s *RandomBeaconServer) WatchBeacons(req *pb.WatchBeaconRequest, stream pb.Beacon_WatchBeaconsServer) error {
-	evCh := s.backend.WatchBeacons()
+	evCh, sub := s.backend.WatchBeacons()
+	defer sub.Close()
 
 	for {
 		ev, ok := <-evCh
