@@ -8,6 +8,8 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+
+	"github.com/eapache/channels"
 )
 
 // EpochTime is the number of intervals (epochs) since a fixed instant
@@ -39,15 +41,20 @@ type TimeSource interface {
 
 	// WatchEpochs returns a channel that produces a stream of messages
 	// on epoch transitions.
+	//
+	// Upon subscription the current epoch is sent immediately.
 	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
 }
 
 // SystemTimeSource is a TimeSource based on the system's real time clock.
 type SystemTimeSource struct {
+	sync.Mutex
+
 	logger   *logging.Logger
 	notifier *pubsub.Broker
 
-	interval int64
+	lastNotified EpochTime
+	interval     int64
 }
 
 // GetEpoch returns the current epoch and the number of seconds since the
@@ -58,22 +65,26 @@ func (s *SystemTimeSource) GetEpoch() (epoch EpochTime, elasped uint64) {
 
 // WatchEpochs returns a channel that produces a stream of messages on epoch
 // transitions.
+//
+// Upon subscription the current epoch is sent immediately.
 func (s *SystemTimeSource) WatchEpochs() (<-chan EpochTime, *pubsub.Subscription) {
 	return subscribeTyped(s.notifier)
 }
 
 func (s *SystemTimeSource) worker() {
 	t := time.NewTicker(1 * time.Second)
-	epoch, _ := s.GetEpoch()
 	for {
 		<-t.C
-		if newEpoch, _ := s.GetEpoch(); newEpoch != epoch {
+		if newEpoch, _ := s.GetEpoch(); newEpoch != s.lastNotified {
 			s.logger.Debug("epoch transition",
-				"prev_epoch", epoch,
+				"prev_epoch", s.lastNotified,
 				"epoch", newEpoch,
 			)
 			s.notifier.Broadcast(newEpoch)
-			epoch = newEpoch
+
+			s.Lock()
+			s.lastNotified = newEpoch
+			s.Unlock()
 		}
 	}
 }
@@ -87,9 +98,12 @@ func NewSystemTimeSource(interval int64) (TimeSource, error) {
 
 	s := &SystemTimeSource{
 		logger:   logging.GetLogger("SystemTimeSource"),
-		notifier: pubsub.NewBroker(false),
 		interval: interval,
 	}
+	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		epoch, _ := s.GetEpoch()
+		ch.In() <- epoch
+	})
 
 	s.logger.Debug("initialized",
 		"backend", backendSystem,
@@ -125,6 +139,8 @@ func (s *MockTimeSource) GetEpoch() (epoch EpochTime, elapsed uint64) {
 
 // WatchEpochs returns a channel that produces a stream of messages on epoch
 // transitions.
+//
+// Upon subscription the current epoch is sent immediately.
 func (s *MockTimeSource) WatchEpochs() (<-chan EpochTime, *pubsub.Subscription) {
 	return subscribeTyped(s.notifier)
 }
@@ -151,9 +167,12 @@ func (s *MockTimeSource) SetEpoch(epoch EpochTime, elapsed uint64) {
 // NewMockTimeSource constructs a new MockTimeSource instance.
 func NewMockTimeSource() *MockTimeSource {
 	s := &MockTimeSource{
-		logger:   logging.GetLogger("MockTimeSource"),
-		notifier: pubsub.NewBroker(false),
+		logger: logging.GetLogger("MockTimeSource"),
 	}
+	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		epoch, _ := s.GetEpoch()
+		ch.In() <- epoch
+	})
 
 	s.logger.Debug("initialized",
 		"backend", backendMock,
