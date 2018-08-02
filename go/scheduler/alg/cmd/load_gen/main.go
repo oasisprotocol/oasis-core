@@ -18,8 +18,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/scheduler/alg/random_distribution"
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
+	"github.com/oasislabs/ekiden/go/scheduler/alg/random_distribution"
 )
 
 var verbosity int

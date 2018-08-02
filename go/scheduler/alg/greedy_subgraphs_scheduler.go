@@ -18,7 +18,7 @@ func NewGreedySubgraphs(max_p int, max_t ExecutionTime) *GreedySubgraphsSchedule
 		max_pending: max_p,
 		max_time:    max_t,
 		in_queue:    nil,
-		logger: logging.GetLogger("GreedySubgraphsScheduler"),
+		logger:      logging.GetLogger("GreedySubgraphsScheduler"),
 	}
 }
 
@@ -36,8 +36,9 @@ func (gs *GreedySubgraphsScheduler) FlushSchedule() []*Subgraph {
 
 // For sorting subgraphs, highest cost first.
 type SubgraphOrder []*Subgraph
-func (a SubgraphOrder) Len() int {return len(a) }
-func (a SubgraphOrder) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
+func (a SubgraphOrder) Len() int           { return len(a) }
+func (a SubgraphOrder) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a SubgraphOrder) Less(i, j int) bool { return a[i].EstExecutionTime() > a[j].EstExecutionTime() }
 
 func (gs *GreedySubgraphsScheduler) Schedule() []*Subgraph {
@@ -45,7 +46,7 @@ func (gs *GreedySubgraphsScheduler) Schedule() []*Subgraph {
 	read_map := make(map[Location][]int)
 	write_map := make(map[Location]int)
 	// out_graphs[0] will forever be nil
-	out_graphs := make([]*Subgraph,1)
+	out_graphs := make([]*Subgraph, 1)
 
 TransactionLoop:
 	for _, t := range gs.in_queue {
@@ -61,7 +62,7 @@ TransactionLoop:
 					deferred = append(deferred, t)
 					continue TransactionLoop
 				}
-				if out_graphs[sgix].EstExecutionTime() + t.TimeCost > gs.max_time {
+				if out_graphs[sgix].EstExecutionTime()+t.TimeCost > gs.max_time {
 					gs.logger.Debug("-- deferring.  Subgraph would be too full.")
 					deferred = append(deferred, t)
 					continue TransactionLoop
