@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/beacon"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
+	"github.com/oasislabs/ekiden/go/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
 
@@ -183,12 +184,14 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
 	contractRegistry := registry.NewMemoryContractRegistry()
 	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
+	sched := scheduler.NewTrivialScheduler(timeSource, contractRegistry, entityRegistry, randomBeacon)
 
 	// Initialize and register the gRPC services.
 	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
 	beacon.NewRandomBeaconServer(env.grpcSrv.s, randomBeacon)
 	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
 	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
+	scheduler.NewSchedulerServer(env.grpcSrv.s, sched)
 
 	rootLog.Debug("backends initialized")
 
