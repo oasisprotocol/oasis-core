@@ -4,7 +4,8 @@ package main
 
 Scheduling algorithm driver.
 
-Generate / read random transactions and feed into selected scheduling algorithm.
+Generate / read randomly generated sythetic transaction descriptions (or actual data extracted
+from Parity) and feed into selected scheduling algorithm.
 
 */
 
@@ -21,8 +22,13 @@ import (
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
 )
 
-var verbosity int
+// Flag variables
 
+var verbosity int
+var scheduler_name string
+// Distribution parameters, gathered into one struct.  When we add new distributions we should
+// just add new fields.  The factory function for sources will only use the config value(s)
+// appropriate for the selected TransactionSource.
 type DistributionConfig struct {
 	seed int64
 	distribution_name string
@@ -37,8 +43,6 @@ type DistributionConfig struct {
 
 dconfig_from_flags := DistributionConfig{}
 
-var scheduler_name string
-
 func init() {
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
 
@@ -46,22 +50,30 @@ func init() {
 
 	// Distribution generator parameters
 
-	// seed is only important for reproducible RNG; input_file/output_file is another mechanism for reproducibility
+	// seed is only important for reproducible RNG; input_file/output_file is another
+	// mechanism for reproducibility
 	flag.Int64Var(&dconfig_from_flags.seed, "seed", 0, "pseudorandom number generator seed")
 
-	flag.StringVar(&dconfig_from_flags.distribution_name, "distribution", "zipf", "random location generation distribution (uniform, or zipf)")
-	flag.StringVar(&dconfig_from_flags.input_file, "input", nil, "read transactions from file instead of generating")
-	flag.StringVar(&dconfig_from_flags.output_file, "output", nil, "write transactions to file in addition to scheduling")
-	flag.Float64Var(&dconfig_from_flags.alpha, "alpha", 1.0, "zipf distribution alpha parameter")
-	// For the Ethereum world, the number of possible locations is
-	// 2^{160+256}, but it is extremely sparse.  Furthermore, many
-	// locations are in (pseudo) equivalence classes, i.e., if a
-	// contract reads one of the locations, then it is almost
-	// certainly going to read the rest, and similarly for writes.
-	flag.UintVar(&dconfig_from_flags.num_locations, "num_locations", 1<<20, "number of possible locations")
-	flag.UintVar(&dconfig_from_flags.num_read_locs, "num_reads", 0, "number of read locations")
-	flag.UintVar(&dconfig_from_flags.num_write_locs, "num_writes", 2, "number of write locations")
-	flag.UintVar(&dconfig_from_flags.num_transactions, "num_transactions", 1<<20, "number of transactions to generate")
+	flag.StringVar(&dconfig_from_flags.distribution_name, "distribution",
+		"zipf", "random location generation distribution (uniform, or zipf)")
+	flag.StringVar(&dconfig_from_flags.input_file, "input",
+		nil, "read transactions from file instead of generating")
+	flag.StringVar(&dconfig_from_flags.output_file, "output",
+		nil, "write transactions to file in addition to scheduling")
+	flag.Float64Var(&dconfig_from_flags.alpha, "alpha",
+		1.0, "zipf distribution alpha parameter")
+	// For the Ethereum world, the number of possible locations is 2^{160+256}, but it is
+	// extremely sparse.  Furthermore, many locations are in (pseudo) equivalence classes,
+	// i.e., if a contract reads one of the locations, then it is almost certainly going to
+	// read the rest, and similarly for writes.
+	flag.UintVar(&dconfig_from_flags.num_locations, "num_locations",
+		1<<20, "number of possible locations")
+	flag.UintVar(&dconfig_from_flags.num_read_locs, "num_reads",
+		0, "number of read locations")
+	flag.UintVar(&dconfig_from_flags.num_write_locs, "num_writes",
+		2, "number of write locations")
+	flag.UintVar(&dconfig_from_flags.num_transactions, "num_transactions",
+		1<<20, "number of transactions to generate")
 }
 
 type TransactionSource interface {

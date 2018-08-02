@@ -53,3 +53,45 @@ func TestLocationSetIO(t *testing.T) {
 	RejectBadLocationSet(t, "{1, 0xf}")
 	RejectBadLocationSet(t, "{1, f}")
 }
+
+func TestLocationSetOps(t *testing.T) {
+	ls := NewLocationSet()
+	fmt.Println("Empty: ", ls)
+	expected := "{}"
+	if s := ls.ToString(); s != expected {
+		t.Error("Empty set should be ", expected, ", but is ", s)
+	}
+	ls.Add(TestLocation(0))
+	fmt.Println("Singleton: ", ls)
+	expected = "{0}"
+	if s := ls.ToString(); s != expected {
+		t.Error("Singleton ", expected, " expected, got ", s)
+	}
+	ls.Add(TestLocation(0))
+	fmt.Println("Still singleton: ", ls)
+	if s := ls.ToString(); s != expected {
+		t.Error("Singleton ", expected, " expected, got ", s)
+	}
+	ls.Add(TestLocation(314159))
+	fmt.Println("Two elts: ", ls)
+	expected = "{0, 314159}"
+	if s := ls.ToString(); s != expected {
+		t.Error("Set {0, 314159} expected, got ", s)
+	}
+	ls.Delete(TestLocation(0))
+	expected = "{314159}"
+	fmt.Println("Back to singleton: ", ls)
+	if s := ls.ToString(); s != expected {
+		t.Error("Singleton ", expected, " expected, got ", s)
+	}
+	ls2 := NewLocationSet()
+	ls2.Add(TestLocation(1))
+	ls2.Add(TestLocation(271828))
+	ls2.Add(TestLocation(161803))
+	ls.Merge(ls2)
+	fmt.Println("Merged: ", ls)
+	expected = "{1, 161803, 271828, 314159}"
+	if s := ls.ToString(); s != expected {
+		t.Error("Expected ", expected, ", got ", s)
+	}
+}

@@ -9,15 +9,19 @@ import (
 )
 
 type LocationSet struct {
-	Locations map[Location]bool
+	Locations map[Location]struct{} // a struct with zero elements take no memory
 }
 
 func NewLocationSet() *LocationSet {
-	return &LocationSet{Locations: make(map[Location]bool)}
+	return &LocationSet{Locations: make(map[Location]struct{})}
 }
 
 func (ls *LocationSet) Add(l Location) {
-	ls.Locations[l] = true
+	ls.Locations[l] = struct{}{}
+}
+
+func (ls *LocationSet) Delete(l Location) {
+	delete(ls.Locations, l)
 }
 
 func (ls *LocationSet) Size() int {
@@ -25,7 +29,8 @@ func (ls *LocationSet) Size() int {
 }
 
 func (ls *LocationSet) Contains(loc Location) bool {
-	return ls.Locations[loc]
+	_, exists := ls.Locations[loc]
+	return exists
 }
 
 func (ls *LocationSet) Merge(other *LocationSet) {
@@ -103,7 +108,7 @@ func (s *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) {
 		if loc, err = l.Read(r); err != nil {
 			return err
 		}
-		s.Locations[loc] = true
+		s.Add(loc)
 		if ch, err = get_nonspace_rune(r); err != nil {
 			return err
 		}
