@@ -4,6 +4,7 @@ package registry
 import (
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -23,6 +24,10 @@ var (
 	// RegisterNodeSignatureContext is the context used for node
 	// registration.
 	RegisterNodeSignatureContext = []byte("EkNodReg")
+
+	// RegisterContractSignatureContext is the context used for contract
+	// registration.
+	RegisterContractSignatureContext = []byte("EkConReg")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
@@ -104,6 +109,19 @@ type NodeList struct {
 	Nodes []*node.Node
 }
 
+// ContractRegistry is a contract (runtime) registry implementation.
+type ContractRegistry interface {
+	// RegisterContract registers a contract.
+	RegisterContract(*contract.Contract, *signature.Signature) error
+
+	// GetContract gets a contract by ID.
+	GetContract(signature.PublicKey) *contract.Contract
+
+	// WatchContracts returns a stream of Contract.  Upon subscription,
+	// all contracts will be sent immediately.
+	WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription)
+}
+
 type registryMapID [signature.PublicKeySize]byte
 
 func pubKeyToMapID(id signature.PublicKey) registryMapID {
@@ -135,6 +153,14 @@ func subscribeTypedNodeEvent(notifier *pubsub.Broker) (<-chan *NodeEvent, *pubsu
 
 func subscribeTypedNodeList(notifier *pubsub.Broker) (<-chan *NodeList, *pubsub.Subscription) {
 	typedCh := make(chan *NodeList)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
+}
+
+func subscribeTypedContract(notifier *pubsub.Broker) (<-chan *contract.Contract, *pubsub.Subscription) {
+	typedCh := make(chan *contract.Contract)
 	sub := notifier.Subscribe()
 	sub.Unwrap(typedCh)
 

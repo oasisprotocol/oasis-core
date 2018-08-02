@@ -264,3 +264,57 @@ func NewEntityRegistryServer(srv *grpc.Server, reg EntityRegistry) {
 	}
 	pb.RegisterEntityRegistryServer(srv, s)
 }
+
+// ContractRegistryServer is a contract registry exposed over gRPC.
+type ContractRegistryServer struct {
+	backend ContractRegistry
+}
+
+// RegisterContract implements the corresponding gRPC call.
+func (s *ContractRegistryServer) RegisterContract(ctx context.Context, req *pb.RegisterContractRequest) (*pb.RegisterContractResponse, error) {
+	return nil, nil
+}
+
+// GetContract implements the corresponding gRPC call.
+func (s *ContractRegistryServer) GetContract(ctx context.Context, req *pb.ContractRequest) (*pb.ContractResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetId()); err != nil {
+		return nil, err
+	}
+
+	var resp pb.ContractResponse
+	if con := s.backend.GetContract(id); con != nil {
+		resp.Contract = con.ToProto()
+	}
+
+	return &resp, nil
+}
+
+// GetContracts implements the corresponding gRPC call.
+func (s *ContractRegistryServer) GetContracts(req *pb.ContractsRequest, stream pb.ContractRegistry_GetContractsServer) error {
+	ch, sub := s.backend.WatchContracts()
+	defer sub.Close()
+
+	for {
+		con, ok := <-ch
+		if !ok {
+			break
+		}
+		resp := &pb.ContractsResponse{
+			Contract: con.ToProto(),
+		}
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// NewContractRegistryServer initializes and registers a new
+// ContractRegistryServer backed by the provided ContractRegistry.
+func NewContractRegistryServer(srv *grpc.Server, reg ContractRegistry) {
+	s := &ContractRegistryServer{
+		backend: reg,
+	}
+	pb.RegisterContractRegistryServer(srv, s)
+}

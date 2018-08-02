@@ -5,15 +5,21 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/epochtime"
+
+	"github.com/eapache/channels"
 )
 
-var _ EntityRegistry = (*MemoryEntityRegistry)(nil)
+var (
+	_ EntityRegistry   = (*MemoryEntityRegistry)(nil)
+	_ ContractRegistry = (*MemoryContractRegistry)(nil)
+)
 
 // MemoryEntityRegistry is a centralized in-memory EntityRegistry.
 type MemoryEntityRegistry struct {
@@ -309,4 +315,84 @@ func NewMemoryEntityRegistry(timeSource epochtime.TimeSource) EntityRegistry {
 	go r.worker(timeSource)
 
 	return r
+}
+
+// MemoryContractRegistry is a centralized in-memory ContractRegistry.
+type MemoryContractRegistry struct {
+	logger *logging.Logger
+
+	state memoryContractRegistryState
+
+	registrationNotifier *pubsub.Broker
+}
+
+// RegisterContract registers a contract.
+func (r *MemoryContractRegistry) RegisterContract(con *contract.Contract, sig *signature.Signature) error {
+	// XXX: Ensure contact is well-formed.
+	if con == nil || sig == nil || sig.SanityCheck(con.ID) != nil {
+		r.logger.Error("RegisterContract: invalid argument(s)",
+			"contract", con,
+			"signature", sig,
+		)
+		return ErrInvalidArgument
+	}
+	if !sig.Verify(RegisterContractSignatureContext, con.ToSignable()) {
+		return ErrInvalidSignature
+	}
+
+	k := pubKeyToMapID(con.ID)
+	r.state.Lock()
+	// XXX: Should this reject attempts to alter an existing registration?
+	r.state.contracts[k] = con
+	r.state.Unlock()
+
+	r.logger.Debug("RegisterContract: registered",
+		"contract", con,
+	)
+
+	r.registrationNotifier.Broadcast(con)
+
+	return nil
+}
+
+// GetContract gets a contract by ID.
+func (r *MemoryContractRegistry) GetContract(id signature.PublicKey) *contract.Contract {
+	k := pubKeyToMapID(id)
+
+	r.state.RLock()
+	defer r.state.RUnlock()
+	return r.state.contracts[k]
+}
+
+// WatchContracts returns a stream of Contract.  Upon subscription, all
+// contracts will be sent immediately.
+func (r *MemoryContractRegistry) WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription) {
+	return subscribeTypedContract(r.registrationNotifier)
+}
+
+// NewMemoryContractRegistry constructs a new MemoryContractRegistry instance.
+func NewMemoryContractRegistry() ContractRegistry {
+	r := &MemoryContractRegistry{
+		logger: logging.GetLogger("MemoryContractRegistry"),
+		state: memoryContractRegistryState{
+			contracts: make(map[registryMapID]*contract.Contract),
+		},
+	}
+	r.registrationNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		wr := ch.In()
+
+		r.state.RLock()
+		defer r.state.RUnlock()
+		for _, v := range r.state.contracts {
+			wr <- v
+		}
+	})
+
+	return r
+}
+
+type memoryContractRegistryState struct {
+	sync.RWMutex
+
+	contracts map[registryMapID]*contract.Contract
 }

@@ -181,11 +181,13 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 		return err
 	}
 	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
+	contractRegistry := registry.NewMemoryContractRegistry()
 	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
 
 	// Initialize and register the gRPC services.
 	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
 	beacon.NewRandomBeaconServer(env.grpcSrv.s, randomBeacon)
+	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
 	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
 
 	rootLog.Debug("backends initialized")
