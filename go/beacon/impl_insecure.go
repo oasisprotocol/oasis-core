@@ -43,12 +43,13 @@ func (r *InsecureDummyRandomBeacon) GetBeacon(epoch epochtime.EpochTime) ([]byte
 // WatchBeacons returns a channel that produces a stream of GenerateEvent.
 // Upon subscription, the most recently generate beacon will be sent
 // immediately if available.
-func (r *InsecureDummyRandomBeacon) WatchBeacons() <-chan *GenerateEvent {
+func (r *InsecureDummyRandomBeacon) WatchBeacons() (<-chan *GenerateEvent, *pubsub.Subscription) {
 	return subscribeTypedGenerateEvent(r.notifier)
 }
 
 func (r *InsecureDummyRandomBeacon) worker(timeSource epochtime.TimeSource) {
-	epochEvents := timeSource.WatchEpochs()
+	epochEvents, sub := timeSource.WatchEpochs()
+	defer sub.Close()
 	for {
 		newEpoch, ok := <-epochEvents
 		if !ok {

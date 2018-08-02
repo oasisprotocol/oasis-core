@@ -11,3 +11,4 @@ grpc/beacon/
 grpc/common/
 grpc/dummydebug/
 grpc/registry/
+grpc/scheduler/

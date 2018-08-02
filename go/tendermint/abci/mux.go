@@ -492,10 +492,12 @@ func newABCIMux(dataDir string) (*abciMux, error) {
 	return mux, nil
 }
 
+// LogAdapter is a log adapter to allow tendermint to use ekiden logging.
 type LogAdapter struct {
 	*logging.Logger
 }
 
+// With implements the correspoding call in the tendermit Logger interface.
 func (a *LogAdapter) With(keyvals ...interface{}) tlog.Logger {
 	// This is a bit silly, but the Ekiden logging's With returns a
 	// pointer to it's Logger struct rather than the tendermint Logger

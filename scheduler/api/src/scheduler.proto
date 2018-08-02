@@ -3,6 +3,7 @@ syntax = "proto3";
 import "common/api/src/common.proto";
 
 package scheduler;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/scheduler";
 
 service Scheduler {
   rpc GetCommittees (CommitteeRequest) returns (CommitteeResponse) {}

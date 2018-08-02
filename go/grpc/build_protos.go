@@ -29,6 +29,7 @@ var protoFiles = [][]string{
 	},
 	[]string{"node/dummy/api/src/dummy_debug.proto"},
 	[]string{"beacon/api/src/beacon.proto"},
+	[]string{"scheduler/api/src/scheduler.proto"},
 }
 
 //

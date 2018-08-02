@@ -4,6 +4,7 @@ package registry
 import (
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -23,6 +24,10 @@ var (
 	// RegisterNodeSignatureContext is the context used for node
 	// registration.
 	RegisterNodeSignatureContext = []byte("EkNodReg")
+
+	// RegisterContractSignatureContext is the context used for contract
+	// registration.
+	RegisterContractSignatureContext = []byte("EkConReg")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
@@ -55,7 +60,7 @@ type EntityRegistry interface {
 
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
-	WatchEntities() <-chan *EntityEvent
+	WatchEntities() (<-chan *EntityEvent, *pubsub.Subscription)
 
 	// RegisterNode registers and or updates a node with the registry.
 	//
@@ -73,7 +78,7 @@ type EntityRegistry interface {
 
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
-	WatchNodes() <-chan *NodeEvent
+	WatchNodes() (<-chan *NodeEvent, *pubsub.Subscription)
 
 	// WatchNodeList returns a channel that produces a stream of NodeList.
 	// Upon subscription, the node list for the current epoch will be sent
@@ -81,7 +86,7 @@ type EntityRegistry interface {
 	//
 	// Each node list will be sorted by node ID in lexographically ascending
 	// order.
-	WatchNodeList() <-chan *NodeList
+	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -104,70 +109,47 @@ type NodeList struct {
 	Nodes []*node.Node
 }
 
-type registryMapID [signature.PublicKeySize]byte
+// ContractRegistry is a contract (runtime) registry implementation.
+type ContractRegistry interface {
+	// RegisterContract registers a contract.
+	RegisterContract(*contract.Contract, *signature.Signature) error
 
-func pubKeyToMapID(id signature.PublicKey) registryMapID {
-	if len(id) != signature.PublicKeySize {
-		panic("registry: invalid ID")
-	}
+	// GetContract gets a contract by ID.
+	GetContract(signature.PublicKey) *contract.Contract
 
-	var ret registryMapID
-	copy(ret[:], id)
-
-	return ret
+	// WatchContracts returns a stream of Contract.  Upon subscription,
+	// all contracts will be sent immediately.
+	WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription)
 }
 
-func subscribeTypedEntityEvent(notifier *pubsub.Broker) <-chan *EntityEvent {
-	rawCh := notifier.Subscribe()
+func subscribeTypedEntityEvent(notifier *pubsub.Broker) (<-chan *EntityEvent, *pubsub.Subscription) {
 	typedCh := make(chan *EntityEvent)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			ev, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- ev.(*EntityEvent)
-		}
-	}()
-
-	return typedCh
+	return typedCh, sub
 }
 
-func subscribeTypedNodeEvent(notifier *pubsub.Broker) <-chan *NodeEvent {
-	rawCh := notifier.Subscribe()
+func subscribeTypedNodeEvent(notifier *pubsub.Broker) (<-chan *NodeEvent, *pubsub.Subscription) {
 	typedCh := make(chan *NodeEvent)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			ev, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- ev.(*NodeEvent)
-		}
-	}()
-
-	return typedCh
+	return typedCh, sub
 }
 
-func subscribeTypedNodeList(notifier *pubsub.Broker) <-chan *NodeList {
-	rawCh := notifier.Subscribe()
+func subscribeTypedNodeList(notifier *pubsub.Broker) (<-chan *NodeList, *pubsub.Subscription) {
 	typedCh := make(chan *NodeList)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
-	go func() {
-		for {
-			l, ok := <-rawCh
-			if !ok {
-				close(typedCh)
-				return
-			}
-			typedCh <- l.(*NodeList)
-		}
-	}()
+	return typedCh, sub
+}
 
-	return typedCh
+func subscribeTypedContract(notifier *pubsub.Broker) (<-chan *contract.Contract, *pubsub.Subscription) {
+	typedCh := make(chan *contract.Contract)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
 
+	return typedCh, sub
 }

@@ -38,7 +38,7 @@ func newTendermintService(mux *adapter.ApplicationServer) (*tendermintAdapter, e
 		tendermintNode.DefaultGenesisDocProviderFunc(tenderConfig),
 		tendermintNode.DefaultDBProvider,
 		tendermintNode.DefaultMetricsProvider,
-		&adapter.LogAdapter{logging.GetLogger("tendermint")})
+		&adapter.LogAdapter{Logger: logging.GetLogger("tendermint")})
 	if err != nil {
 		return nil, err
 	}
