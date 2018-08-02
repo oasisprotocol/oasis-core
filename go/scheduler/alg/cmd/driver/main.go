@@ -11,6 +11,7 @@ from Parity) and feed into selected scheduling algorithm.
 
 import (
 	"bufio"
+	"container/heap"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,7 +26,6 @@ import (
 // Flag variables
 
 var verbosity int
-var scheduler_name string
 
 // Distribution parameters, gathered into one struct.  When we add new distributions we should
 // just add new fields.  The factory function for sources will only use the config value(s)
@@ -44,12 +44,31 @@ type DistributionConfig struct {
 
 var dconfig_from_flags DistributionConfig
 
+type SchedulerConfig struct {
+	name string
+
+	// Buffer at most this many transactions before generating a schedule.
+	max_pending int
+
+	// max_time is per subgraph execution time, but post-schedule generation subgraph merging
+	// will result in higher total execution times per compute committee.
+	max_time    uint
+}
+
+var sconfig_from_flags SchedulerConfig
+
+type ExecutionConfig struct {
+	num_committees int
+}
+
+var xconfig_from_flags ExecutionConfig
+
 func init() {
 	dconfig_from_flags = DistributionConfig{}
+	sconfig_from_flags = SchedulerConfig{}
+	xconfig_from_flags = ExecutionConfig{}
 
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
-
-	flag.StringVar(&scheduler_name, "scheduler", "greedy_subgraph", "scheduling algorithm")
 
 	// Distribution generator parameters
 
@@ -69,14 +88,29 @@ func init() {
 	// extremely sparse.  Furthermore, many locations are in (pseudo) equivalence classes,
 	// i.e., if a contract reads one of the locations, then it is almost certainly going to
 	// read the rest, and similarly for writes.
-	flag.UintVar(&dconfig_from_flags.num_locations, "num_locations",
-		1<<20, "number of possible locations")
-	flag.UintVar(&dconfig_from_flags.num_read_locs, "num_reads",
-		0, "number of read locations")
-	flag.UintVar(&dconfig_from_flags.num_write_locs, "num_writes",
-		2, "number of write locations")
-	flag.UintVar(&dconfig_from_flags.num_transactions, "num_transactions",
+	flag.UintVar(&dconfig_from_flags.num_locations, "num-locations",
+		1<<20, "number of possible memory locations")
+	flag.UintVar(&dconfig_from_flags.num_read_locs, "num-reads",
+		0, "number of read locations in a transaction")
+	flag.UintVar(&dconfig_from_flags.num_write_locs, "num-writes",
+		2, "number of write locations in a transaction")
+	flag.UintVar(&dconfig_from_flags.num_transactions, "num-transactions",
 		1<<20, "number of transactions to generate")
+
+	// Scheduler configuration parameters
+
+	flag.StringVar(&sconfig_from_flags.name, "scheduler",
+		"greedy-subgraph", "scheduling algorithm (greedy-subgraph)")
+	flag.IntVar(&sconfig_from_flags.max_pending, "max-pending",
+		1<<10, "scheduling when there are this many transactions")
+	// In the python simulator, this was 'block_size', and we may still want to have a
+	// maximum transactions as well as maximum execution time.
+	flag.UintVar(&sconfig_from_flags.max_time, "max-subgraph-time",
+		1000, "disallow adding to a subgraph if the total estimated execution time would exceed this")
+
+	// Execution Committes configuration parameters
+	flag.IntVar(&xconfig_from_flags.num_committees, "num-commitees",
+		100, "number of execution committees")
 }
 
 type TransactionSource interface {
@@ -173,7 +207,7 @@ func NewLoggingTransactionSource(fn string, ts TransactionSource) *LoggingTransa
 
 func (lts *LoggingTransactionSource) Get(seqno uint) (*alg.Transaction, error) {
 	t, e := lts.ts.Get(seqno)
-	if e != nil {
+	if e == nil {
 		t.Write(lts.bw)
 		lts.bw.WriteRune('\n')
 	}
@@ -217,35 +251,140 @@ func TransactionSourceFactory(cnf DistributionConfig) TransactionSource {
 	return NewRDTransactionSource(cnf.num_transactions, cnf.num_read_locs, cnf.num_write_locs, rg)
 }
 
-func generate_transactions(dcnf DistributionConfig, bw *bufio.Writer) {
+func scheduler_factory(cnf SchedulerConfig) alg.Scheduler {
+	if cnf.name == "greedy-subgraph" {
+		return alg.NewGreedySubgraphs(cnf.max_pending, alg.ExecutionTime(cnf.max_time))
+	}
+	panic(fmt.Sprintf("Scheduler %s not recognized", cnf.name))
+}
+
+type CommitteeMember struct {
+	batches []*alg.Subgraph
+	execution_time alg.ExecutionTime
+}
+
+type CommitteeMemberHeap []*CommitteeMember
+func (h CommitteeMemberHeap) Len() int {return len(h)}
+func (h CommitteeMemberHeap) Swap(i,j int) {h[i],h[j] = h[j],h[i]}
+func (h CommitteeMemberHeap) Less(i,j int) bool { return h[i].execution_time < h[j].execution_time}
+func (h *CommitteeMemberHeap) Push(x interface{}) {
+	*h = append(*h, x.(*CommitteeMember))
+}
+func (h *CommitteeMemberHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0:n-1]
+	return x
+}
+
+func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
+	xcnf ExecutionConfig, bw *bufio.Writer) {
+
+	total_execution_time := alg.ExecutionTime(0)
+
 	ts := TransactionSourceFactory(dcnf)
+	sched := scheduler_factory(sconfig_from_flags)
 
 	if dcnf.output_file != "" {
 		ts = NewLoggingTransactionSource(dcnf.output_file, ts)
 	}
 
-	var tid uint
+	if xcnf.num_committees < 1 {
+		panic(fmt.Sprintf("Number of execution committees must be at least 1, not %d",
+			xcnf.num_committees))
+	}
+
+	sched_num := 0
+	tid := uint(0)
+	trans := make([]*alg.Transaction, 1)
+	var err error
+	flush := false
 	for {
-		t, err := ts.Get(tid)
-		if err != nil {
+		var sgl []*alg.Subgraph
+		if !flush {
+			trans[0], err = ts.Get(tid)
+			if err == nil {
+				tid++
+				if verbosity > 3 {
+					trans[0].Write(bw)
+					bw.WriteRune('\n')
+				}
+
+				sgl = sched.AddTransactions(trans)
+			} else {
+				flush = true
+			}
+		}
+		if flush {
+			sgl = sched.FlushSchedule()
+		}
+		if len(sgl) > 0 {
+			sched_num++
+			if verbosity > 2 {
+				fmt.Fprintf(bw, "\n\n")
+				fmt.Fprintf(bw, "Schedule %3d\n", sched_num)
+				fmt.Fprintf(bw, "------------\n")
+				fmt.Fprintf(bw, " deferred: %d\n", sched.NumDeferred())
+				for _, sg := range(sgl) {
+					sg.Write(bw)
+					bw.WriteRune('\n')
+				}
+			}
+			// assign subgraphs to execution committees using first-free heuristic
+			committee := make([]CommitteeMember, xcnf.num_committees)
+			h := &CommitteeMemberHeap{}
+			heap.Init(h)
+			for ix := 0; ix < xcnf.num_committees; ix++ {
+				heap.Push(h, &committee[ix])
+			}
+			for _, sg := range(sgl) {
+				cmt := heap.Pop(h).(*CommitteeMember)
+				cmt.execution_time += sg.EstExecutionTime()
+				cmt.batches = append(cmt.batches, sg)
+				heap.Push(h, cmt)
+			}
+			// Calculate execution time for this schedule (max over all members)
+			sched_execution_time := alg.ExecutionTime(0)
+			for ix, cmt := range(committee) {
+				if cmt.execution_time > sched_execution_time {
+					sched_execution_time = cmt.execution_time
+				}
+				// Now show committee statistics
+				if verbosity > 0 {
+					fmt.Fprintf(bw, "\n")
+					fmt.Fprintf(bw, "Committee member %d\n", ix)
+					fmt.Fprintf(bw, " est execution time = %d\n", uint64(cmt.execution_time))
+					fmt.Fprintf(bw, " number of batches = %d\n", len(cmt.batches))
+					if verbosity > 1 {
+						// show the subgraphs
+						for _, sg := range(cmt.batches) {
+							sg.Write(bw)
+							bw.WriteRune('\n')
+						}
+					}
+				}
+			}
+			total_execution_time += sched_execution_time
+		}
+		if flush && len(sgl) == 0 {
 			break
 		}
-		// TODO send to scheduler here and process execution schedules, if any
-		t.Write(bw)
-		bw.WriteRune('\n')
 	}
 	ts.Close()
+
+	fmt.Fprintf(bw, "Total execution time %d\n", uint64(total_execution_time))
 }
 
 func main() {
 	flag.Parse()
 	if verbosity > 0 {
 		fmt.Println("verbosity has value ", verbosity)
+		fmt.Println("seed = ", dconfig_from_flags.seed)
 	}
 
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
 
-	// TODO pick scheduler based on scheduler_name and use instead of bw
-	generate_transactions(dconfig_from_flags, bw)
+	generate_transactions(dconfig_from_flags, sconfig_from_flags, xconfig_from_flags, bw)
 }

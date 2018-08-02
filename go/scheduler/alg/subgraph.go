@@ -53,6 +53,7 @@ func (sg *Subgraph) Merge(other *Subgraph) {
 }
 
 func (sg *Subgraph) Write(bw *bufio.Writer) {
+	fmt.Fprintf(bw, "Subgraph estimated total cost %d\n", uint64(sg.time_cost))
 	fmt.Fprintf(bw, "Transactions\n")
 	j := 0
 	sep := " "

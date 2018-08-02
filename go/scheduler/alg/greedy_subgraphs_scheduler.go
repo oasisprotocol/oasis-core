@@ -34,6 +34,10 @@ func (gs *GreedySubgraphsScheduler) FlushSchedule() []*Subgraph {
 	return gs.Schedule()
 }
 
+func (gs *GreedySubgraphsScheduler) NumDeferred() int {
+	return len(gs.in_queue)
+}
+
 // For sorting subgraphs, highest cost first.
 type SubgraphOrder []*Subgraph
 

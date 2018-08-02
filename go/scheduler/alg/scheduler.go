@@ -25,4 +25,6 @@ type Scheduler interface {
 	// call FlushSchedule until a zero-length slice is returned to
 	// ensure that all buffered transactions have been emitted.
 	FlushSchedule() []*Subgraph
+
+	NumDeferred() int
 }
