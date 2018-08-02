@@ -122,19 +122,6 @@ type ContractRegistry interface {
 	WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription)
 }
 
-type registryMapID [signature.PublicKeySize]byte
-
-func pubKeyToMapID(id signature.PublicKey) registryMapID {
-	if len(id) != signature.PublicKeySize {
-		panic("registry: invalid ID")
-	}
-
-	var ret registryMapID
-	copy(ret[:], id)
-
-	return ret
-}
-
 func subscribeTypedEntityEvent(notifier *pubsub.Broker) (<-chan *EntityEvent, *pubsub.Subscription) {
 	typedCh := make(chan *EntityEvent)
 	sub := notifier.Subscribe()

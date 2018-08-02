@@ -37,8 +37,8 @@ type MemoryEntityRegistry struct {
 type memoryEntityRegistryState struct {
 	sync.RWMutex
 
-	entities map[registryMapID]*entity.Entity
-	nodes    map[registryMapID]*node.Node
+	entities map[signature.ID]*entity.Entity
+	nodes    map[signature.ID]*node.Node
 }
 
 // RegisterEntity registers and or updates an entity with the registry.
@@ -57,9 +57,8 @@ func (r *MemoryEntityRegistry) RegisterEntity(ent *entity.Entity, sig *signature
 		return ErrInvalidSignature
 	}
 
-	k := pubKeyToMapID(ent.ID)
 	r.state.Lock()
-	r.state.entities[k] = ent
+	r.state.entities[ent.ID.ToID()] = ent
 	r.state.Unlock()
 
 	r.logger.Debug("RegisterEntity: registered",
@@ -95,14 +94,13 @@ func (r *MemoryEntityRegistry) DeregisterEntity(id signature.PublicKey, sig *sig
 
 	var removedEntity *entity.Entity
 	var removedNodes []*node.Node
-	k := pubKeyToMapID(id)
+	k := id.ToID()
 	r.state.Lock()
 	if removedEntity = r.state.entities[k]; removedEntity != nil {
 		delete(r.state.entities, k)
 		removedNodes = r.getNodesForEntryLocked(id)
 		for _, v := range removedNodes {
-			nk := pubKeyToMapID(v.ID)
-			delete(r.state.nodes, nk)
+			delete(r.state.nodes, v.ID.ToID())
 		}
 	}
 	r.state.Unlock()
@@ -131,11 +129,9 @@ func (r *MemoryEntityRegistry) DeregisterEntity(id signature.PublicKey, sig *sig
 
 // GetEntity gets an entity by ID.
 func (r *MemoryEntityRegistry) GetEntity(id signature.PublicKey) *entity.Entity {
-	k := pubKeyToMapID(id)
-
 	r.state.RLock()
 	defer r.state.RUnlock()
-	return r.state.entities[k]
+	return r.state.entities[id.ToID()]
 }
 
 // GetEntities gets a list of all registered entities.
@@ -173,7 +169,7 @@ func (r *MemoryEntityRegistry) RegisterNode(node *node.Node, sig *signature.Sign
 		return ErrInvalidSignature
 	}
 
-	k := pubKeyToMapID(node.ID)
+	k := node.ID.ToID()
 	r.state.Lock()
 	if r.state.entities[k] == nil {
 		r.state.Unlock()
@@ -199,11 +195,9 @@ func (r *MemoryEntityRegistry) RegisterNode(node *node.Node, sig *signature.Sign
 
 // GetNode gets a node by ID.
 func (r *MemoryEntityRegistry) GetNode(id signature.PublicKey) *node.Node {
-	k := pubKeyToMapID(id)
-
 	r.state.RLock()
 	defer r.state.RUnlock()
-	return r.state.nodes[k]
+	return r.state.nodes[id.ToID()]
 }
 
 // GetNodes gets a list of all registered nodes.
@@ -303,8 +297,8 @@ func NewMemoryEntityRegistry(timeSource epochtime.TimeSource) EntityRegistry {
 	r := &MemoryEntityRegistry{
 		logger: logging.GetLogger("MemoryEntityRegistry"),
 		state: memoryEntityRegistryState{
-			entities: make(map[registryMapID]*entity.Entity),
-			nodes:    make(map[registryMapID]*node.Node),
+			entities: make(map[signature.ID]*entity.Entity),
+			nodes:    make(map[signature.ID]*node.Node),
 		},
 		registrationNotifier: pubsub.NewBroker(false),
 		nodeNotifier:         pubsub.NewBroker(false),
@@ -326,6 +320,12 @@ type MemoryContractRegistry struct {
 	registrationNotifier *pubsub.Broker
 }
 
+type memoryContractRegistryState struct {
+	sync.RWMutex
+
+	contracts map[signature.ID]*contract.Contract
+}
+
 // RegisterContract registers a contract.
 func (r *MemoryContractRegistry) RegisterContract(con *contract.Contract, sig *signature.Signature) error {
 	// XXX: Ensure contact is well-formed.
@@ -340,10 +340,9 @@ func (r *MemoryContractRegistry) RegisterContract(con *contract.Contract, sig *s
 		return ErrInvalidSignature
 	}
 
-	k := pubKeyToMapID(con.ID)
 	r.state.Lock()
 	// XXX: Should this reject attempts to alter an existing registration?
-	r.state.contracts[k] = con
+	r.state.contracts[con.ID.ToID()] = con
 	r.state.Unlock()
 
 	r.logger.Debug("RegisterContract: registered",
@@ -357,11 +356,9 @@ func (r *MemoryContractRegistry) RegisterContract(con *contract.Contract, sig *s
 
 // GetContract gets a contract by ID.
 func (r *MemoryContractRegistry) GetContract(id signature.PublicKey) *contract.Contract {
-	k := pubKeyToMapID(id)
-
 	r.state.RLock()
 	defer r.state.RUnlock()
-	return r.state.contracts[k]
+	return r.state.contracts[id.ToID()]
 }
 
 // WatchContracts returns a stream of Contract.  Upon subscription, all
@@ -375,7 +372,7 @@ func NewMemoryContractRegistry() ContractRegistry {
 	r := &MemoryContractRegistry{
 		logger: logging.GetLogger("MemoryContractRegistry"),
 		state: memoryContractRegistryState{
-			contracts: make(map[registryMapID]*contract.Contract),
+			contracts: make(map[signature.ID]*contract.Contract),
 		},
 	}
 	r.registrationNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
@@ -389,10 +386,4 @@ func NewMemoryContractRegistry() ContractRegistry {
 	})
 
 	return r
-}
-
-type memoryContractRegistryState struct {
-	sync.RWMutex
-
-	contracts map[registryMapID]*contract.Contract
 }
