@@ -11,12 +11,18 @@ var pause = async function (timeout) {
 };
 
 var makeTxn = function (client) {
-    return new Promise(function (resolve, _reject) {
+    return new Promise(function (resolve, reject) {
         client.eth.sendTransaction({
             from: "1cca28600d7491365520b31b466f88647b9839ec",
             gas: 100000,
             gasPrice: 0
-        }, resolve);
+        }, function(err, txn) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(txn);
+          }
+        });
     });
 };
 
@@ -28,6 +34,10 @@ if (require.main === module) {
     const txncount = new client.Counter({
         name: 'txncount',
         help: 'Number of web3 transactions made'
+    });
+    const txnerrors = new client.Counter({
+        name: 'txnerrors',
+        help: 'Number of errored web3 transactions'
     });
     const txnlatency = new client.Histogram({
         name: 'txnlatency',
@@ -65,7 +75,12 @@ if (require.main === module) {
         while (true) {
             await pause(process.argv[3]);
             const end = txnlatency.startTimer();
-            await makeTxn(client);
+            try {
+              await makeTxn(client);
+            } catch(e) {
+              console.warn("Transaction failed.", e);
+              txnerrors.inc();
+            }
             end();
             txncount.inc();
             if (gateway != null) {
