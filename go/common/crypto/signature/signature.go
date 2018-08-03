@@ -53,8 +53,8 @@ var (
 	_ encoding.BinaryUnmarshaler = RawSignature{}
 )
 
-// ID is a PublicKey as a fixed sized byte array for use as a map key.
-type ID [PublicKeySize]byte
+// MapKey is a PublicKey as a fixed sized byte array for use as a map key.
+type MapKey [PublicKeySize]byte
 
 // PublicKey is a public key used for signing.
 type PublicKey ed25519.PublicKey
@@ -114,16 +114,16 @@ func (k PublicKey) String() string {
 	return hexKey
 }
 
-// ToID returns a fixed-sized representation of the public key.
-func (k PublicKey) ToID() ID {
+// ToMapKey returns a fixed-sized representation of the public key.
+func (k PublicKey) ToMapKey() MapKey {
 	if len(k) != PublicKeySize {
 		panic("signature: public key invalid size for ID")
 	}
 
-	var id ID
-	copy(id[:], k)
+	var mk MapKey
+	copy(mk[:], k)
 
-	return id
+	return mk
 }
 
 // RawSignature is a raw signature.

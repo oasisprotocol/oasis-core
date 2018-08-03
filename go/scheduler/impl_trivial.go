@@ -43,8 +43,8 @@ type trivialSchedulerState struct {
 
 	nodeLists  map[epochtime.EpochTime][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
-	contracts  map[signature.ID]*contract.Contract
-	committees map[epochtime.EpochTime]map[signature.ID][]*Committee
+	contracts  map[signature.MapKey]*contract.Contract
+	committees map[epochtime.EpochTime]map[signature.MapKey][]*Committee
 
 	epoch     epochtime.EpochTime
 	lastElect epochtime.EpochTime
@@ -118,10 +118,10 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 	defer s.Unlock()
 
 	if s.committees[s.epoch] == nil {
-		s.committees[s.epoch] = make(map[signature.ID][]*Committee)
+		s.committees[s.epoch] = make(map[signature.MapKey][]*Committee)
 	}
 	comMap := s.committees[s.epoch]
-	comMap[con.ID.ToID()] = committees
+	comMap[con.ID.ToMapKey()] = committees
 	for _, committee := range committees {
 		notifier.Broadcast(committee)
 	}
@@ -177,7 +177,7 @@ func (s *TrivialScheduler) GetCommittees(id signature.PublicKey) []*Committee {
 	if comMap == nil {
 		return nil
 	}
-	return comMap[id.ToID()]
+	return comMap[id.ToMapKey()]
 }
 
 // WatchCommittees returns a channel that produces a stream of Committee.
@@ -239,15 +239,15 @@ func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg regist
 			)
 			s.state.beacons[ev.Epoch] = ev.Beacon
 		case contract := <-contractCh:
-			id := contract.ID.ToID()
-			if con := s.state.contracts[id]; con != nil {
+			mk := contract.ID.ToMapKey()
+			if con := s.state.contracts[mk]; con != nil {
 				s.logger.Error("worker: contract registration ID conflict",
 					"contract", con,
 					"new_contract", contract,
 				)
 				continue
 			}
-			s.state.contracts[id] = contract
+			s.state.contracts[mk] = contract
 			if s.state.epoch == s.state.lastElect && s.state.canElect() {
 				// Attempt to elect the committee if possible, since
 				// the election for the epoch happened already.
@@ -259,7 +259,7 @@ func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg regist
 				}
 				s.logger.Debug("worker: election (single)",
 					"contract", contract,
-					"committees", s.state.committees[s.state.epoch][contract.ID.ToID()],
+					"committees", s.state.committees[s.state.epoch][contract.ID.ToMapKey()],
 				)
 			}
 			continue
@@ -283,7 +283,7 @@ func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg regist
 			}
 			s.logger.Debug("worker: election",
 				"contract", v,
-				"committees", s.state.committees[s.state.epoch][v.ID.ToID()],
+				"committees", s.state.committees[s.state.epoch][v.ID.ToMapKey()],
 			)
 		}
 
@@ -298,8 +298,8 @@ func NewTrivialScheduler(timeSource epochtime.TimeSource, conReg registry.Contra
 		state: &trivialSchedulerState{
 			nodeLists:  make(map[epochtime.EpochTime][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
-			contracts:  make(map[signature.ID]*contract.Contract),
-			committees: make(map[epochtime.EpochTime]map[signature.ID][]*Committee),
+			contracts:  make(map[signature.MapKey]*contract.Contract),
+			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*Committee),
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,
 		},
