@@ -89,26 +89,26 @@ func init() {
 	// i.e., if a contract reads one of the locations, then it is almost certainly going to
 	// read the rest, and similarly for writes.
 	flag.UintVar(&dconfig_from_flags.num_locations, "num-locations",
-		1<<20, "number of possible memory locations")
+		100000, "number of possible memory locations")
 	flag.UintVar(&dconfig_from_flags.num_read_locs, "num-reads",
 		0, "number of read locations in a transaction")
 	flag.UintVar(&dconfig_from_flags.num_write_locs, "num-writes",
 		2, "number of write locations in a transaction")
 	flag.UintVar(&dconfig_from_flags.num_transactions, "num-transactions",
-		1<<20, "number of transactions to generate")
+		1000000, "number of transactions to generate")
 
 	// Scheduler configuration parameters
 
 	flag.StringVar(&sconfig_from_flags.name, "scheduler",
 		"greedy-subgraph", "scheduling algorithm (greedy-subgraph)")
 	flag.IntVar(&sconfig_from_flags.max_pending, "max-pending",
-		1<<10, "scheduling when there are this many transactions")
+		10000, "scheduling when there are this many transactions")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
 	flag.UintVar(&sconfig_from_flags.max_time, "max-subgraph-time",
 		1000, "disallow adding to a subgraph if the total estimated execution time would exceed this")
 
-	// Execution Committes configuration parameters
+	// Execution Committees configuration parameters
 	flag.IntVar(&xconfig_from_flags.num_committees, "num-commitees",
 		100, "number of execution committees")
 }
@@ -282,6 +282,7 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 	xcnf ExecutionConfig, bw *bufio.Writer) {
 
 	total_execution_time := alg.ExecutionTime(0)
+	linear_execution_time := alg.ExecutionTime(0)
 
 	ts := TransactionSourceFactory(dcnf)
 	sched := scheduler_factory(sconfig_from_flags)
@@ -310,6 +311,8 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 					trans[0].Write(bw)
 					bw.WriteRune('\n')
 				}
+
+				linear_execution_time += trans[0].TimeCost
 
 				sgl = sched.AddTransactions(trans)
 			} else {
@@ -373,7 +376,9 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 	}
 	ts.Close()
 
+	fmt.Fprintf(bw, "Linear execution time %d\n", uint64(linear_execution_time))
 	fmt.Fprintf(bw, "Total execution time %d\n", uint64(total_execution_time))
+	fmt.Fprintf(bw, "Speedup = %f\n", float64(linear_execution_time) / float64(total_execution_time))
 }
 
 func main() {
