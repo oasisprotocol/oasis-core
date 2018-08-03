@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"os"
+	"time"
+
 	"github.com/oasislabs/ekiden/go/common/logging"
 	adapter "github.com/oasislabs/ekiden/go/tendermint/abci"
 
@@ -9,6 +12,7 @@ import (
 	tendermintNode "github.com/tendermint/tendermint/node"
 	tendermintPriv "github.com/tendermint/tendermint/privval"
 	tendermintProxy "github.com/tendermint/tendermint/proxy"
+	tendermintTypes "github.com/tendermint/tendermint/types"
 )
 
 // Adapter for tendermint Nodes to be managed by the ekiden service mux
@@ -32,13 +36,35 @@ func newTendermintService(mux *adapter.ApplicationServer) (*tendermintAdapter, e
 	viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(dataDir)
 
+	tendermintPV := tendermintPriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
+	var tenderminGenesisProvider tendermintNode.GenesisDocProvider
+	genFile := tenderConfig.GenesisFile()
+	_, err := os.Lstat(genFile)
+	if err != nil && os.IsNotExist(err) {
+		rootLog.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
+		genDoc := tendermintTypes.GenesisDoc{
+			ChainID:         "0xa515",
+			GenesisTime:     time.Now(),
+			ConsensusParams: tendermintTypes.DefaultConsensusParams(),
+		}
+		genDoc.Validators = []tendermintTypes.GenesisValidator{{
+			PubKey: tendermintPV.GetPubKey(),
+			Power:  10,
+		}}
+		tenderminGenesisProvider = func() (*tendermintTypes.GenesisDoc, error) {
+			return &genDoc, nil
+		}
+	} else {
+		tenderminGenesisProvider = tendermintNode.DefaultGenesisDocProviderFunc(tenderConfig)
+	}
+
 	node, err := tendermintNode.NewNode(tenderConfig,
-		tendermintPriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile()),
+		tendermintPV,
 		tendermintProxy.NewLocalClientCreator(mux.Mux()),
-		tendermintNode.DefaultGenesisDocProviderFunc(tenderConfig),
+		tenderminGenesisProvider,
 		tendermintNode.DefaultDBProvider,
 		tendermintNode.DefaultMetricsProvider,
-		&adapter.LogAdapter{Logger: logging.GetLogger("tendermint")})
+		&adapter.LogAdapter{logging.GetLogger("tendermint")})
 	if err != nil {
 		return nil, err
 	}
