@@ -44,6 +44,14 @@ type DistributionConfig struct {
 
 var dconfig_from_flags DistributionConfig
 
+type LogicalShardingConfig struct {
+	seed         int64
+	shard_top_n  int
+	shard_factor int
+}
+
+var lsconfig_from_flags LogicalShardingConfig
+
 type SchedulerConfig struct {
 	name string
 
@@ -52,7 +60,7 @@ type SchedulerConfig struct {
 
 	// max_time is per subgraph execution time, but post-schedule generation subgraph merging
 	// will result in higher total execution times per compute committee.
-	max_time    uint
+	max_time uint
 }
 
 var sconfig_from_flags SchedulerConfig
@@ -66,6 +74,7 @@ var xconfig_from_flags ExecutionConfig
 func init() {
 	dconfig_from_flags = DistributionConfig{}
 	sconfig_from_flags = SchedulerConfig{}
+	lsconfig_from_flags = LogicalShardingConfig{}
 	xconfig_from_flags = ExecutionConfig{}
 
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
@@ -74,7 +83,7 @@ func init() {
 
 	// seed is only important for reproducible RNG; input_file/output_file is another
 	// mechanism for reproducibility
-	flag.Int64Var(&dconfig_from_flags.seed, "seed", 0, "pseudorandom number generator seed")
+	flag.Int64Var(&dconfig_from_flags.seed, "seed", 0, "pseudorandom number generator seed for synthetic load generator")
 
 	flag.StringVar(&dconfig_from_flags.distribution_name, "distribution",
 		"zipf", "random location generation distribution (uniform, or zipf)")
@@ -97,20 +106,27 @@ func init() {
 	flag.UintVar(&dconfig_from_flags.num_transactions, "num-transactions",
 		1000000, "number of transactions to generate")
 
+	// Logical sharding filter configuration parameters
+	flag.Int64Var(&lsconfig_from_flags.seed, "shard-seed", 0, "pseudorandom number generator seed for logical sharding filter")
+	flag.IntVar(&lsconfig_from_flags.shard_top_n, "shard-top",
+		0, "shard the highest <shard-top> probable locations")
+	flag.IntVar(&lsconfig_from_flags.shard_factor, "shard-factor",
+		16, "number of new (negative) shards per original location")
+
 	// Scheduler configuration parameters
 
 	flag.StringVar(&sconfig_from_flags.name, "scheduler",
 		"greedy-subgraph", "scheduling algorithm (greedy-subgraph)")
 	flag.IntVar(&sconfig_from_flags.max_pending, "max-pending",
-		10000, "scheduling when there are this many transactions")
+		-1, "scheduling when there are this many transactions")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
 	flag.UintVar(&sconfig_from_flags.max_time, "max-subgraph-time",
-		1000, "disallow adding to a subgraph if the total estimated execution time would exceed this")
+		20, "disallow adding to a subgraph if the total estimated execution time would exceed this")
 
 	// Execution Committees configuration parameters
-	flag.IntVar(&xconfig_from_flags.num_committees, "num-commitees",
-		100, "number of execution committees")
+	flag.IntVar(&xconfig_from_flags.num_committees, "num-committees",
+		40, "number of execution committees")
 }
 
 type TransactionSource interface {
@@ -222,9 +238,57 @@ func (lts *LoggingTransactionSource) Close() {
 	lts.os.Close()
 }
 
+type LogicalShardingFilter struct {
+	cnf     LogicalShardingConfig
+	ts      TransactionSource
+	r       *rand.Rand
+	top_map []int64
+}
+
+func (lsf *LogicalShardingFilter) Get(seqno uint) (*alg.Transaction, error) {
+	lsf.top_map = make([]int64, lsf.cnf.shard_top_n) // zeros means no value
+	t, e := lsf.ts.Get(seqno)
+	if e == nil {
+		// iterate over t's read-set and write-set, replace all elements 0 <= e <
+		// cnf.shard_top_n with a random negative value (memoized)
+		lsf.UpdateSet(t.ReadSet)
+		lsf.UpdateSet(t.WriteSet)
+	}
+	return t, e
+}
+
+func (lsf *LogicalShardingFilter) UpdateSet(ls *alg.LocationSet) {
+	repl := alg.NewLocationSet()
+	for loc := range ls.Locations {
+		tloc := loc.(alg.TestLocation)
+		iloc := int64(tloc)
+		if 0 <= iloc && iloc < int64(lsf.cnf.shard_top_n) {
+			loc := int(iloc)
+			if lsf.top_map[loc] == 0 {
+				shard := int64(lsf.r.Intn(lsf.cnf.shard_factor))
+				shard_base := int64(loc * lsf.cnf.shard_factor)
+				lsf.top_map[loc] = -(1 + shard_base + shard)
+			}
+			repl.Add(alg.TestLocation(lsf.top_map[loc]))
+		}
+	}
+	*ls = *repl
+}
+
+func (lsf *LogicalShardingFilter) Close() {
+	lsf.ts.Close()
+}
+
+func NewLogicalShardingFilter(cnf LogicalShardingConfig, ts TransactionSource) *LogicalShardingFilter {
+	if cnf.seed == 0 {
+		cnf.seed = int64(time.Now().UTC().UnixNano())
+	}
+	return &LogicalShardingFilter{cnf: cnf, ts: ts, r: rand.New(rand.NewSource(cnf.seed))}
+}
+
 func TransactionSourceFactory(cnf DistributionConfig) TransactionSource {
 	if cnf.seed == 0 {
-		cnf.seed = int64(time.Now().Nanosecond())
+		cnf.seed = int64(time.Now().UTC().UnixNano())
 	}
 	if cnf.input_file != "" {
 		cnf.distribution_name = "input"
@@ -244,29 +308,33 @@ func TransactionSourceFactory(cnf DistributionConfig) TransactionSource {
 	} else if cnf.distribution_name == "uniform" {
 		rg = random_distribution.NewUniform(num_locations, rand.New(rand.NewSource(cnf.seed)))
 	} else if cnf.distribution_name == "zipf" {
-		rg = random_distribution.NewZipf(1.0, num_locations, rand.New(rand.NewSource(cnf.seed)))
+		rg = random_distribution.NewZipf(cnf.alpha, num_locations, rand.New(rand.NewSource(cnf.seed)))
 	} else {
 		panic(fmt.Sprintf("Random distribution name not recognized: %s", cnf.distribution_name))
 	}
 	return NewRDTransactionSource(cnf.num_transactions, cnf.num_read_locs, cnf.num_write_locs, rg)
 }
 
-func scheduler_factory(cnf SchedulerConfig) alg.Scheduler {
-	if cnf.name == "greedy-subgraph" {
-		return alg.NewGreedySubgraphs(cnf.max_pending, alg.ExecutionTime(cnf.max_time))
+func scheduler_factory(scnf SchedulerConfig, xcnf ExecutionConfig) alg.Scheduler {
+	if scnf.max_pending < 0 {
+		scnf.max_pending = 2 * int(scnf.max_time) * xcnf.num_committees
 	}
-	panic(fmt.Sprintf("Scheduler %s not recognized", cnf.name))
+	if scnf.name == "greedy-subgraph" {
+		return alg.NewGreedySubgraphs(scnf.max_pending, alg.ExecutionTime(scnf.max_time))
+	}
+	panic(fmt.Sprintf("Scheduler %s not recognized", scnf.name))
 }
 
 type CommitteeMember struct {
-	batches []*alg.Subgraph
+	batches        []*alg.Subgraph
 	execution_time alg.ExecutionTime
 }
 
 type CommitteeMemberHeap []*CommitteeMember
-func (h CommitteeMemberHeap) Len() int {return len(h)}
-func (h CommitteeMemberHeap) Swap(i,j int) {h[i],h[j] = h[j],h[i]}
-func (h CommitteeMemberHeap) Less(i,j int) bool { return h[i].execution_time < h[j].execution_time}
+
+func (h CommitteeMemberHeap) Len() int           { return len(h) }
+func (h CommitteeMemberHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h CommitteeMemberHeap) Less(i, j int) bool { return h[i].execution_time < h[j].execution_time }
 func (h *CommitteeMemberHeap) Push(x interface{}) {
 	*h = append(*h, x.(*CommitteeMember))
 }
@@ -274,18 +342,18 @@ func (h *CommitteeMemberHeap) Pop() interface{} {
 	old := *h
 	n := len(old)
 	x := old[n-1]
-	*h = old[0:n-1]
+	*h = old[0 : n-1]
 	return x
 }
 
 func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
-	xcnf ExecutionConfig, bw *bufio.Writer) {
+	lscnf LogicalShardingConfig, xcnf ExecutionConfig, bw *bufio.Writer) {
 
 	total_execution_time := alg.ExecutionTime(0)
 	linear_execution_time := alg.ExecutionTime(0)
 
 	ts := TransactionSourceFactory(dcnf)
-	sched := scheduler_factory(sconfig_from_flags)
+	sched := scheduler_factory(scnf, xcnf)
 
 	if dcnf.output_file != "" {
 		ts = NewLoggingTransactionSource(dcnf.output_file, ts)
@@ -294,6 +362,10 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 	if xcnf.num_committees < 1 {
 		panic(fmt.Sprintf("Number of execution committees must be at least 1, not %d",
 			xcnf.num_committees))
+	}
+
+	if lscnf.shard_top_n > 0 {
+		ts = NewLogicalShardingFilter(lscnf, ts)
 	}
 
 	sched_num := 0
@@ -329,7 +401,7 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 				fmt.Fprintf(bw, "Schedule %3d\n", sched_num)
 				fmt.Fprintf(bw, "------------\n")
 				fmt.Fprintf(bw, " deferred: %d\n", sched.NumDeferred())
-				for _, sg := range(sgl) {
+				for _, sg := range sgl {
 					sg.Write(bw)
 					bw.WriteRune('\n')
 				}
@@ -341,7 +413,7 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 			for ix := 0; ix < xcnf.num_committees; ix++ {
 				heap.Push(h, &committee[ix])
 			}
-			for _, sg := range(sgl) {
+			for _, sg := range sgl {
 				cmt := heap.Pop(h).(*CommitteeMember)
 				cmt.execution_time += sg.EstExecutionTime()
 				cmt.batches = append(cmt.batches, sg)
@@ -349,7 +421,7 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 			}
 			// Calculate execution time for this schedule (max over all members)
 			sched_execution_time := alg.ExecutionTime(0)
-			for ix, cmt := range(committee) {
+			for ix, cmt := range committee {
 				if cmt.execution_time > sched_execution_time {
 					sched_execution_time = cmt.execution_time
 				}
@@ -361,7 +433,7 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 					fmt.Fprintf(bw, " number of batches = %d\n", len(cmt.batches))
 					if verbosity > 1 {
 						// show the subgraphs
-						for _, sg := range(cmt.batches) {
+						for _, sg := range cmt.batches {
 							sg.Write(bw)
 							bw.WriteRune('\n')
 						}
@@ -378,7 +450,7 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 
 	fmt.Fprintf(bw, "Linear execution time %d\n", uint64(linear_execution_time))
 	fmt.Fprintf(bw, "Total execution time %d\n", uint64(total_execution_time))
-	fmt.Fprintf(bw, "Speedup = %f\n", float64(linear_execution_time) / float64(total_execution_time))
+	fmt.Fprintf(bw, "Speedup = %f\n", float64(linear_execution_time)/float64(total_execution_time))
 }
 
 func main() {
@@ -391,5 +463,5 @@ func main() {
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
 
-	generate_transactions(dconfig_from_flags, sconfig_from_flags, xconfig_from_flags, bw)
+	generate_transactions(dconfig_from_flags, sconfig_from_flags, lsconfig_from_flags, xconfig_from_flags, bw)
 }
