@@ -125,6 +125,11 @@ func normalizePath(f string) string {
 	return f
 }
 
+type cleanupAble interface {
+	// Cleanup performs the service specific post-termination cleanup.
+	Cleanup()
+}
+
 type backgroundService interface {
 	// Stop halts the service.
 	Stop()
@@ -132,8 +137,23 @@ type backgroundService interface {
 	// Quit returns a channel that will be closed when the service terminates.
 	Quit() <-chan struct{}
 
-	// Cleanup performs the service specific post-termination cleanup.
-	Cleanup()
+	cleanupAble
+}
+
+type cleanupOnlyService struct {
+	svc cleanupAble
+}
+
+func (s *cleanupOnlyService) Stop() {
+	// Nothing to stop.
+}
+
+func (s *cleanupOnlyService) Quit() <-chan struct{} {
+	panic("BUG: cleanupOnlyService does not implement Quit()")
+}
+
+func (s *cleanupOnlyService) Cleanup() {
+	s.svc.Cleanup()
 }
 
 type backgroundServiceManager struct {
@@ -151,6 +171,11 @@ func (m *backgroundServiceManager) Register(srv backgroundService) {
 		default:
 		}
 	}()
+}
+
+func (m *backgroundServiceManager) RegisterCleanupOnly(svc cleanupAble) {
+	s := &cleanupOnlyService{svc: svc}
+	m.services = append(m.services, s)
 }
 
 func (m *backgroundServiceManager) Wait() {

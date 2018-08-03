@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
 	"github.com/oasislabs/ekiden/go/scheduler"
+	"github.com/oasislabs/ekiden/go/storage"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
 
@@ -185,6 +186,11 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	contractRegistry := registry.NewMemoryContractRegistry()
 	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
 	sched := scheduler.NewTrivialScheduler(timeSource, contractRegistry, entityRegistry, randomBeacon)
+	store, err := storage.New(cmd, timeSource, dataDir)
+	if err != nil {
+		return err
+	}
+	env.svcMgr.RegisterCleanupOnly(store)
 
 	// Initialize and register the gRPC services.
 	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
@@ -192,6 +198,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
 	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
 	scheduler.NewSchedulerServer(env.grpcSrv.s, sched)
+	storage.NewServer(env.grpcSrv.s, store)
 
 	rootLog.Debug("backends initialized")
 
@@ -237,6 +244,7 @@ func init() {
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
 		epochtime.RegisterFlags,
+		storage.RegisterFlags,
 		tendermintEntry.AddNodeFlags,
 	} {
 		v(rootCmd)
