@@ -21,8 +21,10 @@ extern crate ekiden_roothash_base;
 extern crate ekiden_rpc_api;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
+extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
+extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_multilayer;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
@@ -33,6 +35,7 @@ mod group;
 mod node;
 mod roothash;
 mod services;
+mod statetransfer;
 mod worker;
 
 // Everything above should be moved into a library, while everything below should be in the binary.

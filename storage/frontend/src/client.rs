@@ -139,6 +139,10 @@ impl BatchStorage for ImmediateClient {
     fn end_batch(&self) -> BoxFuture<()> {
         Box::new(future::ok(()))
     }
+
+    fn persistent_storage(&self) -> Arc<StorageBackend> {
+        self.0.clone()
+    }
 }
 
 // Register for dependency injection.

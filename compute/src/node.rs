@@ -20,7 +20,8 @@ use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
 use ekiden_roothash_base::{RootHashBackend, RootHashSigner};
 use ekiden_rpc_api;
 use ekiden_scheduler_base::Scheduler;
-use ekiden_storage_base::BatchStorage;
+use ekiden_storage_api::create_storage;
+use ekiden_storage_base::{BatchStorage, StorageService};
 use ekiden_tools::get_contract_identity;
 
 use super::group::ComputationGroup;
@@ -78,6 +79,9 @@ impl ComputeNode {
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
         let scheduler = container.inject::<Scheduler>()?;
         let storage_backend = container.inject::<BatchStorage>()?;
+        let storage_service = create_storage(StorageService::new(
+            storage_backend.persistent_storage().clone(),
+        ));
         let roothash_backend = container.inject::<RootHashBackend>()?;
         let roothash_signer = container.inject::<RootHashSigner>()?;
 
@@ -156,6 +160,7 @@ impl ComputeNode {
             entity_registry.clone(),
             environment.clone(),
             node_identity.clone(),
+            storage_backend.clone(),
         ));
 
         // Create roothash frontend.
@@ -190,6 +195,7 @@ impl ComputeNode {
             .register_service(enclave_rpc_service)
             .register_service(inter_node_service)
             .register_service(contract_service)
+            .register_service(storage_service)
             .bind_secure(
                 "0.0.0.0",
                 config.port,

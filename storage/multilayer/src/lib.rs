@@ -268,6 +268,10 @@ impl BatchStorage for MultilayerBackend {
             })
             .into_box()
     }
+
+    fn persistent_storage(&self) -> Arc<StorageBackend> {
+        self.sled.clone()
+    }
 }
 
 fn di_factory(
