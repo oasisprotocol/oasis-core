@@ -30,7 +30,7 @@ impl KeyStates {
     }
 }
 
-// Task to copy all keys present in the `from` backend not present in `to` with the same expiry.
+// Task to copy all keys present in the `from` backend not present in the `to` with the same expiry.
 pub fn transition_keys(
     from: Arc<StorageBackend>,
     to: Arc<StorageBackend>,
