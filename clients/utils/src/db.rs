@@ -8,12 +8,13 @@ use ekiden_core::bytes::B256;
 use ekiden_core::bytes::H256;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
-use ekiden_core::futures::Future;
-use ekiden_core::futures::Stream;
+use ekiden_core::futures::prelude::*;
+use ekiden_core::futures::streamfollow;
+use ekiden_core::uint::U256;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::Database;
 use ekiden_di::Container;
-use ekiden_roothash_base::RootHashBackend;
+use ekiden_roothash_base::{Block, RootHashBackend};
 use ekiden_storage_base::BackendIdentityMapper;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_base::StorageMapper;
@@ -72,8 +73,15 @@ impl Manager {
     ) -> Self {
         let root_hash = Arc::new(Mutex::new(None));
         let root_hash_2 = root_hash.clone();
+        let root_hash_init = roothash.clone();
+        let root_hash_resume = roothash.clone();
         let (watch_blocks, blocks_kill_handle) = ekiden_core::futures::killable(
-            roothash.get_blocks(contract_id).for_each(move |block| {
+            streamfollow::follow(
+                move || root_hash_init.get_blocks(contract_id),
+                move |round: &U256| root_hash_resume.get_blocks_since(contract_id, round.clone()),
+                |block: &Block| block.header.round,
+                |_err| false,
+            ).for_each(move |block: Block| {
                 let mut guard = root_hash.lock().unwrap();
                 *guard = Some(block.header.state_root);
                 Ok(())

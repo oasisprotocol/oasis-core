@@ -14,8 +14,10 @@ use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
+use ekiden_core::futures::streamfollow;
 use ekiden_core::futures::sync::mpsc;
 use ekiden_core::tokio::timer::Interval;
+use ekiden_core::uint::U256;
 use ekiden_roothash_base::{Block, Event, RootHashBackend, RootHashSigner};
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, BatchStorage};
@@ -306,20 +308,30 @@ impl RootHashFrontend {
         );
 
         // Subscribe to root hash events.
+        let backend_init = self.inner.backend.clone();
+        let contract_id = self.inner.contract_id.clone();
+
         event_sources.push(
-            self.inner
-                .backend
-                .get_events(self.inner.contract_id)
-                .map(|event| Command::ProcessEvent(event))
+            streamfollow::follow_skip(
+                move || backend_init.get_events(contract_id),
+                |event: &Event| event.clone(),
+                |_err| false,
+            ).map(|event| Command::ProcessEvent(event))
                 .into_box(),
         );
 
         // Subscribe to root hash blocks.
+        let backend_init = self.inner.backend.clone();
+        let backend_resume = self.inner.backend.clone();
+        let contract_id = self.inner.contract_id.clone();
+
         event_sources.push(
-            self.inner
-                .backend
-                .get_blocks(self.inner.contract_id)
-                .map(|block| Command::ProcessBlock(block))
+            streamfollow::follow(
+                move || backend_init.get_blocks(contract_id),
+                move |round: &U256| backend_resume.get_blocks_since(contract_id, round.clone()),
+                |block: &Block| block.header.round,
+                |_err| false,
+            ).map(|block: Block| Command::ProcessBlock(block))
                 .into_box(),
         );
 

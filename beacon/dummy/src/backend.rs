@@ -52,30 +52,34 @@ impl InsecureDummyRandomBeacon {
         environment.spawn({
             let shared_inner = self.inner.clone();
 
-            Box::new(
-                self.inner
-                    .time_notifier
-                    .watch_epochs()
-                    .for_each(move |now| {
-                        let mut notification = shared_inner.last_notify.lock().unwrap();
+            self.inner
+                .time_notifier
+                .watch_epochs()
+                .for_each(move |now| {
+                    let mut notification = shared_inner.last_notify.lock().unwrap();
 
-                        // Acquire the beacon value for the new epoch.
-                        let beacon = shared_inner.get_beacon_impl(now);
+                    // Acquire the beacon value for the new epoch.
+                    let beacon = shared_inner.get_beacon_impl(now);
 
-                        // Cache the epoch/beacon that was last batch notified.
-                        notification.0 = now;
-                        notification.1 = beacon;
+                    // Cache the epoch/beacon that was last batch notified.
+                    notification.0 = now;
+                    notification.1 = beacon;
 
-                        trace!("Epoch: {} Beacon: {:?}", now, beacon);
+                    trace!("Epoch: {} Beacon: {:?}", now, beacon);
 
-                        // Batch notify to all current subscribers.
-                        let to_send = (now, beacon);
-                        shared_inner.subscribers.notify(&to_send);
+                    // Batch notify to all current subscribers.
+                    let to_send = (now, beacon);
+                    shared_inner.subscribers.notify(&to_send);
 
-                        Ok(())
-                    })
-                    .then(|_| future::ok(())),
-            )
+                    Ok(())
+                })
+                .then(|result| {
+                    if let Err(e) = result {
+                        error!("Beacon epoch watch error: {}", e);
+                    };
+                    future::ok(())
+                })
+                .into_box()
         });
         let inner = self.inner.clone();
 

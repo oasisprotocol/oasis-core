@@ -113,7 +113,7 @@ run_test() {
     local dummy_node_runner=$5
     local restart_dummy_after=$6
 
-    echo "RUNNING TEST: ${description}"
+    echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
 
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT

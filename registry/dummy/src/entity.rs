@@ -6,7 +6,7 @@ use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, BoxStream, StreamExt};
+use ekiden_common::futures::prelude::*;
 use ekiden_common::node::Node;
 use ekiden_common::signature::Signed;
 use ekiden_common::subscribers::StreamSubscribers;
