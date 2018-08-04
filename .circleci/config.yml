@@ -4,7 +4,7 @@ defaults: &defaults
 
 version: 2
 jobs:
-  build:
+  build-rust:
     <<: *defaults
     resource_class: large
     steps:
@@ -14,6 +14,9 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
+      - run:
+          name: Checking if rust code has changed
+          command: ./scripts/ci-changed.sh \.circleci beacon clients common compute contract contracts core db di enclave epochtime ethereum instrumentation keys node registry rpc roothash scheduler stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
@@ -35,6 +38,7 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
+            --exclude ekiden-keymanager-untrusted \
             --exclude token \
             --no-run
           cd target/debug
@@ -81,6 +85,40 @@ jobs:
             - ethereum/build/contracts
             - tests
             - scripts
+  build-go:
+    working_directory: /go/src/github.com/oasislabs/ekiden
+    docker:
+      - image: circleci/golang:1.10
+    steps:
+      - checkout
+      - run:
+          name: Checking if go code has changed
+          command: ./scripts/ci-changed.sh \.circleci docker go
+      - restore_cache:
+          keys:
+            - go-cache
+      - run: |
+          wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
+          sudo unzip protoc-3.5.1-linux-x86_64.zip -x readme.txt -d /usr && \
+          rm protoc-3.5.1-linux-x86_64.zip && \
+          sudo chmod a+rx /usr/bin/protoc
+      - run: |
+          go get -d github.com/golang/protobuf/protoc-gen-go && \
+          cd $GOPATH/src/github.com/golang/protobuf && \
+          git checkout v1.0.0 && \
+          cd protoc-gen-go && \
+          go install
+      - run: cd go && dep ensure
+      - run: cd go && go generate ./...
+      - run: cd go && go build -v -o ./ekiden/ekiden ./ekiden
+      - run: cd go && go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
+      - run: bash <(curl -s https://codecov.io/bash) -Z
+      - save_cache:
+          key: go-cache
+          paths:
+            - "/go/pkg"
+
+
 
   benchmark:
     <<: *defaults
@@ -107,7 +145,8 @@ jobs:
           ./scripts/benchmark.py \
               --crate ekiden-rpc-trusted \
               --crate ekiden-db-trusted \
-              --e2e
+              --e2e \
+              --commit $(git rev-parse --short HEAD)
 
   deploy:
     <<: *defaults
@@ -172,20 +211,23 @@ workflows:
   version: 2
   build:
     jobs:
-      - build
+      - build-rust
+      - build-go
       - deploy:
           filters:
             branches:
               only: master
           requires:
-            - build
+            - build-rust
+            - build-go
       - request-deploy:
           type: approval
           filters:
             branches:
               only: master
           requires:
-            - build
+            - build-rust
+            - build-go
       - deployclient:
           requires:
             - request-deploy

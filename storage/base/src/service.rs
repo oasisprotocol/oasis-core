@@ -52,19 +52,42 @@ impl api::Storage for StorageService {
         req: api::InsertRequest,
         sink: UnarySink<api::InsertResponse>,
     ) {
-        let f = move || -> Result<BoxFuture<()>, Error> {
-            Ok(self.inner.insert(req.get_data().to_vec(), req.get_expiry()))
-        };
-        let f = match f() {
-            Ok(f) => f.then(|res| match res {
+        let f = self.inner
+            .insert(req.get_data().to_vec(), req.get_expiry())
+            .then(|res| match res {
                 Ok(()) => Ok(api::InsertResponse::new()),
                 Err(e) => Err(e),
-            }),
-            Err(e) => {
-                ctx.spawn(invalid_rpc!(sink, InvalidArgument, e).map_err(|_e| ()));
-                return;
+            });
+        ctx.spawn(f.then(move |r| match r {
+            Ok(ret) => sink.success(ret),
+            Err(error) => {
+                error!("Failed to insert data to storage backend: {:?}", error);
+                invalid_rpc!(sink, Internal, error)
             }
-        };
+        }).map_err(|_e| ()));
+    }
+
+    fn get_keys(
+        &self,
+        ctx: RpcContext,
+        _req: api::GetKeysRequest,
+        sink: UnarySink<api::GetKeysResponse>,
+    ) {
+        let f = self.inner.get_keys().then(|res| match res {
+            Ok(items) => {
+                let mut resp = api::GetKeysResponse::new();
+                let mut keys = Vec::new();
+                let mut expiry = Vec::new();
+                for item in items.iter() {
+                    keys.push(item.0.to_vec());
+                    expiry.push(item.1);
+                }
+                resp.set_keys(keys.into());
+                resp.set_expiry(expiry);
+                Ok(resp)
+            }
+            Err(e) => Err(e),
+        });
         ctx.spawn(f.then(move |r| match r {
             Ok(ret) => sink.success(ret),
             Err(error) => {

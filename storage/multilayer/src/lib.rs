@@ -236,6 +236,10 @@ impl StorageBackend for MultilayerBackend {
             })));
         Box::new(futures::future::ok(()))
     }
+
+    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+        self.sled.get_keys()
+    }
 }
 
 impl BatchStorage for MultilayerBackend {
@@ -263,6 +267,10 @@ impl BatchStorage for MultilayerBackend {
                 }
             })
             .into_box()
+    }
+
+    fn persistent_storage(&self) -> Arc<StorageBackend> {
+        self.sled.clone()
     }
 }
 

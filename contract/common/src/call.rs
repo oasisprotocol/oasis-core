@@ -1,16 +1,9 @@
 //! Contract call type.
-use std::ops::Deref;
-
 use serde::de::DeserializeOwned;
-use serde::Serialize;
 use serde_cbor;
 
-use ekiden_common::bytes::{B256, B64};
+use ekiden_common::bytes::B256;
 use ekiden_common::error::Result;
-use ekiden_common::signature::{Signature, Signed, Signer};
-
-/// Signature context used for contract calls.
-pub const CALL_SIGNATURE_CONTEXT: B64 = B64(*b"EkCtCall");
 
 /// Helper type used for generic arguments/output.
 pub type Generic = serde_cbor::Value;
@@ -26,85 +19,18 @@ pub struct ContractCall<T> {
     pub arguments: T,
 }
 
-/// Signed contract call.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SignedContractCall<T>(Signed<ContractCall<T>>);
-
-impl<T> SignedContractCall<T> {
-    /// Create a signed contract call.
-    pub fn sign(signer: &Signer, method: &str, arguments: T) -> Self
-    where
-        T: Serialize,
-    {
-        let call = ContractCall {
-            id: B256::random(),
-            method: method.to_owned(),
-            arguments: arguments,
-        };
-
-        SignedContractCall(Signed::sign(signer, &CALL_SIGNATURE_CONTEXT, call))
-    }
-
-    /// Verify signature and return signed contract call.
-    pub fn open(self) -> Result<VerifiedContractCall<T>>
-    where
-        T: DeserializeOwned,
-    {
-        Ok(VerifiedContractCall::new(
-            self.0.open(&CALL_SIGNATURE_CONTEXT)?,
-            self.0.signature,
-        ))
-    }
-}
-
-/// Contract call whose signature has already been verified.
-#[derive(Clone)]
-pub struct VerifiedContractCall<T> {
-    /// Contract call whose signature has been verified.
-    call: ContractCall<T>,
-    /// Signature of the contract call.
-    signature: Signature,
-}
-
-impl<T> VerifiedContractCall<T> {
-    fn new(call: ContractCall<T>, signature: Signature) -> Self {
-        Self { call, signature }
-    }
-
-    /// Convert from generic verified contract call.
-    pub fn from_generic(generic: VerifiedContractCall<Generic>) -> Result<VerifiedContractCall<T>>
+impl<T> ContractCall<T> {
+    /// Convert from generic contract call.
+    pub fn from_generic(generic: ContractCall<Generic>) -> Result<ContractCall<T>>
     where
         T: DeserializeOwned,
     {
         // TODO: Make this work without serialization round trip.
         Ok(Self {
-            call: serde_cbor::from_slice(&serde_cbor::to_vec(&generic.call)?)?,
-            signature: generic.signature,
+            id: generic.id,
+            method: generic.method.clone(),
+            arguments: serde_cbor::from_slice(&serde_cbor::to_vec(&generic.arguments)?)?,
         })
-    }
-
-    /// Get contract call.
-    pub fn get_call(&self) -> &ContractCall<T> {
-        &self.call
-    }
-
-    /// Take contract call.
-    pub fn take_call(self) -> ContractCall<T> {
-        self.call
-    }
-
-    /// Get contract call signature.
-    pub fn get_signature(&self) -> &Signature {
-        &self.signature
-    }
-}
-
-impl<T> Deref for VerifiedContractCall<T> {
-    type Target = T;
-
-    /// Dereferences the request into underlying method arguments.
-    fn deref(&self) -> &T {
-        &self.call.arguments
     }
 }
 

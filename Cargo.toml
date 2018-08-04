@@ -21,11 +21,11 @@ members = [
     "beacon/base",
     "beacon/dummy",
 
-    # Consensus interface.
-    "consensus/api",
-    "consensus/base",
-    "consensus/client",
-    "consensus/dummy",
+    # Root hash interface.
+    "roothash/api",
+    "roothash/base",
+    "roothash/client",
+    "roothash/dummy",
 
     # Storage interface.
     "storage/api",
@@ -42,6 +42,7 @@ members = [
     "enclave/common",
     "enclave/untrusted",
     "enclave/trusted",
+    "enclave/logger",
 
     # Epoch Time.
     "epochtime",
@@ -77,7 +78,6 @@ members = [
     "compute",
 
     # Core contracts.
-    "contracts/key-manager",
     "contracts/token",
 
     # Clients.
@@ -109,5 +109,13 @@ members = [
 
     # Ethereum backend components.
     "ethereum",
+
+    # Key manager.
+    "key-manager/api",
+    "key-manager/common",
+    "key-manager/client",
+    "key-manager/dummy/enclave",
+    "key-manager/dummy/untrusted",
+    "key-manager/node",
 ]
 exclude = [ "thirdparty" ]

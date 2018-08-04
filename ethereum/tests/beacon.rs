@@ -15,6 +15,7 @@ use ekiden_common::entity::Entity;
 use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::futures::prelude::*;
 use ekiden_common::testing;
+use ekiden_epochtime::interface::EPOCH_INTERVAL;
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, SystemTimeSource};
 use ekiden_ethereum::truffle::{deploy_truffle, mine, start_truffle, DEVELOPMENT_ADDRESS};
 use ekiden_ethereum::EthereumRandomBeacon;
@@ -48,7 +49,9 @@ fn beacon_integration() {
     environment.spawn(mine(transport).discard());
 
     // Initialize the beacon.
-    let time_source = Arc::new(SystemTimeSource {});
+    let time_source = Arc::new(SystemTimeSource {
+        interval: EPOCH_INTERVAL,
+    });
     let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
     let beacon = EthereumRandomBeacon::new(
         environment.clone(),

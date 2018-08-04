@@ -12,8 +12,7 @@ use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::error::Result;
-use ekiden_contract_common::call::{ContractOutput, Generic, SignedContractCall,
-                                   VerifiedContractCall};
+use ekiden_contract_common::call::{ContractCall, ContractOutput, Generic};
 
 /// Descriptor of a contract API method.
 #[derive(Clone, Debug)]
@@ -25,17 +24,17 @@ pub struct ContractMethodDescriptor {
 /// Handler for a contract method.
 pub trait ContractMethodHandler<Call, Output> {
     /// Invoke the method implementation and return a response.
-    fn handle(&self, call: &VerifiedContractCall<Call>) -> Result<Output>;
+    fn handle(&self, call: &ContractCall<Call>) -> Result<Output>;
 }
 
 impl<Call, Output, F> ContractMethodHandler<Call, Output> for F
 where
     Call: Send + 'static,
     Output: Send + 'static,
-    F: Fn(&VerifiedContractCall<Call>) -> Result<Output> + Send + Sync + 'static,
+    F: Fn(&Call) -> Result<Output> + Send + Sync + 'static,
 {
-    fn handle(&self, call: &VerifiedContractCall<Call>) -> Result<Output> {
-        (*self)(call)
+    fn handle(&self, call: &ContractCall<Call>) -> Result<Output> {
+        (*self)(&call.arguments)
     }
 }
 
@@ -45,7 +44,7 @@ pub trait ContractMethodHandlerDispatch {
     fn get_descriptor(&self) -> &ContractMethodDescriptor;
 
     /// Dispatches the given raw call.
-    fn dispatch(&self, call: VerifiedContractCall<Generic>) -> Vec<u8>;
+    fn dispatch(&self, call: ContractCall<Generic>) -> Vec<u8>;
 }
 
 struct ContractMethodHandlerDispatchImpl<Call, Output> {
@@ -64,10 +63,10 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, call: VerifiedContractCall<Generic>) -> Vec<u8> {
+    fn dispatch(&self, call: ContractCall<Generic>) -> Vec<u8> {
         // Deserialize call and invoke handler.
-        let output = match VerifiedContractCall::from_generic(call) {
-            Ok(verified) => match self.handler.handle(&verified) {
+        let output = match ContractCall::from_generic(call) {
+            Ok(call) => match self.handler.handle(&call) {
                 Ok(output) => ContractOutput::Success(output),
                 Err(error) => ContractOutput::Error(error.message),
             },
@@ -107,7 +106,7 @@ impl ContractMethod {
     }
 
     /// Dispatch method call.
-    pub fn dispatch(&self, call: VerifiedContractCall<Generic>) -> Vec<u8> {
+    pub fn dispatch(&self, call: ContractCall<Generic>) -> Vec<u8> {
         self.dispatcher.dispatch(call)
     }
 }
@@ -149,23 +148,15 @@ impl Dispatcher {
 
     /// Dispatches a raw contract invocation request.
     pub fn dispatch(&self, call: &Vec<u8>) -> Vec<u8> {
-        match serde_cbor::from_slice::<SignedContractCall<Generic>>(call) {
-            Ok(signed) => {
-                // Verify signature and then get the method.
-                match signed.open() {
-                    Ok(verified) => match self.methods.get(&verified.get_call().method) {
-                        Some(method_dispatch) => method_dispatch.dispatch(verified),
-                        None => serde_cbor::to_vec(&ContractOutput::Error::<Generic>(
-                            "method not found".to_owned(),
-                        )).unwrap(),
-                    },
-                    Err(_) => serde_cbor::to_vec(&ContractOutput::Error::<Generic>(
-                        "failed to verify contract call signature".to_owned(),
-                    )).unwrap(),
-                }
-            }
+        match serde_cbor::from_slice::<ContractCall<Generic>>(call) {
+            Ok(call) => match self.methods.get(&call.method) {
+                Some(method_dispatch) => method_dispatch.dispatch(call),
+                None => serde_cbor::to_vec(&ContractOutput::Error::<Generic>(
+                    "method not found".to_owned(),
+                )).unwrap(),
+            },
             Err(_) => serde_cbor::to_vec(&ContractOutput::Error::<Generic>(
-                "unable to parse call method".to_owned(),
+                "unable to parse call".to_owned(),
             )).unwrap(),
         }
     }
@@ -173,14 +164,9 @@ impl Dispatcher {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
-
     use serde_cbor;
 
     use ekiden_common::bytes::B256;
-    use ekiden_common::ring::signature::Ed25519KeyPair;
-    use ekiden_common::signature::InMemorySigner;
-    use ekiden_common::untrusted;
 
     use super::*;
 
@@ -199,8 +185,7 @@ mod tests {
             ContractMethodDescriptor {
                 name: "dummy".to_owned(),
             },
-            |call: &VerifiedContractCall<Complex>| -> Result<Complex> {
-                let call = call.deref();
+            |call: &Complex| -> Result<Complex> {
                 Ok(Complex {
                     text: call.text.clone(),
                     number: call.number * 2,
@@ -213,20 +198,15 @@ mod tests {
     fn test_dispatcher() {
         register_dummy_method();
 
-        // Generate client key pair.
-        let key_pair =
-            Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-        let signer = InMemorySigner::new(key_pair);
-
         // Prepare a dummy call.
-        let call = SignedContractCall::sign(
-            &signer,
-            "dummy",
-            Complex {
+        let call = ContractCall {
+            id: B256::random(),
+            method: "dummy".to_owned(),
+            arguments: Complex {
                 text: "hello".to_owned(),
                 number: 21,
             },
-        );
+        };
         let call_encoded = serde_cbor::to_vec(&call).unwrap();
 
         // Call contract.

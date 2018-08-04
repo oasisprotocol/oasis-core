@@ -1,5 +1,4 @@
 #![feature(use_extern_macros)]
-#![feature(clone_closures)]
 #![feature(try_from)]
 
 extern crate sgx_types;
@@ -16,25 +15,27 @@ extern crate thread_local;
 
 extern crate ekiden_beacon_base;
 extern crate ekiden_compute_api;
-extern crate ekiden_consensus_base;
 extern crate ekiden_core;
 extern crate ekiden_registry_base;
+extern crate ekiden_roothash_base;
 extern crate ekiden_rpc_api;
 extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
+extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
+extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_multilayer;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 #[macro_use]
 extern crate ekiden_instrumentation;
 
-mod consensus;
 mod group;
-mod ias;
 mod node;
+mod roothash;
 mod services;
+mod statetransfer;
 mod worker;
 
 // Everything above should be moved into a library, while everything below should be in the binary.
@@ -43,13 +44,13 @@ mod worker;
 extern crate clap;
 extern crate pretty_env_logger;
 
-extern crate ekiden_consensus_client;
-extern crate ekiden_consensus_dummy;
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
 extern crate ekiden_ethereum;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
+extern crate ekiden_roothash_client;
+extern crate ekiden_roothash_dummy;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
@@ -62,10 +63,11 @@ use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
+use ekiden_untrusted::enclave::ias;
 
-use self::consensus::{ConsensusConfiguration, ConsensusTestOnlyConfiguration};
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
+use self::roothash::{RootHashConfiguration, RootHashTestOnlyConfiguration};
 use self::worker::WorkerConfiguration;
 
 /// Register known components for dependency injection.
@@ -78,9 +80,9 @@ fn register_components(known_components: &mut KnownComponents) {
     // Storage.
     ekiden_storage_frontend::ImmediateClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
-    // Consensus.
-    ekiden_consensus_client::ConsensusClient::register(known_components);
-    ekiden_consensus_dummy::DummyConsensusSigner::register(known_components);
+    // Root hash.
+    ekiden_roothash_client::RootHashClient::register(known_components);
+    ekiden_roothash_dummy::DummyRootHashSigner::register(known_components);
     // Scheduler.
     ekiden_scheduler_client::SchedulerClient::register(known_components);
     // Entity registry.
@@ -88,8 +90,8 @@ fn register_components(known_components: &mut KnownComponents) {
     // Contract registry.
     ekiden_registry_client::ContractRegistryClient::register(known_components);
     // Local identities.
-    ekiden_ethereum::identity::EthereumEntityIdentity::register(known_components);
-    ekiden_ethereum::identity::EthereumNodeIdentity::register(known_components);
+    ekiden_core::identity::LocalEntityIdentity::register(known_components);
+    ekiden_core::identity::LocalNodeIdentity::register(known_components);
     // Ethereum services.
     ekiden_ethereum::web3_di::Web3Factory::register(known_components);
     ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(known_components);
@@ -198,7 +200,7 @@ fn main() {
         .arg(
             Arg::with_name("test-inject-discrepancy")
                 .long("test-inject-discrepancy")
-                .help("TEST ONLY OPTION: inject discrepancy into consensus process")
+                .help("TEST ONLY OPTION: inject discrepancy into batch processing")
                 .hidden(true)
         )
         .arg(
@@ -218,12 +220,6 @@ fn main() {
             Arg::with_name("test-fail-after-commit")
                 .long("test-fail-after-commit")
                 .help("TEST ONLY OPTION: fail after commit")
-                .hidden(true)
-        )
-        .arg(
-            Arg::with_name("test-fail-after-reveal")
-                .long("test-fail-after-reveal")
-                .help("TEST ONLY OPTION: fail after reveal")
                 .hidden(true)
         )
         .args(&known_components.get_arguments())
@@ -271,14 +267,13 @@ fn main() {
             // TODO: Remove this once we have independent contract registration.
             compute_allowed_stragglers: value_t!(matches, "compute-allowed-stragglers", u64)
                 .unwrap_or_else(|e| e.exit()),
-            // Consensus configuration.
-            consensus: ConsensusConfiguration {
+            // Root hash frontend configuration.
+            roothash: RootHashConfiguration {
                 max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
                 max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
-                test_only: ConsensusTestOnlyConfiguration {
+                test_only: RootHashTestOnlyConfiguration {
                     inject_discrepancy: matches.is_present("test-inject-discrepancy"),
                     fail_after_commit: matches.is_present("test-fail-after-commit"),
-                    fail_after_reveal: matches.is_present("test-fail-after-reveal"),
                 },
             },
             // IAS configuration.

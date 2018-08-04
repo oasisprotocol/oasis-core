@@ -1,3 +1,4 @@
+use std;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -14,10 +15,11 @@ use ekiden_common::futures::Future;
 use ekiden_common::futures::Stream;
 use ekiden_common::hash::EncodedHash;
 use ekiden_common::subscribers::StreamSubscribers;
-use ekiden_consensus_base::backend::ConsensusBackend;
-use ekiden_consensus_base::block::Block;
+use ekiden_common::uint::U256;
 use ekiden_contract_common::batch::CallBatch;
 use ekiden_contract_common::batch::OutputBatch;
+use ekiden_roothash_base::backend::RootHashBackend;
+use ekiden_roothash_base::block::Block;
 use ekiden_storage_base::backend::StorageBackend;
 
 type SharedCommitInfo = Arc<HashMap<H256, Vec<u8>>>;
@@ -50,11 +52,9 @@ impl Wait {
 pub struct Manager {
     /// Keep the environment alive.
     _env: Arc<Environment>,
-    /// Keep the consensus backend alive.
-    _consensus: Arc<ConsensusBackend>,
     /// We distribute commitment information here.
     commit_sub: Arc<StreamSubscribers<SharedCommitInfo>>,
-    /// For killing our consensus follower task.
+    /// For killing our root hash follower task.
     blocks_kill_handle: ekiden_common::futures::KillHandle,
 }
 
@@ -62,74 +62,84 @@ impl Manager {
     pub fn new(
         env: Arc<Environment>,
         contract_id: B256,
-        consensus: Arc<ConsensusBackend>,
+        roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let commit_sub = Arc::new(StreamSubscribers::new());
-        let commit_sub_2 = commit_sub.clone();
-        let (watch_blocks, blocks_kill_handle) =
-            ekiden_common::futures::killable(consensus.get_blocks(contract_id).for_each(
-                move |block: Block| {
-                    if block.header.input_hash == ekiden_common::hash::empty_hash() {
-                        return Ok(());
-                    }
+        let commit_sub_blocks = commit_sub.clone();
+        let roothash_init = roothash.clone();
+        let (watch_blocks, blocks_kill_handle) = ekiden_common::futures::killable(
+            ekiden_common::futures::streamfollow::follow(
+                move || roothash_init.get_blocks(contract_id),
+                move |round: &U256| roothash.get_blocks_since(contract_id, round.clone()),
+                |block: &Block| block.header.round,
+                // TODO: detect permanent errors?
+                |_e| false,
+            ).for_each(move |block: Block| {
+                if block.header.input_hash == ekiden_common::hash::empty_hash() {
+                    return Ok(());
+                }
 
-                    // Check what transactions are included in the block. To do that we need to
-                    // fetch transactions from storage first.
-                    // This wastes local work and storage network effort if we aren't waiting for
-                    // anything. We might be able to save this if we add functionality to
-                    // `StreamSubscriber` to check if there are no subscriptions.
-                    let commit_sub_3 = commit_sub.clone();
-                    ekiden_common::futures::spawn(
-                        storage
-                            .get(block.header.input_hash)
-                            .join(storage.get(block.header.output_hash))
-                            .and_then(move |(inputs, outputs)| {
-                                let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
-                                let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
-                                let mut commit_info = HashMap::with_capacity(inputs.len());
+                // Check what transactions are included in the block. To do that we need to
+                // fetch transactions from storage first.
+                // This wastes local work and storage network effort if we aren't waiting for
+                // anything. We might be able to save this if we add functionality to
+                // `StreamSubscriber` to check if there are no subscriptions.
+                let commit_sub_block = commit_sub_blocks.clone();
+                ekiden_common::futures::spawn(
+                    storage
+                        .get(block.header.input_hash)
+                        .join(storage.get(block.header.output_hash))
+                        .and_then(move |(inputs, outputs)| {
+                            let inputs: CallBatch = serde_cbor::from_slice(&inputs)?;
+                            let outputs: OutputBatch = serde_cbor::from_slice(&outputs)?;
+                            let mut commit_info = HashMap::with_capacity(inputs.len());
 
-                                for (input, output) in inputs.iter().zip(outputs.0.into_iter()) {
-                                    let call_id = input.get_encoded_hash();
+                            for (input, output) in inputs.iter().zip(outputs.0.into_iter()) {
+                                let call_id = input.get_encoded_hash();
 
-                                    commit_info.insert(call_id, output);
-                                }
-                                commit_sub_3.notify(&Arc::new(commit_info));
+                                commit_info.insert(call_id, output);
+                            }
+                            commit_sub_block.notify(&Arc::new(commit_info));
 
-                                Ok(())
-                            })
-                            .or_else(|error| {
-                                error!(
-                                    "Failed to fetch transactions from storage: {}",
-                                    error.message
-                                );
+                            Ok(())
+                        })
+                        .or_else(|error| {
+                            error!(
+                                "Failed to fetch transactions from storage: {}",
+                                error.message
+                            );
 
-                                Ok(())
-                            }),
-                    );
-                    Ok(())
-                },
-            ));
+                            Ok(())
+                        }),
+                );
+                Ok(())
+            }),
+        );
         env.spawn(Box::new(watch_blocks.then(|r| {
             // TODO: propagate giveup-ness to waiting futures
             match r {
                 // Block stream ended.
                 Ok(Ok(())) => {
-                    warn!("manager block stream ended");
+                    // The root hash system has ended the blockchain.
+                    // For now, exit, because no more progress can be made.
+                    error!("manager block stream ended");
+                    std::process::exit(1);
                 }
                 // Manager dropped.
                 Ok(Err(_ /* ekiden_common::futures::killable::Killed */)) => {}
                 // Block stream errored.
                 Err(e) => {
+                    // Propagate error to service manager (high-velocity implementation).
                     error!("manager block stream error: {}", e);
+                    std::process::exit(1);
                 }
             };
             Ok(())
         })));
         Self {
             _env: env,
-            _consensus: consensus,
-            commit_sub: commit_sub_2,
+            commit_sub,
             blocks_kill_handle,
         }
     }

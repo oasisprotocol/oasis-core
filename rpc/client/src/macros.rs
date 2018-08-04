@@ -50,14 +50,24 @@ macro_rules! create_client_rpc {
             #[allow(dead_code)]
             impl<Backend: RpcClientBackend + 'static> Client<Backend> {
                 /// Create new client instance.
-                pub fn new(backend: Arc<Backend>,
-                           mr_enclave: $crate::macros::quote::MrEnclave) -> Self {
-
-                    Client {
+                ///
+                /// If you set `client_authentication` to `None` the default value from the API
+                /// definition will be used. Otherwise this option can be used to override whether
+                /// client authentication is enabled.
+                pub fn new(
+                    backend: Arc<Backend>,
+                    mr_enclave: $crate::macros::quote::MrEnclave,
+                    client_authentication: Option<bool>
+                ) -> Self {
+                    Self {
                         client: RpcClient::new(
                             backend,
                             mr_enclave,
-                            $client_attestation_required,
+                            if let Some(client_authentication) = client_authentication {
+                                client_authentication
+                            } else {
+                                $client_attestation_required
+                            },
                         ),
                     }
                 }

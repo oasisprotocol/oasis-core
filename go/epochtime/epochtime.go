@@ -1,0 +1,201 @@
+// Package epochtime implements the Oasis timekeeping.
+package epochtime
+
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
+
+	"github.com/eapache/channels"
+)
+
+// EpochTime is the number of intervals (epochs) since a fixed instant
+// in time (epoch date).
+type EpochTime uint64
+
+const (
+	// EkidenEpoch is the epoch date, as the number of seconds since
+	// the UNIX epoch.
+	EkidenEpoch int64 = 1514764800 // 2018-01-01T00:00:00+00:00
+
+	// EpochInterval is the epoch interval in seconds.
+	EpochInterval = 86400 // 1 day
+
+	// EpochInvalid is the placeholder invalid epoch.
+	EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
+)
+
+var (
+	ekidenEpochBase            = time.Unix(EkidenEpoch, 0)
+	_               TimeSource = (*MockTimeSource)(nil)
+)
+
+// TimeSource is a timekeeping implementation.
+type TimeSource interface {
+	// GetEpoch returns the current epoch and the number of seconds
+	// since the begining of the current epoch.
+	GetEpoch() (epoch EpochTime, elapsed uint64)
+
+	// WatchEpochs returns a channel that produces a stream of messages
+	// on epoch transitions.
+	//
+	// Upon subscription the current epoch is sent immediately.
+	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
+}
+
+// SystemTimeSource is a TimeSource based on the system's real time clock.
+type SystemTimeSource struct {
+	sync.Mutex
+
+	logger   *logging.Logger
+	notifier *pubsub.Broker
+
+	lastNotified EpochTime
+	interval     int64
+}
+
+// GetEpoch returns the current epoch and the number of seconds since the
+// begining of the current epoch.
+func (s *SystemTimeSource) GetEpoch() (epoch EpochTime, elasped uint64) {
+	return getEpochAt(time.Now(), s.interval)
+}
+
+// WatchEpochs returns a channel that produces a stream of messages on epoch
+// transitions.
+//
+// Upon subscription the current epoch is sent immediately.
+func (s *SystemTimeSource) WatchEpochs() (<-chan EpochTime, *pubsub.Subscription) {
+	return subscribeTyped(s.notifier)
+}
+
+func (s *SystemTimeSource) worker() {
+	t := time.NewTicker(1 * time.Second)
+	for {
+		<-t.C
+		if newEpoch, _ := s.GetEpoch(); newEpoch != s.lastNotified {
+			s.logger.Debug("epoch transition",
+				"prev_epoch", s.lastNotified,
+				"epoch", newEpoch,
+			)
+			s.notifier.Broadcast(newEpoch)
+
+			s.Lock()
+			s.lastNotified = newEpoch
+			s.Unlock()
+		}
+	}
+}
+
+// NewSystemTimeSource constructs a new SystemTimeSource instance, with
+// the specified epoch interval.
+func NewSystemTimeSource(interval int64) (TimeSource, error) {
+	if interval <= 0 {
+		return nil, fmt.Errorf("epochtime: invalid epoch interval: %v", interval)
+	}
+
+	s := &SystemTimeSource{
+		logger:   logging.GetLogger("SystemTimeSource"),
+		interval: interval,
+	}
+	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		epoch, _ := s.GetEpoch()
+		ch.In() <- epoch
+	})
+
+	s.logger.Debug("initialized",
+		"backend", backendSystem,
+		"interval", interval,
+	)
+
+	go s.worker()
+
+	return s, nil
+}
+
+// MockTimeSource is a mock time source that is driven manually
+// via calls to a function.
+type MockTimeSource struct {
+	sync.Mutex
+
+	logger   *logging.Logger
+	notifier *pubsub.Broker
+
+	epoch   EpochTime
+	elapsed uint64
+}
+
+// GetEpoch returns the current epoch and the number of seconds since the
+// begining of the current epoch.
+func (s *MockTimeSource) GetEpoch() (epoch EpochTime, elapsed uint64) {
+	s.Lock()
+	defer s.Unlock()
+
+	epoch, elapsed = s.epoch, s.elapsed
+	return
+}
+
+// WatchEpochs returns a channel that produces a stream of messages on epoch
+// transitions.
+//
+// Upon subscription the current epoch is sent immediately.
+func (s *MockTimeSource) WatchEpochs() (<-chan EpochTime, *pubsub.Subscription) {
+	return subscribeTyped(s.notifier)
+}
+
+// SetEpoch sets the mock epoch and offset.
+func (s *MockTimeSource) SetEpoch(epoch EpochTime, elapsed uint64) {
+	s.Lock()
+	defer s.Unlock()
+
+	if elapsed > EpochInterval {
+		panic("mocktime: elapsed time greater than EpochInterval")
+	}
+	oldEpoch := s.epoch
+	s.epoch, s.elapsed = epoch, elapsed
+	if oldEpoch != epoch {
+		s.logger.Debug("epoch transition",
+			"prev_epoch", oldEpoch,
+			"epoch", epoch,
+		)
+		s.notifier.Broadcast(epoch)
+	}
+}
+
+// NewMockTimeSource constructs a new MockTimeSource instance.
+func NewMockTimeSource() *MockTimeSource {
+	s := &MockTimeSource{
+		logger: logging.GetLogger("MockTimeSource"),
+	}
+	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		epoch, _ := s.GetEpoch()
+		ch.In() <- epoch
+	})
+
+	s.logger.Debug("initialized",
+		"backend", backendMock,
+	)
+
+	return s
+}
+
+func getEpochAt(at time.Time, interval int64) (epoch EpochTime, elapsed uint64) {
+	delta := int64(at.Sub(ekidenEpochBase).Seconds())
+	if delta < 0 {
+		panic("epochtime: time predates EkidenEpoch")
+	}
+
+	epoch = EpochTime(delta / interval)
+	elapsed = uint64(delta % interval)
+	return
+}
+
+func subscribeTyped(notifier *pubsub.Broker) (<-chan EpochTime, *pubsub.Subscription) {
+	typedCh := make(chan EpochTime)
+	sub := notifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
+}

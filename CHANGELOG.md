@@ -1,5 +1,6 @@
 # Unreleased
 
+* Update rust-sgx-sdk to v1.0.1 and rustc to 1.29 nightly
 * **BACKWARD INCOMPATIBLE:** Store batches in storage and distribute only signed batch
   hashes to workers.
 * **BACKWARD INCOMPATIBLE:** Remove `transactions` from consensus blocks and only store
@@ -23,6 +24,12 @@
 * **BACKWARD INCOMPATIBLE:** Use TLS client authentication for gRPC channels, encode
   node Ed25519 public key in TLS certificates, remove custom signed RPC arguments.
 * **BACKWARD INCOMPATIBLE:** Rename `build-contract` to `build-enclave`.
+* **BACKWARD INCOMPATIBLE:** Rename consensus backend to root hash backend to make it more
+  clear what its role is.
+* **BACKWARD INCOMPATIBLE:** Move local node identity implementations to `ekiden-common`
+  (previously they were part of `ekiden-ethereum`).
+* **BACKWARD INCOMPATIBLE:** Make raw contract calls unsigned as signatures and encryption
+  should be handled by the runtime.
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.

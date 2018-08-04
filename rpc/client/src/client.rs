@@ -301,7 +301,9 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
                         let mut request = api::ChannelAuthRequest::new();
                         let credentials = match context.backend.get_credentials() {
                                 Some(credentials) => credentials,
-                                None => return future::Either::A(future::err(Error::new("Channel requires client authentication and backend has no credentials"))),
+                                None => return future::Either::A(future::err(Error::new(
+                                    "Channel requires client authentication and backend has no credentials"
+                                ))),
                             };
                         let bastpk = match context.secure_channel.get_authentication(
                             &credentials.long_term_private_key,

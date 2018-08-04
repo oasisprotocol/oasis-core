@@ -10,6 +10,8 @@ mod retry;
 mod select_all;
 #[cfg(not(target_env = "sgx"))]
 mod spawn;
+#[cfg(not(target_env = "sgx"))]
+pub mod streamfollow;
 
 /// Future type for use in Ekiden.
 pub type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;

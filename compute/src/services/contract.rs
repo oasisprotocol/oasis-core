@@ -7,11 +7,11 @@ use ekiden_compute_api::{Contract, SubmitTxRequest, SubmitTxResponse};
 use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::futures::prelude::*;
 
-use super::super::consensus::ConsensusFrontend;
+use super::super::roothash::RootHashFrontend;
 
 struct ContractServiceInner {
-    /// Consensus frontend.
-    consensus_frontend: Arc<ConsensusFrontend>,
+    /// Root hash frontend.
+    roothash_frontend: Arc<RootHashFrontend>,
 }
 
 #[derive(Clone)]
@@ -21,9 +21,9 @@ pub struct ContractService {
 
 impl ContractService {
     /// Create new compute server instance.
-    pub fn new(consensus_frontend: Arc<ConsensusFrontend>) -> Self {
+    pub fn new(roothash_frontend: Arc<RootHashFrontend>) -> Self {
         ContractService {
-            inner: Arc::new(ContractServiceInner { consensus_frontend }),
+            inner: Arc::new(ContractServiceInner { roothash_frontend }),
         }
     }
 }
@@ -40,7 +40,7 @@ impl Contract for ContractService {
 
         let batch = CallBatch(vec![request.take_data()]);
 
-        self.inner.consensus_frontend.append_batch(batch);
+        self.inner.roothash_frontend.append_batch(batch);
 
         ctx.spawn(sink.success(SubmitTxResponse::new()).map_err(|_error| ()));
     }

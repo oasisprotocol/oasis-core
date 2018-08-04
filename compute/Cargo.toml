@@ -4,7 +4,7 @@ version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden compute node"
 keywords = ["ekiden"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [features]
@@ -21,13 +21,15 @@ ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
 ekiden-rpc-api = { path = "../rpc/api", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
-ekiden-consensus-base = { path = "../consensus/base", version = "0.2.0-alpha" }
-ekiden-consensus-client = { path = "../consensus/client", version = "0.2.0-alpha" }
-ekiden-consensus-dummy = { path = "../consensus/dummy", version = "0.2.0-alpha" }
+ekiden-storage-api = { path = "../storage/api", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../roothash/base", version = "0.2.0-alpha" }
+ekiden-roothash-client = { path = "../roothash/client", version = "0.2.0-alpha" }
+ekiden-roothash-dummy = { path = "../roothash/dummy", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
 ekiden-storage-multilayer = { path = "../storage/multilayer", version = "0.2.0-alpha" }
+ekiden-storage-dummy = { path = "../storage/dummy", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../scheduler/base", version = "0.2.0-alpha" }
 ekiden-scheduler-client = { path = "../scheduler/client", version = "0.2.0-alpha" }
 ekiden-beacon-base = { path = "../beacon/base", version = "0.2.0-alpha" }

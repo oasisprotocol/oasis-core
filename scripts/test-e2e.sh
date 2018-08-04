@@ -22,6 +22,16 @@ run_dummy_node_storage_dynamodb() {
         &
 }
 
+run_dummy_node_persistent_state_storage() {
+    ${WORKDIR}/target/debug/ekiden-node-dummy \
+        --random-beacon-backend dummy \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --time-source-notifier mockrpc \
+        --storage-backend dummy \
+        --roothash-storage-path "/tmp/dummy_node-state_storage" \
+        &
+}
+
 run_compute_node() {
     local id=$1
     shift
@@ -101,6 +111,7 @@ run_test() {
     local client=$3
     local epochs=$4
     local dummy_node_runner=$5
+    local restart_dummy_after=$6
 
     echo "RUNNING TEST: ${description}"
 
@@ -109,7 +120,13 @@ run_test() {
 
     # Start dummy node.
     $dummy_node_runner
+    dummy_pid=$!
     sleep 1
+
+    # Handle restarting the dummy node after a delay.
+    if [[ -n "${restart_dummy_after}" ]]; then
+        (sleep ${restart_dummy_after}; echo -e "\n\n\e[1;7;35m*** RESTARTING DUMMY NODE ***\e[0m\n\n"; kill -9 ${dummy_pid}; ${dummy_node_runner}) &
+    fi
 
     # Run the client. We run the client first so that we test whether it waits for the
     # committee to be elected and connects to the leader.
@@ -220,3 +237,6 @@ else
     echo >&2 "Skipping multilayer storage backend test."
 fi
 run_test scenario_multilayer_remote "e2e-storage-multilayer-remote" token 1 run_dummy_node_default
+
+rm -rf "/tmp/dummy_node-state_storage"
+run_test scenario_basic "e2e-basic-recovery" token 2 run_dummy_node_persistent_state_storage 5

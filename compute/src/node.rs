@@ -6,7 +6,6 @@ use std::sync::Arc;
 use grpcio;
 
 use ekiden_compute_api;
-use ekiden_consensus_base::{ConsensusBackend, ConsensusSigner};
 use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
 use ekiden_core::environment::Environment;
@@ -18,14 +17,16 @@ use ekiden_di::Container;
 use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
                            REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
                            REGISTER_NODE_SIGNATURE_CONTEXT};
+use ekiden_roothash_base::{RootHashBackend, RootHashSigner};
 use ekiden_rpc_api;
 use ekiden_scheduler_base::Scheduler;
-use ekiden_storage_base::BatchStorage;
+use ekiden_storage_api::create_storage;
+use ekiden_storage_base::{BatchStorage, StorageService};
 use ekiden_tools::get_contract_identity;
 
-use super::consensus::{ConsensusConfiguration, ConsensusFrontend};
 use super::group::ComputationGroup;
 use super::ias::{IASConfiguration, IAS};
+use super::roothash::{RootHashConfiguration, RootHashFrontend};
 use super::services::computation_group::ComputationGroupService;
 use super::services::contract::ContractService;
 use super::services::enclaverpc::EnclaveRpcService;
@@ -52,8 +53,8 @@ pub struct ComputeNodeConfiguration {
     /// Number of allowed stragglers.
     // TODO: Remove this once we have independent contract registration.
     pub compute_allowed_stragglers: u64,
-    /// Consensus configuration.
-    pub consensus: ConsensusConfiguration,
+    /// Root hash configuration.
+    pub roothash: RootHashConfiguration,
     /// IAS configuration.
     pub ias: Option<IASConfiguration>,
     /// Worker configuration.
@@ -78,8 +79,11 @@ impl ComputeNode {
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
         let scheduler = container.inject::<Scheduler>()?;
         let storage_backend = container.inject::<BatchStorage>()?;
-        let consensus_backend = container.inject::<ConsensusBackend>()?;
-        let consensus_signer = container.inject::<ConsensusSigner>()?;
+        let storage_service = create_storage(StorageService::new(
+            storage_backend.persistent_storage().clone(),
+        ));
+        let roothash_backend = container.inject::<RootHashBackend>()?;
+        let roothash_signer = container.inject::<RootHashSigner>()?;
 
         // Register entity with the registry.
         // TODO: This should probably be done independently?
@@ -156,17 +160,18 @@ impl ComputeNode {
             entity_registry.clone(),
             environment.clone(),
             node_identity.clone(),
+            storage_backend.clone(),
         ));
 
-        // Create consensus frontend.
-        let consensus_frontend = Arc::new(ConsensusFrontend::new(
-            config.consensus,
+        // Create roothash frontend.
+        let roothash_frontend = Arc::new(RootHashFrontend::new(
+            config.roothash,
             contract_id,
             environment.clone(),
             worker.clone(),
             computation_group.clone(),
-            consensus_backend.clone(),
-            consensus_signer.clone(),
+            roothash_backend.clone(),
+            roothash_signer.clone(),
             storage_backend.clone(),
         ));
 
@@ -176,9 +181,9 @@ impl ComputeNode {
         let enclave_rpc_service =
             ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(worker));
         let contract_service =
-            ekiden_compute_api::create_contract(ContractService::new(consensus_frontend.clone()));
+            ekiden_compute_api::create_contract(ContractService::new(roothash_frontend.clone()));
         let inter_node_service = ekiden_compute_api::create_computation_group(
-            ComputationGroupService::new(consensus_frontend.clone()),
+            ComputationGroupService::new(roothash_frontend.clone()),
         );
         let server = grpcio::ServerBuilder::new(grpc_environment.clone())
             .channel_args(
@@ -190,6 +195,7 @@ impl ComputeNode {
             .register_service(enclave_rpc_service)
             .register_service(inter_node_service)
             .register_service(contract_service)
+            .register_service(storage_service)
             .bind_secure(
                 "0.0.0.0",
                 config.port,

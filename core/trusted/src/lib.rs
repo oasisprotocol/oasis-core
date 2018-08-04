@@ -3,7 +3,7 @@
 extern crate ekiden_contract_trusted;
 extern crate ekiden_db_trusted;
 extern crate ekiden_enclave_trusted;
-extern crate ekiden_key_manager_client;
+extern crate ekiden_keymanager_client;
 extern crate ekiden_rpc_trusted;
 
 pub mod enclave {
@@ -23,5 +23,5 @@ pub mod contract {
 }
 
 pub mod key_manager {
-    pub use ekiden_key_manager_client::*;
+    pub use ekiden_keymanager_client::*;
 }

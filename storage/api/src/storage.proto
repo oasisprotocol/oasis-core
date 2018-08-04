@@ -1,10 +1,12 @@
 syntax = "proto3";
 
 package storage;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 
 service Storage {
     rpc Get(GetRequest) returns (GetResponse) {}
     rpc Insert(InsertRequest) returns (InsertResponse) {}
+    rpc GetKeys(GetKeysRequest) returns (GetKeysResponse) {}
 }
 
 message GetRequest {
@@ -21,4 +23,12 @@ message InsertRequest {
 }
 
 message InsertResponse {
+}
+
+message GetKeysRequest {
+}
+
+message GetKeysResponse {
+    repeated bytes keys = 1;
+    repeated uint64 expiry = 2;
 }

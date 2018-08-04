@@ -72,6 +72,35 @@ pub mod clap {
 ///     ]
 /// );
 /// ```
+///
+/// Custom factory with command-line arguments and injectable dependencies:
+/// ```ignore
+/// create_component!(
+///     foo,
+///     "foo-backend",
+///     FooBackend,
+///     Backend,
+///     (|container: &mut Container| -> Result<Box<Any>> {
+///         let bar = container.inject()?;
+///         let baz = container.inject()?;
+///
+///         let args = container.get_arguments().unwrap();
+///         let arg = args.value_of("foo-arg").unwrap();
+///
+///         let backend = FooBackend::new(bar, baz, arg);
+///
+///         let instance: Arc<Backend> = Arc::new(backend);
+///         Ok(Box::new(instance))
+///     }),
+///     [
+///         Arg::with_name("foo-arg")
+///             .long("foo-arg")
+///             .help("Foo argument")
+///             .takes_value(true)
+///             .default_value("hello")
+///     ]
+/// );
+/// ```
 #[macro_export]
 macro_rules! create_component {
     (

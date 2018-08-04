@@ -1,13 +1,17 @@
 extern crate sgx_types;
 extern crate sgx_urts;
 
+extern crate base64;
 extern crate protobuf;
+extern crate reqwest;
 
 extern crate ekiden_common;
+extern crate ekiden_core;
 extern crate ekiden_enclave_common;
 
 pub mod ecall_proxy;
 pub mod enclave;
+pub mod ias;
 pub mod identity;
 
 // Exports.

@@ -60,17 +60,22 @@ impl Into<api::CommitteeNode> for CommitteeNode {
 }
 
 /// The functionality a committee exists to provide.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CommitteeType {
     Compute,
     Storage,
 }
 
 /// A per-contract (per-contract instance) committee instance.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Committee {
     pub kind: CommitteeType,
     pub members: Vec<CommitteeNode>,
+    // We only need to ser/des this struct in the Consensus dummy backend
+    // when storing or restoring current round state.  Arc<> is problematic
+    // to ser/des, but we can recreate the contract from other data we have,
+    // so we don't really need it there.
+    #[serde(skip)]
     pub contract: Arc<Contract>,
     pub valid_for: EpochTime,
 }
@@ -120,7 +125,7 @@ pub trait Scheduler: Send + Sync {
     /// for the current epoch.
     fn get_committees(&self, contract: B256) -> BoxFuture<Vec<Committee>>;
 
-    /// Subscribe to all comittee generation updates.  Upon subscription
+    /// Subscribe to all committee generation updates.  Upon subscription
     /// all committees for the current epoch will be send immediately.
     fn watch_committees(&self) -> BoxStream<Committee>;
 }

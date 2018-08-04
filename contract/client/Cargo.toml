@@ -4,11 +4,11 @@ version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden contract client functionality"
 keywords = ["ekiden"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-ekiden-consensus-base = { path = "../../consensus/base", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
 ekiden-contract-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }

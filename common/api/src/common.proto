@@ -3,6 +3,7 @@ syntax = "proto3";
 // Common message definitions across services.
 
 package common;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/common";
 
 message Address {
     enum Transport {
@@ -30,7 +31,7 @@ message Node {
     uint64 expiration = 4;
     repeated Address addresses = 5;
     Certificate certificate = 6;
-    // TODO: stake should be formalized in common or consensus.
+    // TODO: stake should be formalized in common or roothash.
     bytes stake = 7;
 }
 

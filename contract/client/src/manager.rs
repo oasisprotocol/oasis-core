@@ -1,4 +1,5 @@
 //! Manager for contract clients.
+use std;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
@@ -9,13 +10,13 @@ use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::futures::streamfollow;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
-use ekiden_common::signature::Signer;
 use ekiden_compute_api;
-use ekiden_consensus_base::backend::ConsensusBackend;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
+use ekiden_roothash_base::backend::RootHashBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 
@@ -40,8 +41,6 @@ struct Inner {
     entity_registry: Arc<EntityRegistryBackend>,
     /// Environment.
     environment: Arc<Environment>,
-    /// Signer.
-    signer: Arc<Signer>,
     /// Shared service for waiting for contract calls.
     call_wait_manager: Arc<super::callwait::Manager>,
     /// Current computation group leader.
@@ -67,14 +66,13 @@ impl ContractClientManager {
         environment: Arc<Environment>,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
-        signer: Arc<Signer>,
-        consensus: Arc<ConsensusBackend>,
+        roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
     ) -> Self {
         let call_wait_manager = Arc::new(super::callwait::Manager::new(
             environment.clone(),
             contract_id,
-            consensus,
+            roothash,
             storage,
         ));
         let (leader_notify, future_leader) = oneshot::channel();
@@ -86,7 +84,6 @@ impl ContractClientManager {
                 environment,
                 scheduler,
                 entity_registry,
-                signer,
                 call_wait_manager,
                 leader: RwLock::new(None),
                 future_leader: future_leader.shared(),
@@ -101,84 +98,103 @@ impl ContractClientManager {
     /// Start contract client manager.
     fn start(&self) {
         self.inner.environment.spawn({
+            let inner_init = self.inner.clone();
             let inner = self.inner.clone();
             let contract_id = self.inner.contract_id;
 
-            self.inner
-                .scheduler
-                .watch_committees()
-                .filter(move |committee| committee.contract.id == contract_id)
-                .filter(|committee| committee.kind == CommitteeType::Compute)
-                .for_each_log_errors(
-                    module_path!(),
-                    "Unexpected error while watching scheduler committees",
-                    move |committee| -> BoxFuture<()> {
-                        // Committee has been updated, check if we need to update the leader.
-                        let new_leader = match committee
-                            .members
-                            .iter()
-                            .filter(|member| member.role == Role::Leader)
-                            .map(|member| member.public_key)
-                            .next()
-                        {
-                            Some(leader) => leader,
-                            None => {
-                                return future::err(Error::new("missing committee leader"))
-                                    .into_box()
-                            }
-                        };
-                        let previous_leader = inner.leader.read().unwrap();
+            streamfollow::follow_skip(
+                move || {
+                    inner_init
+                        .scheduler
+                        .watch_committees()
+                        .filter(move |committee| committee.contract.id == contract_id)
+                        .filter(|committee| committee.kind == CommitteeType::Compute)
+                },
+                |committee| committee.valid_for,
+                |_| false,
+            ).for_each(move |committee| {
+                // Committee has been updated, check if we need to update the leader.
+                let new_leader = match committee
+                    .members
+                    .iter()
+                    .filter(|member| member.role == Role::Leader)
+                    .map(|member| member.public_key)
+                    .next()
+                {
+                    Some(leader) => leader,
+                    None => return future::err(Error::new("missing committee leader")).into_box(),
+                };
+                let previous_leader = inner.leader.read().unwrap();
 
-                        if let Some(ref previous_leader) = *previous_leader {
-                            if previous_leader.node.id == new_leader {
-                                return future::ok(()).into_box();
-                            }
-                        }
+                if let Some(ref previous_leader) = *previous_leader {
+                    if previous_leader.node.id == new_leader {
+                        return future::ok(()).into_box();
+                    }
+                }
 
-                        info!(
-                            "Compute committee has changed, new leader is: {:?}",
-                            new_leader
+                info!(
+                    "Compute committee has changed, new leader is: {:?}",
+                    new_leader
+                );
+
+                // Need to change the leader.
+                let inner = inner.clone();
+
+                inner
+                    .entity_registry
+                    .get_node(new_leader)
+                    .and_then(move |node| {
+                        // Create new client to the leader node.
+                        let rpc = ekiden_compute_api::ContractClient::new(
+                            node.connect_without_identity(inner.environment.clone()),
+                        );
+                        let client = ContractClient::new(
+                            rpc,
+                            inner.call_wait_manager.clone(),
+                            inner.timeout.clone(),
                         );
 
-                        // Need to change the leader.
-                        let inner = inner.clone();
+                        // Change the leader.
+                        let mut previous_leader = inner.leader.write().unwrap();
+                        let new_leader = Arc::new(Leader { node, client });
+                        if previous_leader.is_none() {
+                            // Notify tasks waiting for the leader. Unwrap is safe as this is only
+                            // needed the first time when there is no leader yet.
+                            let mut leader_notify = inner.leader_notify.lock().unwrap();
+                            let leader_notify = leader_notify.take().unwrap();
+                            drop(leader_notify.send(new_leader.clone()));
+                        }
 
-                        inner
-                            .entity_registry
-                            .get_node(new_leader)
-                            .and_then(move |node| {
-                                // Create new client to the leader node.
-                                let rpc = ekiden_compute_api::ContractClient::new(
-                                    node.connect_without_identity(inner.environment.clone()),
-                                );
-                                let client = ContractClient::new(
-                                    rpc,
-                                    inner.signer.clone(),
-                                    inner.call_wait_manager.clone(),
-                                    inner.timeout.clone(),
-                                );
+                        if let Some(previous_leader) = previous_leader.take() {
+                            previous_leader.client.shutdown();
+                        }
+                        *previous_leader = Some(new_leader);
 
-                                // Change the leader.
-                                let mut previous_leader = inner.leader.write().unwrap();
-                                let new_leader = Arc::new(Leader { node, client });
-                                if previous_leader.is_none() {
-                                    // Notify tasks waiting for the leader. Unwrap is safe as this is only
-                                    // needed the first time when there is no leader yet.
-                                    let mut leader_notify = inner.leader_notify.lock().unwrap();
-                                    let leader_notify = leader_notify.take().unwrap();
-                                    drop(leader_notify.send(new_leader.clone()));
-                                }
-
-                                if let Some(previous_leader) = previous_leader.take() {
-                                    previous_leader.client.shutdown();
-                                }
-                                *previous_leader = Some(new_leader);
-
-                                Ok(())
-                            })
-                            .into_box()
-                    },
-                )
+                        Ok(())
+                    })
+                    .into_box()
+            })
+                .then(|result| -> Result<(), ()> {
+                    match result {
+                        // Committee stream ended.
+                        Ok(()) => {
+                            // The scheduler has ended the blockchain.
+                            // For now, exit, because no more progress can be made.
+                            error!("Unexpected end of stream while watching scheduler committees");
+                            std::process::exit(1);
+                        }
+                        // Committee stream errored.
+                        Err(error) => {
+                            // Propagate error to service manager (high-velocity implementation).
+                            error!(
+                                "Unexpected error while watching scheduler committees: {:?}",
+                                error
+                            );
+                            std::process::exit(1);
+                        }
+                    };
+                })
+                .into_box()
         });
     }
 

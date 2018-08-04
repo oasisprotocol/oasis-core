@@ -8,6 +8,8 @@ extern crate grpcio;
 #[cfg(not(target_env = "sgx"))]
 #[macro_use]
 extern crate log;
+#[cfg(not(target_env = "sgx"))]
+extern crate protobuf;
 
 pub mod backend;
 pub mod batch;

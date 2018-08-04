@@ -3,6 +3,7 @@ syntax = "proto3";
 import "common/api/src/common.proto";
 
 package registry;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/registry";
 
 service EntityRegistry {
     rpc RegisterEntity (RegisterRequest) returns (RegisterResponse) {}

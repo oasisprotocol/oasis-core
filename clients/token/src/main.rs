@@ -15,17 +15,11 @@ extern crate ekiden_rpc_client;
 
 extern crate token_api;
 
-use std::sync::Arc;
-
 use clap::{App, Arg};
 use futures::future::Future;
 use rand::{thread_rng, Rng};
 
 use ekiden_contract_client::create_contract_client;
-use ekiden_core::bytes::B256;
-use ekiden_core::ring::signature::Ed25519KeyPair;
-use ekiden_core::signature::InMemorySigner;
-use ekiden_core::untrusted;
 use token_api::with_api;
 
 with_api! {
@@ -118,24 +112,15 @@ fn finalize(client: &mut token::Client, runs: usize, threads: usize) {
     );
 }
 
-/// Generate client key pair.
-fn create_key_pair() -> Arc<InMemorySigner> {
-    let key_pair =
-        Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-    Arc::new(InMemorySigner::new(key_pair))
-}
-
 #[cfg(feature = "benchmark")]
 fn main() {
-    let signer = create_key_pair();
-    let results = benchmark_client!(signer, token, init, scenario, finalize);
+    let results = benchmark_client!(token, init, scenario, finalize);
     results.show();
 }
 
 #[cfg(not(feature = "benchmark"))]
 fn main() {
-    let signer = create_key_pair();
-    let mut client = contract_client!(signer, token);
+    let mut client = contract_client!(token);
     init(&mut client, 1, 1);
     scenario(&mut client);
     finalize(&mut client, 1, 1);

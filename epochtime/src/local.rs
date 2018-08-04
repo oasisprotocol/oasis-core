@@ -14,20 +14,22 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, TimeZone, Utc};
 use futures_timer::{Interval, TimerHandle};
 
-fn get_epoch_at_generic(at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
+fn get_epoch_at_generic(at: &DateTime<Utc>, interval: u64) -> Result<(EpochTime, u64)> {
     let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);
     let at = at.signed_duration_since(epoch_base).num_seconds();
     if at < 0 {
         return Err(Error::new("Current system time predates EKIDEN_EPOCH"));
     }
-    let epoch = (at as u64) / EPOCH_INTERVAL;
-    let since = (at as u64) % EPOCH_INTERVAL;
+    let epoch = (at as u64) / interval;
+    let since = (at as u64) % interval;
     Ok((epoch, since))
 }
 
 /// A system time based TimeSource.
 #[derive(Clone, Debug, Default)]
-pub struct SystemTimeSource;
+pub struct SystemTimeSource {
+    pub interval: u64,
+}
 
 impl TimeSource for SystemTimeSource {
     fn get_epoch(&self) -> Result<(EpochTime, u64)> {
@@ -36,7 +38,7 @@ impl TimeSource for SystemTimeSource {
     }
 
     fn get_epoch_at(&self, at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
-        get_epoch_at_generic(at)
+        get_epoch_at_generic(at, self.interval)
     }
 }
 
@@ -59,7 +61,7 @@ impl MockTimeSource {
 
     /// Set the mock epoch, and offset based off a UTC DateTime.
     pub fn set_mock_time_utc(&self, at: &DateTime<Utc>) -> Result<()> {
-        let (epoch, till) = get_epoch_at_generic(at)?;
+        let (epoch, till) = get_epoch_at_generic(at, EPOCH_INTERVAL)?;
         let mut inner = self.inner.lock()?;
         inner.set_mock_time_impl(epoch, till)
     }
@@ -92,11 +94,12 @@ impl MockTimeSource {
 impl TimeSource for MockTimeSource {
     fn get_epoch(&self) -> Result<(EpochTime, u64)> {
         let inner = self.inner.lock()?;
-        Ok((inner.epoch, inner.till))
+        let since = EPOCH_INTERVAL - inner.till;
+        Ok((inner.epoch, since))
     }
 
     fn get_epoch_at(&self, at: &DateTime<Utc>) -> Result<(EpochTime, u64)> {
-        get_epoch_at_generic(at)
+        get_epoch_at_generic(at, EPOCH_INTERVAL)
     }
 }
 
@@ -221,7 +224,9 @@ mod tests {
         assert!(dt == ekiden_epoch);
 
         // EpochTime for the epoch should be 0.
-        let ts = SystemTimeSource {};
+        let ts = SystemTimeSource {
+            interval: EPOCH_INTERVAL,
+        };
         let (epoch, since) = ts.get_epoch_at(&dt).unwrap();
         assert_eq!(epoch, 0);
         assert_eq!(since, 0);
@@ -247,7 +252,9 @@ mod tests {
 
     #[test]
     fn test_get_epoch() {
-        let ts = SystemTimeSource {};
+        let ts = SystemTimeSource {
+            interval: EPOCH_INTERVAL,
+        };
 
         // Might race, unlikely.
         let now = Utc::now();
@@ -294,7 +301,11 @@ create_component!(
     (|container: &mut Container| -> Result<Box<Any>> {
         let environment: Arc<Environment> = container.inject()?;
 
-        let source = Arc::new(SystemTimeSource::default());
+        let args = container.get_arguments().unwrap();
+
+        let source = Arc::new(SystemTimeSource {
+            interval: value_t_or_exit!(args, "epoch-interval", u64),
+        });
         let notifier = Arc::new(LocalTimeSourceNotifier::new(source.clone()));
         let instance: Arc<TimeSourceNotifier> = notifier.clone();
 
@@ -305,7 +316,8 @@ create_component!(
         }
 
         // drive instance.
-        let (now, till) = source.get_epoch().unwrap();
+        let (now, since) = source.get_epoch().unwrap();
+        let till = source.interval - since;
         trace!("SystemTime: Epoch: {} Till: {}", now, till);
 
         // Note: This assumes that the underlying futures_timer
@@ -318,7 +330,7 @@ create_component!(
         // epoch (eg: once every 60s or so).
 
         let at = Instant::now() + Duration::from_secs(till);
-        let dur = Duration::from_secs(EPOCH_INTERVAL);
+        let dur = Duration::from_secs(source.interval);
         let timer = Interval::new_handle(at, dur, TimerHandle::default());
 
         environment.spawn({
@@ -329,7 +341,8 @@ create_component!(
                 timer
                     .map_err(|error| Error::from(error))
                     .for_each(move |_| {
-                        let (now, till) = source.get_epoch().unwrap();
+                        let (now, since) = source.get_epoch().unwrap();
+                        let till = source.interval - since;
                         trace!("SystemTime: Epoch: {} Till: {}", now, till);
                         notifier.notify_subscribers()
                     })
@@ -339,7 +352,11 @@ create_component!(
 
         Ok(Box::new(instance))
     }),
-    []
+    [Arg::with_name("epoch-interval")
+        .long("epoch-interval")
+        .help("Epoch interval in seconds.")
+        .default_value("86400")
+        .takes_value(true)]
 );
 
 pub struct MockTimeRpcNotifier {}
@@ -368,7 +385,8 @@ create_component!(
         source
             .set_mock_time(0, value_t_or_exit!(args, "mock-rpc-epoch-interval", u64))
             .map_err(|e| ekiden_di::error::Error::from(format!("{:?}", e)))?;
-        let (now, till) = source.get_epoch().unwrap();
+        let (now, since) = source.get_epoch().unwrap();
+        let till = EPOCH_INTERVAL - since;
         trace!("MockTimeRPC: Epoch: {} Till: {}", now, till);
 
         // No timer, the entire operation is RPC dependent.
@@ -411,7 +429,8 @@ create_component!(
         source
             .set_mock_time(0, epoch_interval)
             .map_err(|e| ekiden_di::error::Error::from(format!("{:?}", e)))?;
-        let (now, till) = source.get_epoch().unwrap();
+        let (now, since) = source.get_epoch().unwrap();
+        let till = EPOCH_INTERVAL - since;
         trace!("MockTimeRPC: Epoch: {} Till: {}", now, till);
 
         if should_wait {
@@ -428,7 +447,8 @@ create_component!(
                     Interval::new(dur)
                         .map_err(|error| Error::from(error))
                         .for_each(move |_| {
-                            let (now, till) = time_source.get_epoch().unwrap();
+                            let (now, since) = time_source.get_epoch().unwrap();
+                            let till = EPOCH_INTERVAL - since;
                             trace!("MockTime: Epoch: {} Till: {}", now + 1, till);
                             time_source.set_mock_time(now + 1, till)?;
                             time_notifier.notify_subscribers()

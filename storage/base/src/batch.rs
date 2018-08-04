@@ -1,6 +1,7 @@
+use super::backend::StorageBackend;
 use ekiden_common::futures::BoxFuture;
 
-use super::backend::StorageBackend;
+use std::sync::Arc;
 
 /// A storage interface where writes are deferred. It uses the `StorageBackend` trait syntactically
 /// for `get` and `insert`. However, futures for write operations may resolve before the data is
@@ -22,4 +23,7 @@ pub trait BatchStorage: StorageBackend {
     ///
     /// If called while not collecting a batch, this may panic.
     fn end_batch(&self) -> BoxFuture<()>;
+
+    /// Expose persistent storage backend.
+    fn persistent_storage(&self) -> Arc<StorageBackend>;
 }

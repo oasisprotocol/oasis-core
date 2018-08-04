@@ -90,9 +90,9 @@ spec:
             - "0.0.0.0:3000"
             - --prometheus-mode
             - "pull"
-            - --consensus-client-host
+            - --roothash-client-host
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
-            - --consensus-client-port
+            - --roothash-client-port
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_PORT_DUMMY_GRPC)
             - --contract-registry-client-host
             - $(EKIDEN_TOKEN_NODE_DUMMY_SERVICE_HOST)
