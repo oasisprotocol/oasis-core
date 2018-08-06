@@ -2,16 +2,50 @@
 
 Oasis Labs is building the next generation blockchain technology for scalable, privacy-preserving, and distributed applications/services.
 
+Thank you for your interest in contributing to Oasis! There are many ways to contribute, and this document should not be considered encompassing. If you have questions, please file an issue in this repository.
+
 #### Table of Contents
 
+[Feature Requests](#feature-requests)
+
+[Bug Reports](#bug-reports)
+
 [Development](#development)
+  * [Building](#building)
   * [Contributing Code](#contributing-code)
+  * [Contributing Documentation](#contributing-documentation)
   * [Style Guides](#style-guides)
     * [Git Commit Messages](#git-commit-messages)
     * [Rust Styleguide](#rust-styleguide)
     * [Go Styleguide](#go-styleguide)
 
+[Making a Release](#making-a-release)
+
+## Feature Requests
+
+To request new functionality, there are two primary approaches that will be most effective at receiving input and making progress.
+
+If the feature is `small` - a change to a single piece of functionality, or an addition that can be expressed clearly and succinctly in a few sentences, then the most appropriate place to propose it is as an issue in this repository. Such issues will typically receive `p:3` priority in their initial triage.
+
+If the feature is more complicated, and involves protocol changes, or has potential safety or performance implications, then an RFC document is more appropriate.
+These documents live in the [RFCs](https://github.com/oasislabs/rfcs) repository, new features are proposed via a Pull Request in that repository to allow for
+commenting and consensus to be reached before implementation.
+
+## Bug Reports
+
+Bugs are a reality for any software project. We can't fix what we don't know about!
+
+If you believe a bug report presents a security risk, please report it directly to the team, rather than as a public issue.
+
+If you can, search issues in the repository to contribute to existing reports. We don't mind if an issue is filed, but may close it as duplicate if there's already an issue for it.
+
+More information about what we consider to be useful bug reports is included as prompts in our default [issue template](https://github.com/oasislabs/ekiden/issues/new).
+
 ## Development
+
+### Building
+
+Our development environment is documented in our main repository [README](https://github.com/oasislabs/ekiden/blob/master/README.md) documents.
 
 ### Contributing Code
 
@@ -50,6 +84,14 @@ Oasis Labs is building the next generation blockchain technology for scalable, p
 * **Signal to close issues:** Let the person who filed the issue close it. Ping them in a comment (e.g. @user) making sure you’ve commented how an issue was addressed.
   * Anyone else should be able to close the issue if not addressed within a week
 
+### Contributing Documentation
+
+Documentation is always welcome! Documentation comes in several forms:
+
+* Code-level documentation, following language specifications.
+* Mechanism documentation, which live in `docs/` describe commonly used systems, like adding a new protcol definiton, or benchmarking the system.
+* Protocol documentation, living in the `RFCs` repository, describe protocols and architectural design.
+
 ### Style Guides
 
 #### Git Commit Messages
@@ -74,3 +116,19 @@ Rust code should use the style provided in the `.rustfmt.toml` in the top-level 
 #### Go Styleguide
 
 Go code should use the standard `gofmt` formatting style. Be sure to run `gofmt` before pushing any code.
+
+## Making a Release
+
+Once everything is ready for a release, you can use the `./scripts/make-release.py` script to prepare a release. This script covers the following steps of a release process:
+
+* Bumps all versions and versions of all internal dependencies.
+* Optionally (default: no) bumps and builds Docker images.
+* Commits the version bumps.
+* Creates a tag for the version.
+* Optionally (default: yes) calls `cargo publish` on crates.
+* Optionally (default: no) bumps the repository (master) to a new pre-release version and commits this change.
+* Optionally (default: yes) pushes changes to Git.
+
+See `./scripts/make-release.py --help` for more information on usage.
+
+In addition, update `CHANGELOG.md` to archive changes in this release and begin a new section for subsequent changes.
