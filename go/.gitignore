@@ -12,3 +12,4 @@ grpc/common/
 grpc/dummydebug/
 grpc/registry/
 grpc/scheduler/
+grpc/storage/

@@ -268,50 +268,71 @@ impl DummySchedulerBackend {
         //
         // BUG: None of the registries actually implement the on-subscription
         // semantics required to catch up.
+        let mut event_sources = stream::SelectAll::new();
+
         let shared_inner = self.inner.clone();
         let inner = self.inner.lock().unwrap();
 
-        inner.environment.spawn({
-            let beacon_stream = inner.beacon.watch_beacons().map(AsyncEvent::Beacon);
-            let nodes_stream = inner
+        // Beacon.
+        event_sources.push(
+            inner
+                .beacon
+                .watch_beacons()
+                .map(AsyncEvent::Beacon)
+                .into_box(),
+        );
+
+        // Nodes.
+        event_sources.push(
+            inner
                 .entity_registry
                 .watch_node_list()
-                .map(AsyncEvent::Nodes);
-            let contract_stream = inner
+                .map(AsyncEvent::Nodes)
+                .into_box(),
+        );
+
+        // Contract.
+        event_sources.push(
+            inner
                 .contract_registry
                 .get_contracts()
-                .map(AsyncEvent::Contract);
-            let epoch_stream = inner.time_notifier.watch_epochs().map(AsyncEvent::Epoch);
+                .map(AsyncEvent::Contract)
+                .into_box(),
+        );
 
-            // TODO: futures_util has stream::SelectAll, which appears to be
-            // a less awful way of doing this.
-            let event_stream = beacon_stream
-                .select(nodes_stream)
-                .select(contract_stream)
-                .select(epoch_stream);
+        // Epoch.
+        event_sources.push(
+            inner
+                .time_notifier
+                .watch_epochs()
+                .map(AsyncEvent::Epoch)
+                .into_box(),
+        );
 
-            Box::new(
-                event_stream
-                    .for_each(move |event| {
-                        let mut inner = shared_inner.lock().unwrap();
-                        match event {
-                            AsyncEvent::Beacon((epoch, beacon)) => {
-                                inner.on_random_beacon(epoch, beacon);
-                                inner.maybe_mass_elect();
-                            }
-                            AsyncEvent::Nodes((epoch, nodes)) => {
-                                inner.on_node_list(epoch, nodes);
-                                inner.maybe_mass_elect();
-                            }
-                            AsyncEvent::Contract(contract) => inner.on_contract(contract),
-                            AsyncEvent::Epoch(epoch) => {
-                                inner.on_epoch_transition(epoch);
-                                inner.maybe_mass_elect();
-                            }
-                        };
-                        Ok(())
-                    })
-                    .then(|_| future::ok(())),
+        // Process async events from all event sources.
+        inner.environment.spawn({
+            event_sources.for_each_log_errors(
+                module_path!(),
+                "Unexpected error while processing scheduler events",
+                move |event| {
+                    let mut inner = shared_inner.lock().unwrap();
+                    match event {
+                        AsyncEvent::Beacon((epoch, beacon)) => {
+                            inner.on_random_beacon(epoch, beacon);
+                            inner.maybe_mass_elect();
+                        }
+                        AsyncEvent::Nodes((epoch, nodes)) => {
+                            inner.on_node_list(epoch, nodes);
+                            inner.maybe_mass_elect();
+                        }
+                        AsyncEvent::Contract(contract) => inner.on_contract(contract),
+                        AsyncEvent::Epoch(epoch) => {
+                            inner.on_epoch_transition(epoch);
+                            inner.maybe_mass_elect();
+                        }
+                    }
+                    future::ok(()).into_box()
+                },
             )
         });
     }

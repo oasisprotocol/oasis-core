@@ -118,7 +118,14 @@ jobs:
           paths:
             - "/go/pkg"
 
-
+  lint-git:
+    docker:
+      - image: circleci/python:3.6.6
+    steps:
+      - checkout
+      - run: sudo pip install gitlint
+      # Lint Git commit messages.
+      - run: gitlint --commits origin/master...HEAD
 
   benchmark:
     <<: *defaults
@@ -213,6 +220,7 @@ workflows:
     jobs:
       - build-rust
       - build-go
+      - lint-git
       - deploy:
           filters:
             branches:

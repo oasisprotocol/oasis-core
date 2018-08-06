@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package storage;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 
 service Storage {
     rpc Get(GetRequest) returns (GetResponse) {}
