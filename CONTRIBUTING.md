@@ -112,6 +112,24 @@ A detailed post on Git commit messages: [How To Write a Git Commit Message](http
 #### Rust Styleguide
 
 Rust code should use the style provided in the `.rustfmt.toml` in the top-level directory of the repository. Be sure to run `cargo fmt` before pushing any code.
+`rustfmt` does not check import order, so please ensure that you use the following convention:
+```rust
+// extern crates
+extern crate foo;
+
+// mods
+mod bar;
+
+// std use
+use std::{mem, box::Box};
+
+// extern use
+use foo::baz;
+
+// mod use
+use bar::quux;
+```
+Additionally, as `rustfmt` does not check `Cargo.toml`, please manually verify that changes to `Cargo.toml` follow the [best practices](https://github.com/rust-lang-nursery/fmt-rfcs/blob/master/guide/cargo.md) (the most important ones are sorting dependencies and splitting long lines).
 
 #### Go Styleguide
 
