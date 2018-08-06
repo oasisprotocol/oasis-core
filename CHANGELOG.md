@@ -1,6 +1,6 @@
 # Unreleased
 
-* Update rust-sgx-sdk to v1.0.1 and rustc to 1.29 nightly
+* **BACKWARD INCOMPATIBLE:** Update rust-sgx-sdk to v1.0.1 and rustc to 1.29 nightly.
 * **BACKWARD INCOMPATIBLE:** Store batches in storage and distribute only signed batch
   hashes to workers.
 * **BACKWARD INCOMPATIBLE:** Remove `transactions` from consensus blocks and only store
@@ -51,6 +51,8 @@
 * You can now configure the last resort layer in the multilayer storage backend.
 * Handle stragglers in dummy consensus backend.
 * Change async contract call submission protocol to avoid the use of enclave RPC.
+* Honor `Cargo.enclave.lock` in `build-enclave` subcommand. This makes it possible to use
+  a specific `Cargo.lock` for building enclaves with deterministic versions.
 
 # 0.1.0
 
