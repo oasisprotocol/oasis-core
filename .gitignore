@@ -6,11 +6,7 @@ target/
 *.so
 **/generated
 Cargo.lock
-Xargo.toml
-
-# Enclave compilation
-Enclave_t.c
-Enclave_t.h
+Cargo.enclave.lock
 
 # IDE.
 .idea/*

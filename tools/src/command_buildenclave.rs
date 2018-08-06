@@ -16,7 +16,9 @@ use utils::{get_contract_identity, SgxMode};
 
 /// Build an Ekiden enclave.
 pub fn build_enclave(args: &ArgMatches) -> Result<()> {
-    let cargo_addendum = args.value_of("cargo-addendum").map(|s| PathBuf::from(s));
+    let cargo_addendum = args.value_of("cargo-addendum")
+        .map(|path| PathBuf::from(path));
+
     let mut builder = match args.value_of("enclave-crate") {
         Some(crate_name) => EnclaveBuilder::new(
             // Crate name.
@@ -51,6 +53,7 @@ pub fn build_enclave(args: &ArgMatches) -> Result<()> {
                 }
             },
             cargo_addendum,
+            None,
         )?,
         None => {
             // Invoke enclave-build in the current project directory.
@@ -82,6 +85,9 @@ pub fn build_enclave(args: &ArgMatches) -> Result<()> {
                     path: project.get_path(),
                 }),
                 cargo_addendum,
+                // We currently cannot use a workspace-wide Cargo.lock because if we build
+                // multiple enclaves, the lock files would be overwritten.
+                Some(project.get_path().join("Cargo.enclave.lock")),
             )?
         }
     };

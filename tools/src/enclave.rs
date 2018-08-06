@@ -1,7 +1,7 @@
 //! Ekiden enclave builder.
 use std;
 use std::env;
-use std::fs::{DirBuilder, File};
+use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -54,8 +54,10 @@ pub struct EnclaveBuilder<'a> {
     sgx_mode: SgxMode,
     /// Signing key location.
     signing_key: Option<PathBuf>,
-    /// Extra args for cargo
+    /// Extra args for cargo.
     cargo_args: Vec<&'a str>,
+    /// Optional Cargo.lock location.
+    cargo_lock: Option<PathBuf>,
 }
 
 impl<'a> EnclaveBuilder<'a> {
@@ -65,6 +67,7 @@ impl<'a> EnclaveBuilder<'a> {
         target_path: Option<PathBuf>,
         source: Box<cargo::CrateSource + 'a>,
         cargo_addendum: Option<PathBuf>,
+        cargo_lock: Option<PathBuf>,
     ) -> Result<Self> {
         let build_temporary_dir = Temp::new_dir()?;
         let build_path = build_temporary_dir.to_path_buf();
@@ -77,6 +80,7 @@ impl<'a> EnclaveBuilder<'a> {
             target_path: target_path.unwrap_or(build_path.join("target")),
             source,
             cargo_addendum,
+            cargo_lock,
             verbose: false,
             release: false,
             intel_sgx_sdk: match env::var("INTEL_SGX_SDK") {
@@ -202,6 +206,16 @@ impl<'a> EnclaveBuilder<'a> {
             std::io::copy(&mut cargo_addendum, &mut cargo_toml)?;
         }
         drop(cargo_toml);
+
+        // Include Cargo.lock when present.
+        if let Some(ref cargo_lock) = self.cargo_lock {
+            // Ensure that Cargo.lock exists so we can symlink it.
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(cargo_lock)?;
+            std::os::unix::fs::symlink(cargo_lock, self.build_path.join("Cargo.lock"))?;
+        }
 
         // Include Xargo configuration files.
         let mut xargo_toml = File::create(&self.build_path.join("Xargo.toml"))?;
