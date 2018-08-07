@@ -1,19 +1,18 @@
 //! Debug API service.
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use grpcio;
 use grpcio::RpcStatus;
 use grpcio::RpcStatusCode::Internal;
 
+use ekiden_common::tokio::timer::Interval;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::{future, Future, Stream};
 use ekiden_epochtime::interface::{EpochTime, TimeSource};
 use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
 use ekiden_node_dummy_api::{DummyDebug, SetEpochRequest, SetEpochResponse};
-
-use futures_timer::Interval;
 
 struct DebugServiceInner {
     environment: Arc<Environment>,
@@ -72,7 +71,7 @@ impl DebugService {
                 let time_notifier = self.inner.time_notifier.clone();
 
                 Box::new(
-                    Interval::new(dur)
+                    Interval::new(Instant::now(), dur)
                         .map_err(|error| Error::from(error))
                         .for_each(move |_| {
                             let (now, till) = time_source.get_epoch().unwrap();

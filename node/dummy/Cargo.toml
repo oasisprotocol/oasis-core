@@ -37,7 +37,6 @@ clap = "2.29.1"
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 log = "0.4"
 pretty_env_logger = "0.2"
-futures-timer = "0.1.1"
 ansi_term = "0.11"
 
 [[bin]]
