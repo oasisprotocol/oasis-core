@@ -12,7 +12,6 @@ from Parity) and feed into selected scheduling algorithm.
 import (
 	"bufio"
 	"container/heap"
-	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -21,9 +20,17 @@ import (
 
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
 	"github.com/oasislabs/ekiden/go/scheduler/alg/random_distribution"
+	"github.com/oasislabs/ekiden/go/scheduler/alg/simulator"
 )
 
-// Flag variables
+// Flag variables: verbosity is a single, global flag, and per-module flags are grouped
+// together in *Config structs, with a *from_flags global instance/singleton, just like
+// verbosity.  The convention is that we use an init() function to provide initial values, help
+// strings, etc, then in main() we invoke flag.Parse(), after which we run the
+// UpdateAndCheckDefaults() method to check for contradictory flags, update defaults (e.g., if
+// an input file is specified as the source of synthetic load data, then the distribution
+// parameter that controls the pseudorandom synthetic load generation has to be unset or set to
+// "input")
 
 var verbosity int
 
@@ -47,7 +54,7 @@ type DistributionConfig struct {
 // for showing simulator initial state, after flag.Parse() is done, and any special case
 // handling (e.g. seed, or sconfig_from_flags.max_pending below).
 func (dcnf *DistributionConfig) Show(bw *bufio.Writer) {
-	fmt.Fprintf(bw, "\nSynthetic Load Generator Parameters\n") 
+	fmt.Fprintf(bw, "\nSynthetic Load Generator Parameters\n")
 	fmt.Fprintf(bw, "  seed = %d\n", dcnf.seed)
 	fmt.Fprintf(bw, "  distribution = \"%s\"\n", dcnf.distribution_name)
 	fmt.Fprintf(bw, "  input = \"%s\"\n", dcnf.input_file)
@@ -64,7 +71,11 @@ func (dcnf *DistributionConfig) UpdateAndCheckDefaults() {
 		dcnf.seed = int64(time.Now().UTC().UnixNano())
 	}
 	if dcnf.input_file != "" {
-		dcnf.distribution_name = "input"
+		if dcnf.distribution_name == "" || dcnf.distribution_name == "input" {
+			dcnf.distribution_name = "input"
+		} else {
+			panic(fmt.Sprintf("input distribution \"%s\" specified, but also input file \"%s\" specified\n", dcnf.distribution_name, dcnf.input_file))
+		}
 	}
 	if dcnf.distribution_name == "input" && dcnf.input_file == "" {
 		panic("input distribution but no input_file specified")
@@ -158,7 +169,7 @@ func init() {
 
 	flag.StringVar(&dconfig_from_flags.distribution_name, "distribution", "zipf",
 		"random location generation distribution (uniform, or zipf)")
-	flag.StringVar(&dconfig_from_flags.input_file, "input",	"",
+	flag.StringVar(&dconfig_from_flags.input_file, "input", "",
 		"read transactions from file instead of generating")
 	flag.StringVar(&dconfig_from_flags.output_file, "output", "",
 		"write transactions to file in addition to scheduling")
@@ -201,161 +212,7 @@ func init() {
 		"number of execution committees")
 }
 
-type TransactionSource interface {
-	Get(seqno uint) (*alg.Transaction, error)
-	Close() // Logging "source" needs to flush its buffers; and file readers should close.
-}
-
-type RDTransactionSource struct {
-	num_trans, num_reads, num_writes uint
-	rg                               random_distribution.DiscreteGenerator
-}
-
-func NewRDTransactionSource(nt, nr, nw uint, rg random_distribution.DiscreteGenerator) *RDTransactionSource {
-	return &RDTransactionSource{num_trans: nt, num_reads: nr, num_writes: nw, rg: rg}
-}
-
-func (rdt *RDTransactionSource) Get(seqno uint) (*alg.Transaction, error) {
-	if rdt.num_trans == 0 {
-		return nil, errors.New("All requested transactions generated")
-	}
-	rdt.num_trans--
-	t := alg.NewTransaction()
-	var n uint
-	var loc alg.TestLocation
-	for n = 0; n < rdt.num_reads; n++ {
-		for {
-			loc = alg.TestLocation(rdt.rg.Generate())
-			if !t.ReadSet.Contains(loc) {
-				break
-			}
-		}
-		t.ReadSet.Add(loc)
-	}
-	for n = 0; n < rdt.num_writes; n++ {
-		for {
-			loc = alg.TestLocation(rdt.rg.Generate())
-			if !t.WriteSet.Contains(loc) {
-				break
-			}
-		}
-		t.WriteSet.Add(loc)
-	}
-	t.TimeCost = 1
-	t.CreationSeqno = seqno
-	return t, nil
-}
-
-func (rdt *RDTransactionSource) Close() {}
-
-type FileTransactionSource struct {
-	iof *os.File
-	in  *bufio.Reader
-}
-
-func NewFileTransactionSource(fn string) *FileTransactionSource {
-	// Handle "-" case to mean stdin.  This means files named "-" would have to be referred
-	// to via "./-" which is awkward.  We could instead have the empty string "" mean
-	// standard input, but that is different from the usual Unix convention.
-	if fn == "-" {
-		return &FileTransactionSource{iof: nil, in: bufio.NewReader(os.Stdin)}
-	}
-	f, err := os.Open(fn)
-	if err != nil {
-		panic(fmt.Sprintf("Could not open %s", fn))
-	}
-	return &FileTransactionSource{iof: f, in: bufio.NewReader(f)}
-}
-
-// This will stop at *any* errors, e.g., badly formatted transactions, and not just EOF.
-func (ft *FileTransactionSource) Get(_ uint) (*alg.Transaction, error) {
-	return alg.ReadNewTransaction(alg.TestLocation(0), ft.in)
-}
-
-func (ft *FileTransactionSource) Close() {
-	if ft.iof != nil {
-		ft.iof.Close()
-	}
-	ft.in = nil // No Close() because no "ownership" transfer(?) of *io.File
-}
-
-type LoggingTransactionSource struct {
-	os *os.File
-	bw *bufio.Writer
-	ts TransactionSource
-}
-
-func NewLoggingTransactionSource(fn string, ts TransactionSource) *LoggingTransactionSource {
-	os, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY, 0777)
-	if err != nil {
-		panic(fmt.Sprintf("Could not open file %s for logging transactions", fn))
-	}
-	return &LoggingTransactionSource{os: os, bw: bufio.NewWriter(os), ts: ts}
-}
-
-func (lts *LoggingTransactionSource) Get(seqno uint) (*alg.Transaction, error) {
-	t, e := lts.ts.Get(seqno)
-	if e == nil {
-		t.Write(lts.bw)
-		lts.bw.WriteRune('\n')
-	}
-	return t, e
-}
-
-func (lts *LoggingTransactionSource) Close() {
-	lts.ts.Close()
-	if lts.bw.Flush() != nil {
-		panic(fmt.Sprintf("Write to transaction output log %s failed", lts.os.Name()))
-	}
-	lts.os.Close()
-}
-
-type LogicalShardingFilter struct {
-	cnf     LogicalShardingConfig
-	ts      TransactionSource
-	r       *rand.Rand
-	top_map []int64
-}
-
-func (lsf *LogicalShardingFilter) Get(seqno uint) (*alg.Transaction, error) {
-	lsf.top_map = make([]int64, lsf.cnf.shard_top_n) // zeros means no value
-	t, e := lsf.ts.Get(seqno)
-	if e == nil {
-		// iterate over t's read-set and write-set, replace all elements 0 <= e <
-		// cnf.shard_top_n with a random negative value (memoized)
-		lsf.UpdateSet(t.ReadSet)
-		lsf.UpdateSet(t.WriteSet)
-	}
-	return t, e
-}
-
-func (lsf *LogicalShardingFilter) UpdateSet(ls *alg.LocationSet) {
-	repl := alg.NewLocationSet()
-	for loc := range ls.Locations {
-		tloc := loc.(alg.TestLocation)
-		iloc := int64(tloc)
-		if 0 <= iloc && iloc < int64(lsf.cnf.shard_top_n) {
-			loc := int(iloc)
-			if lsf.top_map[loc] == 0 {
-				shard := int64(lsf.r.Intn(lsf.cnf.shard_factor))
-				shard_base := int64(loc * lsf.cnf.shard_factor)
-				lsf.top_map[loc] = -(1 + shard_base + shard)
-			}
-			repl.Add(alg.TestLocation(lsf.top_map[loc]))
-		}
-	}
-	*ls = *repl
-}
-
-func (lsf *LogicalShardingFilter) Close() {
-	lsf.ts.Close()
-}
-
-func NewLogicalShardingFilter(cnf LogicalShardingConfig, ts TransactionSource) *LogicalShardingFilter {
-	return &LogicalShardingFilter{cnf: cnf, ts: ts, r: rand.New(rand.NewSource(cnf.seed))}
-}
-
-func TransactionSourceFactory(cnf DistributionConfig) TransactionSource {
+func TransactionSourceFactory(cnf DistributionConfig) simulator.TransactionSource {
 	num_locations := int(cnf.num_locations)
 	if num_locations <= 0 {
 		panic("Number of memory locations overflowed")
@@ -364,7 +221,7 @@ func TransactionSourceFactory(cnf DistributionConfig) TransactionSource {
 	var rg random_distribution.DiscreteGenerator
 
 	if cnf.distribution_name == "input" {
-		return NewFileTransactionSource(cnf.input_file)
+		return simulator.NewFileTransactionSource(cnf.input_file)
 	} else if cnf.distribution_name == "uniform" {
 		rg = random_distribution.NewUniform(num_locations, rand.New(rand.NewSource(cnf.seed)))
 	} else if cnf.distribution_name == "zipf" {
@@ -372,7 +229,7 @@ func TransactionSourceFactory(cnf DistributionConfig) TransactionSource {
 	} else {
 		panic(fmt.Sprintf("Random distribution name not recognized: %s", cnf.distribution_name))
 	}
-	return NewRDTransactionSource(cnf.num_transactions, cnf.num_read_locs, cnf.num_write_locs, rg)
+	return simulator.NewRandomDistributionTransactionSource(cnf.num_transactions, cnf.num_read_locs, cnf.num_write_locs, rg)
 }
 
 func scheduler_factory(scnf SchedulerConfig, xcnf ExecutionConfig) alg.Scheduler {
@@ -413,11 +270,11 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 	sched := scheduler_factory(scnf, xcnf)
 
 	if dcnf.output_file != "" {
-		ts = NewLoggingTransactionSource(dcnf.output_file, ts)
+		ts = simulator.NewLoggingTransactionSource(dcnf.output_file, ts)
 	}
 
 	if lscnf.shard_top_n > 0 {
-		ts = NewLogicalShardingFilter(lscnf, ts)
+		ts = simulator.NewLogicalShardingFilter(lscnf.seed, lscnf.shard_top_n, lscnf.shard_factor, ts)
 	}
 
 	sched_num := 0
@@ -519,7 +376,7 @@ func main() {
 	lsconfig_from_flags.UpdateAndCheckDefaults()
 	sconfig_from_flags.UpdateAndCheckDefaults(xconfig_from_flags)
 	xconfig_from_flags.UpdateAndCheckDefaults()
-	if (verbosity > 0) {
+	if verbosity > 0 {
 		dconfig_from_flags.Show(bw)
 		lsconfig_from_flags.Show(bw)
 		sconfig_from_flags.Show(bw)
