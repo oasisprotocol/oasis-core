@@ -19,17 +19,17 @@ import (
 	"time"
 
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
-	"github.com/oasislabs/ekiden/go/scheduler/alg/random_distribution"
+	"github.com/oasislabs/ekiden/go/scheduler/alg/randgen"
 )
 
 var verbosity int
 var seed int64
 var distribution string
 var alpha float64
-var num_locations uint
-var num_read_locs uint
-var num_write_locs uint
-var num_transactions uint
+var numLocations uint
+var numReadLocs uint
+var numWriteLocs uint
+var numTransactions uint
 
 func init() {
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
@@ -42,31 +42,32 @@ func init() {
 	// locations are in (pseudo) equivalence classes, i.e., if a
 	// contract reads one of the locations, then it is almost
 	// certainly going to read the rest, and similarly for writes.
-	flag.UintVar(&num_locations, "num_locations", 1<<20, "number of possible locations")
-	flag.UintVar(&num_read_locs, "num_reads", 0, "number of read locations")
-	flag.UintVar(&num_write_locs, "num_writes", 2, "number of write locations")
-	flag.UintVar(&num_transactions, "num_transactions", 1<<20, "number of transactions to generate")
+	flag.UintVar(&numLocations, "numLocations", 1<<20, "number of possible locations")
+	flag.UintVar(&numReadLocs, "numReads", 0, "number of read locations")
+	flag.UintVar(&numWriteLocs, "numWrites", 2, "number of write locations")
+	flag.UintVar(&numTransactions, "numTransactions", 1<<20, "number of transactions to generate")
 }
 
-func generate_transactions(
-	num_trans, num_reads, num_writes uint,
-	gen random_distribution.DiscreteGenerator,
+// nolint: gosec
+func generateTransactions(
+	numTrans, numReads, numWrites uint,
+	gen randgen.Rng,
 	out *bufio.Writer) {
 
 	var tid uint
-	for tid = 0; tid < num_trans; tid++ {
+	for tid = 0; tid < numTrans; tid++ {
 		t := alg.NewTransaction()
 		var n uint
-		for n = 0; n < num_reads; n++ {
+		for n = 0; n < numReads; n++ {
 			t.ReadSet.Add(alg.TestLocation(gen.Generate()))
 		}
-		for n = 0; n < num_writes; n++ {
+		for n = 0; n < numWrites; n++ {
 			t.WriteSet.Add(alg.TestLocation(gen.Generate()))
 		}
 		t.TimeCost = 1
 		t.CreationSeqno = tid
 		t.Write(out)
-		out.WriteRune('\n')
+		_, _ = out.WriteRune('\n')
 	}
 }
 
@@ -78,21 +79,25 @@ func main() {
 	if seed == 0 {
 		seed = int64(time.Now().Nanosecond())
 	}
-	if num_locations <= 0 {
+	if numLocations <= 0 {
 		panic("Number of memory locations too small")
 	}
-	num_locations := int(num_locations)
-	var rg random_distribution.DiscreteGenerator
+	numLocations := int(numLocations)
+	var rg randgen.Rng
 	if distribution == "zipf" {
-		rg = random_distribution.NewZipf(1.0, num_locations, rand.New(rand.NewSource(seed)))
+		rg = randgen.NewZipf(1.0, numLocations, rand.New(rand.NewSource(seed)))
 	} else if distribution == "uniform" {
-		rg = random_distribution.NewUniform(num_locations, rand.New(rand.NewSource(seed)))
+		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(seed)))
 	} else {
 		panic(fmt.Sprintf("Random distribution %s not understood", distribution))
 	}
 
 	bw := bufio.NewWriter(os.Stdout)
-	defer bw.Flush()
+	defer func(bw *bufio.Writer) {
+		if err := bw.Flush(); err != nil {
+			panic(fmt.Sprintf("I/O error: %s", err))
+		}
+	}(bw)
 
-	generate_transactions(num_transactions, num_read_locs, num_write_locs, rg, bw)
+	generateTransactions(numTransactions, numReadLocs, numWriteLocs, rg, bw)
 }

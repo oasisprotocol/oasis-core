@@ -4,47 +4,57 @@ import (
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
-	"github.com/oasislabs/ekiden/go/scheduler/alg/random_distribution"
+	"github.com/oasislabs/ekiden/go/scheduler/alg/randgen"
 )
 
+// RandomDistributionTransactionSource is a pseudo-randomly generated transaction source.  The
+// rg generator is responsible for generating integers which is used as TestLocation values.
+// Because of duplicate removal, if the number of read (or write) Location values to be put
+// into the set becomes too large (much greater than sqrt of the number of possible Location
+// values), then the sampling could take a long time.
 type RandomDistributionTransactionSource struct {
-	num_trans, num_reads, num_writes uint
-	rg                               random_distribution.DiscreteGenerator
+	numTrans, numReads, numWrites uint
+	rg                            randgen.Rng
 }
 
-func NewRandomDistributionTransactionSource(nt, nr, nw uint, rg random_distribution.DiscreteGenerator) *RandomDistributionTransactionSource {
-	return &RandomDistributionTransactionSource{num_trans: nt, num_reads: nr, num_writes: nw, rg: rg}
+// NewRandomDistributionTransactionSource constructs and returns a
+// RandomDistributionTransactionSource that will generate nt transactions before quitting, with
+// each transaction containing nr TestLocation values in the read set, and nw TestLocation
+// values in the write set.
+func NewRandomDistributionTransactionSource(nt, nr, nw uint, rg randgen.Rng) *RandomDistributionTransactionSource {
+	return &RandomDistributionTransactionSource{numTrans: nt, numReads: nr, numWrites: nw, rg: rg}
 }
 
+// Get generates a new transaction with the given sequence number, and read-set / write-set
+// contents as dictated by the random number generator.
 func (rdt *RandomDistributionTransactionSource) Get(seqno uint) (*alg.Transaction, error) {
-	if rdt.num_trans == 0 {
+	if rdt.numTrans == 0 {
 		return nil, errors.New("All requested transactions generated")
 	}
-	rdt.num_trans--
+	rdt.numTrans--
 	t := alg.NewTransaction()
-	var n uint
-	var loc alg.TestLocation
-	for n = 0; n < rdt.num_reads; n++ {
-		for {
-			loc = alg.TestLocation(rdt.rg.Generate())
-			if !t.ReadSet.Contains(loc) {
-				break
-			}
-		}
-		t.ReadSet.Add(loc)
-	}
-	for n = 0; n < rdt.num_writes; n++ {
-		for {
-			loc = alg.TestLocation(rdt.rg.Generate())
-			if !t.WriteSet.Contains(loc) {
-				break
-			}
-		}
-		t.WriteSet.Add(loc)
-	}
+	rdt.sample(t.ReadSet, rdt.numReads)
+	rdt.sample(t.WriteSet, rdt.numWrites)
 	t.TimeCost = 1
 	t.CreationSeqno = seqno
 	return t, nil
 }
 
-func (rdt *RandomDistributionTransactionSource) Close() {}
+func (rdt *RandomDistributionTransactionSource) sample(set *alg.LocationSet, count uint) {
+	var n uint
+	var loc alg.TestLocation
+	for n = 0; n < count; n++ {
+		for {
+			loc = alg.TestLocation(rdt.rg.Generate())
+			if !set.Contains(loc) {
+				break
+			}
+		}
+		set.Add(loc)
+	}
+}
+
+// Close does cleanup.  For RandomDistributionTransactionSource, there is none needed.
+func (rdt *RandomDistributionTransactionSource) Close() error {
+	return nil
+}

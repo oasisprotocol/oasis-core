@@ -9,29 +9,27 @@ import (
 
 func ReadAndWriteTransaction(t *testing.T, input string) {
 	bufr := bufio.NewReader(bytes.NewReader([]byte(input)))
-	var proto Location
-	proto = new(TestLocation)
+	var proto Location = new(TestLocation)
 	tr, err := ReadNewTransaction(proto, bufr)
 	if err != nil {
 		t.Fatalf("Could not parse %s", input)
 	}
-	output_buffer := new(bytes.Buffer)
-	bufw := bufio.NewWriter(output_buffer)
+	outputBuffer := new(bytes.Buffer)
+	bufw := bufio.NewWriter(outputBuffer)
 	tr.Write(bufw)
 	err = bufw.Flush()
 	if err != nil {
 		t.Errorf("Could not write as string")
 	}
-	fmt.Printf("Got %s\n", output_buffer.String())
-	if input != output_buffer.String() {
+	fmt.Printf("Got %s\n", outputBuffer.String())
+	if input != outputBuffer.String() {
 		t.Errorf("Output differs")
 	}
 }
 
 func RejectBadTransaction(t *testing.T, input string) {
 	bufr := bufio.NewReader(bytes.NewReader([]byte(input)))
-	var proto Location
-	proto = new(TestLocation)
+	var proto Location = new(TestLocation)
 	_, err := ReadNewTransaction(proto, bufr)
 	if err == nil {
 		t.Fatalf("Parsed bad input %s", input)

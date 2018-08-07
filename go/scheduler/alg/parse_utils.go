@@ -3,13 +3,12 @@ package alg
 // Utilities for parsing string representation of transactions / location sets.
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
+	"io"
 	"unicode"
 )
 
-func skip_spaces(r *bufio.Reader) error {
+func skipSpaces(r io.RuneScanner) error {
 	var ch rune
 	var err error
 	for {
@@ -17,28 +16,30 @@ func skip_spaces(r *bufio.Reader) error {
 			return err
 		}
 		if !unicode.IsSpace(ch) {
-			r.UnreadRune()
-			return nil
+			// NB: if UnreadRune fails, caller cannot see the non-space rune!
+			return r.UnreadRune()
 		}
 	}
 }
 
-func get_nonspace_rune(r *bufio.Reader) (ch rune, err error) {
-	if err = skip_spaces(r); err != nil {
+func getNonspaceRune(r io.RuneScanner) (ch rune, err error) {
+	if err = skipSpaces(r); err != nil {
 		return 0, err
 	}
 	ch, _, err = r.ReadRune()
 	return ch, err
 }
 
-func expect_rune(expect rune, r *bufio.Reader) error {
-	actual, err := get_nonspace_rune(r)
+// nolint: gosec
+func expectRune(expect rune, r io.RuneScanner) error {
+	actual, err := getNonspaceRune(r)
 	if err != nil {
 		return err
 	}
 	if actual == expect {
 		return nil // consume the rune
 	}
-	r.UnreadRune()
-	return errors.New(fmt.Sprintf("Expected %c, got %c", expect, actual))
+	// If there is an error on UnreadRune(), the input stream is already in a bad state.
+	_ = r.UnreadRune()
+	return fmt.Errorf("Expected %c, got %c", expect, actual)
 }

@@ -14,17 +14,18 @@ import (
 	"container/heap"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
-	"github.com/oasislabs/ekiden/go/scheduler/alg/random_distribution"
+	"github.com/oasislabs/ekiden/go/scheduler/alg/randgen"
 	"github.com/oasislabs/ekiden/go/scheduler/alg/simulator"
 )
 
 // Flag variables: verbosity is a single, global flag, and per-module flags are grouped
-// together in *Config structs, with a *from_flags global instance/singleton, just like
+// together in *Config structs, with a *FromFlags global instance/singleton, just like
 // verbosity.  The convention is that we use an init() function to provide initial values, help
 // strings, etc, then in main() we invoke flag.Parse(), after which we run the
 // UpdateAndCheckDefaults() method to check for contradictory flags, update defaults (e.g., if
@@ -34,225 +35,251 @@ import (
 
 var verbosity int
 
-// Distribution parameters, gathered into one struct.  When we add new distributions we should
-// just add new fields.  The factory function for sources will only use the config value(s)
-// appropriate for the selected TransactionSource.
-type DistributionConfig struct {
-	seed              int64
-	distribution_name string
-	input_file        string // "-" means standard input
-	output_file       string
-	alpha             float64
-	num_locations     uint
-	num_read_locs     uint
-	num_write_locs    uint
-	num_transactions  uint
+// DistributionConfig are distribution parameters, gathered into one struct.  When we add new
+// distributions we should just add new fields.  The factory function for sources will only use
+// the config value(s) appropriate for the selected TransactionSource.
+type distributionConfig struct {
+	seed             int64
+	distributionName string
+	inputFile        string // "-" means standard input
+	outputFile       string
+	alpha            float64
+	numLocations     uint
+	numReadLocs      uint
+	numWriteLocs     uint
+	numTransactions  uint
 }
 
-// For verbosity level where execution parameters ought to be shown.  Use flag names instead
-// of variable names.  Instead of flag.PrintDefaults(), what we want is a flag.PrintActual()
-// for showing simulator initial state, after flag.Parse() is done, and any special case
-// handling (e.g. seed, or sconfig_from_flags.max_pending below).
-func (dcnf *DistributionConfig) Show(bw *bufio.Writer) {
-	fmt.Fprintf(bw, "\nSynthetic Load Generator Parameters\n")
-	fmt.Fprintf(bw, "  seed = %d\n", dcnf.seed)
-	fmt.Fprintf(bw, "  distribution = \"%s\"\n", dcnf.distribution_name)
-	fmt.Fprintf(bw, "  input = \"%s\"\n", dcnf.input_file)
-	fmt.Fprintf(bw, "  output = \"%s\"\n", dcnf.output_file)
-	fmt.Fprintf(bw, "  alpha = %f\n", dcnf.alpha)
-	fmt.Fprintf(bw, "  num-locations = %d\n", dcnf.num_locations)
-	fmt.Fprintf(bw, "  num-reads = %d\n", dcnf.num_read_locs)
-	fmt.Fprintf(bw, "  num-writes = %d\n", dcnf.num_write_locs)
-	fmt.Fprintf(bw, "  num-transactions = %d\n", dcnf.num_transactions)
+const useInput = "input"
+
+// Show prints the config parameters.  For verbosity level where execution parameters ought to
+// be shown.  Use flag names instead of variable names.  Instead of flag.PrintDefaults(), what
+// we want is a flag.PrintActual() for showing simulator initial state, after flag.Parse() is
+// done, and any special case handling (e.g. seed, or sconfigFromFlags.maxPending below).
+func (dcnf *distributionConfig) Show(bw io.Writer) {
+	_, _ = fmt.Fprintf(bw, "\nSynthetic Load Generator Parameters\n")
+	_, _ = fmt.Fprintf(bw, "  seed = %d\n", dcnf.seed)
+	_, _ = fmt.Fprintf(bw, "  distribution = \"%s\"\n", dcnf.distributionName)
+	_, _ = fmt.Fprintf(bw, "  input = \"%s\"\n", dcnf.inputFile)
+	_, _ = fmt.Fprintf(bw, "  output = \"%s\"\n", dcnf.outputFile)
+	_, _ = fmt.Fprintf(bw, "  alpha = %f\n", dcnf.alpha)
+	_, _ = fmt.Fprintf(bw, "  num-locations = %d\n", dcnf.numLocations)
+	_, _ = fmt.Fprintf(bw, "  num-reads = %d\n", dcnf.numReadLocs)
+	_, _ = fmt.Fprintf(bw, "  num-writes = %d\n", dcnf.numWriteLocs)
+	_, _ = fmt.Fprintf(bw, "  num-transactions = %d\n", dcnf.numTransactions)
 }
 
-func (dcnf *DistributionConfig) UpdateAndCheckDefaults() {
+// UpdateAndCheckDefaults sets the RNG seed if unspecified by a command-line flag and ensures
+// that the "input" distribution name is used when there is a file named via the -input-file
+// flag.
+func (dcnf *distributionConfig) UpdateAndCheckDefaults() {
 	if dcnf.seed == 0 {
-		dcnf.seed = int64(time.Now().UTC().UnixNano())
+		dcnf.seed = time.Now().UTC().UnixNano()
 	}
-	if dcnf.input_file != "" {
-		if dcnf.distribution_name == "" || dcnf.distribution_name == "input" {
-			dcnf.distribution_name = "input"
+	if dcnf.inputFile != "" {
+		if dcnf.distributionName == "" || dcnf.distributionName == useInput {
+			dcnf.distributionName = useInput
 		} else {
-			panic(fmt.Sprintf("input distribution \"%s\" specified, but also input file \"%s\" specified\n", dcnf.distribution_name, dcnf.input_file))
+			panic(fmt.Sprintf("input distribution \"%s\" specified, but also input file \"%s\" specified\n", dcnf.distributionName, dcnf.inputFile))
 		}
 	}
-	if dcnf.distribution_name == "input" && dcnf.input_file == "" {
-		panic("input distribution but no input_file specified")
+	if dcnf.distributionName == useInput && dcnf.inputFile == "" {
+		panic("input distribution but no input-file specified")
 	}
-	if int(dcnf.num_locations) < 0 {
+	if int(dcnf.numLocations) < 0 {
 		panic("Number of memory/conflict locations overflowed")
 	}
 }
 
-var dconfig_from_flags DistributionConfig
+var dconfigFromFlags distributionConfig
 
-type LogicalShardingConfig struct {
-	seed         int64
-	shard_top_n  int
-	shard_factor int
+// logicalShardingConfig holds configuration variables that control how LogicalShardingFilter
+// performs sharding.
+type logicalShardingConfig struct {
+	seed        int64
+	shardTopN   int
+	shardFactor int
 }
 
-func (lcnf *LogicalShardingConfig) Show(bw *bufio.Writer) {
-	fmt.Fprintf(bw, "\nLogical Sharding Parameters\n")
-	fmt.Fprintf(bw, "  shard-seed = %d\n", lcnf.seed)
-	fmt.Fprintf(bw, "  shard-top = %d\n", lcnf.shard_top_n)
-	fmt.Fprintf(bw, "  shard-factor = %d\n", lcnf.shard_factor)
+// Show prints the logicalShardingConfig configuration parameters.
+func (lcnf *logicalShardingConfig) Show(bw io.Writer) {
+	_, _ = fmt.Fprintf(bw, "\nLogical Sharding Parameters\n")
+	_, _ = fmt.Fprintf(bw, "  shard-seed = %d\n", lcnf.seed)
+	_, _ = fmt.Fprintf(bw, "  shard-top = %d\n", lcnf.shardTopN)
+	_, _ = fmt.Fprintf(bw, "  shard-factor = %d\n", lcnf.shardFactor)
 }
 
-func (lcnf *LogicalShardingConfig) UpdateAndCheckDefaults() {
+// UpdateAndCheckDefaults sets the RNG seed for the sharding RNG, if unspecified by a
+// command-line flag.
+func (lcnf *logicalShardingConfig) UpdateAndCheckDefaults() {
 	if lcnf.seed == 0 {
-		lcnf.seed = int64(time.Now().UTC().UnixNano())
+		lcnf.seed = time.Now().UTC().UnixNano()
 	}
 }
 
-var lsconfig_from_flags LogicalShardingConfig
+var lsconfigFromFlags logicalShardingConfig
 
-type SchedulerConfig struct {
+type schedulerConfig struct {
 	name string
 
 	// Buffer at most this many transactions before generating a schedule.
-	max_pending int
+	maxPending int
 
-	// max_time is per subgraph execution time, but post-schedule generation subgraph merging
+	// maxTime is per subgraph execution time, but post-schedule generation subgraph merging
 	// will result in higher total execution times per compute committee.
-	max_time uint
+	maxTime uint
 }
 
-func (scnf *SchedulerConfig) Show(bw *bufio.Writer) {
-	fmt.Fprintf(bw, "\nScheduler Configuration Parameters\n")
-	fmt.Fprintf(bw, "  scheduler = \"%s\"\n", scnf.name)
-	fmt.Fprintf(bw, "  max-pending = %d\n", scnf.max_pending)
-	fmt.Fprintf(bw, "  max-subgraph-time = %d\n", scnf.max_time)
+// Show prints the schedulerConfig fields.  NB: not all schedulers will use all fields.
+func (scnf *schedulerConfig) Show(bw io.Writer) {
+	_, _ = fmt.Fprintf(bw, "\nScheduler Configuration Parameters\n")
+	_, _ = fmt.Fprintf(bw, "  scheduler = \"%s\"\n", scnf.name)
+	_, _ = fmt.Fprintf(bw, "  max-pending = %d\n", scnf.maxPending)
+	_, _ = fmt.Fprintf(bw, "  max-subgraph-time = %d\n", scnf.maxTime)
 }
 
-func (scnf *SchedulerConfig) UpdateAndCheckDefaults(xcnf ExecutionConfig) {
-	if scnf.max_pending < 0 {
-		scnf.max_pending = 2 * int(scnf.max_time) * xcnf.num_committees
+// UpdateAndCheckDefaults sets the maxPending configuration based on other configuration
+// values if it had not been set by a command-line flag.
+func (scnf *schedulerConfig) UpdateAndCheckDefaults(xcnf executionConfig) {
+	if scnf.maxPending < 0 {
+		scnf.maxPending = 2 * int(scnf.maxTime) * xcnf.numCommittees
 	}
 }
 
-var sconfig_from_flags SchedulerConfig
+var sconfigFromFlags schedulerConfig
 
-type ExecutionConfig struct {
-	num_committees int
+// executionConfig contains configuration parameters for the execution environment.  For now,
+// it only contains the number of execution committees.
+type executionConfig struct {
+	numCommittees int
 }
 
-func (xcnf *ExecutionConfig) Show(bw *bufio.Writer) {
-	fmt.Fprintf(bw, "\nExecution Simulator Parameters\n")
-	fmt.Fprintf(bw, "  num-committees = %d\n", xcnf.num_committees)
+// Show prints the executionConfig.
+func (xcnf *executionConfig) Show(bw io.Writer) {
+	_, _ = fmt.Fprintf(bw, "\nExecution Simulator Parameters\n")
+	_, _ = fmt.Fprintf(bw, "  num-committees = %d\n", xcnf.numCommittees)
 }
 
-func (xcnf *ExecutionConfig) UpdateAndCheckDefaults() {
-	if xcnf.num_committees < 1 {
+// UpdateAndCheckDefaults verifies that the executionConfig makes sense (positive numCommittee).
+func (xcnf *executionConfig) UpdateAndCheckDefaults() {
+	if xcnf.numCommittees < 1 {
 		panic(fmt.Sprintf("Number of execution committees must be at least 1, not %d",
-			xcnf.num_committees))
+			xcnf.numCommittees))
 	}
 }
 
-var xconfig_from_flags ExecutionConfig
+var xconfigFromFlags executionConfig
 
+// Set up flag variables before main runs.
 func init() {
-	dconfig_from_flags = DistributionConfig{}
-	sconfig_from_flags = SchedulerConfig{}
-	lsconfig_from_flags = LogicalShardingConfig{}
-	xconfig_from_flags = ExecutionConfig{}
+	dconfigFromFlags = distributionConfig{}
+	sconfigFromFlags = schedulerConfig{}
+	lsconfigFromFlags = logicalShardingConfig{}
+	xconfigFromFlags = executionConfig{}
 
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
 
 	// Distribution generator parameters
 
-	// seed is only important for reproducible RNG; input_file/output_file is another
+	// seed is only important for reproducible RNG; inputFile/outputFile is another
 	// mechanism for reproducibility
-	flag.Int64Var(&dconfig_from_flags.seed, "seed", 0,
+	flag.Int64Var(&dconfigFromFlags.seed, "seed", 0,
 		"pseudorandom number generator seed for synthetic load generator (default: UnixNano)")
 
-	flag.StringVar(&dconfig_from_flags.distribution_name, "distribution", "zipf",
+	flag.StringVar(&dconfigFromFlags.distributionName, "distribution", "zipf",
 		"random location generation distribution (uniform, or zipf)")
-	flag.StringVar(&dconfig_from_flags.input_file, "input", "",
+	flag.StringVar(&dconfigFromFlags.inputFile, "input", "",
 		"read transactions from file instead of generating")
-	flag.StringVar(&dconfig_from_flags.output_file, "output", "",
+	flag.StringVar(&dconfigFromFlags.outputFile, "output", "",
 		"write transactions to file in addition to scheduling")
-	flag.Float64Var(&dconfig_from_flags.alpha, "alpha", 1.0,
+	flag.Float64Var(&dconfigFromFlags.alpha, "alpha", 1.0,
 		"zipf distribution alpha parameter")
 	// For the Ethereum world, the number of possible locations is 2^{160+256}, but it is
 	// extremely sparse.  Furthermore, many locations are in (pseudo) equivalence classes,
 	// i.e., if a contract reads one of the locations, then it is almost certainly going to
 	// read the rest, and similarly for writes.
-	flag.UintVar(&dconfig_from_flags.num_locations, "num-locations", 100000,
+	flag.UintVar(&dconfigFromFlags.numLocations, "num-locations", 100000,
 		"number of possible memory locations")
-	flag.UintVar(&dconfig_from_flags.num_read_locs, "num-reads", 0,
+	flag.UintVar(&dconfigFromFlags.numReadLocs, "num-reads", 0,
 		"number of read locations in a transaction")
-	flag.UintVar(&dconfig_from_flags.num_write_locs, "num-writes", 2,
+	flag.UintVar(&dconfigFromFlags.numWriteLocs, "num-writes", 2,
 		"number of write locations in a transaction")
-	flag.UintVar(&dconfig_from_flags.num_transactions, "num-transactions", 1000000,
+	flag.UintVar(&dconfigFromFlags.numTransactions, "num-transactions", 1000000,
 		"number of transactions to generate")
 
 	// Logical sharding filter configuration parameters
-	flag.Int64Var(&lsconfig_from_flags.seed, "shard-seed", 0,
+	flag.Int64Var(&lsconfigFromFlags.seed, "shard-seed", 0,
 		"pseudorandom number generator seed for logical sharding filter (default: UnixNano)")
-	flag.IntVar(&lsconfig_from_flags.shard_top_n, "shard-top", 0,
+	flag.IntVar(&lsconfigFromFlags.shardTopN, "shard-top", 0,
 		"shard the highest <shard-top> probable locations")
-	flag.IntVar(&lsconfig_from_flags.shard_factor, "shard-factor", 16,
+	flag.IntVar(&lsconfigFromFlags.shardFactor, "shard-factor", 16,
 		"number of new (negative) shards per original location")
 
 	// Scheduler configuration parameters
 
-	flag.StringVar(&sconfig_from_flags.name, "scheduler", "greedy-subgraph",
+	flag.StringVar(&sconfigFromFlags.name, "scheduler", "greedy-subgraph",
 		"scheduling algorithm (greedy-subgraph)")
-	flag.IntVar(&sconfig_from_flags.max_pending, "max-pending", -1,
+	flag.IntVar(&sconfigFromFlags.maxPending, "max-pending", -1,
 		"scheduling when there are this many transactions (default 2 * max-subgraph-time * num-committees")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
-	flag.UintVar(&sconfig_from_flags.max_time, "max-subgraph-time", 20,
+	flag.UintVar(&sconfigFromFlags.maxTime, "max-subgraph-time", 20,
 		"disallow adding to a subgraph if the total estimated execution time would exceed this")
 
 	// Execution Committees configuration parameters
-	flag.IntVar(&xconfig_from_flags.num_committees, "num-committees", 40,
+	flag.IntVar(&xconfigFromFlags.numCommittees, "num-committees", 40,
 		"number of execution committees")
 }
 
-func TransactionSourceFactory(cnf DistributionConfig) simulator.TransactionSource {
-	num_locations := int(cnf.num_locations)
-	if num_locations <= 0 {
+// transactionSourceFactory consults the distributionConfig arg to build and return a
+// TransactionSource, which may be from a canned input data file, from random generator of
+// transactions (with various memory access distributions), etc.
+func transactionSourceFactory(cnf distributionConfig) simulator.TransactionSource {
+	numLocations := int(cnf.numLocations)
+	if numLocations <= 0 {
 		panic("Number of memory locations overflowed")
 	}
 
-	var rg random_distribution.DiscreteGenerator
+	var rg randgen.Rng
 
-	if cnf.distribution_name == "input" {
-		return simulator.NewFileTransactionSource(cnf.input_file)
-	} else if cnf.distribution_name == "uniform" {
-		rg = random_distribution.NewUniform(num_locations, rand.New(rand.NewSource(cnf.seed)))
-	} else if cnf.distribution_name == "zipf" {
-		rg = random_distribution.NewZipf(cnf.alpha, num_locations, rand.New(rand.NewSource(cnf.seed)))
+	if cnf.distributionName == useInput {
+		return simulator.NewFileTransactionSource(cnf.inputFile)
+	} else if cnf.distributionName == "uniform" {
+		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(cnf.seed)))
+	} else if cnf.distributionName == "zipf" {
+		rg = randgen.NewZipf(cnf.alpha, numLocations, rand.New(rand.NewSource(cnf.seed)))
 	} else {
-		panic(fmt.Sprintf("Random distribution name not recognized: %s", cnf.distribution_name))
+		panic(fmt.Sprintf("Random distribution name not recognized: %s", cnf.distributionName))
 	}
-	return simulator.NewRandomDistributionTransactionSource(cnf.num_transactions, cnf.num_read_locs, cnf.num_write_locs, rg)
+	return simulator.NewRandomDistributionTransactionSource(cnf.numTransactions, cnf.numReadLocs, cnf.numWriteLocs, rg)
 }
 
-func scheduler_factory(scnf SchedulerConfig, xcnf ExecutionConfig) alg.Scheduler {
+// schedulerFactory builds a Scheduler.
+func schedulerFactory(scnf schedulerConfig) alg.Scheduler {
 	if scnf.name == "greedy-subgraph" {
-		return alg.NewGreedySubgraphs(scnf.max_pending, alg.ExecutionTime(scnf.max_time))
+		return alg.NewGreedySubgraphs(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
 	}
 	panic(fmt.Sprintf("Scheduler %s not recognized", scnf.name))
 }
 
-type CommitteeMember struct {
-	batches        []*alg.Subgraph
-	execution_time alg.ExecutionTime
+type committeeMember struct {
+	batches       []*alg.Subgraph
+	executionTime alg.ExecutionTime
 }
 
-type CommitteeMemberHeap []*CommitteeMember
+type committeeMemberHeap []*committeeMember
 
-func (h CommitteeMemberHeap) Len() int           { return len(h) }
-func (h CommitteeMemberHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h CommitteeMemberHeap) Less(i, j int) bool { return h[i].execution_time < h[j].execution_time }
-func (h *CommitteeMemberHeap) Push(x interface{}) {
-	*h = append(*h, x.(*CommitteeMember))
+func (h committeeMemberHeap) Len() int { return len(h) }
+
+func (h committeeMemberHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h committeeMemberHeap) Less(i, j int) bool { return h[i].executionTime < h[j].executionTime }
+
+func (h *committeeMemberHeap) Push(x interface{}) {
+	*h = append(*h, x.(*committeeMember))
 }
-func (h *CommitteeMemberHeap) Pop() interface{} {
+
+func (h *committeeMemberHeap) Pop() interface{} {
 	old := *h
 	n := len(old)
 	x := old[n-1]
@@ -260,27 +287,38 @@ func (h *CommitteeMemberHeap) Pop() interface{} {
 	return x
 }
 
-func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
-	lscnf LogicalShardingConfig, xcnf ExecutionConfig, bw *bufio.Writer) {
+// nolint: gocyclo, gosec
+//
+// Run simulation: generate transactions and execute them -- and output results to |bw|.
+// Caller is responsible for checking I/O errors via bw.Flush.  Other errors result in panic
+// here.
+func runSimulation(
+	dcnf distributionConfig,
+	scnf schedulerConfig,
+	lscnf logicalShardingConfig,
+	xcnf executionConfig,
+	bw *bufio.Writer) {
 
-	total_execution_time := alg.ExecutionTime(0)
-	linear_execution_time := alg.ExecutionTime(0)
+	totalExecutionTime := alg.ExecutionTime(0)
+	linearExecutionTime := alg.ExecutionTime(0)
 
-	ts := TransactionSourceFactory(dcnf)
-	sched := scheduler_factory(scnf, xcnf)
+	ts := transactionSourceFactory(dcnf)
+	sched := schedulerFactory(scnf)
+	var err error
 
-	if dcnf.output_file != "" {
-		ts = simulator.NewLoggingTransactionSource(dcnf.output_file, ts)
+	if dcnf.outputFile != "" {
+		if ts, err = simulator.NewLoggingTransactionSource(dcnf.outputFile, ts); err != nil {
+			panic(fmt.Sprintf("Could not open file %s for logging transactions", dcnf.outputFile))
+		}
 	}
 
-	if lscnf.shard_top_n > 0 {
-		ts = simulator.NewLogicalShardingFilter(lscnf.seed, lscnf.shard_top_n, lscnf.shard_factor, ts)
+	if lscnf.shardTopN > 0 {
+		ts = simulator.NewLogicalShardingFilter(lscnf.seed, lscnf.shardTopN, lscnf.shardFactor, ts)
 	}
 
-	sched_num := 0
+	schedNum := 0
 	tid := uint(0)
 	trans := make([]*alg.Transaction, 1)
-	var err error
 	flush := false
 	for {
 		var sgl []*alg.Subgraph
@@ -290,10 +328,10 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 				tid++
 				if verbosity > 4 {
 					trans[0].Write(bw)
-					bw.WriteRune('\n')
+					_, _ = bw.WriteRune('\n')
 				}
 
-				linear_execution_time += trans[0].TimeCost
+				linearExecutionTime += trans[0].TimeCost
 
 				sgl = sched.AddTransactions(trans)
 			} else {
@@ -304,63 +342,65 @@ func generate_transactions(dcnf DistributionConfig, scnf SchedulerConfig,
 			sgl = sched.FlushSchedule()
 		}
 		if len(sgl) > 0 {
-			sched_num++
+			schedNum++
 			if verbosity > 3 {
-				fmt.Fprintf(bw, "\n\n")
-				fmt.Fprintf(bw, "Schedule %3d\n", sched_num)
-				fmt.Fprintf(bw, "------------\n")
-				fmt.Fprintf(bw, " deferred: %d\n", sched.NumDeferred())
+				_, _ = fmt.Fprintf(bw, "\n\n")
+				_, _ = fmt.Fprintf(bw, "Schedule %3d\n", schedNum)
+				_, _ = fmt.Fprintf(bw, "------------\n")
+				_, _ = fmt.Fprintf(bw, " deferred: %d\n", sched.NumDeferred())
 				for _, sg := range sgl {
 					sg.Write(bw)
-					bw.WriteRune('\n')
+					_, _ = bw.WriteRune('\n')
 				}
 			}
 			// assign subgraphs to execution committees using first-free heuristic
-			committee := make([]CommitteeMember, xcnf.num_committees)
-			h := &CommitteeMemberHeap{}
+			committee := make([]committeeMember, xcnf.numCommittees)
+			h := &committeeMemberHeap{}
 			heap.Init(h)
-			for ix := 0; ix < xcnf.num_committees; ix++ {
+			for ix := 0; ix < xcnf.numCommittees; ix++ {
 				heap.Push(h, &committee[ix])
 			}
 			for _, sg := range sgl {
-				cmt := heap.Pop(h).(*CommitteeMember)
-				cmt.execution_time += sg.EstExecutionTime()
+				cmt := heap.Pop(h).(*committeeMember)
+				cmt.executionTime += sg.EstExecutionTime()
 				cmt.batches = append(cmt.batches, sg)
 				heap.Push(h, cmt)
 			}
 			// Calculate execution time for this schedule (max over all members)
-			sched_execution_time := alg.ExecutionTime(0)
+			schedExecutionTime := alg.ExecutionTime(0)
 			for ix, cmt := range committee {
-				if cmt.execution_time > sched_execution_time {
-					sched_execution_time = cmt.execution_time
+				if cmt.executionTime > schedExecutionTime {
+					schedExecutionTime = cmt.executionTime
 				}
 				// Now show committee statistics
 				if verbosity > 1 {
-					fmt.Fprintf(bw, "\n")
-					fmt.Fprintf(bw, "Committee member %d\n", ix)
-					fmt.Fprintf(bw, " est execution time = %d\n", uint64(cmt.execution_time))
-					fmt.Fprintf(bw, " number of batches = %d\n", len(cmt.batches))
+					_, _ = fmt.Fprintf(bw, "\n")
+					_, _ = fmt.Fprintf(bw, "Committee member %d\n", ix)
+					_, _ = fmt.Fprintf(bw, " est execution time = %d\n", uint64(cmt.executionTime))
+					_, _ = fmt.Fprintf(bw, " number of batches = %d\n", len(cmt.batches))
 					if verbosity > 2 {
 						// show the subgraphs
 						for _, sg := range cmt.batches {
 							sg.Write(bw)
-							bw.WriteRune('\n')
+							_, _ = bw.WriteRune('\n')
 						}
 					}
 				}
 			}
-			total_execution_time += sched_execution_time
+			totalExecutionTime += schedExecutionTime
 		}
 		if flush && len(sgl) == 0 {
 			break
 		}
 	}
-	ts.Close()
+	if err = ts.Close(); err != nil {
+		panic(fmt.Sprintf("Transaction Source close error: %s", err.Error()))
+	}
 
-	fmt.Fprintf(bw, "\n********\n")
-	fmt.Fprintf(bw, "Linear execution time: %8d\n", uint64(linear_execution_time))
-	fmt.Fprintf(bw, "Total execution time:  %8d\n", uint64(total_execution_time))
-	fmt.Fprintf(bw, "Speedup:               %22.13f\n", float64(linear_execution_time)/float64(total_execution_time))
+	_, _ = fmt.Fprintf(bw, "\n********\n")
+	_, _ = fmt.Fprintf(bw, "Linear execution time:    %8d\n", uint64(linearExecutionTime))
+	_, _ = fmt.Fprintf(bw, "Parallel execution time:  %8d\n", uint64(totalExecutionTime))
+	_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", float64(linearExecutionTime)/float64(totalExecutionTime))
 }
 
 func main() {
@@ -370,19 +410,28 @@ func main() {
 	}
 
 	bw := bufio.NewWriter(os.Stdout)
-	defer bw.Flush()
+	defer func(bw *bufio.Writer) {
+		if err := bw.Flush(); err != nil {
+			panic(fmt.Sprintf("I/O error: %s", err.Error()))
+		}
+	}(bw)
 
-	dconfig_from_flags.UpdateAndCheckDefaults()
-	lsconfig_from_flags.UpdateAndCheckDefaults()
-	sconfig_from_flags.UpdateAndCheckDefaults(xconfig_from_flags)
-	xconfig_from_flags.UpdateAndCheckDefaults()
+	dconfigFromFlags.UpdateAndCheckDefaults()
+	lsconfigFromFlags.UpdateAndCheckDefaults()
+	sconfigFromFlags.UpdateAndCheckDefaults(xconfigFromFlags)
+	xconfigFromFlags.UpdateAndCheckDefaults()
 	if verbosity > 0 {
-		dconfig_from_flags.Show(bw)
-		lsconfig_from_flags.Show(bw)
-		sconfig_from_flags.Show(bw)
-		xconfig_from_flags.Show(bw)
-		bw.Flush()
+		dconfigFromFlags.Show(bw)
+		lsconfigFromFlags.Show(bw)
+		sconfigFromFlags.Show(bw)
+		xconfigFromFlags.Show(bw)
+		// Check for I/O errors _now_ instead of running the whole simulation and
+		// catching it in the deferred function, since the simulation is relatively
+		// expensive and we should abort early.
+		if bw.Flush() != nil {
+			panic("I/O error")
+		}
 	}
 
-	generate_transactions(dconfig_from_flags, sconfig_from_flags, lsconfig_from_flags, xconfig_from_flags, bw)
+	runSimulation(dconfigFromFlags, sconfigFromFlags, lsconfigFromFlags, xconfigFromFlags, bw)
 }

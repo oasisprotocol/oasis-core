@@ -10,13 +10,13 @@ import (
 	"testing"
 )
 
-var tss_seed = flag.Int64("tss-seed", 1,
+var tssSeed = flag.Int64("tss-seed", 1,
 	"tss-seed <num> where <num is the seed for transaction slices source")
 
-var tss_num_trans = flag.Int("tss-num-trans", 20000,
+var tssNumTrans = flag.Int("tss-num-trans", 20000,
 	"tss-num-trans <num> where <num> specifies the number of transactions to generate")
 
-var tss_num_wallets = flag.Int("tss-num-wallets", 10000,
+var tssNumWallets = flag.Int("tss-num-wallets", 10000,
 	"tss-num-wallets <num> where <num> is the number of read-set/write-set locations (e.g., wallets)")
 
 type TransactionSliceSource struct {
@@ -24,11 +24,11 @@ type TransactionSliceSource struct {
 	nwallets int
 	ntrans   int
 
-	trans_per_batch  int
-	reads_per_trans  int
-	writes_per_trans int
-	next_tid         int
-	retired_tid      []bool
+	transPerBatch  int
+	readsPerTrans  int
+	writesPerTrans int
+	nextTid        int
+	retiredTid     []bool
 }
 
 func NewTransactionSliceSource(r *rand.Rand, nw int, nt int) *TransactionSliceSource {
@@ -37,25 +37,25 @@ func NewTransactionSliceSource(r *rand.Rand, nw int, nt int) *TransactionSliceSo
 		nwallets: nw,
 		ntrans:   nt,
 
-		trans_per_batch:  100,
-		reads_per_trans:  3,
-		writes_per_trans: 3,
-		next_tid:         0,
-		retired_tid:      make([]bool, nt),
+		transPerBatch:  100,
+		readsPerTrans:  3,
+		writesPerTrans: 3,
+		nextTid:        0,
+		retiredTid:     make([]bool, nt),
 	}
 }
 
 func (tss *TransactionSliceSource) GetTransactions() []*Transaction {
-	this_batch := tss.trans_per_batch
-	if tss.ntrans < this_batch {
-		this_batch = tss.ntrans
+	thisBatch := tss.transPerBatch
+	if tss.ntrans < thisBatch {
+		thisBatch = tss.ntrans
 	}
-	tss.ntrans -= this_batch
-	ts := make([]*Transaction, this_batch)
+	tss.ntrans -= thisBatch
+	ts := make([]*Transaction, thisBatch)
 	var loc Location
-	for ix := 0; ix < this_batch; ix++ {
+	for ix := 0; ix < thisBatch; ix++ {
 		ts[ix] = NewTransaction()
-		for count := 0; count < tss.reads_per_trans; count++ {
+		for count := 0; count < tss.readsPerTrans; count++ {
 			for {
 				loc = TestLocation(tss.rng.Intn(tss.nwallets))
 				if !ts[ix].ReadSet.Contains(loc) {
@@ -64,7 +64,7 @@ func (tss *TransactionSliceSource) GetTransactions() []*Transaction {
 			}
 			ts[ix].ReadSet.Add(loc)
 		}
-		for count := 0; count < tss.writes_per_trans; count++ {
+		for count := 0; count < tss.writesPerTrans; count++ {
 			for {
 				loc = TestLocation(tss.rng.Intn(tss.nwallets))
 				if !ts[ix].WriteSet.Contains(loc) {
@@ -73,8 +73,8 @@ func (tss *TransactionSliceSource) GetTransactions() []*Transaction {
 			}
 			ts[ix].WriteSet.Add(loc)
 		}
-		ts[ix].CreationSeqno = uint(tss.next_tid)
-		tss.next_tid++
+		ts[ix].CreationSeqno = uint(tss.nextTid)
+		tss.nextTid++
 	}
 	return ts
 }
@@ -82,17 +82,17 @@ func (tss *TransactionSliceSource) GetTransactions() []*Transaction {
 func (tss *TransactionSliceSource) RetireTransactions(t *testing.T, sgs []*Subgraph) {
 	for _, sg := range sgs {
 		for _, txn := range sg.Transactions {
-			if tss.retired_tid[txn.CreationSeqno] {
+			if tss.retiredTid[txn.CreationSeqno] {
 				t.Errorf("Transaction %d retired twice?", txn.CreationSeqno)
 			}
-			tss.retired_tid[txn.CreationSeqno] = true
+			tss.retiredTid[txn.CreationSeqno] = true
 		}
 	}
 }
 
 func (tss *TransactionSliceSource) HasUnretired() bool {
-	for ix := 0; ix < tss.next_tid; ix++ {
-		if !tss.retired_tid[ix] {
+	for ix := 0; ix < tss.nextTid; ix++ {
+		if !tss.retiredTid[ix] {
 			return true
 		}
 	}
@@ -100,8 +100,8 @@ func (tss *TransactionSliceSource) HasUnretired() bool {
 }
 
 func VerifySchedulerRunsAllTransactions(t *testing.T, sn string, s Scheduler) {
-	tss := NewTransactionSliceSource(rand.New(rand.NewSource(*tss_seed)), *tss_num_wallets,
-		*tss_num_trans)
+	tss := NewTransactionSliceSource(rand.New(rand.NewSource(*tssSeed)), *tssNumWallets,
+		*tssNumTrans)
 
 	for {
 		ts := tss.GetTransactions()

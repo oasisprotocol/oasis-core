@@ -27,8 +27,13 @@ package simulator
 //   negative number.  If logical sharding is by sender address, the adversary is assumed to be
 //   able to create enough accounts so that the
 
-type AdversaryConfig struct {
-	injection_prob   float64
-	spam_batch_size  uint
-	target_addresses string
-}
+// AdversaryConfig wraps the configuration parameters for how an adversary that is mounting a
+// DOS attack might behave.
+
+// type AdversaryConfig struct {
+// 	injectionProb   float64
+// 	spamBatchSize   uint
+// 	targetAddresses string
+// }
+
+// Rest TBD

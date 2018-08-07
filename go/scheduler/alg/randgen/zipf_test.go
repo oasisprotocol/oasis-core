@@ -1,4 +1,4 @@
-package random_distribution
+package randgen
 
 import (
 	"fmt"

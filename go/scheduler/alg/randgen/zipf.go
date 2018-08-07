@@ -1,4 +1,4 @@
-package random_distribution
+package randgen
 
 // We cannot use math/rand's NewZipf because it requires s > 1.  (s
 // corresponds to alpha in this implementation.)
@@ -19,6 +19,8 @@ import (
 	"math/rand"
 )
 
+// Zipf implements the Rng interface and generates random integers in the half-open interval
+// [0, MaxValue) with a Zipf distribution, exponent Alpha.  Alpha must satisfy 0 <= Alpha.
 type Zipf struct {
 	Alpha    float64
 	MaxValue int
@@ -26,15 +28,20 @@ type Zipf struct {
 	cdf      []float64 // cumulative distribution function via table lookup
 }
 
+// NewZipf returns a newly constructed Zipf object.  Because a cumulative-distribution table is
+// generated, this will be expensive when the MaxValue is large.
 func NewZipf(a float64, m int, r *rand.Rand) *Zipf {
 	if m <= 0 {
 		panic("zipf distribution with zero elements?")
 	}
-	num_elts := m + 1
-	if num_elts < m {
+	if a < 0 {
+		panic("zipf distribution with negative exponent?")
+	}
+	numElts := m + 1
+	if numElts < m {
 		panic("zipf distribution with too many elements")
 	}
-	v := make([]float64, num_elts) // could cause OOM
+	v := make([]float64, numElts) // could cause OOM
 	v[0] = 0.0
 	for ix := 1; ix <= m; ix++ {
 		v[ix] = v[ix-1] + 1.0/math.Pow(float64(ix), a)
@@ -46,6 +53,7 @@ func NewZipf(a float64, m int, r *rand.Rand) *Zipf {
 	return &Zipf{Alpha: a, MaxValue: m, rng: r, cdf: v}
 }
 
+// Generate a Zipf-distributed random integer in [0, MaxValue).
 func (z *Zipf) Generate() int {
 	uniform := z.rng.Float64()
 	var low, high int
