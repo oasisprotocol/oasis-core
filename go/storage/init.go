@@ -18,7 +18,7 @@ const (
 	backendBolt   = "bolt"
 )
 
-var flagBackend  string
+var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
 func New(cmd *cobra.Command, timeSource epochtime.TimeSource, dataDir string) (Backend, error) {

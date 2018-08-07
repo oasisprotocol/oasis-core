@@ -108,8 +108,12 @@ jobs:
           git checkout v1.0.0 && \
           cd protoc-gen-go && \
           go install
+      - run: |
+          go get -u github.com/alecthomas/gometalinter
+          gometalinter --install
       - run: cd go && dep ensure
       - run: cd go && go generate ./...
+      - run: cd go && gometalinter ./...
       - run: cd go && go build -v -o ./ekiden/ekiden ./ekiden
       - run: cd go && go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
       - run: bash <(curl -s https://codecov.io/bash) -Z
