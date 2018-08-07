@@ -26,6 +26,19 @@ run_dummy_node_storage_persistent() {
         2>${LOGDIR}/dummy.log &
 }
 
+run_dummy_node_storage_roothash() {
+    local db_dir="/tmp/ekiden-benchmark-storage-roothash"
+    rm -rf ${db_dir}
+
+    ${WORKDIR}/target/debug/ekiden-node-dummy \
+        --random-beacon-backend dummy \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --time-source-notifier mockrpc \
+        --storage-backend dummy \
+        --roothash-storage-path ${db_dir} \
+        2>${LOGDIR}/dummy.log &
+}
+
 run_compute_node() {
     local id=$1
     shift
@@ -85,7 +98,7 @@ run_benchmark() {
     local dummy_node_runner=$5
 
     if [[ "${OUTPUT_FORMAT}" == "text" ]]; then
-        echo "RUNNING BENCHMARK: ${description}"
+        echo -e "\n\e[36;7;1mRUNNING BENCHMARK:\e[27m ${description}\e[0m\n"
     fi
 
     # Ensure cleanup on exit.
@@ -145,4 +158,5 @@ scenario_multilayer_remote() {
 
 run_benchmark scenario_basic "e2e-benchmark" benchmark 1 run_dummy_node_storage_dummy
 run_benchmark scenario_basic "e2e-benchmark-persistent" benchmark 1 run_dummy_node_storage_persistent
+run_benchmark scenario_basic "e2e-benchmark-persistent-roothash" benchmark 1 run_dummy_node_storage_roothash
 run_benchmark scenario_multilayer_remote "e2e-benchmark-multilayer-remote" benchmark 1 run_dummy_node_storage_dummy
