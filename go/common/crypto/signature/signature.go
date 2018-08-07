@@ -48,7 +48,7 @@ var (
 	errMalformedContext = errors.New("signature: Malformed context")
 
 	_ encoding.BinaryMarshaler   = PublicKey{}
-	_ encoding.BinaryUnmarshaler = PublicKey{}
+	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = RawSignature{}
 )
@@ -88,12 +88,16 @@ func (k PublicKey) MarshalBinary() (data []byte, err error) {
 }
 
 // UnmarshalBinary decodes a binary marshaled public key.
-func (k PublicKey) UnmarshalBinary(data []byte) error {
+func (k *PublicKey) UnmarshalBinary(data []byte) error {
 	if len(data) != PublicKeySize {
 		return ErrMalformedPublicKey
 	}
 
-	copy(k[:], data)
+	if len(*k) != PublicKeySize {
+		keybuf := make([]byte, PublicKeySize)
+		*k = keybuf
+	}
+	copy((*k)[:], data)
 
 	return nil
 }
