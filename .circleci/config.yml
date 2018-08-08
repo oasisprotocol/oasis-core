@@ -233,9 +233,6 @@ workflows:
       - build-go
       - lint-git
       - deploy:
-          filters:
-            branches:
-              only: master
           requires:
             - build-rust
             - build-go
