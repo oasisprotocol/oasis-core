@@ -242,7 +242,7 @@ workflows:
             - build-rust
             - build-go
       - deployclient:
-          require:
+          requires:
             - build-rust
             - build-go
   benchmark:
