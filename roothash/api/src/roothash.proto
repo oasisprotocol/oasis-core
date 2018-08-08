@@ -4,6 +4,7 @@ import "common/api/src/common.proto";
 import "scheduler/api/src/scheduler.proto";
 
 package roothash;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/roothash";
 
 service RootHash {
   rpc GetLatestBlock (LatestBlockRequest) returns (LatestBlockResponse) {}
