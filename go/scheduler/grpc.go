@@ -33,6 +33,22 @@ func (s *SchedulerServer) GetCommittees(ctx context.Context, req *pb.CommitteeRe
 
 // WatchCommittees implements the corresponding gRPC call.
 func (s *SchedulerServer) WatchCommittees(req *pb.WatchRequest, stream pb.Scheduler_WatchCommitteesServer) error {
+	ch, sub := s.backend.WatchCommittees()
+	defer sub.Close()
+
+	for {
+		committee, ok := <-ch
+		if !ok {
+			break
+		}
+		resp := &pb.WatchResponse{
+			Committee: committee.ToProto(),
+		}
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
