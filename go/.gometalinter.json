@@ -1,4 +1,9 @@
 {
-  "Exclude": ["vendor"],
-  "Enable": ["gofmt"]
+  "Skip": ["vendor"],
+  "Enable": ["gofmt"],
+  "Linters": {
+    "gofmt": {
+        "Command": "gofmt -l"
+    }
+  }
 }
