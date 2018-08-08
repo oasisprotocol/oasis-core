@@ -1,6 +1,6 @@
 [general]
 verbosity = 2
-ignore-merge-commits=false
+ignore-merge-commits=true
 ignore-fixup-commits=false
 ignore-squash-commits=false
 ignore=body-is-missing
