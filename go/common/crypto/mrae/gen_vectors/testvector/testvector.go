@@ -44,7 +44,7 @@ func KATInputs() (msg, aad []byte) {
 
 // ValidateKATs validates the Known Answer Tests.
 func ValidateKATs(a *require.Assertions, fn string, ctorFn func([]byte) (cipher.AEAD, error)) {
-	raw, err := ioutil.ReadFile(fn)
+	raw, err := ioutil.ReadFile(fn) //nolint:gosec
 	a.NoError(err, "Load test vectors")
 
 	var kats KnownAnswerTests
