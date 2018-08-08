@@ -50,7 +50,7 @@ var (
 	_ encoding.BinaryMarshaler   = PublicKey{}
 	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
-	_ encoding.BinaryUnmarshaler = RawSignature{}
+	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
 )
 
 // MapKey is a PublicKey as a fixed sized byte array for use as a map key.
@@ -140,7 +140,7 @@ func (r RawSignature) MarshalBinary() (data []byte, err error) {
 }
 
 // UnmarshalBinary decodes a binary marshaled signature.
-func (r RawSignature) UnmarshalBinary(data []byte) error {
+func (r *RawSignature) UnmarshalBinary(data []byte) error {
 	if len(data) != SignatureSize {
 		return ErrMalformedSignature
 	}
@@ -148,6 +148,25 @@ func (r RawSignature) UnmarshalBinary(data []byte) error {
 	copy(r[:], data)
 
 	return nil
+}
+
+// PrivateKey is a private key used for signing.
+type PrivateKey ed25519.PrivateKey
+
+// Sign generates a signature with the private key over the context and
+// message.
+func (k PrivateKey) Sign(context, message []byte) ([]byte, error) {
+	data, err := digest(context, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return ed25519.Sign(ed25519.PrivateKey(k), data), nil
+}
+
+// Public returns the PublicKey corresponding to k.
+func (k PrivateKey) Public() PublicKey {
+	return PublicKey(ed25519.PrivateKey(k).Public().(ed25519.PublicKey))
 }
 
 // Signature is a signature, bundled with the signing public key.
@@ -159,6 +178,22 @@ type Signature struct {
 	Signature RawSignature
 
 	// TODO: Attestation.
+}
+
+// Sign generates a signature with the private key over the context and
+// message.
+func Sign(privateKey PrivateKey, context, message []byte) (*Signature, error) {
+	signature, err := privateKey.Sign(context, message)
+	if err != nil {
+		return nil, err
+	}
+
+	var rawSignature RawSignature
+	if err = rawSignature.UnmarshalBinary(signature); err != nil {
+		return nil, err
+	}
+
+	return &Signature{PublicKey: privateKey.Public(), Signature: rawSignature}, nil
 }
 
 // Verify returns true iff the signature is valid over the given
