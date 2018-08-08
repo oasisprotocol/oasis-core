@@ -14,9 +14,6 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
 
-      # Setup version tracking environment variables
-      - run: ./scripts/versioning.sh
-
       - checkout
       - run:
           name: Checking if rust code has changed
@@ -172,6 +169,12 @@ jobs:
       - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
+
+      # Setup version tracking environment variables
+      - run: 
+          name: Load docker tag versioning into environment
+          command: ./scripts/versioning.sh
+
       - checkout
       - attach_workspace:
           at: /workspace
