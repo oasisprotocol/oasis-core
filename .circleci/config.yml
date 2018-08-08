@@ -236,17 +236,7 @@ workflows:
           requires:
             - build-rust
             - build-go
-      - request-deploy:
-          type: approval
-          filters:
-            branches:
-              only: master
-          requires:
-            - build-rust
-            - build-go
-      - deployclient:
-          requires:
-            - request-deploy
+      - deployclient
   benchmark:
     jobs:
       - benchmark:
