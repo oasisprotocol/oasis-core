@@ -30,4 +30,4 @@ else
 fi
 
 # Build the deployable image from the output.
-docker build --rm --force-rm -t oasislabs/testnet - <target/docker-deployment/context.tar.gz
+docker build --rm --force-rm -t oasislabs/testnet:$DOCKER_TAG - <target/docker-deployment/context.tar.gz

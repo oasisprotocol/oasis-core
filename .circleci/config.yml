@@ -13,6 +13,10 @@ jobs:
       - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
+
+      # Setup version tracking environment variables
+      - run: ./scripts/versioning.sh
+
       - checkout
       - run:
           name: Checking if rust code has changed
@@ -194,11 +198,11 @@ jobs:
       # Push deployment image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/testnet:latest
+          docker push oasislabs/testnet:$DOCKER_TAG
       # Update testnet.
       # https://stackoverflow.com/a/33511811/1864688
       - run: |
-          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
+          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:$DOCKER_TAG)
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
   deployclient:
@@ -212,11 +216,11 @@ jobs:
 
       # Build image.
       - run: |
-          docker build --rm --force-rm -t oasislabs/transactionclient -f docker/transactionclient/Dockerfile .
+          docker build --rm --force-rm -t oasislabs/transactionclient:$DOCKER_TAG -f docker/transactionclient/Dockerfile .
       # Push image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/transactionclient:latest
+          docker push oasislabs/transactionclient:$DOCKER_TAG
 
 workflows:
   version: 2
