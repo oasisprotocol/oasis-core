@@ -241,7 +241,7 @@ workflows:
           requires:
             - build-rust
             - build-go
-      - deployclient
+      - deployclient:
           require:
             - build-rust
             - build-go
