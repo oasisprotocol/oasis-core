@@ -25,7 +25,7 @@ var (
 type StoreID [32]byte
 
 // MarshalBinary encodes a StoreID into binary form.
-func (id StoreID) MarshalBinary() (data []byte, err error) {
+func (id *StoreID) MarshalBinary() (data []byte, err error) {
 	data = append([]byte{}, id[:]...)
 	return
 }
@@ -43,7 +43,7 @@ func (id *StoreID) UnmarshalBinary(data []byte) error {
 }
 
 // String returns a string representation of a StoreID.
-func (id StoreID) String() string {
+func (id *StoreID) String() string {
 	return hex.EncodeToString(id[:])
 }
 

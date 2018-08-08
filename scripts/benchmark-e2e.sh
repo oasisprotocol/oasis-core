@@ -30,7 +30,7 @@ run_dummy_node_storage_roothash() {
     local db_dir="/tmp/ekiden-benchmark-storage-roothash"
     rm -rf ${db_dir}
 
-    ${WORKDIR}/target/debug/ekiden-node-dummy \
+    ${WORKDIR}/target/release/ekiden-node-dummy \
         --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
