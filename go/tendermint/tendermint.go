@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
-	adapter "github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/ekiden/go/tendermint/apps"
 
 	"github.com/spf13/viper"
 	tendermintConfig "github.com/tendermint/tendermint/config"
@@ -15,7 +16,7 @@ import (
 	tendermintTypes "github.com/tendermint/tendermint/types"
 )
 
-// Adapter for tendermint Nodes to be managed by the ekiden service mux
+// Adapter for tendermint Nodes to be managed by the ekiden service mux.
 type tendermintAdapter struct {
 	*tendermintNode.Node
 }
@@ -31,7 +32,11 @@ func (t *tendermintAdapter) Cleanup() {
 	_ = t.Reset()
 }
 
-func newTendermintService(mux *adapter.ApplicationServer) (*tendermintAdapter, error) {
+func newTendermintService(mux *abci.ApplicationServer) (*tendermintAdapter, error) {
+	// Register Oasis ABCI applications with the application server.
+	mux.Register(apps.NewRegistryApplication())
+
+	// Instantiate the Tendermint node.
 	tenderConfig := tendermintConfig.DefaultConfig()
 	viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(dataDir)
@@ -64,7 +69,7 @@ func newTendermintService(mux *adapter.ApplicationServer) (*tendermintAdapter, e
 		tenderminGenesisProvider,
 		tendermintNode.DefaultDBProvider,
 		tendermintNode.DefaultMetricsProvider,
-		&adapter.LogAdapter{logging.GetLogger("tendermint")})
+		&abci.LogAdapter{logging.GetLogger("tendermint")})
 	if err != nil {
 		return nil, err
 	}

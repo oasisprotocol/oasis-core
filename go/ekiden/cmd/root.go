@@ -2,9 +2,6 @@
 package cmd
 
 import (
-	"net"
-	"strconv"
-
 	"github.com/oasislabs/ekiden/go/beacon"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
@@ -25,8 +22,6 @@ const (
 	cfgLogFmt   = "log.format"
 	cfgLogLevel = "log.level"
 
-	cfgABCIAddr    = "abci.address"
-	cfgABCIPort    = "abci.port"
 	cfgGRPCPort    = "grpc.port"
 	cfgMetricsPort = "metrics.port"
 )
@@ -40,8 +35,6 @@ var (
 	logLevel string
 
 	// Root (aka node) command config flags.
-	abciAddr    net.IP
-	abciPort    uint16
 	grpcPort    uint16
 	metricsPort uint16
 
@@ -108,12 +101,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize the ABCI multiplexer.
-	abciAddr, _ = cmd.Flags().GetIP(cfgABCIAddr)
-	abciPort, _ = cmd.Flags().GetUint16(cfgABCIPort)
-	abciSockAddr := net.JoinHostPort(abciAddr.String(), strconv.Itoa(int(abciPort)))
-	rootLog.Debug("ABCI Multiplexer Params", "addr", abciSockAddr)
-
-	env.abciMux, err = abci.NewApplicationServer(abciSockAddr, dataDir)
+	env.abciMux, err = abci.NewApplicationServer(dataDir)
 	if err != nil {
 		rootLog.Error("failed to initialize ABCI multiplexer",
 			"err", err,
@@ -227,14 +215,10 @@ func init() {
 	}
 
 	// Flags specific to the root command.
-	rootCmd.Flags().IPVar(&abciAddr, cfgABCIAddr, net.IPv4(127, 0, 0, 1), "ABCI server IP address")
-	rootCmd.Flags().Uint16Var(&abciPort, cfgABCIPort, 26658, "ABCI server port")
 	rootCmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
 	rootCmd.Flags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
 
 	for _, v := range []string{
-		cfgABCIAddr,
-		cfgABCIPort,
 		cfgGRPCPort,
 		cfgMetricsPort,
 	} {

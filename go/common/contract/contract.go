@@ -5,10 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/grpc/common"
-
-	"github.com/ugorji/go/codec"
 )
 
 var (
@@ -18,6 +17,9 @@ var (
 
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
+
+	_ cbor.Marshaler   = (*Contract)(nil)
+	_ cbor.Unmarshaler = (*Contract)(nil)
 )
 
 // StoreID is a storage service ID.
@@ -159,13 +161,17 @@ func (c *Contract) ToProto() *common.Contract {
 
 // ToSignable serializes the Contract into a signature compatible byte vector.
 func (c *Contract) ToSignable() []byte {
-	var b []byte
-	enc := codec.NewEncoderBytes(&b, signature.CBORHandle)
-	if err := enc.Encode(c); err != nil {
-		panic(err)
-	}
+	return c.MarshalCBOR()
+}
 
-	return b
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (c *Contract) MarshalCBOR() []byte {
+	return cbor.Marshal(c)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (c *Contract) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, c)
 }
 
 func pbWantsSGX(pb *common.Contract) bool {

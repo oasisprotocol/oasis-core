@@ -10,7 +10,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/grpc/common"
 
-	"github.com/ugorji/go/codec"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -40,10 +39,6 @@ var (
 
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("signature: Protobuf is nil")
-
-	// CBORHandle is the CBOR codec Handle used to encode/decode signed
-	// CBOR blobs.
-	CBORHandle codec.Handle
 
 	errMalformedContext = errors.New("signature: Malformed context")
 
@@ -234,6 +229,16 @@ func (s *Signature) FromProto(pb *common.Signature) error {
 	return nil
 }
 
+// ToProto serializes a protobuf version of the Signature.
+func (s *Signature) ToProto() *common.Signature {
+	pb := new(common.Signature)
+
+	pb.Pubkey, _ = s.PublicKey.MarshalBinary()
+	pb.Signature, _ = s.Signature.MarshalBinary()
+
+	return pb
+}
+
 func digest(context, message []byte) ([]byte, error) {
 	if len(context) != ContextSize {
 		return nil, errMalformedContext
@@ -245,11 +250,4 @@ func digest(context, message []byte) ([]byte, error) {
 	sum := h.Sum(nil)
 
 	return sum[:], nil
-}
-
-func init() {
-	h := new(codec.CborHandle)
-	h.EncodeOptions.Canonical = true
-
-	CBORHandle = h
 }

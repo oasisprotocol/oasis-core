@@ -5,6 +5,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -34,10 +35,17 @@ var registryEntities = prometheus.NewGauge(
 		Help: "Number of registry entities.",
 	},
 )
+var registryContracts = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "ekiden_registry_contracts",
+		Help: "Number of registry contracts.",
+	},
+)
 var registeryCollectors = []prometheus.Collector{
 	registryFailures,
 	registryNodes,
 	registryEntities,
+	registryContracts,
 }
 
 // EntityRegistryServer is an EntityRegistry exposed over gRPC.
@@ -93,11 +101,12 @@ func (s *EntityRegistryServer) GetEntity(ctx context.Context, req *pb.EntityRequ
 	}
 
 	var resp pb.EntityResponse
-	if ent := s.backend.GetEntity(id); ent != nil {
+	ent, err := s.backend.GetEntity(id)
+	if err == nil && ent != nil {
 		resp.Entity = ent.ToProto()
 	}
 
-	return &resp, nil
+	return &resp, err
 }
 
 // GetEntities implements the corresponding gRPC call.
@@ -165,11 +174,12 @@ func (s *EntityRegistryServer) GetNode(ctx context.Context, req *pb.NodeRequest)
 	}
 
 	var resp pb.NodeResponse
-	if node := s.backend.GetNode(id); node != nil {
+	node, err := s.backend.GetNode(id)
+	if err == nil && node != nil {
 		resp.Node = node.ToProto()
 	}
 
-	return &resp, nil
+	return &resp, err
 }
 
 // GetNodes implements the corresponding gRPC call.
@@ -272,7 +282,22 @@ type ContractRegistryServer struct {
 
 // RegisterContract implements the corresponding gRPC call.
 func (s *ContractRegistryServer) RegisterContract(ctx context.Context, req *pb.RegisterContractRequest) (*pb.RegisterContractResponse, error) {
-	return nil, nil
+	var con contract.Contract
+	if err := con.FromProto(req.GetContract()); err != nil {
+		return nil, err
+	}
+	var sig signature.Signature
+	if err := sig.FromProto(req.GetSignature()); err != nil {
+		return nil, err
+	}
+
+	if err := s.backend.RegisterContract(&con, &sig); err != nil {
+		registryFailures.With(prometheus.Labels{"call": "registerContract"}).Inc()
+		return nil, err
+	}
+
+	registryContracts.Inc()
+	return &pb.RegisterContractResponse{}, nil
 }
 
 // GetContract implements the corresponding gRPC call.
@@ -283,11 +308,12 @@ func (s *ContractRegistryServer) GetContract(ctx context.Context, req *pb.Contra
 	}
 
 	var resp pb.ContractResponse
-	if con := s.backend.GetContract(id); con != nil {
+	con, err := s.backend.GetContract(id)
+	if err == nil && con != nil {
 		resp.Contract = con.ToProto()
 	}
 
-	return &resp, nil
+	return &resp, err
 }
 
 // GetContracts implements the corresponding gRPC call.
