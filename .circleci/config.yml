@@ -216,6 +216,11 @@ jobs:
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - checkout
       - setup_remote_docker
+      
+      # Setup version tracking environment variables
+      - run: 
+          name: Load docker tag versioning into environment
+          command: ./scripts/versioning.sh
 
       # Build image.
       - run: |
@@ -237,6 +242,9 @@ workflows:
             - build-rust
             - build-go
       - deployclient
+          require:
+            - build-rust
+            - build-go
   benchmark:
     jobs:
       - benchmark:
