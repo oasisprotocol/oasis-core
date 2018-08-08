@@ -1,9 +1,37 @@
 {
-  "Skip": ["vendor"],
-  "Enable": ["gofmt"],
+  "DisableAll": true,
+  "Enable": [
+    "deadcode",
+    "errcheck",
+    "goconst",
+    "gocyclo",
+    "gofmt",
+    "golint",
+    "gosec",
+    "gotype",
+    "gotypex",
+    "ineffassign",
+    "interfacer",
+    "maligned",
+    "megacheck",
+    "structcheck",
+    "unconvert",
+    "varcheck",
+    "vet",
+    "vetshadow"
+  ],
   "Linters": {
     "gofmt": {
         "Command": "gofmt -l"
+    },
+    "gosec": {
+        "Command": "gosec -fmt=csv -exclude=G104"
+    },
+    "vet": {
+        "Command": "go vet -composites=false"
     }
-  }
+  },
+  "Deadline": "10m",
+  "Vendor": true,
+  "EnableGC": true
 }
