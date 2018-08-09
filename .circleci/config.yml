@@ -225,7 +225,7 @@ jobs:
       
       - run: 
           name: Load docker previous docker tag
-          command: echo 'DOCKER_TAG=`echo /tmp/docker_tag`' >> $BASH_ENV
+          command: echo 'DOCKER_TAG=`cat /tmp/docker_tag`' >> $BASH_ENV
 
       # Build image.
       - run: |
@@ -243,7 +243,7 @@ jobs:
       
       - run: 
           name: Load docker previous docker tag
-          command: echo 'DOCKER_TAG=`echo /tmp/docker_tag`' >> $BASH_ENV
+          command: echo 'DOCKER_TAG=`cat /tmp/docker_tag`' >> $BASH_ENV
 
       # Login to docker
       - run: |
