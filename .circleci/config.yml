@@ -6,7 +6,7 @@ version: 2
 jobs:
   build-rust:
     <<: *defaults
-    resource_class: xlarge
+    resource_class: large
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
@@ -26,9 +26,6 @@ jobs:
       # Install the NPM truffle dependencies
       - run: cd ethereum && npm install
 
-      # Upload coverage info.
-      #- run: codecov -s target/cov -Z
-
       # Install ekiden-tools.
       - run: cargo install --force --path tools
       # Build token contract.
@@ -37,23 +34,14 @@ jobs:
           working_directory: contracts/token
       # Run token contract tests.
       - run: cargo test -p token
-      # Ensure everything is built. This needs to be after the key manager contract is built.
+      # Ensure everything is built. Building an enclave needs to happen first
       - run: cargo build
       # Check style. This needs to be after everything is built.
       - run: cargo fmt -- --write-mode=check
 
-      # Cargo tests. Some tests are excluded as they currently don't compile.
-      # Heuristic glob to detect what test binaries that cargo builds.
-      # If that gets too janky, try `cargo test --message-format=json`
-      # (see
-      # https://github.com/rust-lang/cargo/issues/1924#issuecomment-289770287).
+      # Cargo tests, with the exception of some enclave-specific ones.
       - run: |
-          RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
-          cargo tarpaulin --all \
-            --ignore-tests \
-            --out Xml \
-            --out Json \
-            --exclude-files *generated* \
+          cargo test --all \
             --exclude ekiden-untrusted \
             --exclude ekiden-enclave-untrusted \
             --exclude ekiden-rpc-untrusted \
@@ -62,9 +50,7 @@ jobs:
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
             --exclude ekiden-keymanager-trusted \
-            --exclude token \
-            -v
-      - run: codecov -X gcov -f cobertura.xml -Z
+            --exclude token
 
       # Integration tests.
       - run: ./scripts/test-e2e.sh
@@ -83,6 +69,42 @@ jobs:
             - ethereum/build/contracts
             - tests
             - scripts
+  cover-rust:
+    <<: *defaults
+    resource_class: xlarge
+    steps:
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
+      - checkout
+      # Install the NPM truffle dependencies
+      - run: cd ethereum && npm install
+      - run: cargo build
+      # install & tarpaulin test.
+      - run: |
+          RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
+          cargo tarpaulin --all \
+            --ignore-tests \
+            --out Xml \
+            --exclude-files *generated* \
+            --exclude ekiden-untrusted \
+            --exclude ekiden-enclave-untrusted \
+            --exclude ekiden-rpc-untrusted \
+            --exclude ekiden-db-untrusted \
+            --exclude ekiden-contract-untrusted \
+            --exclude ekiden-keymanager-untrusted \
+            --exclude ekiden-keymanager-node \
+            --exclude ekiden-keymanager-trusted \
+            --exclude token \
+            --coveralls $COVERALLS_REPO_TOKEN \
+            -v
+      # Store coverage report.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - cordoba.xml  <>
+
   build-go:
     working_directory: /go/src/github.com/oasislabs/ekiden
     docker:
@@ -221,6 +243,7 @@ workflows:
   build:
     jobs:
       - build-rust
+      - cover-rust
       - build-go
       - lint-git
       - deploy:
@@ -247,6 +270,16 @@ workflows:
           filters:
             branches:
               only: master
+  nightly:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - cover-rust
 experimental:
   notify:
     branches:

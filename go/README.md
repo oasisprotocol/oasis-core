@@ -17,3 +17,8 @@ dep ensure
 go generate ./...
 go build -v -o ./ekiden/ekiden ./ekiden
 ```
+
+To lint run:
+```
+gometalinter ./...
+```
