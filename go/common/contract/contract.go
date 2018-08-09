@@ -92,6 +92,10 @@ func (c *Contract) FromProto(pb *common.Contract) error {
 		return ErrNilProtobuf
 	}
 
+	if c.ID == nil {
+		c.ID = signature.PublicKey{}
+	}
+
 	if err := c.ID.UnmarshalBinary(pb.GetId()); err != nil {
 		return err
 	}
@@ -123,9 +127,14 @@ func (c *Contract) FromProto(pb *common.Contract) error {
 // ToProto serializes a Contract into a protobuf.
 func (c *Contract) ToProto() *common.Contract {
 	pb := new(common.Contract)
+	var err error
 
-	pb.Id, _ = c.ID.MarshalBinary()
-	pb.StoreId, _ = c.StoreID.MarshalBinary()
+	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
+		return nil
+	}
+	if pb.StoreId, err = c.StoreID.MarshalBinary(); err != nil {
+		return nil
+	}
 	pb.Code = append([]byte{}, c.Code...)
 	pb.MinimumBond = c.MinimumBond
 	pb.AdvertisementRate = c.AdvertisementRate
