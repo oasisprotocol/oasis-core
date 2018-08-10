@@ -250,7 +250,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - run: echo 'export PRODUCTION_TAG=test-latest' >> $BASH_ENV
+      - run: echo 'export PRODUCTION_TAG=dev-latest' >> $BASH_ENV
       - setup_remote_docker
       - attach_workspace:
           at: /workspace
