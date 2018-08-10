@@ -306,7 +306,7 @@ workflows:
             - deployclient
       - promote-to-production:
           requires:
-            - hold
+            - hold-for-production
           
 
   benchmark:
