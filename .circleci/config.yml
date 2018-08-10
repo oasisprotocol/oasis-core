@@ -163,16 +163,16 @@ jobs:
   set-docker-tag:
     <<: *defaults
     steps:
-			# Setup version tracking environment variables
-			- run: 
-					name: Load docker tag versioning into environment
-					command: ./scripts/determine-docker-versioning.sh /workspace/docker_tag
+      # Setup version tracking environment variables
+      - run: 
+          name: Load docker tag versioning into environment
+          command: ./scripts/determine-docker-versioning.sh /tmp/docker_tag
 
-			# Save docker tag
-			- persist_to_workspace:
-					root: /workspace
-					paths: 
-						- docker_tag
+      # Save docker tag
+      - persist_to_workspace:
+          root: /tmp
+          paths: 
+            - docker_tag
 
   deploy:
     <<: *defaults
