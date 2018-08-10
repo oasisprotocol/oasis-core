@@ -300,7 +300,7 @@ workflows:
           type: approval
           filters:
             branches:
-              only: ravenac95/*
+              only: ravenac95/feature/ci-versioning
           requires:
             - deploy
             - deployclient
