@@ -164,6 +164,7 @@ jobs:
     <<: *defaults
     steps:
       # Setup version tracking environment variables
+      - checkout
       - run: 
           name: Load docker tag versioning into environment
           command: ./scripts/determine-docker-versioning.sh /tmp/docker_tag
