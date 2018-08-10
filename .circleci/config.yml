@@ -171,20 +171,20 @@ jobs:
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
 
-      # Setup version tracking environment variables
-      - run: 
-          name: Load docker tag versioning into environment
-          command: ./scripts/determine-docker-versioning.sh /tmp/docker_tag
-
-      # Save docker tag
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - docker_tag
-
       - attach_workspace:
           at: /workspace
       - setup_remote_docker
+      
+      # Setup version tracking environment variables
+      - run: 
+          name: Load docker tag versioning into environment
+          command: ./scripts/determine-docker-versioning.sh /workspace/docker_tag
+
+      # Save docker tag
+      - persist_to_workspace:
+          root: /workspace
+          paths: 
+            - docker_tag
 
       - run: |
           mkdir -p ~/.kube
@@ -222,10 +222,13 @@ jobs:
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - checkout
       - setup_remote_docker
+
+      - attach_workspace:
+          at: /workspace
       
       - run: 
           name: Load docker previous docker tag
-          command: echo 'DOCKER_TAG=`cat /tmp/docker_tag`' >> $BASH_ENV
+          command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
 
       # Build image.
       - run: |
@@ -240,10 +243,12 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker
+      - attach_workspace:
+          at: /workspace
       
       - run: 
           name: Load docker previous docker tag
-          command: echo 'DOCKER_TAG=`cat /tmp/docker_tag`' >> $BASH_ENV
+          command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
 
       # Login to docker
       - run: |
