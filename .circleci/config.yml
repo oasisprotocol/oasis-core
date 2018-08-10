@@ -229,7 +229,6 @@ jobs:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - checkout
-      - run: echo 'export PRODUCTION_TAG=test-latest' >> $BASH_ENV
       - setup_remote_docker
 
       - attach_workspace:
@@ -251,6 +250,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - run: echo 'export PRODUCTION_TAG=test-latest' >> $BASH_ENV
       - setup_remote_docker
       - attach_workspace:
           at: /workspace
