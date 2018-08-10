@@ -31,4 +31,4 @@ else
 fi
 
 # Build the deployable image from the output.
-docker build --rm --force-rm -t --build-arg EKIDEN_COMMIT_SHA=$ekiden_commit_sha oasislabs/testnet:$DOCKER_TAG - <target/docker-deployment/context.tar.gz
+docker build --rm --force-rm --build-arg EKIDEN_COMMIT_SHA=$ekiden_commit_sha -t oasislabs/testnet:$DOCKER_TAG - <target/docker-deployment/context.tar.gz
