@@ -191,7 +191,7 @@ jobs:
       - setup_remote_docker
       
       - run: 
-          name: Load docker previous docker tag
+          name: Load current docker tag
           command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
 
       - run: |
@@ -235,7 +235,7 @@ jobs:
           at: /workspace
       
       - run: 
-          name: Load docker previous docker tag
+          name: Load current docker tag
           command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
 
       # Build image.
@@ -256,7 +256,7 @@ jobs:
           at: /workspace
       
       - run: 
-          name: Load docker previous docker tag
+          name: Load current docker tag
           command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
 
       # Login to docker
