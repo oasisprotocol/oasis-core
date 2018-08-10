@@ -41,7 +41,7 @@ index 4937cf6..8efd2a6 100644
  ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 +ekiden-roothash-api = { path = "../../roothash/api", version = "0.2.0-alpha" }
  protobuf = "~2.0"
- grpcio = { git = "https://github.com/ekiden/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
+ grpcio = { git = "https://github.com/oasislabs/grpc-rs", tag = "v0.3.0-ekiden2", features = ["openssl"] }
  futures = "0.1"
 ```
 
