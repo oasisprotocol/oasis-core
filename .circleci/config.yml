@@ -240,7 +240,7 @@ jobs:
 
       # Build image.
       - run: |
-          docker build --rm --force-rm -t oasislabs/transactionclient:$DOCKER_TAG -f docker/transactionclient/Dockerfile .
+          docker build --rm --force-rm -t oasislabs/transactionclient:$DOCKER_TAG --build-arg TXCLIENT_COMMIT_SHA=${CIRCLE_SHA1} -f docker/transactionclient/Dockerfile .
       # Push image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

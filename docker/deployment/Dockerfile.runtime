@@ -1,8 +1,8 @@
 FROM tozd/sgx:ubuntu-bionic
 
-ARG EKIDEN_SHA1
+ARG EKIDEN_COMMIT_SHA
 
-LABEL com.oasislabs.ekiden-sha1="${EKIDEN_SHA1}"
+LABEL com.oasislabs.ekiden-commit-sha="${EKIDEN_COMMIT_SHA}"
 
 ENV PATH="/ekiden/bin:${PATH}"
 
