@@ -167,13 +167,13 @@ jobs:
       - checkout
       - run: 
           name: Load docker tag versioning into environment
-          command: ./scripts/determine-docker-versioning.sh /tmp/docker_tag
+          command: ./scripts/determine-docker-versioning.sh /tmp/build_image_tag
 
       # Save docker tag
       - persist_to_workspace:
           root: /tmp
           paths: 
-            - docker_tag
+            - build_image_tag
 
   deploy:
     <<: *defaults
@@ -192,7 +192,7 @@ jobs:
       
       - run: 
           name: Load current docker tag
-          command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
+          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
       - run: |
           mkdir -p ~/.kube
@@ -215,11 +215,11 @@ jobs:
       # Push deployment image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/testnet:$DOCKER_TAG
+          docker push oasislabs/testnet:$BUILD_IMAGE_TAG
       # Update testnet.
       # https://stackoverflow.com/a/33511811/1864688
       - run: |
-          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:$DOCKER_TAG)
+          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:$BUILD_IMAGE_TAG)
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
   deployclient:
@@ -236,15 +236,15 @@ jobs:
       
       - run: 
           name: Load current docker tag
-          command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
+          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
       # Build image.
       - run: |
-          docker build --rm --force-rm -t oasislabs/transactionclient:$DOCKER_TAG --build-arg TXCLIENT_COMMIT_SHA=${CIRCLE_SHA1} -f docker/transactionclient/Dockerfile .
+          docker build --rm --force-rm -t oasislabs/transactionclient:$BUILD_IMAGE_TAG --build-arg TXCLIENT_COMMIT_SHA=${CIRCLE_SHA1} -f docker/transactionclient/Dockerfile .
       # Push image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/transactionclient:$DOCKER_TAG
+          docker push oasislabs/transactionclient:$BUILD_IMAGE_TAG
   promote-to-production:
     <<: *defaults
     resource_class: large
@@ -257,7 +257,7 @@ jobs:
       
       - run: 
           name: Load current docker tag
-          command: echo 'DOCKER_TAG=`cat /workspace/docker_tag`' >> $BASH_ENV
+          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
       # Login to docker
       - run: |
@@ -265,11 +265,11 @@ jobs:
       
       - run:
           name: Download the tag of ekiden for this current workflow
-          command: docker pull oasislabs/testnet:$DOCKER_TAG
+          command: docker pull oasislabs/testnet:$BUILD_IMAGE_TAG
 
       - run:
           name: Tag the ekiden build on this workflow for production
-          command: docker tag oasislabs/testnet:$DOCKER_TAG oasislabs/testnet:$PRODUCTION_TAG
+          command: docker tag oasislabs/testnet:$BUILD_IMAGE_TAG oasislabs/testnet:$PRODUCTION_TAG
 
       - run:
           name: Push the new production tag of ekiden to dockerhub
@@ -277,11 +277,11 @@ jobs:
 
       - run:
           name: Download the tag of transactionclient for this current workflow
-          command: docker pull oasislabs/transactionclient:$DOCKER_TAG
+          command: docker pull oasislabs/transactionclient:$BUILD_IMAGE_TAG
       
       - run:
           name: Tag the transactionclient build on this workflow for production
-          command: docker tag oasislabs/transactionclient:$DOCKER_TAG oasislabs/transactionclient:$PRODUCTION_TAG
+          command: docker tag oasislabs/transactionclient:$BUILD_IMAGE_TAG oasislabs/transactionclient:$PRODUCTION_TAG
       
       - run:
           name: Update the txclient tag to production by setting the tag to latest
