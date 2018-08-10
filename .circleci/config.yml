@@ -296,13 +296,18 @@ workflows:
             - set-docker-tag
             - build-rust
             - build-go
-      - promote-to-production:
+      - hold-for-production:
+          type: approval
           filters:
             branches:
               only: master
           requires:
             - deploy
             - deployclient
+      - promote-to-production:
+          requires:
+            - hold
+          
 
   benchmark:
     jobs:
