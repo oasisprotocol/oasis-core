@@ -229,6 +229,7 @@ jobs:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - checkout
+      - run: echo 'export PRODUCTION_TAG=test-latest' >> $BASH_ENV
       - setup_remote_docker
 
       - attach_workspace:
@@ -262,21 +263,29 @@ jobs:
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       
-      # Download the tag of ekiden in this current workflow
-      - run: |
-          docker pull oasislabs/testnet:$DOCKER_TAG
+      - run:
+          name: Download the tag of ekiden for this current workflow
+          command: docker pull oasislabs/testnet:$DOCKER_TAG
 
-      # Update the tag to production by setting the take to latest
-      - run: |
-          docker push oasislabs/testnet:test
+      - run:
+          name: Tag the ekiden build on this workflow for production
+          command: docker tag oasislabs/testnet:$DOCKER_TAG oasislabs/testnet:$PRODUCTION_TAG
 
-      # Download the tag of transaction client in this current workflow
-      - run: |
-          docker pull oasislabs/transactionclient:$DOCKER_TAG
+      - run:
+          name: Push the new production tag of ekiden to dockerhub
+          command: docker push oasislabs/testnet:$PRODUCTION_TAG
+
+      - run:
+          name: Download the tag of transactionclient for this current workflow
+          command: docker pull oasislabs/transactionclient:$DOCKER_TAG
       
-      # Update the txclient tag to production by setting the take to latest
-      - run: |
-          docker push oasislabs/transactionclient:test
+      - run:
+          name: Tag the transactionclient build on this workflow for production
+          command: docker tag oasislabs/transactionclient:$DOCKER_TAG oasislabs/transactionclient:$PRODUCTION_TAG
+      
+      - run:
+          name: Update the txclient tag to production by setting the take to latest
+          command: docker push oasislabs/transactionclient:$PRODUCTION_TAG
 
 workflows:
   version: 2
