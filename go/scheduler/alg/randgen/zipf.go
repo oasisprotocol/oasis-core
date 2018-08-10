@@ -15,6 +15,7 @@ package randgen
 // the small numbers to be ignored.
 
 import (
+	"errors"
 	"math"
 	"math/rand"
 )
@@ -30,16 +31,16 @@ type Zipf struct {
 
 // NewZipf returns a newly constructed Zipf object.  Because a cumulative-distribution table is
 // generated, this will be expensive when the MaxValue is large.
-func NewZipf(a float64, m int, r *rand.Rand) *Zipf {
+func NewZipf(a float64, m int, r *rand.Rand) (*Zipf, error) {
 	if m <= 0 {
-		panic("zipf distribution with zero elements?")
+		return nil, errors.New("zipf distribution with zero elements?")
 	}
 	if a < 0 {
-		panic("zipf distribution with negative exponent?")
+		return nil, errors.New("zipf distribution with negative exponent?")
 	}
 	numElts := m + 1
 	if numElts < m {
-		panic("zipf distribution with too many elements")
+		return nil, errors.New("zipf distribution with too many elements")
 	}
 	v := make([]float64, numElts) // could cause OOM
 	v[0] = 0.0
@@ -50,7 +51,7 @@ func NewZipf(a float64, m int, r *rand.Rand) *Zipf {
 	for ix := 1; ix <= m; ix++ {
 		v[ix] = normalizer * v[ix]
 	}
-	return &Zipf{Alpha: a, MaxValue: m, rng: r, cdf: v}
+	return &Zipf{Alpha: a, MaxValue: m, rng: r, cdf: v}, nil
 }
 
 // Generate a Zipf-distributed random integer in [0, MaxValue).

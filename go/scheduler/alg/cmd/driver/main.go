@@ -240,14 +240,24 @@ func transactionSourceFactory(cnf distributionConfig) simulator.TransactionSourc
 		panic("Number of memory locations overflowed")
 	}
 
+	var err error
+	if cnf.distributionName == useInput {
+		var fts simulator.TransactionSource
+		fts, err = simulator.NewFileTransactionSource(cnf.inputFile)
+		if err != nil {
+			panic(fmt.Sprintf("Error: %s; cannot open \"%s\"", err.Error(), cnf.inputFile))
+		}
+		return fts
+	}
+
 	var rg randgen.Rng
 
-	if cnf.distributionName == useInput {
-		return simulator.NewFileTransactionSource(cnf.inputFile)
-	} else if cnf.distributionName == "uniform" {
+	if cnf.distributionName == "uniform" {
 		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(cnf.seed)))
 	} else if cnf.distributionName == "zipf" {
-		rg = randgen.NewZipf(cnf.alpha, numLocations, rand.New(rand.NewSource(cnf.seed)))
+		if rg, err = randgen.NewZipf(cnf.alpha, numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
+			panic(err.Error())
+		}
 	} else {
 		panic(fmt.Sprintf("Random distribution name not recognized: %s", cnf.distributionName))
 	}
@@ -287,7 +297,7 @@ func (h *committeeMemberHeap) Pop() interface{} {
 	return x
 }
 
-// nolint: gocyclo, gosec
+// nolint: gocyclo
 //
 // Run simulation: generate transactions and execute them -- and output results to |bw|.
 // Caller is responsible for checking I/O errors via bw.Flush.  Other errors result in panic

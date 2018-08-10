@@ -59,8 +59,6 @@ func NewTransaction() *Transaction {
 
 // Write the receiver transaction using the above grammar to the `bufio.Writer` argument.
 // Caller should check error on bw.Flush().
-//
-// nolint: gosec
 func (t Transaction) Write(bw *bufio.Writer) {
 	_, _ = bw.WriteString("(")
 	t.ReadSet.Write(bw)

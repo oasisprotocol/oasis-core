@@ -48,7 +48,6 @@ func init() {
 	flag.UintVar(&numTransactions, "numTransactions", 1<<20, "number of transactions to generate")
 }
 
-// nolint: gosec
 func generateTransactions(
 	numTrans, numReads, numWrites uint,
 	gen randgen.Rng,
@@ -84,8 +83,12 @@ func main() {
 	}
 	numLocations := int(numLocations)
 	var rg randgen.Rng
+	var err error
 	if distribution == "zipf" {
-		rg = randgen.NewZipf(1.0, numLocations, rand.New(rand.NewSource(seed)))
+		rg, err = randgen.NewZipf(1.0, numLocations, rand.New(rand.NewSource(seed)))
+		if err != nil {
+			panic(err.Error())
+		}
 	} else if distribution == "uniform" {
 		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(seed)))
 	} else {

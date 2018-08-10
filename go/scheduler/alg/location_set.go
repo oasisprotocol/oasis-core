@@ -123,8 +123,6 @@ func (a LocationOrder) Less(i, j int) bool { return a[i].Less(a[j]) }
 
 // Write the receiver LocationSet to the bufio.Writer.  Calling code should check for I/O error
 // via w.Flush().
-//
-// nolint: gosec
 func (ls LocationSet) Write(w *bufio.Writer) {
 	// Canonicalize the set members
 	members := make([]Location, 0, len(ls.locations))
@@ -149,7 +147,7 @@ func (ls LocationSet) Write(w *bufio.Writer) {
 // because LocationSet objects do not know what is the actual type that implements the Location
 // interface, so `l.Read` is used to read in the individual locations from the `*bufio.Reader`.
 //
-// nolint: gosec
+// nolint: gocyclo
 func (ls *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) {
 	if err = expectRune('{', r); err != nil {
 		return err
@@ -177,7 +175,11 @@ func (ls *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) {
 			return nil
 		}
 		if ch != ',' {
-			_ = r.UnreadRune() // report the non-',' rather than the UnreadRune error
+			if err = r.UnreadRune(); err != nil {
+				// Both the non-',' and the UnreadRune error mean the input is
+				// likely to be unusable, but UnreadRune is more serious.
+				return err
+			}
 			return fmt.Errorf("Expected ',' or '}', got %c", ch)
 		}
 	}

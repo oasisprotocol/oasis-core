@@ -70,8 +70,6 @@ func (sg *Subgraph) Merge(other *Subgraph) {
 // `Subgraph.Write` or `LocationSet.Write`, this is not in a canonical form and we do not
 // supply a corresponding `Read` function.  It is the responsibility of the caller to check
 // `bw.Flush()` for errors.
-//
-// nolint: gosec
 func (sg *Subgraph) Write(bw *bufio.Writer) {
 	_, _ = fmt.Fprintf(bw, "Subgraph estimated total cost %d\n", uint64(sg.timeCost))
 	_, _ = fmt.Fprintf(bw, "Transactions\n")

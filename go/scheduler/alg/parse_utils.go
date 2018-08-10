@@ -30,7 +30,6 @@ func getNonspaceRune(r io.RuneScanner) (ch rune, err error) {
 	return ch, err
 }
 
-// nolint: gosec
 func expectRune(expect rune, r io.RuneScanner) error {
 	actual, err := getNonspaceRune(r)
 	if err != nil {

@@ -9,7 +9,10 @@ import (
 )
 
 func TestZipfCdf(t *testing.T) {
-	z := NewZipf(1.0, 1000000, rand.New(rand.NewSource(time.Now().UTC().UnixNano())))
+	z, err := NewZipf(1.0, 1000000, rand.New(rand.NewSource(time.Now().UTC().UnixNano())))
+	if err != nil {
+		panic(err.Error())
+	}
 	cdf := z.cdf
 	for ix := 0; ix < 100; ix++ {
 		fmt.Printf("%2d: %15.13f\n", ix, cdf[ix])
