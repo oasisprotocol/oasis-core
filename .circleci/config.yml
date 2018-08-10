@@ -250,7 +250,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - run: echo 'export PRODUCTION_TAG=dev-latest' >> $BASH_ENV
+      - run: echo 'export PRODUCTION_TAG=latest' >> $BASH_ENV
       - setup_remote_docker
       - attach_workspace:
           at: /workspace
@@ -284,7 +284,7 @@ jobs:
           command: docker tag oasislabs/transactionclient:$DOCKER_TAG oasislabs/transactionclient:$PRODUCTION_TAG
       
       - run:
-          name: Update the txclient tag to production by setting the take to latest
+          name: Update the txclient tag to production by setting the tag to latest
           command: docker push oasislabs/transactionclient:$PRODUCTION_TAG
 
 workflows:
@@ -309,7 +309,7 @@ workflows:
           type: approval
           filters:
             branches:
-              only: ravenac95/feature/ci-versioning
+              only: master
           requires:
             - deploy
             - deployclient
