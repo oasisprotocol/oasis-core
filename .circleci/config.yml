@@ -288,11 +288,12 @@ workflows:
       - set-docker-tag
       - deploy:
           requires:
+            - set-docker-tag
             - build-rust
             - build-go
       - deployclient:
           requires:
-            - deploy
+            - set-docker-tag
             - build-rust
             - build-go
       - promote-to-production:

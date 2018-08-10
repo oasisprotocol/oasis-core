@@ -1,5 +1,9 @@
 FROM tozd/sgx:ubuntu-bionic
 
+ARG EKIDEN_SHA1
+
+LABEL com.oasislabs.ekiden-sha1="${EKIDEN_SHA1}"
+
 ENV PATH="/ekiden/bin:${PATH}"
 
 ADD . /ekiden
