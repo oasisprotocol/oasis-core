@@ -167,7 +167,7 @@ jobs:
       - checkout
       - run: 
           name: Load docker tag versioning into environment
-          command: ./scripts/determine-docker-versioning.sh /tmp/build_image_tag
+          command: ./scripts/determine-build-versioning.sh /tmp/build_image_tag
 
       # Save docker tag
       - persist_to_workspace:
