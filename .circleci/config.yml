@@ -224,7 +224,6 @@ jobs:
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
   deployclient:
     <<: *defaults
-    resource_class: large
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
