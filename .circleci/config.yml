@@ -201,6 +201,10 @@ jobs:
           name: Kubectl port forwarding
           command: kubectl port-forward service/parity 8545:8545
           background: true
+
+      - run: ls -halt /workspace/
+      - run: ls -halt /workspace/ethereum
+
       - run: cd ethereum && npm install && cp -r /workspace/ethereum/build ./build
       - run:
           name: Drive Block Mining
