@@ -12,8 +12,10 @@ set -euxo pipefail
 timestamp=`date +%Y%m%d%H%M%S` # YYYYmmddHHMMSS
 
 if [ "$CIRCLE_BRANCH" = "master" ]; then
-    # If the current branch is master then use the git-tag and a timestamp
-    export BUILD_IMAGE_TAG=${CIRCLE_TAG}-${timestamp}
+    # If the current branch is master then use the git-tag or master and a timestamp
+    # Until we start tagging all master merges CIRCLE_TAG doesn't really work with CircleCI
+    tag=${CIRCLE_TAG:-master}
+    export BUILD_IMAGE_TAG=${tag}-${timestamp}
 else
     # Otherwise this is a pull-request and use the sha1
     export BUILD_IMAGE_TAG=${CIRCLE_SHA1}
