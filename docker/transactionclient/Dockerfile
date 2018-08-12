@@ -1,9 +1,5 @@
 FROM node:8
 
-ARG TXCLIENT_COMMIT_SHA
-
-LABEL com.oasislabs.txclient-commit-sha="${TXCLIENT_COMMIT_SHA}"
-
 WORKDIR /usr/src/app
 
 # Install app dependencies
