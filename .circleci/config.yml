@@ -13,7 +13,6 @@ jobs:
       - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
-
       - checkout
       - run:
           name: Checking if rust code has changed
@@ -160,21 +159,6 @@ jobs:
               --e2e \
               --commit $(git rev-parse --short HEAD)
 
-  set-docker-tag:
-    <<: *defaults
-    steps:
-      # Setup version tracking environment variables
-      - checkout
-      - run: 
-          name: Load docker tag versioning into environment
-          command: ./scripts/determine-build-versioning.sh /tmp/build_image_tag
-
-      # Save docker tag
-      - persist_to_workspace:
-          root: /tmp
-          paths: 
-            - build_image_tag
-
   deploy:
     <<: *defaults
     resource_class: large
@@ -185,14 +169,9 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
-
       - attach_workspace:
           at: /workspace
       - setup_remote_docker
-      
-      - run: 
-          name: Load current docker tag
-          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
       - run: |
           mkdir -p ~/.kube
@@ -215,76 +194,29 @@ jobs:
       # Push deployment image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/testnet:$BUILD_IMAGE_TAG
+          docker push oasislabs/testnet:latest
       # Update testnet.
       # https://stackoverflow.com/a/33511811/1864688
       - run: |
-          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:$BUILD_IMAGE_TAG)
+          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:latest)
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
   deployclient:
     <<: *defaults
+    resource_class: large
     steps:
       # Set up
       - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
       - checkout
       - setup_remote_docker
 
-      - attach_workspace:
-          at: /workspace
-      
-      - run: 
-          name: Load current docker tag
-          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
-
       # Build image.
       - run: |
-          docker build --rm --force-rm -t oasislabs/transactionclient:$BUILD_IMAGE_TAG --build-arg TXCLIENT_COMMIT_SHA=${CIRCLE_SHA1} -f docker/transactionclient/Dockerfile .
+          docker build --rm --force-rm -t oasislabs/transactionclient -f docker/transactionclient/Dockerfile .
       # Push image.
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/transactionclient:$BUILD_IMAGE_TAG
-  promote-to-production:
-    <<: *defaults
-    resource_class: large
-    steps:
-      - checkout
-      - run: echo 'export PRODUCTION_TAG=latest' >> $BASH_ENV
-      - setup_remote_docker
-      - attach_workspace:
-          at: /workspace
-      
-      - run: 
-          name: Load current docker tag
-          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
-
-      # Login to docker
-      - run: |
-          echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      
-      - run:
-          name: Download the tag of ekiden for this current workflow
-          command: docker pull oasislabs/testnet:$BUILD_IMAGE_TAG
-
-      - run:
-          name: Tag the ekiden build on this workflow for production
-          command: docker tag oasislabs/testnet:$BUILD_IMAGE_TAG oasislabs/testnet:$PRODUCTION_TAG
-
-      - run:
-          name: Push the new production tag of ekiden to dockerhub
-          command: docker push oasislabs/testnet:$PRODUCTION_TAG
-
-      - run:
-          name: Download the tag of transactionclient for this current workflow
-          command: docker pull oasislabs/transactionclient:$BUILD_IMAGE_TAG
-      
-      - run:
-          name: Tag the transactionclient build on this workflow for production
-          command: docker tag oasislabs/transactionclient:$BUILD_IMAGE_TAG oasislabs/transactionclient:$PRODUCTION_TAG
-      
-      - run:
-          name: Update the txclient tag to production by setting the tag to latest
-          command: docker push oasislabs/transactionclient:$PRODUCTION_TAG
+          docker push oasislabs/transactionclient:latest
 
 workflows:
   version: 2
@@ -293,30 +225,24 @@ workflows:
       - build-rust
       - build-go
       - lint-git
-      - set-docker-tag
       - deploy:
+          filters:
+            branches:
+              only: master
           requires:
-            - set-docker-tag
             - build-rust
             - build-go
-      - deployclient:
-          requires:
-            - set-docker-tag
-            - build-rust
-            - build-go
-      - hold-for-production:
+      - request-deploy:
           type: approval
           filters:
             branches:
               only: master
           requires:
-            - deploy
-            - deployclient
-      - promote-to-production:
+            - build-rust
+            - build-go
+      - deployclient:
           requires:
-            - hold-for-production
-          
-
+            - request-deploy
   benchmark:
     jobs:
       - benchmark:
