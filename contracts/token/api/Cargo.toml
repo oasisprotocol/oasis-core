@@ -10,7 +10,7 @@ build = "build.rs"
 [dependencies]
 ekiden-core = { path = "../../../core/common" }
 protobuf = "~2.0"
-serde = "=1.0.59"
+serde = "1.0.71"
 
 [build-dependencies]
 ekiden-tools = { path = "../../../tools" }

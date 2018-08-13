@@ -18,10 +18,9 @@ byteorder = "1.2.1"
 rustc-hex = "1.0"
 ring = { git = "https://github.com/oasislabs/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
 untrusted = "0.5.1"
-bigint = { version = "~4.3", features = ["std"] }
+bigint = { version = "4.4.0", features = ["std"] }
 chrono = "0.4.2"
-# We cannot use serde>=1.0.60 as it requires rustc 1.26+.
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"
 serde_bytes = "~0.10"

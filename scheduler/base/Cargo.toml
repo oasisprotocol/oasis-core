@@ -12,5 +12,5 @@ ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-scheduler-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 protobuf = "~2.0"
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_derive = "1.0"
