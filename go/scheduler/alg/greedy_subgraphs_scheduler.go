@@ -76,7 +76,7 @@ func (gs *GreedySubgraphsScheduler) Schedule() []*Subgraph {
 TransactionLoop:
 	for _, t := range gs.inQueue {
 		candidate := 0
-		gs.logger.Debug("New write-set: %s", t.WriteSet.ToString())
+		gs.logger.Debug("New write-set: %s", t.WriteSet.String())
 		// Check for read/write and write/write conflicts that might be created by this
 		// transaction's write-set.
 		if t.WriteSet.MemberIteratorCallbackWithEarlyExit(func(loc Location) bool {

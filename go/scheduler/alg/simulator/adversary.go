@@ -27,13 +27,138 @@ package simulator
 //   negative number.  If logical sharding is by sender address, the adversary is assumed to be
 //   able to create enough accounts so that the
 
-// AdversaryConfig wraps the configuration parameters for how an adversary that is mounting a
+import (
+	"flag"
+	"fmt"
+	"math/rand"
+
+	"github.com/oasislabs/ekiden/go/scheduler/alg"
+)
+
+// adversaryConfig wraps the configuration parameters for how an adversary that is mounting a
 // DOS attack might behave.
 
-// type AdversaryConfig struct {
-// 	injectionProb   float64
-// 	spamBatchSize   uint
-// 	targetAddresses string
-// }
+type adversaryConfig struct {
+	seed            int64
+ 	injectionProb   float64
+ 	spamBatchSize   uint
+ 	targetAddresses string
+}
 
-// Rest TBD
+var adversaryConfigFromFlags adversaryConfig
+
+func init() {
+	flag.Int64Var(&adversaryConfigFromFlags.seed, "adversary-seed", 0, "seed for rng used to randomize adversary actions")
+	flag.Float64Var(&adversaryConfigFromFlags.injectionProb, "injection-prob", 0.01, "probability of deciding to inject (possibly many) DOS transactions")
+	flag.UintVar(&adversaryConfigFromFlags.spamBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to spam is made")
+	flag.StringVar(&adversaryConfigFromFlags.targetAddresses, "target-addresses", "0-16", "comma-separated list of integers or start-end integer ranges")
+}
+
+// AdversarialTransactionSource is a a filter that wraps a legitimate (statistical)
+// TransactionSource that will inject in denial-of-service transactions, i.e., transactions
+// with read-set and write-set locations chosen to maximize the load / likelihood of
+// causing a batch of transactions to revert.
+type AdversarialTransactionSource struct {
+	r *rand.Rand
+	injectionProb float64
+	targets *alg.LocationRangeSet
+
+	numTargets uint64
+
+	ts TransactionSource
+}
+
+func countTargets(targets *alg.LocationRangeSet) uint64 {
+	var total uint64
+	if targets.IsEmpty() {
+		return total
+	}
+	next := targets.MinLoc().(alg.TestLocation)
+	pred := func (lr *alg.LocationRange) bool {
+		lb := lr.LowerBound.(alg.TestLocation)
+		ub := lr.UpperBound.(alg.TestLocation)
+		if next < lb {
+			next = lb
+		}
+		if next > ub {
+			return false
+		}
+		total += uint64(ub - next + 1)
+		return false
+	}
+	targets.Find(pred)
+	return total
+}
+
+// mapTargets:  given a random value `choice` in half open interval [0, `countTargets(targets)`),
+// return the `TestLocation` associated with that value.
+func mapTargets(targets *alg.LocationRangeSet, choice uint64) *alg.TestLocation {
+	if targets.IsEmpty() {
+		return nil
+	}
+	next := targets.MinLoc().(alg.TestLocation)
+	var result alg.TestLocation
+	pred := func (lr *alg.LocationRange) bool {
+		lb := lr.LowerBound.(alg.TestLocation)
+		ub := lr.UpperBound.(alg.TestLocation)
+		// invar: lb <= ub
+		if next < lb {
+			next = lb
+		}
+		if next > ub {
+			return false
+		}
+		// invar: lb <= next <= ub
+
+		// Count is the number of entries in the current range that hasn't been handled
+		// by the previous range (due to overlap).
+		count := ub - next + 1
+		// There is a possibility of arthmetic overflow, e.g., if next = math.MinInt64
+		// and ub >= -1.  We check for it and panic.
+		if count < 0 {
+			panic(fmt.Sprintf("RangeSet range [%d,%d] too big, next=%d, arithmetic underflow", lb, ub, next))
+		}
+		if choice <= uint64(count) {
+			result = alg.TestLocation((uint64(next) + choice))
+			return true
+		}
+		// post: choice > count, so no underflow in subtraction
+		choice -= uint64(count)
+		return false
+	}
+	targets.Find(pred)
+	return &result
+}
+
+// NewAdversarialTransactionSource constructs and returns an AdversarialTransactionSource.
+func NewAdversarialTransactionSource(rngSeed int64, inj float64, targets *alg.LocationRangeSet, ts TransactionSource) (*AdversarialTransactionSource, error) {
+	if inj < 0.0 {
+		return nil, fmt.Errorf("NewAdversarialTransactionSource: Injection probability must be at least 0.0, got %f", inj)
+	}
+	if inj > 1.0 {
+		return nil, fmt.Errorf("NewAdversarialTransactionSource: Injection probability must be at most 1.0, got %f", inj)
+	}
+	if targets == nil {
+		return nil, fmt.Errorf("NewAdversarialTransactionSource: targets cannot be nil")
+	}
+	if targets.IsEmpty() {
+		return nil, fmt.Errorf("NewAdversarialTransactionSource: targets cannot be empty")
+	}
+
+	rng := rand.New(rand.NewSource(rngSeed))
+	nTargets := countTargets(targets)
+
+	return &AdversarialTransactionSource{
+		r: rng, injectionProb: inj, targets: targets, numTargets: nTargets, ts: ts}, nil
+}
+
+// Get the next Transaction from this source.  The result may be from the underlying wrapped
+// TransactionSource, or it may be a bogus DOS transaction injected into the request stream.
+func (ats *AdversarialTransactionSource) Get(tid uint) *alg.Transaction {
+	return nil
+}
+
+// Close cleans up this TransactionSource and invokes Close on the wrapped TransactionSource.
+func (ats *AdversarialTransactionSource) Close() error {
+	return ats.ts.Close()
+}

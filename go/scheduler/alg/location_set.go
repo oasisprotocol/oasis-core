@@ -185,8 +185,8 @@ func (ls *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) {
 	}
 }
 
-// ToString returns the canonical string representation for the receiver LocationSet |ls|.
-func (ls *LocationSet) ToString() string {
+// String returns the canonical string representation for the receiver LocationSet |ls|.
+func (ls *LocationSet) String() string {
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
 	ls.Write(bufw)
