@@ -13,11 +13,11 @@ cc = "1.0"
 protoc = "~2.0"
 protoc-rust = "~2.0"
 protobuf = "~2.0"
-sgx_edl = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
+sgx_edl = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden1" }
 clap = "2.29.1"
 ansi_term = "0.11"
 toml = "0.4"
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_derive = "1.0"
 error-chain = "0.12.0"
 filebuffer = "0.3"

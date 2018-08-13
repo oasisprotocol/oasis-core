@@ -40,7 +40,7 @@ RUN git clone https://github.com/myelin-ml/linux-sgx.git && cd linux-sgx && \
     ./linux/installer/bin/sgx_linux_x64_sdk_*.bin --prefix /opt && \
     echo "source /opt/sgxsdk/environment" >> /root/.bashrc
 
-# install rust (versions based on those found successful in https://github.com/ekiden/rust-sgx-sdk/blob/v0.9.8-ekiden1/dockerfile/Dockerfile)
+# install rust (versions based on those found successful in https://github.com/oasislabs/rust-sgx-sdk/blob/v1.0.1-ekiden1/dockerfile/Dockerfile)
 # Note: 03-16 is the officially supported rust for sgx 0.9.8.
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     sh rustup.sh -y --default-toolchain nightly-2018-07-16 && \

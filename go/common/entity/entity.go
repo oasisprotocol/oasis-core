@@ -4,15 +4,19 @@ package entity
 import (
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ethereum"
 	"github.com/oasislabs/ekiden/go/grpc/common"
-
-	"github.com/ugorji/go/codec"
 )
 
-// ErrNilProtobuf is the error returned when a protobuf is nil.
-var ErrNilProtobuf = errors.New("entity: Protobuf is nil")
+var (
+	// ErrNilProtobuf is the error returned when a protobuf is nil.
+	ErrNilProtobuf = errors.New("entity: Protobuf is nil")
+
+	_ cbor.Marshaler   = (*Entity)(nil)
+	_ cbor.Unmarshaler = (*Entity)(nil)
+)
 
 // Entity represents an entity that controls one or more Nodes and or
 // services.
@@ -58,11 +62,15 @@ func (e *Entity) ToProto() *common.Entity {
 
 // ToSignable serializes the Entity into a signature compatible byte vector.
 func (e *Entity) ToSignable() []byte {
-	var b []byte
-	enc := codec.NewEncoderBytes(&b, signature.CBORHandle)
-	if err := enc.Encode(e); err != nil {
-		panic(err)
-	}
+	return e.MarshalCBOR()
+}
 
-	return b
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (e *Entity) MarshalCBOR() []byte {
+	return cbor.Marshal(e)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (e *Entity) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, e)
 }

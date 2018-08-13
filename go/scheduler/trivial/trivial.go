@@ -1,4 +1,4 @@
-package scheduler
+package trivial
 
 import (
 	"crypto"
@@ -8,7 +8,10 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/oasislabs/ekiden/go/beacon"
+	"github.com/eapache/channels"
+	"golang.org/x/net/context"
+
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
@@ -16,21 +19,22 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
-	"github.com/oasislabs/ekiden/go/registry"
-
-	"github.com/eapache/channels"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/ekiden/go/scheduler/api"
 )
 
+// BackendName is the name of this implementation.
+const BackendName = "trivial"
+
 var (
-	_ Scheduler = (*TrivialScheduler)(nil)
+	_ api.Backend = (*trivialScheduler)(nil)
 
 	rngContextCompute = []byte("EkS-Dummy-Compute")
 	rngContextStorage = []byte("EkS-Dummy-Storage")
 )
 
-// TrivialScheduler is a basic scheduler.
-type TrivialScheduler struct {
+type trivialScheduler struct {
 	logger *logging.Logger
 
 	state *trivialSchedulerState
@@ -44,7 +48,7 @@ type trivialSchedulerState struct {
 	nodeLists  map[epochtime.EpochTime][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
 	contracts  map[signature.MapKey]*contract.Contract
-	committees map[epochtime.EpochTime]map[signature.MapKey][]*Committee
+	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
 
 	epoch     epochtime.EpochTime
 	lastElect epochtime.EpochTime
@@ -55,19 +59,19 @@ func (s *trivialSchedulerState) canElect() bool {
 }
 
 func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.Broker) error { //nolint:gocyclo
-	var committees []*Committee
+	var committees []*api.Committee
 
 	nodeList := s.nodeLists[s.epoch]
 	beacon := s.beacons[s.epoch]
 
-	for _, kind := range []CommitteeKind{Compute, Storage} {
+	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage} {
 		var sz int
 		var ctx []byte
 		switch kind {
-		case Compute:
+		case api.Compute:
 			sz = int(con.ReplicaGroupSize + con.ReplicaGroupBackupSize)
 			ctx = rngContextCompute
-		case Storage:
+		case api.Storage:
 			sz = int(con.StorageGroupSize)
 			ctx = rngContextStorage
 		default:
@@ -89,23 +93,23 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 		rng := rand.New(rngSrc)
 		idxs := rng.Perm(sz)
 
-		committee := &Committee{
+		committee := &api.Committee{
 			Kind:     kind,
 			Contract: con,
 			ValidFor: s.epoch,
 		}
 
 		for i := 0; i < sz; i++ {
-			var role Role
+			var role api.Role
 			switch {
 			case i == 0:
-				role = Leader
+				role = api.Leader
 			case i > int(con.ReplicaGroupSize):
-				role = BackupWorker
+				role = api.BackupWorker
 			default:
-				role = Worker
+				role = api.Worker
 			}
-			committee.Members = append(committee.Members, &CommitteeNode{
+			committee.Members = append(committee.Members, &api.CommitteeNode{
 				Role:      role,
 				PublicKey: nodeList[idxs[i]].ID,
 			})
@@ -118,7 +122,7 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 	defer s.Unlock()
 
 	if s.committees[s.epoch] == nil {
-		s.committees[s.epoch] = make(map[signature.MapKey][]*Committee)
+		s.committees[s.epoch] = make(map[signature.MapKey][]*api.Committee)
 	}
 	comMap := s.committees[s.epoch]
 	comMap[con.ID.ToMapKey()] = committees
@@ -167,35 +171,33 @@ func (s *trivialSchedulerState) updateLastElect() {
 	s.lastElect = s.epoch
 }
 
-// GetCommittees returns a vector of the committees for a given contract
-// ID, for the current epoch.
-func (s *TrivialScheduler) GetCommittees(id signature.PublicKey) []*Committee {
+func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
 	s.state.RLock()
 	defer s.state.RUnlock()
 
 	comMap := s.state.committees[s.state.epoch]
 	if comMap == nil {
-		return nil
+		return nil, nil
 	}
-	return comMap[id.ToMapKey()]
+	return comMap[id.ToMapKey()], nil
 }
 
-// WatchCommittees returns a channel that produces a stream of Committee.
-//
-// Upon subscription, all committees for the current epoch will be
-// sent immediately.
-func (s *TrivialScheduler) WatchCommittees() (<-chan *Committee, *pubsub.Subscription) {
-	return subscribeTypedCommittee(s.notifier)
+func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
+	typedCh := make(chan *api.Committee)
+	sub := s.notifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
 }
 
-func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) { //nolint:gocyclo
+func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend) { //nolint:gocyclo
 	timeCh, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 
-	contractCh, sub := conReg.WatchContracts()
+	contractCh, sub := reg.WatchContracts()
 	defer sub.Close()
 
-	nodeListCh, sub := entReg.WatchNodeList()
+	nodeListCh, sub := reg.WatchNodeList()
 	defer sub.Close()
 
 	beaconCh, sub := beacon.WatchBeacons()
@@ -291,15 +293,15 @@ func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg regist
 	}
 }
 
-// NewTrivialScheduler returns a new TrivialScheduler instance.
-func NewTrivialScheduler(timeSource epochtime.TimeSource, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) *TrivialScheduler {
-	s := &TrivialScheduler{
-		logger: logging.GetLogger("TrivialScheudler"),
+// New constracts a new trivial scheduler Backend instance.
+func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend) api.Backend {
+	s := &trivialScheduler{
+		logger: logging.GetLogger("scheduler/trivial"),
 		state: &trivialSchedulerState{
 			nodeLists:  make(map[epochtime.EpochTime][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
 			contracts:  make(map[signature.MapKey]*contract.Contract),
-			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*Committee),
+			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,
 		},
@@ -325,7 +327,7 @@ func NewTrivialScheduler(timeSource epochtime.TimeSource, conReg registry.Contra
 		}
 	})
 
-	go s.worker(timeSource, conReg, entReg, beacon)
+	go s.worker(timeSource, reg, beacon)
 
 	return s
 }

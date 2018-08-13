@@ -16,19 +16,18 @@ ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 byteorder = "1.2.1"
 rustc-hex = "1.0"
-ring = { git = "https://github.com/ekiden/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
+ring = { git = "https://github.com/oasislabs/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
 untrusted = "0.5.1"
-bigint = { version = "~4.3", features = ["std"] }
+bigint = { version = "4.4.0", features = ["std"] }
 chrono = "0.4.2"
-# We cannot use serde>=1.0.60 as it requires rustc 1.26+.
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"
 serde_bytes = "~0.10"
 log = "0.4"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
-futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
+futures-sgx = { git = "https://github.com/oasislabs/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"
@@ -42,7 +41,7 @@ openssl = "0.10.10"
 tokio = "~0.1.7"
 
 [dev-dependencies]
-serde_json = { git = "https://github.com/ekiden/json" }
+serde_json = { git = "https://github.com/oasislabs/json" }
 
 [target.'cfg(not(target_env = "sgx"))'.dev-dependencies]
 tokio-core = "0.1.17"

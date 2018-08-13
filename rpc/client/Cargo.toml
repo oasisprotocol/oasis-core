@@ -12,11 +12,11 @@ ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha"
 ekiden-rpc-common = { path = "../common", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 sodalite = "0.3.0"
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_cbor = "0.8.2"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
-futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
+futures-sgx = { git = "https://github.com/oasislabs/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 ekiden-rpc-api = { path = "../api", version = "0.2.0-alpha" }

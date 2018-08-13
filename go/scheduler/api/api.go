@@ -1,13 +1,15 @@
-// Package scheduler implements the scheduler.
-package scheduler
+// Package api implements the scheduler API.
+package api
 
 import (
 	"fmt"
 
+	"golang.org/x/net/context"
+
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
 )
@@ -127,11 +129,11 @@ func (c *Committee) ToProto() *pbSched.Committee {
 	return pb
 }
 
-// Scheduler is a scheduler implementation.
-type Scheduler interface {
+// Backend is a scheduler implementation.
+type Backend interface {
 	// GetCommittees returns a vector of the committees for a given
 	// contract ID, for the current epoch.
-	GetCommittees(signature.PublicKey) []*Committee
+	GetCommittees(context.Context, signature.PublicKey) ([]*Committee, error)
 
 	// WatchCommittees returns a channel that produces a stream of
 	// Committee.
@@ -139,12 +141,4 @@ type Scheduler interface {
 	// Upon subscription, all committees for the current epoch will
 	// be sent immediately.
 	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
-}
-
-func subscribeTypedCommittee(notifier *pubsub.Broker) (<-chan *Committee, *pubsub.Subscription) {
-	typedCh := make(chan *Committee)
-	sub := notifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
 }

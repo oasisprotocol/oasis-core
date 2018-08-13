@@ -5,12 +5,15 @@ import (
 	"strconv"
 
 	"google.golang.org/grpc"
+
+	"github.com/oasislabs/ekiden/go/common/service"
 )
 
 type grpcService struct {
-	ln     net.Listener
-	s      *grpc.Server
-	quitCh chan struct{}
+	service.BaseBackgroundService
+
+	ln net.Listener
+	s  *grpc.Server
 }
 
 func (s *grpcService) Start() error {
@@ -19,18 +22,14 @@ func (s *grpcService) Start() error {
 		ln, s.ln = s.ln, nil
 		err := s.s.Serve(ln)
 		if err != nil {
-			rootLog.Error("gRPC Server terminated uncleanly",
+			s.Logger.Error("gRPC Server terminated uncleanly",
 				"err", err,
 			)
 		}
 		s.s = nil
-		close(s.quitCh)
+		s.BaseBackgroundService.Stop()
 	}()
 	return nil
-}
-
-func (s *grpcService) Quit() <-chan struct{} {
-	return s.quitCh
 }
 
 func (s *grpcService) Stop() {
@@ -48,15 +47,17 @@ func (s *grpcService) Cleanup() {
 }
 
 func newGrpcService(port uint16) (*grpcService, error) {
-	rootLog.Debug("gRPC Server Params", "port", grpcPort)
+	svc := *service.NewBaseBackgroundService("grpc")
+
+	svc.Logger.Debug("gRPC Server Params", "port", grpcPort)
 
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
 		return nil, err
 	}
 	return &grpcService{
-		ln:     ln,
-		s:      grpc.NewServer(),
-		quitCh: make(chan struct{}),
+		BaseBackgroundService: svc,
+		ln: ln,
+		s:  grpc.NewServer(),
 	}, nil
 }

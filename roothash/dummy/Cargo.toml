@@ -17,7 +17,7 @@ ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-mutablestate = { path = "../../storage/mutablestate", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 log = "0.4"
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_cbor = "0.8.2"
 serde_derive = "1.0"
 exonum_rocksdb = "~0.7.4"

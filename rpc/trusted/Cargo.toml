@@ -15,11 +15,11 @@ ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha"
 ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.2.0-alpha" }
 ekiden-rpc-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../client", version = "0.2.0-alpha" }
-serde = "=1.0.59"
+serde = "1.0.71"
 serde_cbor = "0.8.2"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
-futures-sgx = { git = "https://github.com/ekiden/futures-rs" }
+futures-sgx = { git = "https://github.com/oasislabs/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"

@@ -2,21 +2,18 @@
 package cmd
 
 import (
-	"net"
-	"strconv"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
 
 	"github.com/oasislabs/ekiden/go/beacon"
+	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
 	"github.com/oasislabs/ekiden/go/scheduler"
 	"github.com/oasislabs/ekiden/go/storage"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
-
-	"github.com/oasislabs/ekiden/go/common/logging"
-
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/oasislabs/ekiden/go/tendermint"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 const (
@@ -25,8 +22,6 @@ const (
 	cfgLogFmt   = "log.format"
 	cfgLogLevel = "log.level"
 
-	cfgABCIAddr    = "abci.address"
-	cfgABCIPort    = "abci.port"
 	cfgGRPCPort    = "grpc.port"
 	cfgMetricsPort = "metrics.port"
 )
@@ -40,8 +35,6 @@ var (
 	logLevel string
 
 	// Root (aka node) command config flags.
-	abciAddr    net.IP
-	abciPort    uint16
 	grpcPort    uint16
 	metricsPort uint16
 
@@ -64,10 +57,9 @@ func Execute() {
 }
 
 type nodeEnv struct {
-	svcMgr     *backgroundServiceManager
-	grpcSrv    *grpcService
-	tenderNode *tendermintAdapter
-	abciMux    *abci.ApplicationServer
+	svcMgr  *backgroundServiceManager
+	grpcSrv *grpcService
+	svcTmnt service.TendermintService
 }
 
 func nodeMain(cmd *cobra.Command, args []string) {
@@ -107,40 +99,20 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	}
 	env.svcMgr.Register(metrics)
 
-	// Initialize the ABCI multiplexer.
-	abciAddr, _ = cmd.Flags().GetIP(cfgABCIAddr)
-	abciPort, _ = cmd.Flags().GetUint16(cfgABCIPort)
-	abciSockAddr := net.JoinHostPort(abciAddr.String(), strconv.Itoa(int(abciPort)))
-	rootLog.Debug("ABCI Multiplexer Params", "addr", abciSockAddr)
-
-	env.abciMux, err = abci.NewApplicationServer(abciSockAddr, dataDir)
+	// Initialize tendermint.
+	// TODO: This should only be done when a tendermint backend is in use.
+	env.svcTmnt, err = tendermint.New(dataDir)
 	if err != nil {
-		rootLog.Error("failed to initialize ABCI multiplexer",
+		rootLog.Error("failed to initialize tendermint service",
 			"err", err,
 		)
 		return
 	}
-	env.svcMgr.Register(env.abciMux)
-
-	env.tenderNode, err = newTendermintService(env.abciMux)
-	if err != nil {
-		rootLog.Error("failed to initialize tendermint",
-			"err", err,
-		)
-		return
-	}
+	env.svcMgr.Register(env.svcTmnt)
 
 	// Initialize the varous node backends.
 	if err = initNode(cmd, env); err != nil {
 		rootLog.Error("failed to initialize backends",
-			"err", err,
-		)
-		return
-	}
-
-	// Start the ABCI server.
-	if err = env.abciMux.Start(); err != nil {
-		rootLog.Error("failed to start ABCI multiplexer",
 			"err", err,
 		)
 		return
@@ -154,8 +126,10 @@ func nodeMain(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if err = env.tenderNode.Start(); err != nil {
-		rootLog.Error("failed to start tendermint server",
+	// Start the tendermint service.
+	// TODO: This should only be done when a tendermint backend is in use.
+	if err = env.svcTmnt.Start(); err != nil {
+		rootLog.Error("failed to start tendermint service",
 			"err", err,
 		)
 		return
@@ -182,10 +156,18 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
-	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
-	contractRegistry := registry.NewMemoryContractRegistry()
-	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
-	sched := scheduler.NewTrivialScheduler(timeSource, contractRegistry, entityRegistry, randomBeacon)
+	randomBeacon, err := beacon.New(cmd, timeSource)
+	if err != nil {
+		return err
+	}
+	reg, err := registry.New(cmd, timeSource, env.svcTmnt)
+	if err != nil {
+		return err
+	}
+	sched, err := scheduler.New(cmd, timeSource, reg, randomBeacon)
+	if err != nil {
+		return err
+	}
 	store, err := storage.New(cmd, timeSource, dataDir)
 	if err != nil {
 		return err
@@ -193,12 +175,11 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	env.svcMgr.RegisterCleanupOnly(store)
 
 	// Initialize and register the gRPC services.
-	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
-	beacon.NewRandomBeaconServer(env.grpcSrv.s, randomBeacon)
-	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
-	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
-	scheduler.NewSchedulerServer(env.grpcSrv.s, sched)
-	storage.NewServer(env.grpcSrv.s, store)
+	epochtime.NewGRPCServer(env.grpcSrv.s, timeSource)
+	beacon.NewGRPCServer(env.grpcSrv.s, randomBeacon)
+	registry.NewGRPCServer(env.grpcSrv.s, reg)
+	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
+	storage.NewGRPCServer(env.grpcSrv.s, store)
 
 	rootLog.Debug("backends initialized")
 
@@ -227,14 +208,10 @@ func init() {
 	}
 
 	// Flags specific to the root command.
-	rootCmd.Flags().IPVar(&abciAddr, cfgABCIAddr, net.IPv4(127, 0, 0, 1), "ABCI server IP address")
-	rootCmd.Flags().Uint16Var(&abciPort, cfgABCIPort, 26658, "ABCI server port")
 	rootCmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
 	rootCmd.Flags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
 
 	for _, v := range []string{
-		cfgABCIAddr,
-		cfgABCIPort,
 		cfgGRPCPort,
 		cfgMetricsPort,
 	} {
@@ -243,7 +220,10 @@ func init() {
 
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
+		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
+		registry.RegisterFlags,
+		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermintEntry.AddNodeFlags,
 	} {

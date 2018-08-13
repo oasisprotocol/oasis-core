@@ -13,7 +13,7 @@ ekiden-untrusted = { path = "../../../core/untrusted", version = "0.2.0-alpha" }
 ekiden-tools = { path = "../../../tools", version = "0.2.0-alpha" }
 ekiden-rpc-api = { path="../../../rpc/api", version = "0.2.0-alpha" }
 protobuf = "~2.0"
-sgx_types = { git = "https://github.com/ekiden/rust-sgx-sdk", tag = "v0.9.8-ekiden1" }
+sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden1" }
 thread_local = "0.3.5"
 clap = "2.29.1"
 reqwest = "0.8.2"

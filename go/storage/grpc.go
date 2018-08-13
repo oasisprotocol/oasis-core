@@ -6,27 +6,27 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/storage/api"
+
 	pb "github.com/oasislabs/ekiden/go/grpc/storage"
 )
 
-var _ pb.StorageServer = (*Server)(nil)
+var _ pb.StorageServer = (*grpcServer)(nil)
 
-// Server is a Backend exposed over gRPC.
-type Server struct {
-	backend Backend
+type grpcServer struct {
+	backend api.Backend
 }
 
-// Get implements the corresponding gRPC call.
-func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+func (s *grpcServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
 	id := req.GetId()
-	if len(id) != KeySize {
-		return nil, errors.New("storage: malfored key")
+	if len(id) != api.KeySize {
+		return nil, errors.New("storage: malformed key")
 	}
 
-	var k Key
+	var k api.Key
 	copy(k[:], id)
 
-	v, err := s.backend.Get(k)
+	v, err := s.backend.Get(ctx, k)
 	if err != nil {
 		return nil, err
 	}
@@ -34,17 +34,15 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	return &pb.GetResponse{Data: v}, nil
 }
 
-// Insert implements the corresponding gRPC call.
-func (s *Server) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
-	if err := s.backend.Insert(req.GetData(), req.GetExpiry()); err != nil {
+func (s *grpcServer) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
+	if err := s.backend.Insert(ctx, req.GetData(), req.GetExpiry()); err != nil {
 		return nil, err
 	}
 	return &pb.InsertResponse{}, nil
 }
 
-// GetKeys implements the corresponding gRPC call.
-func (s *Server) GetKeys(ctx context.Context, req *pb.GetKeysRequest) (*pb.GetKeysResponse, error) {
-	kiVec, err := s.backend.GetKeys()
+func (s *grpcServer) GetKeys(ctx context.Context, req *pb.GetKeysRequest) (*pb.GetKeysResponse, error) {
+	kiVec, err := s.backend.GetKeys(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -58,10 +56,10 @@ func (s *Server) GetKeys(ctx context.Context, req *pb.GetKeysRequest) (*pb.GetKe
 	return &resp, nil
 }
 
-// NewServer intializes and registers a new Server backed by the provided
-// Backend.
-func NewServer(srv *grpc.Server, b Backend) {
-	s := &Server{
+// NewGRPCServer intializes and registers a grpc storage server backed
+// by the provided Backend.
+func NewGRPCServer(srv *grpc.Server, b api.Backend) {
+	s := &grpcServer{
 		backend: b,
 	}
 

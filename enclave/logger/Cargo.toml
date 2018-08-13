@@ -4,7 +4,7 @@ version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "a logger that works for both trusted and untrusted world"
 keywords = ["ekiden", "logging"]
-repository = "https://github.com/ekiden/ekiden"
+repository = "https://github.com/oasislabs/ekiden"
 
 [features]
 default = []
