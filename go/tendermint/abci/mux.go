@@ -7,17 +7,18 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/tendermint/iavl"
-	"github.com/tendermint/tendermint/abci/server"
 	"github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	tmcmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
-	tlog "github.com/tendermint/tendermint/libs/log"
+	tmlog "github.com/tendermint/tendermint/libs/log"
+
+	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
 const (
@@ -32,12 +33,14 @@ const (
 	stateKeyGenesisDigest = "OasisGenesisDigest"
 )
 
-// Status codes for the various ABCI requests.
-const (
-	CodeOK                 uint32 = types.CodeTypeOK // uint32(0)
-	CodeInvalidApplication uint32 = 1
-	CodeNoCommittedBlocks  uint32 = 2
-)
+// TxOutput is the result of processing a transaction.
+type TxOutput struct {
+	// Output data to be serialized.
+	Data interface{}
+
+	// Tags used for easy searching/filtering transactions.
+	Tags []tmcmn.KVPair
+}
 
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
@@ -81,7 +84,7 @@ type Application interface {
 	// the application name if the application does not use paths.
 	//
 	// Implementations MUST restrict their state operations to versioned
-	// Get operations with versions <= BlockHeight - 1.
+	// Get operations with versions <= BlockHeight.
 	//
 	// FIXME: https://github.com/tendermint/iavl/issues/68 hints at
 	// the possiblity of unbound memory growth (DoS hazzard).
@@ -90,7 +93,7 @@ type Application interface {
 	// CheckTx validates a transaction via the mempool.
 	//
 	// Implementations MUST only alter the ApplicationState CheckTxTree.
-	CheckTx([]byte) types.ResponseCheckTx
+	CheckTx([]byte) error
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
@@ -100,7 +103,7 @@ type Application interface {
 	BeginBlock(types.RequestBeginBlock)
 
 	// DeliverTx delivers a transaction for full processing.
-	DeliverTx([]byte) types.ResponseDeliverTx
+	DeliverTx([]byte) (*TxOutput, error)
 
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
@@ -114,46 +117,29 @@ type Application interface {
 // that multiplexes multiple Oasis-specific "applications".
 type ApplicationServer struct {
 	mux         *abciMux
-	service     cmn.Service
-	quitWg      sync.WaitGroup
 	cleanupOnce sync.Once
+	quitChannel chan struct{}
 	started     bool
 }
 
 // Start starts the ApplicationServer.
 func (a *ApplicationServer) Start() error {
-	err := a.service.Start()
-	if err == nil {
-		a.started = true
-
-		// Initialize the wait group so that it is possible to wait
-		// on ApplicationServer termination.
-		a.quitWg.Add(1)
-		go func() {
-			<-a.Quit()
-			a.quitWg.Done()
-		}()
-	}
-	return err
+	return nil
 }
 
 // Stop stops the ApplicationServer.
 func (a *ApplicationServer) Stop() {
-	_ = a.service.Stop()
+	close(a.quitChannel)
 }
 
 // Quit returns a channel which is closed when the ApplicationServer is
 // stopped.
 func (a *ApplicationServer) Quit() <-chan struct{} {
-	return a.service.Quit()
+	return a.quitChannel
 }
 
 // Cleanup cleans up the state of an ApplicationServer instance.
-//
-// This routine will block iff the ApplicationServer is still running.
 func (a *ApplicationServer) Cleanup() {
-	a.quitWg.Wait()
-
 	a.cleanupOnce.Do(func() {
 		a.mux.doCleanup()
 	})
@@ -177,24 +163,17 @@ func (a *ApplicationServer) Register(app Application) error {
 	return a.mux.doRegister(app)
 }
 
-// NewApplicationServer returns a new ApplicationServer, configured to bind
-// to the specified address/port when launched, using the provided directory
-// to persist state.
-func NewApplicationServer(addr string, dataDir string) (*ApplicationServer, error) {
-	if _, _, err := net.SplitHostPort(addr); err != nil {
-		return nil, err
-	}
-
+// NewApplicationServer returns a new ApplicationServer, using the provided
+// directory to persist state.
+func NewApplicationServer(dataDir string) (*ApplicationServer, error) {
 	mux, err := newABCIMux(dataDir)
 	if err != nil {
 		return nil, err
 	}
-	service := server.NewSocketServer(addr, mux)
-	service.SetLogger(&LogAdapter{logging.GetLogger("abci-tendermint")})
 
 	return &ApplicationServer{
-		mux:     mux,
-		service: service,
+		mux:         mux,
+		quitChannel: make(chan struct{}),
 	}, nil
 }
 
@@ -227,7 +206,7 @@ func (mux *abciMux) SetOption(req types.RequestSetOption) types.ResponseSetOptio
 			"err", err,
 		)
 		return types.ResponseSetOption{
-			Code: CodeInvalidApplication,
+			Code: api.CodeInvalidApplication.ToInt(),
 		}
 	}
 
@@ -258,7 +237,7 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 			"req", req,
 		)
 		return types.ResponseQuery{
-			Code: CodeOK,
+			Code: api.CodeOK.ToInt(),
 		}
 	}
 
@@ -267,7 +246,7 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 			"req", req,
 		)
 		return types.ResponseQuery{
-			Code: CodeNoCommittedBlocks,
+			Code: api.CodeNoCommittedBlocks.ToInt(),
 		}
 	}
 
@@ -278,7 +257,7 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 			"err", err,
 		)
 		return types.ResponseQuery{
-			Code: CodeInvalidApplication,
+			Code: api.CodeInvalidApplication.ToInt(),
 		}
 	}
 
@@ -297,7 +276,7 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 			"tx", hex.EncodeToString(tx),
 		)
 		return types.ResponseCheckTx{
-			Code: CodeInvalidApplication,
+			Code: api.CodeInvalidApplication.ToInt(),
 		}
 	}
 
@@ -306,7 +285,16 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 		"tx", hex.EncodeToString(tx),
 	)
 
-	return app.CheckTx(tx[1:])
+	if err := app.CheckTx(tx[1:]); err != nil {
+		return types.ResponseCheckTx{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
+		}
+	}
+
+	return types.ResponseCheckTx{
+		Code: api.CodeOK.ToInt(),
+	}
 }
 
 func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChain {
@@ -366,7 +354,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 			"tx", hex.EncodeToString(tx),
 		)
 		return types.ResponseDeliverTx{
-			Code: CodeInvalidApplication,
+			Code: api.CodeInvalidApplication.ToInt(),
 		}
 	}
 
@@ -375,7 +363,22 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 		"tx", hex.EncodeToString(tx),
 	)
 
-	return app.DeliverTx(tx[1:])
+	output, err := app.DeliverTx(tx[1:])
+	if err != nil {
+		return types.ResponseDeliverTx{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
+		}
+	}
+
+	// Append application name tag.
+	output.Tags = append(output.Tags, tmcmn.KVPair{api.TagApplication, []byte(app.Name())})
+
+	return types.ResponseDeliverTx{
+		Code: api.CodeOK.ToInt(),
+		Data: cbor.Marshal(output.Data),
+		Tags: output.Tags,
+	}
 }
 
 func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
@@ -436,8 +439,12 @@ func (mux *abciMux) doRegister(app Application) error {
 
 	mux.appsByName[name] = app
 	mux.appsByRegOrder = append(mux.appsByRegOrder, app)
+	mux.appsByTxTag[app.TransactionTag()] = app
 
 	app.OnRegister(mux.state)
+	mux.logger.Debug("Registered new application",
+		"app", app.Name(),
+	)
 
 	return nil
 }
@@ -445,7 +452,7 @@ func (mux *abciMux) doRegister(app Application) error {
 func (mux *abciMux) extractAppFromKeyPath(s string) (Application, error) {
 	appName := s
 	if strings.Contains(appName, "/") {
-		sVec := strings.SplitN(appName, "/", 1)
+		sVec := strings.SplitN(appName, "/", 2)
 		appName = sVec[0]
 	}
 
@@ -498,7 +505,7 @@ type LogAdapter struct {
 }
 
 // With implements the correspoding call in the tendermit Logger interface.
-func (a *LogAdapter) With(keyvals ...interface{}) tlog.Logger {
+func (a *LogAdapter) With(keyvals ...interface{}) tmlog.Logger {
 	// This is a bit silly, but the Ekiden logging's With returns a
 	// pointer to it's Logger struct rather than the tendermint Logger
 	// interface.
@@ -516,8 +523,7 @@ type ApplicationState struct {
 	blockHeight int64
 }
 
-// BlockHeight returns the current block height, which is 1 greater
-// than the last committed block height.
+// BlockHeight returns the last committed block height.
 func (s *ApplicationState) BlockHeight() int64 {
 	return s.blockHeight
 }
@@ -586,5 +592,3 @@ func newApplicationState(dataDir string) (*ApplicationState, error) {
 func isP2PFilterQuery(s string) bool {
 	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
 }
-
-// TODO: Support the tendermint in-process interface (might already Just Work).

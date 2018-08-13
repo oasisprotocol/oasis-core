@@ -9,11 +9,10 @@ import (
 	"math"
 	"net"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ethereum"
 	"github.com/oasislabs/ekiden/go/grpc/common"
-
-	"github.com/ugorji/go/codec"
 )
 
 var (
@@ -23,6 +22,9 @@ var (
 
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
+
+	_ cbor.Marshaler   = (*Node)(nil)
+	_ cbor.Unmarshaler = (*Node)(nil)
 )
 
 // Node represents public connectivity information about an Ekiden node.
@@ -82,13 +84,17 @@ func (n *Node) FromProto(pb *common.Node) error { // nolint:gocyclo
 		return err
 	}
 
-	n.Addresses = make([]net.Addr, 0, len(pb.GetAddresses()))
-	for _, v := range pb.GetAddresses() {
-		addr, err := parseProtoAddress(v)
-		if err != nil {
-			return err
+	n.Expiration = pb.GetExpiration()
+
+	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
+		n.Addresses = make([]net.Addr, 0, len(pbAddresses))
+		for _, v := range pbAddresses {
+			addr, err := parseProtoAddress(v)
+			if err != nil {
+				return err
+			}
+			n.Addresses = append(n.Addresses, addr)
 		}
-		n.Addresses = append(n.Addresses, addr)
 	}
 
 	if pbCert := pb.GetCertificate(); pbCert != nil {
@@ -114,26 +120,34 @@ func (n *Node) ToProto() *common.Node {
 	}
 	pb.EntityId, _ = n.EntityID.MarshalBinary()
 	pb.Expiration = n.Expiration
-	pb.Addresses = toProtoAddresses(n.Addresses)
+	if n.Addresses != nil {
+		pb.Addresses = toProtoAddresses(n.Addresses)
+	}
 	if n.Certificate != nil {
 		pb.Certificate = &common.Certificate{
 			Der: append([]byte{}, n.Certificate.Der...),
 		}
 	}
-	pb.Stake = append([]byte{}, n.Stake...)
+	if n.Stake != nil {
+		pb.Stake = append([]byte{}, n.Stake...)
+	}
 
 	return pb
 }
 
 // ToSignable serialized the Node into a signature compatible byte vector.
 func (n *Node) ToSignable() []byte {
-	var b []byte
-	enc := codec.NewEncoderBytes(&b, signature.CBORHandle)
-	if err := enc.Encode(n); err != nil {
-		panic(err)
-	}
+	return n.MarshalCBOR()
+}
 
-	return b
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (n *Node) MarshalCBOR() []byte {
+	return cbor.Marshal(n)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (n *Node) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, n)
 }
 
 func parseProtoAddress(pb *common.Address) (net.Addr, error) {

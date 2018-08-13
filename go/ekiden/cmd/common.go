@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/spf13/viper"
+
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/service"
 	// TODO(willscott): wire in node for connectivity
 	_ "github.com/oasislabs/ekiden/go/common/node"
-	"github.com/spf13/viper"
 )
 
 func initCommon() {
@@ -125,44 +127,13 @@ func normalizePath(f string) string {
 	return f
 }
 
-type cleanupAble interface {
-	// Cleanup performs the service specific post-termination cleanup.
-	Cleanup()
-}
-
-type backgroundService interface {
-	// Stop halts the service.
-	Stop()
-
-	// Quit returns a channel that will be closed when the service terminates.
-	Quit() <-chan struct{}
-
-	cleanupAble
-}
-
-type cleanupOnlyService struct {
-	svc cleanupAble
-}
-
-func (s *cleanupOnlyService) Stop() {
-	// Nothing to stop.
-}
-
-func (s *cleanupOnlyService) Quit() <-chan struct{} {
-	panic("BUG: cleanupOnlyService does not implement Quit()")
-}
-
-func (s *cleanupOnlyService) Cleanup() {
-	s.svc.Cleanup()
-}
-
 type backgroundServiceManager struct {
-	services []backgroundService
-	termCh   chan backgroundService
-	termSvc  backgroundService
+	services []service.BackgroundService
+	termCh   chan service.BackgroundService
+	termSvc  service.BackgroundService
 }
 
-func (m *backgroundServiceManager) Register(srv backgroundService) {
+func (m *backgroundServiceManager) Register(srv service.BackgroundService) {
 	m.services = append(m.services, srv)
 	go func() {
 		<-srv.Quit()
@@ -173,9 +144,8 @@ func (m *backgroundServiceManager) Register(srv backgroundService) {
 	}()
 }
 
-func (m *backgroundServiceManager) RegisterCleanupOnly(svc cleanupAble) {
-	s := &cleanupOnlyService{svc: svc}
-	m.services = append(m.services, s)
+func (m *backgroundServiceManager) RegisterCleanupOnly(svc service.CleanupAble) {
+	m.services = append(m.services, service.NewCleanupOnlyService(svc))
 }
 
 func (m *backgroundServiceManager) Wait() {
@@ -208,6 +178,6 @@ func (m *backgroundServiceManager) Cleanup() {
 
 func newBackgroundServiceManager() *backgroundServiceManager {
 	return &backgroundServiceManager{
-		termCh: make(chan backgroundService),
+		termCh: make(chan service.BackgroundService),
 	}
 }

@@ -128,10 +128,15 @@ func (r *MemoryEntityRegistry) DeregisterEntity(id signature.PublicKey, sig *sig
 }
 
 // GetEntity gets an entity by ID.
-func (r *MemoryEntityRegistry) GetEntity(id signature.PublicKey) *entity.Entity {
+func (r *MemoryEntityRegistry) GetEntity(id signature.PublicKey) (*entity.Entity, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
-	return r.state.entities[id.ToMapKey()]
+	ent := r.state.entities[id.ToMapKey()]
+	if ent == nil {
+		return nil, ErrNoSuchEntity
+	}
+
+	return ent, nil
 }
 
 // GetEntities gets a list of all registered entities.
@@ -194,10 +199,15 @@ func (r *MemoryEntityRegistry) RegisterNode(node *node.Node, sig *signature.Sign
 }
 
 // GetNode gets a node by ID.
-func (r *MemoryEntityRegistry) GetNode(id signature.PublicKey) *node.Node {
+func (r *MemoryEntityRegistry) GetNode(id signature.PublicKey) (*node.Node, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
-	return r.state.nodes[id.ToMapKey()]
+	node := r.state.nodes[id.ToMapKey()]
+	if node == nil {
+		return nil, ErrNoSuchNode
+	}
+
+	return node, nil
 }
 
 // GetNodes gets a list of all registered nodes.
@@ -355,10 +365,15 @@ func (r *MemoryContractRegistry) RegisterContract(con *contract.Contract, sig *s
 }
 
 // GetContract gets a contract by ID.
-func (r *MemoryContractRegistry) GetContract(id signature.PublicKey) *contract.Contract {
+func (r *MemoryContractRegistry) GetContract(id signature.PublicKey) (*contract.Contract, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
-	return r.state.contracts[id.ToMapKey()]
+	con := r.state.contracts[id.ToMapKey()]
+	if con == nil {
+		return nil, ErrNoSuchContract
+	}
+
+	return con, nil
 }
 
 // WatchContracts returns a stream of Contract.  Upon subscription, all

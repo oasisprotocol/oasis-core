@@ -38,6 +38,15 @@ var (
 	// ErrBadEntityForNode is the error returned when a node registration
 	// with an unknown entity is attempted.
 	ErrBadEntityForNode = errors.New("registry: unknown entity in node registration")
+
+	// ErrNoSuchEntity is the error returned when an entity does not exist.
+	ErrNoSuchEntity = errors.New("registry: no such entity")
+
+	// ErrNoSuchNode is the error returned when an node does not exist.
+	ErrNoSuchNode = errors.New("registry: no such node")
+
+	// ErrNoSuchContract is the error returned when an contract does not exist.
+	ErrNoSuchContract = errors.New("registry: no such contract")
 )
 
 // EntityRegistry is a entity registry implementation.
@@ -53,7 +62,7 @@ type EntityRegistry interface {
 	DeregisterEntity(signature.PublicKey, *signature.Signature) error
 
 	// GetEntity gets an entity by ID.
-	GetEntity(signature.PublicKey) *entity.Entity
+	GetEntity(signature.PublicKey) (*entity.Entity, error)
 
 	// GetEntities gets a list of all registered entities.
 	GetEntities() []*entity.Entity
@@ -68,7 +77,7 @@ type EntityRegistry interface {
 	RegisterNode(*node.Node, *signature.Signature) error
 
 	// GetNode gets a node by ID.
-	GetNode(signature.PublicKey) *node.Node
+	GetNode(signature.PublicKey) (*node.Node, error)
 
 	// GetNodes gets a list of all registered nodes.
 	GetNodes() []*node.Node
@@ -115,7 +124,7 @@ type ContractRegistry interface {
 	RegisterContract(*contract.Contract, *signature.Signature) error
 
 	// GetContract gets a contract by ID.
-	GetContract(signature.PublicKey) *contract.Contract
+	GetContract(signature.PublicKey) (*contract.Contract, error)
 
 	// WatchContracts returns a stream of Contract.  Upon subscription,
 	// all contracts will be sent immediately.
