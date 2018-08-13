@@ -1,30 +1,35 @@
 package epochtime
 
 import (
+	"errors"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/common"
 	dbgPB "github.com/oasislabs/ekiden/go/grpc/dummydebug"
 )
 
 var (
-	_ pb.TimeSourceServer    = (*TimeSourceServer)(nil)
-	_ dbgPB.DummyDebugServer = (*TimeSourceServer)(nil)
+	errIncompatibleBackend = errors.New("epochtime/grpc: incompatible backend for call")
 
-	serviceLogger = logging.GetLogger("dummy-debug")
+	_ pb.TimeSourceServer    = (*grpcServer)(nil)
+	_ dbgPB.DummyDebugServer = (*grpcServer)(nil)
 )
 
-// TimeSourceServer is a TimeSource exposed over gRPC.
-type TimeSourceServer struct {
-	backend TimeSource
+type grpcServer struct {
+	logger  *logging.Logger
+	backend api.Backend
 }
 
-// GetEpoch implements the corresponding gRPC call.
-func (s *TimeSourceServer) GetEpoch(context.Context, *pb.EpochRequest) (*pb.EpochResponse, error) {
-	epoch, elapsed := s.backend.GetEpoch()
+func (s *grpcServer) GetEpoch(ctx context.Context, req *pb.EpochRequest) (*pb.EpochResponse, error) {
+	epoch, elapsed, err := s.backend.GetEpoch(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	return &pb.EpochResponse{
 		CurrentEpoch: uint64(epoch),
@@ -32,16 +37,22 @@ func (s *TimeSourceServer) GetEpoch(context.Context, *pb.EpochRequest) (*pb.Epoc
 	}, nil
 }
 
-// WatchEpochs implements the corresponding gRPC call.
-func (s *TimeSourceServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource_WatchEpochsServer) error {
-	epochCh, sub := s.backend.WatchEpochs()
+func (s *grpcServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource_WatchEpochsServer) error {
+	ch, sub := s.backend.WatchEpochs()
 	defer sub.Close()
 
 	for {
-		epoch, ok := <-epochCh
+		var epoch api.EpochTime
+		var ok bool
+
+		select {
+		case epoch, ok = <-ch:
+		case <-stream.Context().Done():
+		}
 		if !ok {
 			break
 		}
+
 		resp := &pb.WatchEpochResponse{
 			CurrentEpoch: uint64(epoch),
 		}
@@ -53,26 +64,34 @@ func (s *TimeSourceServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.Time
 	return nil
 }
 
-// SetEpoch implements the corresponding gRPC call.
-func (s *TimeSourceServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
-	epoch := EpochTime(req.GetEpoch())
-	serviceLogger.Debug("set epoch",
+func (s *grpcServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
+	epoch := api.EpochTime(req.GetEpoch())
+	s.logger.Debug("set epoch",
 		"epoch", epoch,
 	)
 
-	mockTS := s.backend.(*MockTimeSource)
-	mockTS.SetEpoch(epoch, 0)
+	mockTS, ok := s.backend.(api.SetableBackend)
+	if !ok {
+		return nil, errIncompatibleBackend
+	}
+
+	err := mockTS.SetEpoch(ctx, epoch, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	return &dbgPB.SetEpochResponse{}, nil
 }
 
-// NewTimeSourceServer initializes and registers a new TimeSourceServer.
-func NewTimeSourceServer(srv *grpc.Server, timeSource TimeSource) {
-	s := &TimeSourceServer{
-		backend: timeSource,
+// NewGRPCServer initializes and registers a gRPC epochtime server
+// backed by the provided Backend.
+func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
+	s := &grpcServer{
+		logger:  logging.GetLogger("epochtime/grpc"),
+		backend: backend,
 	}
 	pb.RegisterTimeSourceServer(srv, s)
-	if _, ok := s.backend.(*MockTimeSource); ok {
+	if _, ok := s.backend.(api.SetableBackend); ok {
 		dbgPB.RegisterDummyDebugServer(srv, s)
 	}
 }

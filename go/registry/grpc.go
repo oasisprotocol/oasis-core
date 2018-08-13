@@ -9,12 +9,16 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/registry/api"
 
 	commonPB "github.com/oasislabs/ekiden/go/grpc/common"
 	pb "github.com/oasislabs/ekiden/go/grpc/registry"
 )
 
-var _ pb.EntityRegistryServer = (*EntityRegistryServer)(nil)
+var (
+	_ pb.EntityRegistryServer   = (*grpcServer)(nil)
+	_ pb.ContractRegistryServer = (*grpcServer)(nil)
+)
 
 var registryFailures = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -48,13 +52,11 @@ var registeryCollectors = []prometheus.Collector{
 	registryContracts,
 }
 
-// EntityRegistryServer is an EntityRegistry exposed over gRPC.
-type EntityRegistryServer struct {
-	backend EntityRegistry
+type grpcServer struct {
+	backend api.Backend
 }
 
-// RegisterEntity implements the corresponding gRPC call.
-func (s *EntityRegistryServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
+func (s *grpcServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	var ent entity.Entity
 	if err := ent.FromProto(req.GetEntity()); err != nil {
 		return nil, err
@@ -64,7 +66,7 @@ func (s *EntityRegistryServer) RegisterEntity(ctx context.Context, req *pb.Regis
 		return nil, err
 	}
 
-	if err := s.backend.RegisterEntity(&ent, &sig); err != nil {
+	if err := s.backend.RegisterEntity(ctx, &ent, &sig); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerEntity"}).Inc()
 		return nil, err
 	}
@@ -73,8 +75,7 @@ func (s *EntityRegistryServer) RegisterEntity(ctx context.Context, req *pb.Regis
 	return &pb.RegisterResponse{}, nil
 }
 
-// DeregisterEntity implements the corresponding gRPC call.
-func (s *EntityRegistryServer) DeregisterEntity(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
+func (s *grpcServer) DeregisterEntity(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetId()); err != nil {
 		return nil, err
@@ -84,7 +85,7 @@ func (s *EntityRegistryServer) DeregisterEntity(ctx context.Context, req *pb.Der
 		return nil, err
 	}
 
-	if err := s.backend.DeregisterEntity(id, &sig); err != nil {
+	if err := s.backend.DeregisterEntity(ctx, id, &sig); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "deregisterEntity"}).Inc()
 		return nil, err
 	}
@@ -93,25 +94,27 @@ func (s *EntityRegistryServer) DeregisterEntity(ctx context.Context, req *pb.Der
 	return &pb.DeregisterResponse{}, nil
 }
 
-// GetEntity implements the corresponding gRPC call.
-func (s *EntityRegistryServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.EntityResponse, error) {
+func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.EntityResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetId()); err != nil {
 		return nil, err
 	}
 
+	ent, err := s.backend.GetEntity(ctx, id)
+	if err == nil {
+		return nil, err
+	}
+
 	var resp pb.EntityResponse
-	ent, err := s.backend.GetEntity(id)
-	if err == nil && ent != nil {
+	if ent != nil {
 		resp.Entity = ent.ToProto()
 	}
 
-	return &resp, err
+	return &resp, nil
 }
 
-// GetEntities implements the corresponding gRPC call.
-func (s *EntityRegistryServer) GetEntities(ctx context.Context, req *pb.EntitiesRequest) (*pb.EntitiesResponse, error) {
-	ents := s.backend.GetEntities()
+func (s *grpcServer) GetEntities(ctx context.Context, req *pb.EntitiesRequest) (*pb.EntitiesResponse, error) {
+	ents := s.backend.GetEntities(ctx)
 
 	pbEnts := make([]*commonPB.Entity, 0, len(ents))
 	for _, v := range ents {
@@ -121,16 +124,22 @@ func (s *EntityRegistryServer) GetEntities(ctx context.Context, req *pb.Entities
 	return &pb.EntitiesResponse{Entity: pbEnts}, nil
 }
 
-// WatchEntities implements the corresponding gRPC call.
-func (s *EntityRegistryServer) WatchEntities(req *pb.WatchEntityRequest, stream pb.EntityRegistry_WatchEntitiesServer) error {
-	evCh, sub := s.backend.WatchEntities()
+func (s *grpcServer) WatchEntities(req *pb.WatchEntityRequest, stream pb.EntityRegistry_WatchEntitiesServer) error {
+	ch, sub := s.backend.WatchEntities()
 	defer sub.Close()
 
 	for {
-		ev, ok := <-evCh
+		var ev *api.EntityEvent
+		var ok bool
+
+		select {
+		case ev, ok = <-ch:
+		case <-stream.Context().Done():
+		}
 		if !ok {
 			break
 		}
+
 		resp := &pb.WatchEntityResponse{
 			EventType: pb.WatchEntityResponse_REGISTERED,
 			Entity:    ev.Entity.ToProto(),
@@ -146,8 +155,7 @@ func (s *EntityRegistryServer) WatchEntities(req *pb.WatchEntityRequest, stream 
 	return nil
 }
 
-// RegisterNode implements the corresponding gRPC call.
-func (s *EntityRegistryServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
+func (s *grpcServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
 	var node node.Node
 	if err := node.FromProto(req.GetNode()); err != nil {
 		return nil, err
@@ -157,7 +165,7 @@ func (s *EntityRegistryServer) RegisterNode(ctx context.Context, req *pb.Registe
 		return nil, err
 	}
 
-	if err := s.backend.RegisterNode(&node, &sig); err != nil {
+	if err := s.backend.RegisterNode(ctx, &node, &sig); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerNode"}).Inc()
 		return nil, err
 	}
@@ -166,25 +174,27 @@ func (s *EntityRegistryServer) RegisterNode(ctx context.Context, req *pb.Registe
 	return &pb.RegisterNodeResponse{}, nil
 }
 
-// GetNode implements the corresponding gRPC call.
-func (s *EntityRegistryServer) GetNode(ctx context.Context, req *pb.NodeRequest) (*pb.NodeResponse, error) {
+func (s *grpcServer) GetNode(ctx context.Context, req *pb.NodeRequest) (*pb.NodeResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetId()); err != nil {
 		return nil, err
 	}
 
+	node, err := s.backend.GetNode(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
 	var resp pb.NodeResponse
-	node, err := s.backend.GetNode(id)
-	if err == nil && node != nil {
+	if node != nil {
 		resp.Node = node.ToProto()
 	}
 
-	return &resp, err
+	return &resp, nil
 }
 
-// GetNodes implements the corresponding gRPC call.
-func (s *EntityRegistryServer) GetNodes(ctx context.Context, req *pb.NodesRequest) (*pb.NodesResponse, error) {
-	nodes := s.backend.GetNodes()
+func (s *grpcServer) GetNodes(ctx context.Context, req *pb.NodesRequest) (*pb.NodesResponse, error) {
+	nodes := s.backend.GetNodes(ctx)
 
 	// XXX: Epoch????  The underlying implementation doesn't take this
 	// argument.
@@ -197,14 +207,13 @@ func (s *EntityRegistryServer) GetNodes(ctx context.Context, req *pb.NodesReques
 	return &pb.NodesResponse{Node: pbNodes}, nil
 }
 
-// GetNodesForEntity implements the corresponding gRPC call.
-func (s *EntityRegistryServer) GetNodesForEntity(ctx context.Context, req *pb.EntityNodesRequest) (*pb.EntityNodesResponse, error) {
+func (s *grpcServer) GetNodesForEntity(ctx context.Context, req *pb.EntityNodesRequest) (*pb.EntityNodesResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetId()); err != nil {
 		return nil, err
 	}
 
-	nodes := s.backend.GetNodesForEntity(id)
+	nodes := s.backend.GetNodesForEntity(ctx, id)
 	pbNodes := make([]*commonPB.Node, 0, len(nodes))
 	for _, v := range nodes {
 		pbNodes = append(pbNodes, v.ToProto())
@@ -213,16 +222,22 @@ func (s *EntityRegistryServer) GetNodesForEntity(ctx context.Context, req *pb.En
 	return &pb.EntityNodesResponse{Node: pbNodes}, nil
 }
 
-// WatchNodes implements the corresponding gRPC call.
-func (s *EntityRegistryServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.EntityRegistry_WatchNodesServer) error {
-	evCh, sub := s.backend.WatchNodes()
+func (s *grpcServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.EntityRegistry_WatchNodesServer) error {
+	ch, sub := s.backend.WatchNodes()
 	defer sub.Close()
 
 	for {
-		ev, ok := <-evCh
+		var ev *api.NodeEvent
+		var ok bool
+
+		select {
+		case ev, ok = <-ch:
+		case <-stream.Context().Done():
+		}
 		if !ok {
 			break
 		}
+
 		resp := &pb.WatchNodeResponse{
 			EventType: pb.WatchNodeResponse_REGISTERED,
 			Node:      ev.Node.ToProto(),
@@ -238,16 +253,22 @@ func (s *EntityRegistryServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.En
 	return nil
 }
 
-// WatchNodeList implements the corresponding gRPC call.
-func (s *EntityRegistryServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.EntityRegistry_WatchNodeListServer) error {
-	nlCh, sub := s.backend.WatchNodeList()
+func (s *grpcServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.EntityRegistry_WatchNodeListServer) error {
+	ch, sub := s.backend.WatchNodeList()
 	defer sub.Close()
 
 	for {
-		nl, ok := <-nlCh
+		var nl *api.NodeList
+		var ok bool
+
+		select {
+		case nl, ok = <-ch:
+		case <-stream.Context().Done():
+		}
 		if !ok {
 			break
 		}
+
 		nodes := make([]*commonPB.Node, 0, len(nl.Nodes))
 		for _, n := range nl.Nodes {
 			nodes = append(nodes, n.ToProto())
@@ -264,24 +285,7 @@ func (s *EntityRegistryServer) WatchNodeList(req *pb.WatchNodeListRequest, strea
 	return nil
 }
 
-// NewEntityRegistryServer initializes and registers a new EntityRegisteryServer
-// backed by the provided EntityRegistry.
-func NewEntityRegistryServer(srv *grpc.Server, reg EntityRegistry) {
-	prometheus.MustRegister(registeryCollectors...)
-
-	s := &EntityRegistryServer{
-		backend: reg,
-	}
-	pb.RegisterEntityRegistryServer(srv, s)
-}
-
-// ContractRegistryServer is a contract registry exposed over gRPC.
-type ContractRegistryServer struct {
-	backend ContractRegistry
-}
-
-// RegisterContract implements the corresponding gRPC call.
-func (s *ContractRegistryServer) RegisterContract(ctx context.Context, req *pb.RegisterContractRequest) (*pb.RegisterContractResponse, error) {
+func (s *grpcServer) RegisterContract(ctx context.Context, req *pb.RegisterContractRequest) (*pb.RegisterContractResponse, error) {
 	var con contract.Contract
 	if err := con.FromProto(req.GetContract()); err != nil {
 		return nil, err
@@ -291,7 +295,7 @@ func (s *ContractRegistryServer) RegisterContract(ctx context.Context, req *pb.R
 		return nil, err
 	}
 
-	if err := s.backend.RegisterContract(&con, &sig); err != nil {
+	if err := s.backend.RegisterContract(ctx, &con, &sig); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerContract"}).Inc()
 		return nil, err
 	}
@@ -300,32 +304,41 @@ func (s *ContractRegistryServer) RegisterContract(ctx context.Context, req *pb.R
 	return &pb.RegisterContractResponse{}, nil
 }
 
-// GetContract implements the corresponding gRPC call.
-func (s *ContractRegistryServer) GetContract(ctx context.Context, req *pb.ContractRequest) (*pb.ContractResponse, error) {
+func (s *grpcServer) GetContract(ctx context.Context, req *pb.ContractRequest) (*pb.ContractResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetId()); err != nil {
 		return nil, err
 	}
 
+	con, err := s.backend.GetContract(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
 	var resp pb.ContractResponse
-	con, err := s.backend.GetContract(id)
-	if err == nil && con != nil {
+	if con != nil {
 		resp.Contract = con.ToProto()
 	}
 
 	return &resp, err
 }
 
-// GetContracts implements the corresponding gRPC call.
-func (s *ContractRegistryServer) GetContracts(req *pb.ContractsRequest, stream pb.ContractRegistry_GetContractsServer) error {
+func (s *grpcServer) GetContracts(req *pb.ContractsRequest, stream pb.ContractRegistry_GetContractsServer) error {
 	ch, sub := s.backend.WatchContracts()
 	defer sub.Close()
 
 	for {
-		con, ok := <-ch
+		var con *contract.Contract
+		var ok bool
+
+		select {
+		case con, ok = <-ch:
+		case <-stream.Context().Done():
+		}
 		if !ok {
 			break
 		}
+
 		resp := &pb.ContractsResponse{
 			Contract: con.ToProto(),
 		}
@@ -336,11 +349,14 @@ func (s *ContractRegistryServer) GetContracts(req *pb.ContractsRequest, stream p
 	return nil
 }
 
-// NewContractRegistryServer initializes and registers a new
-// ContractRegistryServer backed by the provided ContractRegistry.
-func NewContractRegistryServer(srv *grpc.Server, reg ContractRegistry) {
-	s := &ContractRegistryServer{
-		backend: reg,
+// NewGRPCServer initializes and registers a new gRPC registry server
+// backed by the provided Backend.
+func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
+	prometheus.MustRegister(registeryCollectors...)
+
+	s := &grpcServer{
+		backend: backend,
 	}
+	pb.RegisterEntityRegistryServer(srv, s)
 	pb.RegisterContractRegistryServer(srv, s)
 }
