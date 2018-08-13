@@ -5,9 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/grpc/common"
+	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
 var (
@@ -88,8 +89,14 @@ type Contract struct {
 	StorageGroupSize uint64
 }
 
+// Clone returns a copy of itself.
+func (c *Contract) Clone() common.Cloneable {
+	contractCopy := *c
+	return &contractCopy
+}
+
 // FromProto deserializes a protobuf into a Contract.
-func (c *Contract) FromProto(pb *common.Contract) error {
+func (c *Contract) FromProto(pb *pbCommon.Contract) error {
 	if pb == nil {
 		return ErrNilProtobuf
 	}
@@ -115,7 +122,7 @@ func (c *Contract) FromProto(pb *common.Contract) error {
 	c.StorageGroupSize = pb.GetStorageGroupSize()
 
 	switch pb.GetMode() {
-	case common.Contract_Nondeterministic:
+	case pbCommon.Contract_Nondeterministic:
 		c.ModeNonDeterministic = true
 	default:
 		c.ModeNonDeterministic = false
@@ -127,8 +134,8 @@ func (c *Contract) FromProto(pb *common.Contract) error {
 }
 
 // ToProto serializes a Contract into a protobuf.
-func (c *Contract) ToProto() *common.Contract {
-	pb := new(common.Contract)
+func (c *Contract) ToProto() *pbCommon.Contract {
+	pb := new(pbCommon.Contract)
 	var err error
 
 	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
@@ -147,13 +154,13 @@ func (c *Contract) ToProto() *common.Contract {
 
 	switch c.ModeNonDeterministic {
 	case true:
-		pb.Mode = common.Contract_Nondeterministic
+		pb.Mode = pbCommon.Contract_Nondeterministic
 	case false:
-		pb.Mode = common.Contract_Deterministic
+		pb.Mode = pbCommon.Contract_Deterministic
 	}
 
 	if c.FeaturesSGX {
-		pb.Features = append([]common.Contract_Features{}, common.Contract_SGX)
+		pb.Features = append([]pbCommon.Contract_Features{}, pbCommon.Contract_SGX)
 	}
 
 	return pb
@@ -174,9 +181,9 @@ func (c *Contract) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, c)
 }
 
-func pbWantsSGX(pb *common.Contract) bool {
+func pbWantsSGX(pb *pbCommon.Contract) bool {
 	for _, f := range pb.GetFeatures() {
-		if f == common.Contract_SGX {
+		if f == pbCommon.Contract_SGX {
 			return true
 		}
 	}

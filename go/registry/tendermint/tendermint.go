@@ -4,6 +4,7 @@ package tendermint
 import (
 	"encoding/hex"
 
+	"github.com/eapache/channels"
 	"github.com/pkg/errors"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -84,9 +85,18 @@ func (r *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKe
 	return &ent, nil
 }
 
-func (r *tendermintBackend) GetEntities(ctx context.Context) []*entity.Entity {
-	// TODO: Need support for range queries on previous versions of the tree.
-	return nil
+func (r *tendermintBackend) GetEntities(ctx context.Context) ([]*entity.Entity, error) {
+	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetEntities, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: get entities query failed")
+	}
+
+	var ents []*entity.Entity
+	if err := cbor.Unmarshal(response, &ents); err != nil {
+		return nil, errors.Wrap(err, "registry: get entities malformed response")
+	}
+
+	return ents, nil
 }
 
 func (r *tendermintBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.Subscription) {
@@ -130,9 +140,18 @@ func (r *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey)
 	return &node, nil
 }
 
-func (r *tendermintBackend) GetNodes(ctx context.Context) []*node.Node {
-	// TODO: Need support for range queries on previous versions of the tree.
-	return nil
+func (r *tendermintBackend) GetNodes(ctx context.Context) ([]*node.Node, error) {
+	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetNodes, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: get nodes query failed")
+	}
+
+	var nodes []*node.Node
+	if err := cbor.Unmarshal(response, &nodes); err != nil {
+		return nil, errors.Wrap(err, "registry: get nodes malformed response")
+	}
+
+	return nodes, nil
 }
 
 func (r *tendermintBackend) GetNodesForEntity(ctx context.Context, id signature.PublicKey) []*node.Node {
@@ -192,6 +211,20 @@ func (r *tendermintBackend) WatchContracts() (<-chan *contract.Contract, *pubsub
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
+}
+
+func (r *tendermintBackend) getContracts(ctx context.Context) ([]*contract.Contract, error) {
+	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetContracts, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: get contracts query failed")
+	}
+
+	var contracts []*contract.Contract
+	if err := cbor.Unmarshal(response, &contracts); err != nil {
+		return nil, errors.Wrap(err, "registry: get contracts malformed response")
+	}
+
+	return contracts, nil
 }
 
 func (r *tendermintBackend) worker() {
@@ -259,14 +292,25 @@ func (r *tendermintBackend) worker() {
 // New constructs a new tendermint backed registry Backend instance.
 func New(service service.TendermintService) api.Backend {
 	r := &tendermintBackend{
-		logger:           logging.GetLogger("registry/tendermint"),
-		client:           service.GetClient(),
-		entityNotifier:   pubsub.NewBroker(false),
-		nodeNotifier:     pubsub.NewBroker(false),
-		contractNotifier: pubsub.NewBroker(false),
+		logger:         logging.GetLogger("registry/tendermint"),
+		client:         service.GetClient(),
+		entityNotifier: pubsub.NewBroker(false),
+		nodeNotifier:   pubsub.NewBroker(false),
 	}
+	r.contractNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		wr := ch.In()
+		contracts, err := r.getContracts(context.Background())
+		if err != nil {
+			r.logger.Error("contract notifier: unable to get a list of contracts",
+				"err", err,
+			)
+			return
+		}
 
-	// TODO: Make the contractNotifier fetch all contracts once we have GetContracts.
+		for _, v := range contracts {
+			wr <- v
+		}
+	})
 
 	go r.worker()
 

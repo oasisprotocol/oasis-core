@@ -85,9 +85,6 @@ type Application interface {
 	//
 	// Implementations MUST restrict their state operations to versioned
 	// Get operations with versions <= BlockHeight.
-	//
-	// FIXME: https://github.com/tendermint/iavl/issues/68 hints at
-	// the possiblity of unbound memory growth (DoS hazzard).
 	Query(types.RequestQuery) types.ResponseQuery
 
 	// CheckTx validates a transaction via the mempool.
@@ -312,7 +309,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	tmp := bytes.NewBuffer(nil)
 	types.WriteMessage(&req, tmp)
 	genesisDigest := sha512.Sum512_256(tmp.Bytes())
-	mux.state.verTree.Set([]byte(stateKeyGenesisDigest), genesisDigest[:])
+	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisDigest), genesisDigest[:])
 
 	resp := mux.BaseApplication.InitChain(req)
 	for _, app := range mux.appsByRegOrder {
@@ -321,8 +318,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 			resp = newResp
 		}
 	}
-
-	mux.state.checkTxTree = mux.state.verTree.Tree()
 
 	return resp
 }
@@ -515,9 +510,9 @@ func (a *LogAdapter) With(keyvals ...interface{}) tmlog.Logger {
 // ApplicationState is the overall past, present and future state
 // of all multiplexed applications.
 type ApplicationState struct {
-	db          dbm.DB
-	verTree     *iavl.VersionedTree
-	checkTxTree *iavl.Tree
+	db            dbm.DB
+	deliverTxTree *iavl.MutableTree
+	checkTxTree   *iavl.MutableTree
 
 	blockHash   []byte
 	blockHeight int64
@@ -533,25 +528,38 @@ func (s *ApplicationState) BlockHash() []byte {
 	return append([]byte{}, s.blockHash...)
 }
 
-// VersionedTree returns the versioned tree to be used by queries
+// DeliverTxTree returns the versioned tree to be used by queries
 // to view comitted data, and transactions to build the next version.
-func (s *ApplicationState) VersionedTree() *iavl.VersionedTree {
-	return s.verTree
+func (s *ApplicationState) DeliverTxTree() *iavl.MutableTree {
+	return s.deliverTxTree
 }
 
 // CheckTxTree returns the state tree to be used for modifications
 // inside CheckTx (mempool connection) calls.
-func (s *ApplicationState) CheckTxTree() *iavl.Tree {
+//
+// This state is never persisted.
+func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 	return s.checkTxTree
 }
 
 func (s *ApplicationState) doCommit() error {
 	// Save the new version of the persistent tree.
-	blockHash, blockHeight, err := s.verTree.SaveVersion()
+	blockHash, blockHeight, err := s.deliverTxTree.SaveVersion()
 	if err == nil {
 		s.blockHash = blockHash
 		s.blockHeight = blockHeight
-		s.checkTxTree = s.verTree.Tree()
+
+		// Reset CheckTx state to latest version. This is safe because Tendermint
+		// holds a lock on the mempool for commit.
+		s.checkTxTree.Rollback()
+		loadedVersion, cerr := s.checkTxTree.LoadVersion(blockHeight)
+		if cerr != nil {
+			panic(cerr)
+		}
+
+		if blockHeight != loadedVersion {
+			panic("state: inconsistent trees")
+		}
 	}
 
 	return err
@@ -572,20 +580,32 @@ func newApplicationState(dataDir string) (*ApplicationState, error) {
 
 	// Figure out the latest version/hash if any, and use that
 	// as the block height/hash.
-	verTree := iavl.NewVersionedTree(db, 128)
-	blockHeight, err := verTree.Load()
+	deliverTxTree := iavl.NewMutableTree(db, 128)
+	blockHeight, err := deliverTxTree.Load()
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	blockHash := verTree.Hash()
+	blockHash := deliverTxTree.Hash()
+
+	checkTxTree := iavl.NewMutableTree(db, 128)
+	checkTxBlockHeight, err := checkTxTree.Load()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	if blockHeight != checkTxBlockHeight || !bytes.Equal(blockHash, checkTxTree.Hash()) {
+		db.Close()
+		return nil, fmt.Errorf("state: inconsistent trees")
+	}
 
 	return &ApplicationState{
-		db:          db,
-		verTree:     verTree,
-		checkTxTree: verTree.Tree(),
-		blockHash:   blockHash,
-		blockHeight: blockHeight,
+		db:            db,
+		deliverTxTree: deliverTxTree,
+		checkTxTree:   checkTxTree,
+		blockHash:     blockHash,
+		blockHeight:   blockHeight,
 	}, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -102,21 +103,35 @@ func (app *RegistryApplication) SetOption(request types.RequestSetOption) types.
 //
 // FIXME: https://github.com/tendermint/iavl/issues/68 hints at
 // the possiblity of unbound memory growth (DoS hazzard).
-func (app *RegistryApplication) Query(query types.RequestQuery) types.ResponseQuery {
+func (app *RegistryApplication) Query(query types.RequestQuery) types.ResponseQuery { // nolint: gocyclo
+	// Get state snapshot based on specified version.
 	version := query.GetHeight()
 	if version <= 0 || version > app.state.BlockHeight() {
 		version = app.state.BlockHeight()
 	}
 
+	snapshot, err := app.state.DeliverTxTree().GetImmutable(version)
+	if err != nil {
+		return types.ResponseQuery{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
+		}
+	}
+
 	var response []byte
-	var err error
 	switch query.GetPath() {
 	case api.QueryRegistryGetEntity:
-		response, err = app.queryGetByID(stateEntityMap, query.GetData(), version)
+		response, err = app.queryGetByID(stateEntityMap, query.GetData(), snapshot)
+	case api.QueryRegistryGetEntities:
+		response, err = app.queryGetAll(stateEntityMap, snapshot, &entity.Entity{})
 	case api.QueryRegistryGetNode:
-		response, err = app.queryGetByID(stateNodeMap, query.GetData(), version)
+		response, err = app.queryGetByID(stateNodeMap, query.GetData(), snapshot)
+	case api.QueryRegistryGetNodes:
+		response, err = app.queryGetAll(stateNodeMap, snapshot, &node.Node{})
 	case api.QueryRegistryGetContract:
-		response, err = app.queryGetByID(stateContractMap, query.GetData(), version)
+		response, err = app.queryGetByID(stateContractMap, query.GetData(), snapshot)
+	case api.QueryRegistryGetContracts:
+		response, err = app.queryGetAll(stateContractMap, snapshot, &contract.Contract{})
 	default:
 		return types.ResponseQuery{
 			Code: api.CodeInvalidQuery.ToInt(),
@@ -180,7 +195,7 @@ func (app *RegistryApplication) DeliverTx(tx []byte) (*abci.TxOutput, error) {
 		return nil, errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	return app.executeTx(app.state.VersionedTree().Tree(), request, false)
+	return app.executeTx(app.state.DeliverTxTree(), request, false)
 }
 
 // EndBlock signals the end of a block, returning changes to the
@@ -190,23 +205,47 @@ func (app *RegistryApplication) EndBlock(request types.RequestEndBlock) types.Re
 }
 
 // Perform GetById query.
-func (app *RegistryApplication) queryGetByID(stateKey string, data []byte, version int64) ([]byte, error) {
+func (app *RegistryApplication) queryGetByID(stateKey string, data []byte, snapshot *iavl.ImmutableTree) ([]byte, error) {
 	request := &api.QueryGetByIDRequest{}
 	if err := cbor.Unmarshal(data, request); err != nil {
 		return nil, registry.ErrInvalidArgument
 	}
 
-	_, value := app.state.VersionedTree().GetVersioned(
+	_, value := snapshot.Get(
 		[]byte(fmt.Sprintf(stateKey, request.ID.String())),
-		version,
 	)
+
+	return value, nil
+}
+
+// Perform GetAll query.
+func (app *RegistryApplication) queryGetAll(
+	stateKey string,
+	snapshot *iavl.ImmutableTree,
+	item common.Cloneable,
+) ([]byte, error) {
+	var items []interface{}
+	snapshot.IterateRangeInclusive(
+		[]byte(fmt.Sprintf(stateKey, "")),
+		[]byte(fmt.Sprintf(stateKey, lastID)),
+		true,
+		func(key, value []byte, version int64) bool {
+			itemCopy := item.Clone()
+			cbor.MustUnmarshal(value, &itemCopy)
+
+			items = append(items, itemCopy)
+			return false
+		},
+	)
+
+	value := cbor.Marshal(items)
 
 	return value, nil
 }
 
 // Execute transaction against given state.
 func (app *RegistryApplication) executeTx(
-	state *iavl.Tree,
+	state *iavl.MutableTree,
 	tx *api.TxRegistry,
 	checkOnly bool,
 ) (*abci.TxOutput, error) {
@@ -225,7 +264,7 @@ func (app *RegistryApplication) executeTx(
 
 // Perform actual entity registration.
 func (app *RegistryApplication) registerEntity(
-	state *iavl.Tree,
+	state *iavl.MutableTree,
 	checkOnly bool,
 	ent *entity.Entity,
 	sig *signature.Signature,
@@ -269,7 +308,7 @@ func (app *RegistryApplication) registerEntity(
 
 // Perform actual entity deregistration.
 func (app *RegistryApplication) deregisterEntity(
-	state *iavl.Tree,
+	state *iavl.MutableTree,
 	checkOnly bool,
 	id signature.PublicKey,
 	sig *signature.Signature,
@@ -337,7 +376,7 @@ func (app *RegistryApplication) deregisterEntity(
 
 // Perform actual node registration.
 func (app *RegistryApplication) registerNode(
-	state *iavl.Tree,
+	state *iavl.MutableTree,
 	checkOnly bool,
 	node *node.Node,
 	sig *signature.Signature,
@@ -396,7 +435,7 @@ func (app *RegistryApplication) registerNode(
 
 // Perform actual contract registration.
 func (app *RegistryApplication) registerContract(
-	state *iavl.Tree,
+	state *iavl.MutableTree,
 	checkOnly bool,
 	con *contract.Contract,
 	sig *signature.Signature,
