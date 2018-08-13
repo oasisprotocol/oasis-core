@@ -1,8 +1,10 @@
-// Package registry implements the runtime and entity registries.
-package registry
+// Package api implements the runtime and entity registry APIs.
+package api
 
 import (
 	"errors"
+
+	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -49,23 +51,23 @@ var (
 	ErrNoSuchContract = errors.New("registry: no such contract")
 )
 
-// EntityRegistry is a entity registry implementation.
-type EntityRegistry interface {
+// Backend is a registry implementation.
+type Backend interface {
 	// RegisterEntity registers and or updates an entity with the registry.
 	//
 	// The signature should be made using RegisterEntitySignatureContext.
-	RegisterEntity(*entity.Entity, *signature.Signature) error
+	RegisterEntity(context.Context, *entity.Entity, *signature.Signature) error
 
 	// DeregisterEntity deregisters an entity.
 	//
 	// The signature should be made using DeregisterEntitySignatureContext.
-	DeregisterEntity(signature.PublicKey, *signature.Signature) error
+	DeregisterEntity(context.Context, signature.PublicKey, *signature.Signature) error
 
 	// GetEntity gets an entity by ID.
-	GetEntity(signature.PublicKey) (*entity.Entity, error)
+	GetEntity(context.Context, signature.PublicKey) (*entity.Entity, error)
 
 	// GetEntities gets a list of all registered entities.
-	GetEntities() []*entity.Entity
+	GetEntities(context.Context) []*entity.Entity
 
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
@@ -74,16 +76,16 @@ type EntityRegistry interface {
 	// RegisterNode registers and or updates a node with the registry.
 	//
 	// The signature should be made using RegisterNodeSignatureContext.
-	RegisterNode(*node.Node, *signature.Signature) error
+	RegisterNode(context.Context, *node.Node, *signature.Signature) error
 
 	// GetNode gets a node by ID.
-	GetNode(signature.PublicKey) (*node.Node, error)
+	GetNode(context.Context, signature.PublicKey) (*node.Node, error)
 
 	// GetNodes gets a list of all registered nodes.
-	GetNodes() []*node.Node
+	GetNodes(context.Context) []*node.Node
 
 	// GetNodesForEntity gets a list of nodes registered to an entity ID.
-	GetNodesForEntity(signature.PublicKey) []*node.Node
+	GetNodesForEntity(context.Context, signature.PublicKey) []*node.Node
 
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
@@ -96,6 +98,16 @@ type EntityRegistry interface {
 	// Each node list will be sorted by node ID in lexographically ascending
 	// order.
 	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
+
+	// RegisterContract registers a contract.
+	RegisterContract(context.Context, *contract.Contract, *signature.Signature) error
+
+	// GetContract gets a contract by ID.
+	GetContract(context.Context, signature.PublicKey) (*contract.Contract, error)
+
+	// WatchContracts returns a stream of Contract.  Upon subscription,
+	// all contracts will be sent immediately.
+	WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -116,49 +128,4 @@ type NodeEvent struct {
 type NodeList struct {
 	Epoch epochtime.EpochTime
 	Nodes []*node.Node
-}
-
-// ContractRegistry is a contract (runtime) registry implementation.
-type ContractRegistry interface {
-	// RegisterContract registers a contract.
-	RegisterContract(*contract.Contract, *signature.Signature) error
-
-	// GetContract gets a contract by ID.
-	GetContract(signature.PublicKey) (*contract.Contract, error)
-
-	// WatchContracts returns a stream of Contract.  Upon subscription,
-	// all contracts will be sent immediately.
-	WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription)
-}
-
-func subscribeTypedEntityEvent(notifier *pubsub.Broker) (<-chan *EntityEvent, *pubsub.Subscription) {
-	typedCh := make(chan *EntityEvent)
-	sub := notifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
-}
-
-func subscribeTypedNodeEvent(notifier *pubsub.Broker) (<-chan *NodeEvent, *pubsub.Subscription) {
-	typedCh := make(chan *NodeEvent)
-	sub := notifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
-}
-
-func subscribeTypedNodeList(notifier *pubsub.Broker) (<-chan *NodeList, *pubsub.Subscription) {
-	typedCh := make(chan *NodeList)
-	sub := notifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
-}
-
-func subscribeTypedContract(notifier *pubsub.Broker) (<-chan *contract.Contract, *pubsub.Subscription) {
-	typedCh := make(chan *contract.Contract)
-	sub := notifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
 }

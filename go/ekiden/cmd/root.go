@@ -160,9 +160,11 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
-	contractRegistry := registry.NewMemoryContractRegistry()
-	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
-	sched, err := scheduler.New(cmd, timeSource, contractRegistry, entityRegistry, randomBeacon)
+	reg, err := registry.New(cmd, timeSource, env.svcTmnt)
+	if err != nil {
+		return err
+	}
+	sched, err := scheduler.New(cmd, timeSource, reg, randomBeacon)
 	if err != nil {
 		return err
 	}
@@ -175,8 +177,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	// Initialize and register the gRPC services.
 	epochtime.NewGRPCServer(env.grpcSrv.s, timeSource)
 	beacon.NewGRPCServer(env.grpcSrv.s, randomBeacon)
-	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
-	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
+	registry.NewGRPCServer(env.grpcSrv.s, reg)
 	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
 	storage.NewGRPCServer(env.grpcSrv.s, store)
 
@@ -221,6 +222,7 @@ func init() {
 	for _, v := range []func(*cobra.Command){
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
+		registry.RegisterFlags,
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermintEntry.AddNodeFlags,
