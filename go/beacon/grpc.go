@@ -4,21 +4,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/beacon/api"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/beacon"
 )
 
-var _ pb.BeaconServer = (*RandomBeaconServer)(nil)
+var _ pb.BeaconServer = (*grpcServer)(nil)
 
-// RandomBeaconServer is a RandomBeacon exposed over gRPC.
-type RandomBeaconServer struct {
-	backend RandomBeacon
+type grpcServer struct {
+	backend api.Backend
 }
 
-// GetBeacon implements the corresponding gRPC call.
-func (s *RandomBeaconServer) GetBeacon(ctx context.Context, req *pb.BeaconRequest) (*pb.BeaconResponse, error) {
-	b, err := s.backend.GetBeacon(epochtime.EpochTime(req.GetEpoch()))
+func (s *grpcServer) GetBeacon(ctx context.Context, req *pb.BeaconRequest) (*pb.BeaconResponse, error) {
+	b, err := s.backend.GetBeacon(ctx, epochtime.EpochTime(req.GetEpoch()))
 	if err != nil {
 		return nil, err
 	}
@@ -26,13 +25,18 @@ func (s *RandomBeaconServer) GetBeacon(ctx context.Context, req *pb.BeaconReques
 	return &pb.BeaconResponse{Beacon: b}, nil
 }
 
-// WatchBeacons implements the corresponding gRPC call.
-func (s *RandomBeaconServer) WatchBeacons(req *pb.WatchBeaconRequest, stream pb.Beacon_WatchBeaconsServer) error {
-	evCh, sub := s.backend.WatchBeacons()
+func (s *grpcServer) WatchBeacons(req *pb.WatchBeaconRequest, stream pb.Beacon_WatchBeaconsServer) error {
+	ch, sub := s.backend.WatchBeacons()
 	defer sub.Close()
 
 	for {
-		ev, ok := <-evCh
+		var ev *api.GenerateEvent
+		var ok bool
+
+		select {
+		case ev, ok = <-ch:
+		case <-stream.Context().Done():
+		}
 		if !ok {
 			break
 		}
@@ -48,10 +52,10 @@ func (s *RandomBeaconServer) WatchBeacons(req *pb.WatchBeaconRequest, stream pb.
 	return nil
 }
 
-// NewRandomBeaconServer initializes and registers a new RandomBeaconServer
-// backed by the provided RandomBeacon.
-func NewRandomBeaconServer(srv *grpc.Server, r RandomBeacon) {
-	s := &RandomBeaconServer{
+// NewGRPCServer initializes and registers a gRPC random beacon server
+// backed by the provided Backend.
+func NewGRPCServer(srv *grpc.Server, r api.Backend) {
+	s := &grpcServer{
 		backend: r,
 	}
 	pb.RegisterBeaconServer(srv, s)

@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/oasislabs/ekiden/go/beacon"
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
@@ -188,7 +188,7 @@ func (s *TrivialScheduler) WatchCommittees() (<-chan *Committee, *pubsub.Subscri
 	return subscribeTypedCommittee(s.notifier)
 }
 
-func (s *TrivialScheduler) worker(timeSource epochtime.Backend, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) { //nolint:gocyclo
+func (s *TrivialScheduler) worker(timeSource epochtime.Backend, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.Backend) { //nolint:gocyclo
 	timeCh, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 
@@ -292,7 +292,7 @@ func (s *TrivialScheduler) worker(timeSource epochtime.Backend, conReg registry.
 }
 
 // NewTrivialScheduler returns a new TrivialScheduler instance.
-func NewTrivialScheduler(timeSource epochtime.Backend, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) *TrivialScheduler {
+func NewTrivialScheduler(timeSource epochtime.Backend, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.Backend) *TrivialScheduler {
 	s := &TrivialScheduler{
 		logger: logging.GetLogger("TrivialScheudler"),
 		state: &trivialSchedulerState{
