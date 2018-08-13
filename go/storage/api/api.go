@@ -1,11 +1,12 @@
-// Package storage implements the storage backend.
-package storage
+// Package api implements the storage backend API.
+package api
 
 import (
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
-	"sync"
+
+	"golang.org/x/net/context"
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
@@ -47,16 +48,16 @@ type KeyInfo struct {
 // Backend is a storage backend implementation.
 type Backend interface {
 	// Get returns the value for a specific immutable key.
-	Get(Key) ([]byte, error)
+	Get(context.Context, Key) ([]byte, error)
 
 	// Insert inserts a specific value, which can later be retreived by
 	// it's hash.  The expiration is the number of epochs for which the
 	// value should remain available.
-	Insert([]byte, uint64) error
+	Insert(context.Context, []byte, uint64) error
 
 	// GetKeys returns all of the keys in the storage database, along
 	// with their associated metadata.
-	GetKeys() ([]*KeyInfo, error)
+	GetKeys(context.Context) ([]*KeyInfo, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()
@@ -70,65 +71,4 @@ func HashStorageKey(value []byte) Key {
 	var k Key
 	copy(k[:], sum[:])
 	return k
-}
-
-type backendSweepable interface {
-	Backend
-
-	// PurgeExpired purges keys that expire before the provided epoch.
-	PurgeExpired(epochtime.EpochTime)
-}
-
-type backendSweeper struct {
-	sync.Once
-
-	backend backendSweepable
-
-	closeCh  chan interface{}
-	closedCh chan interface{}
-}
-
-func (s *backendSweeper) Close() {
-	s.Do(func() {
-		close(s.closeCh)
-		<-s.closedCh
-	})
-}
-
-func (s *backendSweeper) worker(timeSource epochtime.Backend) {
-	defer close(s.closedCh)
-
-	epochCh, sub := timeSource.WatchEpochs()
-	defer sub.Close()
-
-	epoch := epochtime.EpochInvalid
-	for {
-		select {
-		case <-s.closeCh:
-			return
-		case newEpoch, ok := <-epochCh:
-			if !ok {
-				return
-			}
-			if epoch == newEpoch {
-				continue
-			}
-			epoch = newEpoch
-		}
-
-		// Sweep.
-		s.backend.PurgeExpired(epoch)
-	}
-}
-
-func newBackendSweeper(backend backendSweepable, timeSource epochtime.Backend) *backendSweeper {
-	s := &backendSweeper{
-		backend:  backend,
-		closeCh:  make(chan interface{}),
-		closedCh: make(chan interface{}),
-	}
-
-	go s.worker(timeSource)
-
-	return s
 }

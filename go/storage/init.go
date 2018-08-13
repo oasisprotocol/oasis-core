@@ -1,3 +1,4 @@
+// Package storage implements the storage backend.
 package storage
 
 import (
@@ -9,26 +10,24 @@ import (
 	"github.com/spf13/viper"
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/bolt"
+	"github.com/oasislabs/ekiden/go/storage/memory"
 )
 
-const (
-	cfgBackend = "storage.backend"
-
-	backendMemory = "memory"
-	backendBolt   = "bolt"
-)
+const cfgBackend = "storage.backend"
 
 var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
-func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (Backend, error) {
+func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
 	switch strings.ToLower(backend) {
-	case backendMemory:
-		return NewMemoryBackend(timeSource), nil
-	case backendBolt:
-		fn := filepath.Join(dataDir, boltDBFile)
-		return NewBoltBackend(fn, timeSource)
+	case memory.BackendName:
+		return memory.New(timeSource), nil
+	case bolt.BackendName:
+		fn := filepath.Join(dataDir, bolt.DBFile)
+		return bolt.New(fn, timeSource)
 	default:
 		return nil, fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
@@ -37,7 +36,7 @@ func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (Back
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagBackend, cfgBackend, backendMemory, "Storage backend")
+	cmd.Flags().StringVar(&flagBackend, cfgBackend, memory.BackendName, "Storage backend")
 
 	for _, v := range []string{
 		cfgBackend,

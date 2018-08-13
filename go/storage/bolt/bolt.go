@@ -1,4 +1,5 @@
-package storage
+// Package bolt implements the BoltDB backed storage backend.
+package bolt
 
 import (
 	"bytes"
@@ -12,51 +13,56 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
-const boltDBFile = "storage.bolt.db"
+const (
+	// BackendName is the name of this implementation.
+	BackendName = "bolt"
+
+	// DBFile is the default backing store filename.
+	DBFile = "storage.bolt.db"
+)
 
 var (
-	_ Backend          = (*BoltBackend)(nil)
-	_ backendSweepable = (*BoltBackend)(nil)
+	_ api.Backend          = (*boltBackend)(nil)
+	_ api.SweepableBackend = (*boltBackend)(nil)
 
-	boltBktMetadata = []byte("metadata")
-	boltKeyVersion  = []byte("version")
-	boltVersion     = []byte{0x00}
+	bktMetadata = []byte("metadata")
+	keyVersion  = []byte("version")
+	dbVersion   = []byte{0x00}
 
-	boltBktStore      = []byte("store")
-	boltKeyValue      = []byte("value")
-	boltKeyExpiration = []byte("expiration")
+	bktStore      = []byte("store")
+	keyValue      = []byte("value")
+	keyExpiration = []byte("expiration")
 )
 
-// BoltBackend is a boltdb backed storage backend.
-type BoltBackend struct {
+type boltBackend struct {
 	logger     *logging.Logger
 	timeSource epochtime.Backend
 	db         *bolt.DB
-	sweeper    *backendSweeper
+	sweeper    *api.Sweeper
 
 	closeOnce sync.Once
 }
 
-// Get returns the value for a specific immutable key.
-func (b *BoltBackend) Get(key Key) ([]byte, error) {
-	epoch, _, err := b.timeSource.GetEpoch(context.Background())
+func (b *boltBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
+	epoch, _, err := b.timeSource.GetEpoch(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var value []byte
 	if err := b.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(boltBktStore)
+		bkt := tx.Bucket(bktStore)
 		if bkt = bkt.Bucket(key[:]); bkt == nil {
-			return ErrKeyNotFound
+			return api.ErrKeyNotFound
 		}
 		if boltGetExpiration(bkt) < epoch {
-			return ErrKeyExpired
+			return api.ErrKeyExpired
 		}
 
-		v := bkt.Get(boltKeyValue)
+		v := bkt.Get(keyValue)
 		value = append([]byte{}, v...) // MUST copy.
 
 		return nil
@@ -67,19 +73,16 @@ func (b *BoltBackend) Get(key Key) ([]byte, error) {
 	return value, nil
 }
 
-// Insert inserts a specific value, which can later be retreived by
-// it's hash.  The expiration is the number of epochs for which the
-// value should remain available.
-func (b *BoltBackend) Insert(value []byte, expiration uint64) error {
-	epoch, _, err := b.timeSource.GetEpoch(context.Background())
+func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
+	epoch, _, err := b.timeSource.GetEpoch(ctx)
 	if err != nil {
 		return err
 	}
 	if epoch == epochtime.EpochInvalid {
-		return ErrIncoherentTime
+		return api.ErrIncoherentTime
 	}
 
-	key := HashStorageKey(value)
+	key := api.HashStorageKey(value)
 	expEpoch := epoch + epochtime.EpochTime(expiration)
 
 	b.logger.Debug("Insert",
@@ -89,7 +92,7 @@ func (b *BoltBackend) Insert(value []byte, expiration uint64) error {
 	)
 
 	return b.db.Update(func(tx *bolt.Tx) error {
-		storeBkt := tx.Bucket(boltBktStore)
+		storeBkt := tx.Bucket(bktStore)
 
 		bkt, err := storeBkt.CreateBucketIfNotExists(key[:])
 		if err != nil {
@@ -98,20 +101,18 @@ func (b *BoltBackend) Insert(value []byte, expiration uint64) error {
 		if err = boltSetExpiration(bkt, expEpoch); err != nil {
 			return err
 		}
-		return bkt.Put(boltKeyValue, value)
+		return bkt.Put(keyValue, value)
 	})
 }
 
-// GetKeys returns all of the keys in the storage database, along
-// with their associated metadata.
-func (b *BoltBackend) GetKeys() ([]*KeyInfo, error) {
-	var kiVec []*KeyInfo
+func (b *boltBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
+	var kiVec []*api.KeyInfo
 
 	if err := b.db.View(func(tx *bolt.Tx) error {
-		storeBkt := tx.Bucket(boltBktStore)
+		storeBkt := tx.Bucket(bktStore)
 		return storeBkt.ForEach(func(k, v []byte) error {
 			bkt := storeBkt.Bucket(k)
-			ki := &KeyInfo{
+			ki := &api.KeyInfo{
 				Expiration: boltGetExpiration(bkt),
 			}
 			copy(ki.Key[:], k)
@@ -126,10 +127,9 @@ func (b *BoltBackend) GetKeys() ([]*KeyInfo, error) {
 	return kiVec, nil
 }
 
-// PurgeExpired purges keys that expire before the provided epoch.
-func (b *BoltBackend) PurgeExpired(epoch epochtime.EpochTime) {
+func (b *boltBackend) PurgeExpired(epoch epochtime.EpochTime) {
 	if err := b.db.Update(func(tx *bolt.Tx) error {
-		storeBkt := tx.Bucket(boltBktStore)
+		storeBkt := tx.Bucket(bktStore)
 
 		cur := storeBkt.Cursor()
 		for key, _ := cur.First(); key != nil; key, _ = cur.Next() {
@@ -150,38 +150,37 @@ func (b *BoltBackend) PurgeExpired(epoch epochtime.EpochTime) {
 	}
 }
 
-// Cleanup closes/cleans up the storage backend.
-func (b *BoltBackend) Cleanup() {
+func (b *boltBackend) Cleanup() {
 	b.closeOnce.Do(func() {
 		b.sweeper.Close()
 		_ = b.db.Close()
 	})
 }
 
-// NewBoltBackend constructs a new BoltBackend instance, using the provided
-// path for the database.
-func NewBoltBackend(fn string, timeSource epochtime.Backend) (Backend, error) {
+// New constructs a new BoltDB backed storage Backend instance, using
+// the provided path for the database.
+func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 	db, err := bolt.Open(fn, 0600, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists(boltBktStore); err != nil {
+		if _, err := tx.CreateBucketIfNotExists(bktStore); err != nil {
 			return err
 		}
-		bkt, err := tx.CreateBucketIfNotExists(boltBktMetadata)
+		bkt, err := tx.CreateBucketIfNotExists(bktMetadata)
 		if err != nil {
 			return err
 		}
 
-		ver := bkt.Get(boltKeyVersion)
+		ver := bkt.Get(keyVersion)
 		if ver == nil {
-			return bkt.Put(boltKeyVersion, boltVersion)
+			return bkt.Put(keyVersion, dbVersion)
 		}
 
-		if !bytes.Equal(ver, boltVersion) {
-			return fmt.Errorf("storage: incompatible boltdb store version: '%v'", hex.EncodeToString(ver))
+		if !bytes.Equal(ver, dbVersion) {
+			return fmt.Errorf("storage/bolt: incompatible BoltDB store version: '%v'", hex.EncodeToString(ver))
 		}
 
 		return nil
@@ -190,20 +189,20 @@ func NewBoltBackend(fn string, timeSource epochtime.Backend) (Backend, error) {
 		return nil, err
 	}
 
-	b := &BoltBackend{
-		logger:     logging.GetLogger("BoltStorageBackend"),
+	b := &boltBackend{
+		logger:     logging.GetLogger("storage/bolt"),
 		timeSource: timeSource,
 		db:         db,
 	}
-	b.sweeper = newBackendSweeper(b, timeSource)
+	b.sweeper = api.NewSweeper(b, timeSource)
 
 	return b, nil
 }
 
 func boltGetExpiration(bkt *bolt.Bucket) epochtime.EpochTime {
-	v := bkt.Get(boltKeyExpiration)
+	v := bkt.Get(keyExpiration)
 	if v == nil {
-		panic("storage: no expiration time set for entry")
+		panic("storage/bolt: no expiration time set for entry")
 	}
 
 	exp := binary.LittleEndian.Uint64(v)
@@ -214,5 +213,5 @@ func boltSetExpiration(bkt *bolt.Bucket, expiration epochtime.EpochTime) error {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], uint64(expiration))
 
-	return bkt.Put(boltKeyExpiration, tmp[:])
+	return bkt.Put(keyExpiration, tmp[:])
 }

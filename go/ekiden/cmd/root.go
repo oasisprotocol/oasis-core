@@ -178,7 +178,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
 	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
 	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
-	storage.NewServer(env.grpcSrv.s, store)
+	storage.NewGRPCServer(env.grpcSrv.s, store)
 
 	rootLog.Debug("backends initialized")
 
