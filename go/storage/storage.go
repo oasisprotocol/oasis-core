@@ -7,7 +7,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 // KeySize is the size of a storage key in bytes.
@@ -95,7 +95,7 @@ func (s *backendSweeper) Close() {
 	})
 }
 
-func (s *backendSweeper) worker(timeSource epochtime.TimeSource) {
+func (s *backendSweeper) worker(timeSource epochtime.Backend) {
 	defer close(s.closedCh)
 
 	epochCh, sub := timeSource.WatchEpochs()
@@ -121,7 +121,7 @@ func (s *backendSweeper) worker(timeSource epochtime.TimeSource) {
 	}
 }
 
-func newBackendSweeper(backend backendSweepable, timeSource epochtime.TimeSource) *backendSweeper {
+func newBackendSweeper(backend backendSweepable, timeSource epochtime.Backend) *backendSweeper {
 	s := &backendSweeper{
 		backend:  backend,
 		closeCh:  make(chan interface{}),

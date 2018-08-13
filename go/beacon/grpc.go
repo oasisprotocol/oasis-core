@@ -4,7 +4,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/beacon"
 )

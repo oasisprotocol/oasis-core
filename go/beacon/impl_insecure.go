@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 var (
@@ -47,7 +47,7 @@ func (r *InsecureDummyRandomBeacon) WatchBeacons() (<-chan *GenerateEvent, *pubs
 	return subscribeTypedGenerateEvent(r.notifier)
 }
 
-func (r *InsecureDummyRandomBeacon) worker(timeSource epochtime.TimeSource) {
+func (r *InsecureDummyRandomBeacon) worker(timeSource epochtime.Backend) {
 	epochEvents, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
@@ -84,7 +84,7 @@ func (r *InsecureDummyRandomBeacon) worker(timeSource epochtime.TimeSource) {
 
 // NewInsecureDummyRandomBeacon constructs a new InsecureDummyRandomBeacon
 // instance.
-func NewInsecureDummyRandomBeacon(timeSource epochtime.TimeSource) *InsecureDummyRandomBeacon {
+func NewInsecureDummyRandomBeacon(timeSource epochtime.Backend) *InsecureDummyRandomBeacon {
 	r := &InsecureDummyRandomBeacon{
 		logger:    logging.GetLogger("InsecureDummyRandomBeacon"),
 		notifier:  pubsub.NewBroker(true),

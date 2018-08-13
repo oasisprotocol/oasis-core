@@ -4,8 +4,10 @@ import (
 	"encoding/hex"
 	"sync"
 
+	"golang.org/x/net/context"
+
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 var (
@@ -25,14 +27,17 @@ type MemoryBackend struct {
 	sync.RWMutex
 
 	logger     *logging.Logger
-	timeSource epochtime.TimeSource
+	timeSource epochtime.Backend
 	store      map[Key]*memoryEntry
 	sweeper    *backendSweeper
 }
 
 // Get returns the value for a specific immutable key.
 func (b *MemoryBackend) Get(key Key) ([]byte, error) {
-	epoch, _ := b.timeSource.GetEpoch()
+	epoch, _, err := b.timeSource.GetEpoch(context.Background())
+	if err != nil {
+		return nil, err
+	}
 
 	b.RLock()
 	defer b.RUnlock()
@@ -52,12 +57,15 @@ func (b *MemoryBackend) Get(key Key) ([]byte, error) {
 // it's hash.  The expiration is the number of epochs for which the
 // value should remain available.
 func (b *MemoryBackend) Insert(value []byte, expiration uint64) error {
-	key := HashStorageKey(value)
-	epoch, _ := b.timeSource.GetEpoch()
+	epoch, _, err := b.timeSource.GetEpoch(context.Background())
+	if err != nil {
+		return err
+	}
 	if epoch == epochtime.EpochInvalid {
 		return ErrIncoherentTime
 	}
 
+	key := HashStorageKey(value)
 	ent := &memoryEntry{
 		value:      append([]byte{}, value...),
 		expiration: epoch + epochtime.EpochTime(expiration),
@@ -119,7 +127,7 @@ func (b *MemoryBackend) Cleanup() {
 }
 
 // NewMemoryBackend constructs a new MemoryBackend instance.
-func NewMemoryBackend(timeSource epochtime.TimeSource) Backend {
+func NewMemoryBackend(timeSource epochtime.Backend) Backend {
 	b := &MemoryBackend{
 		logger:     logging.GetLogger("MemoryStorageBackend"),
 		timeSource: timeSource,

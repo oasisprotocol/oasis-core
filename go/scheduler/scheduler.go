@@ -7,7 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
 )

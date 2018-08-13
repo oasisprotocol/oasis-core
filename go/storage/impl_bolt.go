@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/epochtime"
-
 	bolt "github.com/coreos/bbolt"
+	"golang.org/x/net/context"
+
+	"github.com/oasislabs/ekiden/go/common/logging"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 const boltDBFile = "storage.bolt.db"
@@ -31,7 +32,7 @@ var (
 // BoltBackend is a boltdb backed storage backend.
 type BoltBackend struct {
 	logger     *logging.Logger
-	timeSource epochtime.TimeSource
+	timeSource epochtime.Backend
 	db         *bolt.DB
 	sweeper    *backendSweeper
 
@@ -40,7 +41,10 @@ type BoltBackend struct {
 
 // Get returns the value for a specific immutable key.
 func (b *BoltBackend) Get(key Key) ([]byte, error) {
-	epoch, _ := b.timeSource.GetEpoch()
+	epoch, _, err := b.timeSource.GetEpoch(context.Background())
+	if err != nil {
+		return nil, err
+	}
 
 	var value []byte
 	if err := b.db.View(func(tx *bolt.Tx) error {
@@ -67,11 +71,15 @@ func (b *BoltBackend) Get(key Key) ([]byte, error) {
 // it's hash.  The expiration is the number of epochs for which the
 // value should remain available.
 func (b *BoltBackend) Insert(value []byte, expiration uint64) error {
-	key := HashStorageKey(value)
-	epoch, _ := b.timeSource.GetEpoch()
+	epoch, _, err := b.timeSource.GetEpoch(context.Background())
+	if err != nil {
+		return err
+	}
 	if epoch == epochtime.EpochInvalid {
 		return ErrIncoherentTime
 	}
+
+	key := HashStorageKey(value)
 	expEpoch := epoch + epochtime.EpochTime(expiration)
 
 	b.logger.Debug("Insert",
@@ -152,7 +160,7 @@ func (b *BoltBackend) Cleanup() {
 
 // NewBoltBackend constructs a new BoltBackend instance, using the provided
 // path for the database.
-func NewBoltBackend(fn string, timeSource epochtime.TimeSource) (Backend, error) {
+func NewBoltBackend(fn string, timeSource epochtime.Backend) (Backend, error) {
 	db, err := bolt.Open(fn, 0600, nil)
 	if err != nil {
 		return nil, err

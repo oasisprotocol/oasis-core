@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	"github.com/eapache/channels"
 )
@@ -260,7 +260,7 @@ func (r *MemoryEntityRegistry) getNodesForEntryLocked(id signature.PublicKey) []
 	return ret
 }
 
-func (r *MemoryEntityRegistry) worker(timeSource epochtime.TimeSource) {
+func (r *MemoryEntityRegistry) worker(timeSource epochtime.Backend) {
 	epochEvents, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
@@ -303,7 +303,7 @@ func (r *MemoryEntityRegistry) buildNodeList(newEpoch epochtime.EpochTime) {
 }
 
 // NewMemoryEntityRegistry constructs a new MemoryEntityRegistry instance.
-func NewMemoryEntityRegistry(timeSource epochtime.TimeSource) EntityRegistry {
+func NewMemoryEntityRegistry(timeSource epochtime.Backend) EntityRegistry {
 	r := &MemoryEntityRegistry{
 		logger: logging.GetLogger("MemoryEntityRegistry"),
 		state: memoryEntityRegistryState{

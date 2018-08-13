@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/oasislabs/ekiden/go/epochtime"
+	"github.com/oasislabs/ekiden/go/epochtime/mock"
 
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +12,7 @@ import (
 func TestInsecureDummyRandomBeacon(t *testing.T) {
 	const farFuture = 0xcafebabedeadbeef
 
-	ts := epochtime.NewMockTimeSource()
+	ts := mock.New()
 	r := NewInsecureDummyRandomBeacon(ts)
 
 	// Known Answer Tests taken from the Rust implementation, which

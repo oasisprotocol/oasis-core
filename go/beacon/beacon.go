@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 // ErrBeaconNotAvailable is the error returned when a beacon is not

@@ -167,7 +167,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	env.svcMgr.RegisterCleanupOnly(store)
 
 	// Initialize and register the gRPC services.
-	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
+	epochtime.NewGRPCServer(env.grpcSrv.s, timeSource)
 	beacon.NewRandomBeaconServer(env.grpcSrv.s, randomBeacon)
 	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
 	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)

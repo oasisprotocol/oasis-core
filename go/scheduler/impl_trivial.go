@@ -16,7 +16,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry"
 
 	"github.com/eapache/channels"
@@ -188,7 +188,7 @@ func (s *TrivialScheduler) WatchCommittees() (<-chan *Committee, *pubsub.Subscri
 	return subscribeTypedCommittee(s.notifier)
 }
 
-func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) { //nolint:gocyclo
+func (s *TrivialScheduler) worker(timeSource epochtime.Backend, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) { //nolint:gocyclo
 	timeCh, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 
@@ -292,7 +292,7 @@ func (s *TrivialScheduler) worker(timeSource epochtime.TimeSource, conReg regist
 }
 
 // NewTrivialScheduler returns a new TrivialScheduler instance.
-func NewTrivialScheduler(timeSource epochtime.TimeSource, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) *TrivialScheduler {
+func NewTrivialScheduler(timeSource epochtime.Backend, conReg registry.ContractRegistry, entReg registry.EntityRegistry, beacon beacon.RandomBeacon) *TrivialScheduler {
 	s := &TrivialScheduler{
 		logger: logging.GetLogger("TrivialScheudler"),
 		state: &trivialSchedulerState{

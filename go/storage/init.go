@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/oasislabs/ekiden/go/epochtime"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
-func New(cmd *cobra.Command, timeSource epochtime.TimeSource, dataDir string) (Backend, error) {
+func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case backendMemory:
