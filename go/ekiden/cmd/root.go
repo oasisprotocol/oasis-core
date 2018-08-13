@@ -162,7 +162,10 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	}
 	contractRegistry := registry.NewMemoryContractRegistry()
 	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
-	sched := scheduler.NewTrivialScheduler(timeSource, contractRegistry, entityRegistry, randomBeacon)
+	sched, err := scheduler.New(cmd, timeSource, contractRegistry, entityRegistry, randomBeacon)
+	if err != nil {
+		return err
+	}
 	store, err := storage.New(cmd, timeSource, dataDir)
 	if err != nil {
 		return err
@@ -174,7 +177,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	beacon.NewGRPCServer(env.grpcSrv.s, randomBeacon)
 	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
 	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
-	scheduler.NewSchedulerServer(env.grpcSrv.s, sched)
+	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
 	storage.NewServer(env.grpcSrv.s, store)
 
 	rootLog.Debug("backends initialized")
@@ -218,6 +221,7 @@ func init() {
 	for _, v := range []func(*cobra.Command){
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
+		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermintEntry.AddNodeFlags,
 	} {
