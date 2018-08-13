@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	tmnode "github.com/tendermint/tendermint/node"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmtypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/net/context"
@@ -17,6 +16,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 // TendermintClientEntityRegistry is a Tendermint-based registry entity backend.
@@ -222,10 +222,10 @@ func (r *TendermintClientEntityRegistry) worker() {
 }
 
 // NewTendermintClientEntityRegistry constructs a new TendermintClientEntityRegistry instance.
-func NewTendermintClientEntityRegistry(node *tmnode.Node) EntityRegistry {
+func NewTendermintClientEntityRegistry(service service.TendermintService) EntityRegistry {
 	r := &TendermintClientEntityRegistry{
 		logger:         logging.GetLogger("TendermintClientEntityRegistry"),
-		client:         tmcli.NewLocal(node),
+		client:         service.GetClient(),
 		entityNotifier: pubsub.NewBroker(false),
 		nodeNotifier:   pubsub.NewBroker(false),
 	}
@@ -322,10 +322,10 @@ func (r *TendermintClientContractRegistry) worker() {
 }
 
 // NewTendermintClientContractRegistry constructs a new TendermintClientContractRegistry instance.
-func NewTendermintClientContractRegistry(node *tmnode.Node) ContractRegistry {
+func NewTendermintClientContractRegistry(service service.TendermintService) ContractRegistry {
 	r := &TendermintClientContractRegistry{
 		logger:           logging.GetLogger("TendermintClientContractRegistry"),
-		client:           tmcli.NewLocal(node),
+		client:           service.GetClient(),
 		contractNotifier: pubsub.NewBroker(false),
 	}
 

@@ -2,18 +2,18 @@
 package cmd
 
 import (
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
+
 	"github.com/oasislabs/ekiden/go/beacon"
+	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
 	"github.com/oasislabs/ekiden/go/scheduler"
 	"github.com/oasislabs/ekiden/go/storage"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
-
-	"github.com/oasislabs/ekiden/go/common/logging"
-
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/oasislabs/ekiden/go/tendermint"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 const (
@@ -57,10 +57,9 @@ func Execute() {
 }
 
 type nodeEnv struct {
-	svcMgr     *backgroundServiceManager
-	grpcSrv    *grpcService
-	tenderNode *tendermintAdapter
-	abciMux    *abci.ApplicationServer
+	svcMgr  *backgroundServiceManager
+	grpcSrv *grpcService
+	svcTmnt service.TendermintService
 }
 
 func nodeMain(cmd *cobra.Command, args []string) {
@@ -100,35 +99,20 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	}
 	env.svcMgr.Register(metrics)
 
-	// Initialize the ABCI multiplexer.
-	env.abciMux, err = abci.NewApplicationServer(dataDir)
+	// Initialize tendermint.
+	// TODO: This should only be done when a tendermint backend is in use.
+	env.svcTmnt, err = tendermint.New(dataDir)
 	if err != nil {
-		rootLog.Error("failed to initialize ABCI multiplexer",
+		rootLog.Error("failed to initialize tendermint service",
 			"err", err,
 		)
 		return
 	}
-	env.svcMgr.Register(env.abciMux)
-
-	env.tenderNode, err = newTendermintService(env.abciMux)
-	if err != nil {
-		rootLog.Error("failed to initialize tendermint",
-			"err", err,
-		)
-		return
-	}
+	env.svcMgr.Register(env.svcTmnt)
 
 	// Initialize the varous node backends.
 	if err = initNode(cmd, env); err != nil {
 		rootLog.Error("failed to initialize backends",
-			"err", err,
-		)
-		return
-	}
-
-	// Start the ABCI server.
-	if err = env.abciMux.Start(); err != nil {
-		rootLog.Error("failed to start ABCI multiplexer",
 			"err", err,
 		)
 		return
@@ -142,8 +126,10 @@ func nodeMain(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if err = env.tenderNode.Start(); err != nil {
-		rootLog.Error("failed to start tendermint server",
+	// Start the tendermint service.
+	// TODO: This should only be done when a tendermint backend is in use.
+	if err = env.svcTmnt.Start(); err != nil {
+		rootLog.Error("failed to start tendermint service",
 			"err", err,
 		)
 		return

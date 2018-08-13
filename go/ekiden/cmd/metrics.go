@@ -7,12 +7,15 @@ import (
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/oasislabs/ekiden/go/common/service"
 )
 
 type metrics struct {
-	ln     net.Listener
-	s      *http.Server
-	quitCh chan struct{}
+	service.BaseBackgroundService
+
+	ln net.Listener
+	s  *http.Server
 }
 
 func (s *metrics) Start() error {
@@ -21,18 +24,14 @@ func (s *metrics) Start() error {
 		ln, s.ln = s.ln, nil
 		err := s.s.Serve(ln)
 		if err != nil {
-			rootLog.Error("metrics terminated uncleanly",
+			s.Logger.Error("metrics terminated uncleanly",
 				"err", err,
 			)
 		}
 		s.s = nil
-		close(s.quitCh)
+		s.BaseBackgroundService.Stop()
 	}()
 	return nil
-}
-
-func (s *metrics) Quit() <-chan struct{} {
-	return s.quitCh
 }
 
 func (s *metrics) Stop() {
@@ -50,7 +49,9 @@ func (s *metrics) Cleanup() {
 }
 
 func newMetrics(port uint16) (*metrics, error) {
-	rootLog.Debug("Metric Server Params", "port", port)
+	svc := *service.NewBaseBackgroundService("metrics")
+
+	svc.Logger.Debug("Metric Server Params", "port", port)
 
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
@@ -58,8 +59,8 @@ func newMetrics(port uint16) (*metrics, error) {
 	}
 
 	return &metrics{
-		ln:     ln,
-		s:      &http.Server{Handler: promhttp.Handler()},
-		quitCh: make(chan struct{}),
+		BaseBackgroundService: svc,
+		ln: ln,
+		s:  &http.Server{Handler: promhttp.Handler()},
 	}, nil
 }
