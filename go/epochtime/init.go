@@ -1,3 +1,4 @@
+// Package epochtime implements the Oasis timekeeping backend.
 package epochtime
 
 import (
@@ -6,14 +7,15 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/epochtime/mock"
+	"github.com/oasislabs/ekiden/go/epochtime/system"
 )
 
 const (
 	cfgBackend        = "epochtime.backend"
 	cfgSystemInterval = "epochtime.system.interval"
-
-	backendSystem = "system"
-	backendMock   = "mock"
 )
 
 var (
@@ -21,15 +23,15 @@ var (
 	flagSystemInterval int64
 )
 
-// New constructs a new TimeSource based on the configuration flags.
-func New(cmd *cobra.Command) (TimeSource, error) {
+// New constructs a new Backend based on the configuration flags.
+func New(cmd *cobra.Command) (api.Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
 	switch strings.ToLower(backend) {
-	case backendSystem:
+	case system.BackendName:
 		interval, _ := cmd.Flags().GetInt64(cfgSystemInterval)
-		return NewSystemTimeSource(interval)
-	case backendMock:
-		return NewMockTimeSource(), nil
+		return system.New(interval)
+	case mock.BackendName:
+		return mock.New(), nil
 	default:
 		return nil, fmt.Errorf("epochtime: unsupported backend: '%v'", backend)
 	}
@@ -38,8 +40,8 @@ func New(cmd *cobra.Command) (TimeSource, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagBackend, cfgBackend, backendSystem, "Epoch time backend")
-	cmd.Flags().Int64Var(&flagSystemInterval, cfgSystemInterval, EpochInterval, "Epoch interval")
+	cmd.Flags().StringVar(&flagBackend, cfgBackend, system.BackendName, "Epoch time backend")
+	cmd.Flags().Int64Var(&flagSystemInterval, cfgSystemInterval, api.EpochInterval, "Epoch interval")
 
 	for _, v := range []string{
 		cfgBackend,

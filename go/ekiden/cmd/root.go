@@ -156,10 +156,18 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
-	randomBeacon := beacon.NewInsecureDummyRandomBeacon(timeSource)
-	contractRegistry := registry.NewMemoryContractRegistry()
-	entityRegistry := registry.NewMemoryEntityRegistry(timeSource)
-	sched := scheduler.NewTrivialScheduler(timeSource, contractRegistry, entityRegistry, randomBeacon)
+	randomBeacon, err := beacon.New(cmd, timeSource)
+	if err != nil {
+		return err
+	}
+	reg, err := registry.New(cmd, timeSource, env.svcTmnt)
+	if err != nil {
+		return err
+	}
+	sched, err := scheduler.New(cmd, timeSource, reg, randomBeacon)
+	if err != nil {
+		return err
+	}
 	store, err := storage.New(cmd, timeSource, dataDir)
 	if err != nil {
 		return err
@@ -167,12 +175,11 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	env.svcMgr.RegisterCleanupOnly(store)
 
 	// Initialize and register the gRPC services.
-	epochtime.NewTimeSourceServer(env.grpcSrv.s, timeSource)
-	beacon.NewRandomBeaconServer(env.grpcSrv.s, randomBeacon)
-	registry.NewContractRegistryServer(env.grpcSrv.s, contractRegistry)
-	registry.NewEntityRegistryServer(env.grpcSrv.s, entityRegistry)
-	scheduler.NewSchedulerServer(env.grpcSrv.s, sched)
-	storage.NewServer(env.grpcSrv.s, store)
+	epochtime.NewGRPCServer(env.grpcSrv.s, timeSource)
+	beacon.NewGRPCServer(env.grpcSrv.s, randomBeacon)
+	registry.NewGRPCServer(env.grpcSrv.s, reg)
+	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
+	storage.NewGRPCServer(env.grpcSrv.s, store)
 
 	rootLog.Debug("backends initialized")
 
@@ -213,7 +220,10 @@ func init() {
 
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
+		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
+		registry.RegisterFlags,
+		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermintEntry.AddNodeFlags,
 	} {
