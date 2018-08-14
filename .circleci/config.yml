@@ -194,14 +194,6 @@ jobs:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
-      - run: |
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_CONTENT_BASE64" | base64 -di >~/.kube/config
-      - run:
-          name: Kubectl port forwarding
-          command: kubectl port-forward service/parity 8545:8545
-          background: true
-
       - run: cd ethereum && npm install && cp -r /workspace/ethereum/build ./build
       - run:
           name: Drive Block Mining
@@ -217,12 +209,6 @@ jobs:
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
           docker push oasislabs/testnet:$BUILD_IMAGE_TAG
-      # Update testnet.
-      # https://stackoverflow.com/a/33511811/1864688
-      - run: |
-          REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:$BUILD_IMAGE_TAG)
-          kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
-          kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
   deployclient:
     <<: *defaults
     steps:
