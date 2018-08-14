@@ -101,7 +101,7 @@ func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.
 	}
 
 	ent, err := s.backend.GetEntity(ctx, id)
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 
