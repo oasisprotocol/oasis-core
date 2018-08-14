@@ -36,21 +36,13 @@ func (tl TestLocation) Write(w *bufio.Writer) (int, error) {
 // Less returns true iff the receiver TestLocation tl is less than the argument.
 // This panics if the argument interface object is not also a TestLocation.
 func (tl TestLocation) Less(other interface{}) bool {
-	switch other := other.(type) {
-	case TestLocation:
-		return tl < other
-	default:
-		panic(fmt.Sprintf("unexpected type %T: %v", other, other))
-	}
+	o := other.(TestLocation)
+	return tl < o
 }
 
 // Equal returns true iff the receiver TestLocation tl is equal to the argument.
 // This panics if the argumenet interface object is not also a TestLocation.
 func (tl TestLocation) Equal(other interface{}) bool {
-	switch other := other.(type) {
-	case TestLocation:
-		return tl == other
-	default:
-		panic(fmt.Sprintf("unexpected type %T: %v", other, other))
-	}
+	o := other.(TestLocation)
+	return tl == o
 }
