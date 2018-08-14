@@ -111,7 +111,8 @@ run_test() {
     local client=$3
     local epochs=$4
     local dummy_node_runner=$5
-    local restart_dummy_after=$6
+    local restart_dummy_after=${6:-0}
+    local pre_epochs=${7:-0}
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
 
@@ -123,8 +124,16 @@ run_test() {
     dummy_pid=$!
     sleep 1
 
+    # Advance epochs before starting any compute nodes.
+    if [[ "${pre_epochs}" > 0 ]]; then
+        for epoch in $(seq $pre_epochs); do
+            sleep 1
+            ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch
+        done
+    fi
+
     # Handle restarting the dummy node after a delay.
-    if [[ -n "${restart_dummy_after}" ]]; then
+    if [[ "${restart_dummy_after}" > 0 ]]; then
         (sleep ${restart_dummy_after}; echo -e "\n\n\e[1;7;35m*** RESTARTING DUMMY NODE ***\e[0m\n\n"; kill -9 ${dummy_pid}; ${dummy_node_runner}) &
     fi
 
@@ -139,7 +148,9 @@ run_test() {
     $scenario
 
     # Advance epoch to elect a new committee.
-    for epoch in $(seq $epochs); do
+    let epochs_offset=pre_epochs+1
+    let epochs+=pre_epochs
+    for epoch in $(seq $epochs_offset $epochs); do
         sleep 2
         ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch
     done
@@ -220,6 +231,7 @@ scenario_fail_worker_after_commit() {
 }
 
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
+run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_default 0 3
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
 run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_default
