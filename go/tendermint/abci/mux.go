@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 )
 
 const (
@@ -573,7 +575,7 @@ func (s *ApplicationState) doCleanup() {
 }
 
 func newApplicationState(dataDir string) (*ApplicationState, error) {
-	db, err := dbm.NewGoLevelDB("abci-mux-state", dataDir)
+	db, err := bolt.New(filepath.Join(dataDir, "abci-mux-state.bolt.db"))
 	if err != nil {
 		return nil, err
 	}
