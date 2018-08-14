@@ -260,6 +260,7 @@ impl ComputationGroup {
                     // Optimistic fetch of previous epoch keys.
                     if epoch > 1
                         && (new_role == Some(Role::Leader) || new_role == Some(Role::Worker))
+                        && !pre_nodes_handle.is_empty()
                     {
                         let pre_nodes_unwrap = pre_nodes_handle.clone();
                         // TODO: smarter choice of remote node.
