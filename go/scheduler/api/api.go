@@ -2,6 +2,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 
 	"golang.org/x/net/context"
@@ -12,6 +13,14 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
+)
+
+var (
+	// ErrNilProtobuf is the error returned when a protobuf is nil.
+	ErrNilProtobuf = errors.New("scheduler: protobuf is nil")
+
+	// ErrInvalidRole is the error returned when a role is invalid.
+	ErrInvalidRole = errors.New("scheduler: invalid role")
 )
 
 // Role is the role a given node plays in a committee.
@@ -51,6 +60,25 @@ type CommitteeNode struct {
 	PublicKey signature.PublicKey
 }
 
+// FromProto deserializes a protobuf into a CommitteeNode.
+func (n *CommitteeNode) FromProto(pb *pbSched.CommitteeNode) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
+
+	switch pb.GetRole() {
+	case pbSched.CommitteeNode_WORKER:
+		n.Role = Worker
+	case pbSched.CommitteeNode_BACKUP_WORKER:
+		n.Role = BackupWorker
+	case pbSched.CommitteeNode_LEADER:
+		n.Role = Leader
+	default:
+		return ErrInvalidRole
+	}
+	return n.PublicKey.UnmarshalBinary(pb.GetPublicKey())
+}
+
 // ToProto serializes a CommitteeNode into a protobuf.
 func (n *CommitteeNode) ToProto() *pbSched.CommitteeNode {
 	pb := new(pbSched.CommitteeNode)
@@ -64,7 +92,7 @@ func (n *CommitteeNode) ToProto() *pbSched.CommitteeNode {
 	case Leader:
 		pb.Role = pbSched.CommitteeNode_LEADER
 	default:
-		panic("scheduler: invalid node role")
+		panic(ErrInvalidRole)
 	}
 
 	return pb

@@ -35,7 +35,7 @@
 
 [[constraint]]
   name = "github.com/tendermint/iavl"
-  version = "=v0.9.2"
+  revision = "da94e6c675c8b150a808ca61d0553e5f9667f222"
 
 [[constraint]]
   name = "github.com/tendermint/tendermint"
@@ -65,11 +65,6 @@
   go-tests = true
   unused-packages = true
 
-# iavl as of 2018/07/12 wants `=0.22.0-rc2`, so override it.
-[[override]]
-  name = "github.com/tendermint/tendermint"
-  version = "=v0.22.8"
-
 [[override]]
   name = "github.com/tendermint/go-amino"
   version = "=v0.10.1"
@@ -84,7 +79,7 @@
 
 [[override]]
   name = "github.com/tendermint/iavl"
-  version = "=v0.9.2"
+  revision = "da94e6c675c8b150a808ca61d0553e5f9667f222"
 
 [[override]]
   name = "github.com/prometheus/client_golang"

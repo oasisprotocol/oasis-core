@@ -67,7 +67,7 @@ type Backend interface {
 	GetEntity(context.Context, signature.PublicKey) (*entity.Entity, error)
 
 	// GetEntities gets a list of all registered entities.
-	GetEntities(context.Context) []*entity.Entity
+	GetEntities(context.Context) ([]*entity.Entity, error)
 
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
@@ -82,7 +82,7 @@ type Backend interface {
 	GetNode(context.Context, signature.PublicKey) (*node.Node, error)
 
 	// GetNodes gets a list of all registered nodes.
-	GetNodes(context.Context) []*node.Node
+	GetNodes(context.Context) ([]*node.Node, error)
 
 	// GetNodesForEntity gets a list of nodes registered to an entity ID.
 	GetNodesForEntity(context.Context, signature.PublicKey) []*node.Node

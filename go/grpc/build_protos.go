@@ -29,6 +29,7 @@ var protoFiles = [][]string{
 		"registry/api/src/contract.proto",
 		"registry/api/src/entity.proto",
 	},
+	{"roothash/api/src/roothash.proto"},
 	{"scheduler/api/src/scheduler.proto"},
 	{"storage/api/src/storage.proto"},
 }

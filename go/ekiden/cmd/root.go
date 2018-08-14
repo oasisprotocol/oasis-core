@@ -4,12 +4,12 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
 
 	"github.com/oasislabs/ekiden/go/beacon"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
+	"github.com/oasislabs/ekiden/go/roothash"
 	"github.com/oasislabs/ekiden/go/scheduler"
 	"github.com/oasislabs/ekiden/go/storage"
 	"github.com/oasislabs/ekiden/go/tendermint"
@@ -172,12 +172,17 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
+	rootHash, err := roothash.New(cmd, sched, store, reg)
+	if err != nil {
+		return err
+	}
 	env.svcMgr.RegisterCleanupOnly(store)
 
 	// Initialize and register the gRPC services.
 	epochtime.NewGRPCServer(env.grpcSrv.s, timeSource)
 	beacon.NewGRPCServer(env.grpcSrv.s, randomBeacon)
 	registry.NewGRPCServer(env.grpcSrv.s, reg)
+	roothash.NewGRPCServer(env.grpcSrv.s, rootHash)
 	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
 	storage.NewGRPCServer(env.grpcSrv.s, store)
 
@@ -223,9 +228,9 @@ func init() {
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
 		registry.RegisterFlags,
+		roothash.RegisterFlags,
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
-		tendermintEntry.AddNodeFlags,
 	} {
 		v(rootCmd)
 	}

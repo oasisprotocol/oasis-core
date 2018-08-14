@@ -11,5 +11,6 @@ grpc/beacon/
 grpc/common/
 grpc/dummydebug/
 grpc/registry/
+grpc/roothash/
 grpc/scheduler/
 grpc/storage/

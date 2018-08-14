@@ -137,7 +137,7 @@ func (r *memoryBackend) GetEntity(ctx context.Context, id signature.PublicKey) (
 	return ent, nil
 }
 
-func (r *memoryBackend) GetEntities(ctx context.Context) []*entity.Entity {
+func (r *memoryBackend) GetEntities(ctx context.Context) ([]*entity.Entity, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
 
@@ -146,7 +146,7 @@ func (r *memoryBackend) GetEntities(ctx context.Context) []*entity.Entity {
 		ret = append(ret, v)
 	}
 
-	return ret
+	return ret, nil
 }
 
 func (r *memoryBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.Subscription) {
@@ -206,7 +206,7 @@ func (r *memoryBackend) GetNode(ctx context.Context, id signature.PublicKey) (*n
 	return node, nil
 }
 
-func (r *memoryBackend) GetNodes(ctx context.Context) []*node.Node {
+func (r *memoryBackend) GetNodes(ctx context.Context) ([]*node.Node, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
 
@@ -215,7 +215,7 @@ func (r *memoryBackend) GetNodes(ctx context.Context) []*node.Node {
 		ret = append(ret, v)
 	}
 
-	return ret
+	return ret, nil
 }
 
 func (r *memoryBackend) GetNodesForEntity(ctx context.Context, id signature.PublicKey) []*node.Node {
@@ -280,7 +280,11 @@ func (r *memoryBackend) worker(timeSource epochtime.Backend) {
 }
 
 func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
-	nodes := r.GetNodes(context.Background())
+	nodes, err := r.GetNodes(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
 	sort.Slice(nodes, func(i, j int) bool {
 		return bytes.Compare(nodes[i].ID, nodes[j].ID) == -1
 	})
