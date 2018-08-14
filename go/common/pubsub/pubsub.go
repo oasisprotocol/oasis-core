@@ -12,8 +12,9 @@ type broadcastedValue struct {
 }
 
 type cmdCtx struct {
-	ch    *channels.InfiniteChannel
-	errCh chan error
+	ch              *channels.InfiniteChannel
+	errCh           chan error
+	onSubscribeHook OnSubscribeHook
 
 	isSubscribe bool
 }
@@ -63,10 +64,23 @@ type OnSubscribeHook func(*channels.InfiniteChannel)
 // Note: The returned subscription's channel will have an unbounded
 // capacity.
 func (b *Broker) Subscribe() *Subscription {
+	return b.SubscribeEx(nil)
+}
+
+// SubscribeEx subscribes to the Broker's broadcasts, and returns a
+// subscription handle that can be used to receive broadcasts.  In
+// addition it also takes a per-subscription on-subscribe callback
+// hook.
+//
+// Note: The returned subscription's channel will have an unbounded
+// capacity.  If there is a Broker wide hook set, it will be called
+// after the per-subscription hook is called.
+func (b *Broker) SubscribeEx(onSubscribeHook OnSubscribeHook) *Subscription {
 	ctx := &cmdCtx{
-		ch:          channels.NewInfiniteChannel(),
-		errCh:       make(chan error),
-		isSubscribe: true,
+		ch:              channels.NewInfiniteChannel(),
+		errCh:           make(chan error),
+		onSubscribeHook: onSubscribeHook,
+		isSubscribe:     true,
 	}
 
 	b.cmdCh <- ctx
@@ -91,6 +105,9 @@ func (b *Broker) worker() {
 		select {
 		case ctx := <-b.cmdCh:
 			if ctx.isSubscribe {
+				if ctx.onSubscribeHook != nil {
+					ctx.onSubscribeHook(ctx.ch)
+				}
 				if b.onSubscribeHook != nil {
 					b.onSubscribeHook(ctx.ch)
 				}
