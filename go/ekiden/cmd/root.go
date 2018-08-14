@@ -4,7 +4,6 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	tendermintEntry "github.com/tendermint/tendermint/cmd/tendermint/commands"
 
 	"github.com/oasislabs/ekiden/go/beacon"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -232,7 +231,6 @@ func init() {
 		roothash.RegisterFlags,
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
-		tendermintEntry.AddNodeFlags,
 	} {
 		v(rootCmd)
 	}
