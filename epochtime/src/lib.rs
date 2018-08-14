@@ -1,7 +1,6 @@
 extern crate chrono;
 extern crate ekiden_common;
 extern crate ekiden_common_api;
-extern crate futures_timer;
 extern crate grpcio;
 #[macro_use]
 extern crate ekiden_di;

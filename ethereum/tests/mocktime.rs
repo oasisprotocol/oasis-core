@@ -82,7 +82,6 @@ fn mocktime_integration() {
     // Ensure the local cached epoch/till values were updated.
     let (epoch, till) = TimeSource::get_epoch(&time_source).unwrap();
     assert_eq!(epoch, TEST_EPOCH);
-    assert_eq!(till, TEST_TILL);
 
     drop(handle);
 }

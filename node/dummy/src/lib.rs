@@ -1,6 +1,5 @@
 #![feature(use_extern_macros)]
 
-extern crate futures_timer;
 extern crate grpcio;
 #[macro_use]
 extern crate log;

@@ -4,6 +4,7 @@ use ekiden_common::error::{Error, Result};
 #[allow(unused_imports)]
 use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::subscribers::StreamSubscribers;
+use ekiden_common::tokio::timer::Interval;
 use ekiden_di;
 use interface::*;
 use std::mem;
@@ -12,7 +13,6 @@ use std::sync::{Once, ONCE_INIT};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, TimeZone, Utc};
-use futures_timer::{Interval, TimerHandle};
 
 fn get_epoch_at_generic(at: &DateTime<Utc>, interval: u64) -> Result<(EpochTime, u64)> {
     let epoch_base = Utc.timestamp(EKIDEN_EPOCH as i64, 0);
@@ -331,7 +331,7 @@ create_component!(
 
         let at = Instant::now() + Duration::from_secs(till);
         let dur = Duration::from_secs(source.interval);
-        let timer = Interval::new_handle(at, dur, TimerHandle::default());
+        let timer = Interval::new(at, dur);
 
         environment.spawn({
             let source = source.clone();
@@ -444,7 +444,7 @@ create_component!(
                 let time_notifier = notifier.clone();
 
                 Box::new(
-                    Interval::new(dur)
+                    Interval::new(Instant::now(), dur)
                         .map_err(|error| Error::from(error))
                         .for_each(move |_| {
                             let (now, since) = time_source.get_epoch().unwrap();

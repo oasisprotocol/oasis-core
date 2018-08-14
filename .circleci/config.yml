@@ -27,35 +27,6 @@ jobs:
       # Install the NPM truffle dependencies
       - run: cd ethereum && npm install
 
-      # Cargo tests. Some tests are excluded as they currently don't compile.
-      # Heuristic glob to detect what test binaries that cargo builds.
-      # If that gets too janky, try `cargo test --message-format=json`
-      # (see
-      # https://github.com/rust-lang/cargo/issues/1924#issuecomment-289770287).
-      - run: |
-          cargo test --all \
-            --exclude ekiden-untrusted \
-            --exclude ekiden-enclave-untrusted \
-            --exclude ekiden-rpc-untrusted \
-            --exclude ekiden-db-untrusted \
-            --exclude ekiden-contract-untrusted \
-            --exclude ekiden-keymanager-untrusted \
-            --exclude token \
-            --no-run
-          cd target/debug
-          mkdir ../cov
-          for bin in $(ls | grep '^\w\+-[0-9a-f]\{16\}$'); do
-            mkdir ../cov/$bin
-            kcov \
-              --include-pattern=$HOME/project \
-              --verify \
-              ../cov/$bin \
-              ./$bin \
-              --test-threads 1
-          done
-      # Upload coverage info.
-      - run: codecov -s target/cov -Z
-
       # Install ekiden-tools.
       - run: cargo install --force --path tools
       # Build token contract.
@@ -64,10 +35,24 @@ jobs:
           working_directory: contracts/token
       # Run token contract tests.
       - run: cargo test -p token
-      # Ensure everything is built. This needs to be after the key manager contract is built.
+      # Ensure everything is built. Building an enclave needs to happen first
       - run: cargo build
       # Check style. This needs to be after everything is built.
       - run: cargo fmt -- --write-mode=check
+
+      # Cargo tests, with the exception of some enclave-specific ones.
+      - run: |
+          cargo test --all \
+            --exclude ekiden-untrusted \
+            --exclude ekiden-enclave-untrusted \
+            --exclude ekiden-rpc-untrusted \
+            --exclude ekiden-db-trusted \
+            --exclude ekiden-db-untrusted \
+            --exclude ekiden-contract-untrusted \
+            --exclude ekiden-keymanager-untrusted \
+            --exclude ekiden-keymanager-node \
+            --exclude ekiden-keymanager-trusted \
+            --exclude token
 
       # Integration tests.
       - run: ./scripts/test-e2e.sh
@@ -86,6 +71,43 @@ jobs:
             - ethereum/build/contracts
             - tests
             - scripts
+  cover-rust:
+    <<: *defaults
+    resource_class: xlarge
+    steps:
+      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
+      - run: echo 'export SGX_MODE=SIM' >> $BASH_ENV
+      - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
+      - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
+      - checkout
+      # Install the NPM truffle dependencies
+      - run: cd ethereum && npm install
+      - run: cargo build
+      # install & tarpaulin test.
+      - run: |
+          RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
+          cargo tarpaulin --all \
+            --ignore-tests \
+            --out Xml \
+            --exclude-files *generated* \
+            --exclude ekiden-untrusted \
+            --exclude ekiden-enclave-untrusted \
+            --exclude ekiden-rpc-untrusted \
+            --exclude ekiden-db-trusted \
+            --exclude ekiden-db-untrusted \
+            --exclude ekiden-contract-untrusted \
+            --exclude ekiden-keymanager-untrusted \
+            --exclude ekiden-keymanager-node \
+            --exclude ekiden-keymanager-trusted \
+            --exclude token \
+            --coveralls $COVERALLS_REPO_TOKEN \
+            -v
+      # Store coverage report.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - cobertura.xml
+
   build-go:
     working_directory: /go/src/github.com/oasislabs/ekiden
     docker:
@@ -165,14 +187,14 @@ jobs:
     steps:
       # Setup version tracking environment variables
       - checkout
-      - run: 
+      - run:
           name: Load docker tag versioning into environment
           command: ./scripts/determine-build-versioning.sh /tmp/build_image_tag
 
       # Save docker tag
       - persist_to_workspace:
           root: /tmp
-          paths: 
+          paths:
             - build_image_tag
 
   deploy:
@@ -189,8 +211,8 @@ jobs:
       - attach_workspace:
           at: /workspace
       - setup_remote_docker
-      
-      - run: 
+
+      - run:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
@@ -233,8 +255,8 @@ jobs:
 
       - attach_workspace:
           at: /workspace
-      
-      - run: 
+
+      - run:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
@@ -254,15 +276,15 @@ jobs:
       - setup_remote_docker
       - attach_workspace:
           at: /workspace
-      
-      - run: 
+
+      - run:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
       # Login to docker
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      
+
       - run:
           name: Download the tag of ekiden for this current workflow
           command: docker pull oasislabs/testnet:$BUILD_IMAGE_TAG
@@ -278,11 +300,11 @@ jobs:
       - run:
           name: Download the tag of transactionclient for this current workflow
           command: docker pull oasislabs/transactionclient:$BUILD_IMAGE_TAG
-      
+
       - run:
           name: Tag the transactionclient build on this workflow for production
           command: docker tag oasislabs/transactionclient:$BUILD_IMAGE_TAG oasislabs/transactionclient:$PRODUCTION_TAG
-      
+
       - run:
           name: Update the txclient tag to production by setting the tag to latest
           command: docker push oasislabs/transactionclient:$PRODUCTION_TAG
@@ -300,11 +322,11 @@ workflows:
           # given testnet eventually. However it currently disrupts some
           # builds.
           filters:
-            branches: 
+            branches:
               only: master
       - deploy:
           filters:
-            branches: 
+            branches:
               only: master
           requires:
             - set-docker-tag
@@ -312,7 +334,7 @@ workflows:
             - build-go
       - deployclient:
           filters:
-            branches: 
+            branches:
               only: master
           requires:
             - set-docker-tag
@@ -329,7 +351,7 @@ workflows:
       - promote-to-production:
           requires:
             - hold-for-production
-          
+
 
   benchmark:
     jobs:
@@ -337,6 +359,16 @@ workflows:
           filters:
             branches:
               only: master
+  nightly:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - cover-rust
 experimental:
   notify:
     branches:

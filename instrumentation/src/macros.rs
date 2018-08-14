@@ -19,7 +19,7 @@ macro_rules! measure {
 /// # Examples
 ///
 /// To configure buckets for a histogram:
-/// ```
+/// ```rust,ignore
 /// measure_configure!(
 ///     "my_histogram",
 ///     "This is my lovely histogram.",
@@ -50,7 +50,7 @@ macro_rules! measure_configure {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// measure_counter_inc!("my_counter");
 /// measure_counter_inc!("my_counter", 10);
 /// ```
@@ -69,7 +69,7 @@ macro_rules! measure_counter_inc {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// measure_gauge!("my_gauge", 10);
 /// ```
 #[macro_export]
@@ -83,7 +83,7 @@ macro_rules! measure_gauge {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// measure_histogram!("my_histogram", 1.3);
 /// ```
 #[macro_export]
@@ -98,7 +98,7 @@ macro_rules! measure_histogram {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// {
 ///     measure_histogram_timer!("my_timer");
 ///     // ...
