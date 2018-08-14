@@ -104,7 +104,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - cordoba.xml  <>
+            - cobertura.xml
 
   build-go:
     working_directory: /go/src/github.com/oasislabs/ekiden
@@ -185,14 +185,14 @@ jobs:
     steps:
       # Setup version tracking environment variables
       - checkout
-      - run: 
+      - run:
           name: Load docker tag versioning into environment
           command: ./scripts/determine-build-versioning.sh /tmp/build_image_tag
 
       # Save docker tag
       - persist_to_workspace:
           root: /tmp
-          paths: 
+          paths:
             - build_image_tag
 
   deploy:
@@ -209,8 +209,8 @@ jobs:
       - attach_workspace:
           at: /workspace
       - setup_remote_docker
-      
-      - run: 
+
+      - run:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
@@ -253,8 +253,8 @@ jobs:
 
       - attach_workspace:
           at: /workspace
-      
-      - run: 
+
+      - run:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
@@ -274,15 +274,15 @@ jobs:
       - setup_remote_docker
       - attach_workspace:
           at: /workspace
-      
-      - run: 
+
+      - run:
           name: Load current docker tag
           command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
 
       # Login to docker
       - run: |
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      
+
       - run:
           name: Download the tag of ekiden for this current workflow
           command: docker pull oasislabs/testnet:$BUILD_IMAGE_TAG
@@ -298,11 +298,11 @@ jobs:
       - run:
           name: Download the tag of transactionclient for this current workflow
           command: docker pull oasislabs/transactionclient:$BUILD_IMAGE_TAG
-      
+
       - run:
           name: Tag the transactionclient build on this workflow for production
           command: docker tag oasislabs/transactionclient:$BUILD_IMAGE_TAG oasislabs/transactionclient:$PRODUCTION_TAG
-      
+
       - run:
           name: Update the txclient tag to production by setting the tag to latest
           command: docker push oasislabs/transactionclient:$PRODUCTION_TAG
@@ -312,7 +312,6 @@ workflows:
   build:
     jobs:
       - build-rust
-      - cover-rust
       - build-go
       - lint-git
       - set-docker-tag:
@@ -321,11 +320,11 @@ workflows:
           # given testnet eventually. However it currently disrupts some
           # builds.
           filters:
-            branches: 
+            branches:
               only: master
       - deploy:
           filters:
-            branches: 
+            branches:
               only: master
           requires:
             - set-docker-tag
@@ -333,7 +332,7 @@ workflows:
             - build-go
       - deployclient:
           filters:
-            branches: 
+            branches:
               only: master
           requires:
             - set-docker-tag
@@ -350,7 +349,7 @@ workflows:
       - promote-to-production:
           requires:
             - hold-for-production
-          
+
 
   benchmark:
     jobs:
