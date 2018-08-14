@@ -96,7 +96,10 @@ func BroadcastTx(client tmcli.Client, tag byte, tx interface{}) error {
 
 // Query transmits a query to the Ekiden ABCI application.
 func Query(client tmcli.Client, path string, query interface{}) ([]byte, error) {
-	data := cbor.Marshal(query)
+	var data []byte
+	if query != nil {
+		data = cbor.Marshal(query)
+	}
 	response, err := client.ABCIQuery(path, data)
 	if err != nil {
 		return nil, errors.Wrap(err, "query: request failed")

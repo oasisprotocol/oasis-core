@@ -4,10 +4,11 @@ package entity
 import (
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ethereum"
-	"github.com/oasislabs/ekiden/go/grpc/common"
+	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
 var (
@@ -28,8 +29,14 @@ type Entity struct {
 	EthAddress *ethereum.Address
 }
 
+// Clone returns a copy of itself.
+func (e *Entity) Clone() common.Cloneable {
+	entityCopy := *e
+	return &entityCopy
+}
+
 // FromProto deserializes a protobuf into an Entity.
-func (e *Entity) FromProto(pb *common.Entity) error {
+func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 	if pb == nil {
 		return ErrNilProtobuf
 	}
@@ -49,8 +56,8 @@ func (e *Entity) FromProto(pb *common.Entity) error {
 }
 
 // ToProto serializes the Entity into a protobuf.
-func (e *Entity) ToProto() *common.Entity {
-	pb := new(common.Entity)
+func (e *Entity) ToProto() *pbCommon.Entity {
+	pb := new(pbCommon.Entity)
 
 	pb.Id, _ = e.ID.MarshalBinary()
 	if e.EthAddress != nil {

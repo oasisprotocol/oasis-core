@@ -101,7 +101,7 @@ func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.
 	}
 
 	ent, err := s.backend.GetEntity(ctx, id)
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 
@@ -114,7 +114,10 @@ func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.
 }
 
 func (s *grpcServer) GetEntities(ctx context.Context, req *pb.EntitiesRequest) (*pb.EntitiesResponse, error) {
-	ents := s.backend.GetEntities(ctx)
+	ents, err := s.backend.GetEntities(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	pbEnts := make([]*commonPB.Entity, 0, len(ents))
 	for _, v := range ents {
@@ -194,7 +197,10 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.NodeRequest) (*pb.Node
 }
 
 func (s *grpcServer) GetNodes(ctx context.Context, req *pb.NodesRequest) (*pb.NodesResponse, error) {
-	nodes := s.backend.GetNodes(ctx)
+	nodes, err := s.backend.GetNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// XXX: Epoch????  The underlying implementation doesn't take this
 	// argument.

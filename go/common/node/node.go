@@ -9,10 +9,11 @@ import (
 	"math"
 	"net"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ethereum"
-	"github.com/oasislabs/ekiden/go/grpc/common"
+	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
 var (
@@ -63,8 +64,14 @@ func (c *Certificate) Parse() (*x509.Certificate, error) {
 	return x509.ParseCertificate(c.Der)
 }
 
+// Clone returns a copy of itself.
+func (n *Node) Clone() common.Cloneable {
+	nodeCopy := *n
+	return &nodeCopy
+}
+
 // FromProto deserializes a protobuf into a Node.
-func (n *Node) FromProto(pb *common.Node) error { // nolint:gocyclo
+func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 	if pb == nil {
 		return ErrNilProtobuf
 	}
@@ -111,8 +118,8 @@ func (n *Node) FromProto(pb *common.Node) error { // nolint:gocyclo
 }
 
 // ToProto serializes the Node into a protobuf.
-func (n *Node) ToProto() *common.Node {
-	pb := new(common.Node)
+func (n *Node) ToProto() *pbCommon.Node {
+	pb := new(pbCommon.Node)
 
 	pb.Id, _ = n.ID.MarshalBinary()
 	if n.EthAddress != nil {
@@ -124,7 +131,7 @@ func (n *Node) ToProto() *common.Node {
 		pb.Addresses = toProtoAddresses(n.Addresses)
 	}
 	if n.Certificate != nil {
-		pb.Certificate = &common.Certificate{
+		pb.Certificate = &pbCommon.Certificate{
 			Der: append([]byte{}, n.Certificate.Der...),
 		}
 	}
@@ -150,12 +157,12 @@ func (n *Node) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, n)
 }
 
-func parseProtoAddress(pb *common.Address) (net.Addr, error) {
+func parseProtoAddress(pb *pbCommon.Address) (net.Addr, error) {
 	var ipLen int
 	switch pb.GetTransport() {
-	case common.Address_TCPv4:
+	case pbCommon.Address_TCPv4:
 		ipLen = 4
-	case common.Address_TCPv6:
+	case pbCommon.Address_TCPv6:
 		ipLen = 16
 	default:
 		return nil, ErrInvalidAddress
@@ -177,22 +184,22 @@ func parseProtoAddress(pb *common.Address) (net.Addr, error) {
 	return tAddr, nil
 }
 
-func toProtoAddress(addr net.Addr) *common.Address {
+func toProtoAddress(addr net.Addr) *pbCommon.Address {
 	taddr, ok := addr.(*net.TCPAddr)
 	if !ok {
 		panic("unsupported address type")
 	}
 
-	pbAddr := new(common.Address)
+	pbAddr := new(pbCommon.Address)
 	ip := taddr.IP.To4()
 	if ip != nil {
-		pbAddr.Transport = common.Address_TCPv4
+		pbAddr.Transport = pbCommon.Address_TCPv4
 	} else {
 		ip = taddr.IP.To16()
 		if ip == nil {
 			panic("IP address is neither IPv4 nor IPv6")
 		}
-		pbAddr.Transport = common.Address_TCPv6
+		pbAddr.Transport = pbCommon.Address_TCPv6
 	}
 	pbAddr.Address = append([]byte{}, ip...)
 	pbAddr.Port = uint32(taddr.Port)
@@ -200,8 +207,8 @@ func toProtoAddress(addr net.Addr) *common.Address {
 	return pbAddr
 }
 
-func toProtoAddresses(addrs []net.Addr) []*common.Address {
-	var pbAddrs []*common.Address
+func toProtoAddresses(addrs []net.Addr) []*pbCommon.Address {
+	var pbAddrs []*pbCommon.Address
 	for _, addr := range addrs {
 		pbAddrs = append(pbAddrs, toProtoAddress(addr))
 	}

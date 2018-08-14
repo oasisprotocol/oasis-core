@@ -36,10 +36,21 @@ var (
 const (
 	// QueryRegistryGetEntity is a path for GetEntity query.
 	QueryRegistryGetEntity = "registry/entity"
+
+	// QueryRegistryGetEntities is a path for GetEntities query.
+	QueryRegistryGetEntities = "registry/entities"
+
 	// QueryRegistryGetNode is a path for GetNode query.
 	QueryRegistryGetNode = "registry/node"
+
+	// QueryRegistryGetNodes is a path for GetNodes query.
+	QueryRegistryGetNodes = "registry/nodes"
+
 	// QueryRegistryGetContract is a path for GetContract query.
 	QueryRegistryGetContract = "registry/contract"
+
+	// QueryRegistryGetContracts is a path for GetContracts query.
+	QueryRegistryGetContracts = "registry/contracts"
 )
 
 var (
