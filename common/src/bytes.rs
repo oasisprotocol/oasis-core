@@ -10,11 +10,10 @@
 //!
 //! These represent unformatted binary data of fixed length.
 use std::fmt;
-use std::marker::PhantomData;
 use std::str::FromStr;
 
 use rustc_hex;
-use serde::de::{self, SeqAccess, Visitor};
+use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::error::Error;
@@ -411,13 +410,7 @@ macro_rules! impl_serialize_for_bytes {
             where
                 S: Serializer,
             {
-                use serde::ser::SerializeTuple;
-
-                let mut seq = serializer.serialize_tuple($size)?;
-                for e in self.0.iter() {
-                    seq.serialize_element(e)?;
-                }
-                seq.end()
+                serializer.serialize_bytes(self)
             }
         }
     };
@@ -430,37 +423,42 @@ macro_rules! impl_deserialize_for_bytes {
             where
                 D: Deserializer<'de>,
             {
-                struct ArrayVisitor<T> {
-                    element: PhantomData<T>,
-                }
+                struct BytesVisitor;
 
-                impl<'de, T> Visitor<'de> for ArrayVisitor<T>
-                where
-                    T: Default + Copy + Deserialize<'de>,
+                impl<'de> Visitor<'de> for BytesVisitor
                 {
-                    type Value = [T; $size];
+                    type Value = $name;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str(concat!("an array of length ", $size))
+                        formatter.write_str("bytes or sequence of u8")
                     }
 
-                    fn visit_seq<A>(self, mut seq: A) -> Result<[T; $size], A::Error>
+                    fn visit_seq<A>(self, mut seq: A) -> Result<$name, A::Error>
                     where
-                        A: SeqAccess<'de>,
+                        A: de::SeqAccess<'de>,
                     {
-                        let mut arr = [T::default(); $size];
+                        let mut array = [0; $size];
                         for i in 0..$size {
-                            arr[i] = seq.next_element()?
+                            array[i] = seq.next_element()?
                                 .ok_or_else(|| de::Error::invalid_length(i, &self))?;
                         }
-                        Ok(arr)
+                        Ok($name(array))
+                    }
+
+                    fn visit_bytes<E>(self, data: &[u8]) -> Result<$name, E>
+                    where
+                        E: de::Error,
+                    {
+                        let mut array = [0; $size];
+                        if data.len() != $size {
+                            return Err(de::Error::invalid_length(data.len(), &self));
+                        }
+                        array[..].copy_from_slice(data);
+                        Ok($name(array))
                     }
                 }
 
-                let visitor = ArrayVisitor {
-                    element: PhantomData,
-                };
-                Ok($name(deserializer.deserialize_tuple($size, visitor)?))
+                Ok(deserializer.deserialize_bytes(BytesVisitor)?)
             }
         }
     };
