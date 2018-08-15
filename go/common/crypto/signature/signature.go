@@ -195,10 +195,10 @@ func (k PrivateKey) String() string {
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
-	PublicKey PublicKey
+	PublicKey PublicKey `codec:"public_key"`
 
 	// Signature is the actual raw signature.
-	Signature RawSignature
+	Signature RawSignature `codec:"signature"`
 
 	// TODO: Attestation.
 }
@@ -270,10 +270,10 @@ func (s *Signature) ToProto() *common.Signature {
 // Signed is a signed blob.
 type Signed struct {
 	// Blob is the signed blob.
-	Blob []byte
+	Blob []byte `codec:"untrusted_raw_value"`
 
 	// Signature is the signature over blob.
-	Signature Signature
+	Signature Signature `codec:"signature"`
 }
 
 // SignSigned generates a Signed with the private key over the context and

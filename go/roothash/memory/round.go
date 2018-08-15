@@ -33,18 +33,9 @@ func (e errDiscrepancyDetected) Error() string {
 }
 
 type commitment struct {
-	Raw       []byte
-	Signature *signature.Signature
+	signature.Signed
 
 	header *api.Header
-}
-
-func (c *commitment) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, c)
-}
-
-func (c *commitment) MarshalCBOR() []byte {
-	return cbor.Marshal(c)
 }
 
 func (c *commitment) fromCommitment(commit *api.Commitment) error {
@@ -56,15 +47,11 @@ func (c *commitment) toCommitment() *api.Commitment {
 }
 
 func (c *commitment) open() error {
-	if !c.Signature.Verify(commitmentSignatureContext, c.Raw) {
+	var header api.Header
+	if err := c.Signed.Open(commitmentSignatureContext, &header); err != nil {
 		return errors.New("roothash/memory: commitment has invalid signature")
 	}
-
-	header := new(api.Header)
-	if err := header.UnmarshalCBOR(c.Raw); err != nil {
-		return err
-	}
-	c.header = header
+	c.header = &header
 
 	return nil
 }
