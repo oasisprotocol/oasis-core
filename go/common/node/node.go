@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"math"
-	"net"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -44,13 +43,56 @@ type Node struct {
 	Expiration uint64 `codec:"expiration"`
 
 	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []net.Addr `codec:"addresses"`
+	Addresses []Address `codec:"addresses"`
 
 	// Certificate is the certificate for establishing TLS connections.
 	Certificate *Certificate `codec:"certificate"`
 
 	// Stake is the node's stake. (TODO: Not defined yet.)
 	Stake []byte `codec:"stake"`
+}
+
+// Address families.
+const (
+	AddressFamilyIPv4 = "V4"
+	AddressFamilyIPv6 = "V6"
+)
+
+// Address is an IP address.
+//
+// This structure format is compatible with Rust's SocketAddr serialization.
+type Address struct {
+	_struct struct{} `codec:",toarray"`
+
+	// Family is an address family.
+	Family string
+
+	// Tuple is a (ip, port) tuple.
+	Tuple AddressTuple
+}
+
+// NewAddress creates a new address.
+func NewAddress(family string, ip []byte, port uint16) (*Address, error) {
+	return &Address{
+		Family: family,
+		Tuple: AddressTuple{
+			IP:   ip,
+			Port: port,
+		},
+	}, nil
+}
+
+// AddressTuple is an (ip, port) tuple.
+//
+// This structure format is compatible with Rust's SocketAddr serialization.
+type AddressTuple struct {
+	_struct struct{} `codec:",toarray"`
+
+	// IP address.
+	IP []byte
+
+	// Port.
+	Port uint16
 }
 
 // Certificate represents a X.509 certificate.
@@ -99,13 +141,13 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 	n.Expiration = pb.GetExpiration()
 
 	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
-		n.Addresses = make([]net.Addr, 0, len(pbAddresses))
+		n.Addresses = make([]Address, 0, len(pbAddresses))
 		for _, v := range pbAddresses {
 			addr, err := parseProtoAddress(v)
 			if err != nil {
 				return err
 			}
-			n.Addresses = append(n.Addresses, addr)
+			n.Addresses = append(n.Addresses, *addr)
 		}
 	}
 
@@ -172,13 +214,16 @@ func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfa
 	return s.Signed.Open(context, node)
 }
 
-func parseProtoAddress(pb *pbCommon.Address) (net.Addr, error) {
+func parseProtoAddress(pb *pbCommon.Address) (*Address, error) {
 	var ipLen int
+	var family string
 	switch pb.GetTransport() {
 	case pbCommon.Address_TCPv4:
 		ipLen = 4
+		family = AddressFamilyIPv4
 	case pbCommon.Address_TCPv6:
 		ipLen = 16
+		family = AddressFamilyIPv6
 	default:
 		return nil, ErrInvalidAddress
 	}
@@ -192,37 +237,26 @@ func parseProtoAddress(pb *pbCommon.Address) (net.Addr, error) {
 		return nil, ErrInvalidAddress
 	}
 
-	tAddr := new(net.TCPAddr)
-	copy(tAddr.IP[:], rawIP)
-	tAddr.Port = int(rawPort)
-
-	return tAddr, nil
+	return NewAddress(family, rawIP, uint16(rawPort))
 }
 
-func toProtoAddress(addr net.Addr) *pbCommon.Address {
-	taddr, ok := addr.(*net.TCPAddr)
-	if !ok {
-		panic("unsupported address type")
-	}
-
+func toProtoAddress(addr Address) *pbCommon.Address {
 	pbAddr := new(pbCommon.Address)
-	ip := taddr.IP.To4()
-	if ip != nil {
+	switch addr.Family {
+	case AddressFamilyIPv4:
 		pbAddr.Transport = pbCommon.Address_TCPv4
-	} else {
-		ip = taddr.IP.To16()
-		if ip == nil {
-			panic("IP address is neither IPv4 nor IPv6")
-		}
+	case AddressFamilyIPv6:
 		pbAddr.Transport = pbCommon.Address_TCPv6
+	default:
+		panic("Address is neither IPv4 nor IPv6")
 	}
-	pbAddr.Address = append([]byte{}, ip...)
-	pbAddr.Port = uint32(taddr.Port)
+	pbAddr.Address = append([]byte{}, addr.Tuple.IP...)
+	pbAddr.Port = uint32(addr.Tuple.Port)
 
 	return pbAddr
 }
 
-func toProtoAddresses(addrs []net.Addr) []*pbCommon.Address {
+func toProtoAddresses(addrs []Address) []*pbCommon.Address {
 	var pbAddrs []*pbCommon.Address
 	for _, addr := range addrs {
 		pbAddrs = append(pbAddrs, toProtoAddress(addr))
