@@ -10,14 +10,14 @@ import (
 // Block is an Oasis block.
 type Block struct {
 	// Header is the block header.
-	Header Header
+	Header Header `codec:"header"`
 
 	// ComputationGroup is the designated computation group.
-	ComputationGroup []*scheduler.CommitteeNode
+	ComputationGroup []*scheduler.CommitteeNode `codec:"computation_group"`
 
 	// Commitments is the vector of commitments from compute nodes,
 	// in the same order as in the computation group.
-	Commitments []*Commitment
+	Commitments []*Commitment `codec:"commitments"`
 }
 
 // Update updates the block header based on the current block content.

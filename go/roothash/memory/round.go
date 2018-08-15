@@ -80,7 +80,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) error {
 
 	switch s.state {
 	case stateWaitingCommitments:
-		ok = node.Role == scheduler.Worker
+		ok = node.Role == scheduler.Worker || node.Role == scheduler.Leader
 	case stateDiscrepancyWaitingCommitments:
 		ok = node.Role == scheduler.BackupWorker
 	}

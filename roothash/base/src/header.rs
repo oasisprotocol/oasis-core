@@ -1,8 +1,8 @@
 //! Block header type.
 use std::convert::TryFrom;
 
-use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 
 use ekiden_roothash_api as api;
 

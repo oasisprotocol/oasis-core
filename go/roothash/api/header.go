@@ -71,27 +71,27 @@ func (n *Namespace) String() string {
 
 // Round is a round number.
 //
-// While this is encoded as a unsigned 256 bit little endian integer
+// While this is encoded as a unsigned 256 bit big endian integer
 // on the wire, it is a 64 bit unsigned integer in reality.
 type Round [RoundSize]byte
 
 // ToU64 returns the 64 bit unsigned representation of a round.
 func (r *Round) ToU64() (uint64, error) {
 	// Ensure the value fits in 64 bits.
-	if !memIsZero(r[8:]) {
+	if !memIsZero(r[:RoundSize-8]) {
 		return 0, ErrInvalidRound
 	}
 
-	return binary.LittleEndian.Uint64(r[:]), nil
+	return binary.BigEndian.Uint64(r[RoundSize-8:]), nil
 }
 
 // FromU64 sets a round from a uint64.
 func (r *Round) FromU64(x uint64) {
-	for i := 8; i < 32; i++ {
+	for i := 0; i < RoundSize-8; i++ {
 		r[i] = 0
 	}
 
-	binary.LittleEndian.PutUint64(r[:], x)
+	binary.BigEndian.PutUint64(r[RoundSize-8:], x)
 }
 
 // Increment returns the round incremented by 1.
@@ -108,23 +108,33 @@ func (r *Round) Increment() Round {
 
 // MarshalBinary encodes a round into binary form.
 func (r *Round) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, r[:]...)
+	var offset int
+	for offset = 0; offset < RoundSize; offset++ {
+		if r[offset] != 0 {
+			break
+		}
+	}
+
+	data = append([]byte{}, r[offset:]...)
 	return
 }
 
 // UnmarshalBinary decodes a binary marshaled round.
 func (r *Round) UnmarshalBinary(data []byte) error {
-	if len(data) != 32 {
+	if len(data) > 0 && data[0] == 0 {
+		// Leading empty bytes should be stripped.
+		return ErrMalformedRound
+	} else if len(data) > RoundSize {
 		return ErrMalformedRound
 	}
 
-	copy(r[:], data)
+	copy(r[RoundSize-len(data):], data)
 
 	_, err := r.ToU64()
 	return err
 }
 
-// String returns the string representation of a roundf.
+// String returns the string representation of a round.
 func (r *Round) String() string {
 	v, err := r.ToU64()
 	if err != nil {
@@ -137,31 +147,31 @@ func (r *Round) String() string {
 // Header is a block header.
 type Header struct {
 	// Version is the protocol version number.
-	Version uint16
+	Version uint16 `codec:"version"`
 
 	// Namespace is the header's chain namespace.
-	Namespace Namespace
+	Namespace Namespace `codec:"namespace"`
 
 	// Round is the block round.
-	Round Round
+	Round Round `codec:"round"`
 
 	// PreviousHash is the previous block hash.
-	PreviousHash hash.Hash
+	PreviousHash hash.Hash `codec:"previous_hash"`
 
 	// GroupHash is the computation group hash.
-	GroupHash hash.Hash
+	GroupHash hash.Hash `codec:"group_hash"`
 
 	// InputHash is the input hash.
-	InputHash hash.Hash
+	InputHash hash.Hash `codec:"input_hash"`
 
 	// OutputHash is the output hash.
-	OutputHash hash.Hash
+	OutputHash hash.Hash `codec:"output_hash"`
 
 	// StateRoot is the state root hash.
-	StateRoot hash.Hash
+	StateRoot hash.Hash `codec:"state_root"`
 
 	// CommitmentsHash is the Commitments hash.
-	CommitmentsHash hash.Hash
+	CommitmentsHash hash.Hash `codec:"commitments_hash"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
