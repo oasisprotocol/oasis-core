@@ -146,16 +146,15 @@ func (r *memoryBackend) RegisterNode(ctx context.Context, sigNode *node.SignedNo
 		return err
 	}
 
-	mk := node.ID.ToMapKey()
 	r.state.Lock()
-	if r.state.entities[mk] == nil {
+	if r.state.entities[node.EntityID.ToMapKey()] == nil {
 		r.state.Unlock()
 		r.logger.Error("RegisterNode: unknown entity in node registration",
 			"node", node,
 		)
 		return api.ErrBadEntityForNode
 	}
-	r.state.nodes[mk] = node
+	r.state.nodes[node.ID.ToMapKey()] = node
 	r.state.Unlock()
 
 	r.logger.Debug("RegisterNode: registered",
