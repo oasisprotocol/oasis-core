@@ -1,6 +1,9 @@
 //! Block header type.
 use std::convert::TryFrom;
 
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeStruct;
+
 use ekiden_roothash_api as api;
 
 use ekiden_common::bytes::{B256, H256};
@@ -9,7 +12,7 @@ use ekiden_common::hash::EncodedHash;
 use ekiden_common::uint::U256;
 
 /// Block header.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Deserialize)]
 pub struct Header {
     /// Protocol version number.
     pub version: u16,
@@ -35,6 +38,27 @@ impl Header {
     /// Check if this header is a parent of a child header.
     pub fn is_parent_of(&self, child: &Header) -> bool {
         self.previous_hash == child.get_encoded_hash()
+    }
+}
+
+// NOTE: We need to implement a custom Serialize because we need canonical encoding,
+//       e.g., fields sorted by name.
+impl Serialize for Header {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut header = serializer.serialize_struct("Header", 9)?;
+        header.serialize_field("commitments_hash", &self.commitments_hash)?;
+        header.serialize_field("group_hash", &self.group_hash)?;
+        header.serialize_field("input_hash", &self.input_hash)?;
+        header.serialize_field("namespace", &self.namespace)?;
+        header.serialize_field("output_hash", &self.output_hash)?;
+        header.serialize_field("previous_hash", &self.previous_hash)?;
+        header.serialize_field("round", &self.round)?;
+        header.serialize_field("state_root", &self.state_root)?;
+        header.serialize_field("version", &self.version)?;
+        header.end()
     }
 }
 

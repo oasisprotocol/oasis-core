@@ -1,10 +1,10 @@
 //! Common big unsigned integer types.
-use std::ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub};
 use std::fmt;
+use std::ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub};
 
 use bigint::uint;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Implement binary operator for uint type wrapper.
 macro_rules! impl_op_for_wrapper {
@@ -156,8 +156,7 @@ macro_rules! impl_deserialize_for_uint {
             {
                 struct BytesVisitor;
 
-                impl<'de> Visitor<'de> for BytesVisitor
-                {
+                impl<'de> Visitor<'de> for BytesVisitor {
                     type Value = $name;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
