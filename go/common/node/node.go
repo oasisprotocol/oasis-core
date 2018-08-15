@@ -31,37 +31,42 @@ var (
 // Node represents public connectivity information about an Ekiden node.
 type Node struct {
 	// ID is the public key identifying the node.
-	ID signature.PublicKey
+	ID signature.PublicKey `codec:"id"`
 
 	// EthAddress is the optional Ethereum address of this node.
-	EthAddress *ethereum.Address
+	EthAddress *ethereum.Address `codec:"eth_address"`
 
 	// EntityID is the public key identifying the Entity controlling
 	// the node.
-	EntityID signature.PublicKey
+	EntityID signature.PublicKey `codec:"entity_id"`
 
 	// Expiration is the epoch in which this node's commitment expires.
-	Expiration uint64
+	Expiration uint64 `codec:"expiration"`
 
 	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []net.Addr
+	Addresses []net.Addr `codec:"addresses"`
 
 	// Certificate is the certificate for establishing TLS connections.
-	Certificate *Certificate
+	Certificate *Certificate `codec:"certificate"`
 
 	// Stake is the node's stake. (TODO: Not defined yet.)
-	Stake []byte
+	Stake []byte `codec:"stake"`
 }
 
 // Certificate represents a X.509 certificate.
 type Certificate struct {
 	// Der is the DER encoding of a X.509 certificate.
-	Der []byte
+	Der []byte `codec:"der"`
 }
 
 // Parse parses the DER encoded payload and returns the certificate.
 func (c *Certificate) Parse() (*x509.Certificate, error) {
 	return x509.ParseCertificate(c.Der)
+}
+
+// String returns a string representation of itself.
+func (n *Node) String() string {
+	return "<Node id=" + n.ID.String() + ">"
 }
 
 // Clone returns a copy of itself.
@@ -155,6 +160,16 @@ func (n *Node) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (n *Node) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, n)
+}
+
+// SignedNode is a signed blob containing a CBOR-serialized Node.
+type SignedNode struct {
+	signature.Signed
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfacer
+	return s.Signed.Open(context, node)
 }
 
 func parseProtoAddress(pb *pbCommon.Address) (net.Addr, error) {

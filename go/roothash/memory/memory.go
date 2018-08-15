@@ -97,7 +97,7 @@ func (s *contractState) onNewCommittee(committee *scheduler.Committee) {
 	s.round = newRound(s.storage, s.contract, committee, block)
 }
 
-func (s *contractState) tryFinalize(forced bool) {
+func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
 	var rearmTimer bool
 	defer func() {
 		// Note: Unlike the Rust code, this pushes back the timer

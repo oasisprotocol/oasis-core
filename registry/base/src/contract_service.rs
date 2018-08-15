@@ -8,7 +8,7 @@ use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture, Future, Stream};
-use ekiden_common::signature::{Signature, Signed};
+use ekiden_common::signature::Signed;
 use ekiden_registry_api as api;
 
 use super::contract_backend::ContractRegistryBackend;
@@ -32,9 +32,8 @@ impl api::ContractRegistry for ContractRegistryService {
         sink: UnarySink<api::RegisterContractResponse>,
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
-            let c = Contract::try_from(req.get_contract().clone())?;
-            let s = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.register_contract(Signed::from_parts(c, s)))
+            Ok(self.inner
+                .register_contract(Signed::try_from(req.get_contract().clone())?))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {

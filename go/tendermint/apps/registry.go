@@ -250,13 +250,13 @@ func (app *RegistryApplication) executeTx(
 	checkOnly bool,
 ) (*abci.TxOutput, error) {
 	if tx.TxRegisterEntity != nil {
-		return app.registerEntity(state, checkOnly, &tx.TxRegisterEntity.Entity, &tx.TxRegisterEntity.Signature)
+		return app.registerEntity(state, checkOnly, &tx.TxRegisterEntity.Entity)
 	} else if tx.TxDeregisterEntity != nil {
-		return app.deregisterEntity(state, checkOnly, tx.TxDeregisterEntity.ID, &tx.TxDeregisterEntity.Signature)
+		return app.deregisterEntity(state, checkOnly, &tx.TxDeregisterEntity.ID)
 	} else if tx.TxRegisterNode != nil {
-		return app.registerNode(state, checkOnly, &tx.TxRegisterNode.Node, &tx.TxRegisterNode.Signature)
+		return app.registerNode(state, checkOnly, &tx.TxRegisterNode.Node)
 	} else if tx.TxRegisterContract != nil {
-		return app.registerContract(state, checkOnly, &tx.TxRegisterContract.Contract, &tx.TxRegisterContract.Signature)
+		return app.registerContract(state, checkOnly, &tx.TxRegisterContract.Contract)
 	} else {
 		return nil, registry.ErrInvalidArgument
 	}
@@ -266,19 +266,11 @@ func (app *RegistryApplication) executeTx(
 func (app *RegistryApplication) registerEntity(
 	state *iavl.MutableTree,
 	checkOnly bool,
-	ent *entity.Entity,
-	sig *signature.Signature,
+	sigEnt *entity.SignedEntity,
 ) (*abci.TxOutput, error) {
-	// XXX: Ensure ent is well-formed.
-	if ent == nil || sig == nil || sig.SanityCheck(ent.ID) != nil {
-		app.logger.Error("RegisterEntity: invalid argument(s)",
-			"entity", ent,
-			"signature", sig,
-		)
-		return nil, registry.ErrInvalidArgument
-	}
-	if !sig.Verify(registry.RegisterEntitySignatureContext, ent.ToSignable()) {
-		return nil, registry.ErrInvalidSignature
+	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt)
+	if err != nil {
+		return nil, err
 	}
 
 	if checkOnly {
@@ -310,22 +302,11 @@ func (app *RegistryApplication) registerEntity(
 func (app *RegistryApplication) deregisterEntity(
 	state *iavl.MutableTree,
 	checkOnly bool,
-	id signature.PublicKey,
-	sig *signature.Signature,
+	sigID *signature.SignedPublicKey,
 ) (*abci.TxOutput, error) {
-	if sig == nil || sig.SanityCheck(id) != nil {
-		app.logger.Error("DeregisterEntity: invalid argument(s)",
-			"entity_id", id,
-			"signature", sig,
-		)
-		return nil, registry.ErrInvalidArgument
-	}
-	if !sig.Verify(registry.DeregisterEntitySignatureContext, id) {
-		app.logger.Error("DeregisterEntity: invalid signature",
-			"entity_id", id,
-			"signature", sig,
-		)
-		return nil, registry.ErrInvalidSignature
+	id, err := registry.VerifyDeregisterEntityArgs(app.logger, sigID)
+	if err != nil {
+		return nil, err
 	}
 
 	if checkOnly {
@@ -378,19 +359,11 @@ func (app *RegistryApplication) deregisterEntity(
 func (app *RegistryApplication) registerNode(
 	state *iavl.MutableTree,
 	checkOnly bool,
-	node *node.Node,
-	sig *signature.Signature,
+	sigNode *node.SignedNode,
 ) (*abci.TxOutput, error) {
-	// XXX: Ensure node is well-formed.
-	if node == nil || sig == nil || sig.SanityCheck(node.EntityID) != nil {
-		app.logger.Error("RegisterNode: invalid argument(s)",
-			"node", node,
-			"signature", sig,
-		)
-		return nil, registry.ErrInvalidArgument
-	}
-	if !sig.Verify(registry.RegisterNodeSignatureContext, node.ToSignable()) {
-		return nil, registry.ErrInvalidSignature
+	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode)
+	if err != nil {
+		return nil, err
 	}
 
 	// Ensure that the entity exists.
@@ -437,19 +410,15 @@ func (app *RegistryApplication) registerNode(
 func (app *RegistryApplication) registerContract(
 	state *iavl.MutableTree,
 	checkOnly bool,
-	con *contract.Contract,
-	sig *signature.Signature,
+	sigCon *contract.SignedContract,
 ) (*abci.TxOutput, error) {
-	// XXX: Ensure contact is well-formed.
-	if con == nil || sig == nil || sig.SanityCheck(con.ID) != nil {
-		app.logger.Error("RegisterContract: invalid argument(s)",
-			"contract", con,
-			"signature", sig,
-		)
-		return nil, registry.ErrInvalidArgument
+	con, err := registry.VerifyRegisterContractArgs(app.logger, sigCon)
+	if err != nil {
+		return nil, err
 	}
-	if !sig.Verify(registry.RegisterContractSignatureContext, con.ToSignable()) {
-		return nil, registry.ErrInvalidSignature
+
+	if checkOnly {
+		return nil, nil
 	}
 
 	state.Set(
@@ -476,6 +445,6 @@ func (app *RegistryApplication) registerContract(
 // NewRegistryApplication constructs a new RegistryApplication instance.
 func NewRegistryApplication() abci.Application {
 	return &RegistryApplication{
-		logger: logging.GetLogger("RegistryApplication"),
+		logger: logging.GetLogger("tendermint/registry"),
 	}
 }

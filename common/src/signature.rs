@@ -285,3 +285,24 @@ impl<T: Clone> Clone for Signed<T> {
         }
     }
 }
+
+impl<T> TryFrom<api::Signed> for Signed<T> {
+    type Error = super::error::Error;
+
+    fn try_from(mut pb: api::Signed) -> std::result::Result<Self, self::Error> {
+        Ok(Signed {
+            untrusted_raw_value: pb.take_blob(),
+            value: PhantomData::<T>,
+            signature: Signature::try_from(pb.take_signature())?,
+        })
+    }
+}
+
+impl<T> Into<api::Signed> for Signed<T> {
+    fn into(self) -> api::Signed {
+        let mut signed = api::Signed::new();
+        signed.set_blob(self.untrusted_raw_value);
+        signed.set_signature(self.signature.into());
+        signed
+    }
+}
