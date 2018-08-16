@@ -107,7 +107,10 @@ func New(dataDir string) (service.TendermintService, error) {
 		tenderminGenesisProvider,
 		tendermintNode.DefaultDBProvider,
 		tendermintNode.DefaultMetricsProvider,
-		&abci.LogAdapter{logging.GetLogger("tendermint")},
+		&abci.LogAdapter{
+			Logger:           logging.GetLogger("tendermint"),
+			IsTendermintCore: true,
+		},
 	)
 	if err != nil {
 		return nil, err

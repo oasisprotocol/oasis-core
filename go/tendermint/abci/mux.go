@@ -499,14 +499,40 @@ func newABCIMux(dataDir string) (*abciMux, error) {
 // LogAdapter is a log adapter to allow tendermint to use ekiden logging.
 type LogAdapter struct {
 	*logging.Logger
+
+	IsTendermintCore bool
 }
 
 // With implements the correspoding call in the tendermit Logger interface.
 func (a *LogAdapter) With(keyvals ...interface{}) tmlog.Logger {
-	// This is a bit silly, but the Ekiden logging's With returns a
-	// pointer to it's Logger struct rather than the tendermint Logger
-	// interface.
-	return &LogAdapter{a.Logger.With(keyvals...)}
+	// The tendermint code separates logs by module using the "module"
+	// key similar to the Ekiden code, so rewrite the module value to
+	// include a prefix that makes it obvious that the log originates
+	// from tendermint for easy filtering.
+	if a.IsTendermintCore {
+		for i, v := range keyvals {
+			// keyvals is a set of key value pairs.
+			if i&1 != 0 {
+				continue
+			}
+
+			sKey := v.(string)
+			if sKey != "module" {
+				continue
+			}
+			if i+1 >= len(keyvals) {
+				panic("With(): tenderming core logger, missing 'module' value")
+			}
+			sVal := keyvals[i+1].(string)
+			keyvals[i+1] = "tendermint:" + sVal
+			break
+		}
+	}
+
+	return &LogAdapter{
+		Logger:           a.Logger.With(keyvals...),
+		IsTendermintCore: a.IsTendermintCore,
+	}
 }
 
 // ApplicationState is the overall past, present and future state
