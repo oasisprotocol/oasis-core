@@ -26,25 +26,6 @@ func (b *Block) Update() {
 	b.Header.CommitmentsHash = b.getCommitmentsHash()
 }
 
-// NewParentOf returns a parent block generated from a existing block,
-// and a header containing the new block's hashes.
-func (b *Block) NewParentOf(newHdr *Header) *Block {
-	parent := new(Block)
-	parent.Header.Version = b.Header.Version
-	parent.Header.Namespace = b.Header.Namespace
-	parent.Header.Round = b.Header.Round.Increment()
-	parent.Header.PreviousHash = b.Header.EncodedHash()
-
-	parent.Header.InputHash = b.Header.InputHash
-	parent.Header.OutputHash = b.Header.OutputHash
-	parent.Header.StateRoot = b.Header.StateRoot
-
-	// The Rust code calls Update(), but that is wasted since the
-	// commitments aren't present in the new block yet.
-
-	return parent
-}
-
 // FromProto deserializes a protobuf into a block.
 //
 // WARNING: The block is not guaranteed to be internally consistent.
