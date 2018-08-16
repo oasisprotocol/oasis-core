@@ -164,6 +164,15 @@ func (k PrivateKey) Public() PublicKey {
 	return PublicKey(ed25519.PrivateKey(k).Public().(ed25519.PublicKey))
 }
 
+// String returns the string representation of a PrivateKey.
+func (k PrivateKey) String() string {
+	// There is close to zero reason to ever serialize a PrivateKey
+	// to a string in this manner.  This method exists as a safeguard
+	// against inadvertently trying to do so (eg: misguided attempts
+	// at logging).
+	return "[redacted private key]"
+}
+
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
