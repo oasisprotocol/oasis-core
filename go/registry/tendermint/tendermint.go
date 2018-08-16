@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
+	tmapps "github.com/oasislabs/ekiden/go/tendermint/apps"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -290,7 +291,13 @@ func (r *tendermintBackend) worker() {
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(service service.TendermintService) api.Backend {
+func New(service service.TendermintService) (api.Backend, error) {
+	// Initialze and register the tendermint service component.
+	app := tmapps.NewRegistryApplication()
+	if err := service.RegisterApplication(app); err != nil {
+		return nil, err
+	}
+
 	r := &tendermintBackend{
 		logger:         logging.GetLogger("registry/tendermint"),
 		client:         service.GetClient(),
@@ -314,5 +321,5 @@ func New(service service.TendermintService) api.Backend {
 
 	go r.worker()
 
-	return r
+	return r, nil
 }
