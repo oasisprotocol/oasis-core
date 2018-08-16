@@ -23,10 +23,15 @@ var (
 // services.
 type Entity struct {
 	// ID is the public key identifying the entity.
-	ID signature.PublicKey
+	ID signature.PublicKey `codec:"id"`
 
 	// EthAddress is the Ethereum address of this Entity.
-	EthAddress *ethereum.Address
+	EthAddress *ethereum.Address `codec:"eth_address"`
+}
+
+// String returns a string representation of itself.
+func (e *Entity) String() string {
+	return "<Entity id=" + e.ID.String() + ">"
 }
 
 // Clone returns a copy of itself.
@@ -80,4 +85,14 @@ func (e *Entity) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (e *Entity) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
+}
+
+// SignedEntity is a signed blob containing a CBOR-serialized Entity.
+type SignedEntity struct {
+	signature.Signed
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedEntity) Open(context []byte, entity *Entity) error { // nolint: interfacer
+	return s.Signed.Open(context, entity)
 }

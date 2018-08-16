@@ -57,16 +57,12 @@ type grpcServer struct {
 }
 
 func (s *grpcServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	var ent entity.Entity
+	var ent entity.SignedEntity
 	if err := ent.FromProto(req.GetEntity()); err != nil {
 		return nil, err
 	}
-	var sig signature.Signature
-	if err := sig.FromProto(req.GetSignature()); err != nil {
-		return nil, err
-	}
 
-	if err := s.backend.RegisterEntity(ctx, &ent, &sig); err != nil {
+	if err := s.backend.RegisterEntity(ctx, &ent); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerEntity"}).Inc()
 		return nil, err
 	}
@@ -76,16 +72,12 @@ func (s *grpcServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest
 }
 
 func (s *grpcServer) DeregisterEntity(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetId()); err != nil {
-		return nil, err
-	}
-	var sig signature.Signature
-	if err := sig.FromProto(req.GetSignature()); err != nil {
+	var id signature.SignedPublicKey
+	if err := id.FromProto(req.GetId()); err != nil {
 		return nil, err
 	}
 
-	if err := s.backend.DeregisterEntity(ctx, id, &sig); err != nil {
+	if err := s.backend.DeregisterEntity(ctx, &id); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "deregisterEntity"}).Inc()
 		return nil, err
 	}
@@ -159,16 +151,12 @@ func (s *grpcServer) WatchEntities(req *pb.WatchEntityRequest, stream pb.EntityR
 }
 
 func (s *grpcServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
-	var node node.Node
+	var node node.SignedNode
 	if err := node.FromProto(req.GetNode()); err != nil {
 		return nil, err
 	}
-	var sig signature.Signature
-	if err := sig.FromProto(req.GetSignature()); err != nil {
-		return nil, err
-	}
 
-	if err := s.backend.RegisterNode(ctx, &node, &sig); err != nil {
+	if err := s.backend.RegisterNode(ctx, &node); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerNode"}).Inc()
 		return nil, err
 	}
@@ -292,16 +280,12 @@ func (s *grpcServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.Entit
 }
 
 func (s *grpcServer) RegisterContract(ctx context.Context, req *pb.RegisterContractRequest) (*pb.RegisterContractResponse, error) {
-	var con contract.Contract
+	var con contract.SignedContract
 	if err := con.FromProto(req.GetContract()); err != nil {
 		return nil, err
 	}
-	var sig signature.Signature
-	if err := sig.FromProto(req.GetSignature()); err != nil {
-		return nil, err
-	}
 
-	if err := s.backend.RegisterContract(ctx, &con, &sig); err != nil {
+	if err := s.backend.RegisterContract(ctx, &con); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerContract"}).Inc()
 		return nil, err
 	}

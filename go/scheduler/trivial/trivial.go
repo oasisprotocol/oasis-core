@@ -104,7 +104,7 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 			switch {
 			case i == 0:
 				role = api.Leader
-			case i > int(con.ReplicaGroupSize):
+			case i >= int(con.ReplicaGroupSize):
 				role = api.BackupWorker
 			default:
 				role = api.Worker

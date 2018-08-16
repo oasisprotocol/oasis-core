@@ -3,6 +3,8 @@ use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+
 use ekiden_common::bytes::B256;
 use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
@@ -11,14 +13,40 @@ use ekiden_epochtime::interface::EpochTime;
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Role {
     /// Worker node.
-    Worker,
+    Worker = 0,
     /// Backup worker node for discrepancy resolution.
     BackupWorker,
     /// Group leader.
     Leader,
+}
+
+impl Serialize for Role {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
+}
+
+impl<'de> Deserialize<'de> for Role {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = match u8::deserialize(deserializer)? {
+            0 => Role::Worker,
+            1 => Role::BackupWorker,
+            2 => Role::Leader,
+            _ => return Err(serde::de::Error::custom("invalid role")),
+        };
+
+        Ok(value)
+    }
 }
 
 /// A node participating in a committee.
@@ -60,10 +88,35 @@ impl Into<api::CommitteeNode> for CommitteeNode {
 }
 
 /// The functionality a committee exists to provide.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum CommitteeType {
-    Compute,
+    Compute = 0,
     Storage,
+}
+
+impl Serialize for CommitteeType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
+}
+
+impl<'de> Deserialize<'de> for CommitteeType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = match u8::deserialize(deserializer)? {
+            0 => CommitteeType::Compute,
+            1 => CommitteeType::Storage,
+            _ => return Err(serde::de::Error::custom("invalid committee type")),
+        };
+
+        Ok(value)
+    }
 }
 
 /// A per-contract (per-contract instance) committee instance.

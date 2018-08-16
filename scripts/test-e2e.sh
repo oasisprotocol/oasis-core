@@ -2,6 +2,22 @@
 
 WORKDIR=${1:-$(pwd)}
 
+run_dummy_node_go_default() {
+    local datadir=/tmp/ekiden-dummy-data
+    rm -rf ${datadir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level debug \
+        --grpc.port 42261 \
+        --epochtime.backend mock \
+        --beacon.backend insecure \
+        --storage.backend memory \
+        --scheduler.backend trivial \
+        --registry.backend memory \
+        --datadir ${datadir} \
+        &
+}
+
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
         --random-beacon-backend dummy \
@@ -230,6 +246,18 @@ scenario_fail_worker_after_commit() {
     run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 1
 }
 
+# Go node.
+run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_default
+run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_default 0 3
+run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_default
+run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_default
+run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_default
+run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_default
+run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_go_default
+run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_go_default
+
+# Rust node.
+# TODO: Remove Rust node and only test against the Go node.
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
 run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_default 0 3
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default

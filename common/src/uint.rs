@@ -1,8 +1,10 @@
 //! Common big unsigned integer types.
+use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub};
 
 use bigint::uint;
-use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Implement binary operator for uint type wrapper.
 macro_rules! impl_op_for_wrapper {
@@ -138,7 +140,7 @@ macro_rules! impl_serialize_for_uint {
                 let leading_empty_bytes = $size - (self.bits() + 7) / 8;
                 let mut buffer = [0u8; $size];
                 self.to_big_endian(&mut buffer);
-                buffer[leading_empty_bytes..].serialize(serializer)
+                serializer.serialize_bytes(&buffer[leading_empty_bytes..])
             }
         }
     };
@@ -152,18 +154,53 @@ macro_rules! impl_deserialize_for_uint {
             where
                 D: Deserializer<'de>,
             {
-                let buffer: Vec<u8> = Deserialize::deserialize(deserializer)?;
-                if !buffer.is_empty() && buffer[0] == 0 {
-                    // Leading empty bytes should be stripped.
-                    return Err(serde::de::Error::custom("incorrect uint encoding"));
-                } else if buffer.len() > $size {
-                    return Err(serde::de::Error::custom("incorrect uint size"));
+                struct BytesVisitor;
+
+                impl<'de> Visitor<'de> for BytesVisitor {
+                    type Value = $name;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("bytes or sequence of u8")
+                    }
+
+                    fn visit_seq<A>(self, mut seq: A) -> Result<$name, A::Error>
+                    where
+                        A: de::SeqAccess<'de>,
+                    {
+                        let mut buffer = vec![];
+                        loop {
+                            if buffer.len() >= $size {
+                                return Err(de::Error::custom("incorrect uint size"));
+                            }
+
+                            match seq.next_element() {
+                                Ok(Some(element)) => buffer.push(element),
+                                Ok(None) => break,
+                                Err(error) => return Err(error),
+                            }
+                        }
+
+                        self.visit_bytes(&buffer[..])
+                    }
+
+                    fn visit_bytes<E>(self, buffer: &[u8]) -> Result<$name, E>
+                    where
+                        E: de::Error,
+                    {
+                        if !buffer.is_empty() && buffer[0] == 0 {
+                            // Leading empty bytes should be stripped.
+                            return Err(de::Error::custom("incorrect uint encoding"));
+                        } else if buffer.len() > $size {
+                            return Err(de::Error::custom("incorrect uint size"));
+                        }
+
+                        let mut buffer_with_leading = [0; $size];
+                        buffer_with_leading[$size - buffer.len()..].copy_from_slice(&buffer);
+                        Ok($name::from(buffer_with_leading))
+                    }
                 }
 
-                let mut buffer_with_leading = [0u8; $size];
-                buffer_with_leading[$size - buffer.len()..].copy_from_slice(&buffer);
-
-                Ok($name::from(buffer_with_leading))
+                Ok(deserializer.deserialize_bytes(BytesVisitor)?)
             }
         }
     };

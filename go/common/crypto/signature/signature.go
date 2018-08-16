@@ -8,9 +8,10 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/grpc/common"
-
 	"golang.org/x/crypto/ed25519"
+
+	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/grpc/common"
 )
 
 const (
@@ -40,8 +41,16 @@ var (
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("signature: Protobuf is nil")
 
+	// ErrVerifyFailed is the error return when a signature verification
+	// fails when opening a signed blob.
+	ErrVerifyFailed = errors.New("signed: Signature verification failed")
+
 	errMalformedContext = errors.New("signature: Malformed context")
 
+	_ cbor.Marshaler             = PublicKey{}
+	_ cbor.Unmarshaler           = (*PublicKey)(nil)
+	_ cbor.Marshaler             = (*Signed)(nil)
+	_ cbor.Unmarshaler           = (*Signed)(nil)
 	_ encoding.BinaryMarshaler   = PublicKey{}
 	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
@@ -95,6 +104,16 @@ func (k *PublicKey) UnmarshalBinary(data []byte) error {
 	copy((*k)[:], data)
 
 	return nil
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (k PublicKey) MarshalCBOR() []byte {
+	return cbor.Marshal(k)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (k *PublicKey) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, k)
 }
 
 // Equal compares vs another public key for equality.
@@ -176,10 +195,10 @@ func (k PrivateKey) String() string {
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
-	PublicKey PublicKey
+	PublicKey PublicKey `codec:"public_key"`
 
 	// Signature is the actual raw signature.
-	Signature RawSignature
+	Signature RawSignature `codec:"signature"`
 
 	// TODO: Attestation.
 }
@@ -246,6 +265,79 @@ func (s *Signature) ToProto() *common.Signature {
 	pb.Signature, _ = s.Signature.MarshalBinary()
 
 	return pb
+}
+
+// Signed is a signed blob.
+type Signed struct {
+	// Blob is the signed blob.
+	Blob []byte `codec:"untrusted_raw_value"`
+
+	// Signature is the signature over blob.
+	Signature Signature `codec:"signature"`
+}
+
+// SignSigned generates a Signed with the private key over the context and
+// CBOR-serialized message.
+func SignSigned(privateKey PrivateKey, context []byte, src cbor.Marshaler) (*Signed, error) {
+	data := src.MarshalCBOR()
+	signature, err := Sign(privateKey, context, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Signed{Blob: data, Signature: *signature}, nil
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *Signed) Open(context []byte, dst cbor.Unmarshaler) error {
+	// Verify signature first.
+	if !s.Signature.Verify(context, s.Blob) {
+		return ErrVerifyFailed
+	}
+
+	return dst.UnmarshalCBOR(s.Blob)
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (s *Signed) MarshalCBOR() []byte {
+	return cbor.Marshal(s)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (s *Signed) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, s)
+}
+
+// FromProto deserializes a protobuf into a Signed.
+func (s *Signed) FromProto(pb *common.Signed) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
+
+	s.Blob = pb.GetBlob()
+	if err := s.Signature.FromProto(pb.GetSignature()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ToProto serializes a protobuf version of the Signed.
+func (s *Signed) ToProto() *common.Signed {
+	return &common.Signed{
+		Blob:      s.Blob,
+		Signature: s.Signature.ToProto(),
+	}
+}
+
+// SignedPublicKey is a signed blob containing a PublicKey.
+type SignedPublicKey struct {
+	Signed
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedPublicKey) Open(context []byte, pub *PublicKey) error { // nolint: interfacer
+	return s.Signed.Open(context, pub)
 }
 
 func digest(context, message []byte) ([]byte, error) {

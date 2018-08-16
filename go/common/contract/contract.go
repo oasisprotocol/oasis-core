@@ -53,40 +53,45 @@ func (id *StoreID) String() string {
 // Contract represents a contract (aka runtime).
 type Contract struct {
 	// ID is a globally unique long term identifier of the contract.
-	ID signature.PublicKey
+	ID signature.PublicKey `codec:"id"`
 
 	// StoreID is the storage service ID associated with the contract.
-	StoreID StoreID
+	StoreID StoreID `codec:"store_id"`
 
 	// Code is the contract code body.
-	Code []byte
+	Code []byte `codec:"code"`
 
 	// MinimumBond is the mimimum stake required by the contract.
-	MinimumBond uint64
+	MinimumBond uint64 `codec:"minimum_bond"`
 
 	// ModeNonDeterministic indicates if the contract should be executed
 	// in a non-deterministic manner.
-	ModeNonDeterministic bool
+	ModeNonDeterministic bool `codec:"mode_nondeterministic"`
 
 	// FeaturesSGX indicates if the contract requires SGX.
-	FeaturesSGX bool
+	FeaturesSGX bool `codec:"features_sgx"`
 
 	// AdvertisementRate is the number of tokens/second of contract
 	// instance advertisement.
-	AdvertisementRate uint64
+	AdvertisementRate uint64 `codec:"advertisement_rate"`
 
 	// ReplicaGroupSize is the size of the computation group.
-	ReplicaGroupSize uint64
+	ReplicaGroupSize uint64 `codec:"replica_group_size"`
 
 	// ReplicaGroupBackupSize is the size of the discrepancy resolution
 	// replica group.
-	ReplicaGroupBackupSize uint64
+	ReplicaGroupBackupSize uint64 `codec:"replica_group_backup_size"`
 
 	// ReplicaAllowedStragglers is the number of allowed stragglers.
-	ReplicaAllowedStragglers uint64
+	ReplicaAllowedStragglers uint64 `codec:"replica_allowed_stragglers"`
 
 	// StorageGroupSize is the size of the storage group.
-	StorageGroupSize uint64
+	StorageGroupSize uint64 `codec:"storage_group_size"`
+}
+
+// String returns a string representation of itself.
+func (c *Contract) String() string {
+	return "<Contract id=" + c.ID.String() + ">"
 }
 
 // Clone returns a copy of itself.
@@ -189,4 +194,14 @@ func pbWantsSGX(pb *pbCommon.Contract) bool {
 	}
 
 	return false
+}
+
+// SignedContract is a signed blob containing a CBOR-serialized Contract.
+type SignedContract struct {
+	signature.Signed
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedContract) Open(context []byte, contract *Contract) error { // nolint: interfacer
+	return s.Signed.Open(context, contract)
 }

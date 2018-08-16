@@ -20,16 +20,16 @@ service EntityRegistry {
 }
 
 message RegisterRequest {
-    common.Entity entity = 1;
-    common.Signature signature = 2;
+    // Signed blob should be a CBOR-serialized entity.
+    common.Signed entity = 1;
 }
 
 message RegisterResponse {
 }
 
 message DeregisterRequest {
-    bytes id = 1;
-    common.Signature signature = 2;
+    // Signed blob should be a the entity id.
+    common.Signed id = 1;
 }
 
 message DeregisterResponse {
@@ -63,8 +63,8 @@ message WatchEntityResponse {
 }
 
 message RegisterNodeRequest {
-    common.Node node = 1;
-    common.Signature signature = 2;
+    // Signed blob should be a CBOR-serialized node.
+    common.Signed node = 1;
 }
 
 message RegisterNodeResponse {
