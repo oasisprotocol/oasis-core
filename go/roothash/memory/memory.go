@@ -103,7 +103,7 @@ func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
 		// Note: Unlike the Rust code, this pushes back the timer
 		// each time forward progress is made.
 
-		if !s.timer.Stop() {
+		if !forced && !s.timer.Stop() {
 			<-s.timer.C
 		}
 
