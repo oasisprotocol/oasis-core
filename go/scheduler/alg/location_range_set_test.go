@@ -7,10 +7,11 @@ import (
 	"testing"
 )
 
+// ShouldPanic runs f, which is expected to panic.
 func ShouldPanic(t *testing.T, f func()) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered from expected error in f", r)
+			fmt.Println("Recovered from expected panic in f", r)
 		} else {
 			t.Errorf("ShouldPanic: f() did not panic (in defer)")
 		}

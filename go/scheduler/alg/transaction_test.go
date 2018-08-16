@@ -4,36 +4,31 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func ReadAndWriteTransaction(t *testing.T, input string) {
 	bufr := bufio.NewReader(bytes.NewReader([]byte(input)))
 	var proto Location = new(TestLocation)
 	tr, err := ReadNewTransaction(proto, bufr)
-	if err != nil {
-		t.Fatalf("Could not parse %s", input)
-	}
+	assert.NoError(t, err, "Could not parse %s", input)
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
 	tr.Write(bufw)
 	err = bufw.Flush()
-	if err != nil {
-		t.Errorf("Could not write as string")
-	}
+	assert.NoError(t, err, "Could not write as string")
 	fmt.Printf("Got %s\n", outputBuffer.String())
-	if input != outputBuffer.String() {
-		t.Errorf("Output differs")
-	}
+	assert.Equal(t, input, outputBuffer.String(), "Output should match input")
 }
 
 func RejectBadTransaction(t *testing.T, input string) {
 	bufr := bufio.NewReader(bytes.NewReader([]byte(input)))
 	var proto Location = new(TestLocation)
 	_, err := ReadNewTransaction(proto, bufr)
-	if err == nil {
-		t.Fatalf("Parsed bad input %s", input)
-	}
+	assert.Error(t, io.EOF, err, "Parsed bad input %s", input)
 	fmt.Printf("Rejected %s\n", input)
 }
 
@@ -48,4 +43,7 @@ func TestTransaction(t *testing.T) {
 	RejectBadTransaction(t, "(123, {}, {}, 2)")
 	RejectBadTransaction(t, "({1, 2, {3, 4}}, {}, 2, 3)")
 	RejectBadTransaction(t, "({1, 2, 3, 4}, {-5, 2.2}, 2, 3)")
+	RejectBadTransaction(t, "({1, 2, 3, 4}, {-5, 2.2}, garbage, 2, 3)")
+	RejectBadTransaction(t, "garbage-in")
+	RejectBadTransaction(t, "({}, {}, 314159,")
 }

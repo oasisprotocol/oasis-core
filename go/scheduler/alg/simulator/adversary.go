@@ -41,7 +41,7 @@ import (
 type adversaryConfig struct {
 	seed            int64
  	injectionProb   float64
- 	spamBatchSize   uint
+ 	spamBatchSize   int
  	targetAddresses string
 }
 
@@ -50,7 +50,7 @@ var adversaryConfigFromFlags adversaryConfig
 func init() {
 	flag.Int64Var(&adversaryConfigFromFlags.seed, "adversary-seed", 0, "seed for rng used to randomize adversary actions")
 	flag.Float64Var(&adversaryConfigFromFlags.injectionProb, "injection-prob", 0.01, "probability of deciding to inject (possibly many) DOS transactions")
-	flag.UintVar(&adversaryConfigFromFlags.spamBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to spam is made")
+	flag.IntVar(&adversaryConfigFromFlags.spamBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to spam is made")
 	flag.StringVar(&adversaryConfigFromFlags.targetAddresses, "target-addresses", "0-16", "comma-separated list of integers or start-end integer ranges")
 }
 
@@ -63,8 +63,9 @@ type AdversarialTransactionSource struct {
 	injectionProb float64
 	targets *alg.LocationRangeSet
 
+	step int
+	batchSize int
 	numTargets uint64
-
 	ts TransactionSource
 }
 
@@ -131,7 +132,12 @@ func mapTargets(targets *alg.LocationRangeSet, choice uint64) *alg.TestLocation 
 }
 
 // NewAdversarialTransactionSource constructs and returns an AdversarialTransactionSource.
-func NewAdversarialTransactionSource(rngSeed int64, inj float64, targets *alg.LocationRangeSet, ts TransactionSource) (*AdversarialTransactionSource, error) {
+func NewAdversarialTransactionSource(
+	rngSeed int64,
+	inj float64,
+	targets *alg.LocationRangeSet,
+	batchSize int,
+	ts TransactionSource) (*AdversarialTransactionSource, error) {
 	if inj < 0.0 {
 		return nil, fmt.Errorf("NewAdversarialTransactionSource: Injection probability must be at least 0.0, got %f", inj)
 	}
@@ -144,21 +150,43 @@ func NewAdversarialTransactionSource(rngSeed int64, inj float64, targets *alg.Lo
 	if targets.IsEmpty() {
 		return nil, fmt.Errorf("NewAdversarialTransactionSource: targets cannot be empty")
 	}
+	// We allow 0 to mean be a pass-through.
+	if batchSize < 0 {
+		return nil, fmt.Errorf("NewAdversarialTransactionSource: batchSize must be at least 0")
+	}
 
 	rng := rand.New(rand.NewSource(rngSeed))
 	nTargets := countTargets(targets)
 
 	return &AdversarialTransactionSource{
-		r: rng, injectionProb: inj, targets: targets, numTargets: nTargets, ts: ts}, nil
+		r: rng,
+		injectionProb: inj,
+		targets: targets,
+		batchSize: batchSize,
+		numTargets: nTargets,
+		ts: ts}, nil
 }
 
 // Get the next Transaction from this source.  The result may be from the underlying wrapped
 // TransactionSource, or it may be a bogus DOS transaction injected into the request stream.
-func (ats *AdversarialTransactionSource) Get(tid uint) *alg.Transaction {
-	return nil
+func (ats *AdversarialTransactionSource) Get(tid uint) (*alg.Transaction, error) {
+	if ats.step != 0 {
+		ats.step--
+		return ats.generateSpam()
+	}
+	if ats.batchSize > 0 && ats.r.Float64() < ats.injectionProb {
+		ats.step = ats.batchSize - 1
+		return ats.generateSpam()
+	}
+	return ats.ts.Get(tid)
 }
 
 // Close cleans up this TransactionSource and invokes Close on the wrapped TransactionSource.
 func (ats *AdversarialTransactionSource) Close() error {
 	return ats.ts.Close()
 }
+
+func (ats *AdversarialTransactionSource) generateSpam() (*alg.Transaction, error) {
+	return nil, nil
+}
+
