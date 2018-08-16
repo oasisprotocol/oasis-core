@@ -100,14 +100,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize tendermint.
-	// TODO: This should only be done when a tendermint backend is in use.
-	env.svcTmnt, err = tendermint.New(dataDir)
-	if err != nil {
-		rootLog.Error("failed to initialize tendermint service",
-			"err", err,
-		)
-		return
-	}
+	env.svcTmnt = tendermint.New(dataDir)
 	env.svcMgr.Register(env.svcTmnt)
 
 	// Initialize the varous node backends.
@@ -127,7 +120,9 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	}
 
 	// Start the tendermint service.
-	// TODO: This should only be done when a tendermint backend is in use.
+	//
+	// Note: This will only start the node if it is required by
+	// one of the backends.
 	if err = env.svcTmnt.Start(); err != nil {
 		rootLog.Error("failed to start tendermint service",
 			"err", err,
