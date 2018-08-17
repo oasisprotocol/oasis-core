@@ -7,11 +7,10 @@ import (
 
 // Raw table from https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm
 
-const
-prob = `      0.90      0.95     0.975      0.99     0.999`
+const prob = `      0.90      0.95     0.975      0.99     0.999`
+
 // dof      critical values for probabilities above
-const
-rawData = `
+const rawData = `
   1          2.706     3.841     5.024     6.635    10.828
   2          4.605     5.991     7.378     9.210    13.816
   3          6.251     7.815     9.348    11.345    16.266
@@ -115,12 +114,17 @@ rawData = `
 
 // CritTable is the parsed critical value table
 type CritTable struct {
-	prob []float64
+	prob    []float64
 	dofProb map[int][]float64
 }
 
 var critTableSingleton *CritTable
 
+// Init initializes the chi-squared critical values data.  It creates a read-only singleton
+// using which users can extract the list of confidence probabilities, and look up the
+// chi-squared critical values for those probabilities at various degrees-of-freedom values.
+//
+// nolint: gocyclo
 func Init() *CritTable {
 	if critTableSingleton != nil {
 		return critTableSingleton
@@ -128,7 +132,7 @@ func Init() *CritTable {
 	p := strings.Fields(prob)
 	numProb := len(p)
 	pa := make([]float64, numProb)
-	for ix, s := range(p) {
+	for ix, s := range p {
 		n, err := fmt.Sscanf(s, "%g", &pa[ix])
 		if err != nil || n != 1 {
 			panic(fmt.Sprintf("Internal error in probability data: '%s'", s))
@@ -136,12 +140,12 @@ func Init() *CritTable {
 	}
 	lines := strings.Split(rawData, "\n")
 	dmap := make(map[int][]float64)
-	for _, line := range(lines) {
+	for _, line := range lines {
 		if line == "" {
 			continue
 		}
 		f := strings.Fields(line)
-		if len(f) != numProb + 1 {
+		if len(f) != numProb+1 {
 			panic(fmt.Sprintf("Internal error: dof crit line wrong number of fields: '%s'", line))
 		}
 		var dof int
@@ -150,7 +154,7 @@ func Init() *CritTable {
 		if err != nil || n != 1 {
 			panic(fmt.Sprintf("Internal error: dof not an integer in '%s'", line))
 		}
-		for ix, s := range(f[1:]) {
+		for ix, s := range f[1:] {
 			n, err := fmt.Sscanf(s, "%g", &crit[ix])
 			if err != nil || n != 1 {
 				panic(fmt.Sprintf("Internal error: critical value error in '%s'", line))
@@ -158,14 +162,18 @@ func Init() *CritTable {
 		}
 		dmap[dof] = crit
 	}
-	critTableSingleton = &CritTable{ prob: pa, dofProb: dmap }
+	critTableSingleton = &CritTable{prob: pa, dofProb: dmap}
 	return critTableSingleton
 }
 
+// ConfidenceProbAvailable returns a slice containing the confidence probabilities with which
+// the user can use to look up chi-square critical values.
 func (ct *CritTable) ConfidenceProbAvailable() []float64 {
 	return append([]float64(nil), ct.prob...)
 }
 
+// CriticalValue returns the chi-squared critical values for the given degree-of-freedom (dof)
+// and confidence probability.
 func (ct *CritTable) CriticalValue(dof int, confidence float64) (float64, error) {
 	if len(ct.dofProb[dof]) == 0 {
 		return 0.0, fmt.Errorf("Critical value not available for degree-of-freedom=%d", dof)

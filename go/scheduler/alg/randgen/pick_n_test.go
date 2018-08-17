@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -28,63 +29,76 @@ func ShouldPanic(t *testing.T, f func()) {
 	t.Errorf("ShouldPanic: f() did not panic")
 }
 
-func ensureIsShuffle(t *testing.T, size int64, r *rand.Rand) {
-	fmt.Printf("Size %d shuffle\n", size)
-	shuffle := PickNFromM(size, size, r)
-	for i := int64(0); i < int64(size); i++ {
-		found := false
-		for _, v := range(shuffle) {
-			if v == i {
-				found = true
-			}
-		}
-		assert.True(t, found, "Shuffled element %d not found in result %v", i, shuffle)
+func ensureIsShuffle(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64, pickerName string, size int64, r *rand.Rand) {
+	fmt.Printf("%s: size %d shuffle\n", pickerName, size)
+	shuffle := picker(size, size, r)
+	seen := make(map[int64]struct{})
+	for _, v := range shuffle {
+		assert.True(t, 0 <= v && v < size, "Shuffle element %d out of range\n", v)
+		_, twice := seen[v]
+		assert.False(t, twice, "Shuffle element %d duplicate in result\n", v)
+		seen[v] = struct{}{}
 	}
+	assert.Equal(t, size, int64(len(shuffle)), "Not all elements found in shuffle\n")
 }
 
-func efficientPickSmall(t *testing.T, numElts, size int64, r *rand.Rand) {
-	fmt.Printf("PickNFromM(%d, %d, .)\n", numElts, size)
-	sample := PickNFromM(numElts, size, r)
+func efficientPickSmall(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64, pickerName string, numElts, size int64, r *rand.Rand) {
+	fmt.Printf("%s(%d, %d, .)\n", pickerName, numElts, size)
+	sample := picker(numElts, size, r)
 	// just ensure all elements are in [0, size)
-	for _, v := range(sample) {
+	for _, v := range sample {
 		assert.True(t, 0 <= v && v < size, "Found illegal element %d", v)
 	}
 	showElts := len(sample)
 	if showElts > 20 {
 		showElts = 20
 	}
-	for _, v := range(sample[:showElts]) {
+	for _, v := range sample[:showElts] {
 		fmt.Printf("%d ", v)
 	}
 	fmt.Printf("\n")
 }
 
-func TestPickNFromM(t *testing.T) {
+func timeFunc(f func()) {
+	startTime := time.Now()
+	f()
+	elapsedTime := time.Since(startTime)
+	fmt.Printf("Time took %s\n", elapsedTime)
+}
+
+func PickNFromMVarious(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64, pickerName string) {
 	handleTestSeed(&pickNFromNSeed, "pick-n-from-m")
 	r := rand.New(rand.NewSource(pickNFromNSeed))
-	ensureIsShuffle(t, 10, r)
-	ensureIsShuffle(t, 100, r)
-	ensureIsShuffle(t, 1000, r)
+	ensureIsShuffle(t, picker, pickerName, 10, r)
+	ensureIsShuffle(t, picker, pickerName, 100, r)
+	ensureIsShuffle(t, picker, pickerName, 1000, r)
+	ensureIsShuffle(t, picker, pickerName, 10000, r)
+	timeFunc(func() { ensureIsShuffle(t, picker, pickerName, 1000000, r) })
 
-	efficientPickSmall(t, 10, 1000000000, r)
-	efficientPickSmall(t, 10, 10000000000, r)
-	efficientPickSmall(t, 10, 100000000000000, r)
+	efficientPickSmall(t, picker, pickerName, 10, 1000000000, r)
+	efficientPickSmall(t, picker, pickerName, 10, 10000000000, r)
+	efficientPickSmall(t, picker, pickerName, 10, 100000000000000, r)
 
-	efficientPickSmall(t, 1000, 10000000000000000, r)
-	efficientPickSmall(t, 1000, 100000000000000000, r)
-	efficientPickSmall(t, 1000, 1000000000000000000, r)
+	efficientPickSmall(t, picker, pickerName, 1000, 10000000000000000, r)
+	efficientPickSmall(t, picker, pickerName, 1000, 100000000000000000, r)
+	efficientPickSmall(t, picker, pickerName, 1000, 1000000000000000000, r)
 
-	ensureIsShuffle(t, 1, r)
-	efficientPickSmall(t, 0, 1, r)
-	efficientPickSmall(t, 0, 1000000000000000000, r)
+	ensureIsShuffle(t, picker, pickerName, 1, r)
+	efficientPickSmall(t, picker, pickerName, 0, 1, r)
+	efficientPickSmall(t, picker, pickerName, 0, 1000000000000000000, r)
 
 	ShouldPanic(t, func() {
-		ensureIsShuffle(t, 0, r)
+		ensureIsShuffle(t, picker, pickerName, 0, r)
 	})
 	ShouldPanic(t, func() {
-		efficientPickSmall(t, 0, 0, r)
+		efficientPickSmall(t, picker, pickerName, 0, 0, r)
 	})
 	ShouldPanic(t, func() {
-		efficientPickSmall(t, 1, 0, r)
+		efficientPickSmall(t, picker, pickerName, 1, 0, r)
 	})
+}
+
+func TestPickNFromM(t *testing.T) {
+	PickNFromMVarious(t, PickNFromMRemapping, "PickNFromMRemapping")
+	PickNFromMVarious(t, PickNFromMRejectionSampling, "PickNFromMRejectionSampling")
 }

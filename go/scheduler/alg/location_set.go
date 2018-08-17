@@ -38,23 +38,30 @@ func NewLocationSet() *LocationSet {
 	return &LocationSet{locations: make(map[Location]struct{})}
 }
 
-// Add a location to the LocationSet
+// Add a location to the LocationSet.
 func (ls *LocationSet) Add(loc Location) {
 	ls.locations[loc] = struct{}{}
 }
 
-// Delete (remove) a location from the LocationSet
+// AddSlice adds all elements of a slice of locations to the LocationSet.
+func (ls *LocationSet) AddSlice(locs []Location) {
+	for _, loc := range locs {
+		ls.Add(loc)
+	}
+}
+
+// Delete (remove) a location from the LocationSet.
 func (ls *LocationSet) Delete(loc Location) {
 	delete(ls.locations, loc)
 }
 
-// Size returns the number of elements (locations) in the LocationSet
+// Size returns the number of elements (locations) in the LocationSet.
 func (ls *LocationSet) Size() int {
 	return len(ls.locations)
 }
 
 // Contains is a boolean predicate returning true iff the location is a member of the
-// LocationSet
+// LocationSet.
 func (ls *LocationSet) Contains(loc Location) bool {
 	_, exists := ls.locations[loc]
 	return exists

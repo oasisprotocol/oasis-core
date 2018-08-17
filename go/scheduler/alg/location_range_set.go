@@ -2,6 +2,7 @@ package alg
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"sort"
@@ -199,6 +200,12 @@ func ReadNewLocationRangeSet(loc Location, r *bufio.Reader) (*LocationRangeSet, 
 	}
 }
 
+// LocationRangeSetFromString converts a string representation of a LocationRangeSet (see
+// grammar above) into a LocationRangeSet.
+func LocationRangeSetFromString(loc Location, set string) (*LocationRangeSet, error) {
+	return ReadNewLocationRangeSet(loc, bufio.NewReader(bytes.NewReader([]byte(set))))
+}
+
 type locationRangeOrder []*LocationRange
 
 func (a locationRangeOrder) Len() int      { return len(a) }
@@ -267,7 +274,7 @@ func (lrs *LocationRangeSet) MinLoc() Location {
 		panic("MinLoc pre-condition violation: empty LocationRangeSet used")
 	}
 	min := lrs.r[0].LowerBound
-	for _, lr := range(lrs.r) {
+	for _, lr := range lrs.r {
 		if lr.LowerBound.Less(min) {
 			min = lr.LowerBound
 		}
@@ -281,7 +288,7 @@ func (lrs *LocationRangeSet) MaxLoc() Location {
 		panic("MaxLoc pre-condition violation: empty LocationRangeSet used")
 	}
 	max := lrs.r[0].UpperBound
-	for _, lr := range(lrs.r) {
+	for _, lr := range lrs.r {
 		if max.Less(lr.UpperBound) {
 			max = lr.UpperBound
 		}
@@ -295,7 +302,7 @@ func (lrs *LocationRangeSet) MaxLoc() Location {
 // visited.
 func (lrs *LocationRangeSet) Find(f func(*LocationRange) bool) {
 	sorted := lrs.sortedRanges()
-	for _, lr := range(sorted) {
+	for _, lr := range sorted {
 		if f(lr) {
 			break
 		}

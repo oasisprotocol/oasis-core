@@ -59,10 +59,10 @@ func TestLocationRangeSetContains(t *testing.T) {
 	}
 }
 
-func TestLocationRangeRead(t *testing.T) {
+func TestLocationRangeSetRead(t *testing.T) {
 	input := "2:4,9:15,7,23:71"
 	expected := "2:4, 7, 9:15, 23:71"
-	lrs, err := ReadNewLocationRangeSet(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte(input))))
+	lrs, err := LocationRangeSetFromString(TestLocation(0), input)
 	if err != nil {
 		t.Errorf("ReadNewLocationRangeSet error: %s", err.Error())
 	}
@@ -117,7 +117,7 @@ func TestLocationRangeParse(t *testing.T) {
 // nolint: gocyclo
 func TestLocationRangeSetParse(t *testing.T) {
 	helper := func(in string) (*LocationRangeSet, error) {
-		return ReadNewLocationRangeSet(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte(in))))
+		return LocationRangeSetFromString(TestLocation(0), in)
 	}
 
 	// single range

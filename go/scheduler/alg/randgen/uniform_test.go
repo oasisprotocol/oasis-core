@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/oasislabs/ekiden/go/scheduler/alg/randgen/chisquared"
+	"github.com/stretchr/testify/assert"
 )
 
 var uniformSeed int64
@@ -24,7 +24,7 @@ func TestUniform(t *testing.T) {
 	assert := assert.New(t)
 	handleTestSeed(&uniformSeed, "uniform-test")
 	critData := chisquared.Init()
-	critValue, err := critData.CriticalValue(uniformNumBuckets - 1, 0.999)
+	critValue, err := critData.CriticalValue(uniformNumBuckets-1, 0.999)
 	if err != nil {
 		panic("uniform-test-buckets-1 must be a degree-of-freedom value for which chi-squared critical value can be looked up")
 	}
@@ -34,11 +34,11 @@ func TestUniform(t *testing.T) {
 	for ix := 0; ix < uniformNumTrials; ix++ {
 		buckets[u.Generate()]++
 	}
-	nullHypothesisExpected := float64(uniformNumTrials)/float64(uniformNumBuckets)
+	nullHypothesisExpected := float64(uniformNumTrials) / float64(uniformNumBuckets)
 	fmt.Printf("Null hypothesis: expected number of entries = %f\n", nullHypothesisExpected)
 	fmt.Printf("Expected per bucket: %f\n", nullHypothesisExpected)
 	chiSquared := 0.0
-	for _, v := range(buckets) {
+	for _, v := range buckets {
 		diff := float64(v) - nullHypothesisExpected
 		diffSquared := diff * diff
 		chiSquared += diffSquared

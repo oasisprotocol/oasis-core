@@ -20,7 +20,7 @@ func TestCriticalValue(t *testing.T) {
 	_, err = ct.CriticalValue(10000, 0.999)
 	assert.NotNil(t, err, "Should have failed with too-large DoF")
 
-	for _, prob := range([]float64{1.1, 0.5, 3, -10}) {
+	for _, prob := range []float64{1.1, 0.5, 3, -10} {
 		_, err = ct.CriticalValue(100, prob)
 		assert.NotNilf(t, err, "Should have failed with crazy probability %g", prob)
 	}
