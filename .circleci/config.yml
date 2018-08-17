@@ -57,13 +57,14 @@ jobs:
       # Integration tests.
       - attach_workspace:
           at: /workspace
-      - run: cp /workspace/go/ekiden/ekiden go/ekiden/ekiden
+      - run: cp /workspace/go/ekiden/ekiden target/debug/ekiden-node
       - run: ./scripts/test-e2e.sh
 
       # Store built files.
       - persist_to_workspace:
           root: .
           paths:
+            - target/debug/ekiden-node
             - target/debug/ekiden-node-dummy
             - target/debug/ekiden-node-dummy-controller
             - target/debug/ekiden-compute
