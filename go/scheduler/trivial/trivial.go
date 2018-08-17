@@ -118,9 +118,6 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 		committees = append(committees, committee)
 	}
 
-	s.Lock()
-	defer s.Unlock()
-
 	if s.committees[s.epoch] == nil {
 		s.committees[s.epoch] = make(map[signature.MapKey][]*api.Committee)
 	}
@@ -135,6 +132,9 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 
 func (s *trivialSchedulerState) prune() {
 	pruneBefore := s.epoch - 1
+	if pruneBefore > s.epoch {
+		return
+	}
 
 	for epoch := range s.nodeLists {
 		if epoch < pruneBefore {
@@ -164,13 +164,6 @@ func (s *trivialSchedulerState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
-func (s *trivialSchedulerState) updateLastElect() {
-	s.Lock()
-	defer s.Unlock()
-
-	s.lastElect = s.epoch
-}
-
 func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
 	s.state.RLock()
 	defer s.state.RUnlock()
@@ -188,6 +181,46 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
+}
+
+func (s *trivialScheduler) electSingle(con *contract.Contract, notifier *pubsub.Broker) {
+	s.state.Lock()
+	defer s.state.Unlock()
+
+	if err := s.state.elect(con, s.notifier); err != nil {
+		s.logger.Debug("worker: failed to elect (single)",
+			"contract", con,
+			"err", err,
+		)
+		return
+	}
+
+	s.logger.Debug("worker: election (single)",
+		"contract", con,
+		"committees", s.state.committees[s.state.epoch][con.ID.ToMapKey()],
+	)
+}
+
+func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
+	s.state.Lock()
+	defer s.state.Unlock()
+
+	for _, v := range s.state.contracts {
+		if err := s.state.elect(v, s.notifier); err != nil {
+			s.logger.Debug("worker: failed to elect",
+				"contract", v,
+				"err", err,
+			)
+			continue
+		}
+
+		s.logger.Debug("worker: election",
+			"contract", v,
+			"committees", s.state.committees[s.state.epoch][v.ID.ToMapKey()],
+		)
+	}
+
+	s.state.lastElect = s.state.epoch
 }
 
 func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend) { //nolint:gocyclo
@@ -253,16 +286,7 @@ func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Bac
 			if s.state.epoch == s.state.lastElect && s.state.canElect() {
 				// Attempt to elect the committee if possible, since
 				// the election for the epoch happened already.
-				if err := s.state.elect(contract, s.notifier); err != nil {
-					s.logger.Debug("worker: failed to elect (single)",
-						"contract", contract,
-						"err", err,
-					)
-				}
-				s.logger.Debug("worker: election (single)",
-					"contract", contract,
-					"committees", s.state.committees[s.state.epoch][contract.ID.ToMapKey()],
-				)
+				s.electSingle(contract, s.notifier)
 			}
 			continue
 		}
@@ -276,20 +300,7 @@ func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Bac
 			"epoch", s.state.epoch,
 		)
 
-		for _, v := range s.state.contracts {
-			if err := s.state.elect(v, s.notifier); err != nil {
-				s.logger.Debug("worker: failed to elect",
-					"contract", v,
-					"err", err,
-				)
-			}
-			s.logger.Debug("worker: election",
-				"contract", v,
-				"committees", s.state.committees[s.state.epoch][v.ID.ToMapKey()],
-			)
-		}
-
-		s.state.updateLastElect()
+		s.electAll(s.notifier)
 	}
 }
 
@@ -312,11 +323,18 @@ func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backe
 
 		if s.state.lastElect != s.state.epoch {
 			// A mass-election will happen Real Soon Now, don't bother.
+			s.logger.Debug("notifier: not sending stale committees",
+				"last_elect", s.state.lastElect,
+				"epoch", s.state.epoch,
+			)
 			return
 		}
 
 		comMap := s.state.committees[s.state.epoch]
 		if comMap == nil {
+			s.logger.Debug("notifier: no committees for epoch",
+				"epoch", s.state.epoch,
+			)
 			return
 		}
 
