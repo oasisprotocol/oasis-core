@@ -23,7 +23,7 @@ cargo install --force --path tools
 # Build all Ekiden Go binaries and resources.
 GO_SRC_BASE=${GOPATH}/src/github.com/oasislabs
 mkdir -p ${GO_SRC_BASE}
-ln -s ${GO_SRC_BASE}/ekiden ./
+ln -s `pwd` ${GO_SRC_BASE}/ekiden
 (cd ${GO_SRC_BASE}/ekiden/go && dep ensure)
 (cd ${GO_SRC_BASE}/ekiden/go && go generate ./...)
 (cd ${GO_SRC_BASE}/ekiden/go && go build -o ./ekiden/ekiden ./ekiden)
