@@ -6,7 +6,7 @@ run_dummy_node_go_default() {
     local datadir=/tmp/ekiden-dummy-data
     rm -rf ${datadir}
 
-    ${WORKDIR}/target/debug/ekiden-node \
+    ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
         --grpc.port 42261 \
         --epochtime.backend mock \

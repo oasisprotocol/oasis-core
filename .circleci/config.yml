@@ -55,16 +55,14 @@ jobs:
             --exclude token
 
       # Integration tests.
-      - attach_workspace:
-          at: /workspace
-      - run: cp /workspace/go/ekiden/ekiden target/debug/ekiden-node
+      - run: make -C go
       - run: ./scripts/test-e2e.sh
 
       # Store built files.
       - persist_to_workspace:
           root: .
           paths:
-            - target/debug/ekiden-node
+            - go/ekiden/ekiden
             - target/debug/ekiden-node-dummy
             - target/debug/ekiden-node-dummy-controller
             - target/debug/ekiden-compute
@@ -118,6 +116,9 @@ jobs:
       - image: circleci/golang:1.10
     steps:
       - checkout
+      - run:
+          name: Checking if go code has changed
+          command: ./scripts/ci-changed.sh \.circleci docker go
       - restore_cache:
           keys:
             - go-cache
@@ -321,9 +322,7 @@ workflows:
   build:
     jobs:
       - build-go
-      - build-rust:
-          requires:
-            - build-go
+      - build-rust
       - lint-git
       - set-docker-tag:
           # FIXME: The master filter for this and the deploy steps is a

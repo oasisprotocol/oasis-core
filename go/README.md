@@ -11,14 +11,19 @@ development docker environment:
 * [protoc](https://github.com/google/protobuf)
 * [protobuf](https://github.com/golang/protobuf) Version 1.0.0
 
-The following steps are used for compilation:
+You can build everything by running:
 ```
-dep ensure
-go generate ./...
-go build -v -o ./ekiden/ekiden ./ekiden
+make
+```
+
+If you want to run individual steps, the following steps are used for compilation:
+```
+make dep
+make generate
+make build
 ```
 
 To lint run:
 ```
-gometalinter ./...
+make lint
 ```
