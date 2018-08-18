@@ -6,11 +6,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
-func TestSystemBackendInternal(t *testing.T) {
+func TestEpochtimeSystem(t *testing.T) {
+	t.Run("Internals", testInternals)
+	t.Run("APIs", testAPIs)
+}
+
+func testInternals(t *testing.T) {
 	// Ensure that EKIDEN_EPOCH is sensible, and in fact, represents the
 	// instant in time that it should, relative to the UNIX epoch.
 	dt, err := time.Parse(time.RFC3339, "2018-01-01T00:00:00+00:00")
@@ -39,4 +45,34 @@ func TestSystemBackendInternal(t *testing.T) {
 	dt, err = time.Parse(time.RFC3339, "1997-08-29T02:14:00-04:00")
 	require.NoError(t, err, "Parse invalid constant")
 	assert.Panics(t, func() { getEpochAt(dt, api.EpochInterval) }, "Epoch at invalid time")
+}
+
+func testAPIs(t *testing.T) {
+	const epochInterval = 1 // Second.
+
+	timeSource, err := New(epochInterval)
+	require.NoError(t, err, "New()")
+
+	currentEpoch, _ := getEpochAt(time.Now(), epochInterval)
+	epoch, _, err := timeSource.GetEpoch(context.Background())
+	require.NoError(t, err, "GetEpoch()")
+	require.InDelta(t, uint64(currentEpoch), uint64(epoch), 1, "GetEpoch()")
+
+	ch, sub := timeSource.WatchEpochs()
+	defer sub.Close()
+	select {
+	case epoch = <-ch:
+		require.InDelta(t, uint64(currentEpoch), uint64(epoch), 1, "WatchEpochs() initial")
+	case <-time.After(1 * time.Second):
+		t.Fatalf("Failed to receive current epoch on WatchEpochs()")
+	}
+
+	time.Sleep(epochInterval * time.Second)
+
+	select {
+	case epoch = <-ch:
+		require.InDelta(t, uint64(currentEpoch)+1, uint64(epoch), 1, "WatchEpochs()")
+	case <-time.After(1 * time.Second):
+		t.Fatalf("Failed to receive epoch notification after expected transition")
+	}
 }
