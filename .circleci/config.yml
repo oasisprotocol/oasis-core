@@ -147,12 +147,6 @@ jobs:
           paths:
             - "/go/pkg"
 
-      # Store built files.
-      - persist_to_workspace:
-          root: .
-          paths:
-            - go/ekiden/ekiden
-
   lint-git:
     docker:
       - image: circleci/python:3.6.6
