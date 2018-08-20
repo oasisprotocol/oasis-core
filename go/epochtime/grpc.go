@@ -6,7 +6,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/common"
@@ -21,7 +20,6 @@ var (
 )
 
 type grpcServer struct {
-	logger  *logging.Logger
 	backend api.Backend
 }
 
@@ -65,16 +63,12 @@ func (s *grpcServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource
 }
 
 func (s *grpcServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
-	epoch := api.EpochTime(req.GetEpoch())
-	s.logger.Debug("set epoch",
-		"epoch", epoch,
-	)
-
 	mockTS, ok := s.backend.(api.SetableBackend)
 	if !ok {
 		return nil, errIncompatibleBackend
 	}
 
+	epoch := api.EpochTime(req.GetEpoch())
 	err := mockTS.SetEpoch(ctx, epoch, 0)
 	if err != nil {
 		return nil, err
@@ -87,7 +81,6 @@ func (s *grpcServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (
 // backed by the provided Backend.
 func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
 	s := &grpcServer{
-		logger:  logging.GetLogger("epochtime/grpc"),
 		backend: backend,
 	}
 	pb.RegisterTimeSourceServer(srv, s)
