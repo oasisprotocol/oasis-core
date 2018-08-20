@@ -101,4 +101,5 @@ func PickNFromMVarious(t *testing.T, picker func(n, m int64, r *rand.Rand) []int
 func TestPickNFromM(t *testing.T) {
 	PickNFromMVarious(t, PickNFromMRemapping, "PickNFromMRemapping")
 	PickNFromMVarious(t, PickNFromMRejectionSampling, "PickNFromMRejectionSampling")
+	PickNFromMVarious(t, PickNFromM, "PickNFromM")
 }

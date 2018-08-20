@@ -6,45 +6,42 @@ import (
 	"fmt"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func ReadAndWriteLocationSet(t *testing.T, input string) {
+	assert := assert.New(t)
 	bufr := bufio.NewReader(bytes.NewReader([]byte(input)))
 	var proto Location = new(TestLocation)
 	ls, err := ReadNewLocationSet(proto, bufr)
-	if err != nil {
-		t.Fatalf("Could not parse %s", input)
-	}
+	assert.NoError(err, "Could not parse %s", input)
+
 	fmt.Printf("Remaining %d bytes\n", bufr.Buffered())
-	if bufr.Buffered() != 0 {
-		t.Errorf("Should have consumed entire buffer")
-	}
+	assert.Equal(0, bufr.Buffered(), "Should have consumed entire buffer")
+
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
 	ls.Write(bufw)
 	err = bufw.Flush()
-	if err != nil {
-		t.Errorf("Could not write as string")
-	}
+	assert.NoError(err, "Could not write as string")
+
 	fmt.Printf("Got %s\n", outputBuffer.String())
-	if input != outputBuffer.String() {
-		t.Errorf("Output differs")
-	}
+	assert.Equal(input, outputBuffer.String(), "Output differs")
 }
 
 func RejectBadLocationSet(t *testing.T, input string) {
+	assert := assert.New(t)
 	bufr := bufio.NewReader(bytes.NewReader([]byte(input)))
 	var proto Location = new(TestLocation)
 	_, err := ReadNewLocationSet(proto, bufr)
-	if err == nil {
-		t.Fatalf("Parsed bad input %s", input)
-	}
+	assert.Error(err, "Parsed bad input %s", input)
+
 	fmt.Printf("Rejected %s\n", input)
 	fmt.Printf("Remaining %d bytes\n", bufr.Buffered())
 	str, err := bufr.ReadString(byte(0))
-	if err != io.EOF {
-		t.Errorf("ReadString did not hit end of string")
-	}
+	assert.Equal(io.EOF, err, "ReadString did not hit end of string")
+
 	fmt.Printf("Remaining buffer: %s\n", str)
 }
 
@@ -68,35 +65,36 @@ func TestLocationSetIO(t *testing.T) {
 }
 
 func TestLocationSetOps(t *testing.T) {
+	assert := assert.New(t)
 	ls := NewLocationSet()
 	fmt.Println("Empty: ", ls)
 	expected := "{}"
-	if s := ls.String(); s != expected {
-		t.Error("Empty set should be ", expected, ", but is ", s)
-	}
+	s := ls.String()
+	assert.Equal(expected, s, "Empty set should be ", expected, ", but is ", s)
+
 	ls.Add(TestLocation(0))
 	fmt.Println("Singleton: ", ls)
 	expected = "{0}"
-	if s := ls.String(); s != expected {
-		t.Error("Singleton ", expected, " expected, got ", s)
-	}
+	s = ls.String()
+	assert.Equal(expected, s, "Singleton ", expected, " expected, got ", s)
+
 	ls.Add(TestLocation(0))
 	fmt.Println("Still singleton: ", ls)
-	if s := ls.String(); s != expected {
-		t.Error("Singleton ", expected, " expected, got ", s)
-	}
+	s = ls.String()
+	assert.Equal(expected, s, "Singleton ", expected, " expected, got ", s)
+
 	ls.Add(TestLocation(314159))
 	fmt.Println("Two elts: ", ls)
 	expected = "{0, 314159}"
-	if s := ls.String(); s != expected {
-		t.Error("Set {0, 314159} expected, got ", s)
-	}
+	s = ls.String()
+	assert.Equal(expected, s, "Set {0, 314159} expected, got ", s)
+
 	ls.Delete(TestLocation(0))
 	expected = "{314159}"
 	fmt.Println("Back to singleton: ", ls)
-	if s := ls.String(); s != expected {
-		t.Error("Singleton ", expected, " expected, got ", s)
-	}
+	s = ls.String()
+	assert.Equal(expected, s, "Singleton ", expected, " expected, got ", s)
+
 	ls2 := NewLocationSet()
 	ls2.Add(TestLocation(1))
 	ls2.Add(TestLocation(271828))
@@ -104,7 +102,47 @@ func TestLocationSetOps(t *testing.T) {
 	ls.Merge(ls2)
 	fmt.Println("Merged: ", ls)
 	expected = "{1, 161803, 271828, 314159}"
-	if s := ls.String(); s != expected {
-		t.Error("Expected ", expected, ", got ", s)
-	}
+	s = ls.String()
+	assert.Equal(expected, s, "Expected ", expected, ", got ", s)
+}
+
+func TestLocationSetAddSliceAndSize(t *testing.T) {
+	assert := assert.New(t)
+	ls, err := LocationSetFromString(TestLocation(0), "{1, 3, 5, 7, 9, 11}")
+	assert.NoError(err, "LocationSetFromString setup failed")
+	assert.Equal(6, ls.Size(), "Size() failed, should be 6")
+	ls.AddSlice([]Location{TestLocation(2), TestLocation(4), TestLocation(6)})
+	expected := "{1, 2, 3, 4, 5, 6, 7, 9, 11}"
+	assert.Equal(expected, ls.String())
+	assert.Equal(9, ls.Size(), "Size() failed, should be 9")
+}
+
+func TestLocationSetOverlapsIntersects(t *testing.T) {
+	assert := assert.New(t)
+	ls1, err := LocationSetFromString(TestLocation(0), "{1, 3, 5, 7, 9, 11}")
+	assert.NoError(err, "LocationSetFromString setup failed")
+	ls2, err := LocationSetFromString(TestLocation(0), "{2, 4, 5, 7, 10, 12}")
+	assert.NoError(err, "LocationSetFromString setup failed")
+	assert.True(ls1.Overlaps(ls2), "the two sets overlap at 5, 7")
+	assert.True(ls2.Overlaps(ls1), "the two sets overlap at 5, 7")
+
+	ls3, err := LocationSetFromString(TestLocation(0), "{2, 4, 5, 7, 10, 11, 12, 14, 16}")
+	assert.NoError(err, "LocationSetFromString setup failed")
+	assert.True(ls1.Overlaps(ls3), "the two sets overlap at 5, 7")
+	assert.True(ls3.Overlaps(ls1), "the two sets overlap at 5, 7")
+
+	lsInt := ls1.Intersect(ls2)
+	expected := "{5, 7}"
+	assert.Equal(expected, lsInt.String())
+
+	lsInt = ls1.Intersect(ls3)
+	expected = "{5, 7, 11}"
+	assert.Equal(expected, lsInt.String())
+	lsInt = ls3.Intersect(ls1)
+	assert.Equal(expected, lsInt.String())
+
+	ls4, err := LocationSetFromString(TestLocation(0), "{2, 4, 6, 8, 10, 12}")
+	assert.NoError(err, "LocationSetFromString setup failed")
+	assert.False(ls1.Overlaps(ls4), "the two sets do not overlap")
+	assert.False(ls4.Overlaps(ls1), "the two sets do not overlap")
 }

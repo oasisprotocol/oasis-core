@@ -47,3 +47,19 @@ func TestTransaction(t *testing.T) {
 	RejectBadTransaction(t, "garbage-in")
 	RejectBadTransaction(t, "({}, {}, 314159,")
 }
+
+func TestTransactionReadString(t *testing.T) {
+	assert := assert.New(t)
+
+	input := "({1, 2}, {3, 4, 5}, 10, 1)"
+	expected := "({1, 2}, {3, 4, 5}, 10, 1)"
+	txn, err := TransactionFromString(TestLocation(0), input)
+	assert.NoError(err, "TransactionFromString, setup")
+	assert.Equal(expected, txn.String())
+
+	input = "({2, 1}, {5, 3, 4}, 10, 1)"
+	expected = "({1, 2}, {3, 4, 5}, 10, 1)"
+	txn, err = TransactionFromString(TestLocation(0), input)
+	assert.NoError(err, "TransactionFromString, setup")
+	assert.Equal(expected, txn.String())
+}

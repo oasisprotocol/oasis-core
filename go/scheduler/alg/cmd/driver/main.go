@@ -311,7 +311,9 @@ func transactionSourceFactory(cnf distributionConfig) simulator.TransactionSourc
 	var rg randgen.Rng
 
 	if cnf.distributionName == "uniform" {
-		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(cnf.seed)))
+		if rg, err = randgen.NewUniform(numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
+			panic(err.Error())
+		}
 	} else if cnf.distributionName == "zipf" {
 		if rg, err = randgen.NewZipf(cnf.alpha, numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
 			panic(err.Error())

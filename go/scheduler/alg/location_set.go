@@ -207,10 +207,15 @@ func (ls *LocationSet) String() string {
 // Location interface argument `l` is needed because LocationSet objects do not know what is
 // the actual type that implements the Location interface, so `l.Read` is used to read in the
 // individual locations from the `*bufio.Reader`.
-func ReadNewLocationSet(l Location, r *bufio.Reader) (set *LocationSet, err error) {
+func ReadNewLocationSet(l Location, r *bufio.Reader) (*LocationSet, error) {
 	s := NewLocationSet()
 	if err := s.ReadMerge(l, r); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// LocationSetFromString reads a LocationSet from a string by using the string as an input buffer.
+func LocationSetFromString(loc Location, s string) (*LocationSet, error) {
+	return ReadNewLocationSet(loc, bufio.NewReader(bytes.NewReader([]byte(s))))
 }

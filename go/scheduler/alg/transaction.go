@@ -125,3 +125,8 @@ func ReadNewTransaction(l Location, r *bufio.Reader) (*Transaction, error) {
 	}
 	return t, nil
 }
+
+// TransactionFromString reads a Transaction from a string by using the string as an input buffer.
+func TransactionFromString(loc Location, s string) (*Transaction, error) {
+	return ReadNewTransaction(loc, bufio.NewReader(bytes.NewReader([]byte(s))))
+}

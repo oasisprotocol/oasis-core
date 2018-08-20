@@ -2,6 +2,7 @@ package randgen
 
 import (
 	"flag"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -12,6 +13,23 @@ var zipfSeed int64
 
 func init() {
 	flag.Int64Var(&zipfSeed, "zipf-test-seed", 0, "zipf-test reproducibility seed value")
+}
+
+func TestZipfNew(t *testing.T) {
+	assert := assert.New(t)
+	r := rand.New(rand.NewSource(zipfSeed))
+	_, err := NewZipf(-1.0, 100000, r)
+	assert.Error(err, "Negative exponent should not work")
+	_, err = NewZipf(1.5, 0, r)
+	assert.Error(err, "Zero possible values should not work")
+	_, err = NewZipf(1.5, -1, r)
+	assert.Error(err, "Negative possible values should not work")
+	maxint := int(math.MaxInt64)
+	if maxint < 0 {
+		maxint = int(math.MaxInt32)
+	}
+	_, err = NewZipf(1.5, maxint, r)
+	assert.Error(err, "MaxInt values should not work")
 }
 
 // nolint: gocyclo

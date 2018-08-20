@@ -9,26 +9,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// ShouldPanic runs f, which is expected to panic.
-func ShouldPanic(t *testing.T, f func()) {
+// shouldPanic runs f, which is expected to panic.
+func shouldPanic(t *testing.T, f func()) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Recovered from expected panic in f", r)
 		} else {
-			t.Errorf("ShouldPanic: f() did not panic (in defer)")
+			t.Errorf("shouldPanic: f() did not panic (in defer)")
 		}
 	}()
 	f()
-	t.Errorf("ShouldPanic: f() did not panic")
+	t.Errorf("shouldPanic: f() did not panic")
 }
 
 func TestLocationRangeInvarianceCheck(t *testing.T) {
-	ShouldPanic(t, func() {
+	shouldPanic(t, func() {
 		lr := NewLocationRange(TestLocation(1), TestLocation(0))
 		fmt.Printf("Should be unreached.\n")
 		fmt.Printf("Got: %s\n", lr.String())
 	})
-	ShouldPanic(t, func() {
+	shouldPanic(t, func() {
 		lr := NewLocationRange(TestLocation(1000), TestLocation(10))
 		fmt.Printf("Should be unreached.\n")
 		fmt.Printf("Got: %s\n", lr.String())
@@ -74,9 +74,39 @@ func TestLocationRangeSetRead(t *testing.T) {
 	ws := outputBuffer.String()
 	fmt.Printf("Got via Write %s\n", ws)
 	assert.Equal(expected, ws, "Parsed from %s, written as %s, expected %s", input, ws, expected)
+
+	input = "2:4, 5:2"
+	_, err = LocationRangeSetFromString(TestLocation(0), input)
+	assert.Error(err, "bad range should have been detected")
+
+	input = "2:4; 5:10"
+	expected = "2:4"
+	lrs, err = LocationRangeSetFromString(TestLocation(0), input)
+	assert.NoError(err, "bad range separator should have stopped parsing instead of generating error")
+	assert.Equal(expected, lrs.String(), "should have decoded valid range prefix")
+
+	input = "2:4, 5:10, 100:1000, x"
+	_, err = LocationRangeSetFromString(TestLocation(0), input)
+	assert.Error(err, "bad range after separator should have been detected")
+
+	input = "2:4, 5:10, 100:1000; y"
+	expected = "2:4, 5:10, 100:1000"
+	lrs, err = LocationRangeSetFromString(TestLocation(0), input)
+	assert.NoError(err, "bad range after separator should have stopped parsing")
+	assert.Equal(expected, lrs.String(), "should have decoded valid ranges")
 }
 
-func TestLocationRangeParse(t *testing.T) {
+func TestMustReadLocationRange(t *testing.T) {
+	assert := assert.New(t)
+	shouldPanic(t, func() {
+		_ = MustReadNewLocationRange(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte("9:1"))))
+	})
+	lr := MustReadNewLocationRange(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte("1:9"))))
+	assert.NotNil(lr, "MustReadNewLocationRange should work")
+}
+
+// nolint: gocyclo
+func TestReadNewLocationRange(t *testing.T) {
 	assert := assert.New(t)
 	helper := func(in string) (*LocationRange, error) {
 		return ReadNewLocationRange(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte(in))))
@@ -109,6 +139,39 @@ func TestLocationRangeParse(t *testing.T) {
 	lr, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
 	fmt.Printf("parsed: %s\n", lr.String())
+
+	input = "-100:1,"
+	lr, err = helper(input)
+	assert.NoError(err, "Could not parse input '%s'", input)
+	fmt.Printf("parsed: %s\n", lr.String())
+
+	input = "garbage"
+	lr, err = helper(input)
+	if err == nil && lr != nil {
+		fmt.Printf("parsed %s as %s\n", input, lr.String())
+	}
+	assert.Error(err, "Unexpected ability to parse input '%s'", input)
+
+	input = ""
+	lr, err = helper(input)
+	if err == nil && lr != nil {
+		fmt.Printf("parsed %s as %s\n", input, lr.String())
+	}
+	assert.Error(err, "Unexpected ability to parse input '%s'", input)
+
+	input = "10:"
+	lr, err = helper(input)
+	if err == nil && lr != nil {
+		fmt.Printf("parsed %s as %s\n", input, lr.String())
+	}
+	assert.Error(err, "Unexpected ability to parse input '%s'", input)
+
+	input = ":10"
+	lr, err = helper(input)
+	if err == nil && lr != nil {
+		fmt.Printf("parsed %s as %s\n", input, lr.String())
+	}
+	assert.Error(err, "Unexpected ability to parse input '%s'", input)
 }
 
 // nolint: gocyclo

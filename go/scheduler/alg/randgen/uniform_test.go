@@ -20,6 +20,15 @@ func init() {
 	flag.IntVar(&uniformNumTrials, "uniform-test-trials", 1000000, "uniform-test chi-square trials")
 }
 
+func TestUniformNew(t *testing.T) {
+	assert := assert.New(t)
+	r := rand.New(rand.NewSource(uniformSeed))
+	_, err := NewUniform(0, r)
+	assert.Error(err, "NewUniform with zero elements should fail")
+	_, err = NewUniform(-10, r)
+	assert.Error(err, "NewUniform with negative elements should fail")
+}
+
 func TestUniform(t *testing.T) {
 	assert := assert.New(t)
 	handleTestSeed(&uniformSeed, "uniform-test")
@@ -29,7 +38,8 @@ func TestUniform(t *testing.T) {
 		panic("uniform-test-buckets-1 must be a degree-of-freedom value for which chi-squared critical value can be looked up")
 	}
 	fmt.Printf("Chi-squared critical value = %g\n", critValue)
-	u := NewUniform(uniformNumBuckets, rand.New(rand.NewSource(uniformSeed)))
+	u, err := NewUniform(uniformNumBuckets, rand.New(rand.NewSource(uniformSeed)))
+	assert.NoError(err, "NewUniform should not have failed")
 	buckets := make([]int, uniformNumBuckets)
 	for ix := 0; ix < uniformNumTrials; ix++ {
 		buckets[u.Generate()]++

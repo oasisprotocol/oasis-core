@@ -91,7 +91,10 @@ func main() {
 			panic(err.Error())
 		}
 	} else if distribution == "uniform" {
-		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(seed)))
+		rg, err = randgen.NewUniform(numLocations, rand.New(rand.NewSource(seed)))
+		if err != nil {
+			panic(err.Error())
+		}
 	} else {
 		panic(fmt.Sprintf("Random distribution %s not understood", distribution))
 	}
