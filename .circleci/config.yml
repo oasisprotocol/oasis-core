@@ -17,7 +17,7 @@ jobs:
       - checkout
       - run:
           name: Checking if rust code has changed
-          command: ./scripts/ci-changed.sh \.circleci beacon clients common compute contract contracts core db di enclave epochtime ethereum instrumentation keys node registry rpc roothash scheduler stake storage tools xargo
+          command: ./scripts/ci-changed.sh \.circleci beacon clients common compute contract contracts core db di enclave epochtime ethereum instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
