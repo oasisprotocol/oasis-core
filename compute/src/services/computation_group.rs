@@ -55,7 +55,7 @@ impl ComputationGroup for ComputationGroupService {
         let f = match f() {
             Ok(()) => sink.success(SubmitBatchResponse::new()),
             Err(error) => sink.fail(RpcStatus::new(
-                RpcStatusCode::Internal,
+                RpcStatusCode::Unavailable,
                 Some(error.description().to_owned()),
             )),
         };
