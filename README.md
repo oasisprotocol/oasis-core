@@ -3,11 +3,6 @@
 [![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
 
 
-## Developing, building and using Ekiden
-
-If you are interested in developing contracts in the ekiden runtime, you should check out the documentation of the
-[hello world contract](https://github.com/oasislabs/contract-helloworld).
-
 ## Developing and building the Ekiden system
 
 The canonical development environment is defined by our development Docker container.
@@ -32,33 +27,41 @@ your host.  The actual prompt from the bash shell running in the
 container will look like `root@xxxx:/code#` where `xxxx` is the docker
 container id; in the text below, we will just use `#`.
 
-## Building core contracts
+## Building the Go node
+
+The Ekiden node is written in Go and lives under `go/`. For building the Go node in
+the development container:
+```
+# make -C go
+```
+
+## Building a test enclave
 
 Starting directory is
 ```
 # cd /code
 ```
 
-For building contracts we have our own Cargo extension which should be installed:
+For building enclaves we have our own Cargo extension which should be installed:
 ```
 # cargo install --force --path tools
 ```
 
-To build the token contract:
+To build the token enclave:
 ```
 # cd contracts/token
-# cargo ekiden build-enclave
+# cargo ekiden build-enclave --output-identity
 ```
 
-The built contract will be stored under `target/enclave/token.so`.
+The built enclave will be stored under `target/enclave/token.so`.
 
-To build the client token contract:
+To build the token client:
 ```
 # cd clients/token
 # cargo build
 ```
 
-## Running a contract
+## Running an Ekiden node
 
 Starting directory is
 ```
@@ -71,7 +74,7 @@ token contract, but the process is the same for any contract.
 
 To start the shared dummy node:
 ```
-# ./target/debug/ekiden-node-dummy --time-source mockrpc --storage-backend dummy
+# ./go/ekiden/ekiden --datadir /tmp/ekiden-dummy-data --grpc.port 42261
 ```
 
 To start the compute node for the token contract (you need to start two):
@@ -113,13 +116,9 @@ To run end-to-end tests:
 # ./scripts/test-e2e.sh
 ```
 
-## Developing
+## Contributing
 
-We welcome anyone to fork and submit a pull request! Please make sure to run `rustfmt` before submitting.
-
-```
-# cargo fmt
-```
+See our [contributing guidelines](CONTRIBUTING.md).
 
 ## Packages
 - `beacon`: Random beacon for preventing predictability
