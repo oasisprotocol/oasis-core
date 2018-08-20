@@ -817,10 +817,10 @@ impl RootHashFrontend {
     }
 
     /// Append contract calls to current batch for eventual processing.
-    pub fn append_batch(&self, calls: CallBatch) {
+    pub fn append_batch(&self, calls: CallBatch) -> Result<()> {
         // Ignore empty batches.
         if calls.is_empty() {
-            return;
+            return Ok(());
         }
 
         // If we are not a leader, do not append to batch.
@@ -828,7 +828,7 @@ impl RootHashFrontend {
             let state = self.inner.state.lock().unwrap();
             if !state.is_leader() {
                 warn!("Ignoring append to batch as we are not the computation group leader");
-                return;
+                return Err(Error::new("not computation group leader"));
             }
         }
 
@@ -851,6 +851,8 @@ impl RootHashFrontend {
                 .unbounded_send(Command::ProcessIncomingQueue)
                 .unwrap();
         }
+
+        Ok(())
     }
 
     /// Directly process a batch from a remote leader.
