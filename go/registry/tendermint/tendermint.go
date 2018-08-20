@@ -38,11 +38,10 @@ type tendermintBackend struct {
 	contractNotifier *pubsub.Broker
 }
 
-func (r *tendermintBackend) RegisterEntity(ctx context.Context, ent *entity.Entity, sig *signature.Signature) error {
+func (r *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
 	tx := tmapi.TxRegistry{
 		TxRegisterEntity: &tmapi.TxRegisterEntity{
-			Entity:    *ent,
-			Signature: *sig,
+			Entity: *sigEnt,
 		},
 	}
 
@@ -53,11 +52,10 @@ func (r *tendermintBackend) RegisterEntity(ctx context.Context, ent *entity.Enti
 	return nil
 }
 
-func (r *tendermintBackend) DeregisterEntity(ctx context.Context, id signature.PublicKey, sig *signature.Signature) error {
+func (r *tendermintBackend) DeregisterEntity(ctx context.Context, sigID *signature.SignedPublicKey) error {
 	tx := tmapi.TxRegistry{
 		TxDeregisterEntity: &tmapi.TxDeregisterEntity{
-			ID:        id,
-			Signature: *sig,
+			ID: *sigID,
 		},
 	}
 
@@ -108,11 +106,10 @@ func (r *tendermintBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.Su
 	return typedCh, sub
 }
 
-func (r *tendermintBackend) RegisterNode(ctx context.Context, node *node.Node, sig *signature.Signature) error {
+func (r *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.SignedNode) error {
 	tx := tmapi.TxRegistry{
 		TxRegisterNode: &tmapi.TxRegisterNode{
-			Node:      *node,
-			Signature: *sig,
+			Node: *sigNode,
 		},
 	}
 
@@ -173,11 +170,10 @@ func (r *tendermintBackend) WatchNodeList() (<-chan *api.NodeList, *pubsub.Subsc
 	return nil, nil
 }
 
-func (r *tendermintBackend) RegisterContract(ctx context.Context, con *contract.Contract, sig *signature.Signature) error {
+func (r *tendermintBackend) RegisterContract(ctx context.Context, sigCon *contract.SignedContract) error {
 	tx := tmapi.TxRegistry{
 		TxRegisterContract: &tmapi.TxRegisterContract{
-			Contract:  *con,
-			Signature: *sig,
+			Contract: *sigCon,
 		},
 	}
 

@@ -40,6 +40,11 @@ message Signature {
     bytes signature = 2;
 }
 
+message Signed {
+    bytes blob = 1;
+    Signature signature = 2;
+}
+
 message Contract {
     bytes id = 1;
     bytes store_id = 2;

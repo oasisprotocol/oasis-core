@@ -45,17 +45,10 @@ type memoryBackendState struct {
 	contracts map[signature.MapKey]*contract.Contract
 }
 
-func (r *memoryBackend) RegisterEntity(ctx context.Context, ent *entity.Entity, sig *signature.Signature) error {
-	// XXX: Ensure ent is well-formed.
-	if ent == nil || sig == nil || sig.SanityCheck(ent.ID) != nil {
-		r.logger.Error("RegisterEntity: invalid argument(s)",
-			"entity", ent,
-			"signature", sig,
-		)
-		return api.ErrInvalidArgument
-	}
-	if !sig.Verify(api.RegisterEntitySignatureContext, ent.ToSignable()) {
-		return api.ErrInvalidSignature
+func (r *memoryBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
+	ent, err := api.VerifyRegisterEntityArgs(r.logger, sigEnt)
+	if err != nil {
+		return err
 	}
 
 	r.state.Lock()
@@ -74,20 +67,10 @@ func (r *memoryBackend) RegisterEntity(ctx context.Context, ent *entity.Entity, 
 	return nil
 }
 
-func (r *memoryBackend) DeregisterEntity(ctx context.Context, id signature.PublicKey, sig *signature.Signature) error {
-	if sig == nil || sig.SanityCheck(id) != nil {
-		r.logger.Error("DeregisterEntity: invalid argument(s)",
-			"entity_id", id,
-			"signature", sig,
-		)
-		return api.ErrInvalidArgument
-	}
-	if !sig.Verify(api.DeregisterEntitySignatureContext, id) {
-		r.logger.Error("DeregisterEntity: invalid signature",
-			"entity_id", id,
-			"signature", sig,
-		)
-		return api.ErrInvalidSignature
+func (r *memoryBackend) DeregisterEntity(ctx context.Context, sigID *signature.SignedPublicKey) error {
+	id, err := api.VerifyDeregisterEntityArgs(r.logger, sigID)
+	if err != nil {
+		return err
 	}
 
 	var removedEntity *entity.Entity
@@ -157,29 +140,21 @@ func (r *memoryBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.Subscr
 	return typedCh, sub
 }
 
-func (r *memoryBackend) RegisterNode(ctx context.Context, node *node.Node, sig *signature.Signature) error {
-	// XXX: Ensure node is well-formed.
-	if node == nil || sig == nil || sig.SanityCheck(node.EntityID) != nil {
-		r.logger.Error("RegisterNode: invalid argument(s)",
-			"node", node,
-			"signature", sig,
-		)
-		return api.ErrInvalidArgument
-	}
-	if !sig.Verify(api.RegisterNodeSignatureContext, node.ToSignable()) {
-		return api.ErrInvalidSignature
+func (r *memoryBackend) RegisterNode(ctx context.Context, sigNode *node.SignedNode) error {
+	node, err := api.VerifyRegisterNodeArgs(r.logger, sigNode)
+	if err != nil {
+		return err
 	}
 
-	mk := node.ID.ToMapKey()
 	r.state.Lock()
-	if r.state.entities[mk] == nil {
+	if r.state.entities[node.EntityID.ToMapKey()] == nil {
 		r.state.Unlock()
 		r.logger.Error("RegisterNode: unknown entity in node registration",
 			"node", node,
 		)
 		return api.ErrBadEntityForNode
 	}
-	r.state.nodes[mk] = node
+	r.state.nodes[node.ID.ToMapKey()] = node
 	r.state.Unlock()
 
 	r.logger.Debug("RegisterNode: registered",
@@ -300,17 +275,10 @@ func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
 	})
 }
 
-func (r *memoryBackend) RegisterContract(ctx context.Context, con *contract.Contract, sig *signature.Signature) error {
-	// XXX: Ensure contact is well-formed.
-	if con == nil || sig == nil || sig.SanityCheck(con.ID) != nil {
-		r.logger.Error("RegisterContract: invalid argument(s)",
-			"contract", con,
-			"signature", sig,
-		)
-		return api.ErrInvalidArgument
-	}
-	if !sig.Verify(api.RegisterContractSignatureContext, con.ToSignable()) {
-		return api.ErrInvalidSignature
+func (r *memoryBackend) RegisterContract(ctx context.Context, sigCon *contract.SignedContract) error {
+	con, err := api.VerifyRegisterContractArgs(r.logger, sigCon)
+	if err != nil {
+		return err
 	}
 
 	r.state.Lock()

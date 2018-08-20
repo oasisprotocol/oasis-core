@@ -55,12 +55,14 @@ jobs:
             --exclude token
 
       # Integration tests.
+      - run: make -C go
       - run: ./scripts/test-e2e.sh
 
       # Store built files.
       - persist_to_workspace:
           root: .
           paths:
+            - go/ekiden/ekiden
             - target/debug/ekiden-node-dummy
             - target/debug/ekiden-node-dummy-controller
             - target/debug/ekiden-compute
@@ -144,6 +146,12 @@ jobs:
           key: go-cache
           paths:
             - "/go/pkg"
+
+      # Store built files.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - go/ekiden/ekiden
 
   lint-git:
     docker:
@@ -313,8 +321,8 @@ workflows:
   version: 2
   build:
     jobs:
-      - build-rust
       - build-go
+      - build-rust
       - lint-git
       - set-docker-tag:
           # FIXME: The master filter for this and the deploy steps is a

@@ -14,11 +14,19 @@ EOF
     exit 1
 fi
 
-# Build all Ekiden binaries and resources.
+# Build all Ekiden Rust binaries and resources.
 cargo install --force --path tools
 (cd contracts/token && cargo ekiden build-enclave --release)
 (cd compute && cargo build --release)
 (cd node/dummy && cargo build --release)
+
+# Build all Ekiden Go binaries and resources.
+GO_SRC_BASE=${GOPATH}/src/github.com/oasislabs
+mkdir -p ${GO_SRC_BASE}
+ln -s `pwd` ${GO_SRC_BASE}/ekiden
+(cd ${GO_SRC_BASE}/ekiden/go && dep ensure)
+(cd ${GO_SRC_BASE}/ekiden/go && go generate ./...)
+(cd ${GO_SRC_BASE}/ekiden/go && go build -o ./ekiden/ekiden ./ekiden)
 
 # Package all binaries and resources.
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
@@ -26,6 +34,7 @@ ln target/enclave/token.so target/docker-deployment/context/lib
 ln target/release/ekiden-compute target/docker-deployment/context/bin
 ln target/release/ekiden-node-dummy target/docker-deployment/context/bin
 ln target/release/ekiden-node-dummy-controller target/docker-deployment/context/bin
+ln go/ekiden/ekiden target/docker-deployment/context/bin/ekiden-node
 if [ -e docker/deployment/Dockerfile.generated ]
 then
     ln docker/deployment/Dockerfile.generated target/docker-deployment/context/Dockerfile

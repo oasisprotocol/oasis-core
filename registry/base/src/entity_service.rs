@@ -11,7 +11,7 @@ use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::error::Error;
 use ekiden_common::node::Node;
-use ekiden_common::signature::{Signature, Signed};
+use ekiden_common::signature::Signed;
 
 #[derive(Clone)]
 pub struct EntityRegistryService {
@@ -32,9 +32,8 @@ impl api::EntityRegistry for EntityRegistryService {
         sink: UnarySink<api::RegisterResponse>,
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
-            let e = Entity::try_from(req.get_entity().clone())?;
-            let s = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.register_entity(Signed::from_parts(e, s)))
+            Ok(self.inner
+                .register_entity(Signed::try_from(req.get_entity().clone())?))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -59,9 +58,8 @@ impl api::EntityRegistry for EntityRegistryService {
         sink: UnarySink<api::DeregisterResponse>,
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
-            let id = B256::from_slice(req.get_id());
-            let s = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.deregister_entity(Signed::from_parts(id, s)))
+            Ok(self.inner
+                .deregister_entity(Signed::try_from(req.get_id().clone())?))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {
@@ -168,9 +166,8 @@ impl api::EntityRegistry for EntityRegistryService {
         sink: UnarySink<api::RegisterNodeResponse>,
     ) {
         let f = move || -> Result<BoxFuture<()>, Error> {
-            let node = Node::try_from(req.get_node().clone())?;
-            let s = Signature::try_from(req.get_signature().clone())?;
-            Ok(self.inner.register_node(Signed::from_parts(node, s)))
+            Ok(self.inner
+                .register_node(Signed::try_from(req.get_node().clone())?))
         };
         let f = match f() {
             Ok(f) => f.then(|res| match res {

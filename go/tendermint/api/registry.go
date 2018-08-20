@@ -72,26 +72,22 @@ type TxRegistry struct {
 
 // TxRegisterEntity is a transaction for registering a new entity.
 type TxRegisterEntity struct {
-	Entity    entity.Entity
-	Signature signature.Signature
+	Entity entity.SignedEntity
 }
 
 // TxDeregisterEntity is a transaction for deregistering an entity.
 type TxDeregisterEntity struct {
-	ID        signature.PublicKey
-	Signature signature.Signature
+	ID signature.SignedPublicKey
 }
 
 // TxRegisterNode is a transaction for registering a new node.
 type TxRegisterNode struct {
-	Node      node.Node
-	Signature signature.Signature
+	Node node.SignedNode
 }
 
 // TxRegisterContract is a transaction for registering a new contract.
 type TxRegisterContract struct {
-	Contract  contract.Contract
-	Signature signature.Signature
+	Contract contract.SignedContract
 }
 
 // OutputRegistry is an output of an registry app transaction.

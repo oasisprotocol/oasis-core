@@ -12,8 +12,8 @@ service ContractRegistry {
 }
 
 message RegisterContractRequest {
-    common.Contract contract = 1;
-    common.Signature signature = 2;
+    // Signed blob should be a CBOR-serialized contract.
+    common.Signed contract = 1;
 }
 
 message RegisterContractResponse {

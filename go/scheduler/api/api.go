@@ -24,7 +24,7 @@ var (
 )
 
 // Role is the role a given node plays in a committee.
-type Role int
+type Role uint8
 
 const (
 	// Worker indicates the node is a worker.
@@ -54,10 +54,10 @@ func (r Role) String() string {
 // CommitteeNode is a node participating in a committee.
 type CommitteeNode struct {
 	// Role is the node's role in a committee.
-	Role Role
+	Role Role `codec:"role"`
 
 	// PublicKey is the node's public key.
-	PublicKey signature.PublicKey
+	PublicKey signature.PublicKey `codec:"public_key"`
 }
 
 // FromProto deserializes a protobuf into a CommitteeNode.
@@ -99,7 +99,7 @@ func (n *CommitteeNode) ToProto() *pbSched.CommitteeNode {
 }
 
 // CommitteeKind is the functionality a committee exists to provide.
-type CommitteeKind int
+type CommitteeKind uint8
 
 const (
 	// Compute is a compute committee.
@@ -124,16 +124,16 @@ func (k CommitteeKind) String() string {
 // Committee is a per-contract (instance) committee.
 type Committee struct {
 	// Kind is the functionality a committee exists to provide.
-	Kind CommitteeKind
+	Kind CommitteeKind `codec:"kind"`
 
 	// Members is the committee members.
-	Members []*CommitteeNode
+	Members []*CommitteeNode `codec:"members"`
 
 	// Contract is the contract (runtime) that this committee is for.
-	Contract *contract.Contract
+	Contract *contract.Contract `codec:"-"`
 
 	// ValidFor is the epoch for which the committee is valid.
-	ValidFor epochtime.EpochTime
+	ValidFor epochtime.EpochTime `codec:"valid_for"`
 }
 
 // ToProto serializes a Committee into a protobuf.

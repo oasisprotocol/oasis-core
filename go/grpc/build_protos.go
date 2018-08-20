@@ -66,10 +66,15 @@ func main() {
 	// one that the current repo is living under.
 	goPaths := filepath.SplitList(os.Getenv("GOPATH"))
 	var goPath string
-	for _, candidate := range goPaths {
-		if strings.HasPrefix(pwd, candidate) {
-			goPath = candidate
-			break
+	if len(goPaths) == 1 {
+		// If there is only one $GOPATH use it instead of doing resolution.
+		goPath = goPaths[0]
+	} else {
+		for _, candidate := range goPaths {
+			if strings.HasPrefix(pwd, candidate) {
+				goPath = candidate
+				break
+			}
 		}
 	}
 	if goPath == "" {

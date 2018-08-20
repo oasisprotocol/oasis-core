@@ -10,39 +10,20 @@ import (
 // Block is an Oasis block.
 type Block struct {
 	// Header is the block header.
-	Header Header
+	Header Header `codec:"header"`
 
 	// ComputationGroup is the designated computation group.
-	ComputationGroup []*scheduler.CommitteeNode
+	ComputationGroup []*scheduler.CommitteeNode `codec:"computation_group"`
 
 	// Commitments is the vector of commitments from compute nodes,
 	// in the same order as in the computation group.
-	Commitments []*Commitment
+	Commitments []*Commitment `codec:"commitments"`
 }
 
 // Update updates the block header based on the current block content.
 func (b *Block) Update() {
 	b.Header.GroupHash = b.getComputationGroupHash()
 	b.Header.CommitmentsHash = b.getCommitmentsHash()
-}
-
-// NewParentOf returns a parent block generated from a existing block,
-// and a header containing the new block's hashes.
-func (b *Block) NewParentOf(newHdr *Header) *Block {
-	parent := new(Block)
-	parent.Header.Version = b.Header.Version
-	parent.Header.Namespace = b.Header.Namespace
-	parent.Header.Round = b.Header.Round.Increment()
-	parent.Header.PreviousHash = b.Header.EncodedHash()
-
-	parent.Header.InputHash = b.Header.InputHash
-	parent.Header.OutputHash = b.Header.OutputHash
-	parent.Header.StateRoot = b.Header.StateRoot
-
-	// The Rust code calls Update(), but that is wasted since the
-	// commitments aren't present in the new block yet.
-
-	return parent
 }
 
 // FromProto deserializes a protobuf into a block.

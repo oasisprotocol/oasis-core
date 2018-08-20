@@ -49,7 +49,7 @@ func (s *Subscription) Close() {
 type Broker struct {
 	subscribers     map[*channels.InfiniteChannel]bool
 	cmdCh           chan *cmdCtx
-	broadcastCh     chan interface{}
+	broadcastCh     *channels.InfiniteChannel
 	lastBroadcasted *broadcastedValue
 
 	onSubscribeHook OnSubscribeHook
@@ -97,7 +97,7 @@ func (b *Broker) SubscribeEx(onSubscribeHook OnSubscribeHook) *Subscription {
 // Note: This makes no special effort to avoid deadlocking if any one
 // of the subscribers' channel is full.
 func (b *Broker) Broadcast(v interface{}) {
-	b.broadcastCh <- v
+	b.broadcastCh.In() <- v
 }
 
 func (b *Broker) worker() {
@@ -122,7 +122,7 @@ func (b *Broker) worker() {
 					close(ctx.errCh)
 				}
 			}
-		case v := <-b.broadcastCh:
+		case v := <-b.broadcastCh.Out():
 			for ch := range b.subscribers {
 				ch.In() <- v
 			}
@@ -164,6 +164,6 @@ func newBroker() *Broker {
 	return &Broker{
 		subscribers: make(map[*channels.InfiniteChannel]bool),
 		cmdCh:       make(chan *cmdCtx),
-		broadcastCh: make(chan interface{}),
+		broadcastCh: channels.NewInfiniteChannel(),
 	}
 }
