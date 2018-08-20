@@ -122,6 +122,7 @@ var lsconfigFromFlags logicalShardingConfig
 type adversaryConfig struct {
 	seed            int64
 	injectionProb   float64
+	targetFrac      float64
 	readFrac        float64
 	dosBatchSize    int
 	targetAddresses string
@@ -135,6 +136,7 @@ func (acnf *adversaryConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nAdversary (DOS) Transaction Generator Parameters\n")
 	_, _ = fmt.Fprintf(bw, "  dos-seed = %d\n", acnf.seed)
 	_, _ = fmt.Fprintf(bw, "  dos-injection-prob = %g\n", acnf.injectionProb)
+	_, _ = fmt.Fprintf(bw, "  dos-target-fraction = %g\n", acnf.targetFrac)
 	_, _ = fmt.Fprintf(bw, "  dos-read-fraction = %g\n", acnf.readFrac)
 	_, _ = fmt.Fprintf(bw, "  dos-batch-size = %d\n", acnf.dosBatchSize)
 	_, _ = fmt.Fprintf(bw, "  dos-target-addresses = %s\n", acnf.targetAddresses)
@@ -265,7 +267,8 @@ func init() {
 
 	flag.Int64Var(&adversaryConfigFromFlags.seed, "dos-seed", 0, "seed for rng used to randomize DOS-spam adversary actions")
 	flag.Float64Var(&adversaryConfigFromFlags.injectionProb, "dos-injection-prob", 0.0, "probability of deciding to inject (possibly many) DOS transactions (0 disables adversary)")
-	flag.Float64Var(&adversaryConfigFromFlags.readFrac, "dos-read-fraction", 0.0, "fraction of DOS addresses that go to the read set (rest go to the write set)")
+	flag.Float64Var(&adversaryConfigFromFlags.targetFrac, "dos-target-fraction", 0.9, "fraction of DOS addresses that will be attacked")
+	flag.Float64Var(&adversaryConfigFromFlags.readFrac, "dos-read-fraction", 0.0, "fraction of DOS addresses under attack that go to the read set (rest go to the write set)")
 	flag.IntVar(&adversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to DOS spam is made")
 	flag.StringVar(&adversaryConfigFromFlags.targetAddresses, "dos-target-addresses", "0:15,128:131", "comma-separated list of integers or start-end integer ranges")
 	flag.UintVar(&adversaryConfigFromFlags.seqno, "dos-seqno", 1000000, "starting seqno/id for DOS spam transactions")
@@ -329,6 +332,7 @@ func adversaryFactory(acnf adversaryConfig, ts simulator.TransactionSource) simu
 	ats, err := simulator.NewAdversarialTransactionSource(
 		acnf.seed,
 		acnf.injectionProb,
+		acnf.targetFrac,
 		acnf.readFrac,
 		acnf.targets,
 		acnf.dosBatchSize,

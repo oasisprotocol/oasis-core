@@ -47,13 +47,13 @@ import (
 type AdversarialTransactionSource struct {
 	r             *rand.Rand
 	injectionProb float64
+	targetFract   float64
 	readFrac      float64
 	targets       *alg.LocationRangeSet
 
-	batchSize   int
-	targetFract float64
-	ts          TransactionSource
-	spamSeqno   uint
+	batchSize int
+	ts        TransactionSource
+	spamSeqno uint
 
 	numTargets int64
 	step       int
@@ -176,6 +176,7 @@ func mapTargets(targets *alg.LocationRangeSet, choice []int64) []alg.Location {
 func NewAdversarialTransactionSource(
 	rngSeed int64,
 	inj float64,
+	tFrac float64,
 	rFrac float64,
 	targets *alg.LocationRangeSet,
 	batchSize int,
@@ -212,10 +213,10 @@ func NewAdversarialTransactionSource(
 	return &AdversarialTransactionSource{
 		r:             rng,
 		injectionProb: inj,
+		targetFract:   tFrac,
 		readFrac:      rFrac,
 		targets:       targets,
 		batchSize:     batchSize,
-		targetFract:   0.75,
 		ts:            ts,
 
 		numTargets: iNTargets,
