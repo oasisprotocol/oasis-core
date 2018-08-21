@@ -2,10 +2,8 @@ package randgen
 
 import (
 	"flag"
-	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -16,21 +14,8 @@ func init() {
 	flag.Int64Var(&pickNFromNSeed, "pick-n-from-m-seed", 0, "pick-n-from-m reproducibility seed")
 }
 
-// ShouldPanic runs f, which is expected to panic.
-func ShouldPanic(t *testing.T, f func()) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered from expected panic in f", r)
-		} else {
-			t.Errorf("ShouldPanic: f() did not panic (in defer)")
-		}
-	}()
-	f()
-	t.Errorf("ShouldPanic: f() did not panic")
-}
-
 func ensureIsShuffle(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64, pickerName string, size int64, r *rand.Rand) {
-	fmt.Printf("%s: size %d shuffle\n", pickerName, size)
+	t.Logf("%s: size %d shuffle\n", pickerName, size)
 	shuffle := picker(size, size, r)
 	seen := make(map[int64]struct{})
 	for _, v := range shuffle {
@@ -43,7 +28,7 @@ func ensureIsShuffle(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64
 }
 
 func efficientPickSmall(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64, pickerName string, numElts, size int64, r *rand.Rand) {
-	fmt.Printf("%s(%d, %d, .)\n", pickerName, numElts, size)
+	t.Logf("%s(%d, %d, .)\n", pickerName, numElts, size)
 	sample := picker(numElts, size, r)
 	// just ensure all elements are in [0, size)
 	for _, v := range sample {
@@ -54,26 +39,19 @@ func efficientPickSmall(t *testing.T, picker func(n, m int64, r *rand.Rand) []in
 		showElts = 20
 	}
 	for _, v := range sample[:showElts] {
-		fmt.Printf("%d ", v)
+		t.Logf("%d ", v)
 	}
-	fmt.Printf("\n")
-}
-
-func timeFunc(f func()) {
-	startTime := time.Now()
-	f()
-	elapsedTime := time.Since(startTime)
-	fmt.Printf("Time took %s\n", elapsedTime)
+	t.Logf("\n")
 }
 
 func PickNFromMVarious(t *testing.T, picker func(n, m int64, r *rand.Rand) []int64, pickerName string) {
-	handleTestSeed(&pickNFromNSeed, "pick-n-from-m")
+	assert := assert.New(t)
+	handleTestSeed(t.Logf, &pickNFromNSeed, "pick-n-from-m")
 	r := rand.New(rand.NewSource(pickNFromNSeed))
 	ensureIsShuffle(t, picker, pickerName, 10, r)
 	ensureIsShuffle(t, picker, pickerName, 100, r)
 	ensureIsShuffle(t, picker, pickerName, 1000, r)
 	ensureIsShuffle(t, picker, pickerName, 10000, r)
-	timeFunc(func() { ensureIsShuffle(t, picker, pickerName, 1000000, r) })
 
 	efficientPickSmall(t, picker, pickerName, 10, 1000000000, r)
 	efficientPickSmall(t, picker, pickerName, 10, 10000000000, r)
@@ -87,19 +65,83 @@ func PickNFromMVarious(t *testing.T, picker func(n, m int64, r *rand.Rand) []int
 	efficientPickSmall(t, picker, pickerName, 0, 1, r)
 	efficientPickSmall(t, picker, pickerName, 0, 1000000000000000000, r)
 
-	ShouldPanic(t, func() {
+	assert.Panics(func() {
 		ensureIsShuffle(t, picker, pickerName, 0, r)
-	})
-	ShouldPanic(t, func() {
+	}, "shuffle of zero elements should panic")
+	assert.Panics(func() {
 		efficientPickSmall(t, picker, pickerName, 0, 0, r)
-	})
-	ShouldPanic(t, func() {
+	}, "picking from zero elements from zero elements should panic")
+	assert.Panics(func() {
 		efficientPickSmall(t, picker, pickerName, 1, 0, r)
-	})
+	}, "picking one element from zero elements should panic")
 }
 
 func TestPickNFromM(t *testing.T) {
 	PickNFromMVarious(t, PickNFromMRemapping, "PickNFromMRemapping")
 	PickNFromMVarious(t, PickNFromMRejectionSampling, "PickNFromMRejectionSampling")
 	PickNFromMVarious(t, PickNFromM, "PickNFromM")
+}
+
+func doShuffleBench(b *testing.B, picker func(n, m int64, r *rand.Rand) []int64, pickerName string, r *rand.Rand) {
+	b.Logf("%s: size %d shuffle\n", pickerName, b.N)
+	_ = picker(int64(b.N), int64(b.N), r)
+}
+
+func BenchmarkShuffleRemapping(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doShuffleBench(b, PickNFromMRemapping, "PickNFromMRemapping", r)
+}
+
+func BenchmarkShuffleRejectionSampling(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doShuffleBench(b, PickNFromMRejectionSampling, "PickNFromMRejectionSampling", r)
+}
+
+func doPickSmall(b *testing.B, picker func(n, m int64, r *rand.Rand) []int64, pickerName string, pickNum int64, r *rand.Rand) {
+	// We do not control b.N to ensure that it is large enough.
+	if pickNum > int64(b.N) {
+		pickNum = int64(b.N)
+	}
+	b.Logf("%s: %d from %d pick small  \n", pickerName, pickNum, b.N)
+	_ = picker(pickNum, int64(b.N), r)
+}
+
+// repeat for various small values
+
+func BenchmarkPickSmallRemapping10(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doPickSmall(b, PickNFromMRemapping, "PickNFromMRemapping", 10, r)
+}
+
+func BenchmarkPickSmallRejectionSampling10(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doPickSmall(b, PickNFromMRejectionSampling, "PickNFromMRejectionSampling", 10, r)
+}
+
+func BenchmarkPickSmallRemapping100(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doPickSmall(b, PickNFromMRemapping, "PickNFromMRemapping", 100, r)
+}
+
+func BenchmarkPickSmallRejectionSampling100(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doPickSmall(b, PickNFromMRejectionSampling, "PickNFromMRejectionSampling", 100, r)
+}
+
+func BenchmarkPickSmallRemapping1000(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doPickSmall(b, PickNFromMRemapping, "PickNFromMRemapping", 1000, r)
+}
+
+func BenchmarkPickSmallRejectionSampling1000(b *testing.B) {
+	handleTestSeed(b.Logf, &pickNFromNSeed, "pick-n-from-m")
+	r := rand.New(rand.NewSource(pickNFromNSeed))
+	doPickSmall(b, PickNFromMRejectionSampling, "PickNFromMRejectionSampling", 1000, r)
 }

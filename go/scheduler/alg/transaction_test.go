@@ -3,7 +3,6 @@ package alg
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"testing"
 
@@ -20,7 +19,7 @@ func ReadAndWriteTransaction(t *testing.T, input string) {
 	tr.Write(bufw)
 	err = bufw.Flush()
 	assert.NoError(t, err, "Could not write as string")
-	fmt.Printf("Got %s\n", outputBuffer.String())
+	t.Logf("Got %s\n", outputBuffer.String())
 	assert.Equal(t, input, outputBuffer.String(), "Output should match input")
 }
 
@@ -29,7 +28,7 @@ func RejectBadTransaction(t *testing.T, input string) {
 	var proto Location = new(TestLocation)
 	_, err := ReadNewTransaction(proto, bufr)
 	assert.Error(t, io.EOF, err, "Parsed bad input %s", input)
-	fmt.Printf("Rejected %s\n", input)
+	t.Logf("Rejected %s\n", input)
 }
 
 func TestTransaction(t *testing.T) {

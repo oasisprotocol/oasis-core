@@ -17,6 +17,7 @@ func init() {
 
 func TestZipfNew(t *testing.T) {
 	assert := assert.New(t)
+	handleTestSeed(t.Logf, &zipfSeed, "zipf CDF test")
 	r := rand.New(rand.NewSource(zipfSeed))
 	_, err := NewZipf(-1.0, 100000, r)
 	assert.Error(err, "Negative exponent should not work")
@@ -35,8 +36,8 @@ func TestZipfNew(t *testing.T) {
 // nolint: gocyclo
 func TestZipfCdf(t *testing.T) {
 	assert := assert.New(t)
-	handleTestSeed(&zipfSeed, "zipf CDF test")
 	const maxValue = 1000000
+	handleTestSeed(t.Logf, &zipfSeed, "zipf CDF test")
 	z, err := NewZipf(1.0, maxValue, rand.New(rand.NewSource(zipfSeed)))
 	if err != nil {
 		t.Errorf("NewZipf failed: %s", err.Error())

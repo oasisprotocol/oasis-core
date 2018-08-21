@@ -3,36 +3,23 @@ package alg
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-// shouldPanic runs f, which is expected to panic.
-func shouldPanic(t *testing.T, f func()) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered from expected panic in f", r)
-		} else {
-			t.Errorf("shouldPanic: f() did not panic (in defer)")
-		}
-	}()
-	f()
-	t.Errorf("shouldPanic: f() did not panic")
-}
-
 func TestLocationRangeInvarianceCheck(t *testing.T) {
-	shouldPanic(t, func() {
+	assert := assert.New(t)
+	assert.Panics(func() {
 		lr := NewLocationRange(TestLocation(1), TestLocation(0))
-		fmt.Printf("Should be unreached.\n")
-		fmt.Printf("Got: %s\n", lr.String())
-	})
-	shouldPanic(t, func() {
+		t.Logf("Should be unreached.\n")
+		t.Logf("Got: %s\n", lr.String())
+	}, "Range lowerbound greater than upperbound accepted (1:0)")
+	assert.Panics(func() {
 		lr := NewLocationRange(TestLocation(1000), TestLocation(10))
-		fmt.Printf("Should be unreached.\n")
-		fmt.Printf("Got: %s\n", lr.String())
-	})
+		t.Logf("Should be unreached.\n")
+		t.Logf("Got: %s\n", lr.String())
+	}, "Range lowerbound greater than upperbound accepted (1000:10)")
 }
 
 func TestLocationRangeSetContains(t *testing.T) {
@@ -42,7 +29,7 @@ func TestLocationRangeSetContains(t *testing.T) {
 	lrs.Add(NewLocationRange(TestLocation(42), TestLocation(57)))
 	lrs.Add(NewLocationRange(TestLocation(101), TestLocation(101)))
 	s := lrs.String()
-	fmt.Printf("lrs: %s\n", s)
+	t.Logf("lrs: %s\n", s)
 	expected := "1:10, 42:57, 101"
 	assert.Equal(expected, s, "String output wrong: expected '%s', got '%s'", expected, s)
 	assert.False(lrs.Contains(TestLocation(11)), "Should not contain 11")
@@ -64,7 +51,7 @@ func TestLocationRangeSetRead(t *testing.T) {
 
 	s := lrs.String()
 	assert.Equal(expected, s, "Parsed from %s, stringified to %s, expected %s", input, s, expected)
-	fmt.Printf("Got via String %s\n", s)
+	t.Logf("Got via String %s\n", s)
 
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
@@ -72,7 +59,7 @@ func TestLocationRangeSetRead(t *testing.T) {
 	err = bufw.Flush()
 	assert.NoError(err, "Could not write as string")
 	ws := outputBuffer.String()
-	fmt.Printf("Got via Write %s\n", ws)
+	t.Logf("Got via Write %s\n", ws)
 	assert.Equal(expected, ws, "Parsed from %s, written as %s, expected %s", input, ws, expected)
 
 	input = "2:4, 5:2"
@@ -98,9 +85,9 @@ func TestLocationRangeSetRead(t *testing.T) {
 
 func TestMustReadLocationRange(t *testing.T) {
 	assert := assert.New(t)
-	shouldPanic(t, func() {
+	assert.Panics(func() {
 		_ = MustReadNewLocationRange(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte("9:1"))))
-	})
+	}, "MustReadLocationRange: 9:1 accepted")
 	lr := MustReadNewLocationRange(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte("1:9"))))
 	assert.NotNil(lr, "MustReadNewLocationRange should work")
 }
@@ -115,61 +102,61 @@ func TestReadNewLocationRange(t *testing.T) {
 	input := "1"
 	lr, err := helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lr.String())
+	t.Logf("parsed: %s\n", lr.String())
 
 	input = "1:1"
 	lr, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lr.String())
+	t.Logf("parsed: %s\n", lr.String())
 
 	input = "100:1000"
 	lr, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lr.String())
+	t.Logf("parsed: %s\n", lr.String())
 
 	input = "100:1"
 	lr, err = helper(input)
 	if err == nil && lr != nil {
-		fmt.Printf("parsed %s as %s\n", input, lr.String())
+		t.Logf("parsed %s as %s\n", input, lr.String())
 	}
 	assert.Error(err, "Unexpected ability to parse/accept input '%s'", input)
-	fmt.Printf("could not parsed '%s' as expected\n", input)
+	t.Logf("could not parsed '%s' as expected\n", input)
 
 	input = "-100:1"
 	lr, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lr.String())
+	t.Logf("parsed: %s\n", lr.String())
 
 	input = "-100:1,"
 	lr, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lr.String())
+	t.Logf("parsed: %s\n", lr.String())
 
 	input = "garbage"
 	lr, err = helper(input)
 	if err == nil && lr != nil {
-		fmt.Printf("parsed %s as %s\n", input, lr.String())
+		t.Logf("parsed %s as %s\n", input, lr.String())
 	}
 	assert.Error(err, "Unexpected ability to parse input '%s'", input)
 
 	input = ""
 	lr, err = helper(input)
 	if err == nil && lr != nil {
-		fmt.Printf("parsed %s as %s\n", input, lr.String())
+		t.Logf("parsed %s as %s\n", input, lr.String())
 	}
 	assert.Error(err, "Unexpected ability to parse input '%s'", input)
 
 	input = "10:"
 	lr, err = helper(input)
 	if err == nil && lr != nil {
-		fmt.Printf("parsed %s as %s\n", input, lr.String())
+		t.Logf("parsed %s as %s\n", input, lr.String())
 	}
 	assert.Error(err, "Unexpected ability to parse input '%s'", input)
 
 	input = ":10"
 	lr, err = helper(input)
 	if err == nil && lr != nil {
-		fmt.Printf("parsed %s as %s\n", input, lr.String())
+		t.Logf("parsed %s as %s\n", input, lr.String())
 	}
 	assert.Error(err, "Unexpected ability to parse input '%s'", input)
 }
@@ -185,30 +172,30 @@ func TestLocationRangeSetParse(t *testing.T) {
 	input := "1"
 	lrs, err := helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lrs.String())
+	t.Logf("parsed: %s\n", lrs.String())
 
 	input = "1:1"
 	lrs, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lrs.String())
+	t.Logf("parsed: %s\n", lrs.String())
 
 	input = "100:1000"
 	lrs, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lrs.String())
+	t.Logf("parsed: %s\n", lrs.String())
 
 	input = "100:1"
 	lrs, err = helper(input)
 	if err == nil && lrs != nil {
-		fmt.Printf("parsed %s as %s\n", input, lrs.String())
+		t.Logf("parsed %s as %s\n", input, lrs.String())
 	}
 	assert.Error(err, "Unexpected ability to parse/accept input '%s'", input)
-	fmt.Printf("could not parsed '%s' as expected\n", input)
+	t.Logf("could not parsed '%s' as expected\n", input)
 
 	input = "-100:1"
 	lrs, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
-	fmt.Printf("parsed: %s\n", lrs.String())
+	t.Logf("parsed: %s\n", lrs.String())
 
 	// multiple ranges
 	input = "1,10:23,11:12"
@@ -216,7 +203,7 @@ func TestLocationRangeSetParse(t *testing.T) {
 	lrs, err = helper(input)
 	assert.NoError(err, "Could not parse input '%s'", input)
 	s := lrs.String()
-	fmt.Printf("parsed: %s\n", s)
+	t.Logf("parsed: %s\n", s)
 	assert.Equal(expected, s, "Output string representation mismatch")
 
 	input = "1:1, 100 : 103, 51:57"
@@ -225,7 +212,7 @@ func TestLocationRangeSetParse(t *testing.T) {
 	assert.NoError(err, "Could not parse input '%s'", input)
 
 	s = lrs.String()
-	fmt.Printf("parsed: %s\n", s)
+	t.Logf("parsed: %s\n", s)
 	assert.Equal(expected, s, "Output string representation mismatch")
 
 	input = "100:1000, 101:2000, 11:13, 23, 31415, 2717:31415   "
@@ -234,16 +221,16 @@ func TestLocationRangeSetParse(t *testing.T) {
 	assert.NoError(err, "Could not parse input '%s'", input)
 
 	s = lrs.String()
-	fmt.Printf("parsed: %s\n", s)
+	t.Logf("parsed: %s\n", s)
 	assert.Equal(expected, s, "Output string representation mismatch")
 
 	input = "100:1"
 	lrs, err = helper(input)
 	if err == nil && lrs != nil {
-		fmt.Printf("parsed %s as %s\n", input, lrs.String())
+		t.Logf("parsed %s as %s\n", input, lrs.String())
 	}
 	assert.Error(err, "Unexpected ability to parse/accept input '%s'", input)
-	fmt.Printf("could not parsed '%s' as expected\n", input)
+	t.Logf("could not parsed '%s' as expected\n", input)
 
 	input = "-100 : 1 , 23 : 27"
 	expected = "-100:1, 23:27"
@@ -251,7 +238,7 @@ func TestLocationRangeSetParse(t *testing.T) {
 	assert.NoError(err, "Could not parse input '%s'", input)
 
 	s = lrs.String()
-	fmt.Printf("parsed: %s\n", s)
+	t.Logf("parsed: %s\n", s)
 	assert.Equal(expected, s, "Output string representation mismatch")
 }
 
@@ -273,7 +260,7 @@ func TestLocationRangeSetFindAndMinMax(t *testing.T) {
 			return false
 		}
 		foundBad = true
-		fmt.Printf("Bad range: %d:%d\n", lb, ub)
+		t.Logf("Bad range: %d:%d\n", lb, ub)
 		return true
 	})
 

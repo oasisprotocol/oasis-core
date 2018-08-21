@@ -1,7 +1,6 @@
 package randgen
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -12,9 +11,9 @@ import (
 // statistical tests so that the probability of passing is high, given enough continuous
 // integration / continuous testing runs the error *will* occur.  We require that the test
 // runner explicitly ask for a random seed, using -1 as the indicator value.
-func handleTestSeed(seedPtr *int64, name string) {
+func handleTestSeed(logger func(format string, args ...interface{}), seedPtr *int64, name string) {
 	if *seedPtr == -1 {
 		*seedPtr = time.Now().UTC().UnixNano()
 	}
-	fmt.Printf("%s seed = %d\n", name, *seedPtr)
+	logger("%s seed = %d\n", name, *seedPtr)
 }

@@ -3,7 +3,6 @@ package alg
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"testing"
 )
 
@@ -21,7 +20,7 @@ func ReadAndWriteLocation(t *testing.T, input string) {
 	if err != nil {
 		t.Errorf("Could not write as string")
 	}
-	fmt.Printf("Got %s\n", outputBuffer.String())
+	t.Logf("Got %s\n", outputBuffer.String())
 	if input != outputBuffer.String() {
 		t.Errorf("Output differs")
 	}
@@ -34,7 +33,7 @@ func RejectBadLocation(t *testing.T, input string) {
 	if err == nil {
 		t.Fatalf("Parsed bad input %s", input)
 	}
-	fmt.Printf("Rejected %s\n", input)
+	t.Logf("Rejected %s\n", input)
 }
 
 func TestLocationIO(t *testing.T) {

@@ -2,7 +2,6 @@ package randgen
 
 import (
 	"flag"
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -22,6 +21,7 @@ func init() {
 
 func TestUniformNew(t *testing.T) {
 	assert := assert.New(t)
+	handleTestSeed(t.Logf, &uniformSeed, "uniform test")
 	r := rand.New(rand.NewSource(uniformSeed))
 	_, err := NewUniform(0, r)
 	assert.Error(err, "NewUniform with zero elements should fail")
@@ -31,13 +31,12 @@ func TestUniformNew(t *testing.T) {
 
 func TestUniform(t *testing.T) {
 	assert := assert.New(t)
-	handleTestSeed(&uniformSeed, "uniform-test")
-	critData := chisquared.Init()
-	critValue, err := critData.CriticalValue(uniformNumBuckets-1, 0.999)
+	handleTestSeed(t.Logf, &uniformSeed, "uniform-test")
+	critValue, err := chisquared.CriticalValue(uniformNumBuckets-1, 0.999)
 	if err != nil {
 		panic("uniform-test-buckets-1 must be a degree-of-freedom value for which chi-squared critical value can be looked up")
 	}
-	fmt.Printf("Chi-squared critical value = %g\n", critValue)
+	t.Logf("Chi-squared critical value = %g\n", critValue)
 	u, err := NewUniform(uniformNumBuckets, rand.New(rand.NewSource(uniformSeed)))
 	assert.NoError(err, "NewUniform should not have failed")
 	buckets := make([]int, uniformNumBuckets)
@@ -45,8 +44,8 @@ func TestUniform(t *testing.T) {
 		buckets[u.Generate()]++
 	}
 	nullHypothesisExpected := float64(uniformNumTrials) / float64(uniformNumBuckets)
-	fmt.Printf("Null hypothesis: expected number of entries = %f\n", nullHypothesisExpected)
-	fmt.Printf("Expected per bucket: %f\n", nullHypothesisExpected)
+	t.Logf("Null hypothesis: expected number of entries = %f\n", nullHypothesisExpected)
+	t.Logf("Expected per bucket: %f\n", nullHypothesisExpected)
 	chiSquared := 0.0
 	for _, v := range buckets {
 		diff := float64(v) - nullHypothesisExpected
@@ -54,6 +53,6 @@ func TestUniform(t *testing.T) {
 		chiSquared += diffSquared
 	}
 	chiSquared = chiSquared / nullHypothesisExpected
-	fmt.Printf("Chi-squared: %f\n", chiSquared)
+	t.Logf("Chi-squared: %f\n", chiSquared)
 	assert.True(chiSquared < critValue, "Chi-squared value %f too large", chiSquared)
 }

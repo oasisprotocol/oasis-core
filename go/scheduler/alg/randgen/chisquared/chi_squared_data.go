@@ -112,23 +112,20 @@ const rawData = `
  99        117.407   123.225   128.422   134.642   148.230
 100        118.498   124.342   129.561   135.807   149.449`
 
-// CritTable is the parsed critical value table
-type CritTable struct {
+// critTable holds the parsed critical value table
+type critTable struct {
 	prob    []float64
 	dofProb map[int][]float64
 }
 
-var critTableSingleton *CritTable
+var critTableSingleton *critTable
 
-// Init initializes the chi-squared critical values data.  It creates a read-only singleton
+// init initializes the chi-squared critical values data.  It creates a read-only singleton
 // using which users can extract the list of confidence probabilities, and look up the
 // chi-squared critical values for those probabilities at various degrees-of-freedom values.
 //
 // nolint: gocyclo
-func Init() *CritTable {
-	if critTableSingleton != nil {
-		return critTableSingleton
-	}
+func init() {
 	p := strings.Fields(prob)
 	numProb := len(p)
 	pa := make([]float64, numProb)
@@ -162,30 +159,29 @@ func Init() *CritTable {
 		}
 		dmap[dof] = crit
 	}
-	critTableSingleton = &CritTable{prob: pa, dofProb: dmap}
-	return critTableSingleton
+	critTableSingleton = &critTable{prob: pa, dofProb: dmap}
 }
 
 // ConfidenceProbAvailable returns a slice containing the confidence probabilities with which
 // the user can use to look up chi-square critical values.
-func (ct *CritTable) ConfidenceProbAvailable() []float64 {
-	return append([]float64(nil), ct.prob...)
+func ConfidenceProbAvailable() []float64 {
+	return append([]float64(nil), critTableSingleton.prob...)
 }
 
 // CriticalValue returns the chi-squared critical values for the given degree-of-freedom (dof)
 // and confidence probability.
-func (ct *CritTable) CriticalValue(dof int, confidence float64) (float64, error) {
-	if len(ct.dofProb[dof]) == 0 {
+func CriticalValue(dof int, confidence float64) (float64, error) {
+	if len(critTableSingleton.dofProb[dof]) == 0 {
 		return 0.0, fmt.Errorf("Critical value not available for degree-of-freedom=%d", dof)
 	}
 	var ix int
-	for ix = 0; ix < len(ct.prob); ix++ {
-		if ct.prob[ix] == confidence {
+	for ix = 0; ix < len(critTableSingleton.prob); ix++ {
+		if critTableSingleton.prob[ix] == confidence {
 			break
 		}
 	}
-	if ix == len(ct.prob) {
+	if ix == len(critTableSingleton.prob) {
 		return 0.0, fmt.Errorf("Critical value not available for confidence probability %g", confidence)
 	}
-	return ct.dofProb[dof][ix], nil
+	return critTableSingleton.dofProb[dof][ix], nil
 }

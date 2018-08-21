@@ -3,7 +3,6 @@ package alg
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"testing"
 
@@ -17,7 +16,7 @@ func ReadAndWriteLocationSet(t *testing.T, input string) {
 	ls, err := ReadNewLocationSet(proto, bufr)
 	assert.NoError(err, "Could not parse %s", input)
 
-	fmt.Printf("Remaining %d bytes\n", bufr.Buffered())
+	t.Logf("Remaining %d bytes\n", bufr.Buffered())
 	assert.Equal(0, bufr.Buffered(), "Should have consumed entire buffer")
 
 	outputBuffer := new(bytes.Buffer)
@@ -26,7 +25,7 @@ func ReadAndWriteLocationSet(t *testing.T, input string) {
 	err = bufw.Flush()
 	assert.NoError(err, "Could not write as string")
 
-	fmt.Printf("Got %s\n", outputBuffer.String())
+	t.Logf("Got %s\n", outputBuffer.String())
 	assert.Equal(input, outputBuffer.String(), "Output differs")
 }
 
@@ -37,16 +36,16 @@ func RejectBadLocationSet(t *testing.T, input string) {
 	_, err := ReadNewLocationSet(proto, bufr)
 	assert.Error(err, "Parsed bad input %s", input)
 
-	fmt.Printf("Rejected %s\n", input)
-	fmt.Printf("Remaining %d bytes\n", bufr.Buffered())
+	t.Logf("Rejected %s\n", input)
+	t.Logf("Remaining %d bytes\n", bufr.Buffered())
 	str, err := bufr.ReadString(byte(0))
 	assert.Equal(io.EOF, err, "ReadString did not hit end of string")
 
-	fmt.Printf("Remaining buffer: %s\n", str)
+	t.Logf("Remaining buffer: %s\n", str)
 }
 
 func TestLocationSetIO(t *testing.T) {
-	fmt.Printf("Positive examples\n")
+	t.Logf("Positive examples\n")
 	ReadAndWriteLocationSet(t, "{}")
 	ReadAndWriteLocationSet(t, "{123}")
 	// The input string must be in canonical format wrt spacing
@@ -54,7 +53,7 @@ func TestLocationSetIO(t *testing.T) {
 	ReadAndWriteLocationSet(t, "{1, 2, 100, 123}")
 	ReadAndWriteLocationSet(t, "{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31}")
 
-	fmt.Printf("Negative examples\n")
+	t.Logf("Negative examples\n")
 	RejectBadLocationSet(t, "")
 	RejectBadLocationSet(t, "1, 2, 3}")
 	RejectBadLocationSet(t, "{1, 2, 3)")
@@ -67,31 +66,26 @@ func TestLocationSetIO(t *testing.T) {
 func TestLocationSetOps(t *testing.T) {
 	assert := assert.New(t)
 	ls := NewLocationSet()
-	fmt.Println("Empty: ", ls)
 	expected := "{}"
 	s := ls.String()
 	assert.Equal(expected, s, "Empty set should be ", expected, ", but is ", s)
 
 	ls.Add(TestLocation(0))
-	fmt.Println("Singleton: ", ls)
 	expected = "{0}"
 	s = ls.String()
 	assert.Equal(expected, s, "Singleton ", expected, " expected, got ", s)
 
 	ls.Add(TestLocation(0))
-	fmt.Println("Still singleton: ", ls)
 	s = ls.String()
 	assert.Equal(expected, s, "Singleton ", expected, " expected, got ", s)
 
 	ls.Add(TestLocation(314159))
-	fmt.Println("Two elts: ", ls)
 	expected = "{0, 314159}"
 	s = ls.String()
 	assert.Equal(expected, s, "Set {0, 314159} expected, got ", s)
 
 	ls.Delete(TestLocation(0))
 	expected = "{314159}"
-	fmt.Println("Back to singleton: ", ls)
 	s = ls.String()
 	assert.Equal(expected, s, "Singleton ", expected, " expected, got ", s)
 
@@ -100,7 +94,6 @@ func TestLocationSetOps(t *testing.T) {
 	ls2.Add(TestLocation(271828))
 	ls2.Add(TestLocation(161803))
 	ls.Merge(ls2)
-	fmt.Println("Merged: ", ls)
 	expected = "{1, 161803, 271828, 314159}"
 	s = ls.String()
 	assert.Equal(expected, s, "Expected ", expected, ", got ", s)
