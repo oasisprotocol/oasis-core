@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -147,7 +148,7 @@ func (t *tendermintService) lazyInit() error {
 		tendermintPV,
 		tendermintProxy.NewLocalClientCreator(t.mux.Mux()),
 		tenderminGenesisProvider,
-		tendermintNode.DefaultDBProvider,
+		bolt.BoltDBProvider,
 		tendermintNode.DefaultMetricsProvider,
 		&abci.LogAdapter{
 			Logger:           logging.GetLogger("tendermint"),
@@ -174,6 +175,9 @@ func New(dataDir string) service.TendermintService {
 func initDataDir(dataDir string) error {
 	subDirs := []string{
 		"config",
+
+		// This *could* also create "data", but both the built in and
+		// BoltDB providers handle it being missing gracefully.
 	}
 
 	if err := common.Mkdir(dataDir); err != nil {
