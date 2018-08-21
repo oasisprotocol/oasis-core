@@ -2,24 +2,40 @@
 package bolt
 
 import (
+	"path/filepath"
 	"strconv"
 	"sync"
 
 	bolt "github.com/coreos/bbolt"
 	dbm "github.com/tendermint/tendermint/libs/db"
+	"github.com/tendermint/tendermint/node"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"
 )
 
 const dbVersion = 0
 
 var (
+	baseLogger = logging.GetLogger("tendermint/db/bolt")
+
 	bktContents = []byte("contents")
 
 	_ dbm.DB       = (*boltDBImpl)(nil)
 	_ dbm.Iterator = (*boltDBIterator)(nil)
 	_ dbm.Batch    = (*boltDBBatch)(nil)
+
+	// BoltDBProvider is a DBProvider to be used when initializing
+	// a tendermint node.
+	BoltDBProvider node.DBProvider = boltDBProvider
 )
+
+func boltDBProvider(ctx *node.DBContext) (dbm.DB, error) {
+	if err := common.Mkdir(ctx.Config.DBDir()); err != nil {
+		return nil, err
+	}
+	return New(filepath.Join(ctx.Config.DBDir(), ctx.ID+".bolt.db"))
+}
 
 type boltDBImpl struct {
 	logger *logging.Logger
@@ -49,7 +65,7 @@ func New(fn string) (dbm.DB, error) {
 	}
 
 	return &boltDBImpl{
-		logger: logging.GetLogger("tendermint/db/bolt"),
+		logger: baseLogger.With("path", fn),
 		db:     db,
 	}, nil
 }
