@@ -129,16 +129,19 @@ run_test() {
     local dummy_node_runner=$5
     local restart_dummy_after=${6:-0}
     local pre_epochs=${7:-0}
+    local start_client_first=${8:-0}
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
 
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT
 
-    # Start dummy node.
-    $dummy_node_runner
-    dummy_pid=$!
-    sleep 1
+    if [[ "${start_client_first}" == 0 ]]; then
+        # Start dummy node.
+        $dummy_node_runner
+        dummy_pid=$!
+        sleep 1
+    fi
 
     # Advance epochs before starting any compute nodes.
     if [[ "${pre_epochs}" > 0 ]]; then
@@ -159,6 +162,13 @@ run_test() {
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 &
     client_pid=$!
+
+    if [[ "${start_client_first}" == 1 ]]; then
+        # Start dummy node.
+        $dummy_node_runner
+        dummy_pid=$!
+        sleep 1
+    fi
 
     # Start compute nodes.
     $scenario
@@ -245,6 +255,10 @@ scenario_fail_worker_after_commit() {
     sleep 1
     run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 1
 }
+
+# Alternate starting order (client before dummy node)
+run_test scenario_basic "e2e-basic-client-starts-first-rust" token 1 run_dummy_node_default 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first-go" token 1 run_dummy_node_go_default 0 0 1
 
 # Go node.
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_default
