@@ -3,6 +3,7 @@ package tendermint
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/viper"
@@ -13,6 +14,7 @@ import (
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tendermintTypes "github.com/tendermint/tendermint/types"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
@@ -107,10 +109,18 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
+	// Tendermint needs the on-disk directories to be present when
+	// launched like this, so create the relevant sub-directories
+	// under the ekiden DataDir.
+	tendermintDataDir := filepath.Join(t.dataDir, "tendermint")
+	if err = initDataDir(tendermintDataDir); err != nil {
+		return err
+	}
+
 	// Create Tendermint node.
 	tenderConfig := tendermintConfig.DefaultConfig()
 	viper.Unmarshal(&tenderConfig)
-	tenderConfig.SetRoot(t.dataDir)
+	tenderConfig.SetRoot(tendermintDataDir)
 
 	tendermintPV := tendermintPriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
 	var tenderminGenesisProvider tendermintNode.GenesisDocProvider
@@ -159,4 +169,22 @@ func New(dataDir string) service.TendermintService {
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		dataDir:               dataDir,
 	}
+}
+
+func initDataDir(dataDir string) error {
+	subDirs := []string{
+		"config",
+	}
+
+	if err := common.Mkdir(dataDir); err != nil {
+		return err
+	}
+
+	for _, subDir := range subDirs {
+		if err := common.Mkdir(filepath.Join(dataDir, subDir)); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

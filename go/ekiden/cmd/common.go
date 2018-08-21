@@ -5,12 +5,12 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
 	// TODO(willscott): wire in node for connectivity
@@ -65,31 +65,7 @@ func initConfig() {
 }
 
 func initDataDir() error {
-	const permDir = 0700
-
-	// Tendermint uses dataDir/config, so we confim or make that subdirectory.
-	fi, err := os.Lstat(path.Join(dataDir, "config"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Make the directory.
-			if err = os.MkdirAll(path.Join(dataDir, "config"), permDir); err == nil {
-				return nil
-			}
-		}
-		return err
-	}
-
-	// Ensure the directory is actually a directory, with sufficiently
-	// restrictive permissions.
-	fm := fi.Mode()
-	if !fm.IsDir() {
-		return fmt.Errorf("init: datadir is not a directory")
-	}
-	if fm.Perm() != permDir {
-		return fmt.Errorf("init: datadir has invalid permissions: %v", fm.Perm())
-	}
-
-	return nil
+	return common.Mkdir(dataDir)
 }
 
 func initLogging() error {
