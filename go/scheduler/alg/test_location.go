@@ -33,6 +33,10 @@ func (tl TestLocation) Write(w *bufio.Writer) (int, error) {
 	return fmt.Fprintf(w, "%d", tl)
 }
 
+func (tl TestLocation) String() string {
+	return fmt.Sprintf("%d", tl)
+}
+
 // Less returns true iff the receiver TestLocation tl is less than the argument.
 // This panics if the argument interface object is not also a TestLocation.
 func (tl TestLocation) Less(other interface{}) bool {

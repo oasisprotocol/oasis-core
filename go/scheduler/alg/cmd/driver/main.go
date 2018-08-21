@@ -119,6 +119,53 @@ func (lcnf *logicalShardingConfig) UpdateAndCheckDefaults() {
 
 var lsconfigFromFlags logicalShardingConfig
 
+type adversaryConfig struct {
+	seed            int64
+	injectionProb   float64
+	targetFrac      float64
+	readFrac        float64
+	dosBatchSize    int
+	targetAddresses string
+	seqno           uint
+
+	// not set via config, but during param validation to avoid dup work
+	targets *alg.LocationRangeSet
+}
+
+func (acnf *adversaryConfig) Show(bw io.Writer) {
+	_, _ = fmt.Fprintf(bw, "\nAdversary (DOS) Transaction Generator Parameters\n")
+	_, _ = fmt.Fprintf(bw, "  dos-seed = %d\n", acnf.seed)
+	_, _ = fmt.Fprintf(bw, "  dos-injection-prob = %g\n", acnf.injectionProb)
+	_, _ = fmt.Fprintf(bw, "  dos-target-fraction = %g\n", acnf.targetFrac)
+	_, _ = fmt.Fprintf(bw, "  dos-read-fraction = %g\n", acnf.readFrac)
+	_, _ = fmt.Fprintf(bw, "  dos-batch-size = %d\n", acnf.dosBatchSize)
+	_, _ = fmt.Fprintf(bw, "  dos-target-addresses = %s\n", acnf.targetAddresses)
+	_, _ = fmt.Fprintf(bw, "  dos-seqno = %d\n", acnf.seqno)
+}
+
+func (acnf *adversaryConfig) UpdateAndCheckDefaults() {
+	if acnf.seed == 0 {
+		acnf.seed = time.Now().UTC().UnixNano()
+	}
+	if acnf.injectionProb < 0 || 1.0 <= acnf.injectionProb {
+		panic(fmt.Sprintf("dos-injection-prob has to be in [0,1)."))
+	}
+	if acnf.readFrac < 0 || acnf.readFrac > 1.0 {
+		panic(fmt.Sprintf("dos-read-fraction has to be in [0,1]."))
+	}
+	if acnf.dosBatchSize <= 0 {
+		panic(fmt.Sprintf("dos-batch-size should be greater than 0 (is %d)",
+			acnf.dosBatchSize))
+	}
+	targets, err := alg.LocationRangeSetFromString(alg.TestLocation(0), acnf.targetAddresses)
+	if err != nil {
+		panic(fmt.Sprintf("Target list misparse: '%s'.", acnf.targetAddresses))
+	}
+	acnf.targets = targets
+}
+
+var adversaryConfigFromFlags adversaryConfig
+
 type schedulerConfig struct {
 	name string
 
@@ -175,6 +222,7 @@ func init() {
 	dconfigFromFlags = distributionConfig{}
 	sconfigFromFlags = schedulerConfig{}
 	lsconfigFromFlags = logicalShardingConfig{}
+	adversaryConfigFromFlags = adversaryConfig{}
 	xconfigFromFlags = executionConfig{}
 
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
@@ -215,6 +263,16 @@ func init() {
 	flag.IntVar(&lsconfigFromFlags.shardFactor, "shard-factor", 16,
 		"number of new (negative) shards per original location")
 
+	// Adversary configuration parameters
+
+	flag.Int64Var(&adversaryConfigFromFlags.seed, "dos-seed", 0, "seed for rng used to randomize DOS-spam adversary actions")
+	flag.Float64Var(&adversaryConfigFromFlags.injectionProb, "dos-injection-prob", 0.0, "probability of deciding to inject (possibly many) DOS transactions (0 disables adversary)")
+	flag.Float64Var(&adversaryConfigFromFlags.targetFrac, "dos-target-fraction", 0.9, "fraction of DOS addresses that will be attacked")
+	flag.Float64Var(&adversaryConfigFromFlags.readFrac, "dos-read-fraction", 0.0, "fraction of DOS addresses under attack that go to the read set (rest go to the write set)")
+	flag.IntVar(&adversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to DOS spam is made")
+	flag.StringVar(&adversaryConfigFromFlags.targetAddresses, "dos-target-addresses", "0:15,128:131", "comma-separated list of integers or start-end integer ranges")
+	flag.UintVar(&adversaryConfigFromFlags.seqno, "dos-seqno", 1000000, "starting seqno/id for DOS spam transactions")
+
 	// Scheduler configuration parameters
 
 	flag.StringVar(&sconfigFromFlags.name, "scheduler", "greedy-subgraph",
@@ -253,7 +311,9 @@ func transactionSourceFactory(cnf distributionConfig) simulator.TransactionSourc
 	var rg randgen.Rng
 
 	if cnf.distributionName == "uniform" {
-		rg = randgen.NewUniform(numLocations, rand.New(rand.NewSource(cnf.seed)))
+		if rg, err = randgen.NewUniform(numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
+			panic(err.Error())
+		}
 	} else if cnf.distributionName == "zipf" {
 		if rg, err = randgen.NewZipf(cnf.alpha, numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
 			panic(err.Error())
@@ -264,7 +324,30 @@ func transactionSourceFactory(cnf distributionConfig) simulator.TransactionSourc
 	return simulator.NewRandomDistributionTransactionSource(cnf.numTransactions, cnf.numReadLocs, cnf.numWriteLocs, rg)
 }
 
-// schedulerFactory builds a Scheduler.
+func adversaryFactory(acnf adversaryConfig, ts simulator.TransactionSource) simulator.TransactionSource {
+	if acnf.injectionProb == 0.0 {
+		if verbosity > 0 {
+			fmt.Printf("No Adversarial transactions will be injected\n")
+		}
+		return ts
+	}
+	ats, err := simulator.NewAdversarialTransactionSource(
+		acnf.seed,
+		acnf.injectionProb,
+		acnf.targetFrac,
+		acnf.readFrac,
+		acnf.targets,
+		acnf.dosBatchSize,
+		ts,
+		acnf.seqno,
+	)
+	if err != nil {
+		panic("adversaryFactory could not construct AdversarialTransactionSource")
+	}
+	fmt.Printf("Will inject adversarial transactions\n")
+	return ats
+}
+
 func schedulerFactory(scnf schedulerConfig) alg.Scheduler {
 	if scnf.name == "greedy-subgraph" {
 		return alg.NewGreedySubgraphs(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
@@ -304,8 +387,9 @@ func (h *committeeMemberHeap) Pop() interface{} {
 // here.
 func runSimulation(
 	dcnf distributionConfig,
-	scnf schedulerConfig,
+	acnf adversaryConfig,
 	lscnf logicalShardingConfig,
+	scnf schedulerConfig,
 	xcnf executionConfig,
 	bw *bufio.Writer) {
 
@@ -315,6 +399,11 @@ func runSimulation(
 	ts := transactionSourceFactory(dcnf)
 	sched := schedulerFactory(scnf)
 	var err error
+
+	// The adversary cannot override logical sharding, under the assumption that the
+	// sharding is done by msg.sender address and that misdirected calls will either be
+	// forwarded (thereby touching no local-shard state) or reverted.
+	ts = adversaryFactory(acnf, ts)
 
 	if dcnf.outputFile != "" {
 		if ts, err = simulator.NewLoggingTransactionSource(dcnf.outputFile, ts); err != nil {
@@ -427,11 +516,13 @@ func main() {
 	}(bw)
 
 	dconfigFromFlags.UpdateAndCheckDefaults()
+	adversaryConfigFromFlags.UpdateAndCheckDefaults()
 	lsconfigFromFlags.UpdateAndCheckDefaults()
 	sconfigFromFlags.UpdateAndCheckDefaults(xconfigFromFlags)
 	xconfigFromFlags.UpdateAndCheckDefaults()
 	if verbosity > 0 {
 		dconfigFromFlags.Show(bw)
+		adversaryConfigFromFlags.Show(bw)
 		lsconfigFromFlags.Show(bw)
 		sconfigFromFlags.Show(bw)
 		xconfigFromFlags.Show(bw)
@@ -443,5 +534,5 @@ func main() {
 		}
 	}
 
-	runSimulation(dconfigFromFlags, sconfigFromFlags, lsconfigFromFlags, xconfigFromFlags, bw)
+	runSimulation(dconfigFromFlags, adversaryConfigFromFlags, lsconfigFromFlags, sconfigFromFlags, xconfigFromFlags, bw)
 }

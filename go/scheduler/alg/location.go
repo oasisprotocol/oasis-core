@@ -13,9 +13,13 @@ type Location interface {
 
 	Write(w *bufio.Writer) (int, error)
 
+	String() string
+
 	// other must have the same underlying concrete type as the
 	// receiver
 	Less(other interface{}) bool
 
+	// other must have the same underlying concrete type as the
+	// receiver
 	Equal(other interface{}) bool
 }

@@ -105,7 +105,7 @@ func (t *Transaction) Read(lc Location, r *bufio.Reader) error {
 
 // ToString converts the receiver transaction into a string.  The format should satisfy the
 // grammar above.
-func (t *Transaction) ToString() string {
+func (t *Transaction) String() string {
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
 	t.Write(bufw)
@@ -124,4 +124,9 @@ func ReadNewTransaction(l Location, r *bufio.Reader) (*Transaction, error) {
 		return nil, err
 	}
 	return t, nil
+}
+
+// TransactionFromString reads a Transaction from a string by using the string as an input buffer.
+func TransactionFromString(loc Location, s string) (*Transaction, error) {
+	return ReadNewTransaction(loc, bufio.NewReader(bytes.NewReader([]byte(s))))
 }

@@ -38,23 +38,30 @@ func NewLocationSet() *LocationSet {
 	return &LocationSet{locations: make(map[Location]struct{})}
 }
 
-// Add a location to the LocationSet
+// Add a location to the LocationSet.
 func (ls *LocationSet) Add(loc Location) {
 	ls.locations[loc] = struct{}{}
 }
 
-// Delete (remove) a location from the LocationSet
+// AddSlice adds all elements of a slice of locations to the LocationSet.
+func (ls *LocationSet) AddSlice(locs []Location) {
+	for _, loc := range locs {
+		ls.Add(loc)
+	}
+}
+
+// Delete (remove) a location from the LocationSet.
 func (ls *LocationSet) Delete(loc Location) {
 	delete(ls.locations, loc)
 }
 
-// Size returns the number of elements (locations) in the LocationSet
+// Size returns the number of elements (locations) in the LocationSet.
 func (ls *LocationSet) Size() int {
 	return len(ls.locations)
 }
 
 // Contains is a boolean predicate returning true iff the location is a member of the
-// LocationSet
+// LocationSet.
 func (ls *LocationSet) Contains(loc Location) bool {
 	_, exists := ls.locations[loc]
 	return exists
@@ -185,8 +192,8 @@ func (ls *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) {
 	}
 }
 
-// ToString returns the canonical string representation for the receiver LocationSet |ls|.
-func (ls *LocationSet) ToString() string {
+// String returns the canonical string representation for the receiver LocationSet |ls|.
+func (ls *LocationSet) String() string {
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
 	ls.Write(bufw)
@@ -200,10 +207,15 @@ func (ls *LocationSet) ToString() string {
 // Location interface argument `l` is needed because LocationSet objects do not know what is
 // the actual type that implements the Location interface, so `l.Read` is used to read in the
 // individual locations from the `*bufio.Reader`.
-func ReadNewLocationSet(l Location, r *bufio.Reader) (set *LocationSet, err error) {
+func ReadNewLocationSet(l Location, r *bufio.Reader) (*LocationSet, error) {
 	s := NewLocationSet()
 	if err := s.ReadMerge(l, r); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// LocationSetFromString reads a LocationSet from a string by using the string as an input buffer.
+func LocationSetFromString(loc Location, s string) (*LocationSet, error) {
+	return ReadNewLocationSet(loc, bufio.NewReader(bytes.NewReader([]byte(s))))
 }

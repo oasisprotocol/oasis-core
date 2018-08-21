@@ -1,6 +1,7 @@
 package randgen
 
 import (
+	"fmt"
 	"math/rand"
 )
 
@@ -13,11 +14,11 @@ type Uniform struct {
 
 // NewUniform returns a newly constructed Uniform object.  This is a thin wrapper around rand's
 // Intn.
-func NewUniform(m int, r *rand.Rand) *Uniform {
+func NewUniform(m int, r *rand.Rand) (*Uniform, error) {
 	if m <= 0 {
-		panic("uniform distribution with zero elements?")
+		return nil, fmt.Errorf("uniform distribution with zero or fewer (%d) elements?", m)
 	}
-	return &Uniform{MaxValue: m, rng: r}
+	return &Uniform{MaxValue: m, rng: r}, nil
 }
 
 // Generate a uniformly random number in [0, MaxValue).
