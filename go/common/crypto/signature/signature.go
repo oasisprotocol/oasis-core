@@ -6,7 +6,12 @@ import (
 	"crypto/sha512"
 	"encoding"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
 
 	"golang.org/x/crypto/ed25519"
 
@@ -18,34 +23,47 @@ const (
 	// PublicKeySize is the size of a public key in bytes.
 	PublicKeySize = ed25519.PublicKeySize
 
+	// PrivateKeySize is the size of a private key in bytes.
+	PrivateKeySize = ed25519.PrivateKeySize
+
 	// SignatureSize is the size of a signature in bytes.
 	SignatureSize = ed25519.SignatureSize
 
 	// ContextSize is the size of a signature context in bytes
 	ContextSize = 8
+
+	pemType = "ED25519 PRIVATE KEY"
 )
 
 var (
 	// ErrMalformedPublicKey is the error returned when a public key is
 	// malformed.
-	ErrMalformedPublicKey = errors.New("signature: Malformed public key")
+	ErrMalformedPublicKey = errors.New("signature: malformed public key")
 
 	// ErrMalformedSignature is the error returned when a signature is
 	// malformed.
-	ErrMalformedSignature = errors.New("signature: Malformed signature")
+	ErrMalformedSignature = errors.New("signature: malformed signature")
+
+	// ErrMalformedPrivateKey is the error returned when a private key is
+	// malformed.
+	ErrMalformedPrivateKey = errors.New("signature: malformed private key")
 
 	// ErrPublicKeyMismatch is the error returned when a signature was
 	// not produced by the expected public key.
-	ErrPublicKeyMismatch = errors.New("signature: Public key mismatch")
+	ErrPublicKeyMismatch = errors.New("signature: public key mismatch")
 
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("signature: Protobuf is nil")
+	ErrNilProtobuf = errors.New("signature: protobuf is nil")
 
 	// ErrVerifyFailed is the error return when a signature verification
 	// fails when opening a signed blob.
-	ErrVerifyFailed = errors.New("signed: Signature verification failed")
+	ErrVerifyFailed = errors.New("signed: signature verification failed")
 
-	errMalformedContext = errors.New("signature: Malformed context")
+	errMalformedContext = errors.New("signature: malformed context")
+
+	errNilPEM          = errors.New("signature: PEM data missing blocks")
+	errTrailingGarbage = errors.New("signature: PEM data has trailing garbage")
+	errMalformedPEM    = errors.New("signature: malformed PEM")
 
 	_ cbor.Marshaler             = PublicKey{}
 	_ cbor.Unmarshaler           = (*PublicKey)(nil)
@@ -55,6 +73,7 @@ var (
 	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
+	_ encoding.BinaryUnmarshaler = (*PrivateKey)(nil)
 )
 
 // MapKey is a PublicKey as a fixed sized byte array for use as a map key.
@@ -192,6 +211,115 @@ func (k PrivateKey) String() string {
 	return "[redacted private key]"
 }
 
+// UnmarshalBinary decodes a binary marshaled private key.
+func (k *PrivateKey) UnmarshalBinary(data []byte) error {
+	if len(data) != PrivateKeySize {
+		return ErrMalformedPrivateKey
+	}
+
+	if len(*k) != PrivateKeySize {
+		keybuf := make([]byte, PrivateKeySize)
+		*k = keybuf
+	}
+	copy((*k)[:], data)
+
+	return nil
+}
+
+// UnmarshalPEM decodes a PEM marshaled PrivateKey.
+func (k *PrivateKey) UnmarshalPEM(data []byte) error {
+	blk, rest := pem.Decode(data)
+	if blk == nil {
+		return errNilPEM
+	}
+	if len(rest) != 0 {
+		return errTrailingGarbage
+	}
+	if blk.Type != pemType {
+		return errMalformedPEM
+	}
+
+	return k.UnmarshalBinary(blk.Bytes)
+}
+
+// MarshalPEM encodes a PrivateKey into PEM form.
+func (k PrivateKey) MarshalPEM() (data []byte, err error) {
+	blk := &pem.Block{
+		Type:  pemType,
+		Bytes: k[:],
+	}
+
+	var buf bytes.Buffer
+	if err = pem.Encode(&buf, blk); err != nil {
+		return nil, err
+	}
+	data = buf.Bytes()
+
+	return
+}
+
+// LoadPEM loads a private key from a PEM file on disk.  Iff the private
+// key is missing and an entropy source is provided, a new private key
+// will be generated and written.
+func (k *PrivateKey) LoadPEM(fn string, rng io.Reader) error {
+	const filePerm = 0600
+
+	f, err := os.Open(fn) // nolint: gosec
+	if err != nil {
+		if os.IsNotExist(err) && rng != nil {
+			if err = k.generate(rng); err != nil {
+				return err
+			}
+
+			var buf []byte
+			buf, err = k.MarshalPEM()
+			if err != nil {
+				return err
+			}
+
+			return ioutil.WriteFile(fn, buf, filePerm)
+		}
+		return err
+	}
+	defer f.Close() // nolint: errcheck
+
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	fm := fi.Mode()
+	if fm.Perm() != filePerm {
+		return fmt.Errorf("signature: file '%s' has invalid permissions: %v", fn, fm.Perm())
+	}
+
+	buf, err := ioutil.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
+	return k.UnmarshalPEM(buf)
+}
+
+func (k *PrivateKey) generate(rng io.Reader) error {
+	seed := make([]byte, ed25519.SeedSize)
+	if _, err := io.ReadFull(rng, seed); err != nil {
+		return err
+	}
+
+	nk := ed25519.NewKeyFromSeed(seed)
+	_ = k.UnmarshalBinary(nk[:])
+
+	return nil
+}
+
+// NewPrivateKey generates a new private key via the provided
+// entropy source.
+func NewPrivateKey(rng io.Reader) (k PrivateKey, err error) {
+	err = k.generate(rng)
+	return
+}
+
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
@@ -315,11 +443,7 @@ func (s *Signed) FromProto(pb *common.Signed) error {
 	}
 
 	s.Blob = pb.GetBlob()
-	if err := s.Signature.FromProto(pb.GetSignature()); err != nil {
-		return err
-	}
-
-	return nil
+	return s.Signature.FromProto(pb.GetSignature())
 }
 
 // ToProto serializes a protobuf version of the Signed.
