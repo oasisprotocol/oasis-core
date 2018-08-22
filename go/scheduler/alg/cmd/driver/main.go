@@ -172,6 +172,9 @@ type schedulerConfig struct {
 	// Buffer at most this many transactions before generating a schedule.
 	maxPending int
 
+	// Divisor used to compute new maxPending (1 + excessFraction) * previousBatchSize
+	excessFraction float64
+
 	// maxTime is per subgraph execution time, but post-schedule generation subgraph merging
 	// will result in higher total execution times per compute committee.
 	maxTime uint
@@ -182,6 +185,7 @@ func (scnf *schedulerConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nScheduler Configuration Parameters\n")
 	_, _ = fmt.Fprintf(bw, "  scheduler = \"%s\"\n", scnf.name)
 	_, _ = fmt.Fprintf(bw, "  max-pending = %d\n", scnf.maxPending)
+	_, _ = fmt.Fprintf(bw, "  excess-fraction = %g\n", scnf.excessFraction)
 	_, _ = fmt.Fprintf(bw, "  max-subgraph-time = %d\n", scnf.maxTime)
 }
 
@@ -190,6 +194,9 @@ func (scnf *schedulerConfig) Show(bw io.Writer) {
 func (scnf *schedulerConfig) UpdateAndCheckDefaults(xcnf executionConfig) {
 	if scnf.maxPending < 0 {
 		scnf.maxPending = 2 * int(scnf.maxTime) * xcnf.numCommittees
+	}
+	if scnf.excessFraction < 0 {
+		panic(fmt.Sprintf("excess-fraction cannot be less than 0 (got %g)", scnf.excessFraction))
 	}
 }
 
@@ -279,6 +286,8 @@ func init() {
 		"scheduling algorithm (greedy-subgraph)")
 	flag.IntVar(&sconfigFromFlags.maxPending, "max-pending", -1,
 		"scheduling when there are this many transactions (default 2 * max-subgraph-time * num-committees")
+	flag.Float64Var(&sconfigFromFlags.excessFraction, "excess-fraction", 0.75,
+		"adaptive max-pending (default 4, updated max-pending = (1 + excessFraction) * previousBatchSize")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
 	flag.UintVar(&sconfigFromFlags.maxTime, "max-subgraph-time", 20,
@@ -349,7 +358,9 @@ func adversaryFactory(acnf adversaryConfig, ts simulator.TransactionSource) simu
 }
 
 func schedulerFactory(scnf schedulerConfig) alg.Scheduler {
-	if scnf.name == "greedy-subgraph" {
+	if scnf.name == "greedy-subgraph-adaptive" {
+		return alg.NewGreedySubgraphsAdaptiveQueuing(scnf.maxPending, scnf.excessFraction, alg.ExecutionTime(scnf.maxTime))
+	} else if scnf.name == "greedy-subgraph" {
 		return alg.NewGreedySubgraphs(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
 	}
 	panic(fmt.Sprintf("Scheduler %s not recognized", scnf.name))
