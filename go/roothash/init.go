@@ -26,12 +26,17 @@ var flagBackend string
 // New constructs a new Backend based on the configuration flags.
 func New(cmd *cobra.Command, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) (api.Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
+
+	var impl api.Backend
+
 	switch strings.ToLower(backend) {
 	case backendMemory:
-		return memory.New(scheduler, storage, registry), nil
+		impl = memory.New(scheduler, storage, registry)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}
+
+	return newMetricsWrapper(impl), nil
 }
 
 // RegisterFlags registers the configuration flags with the provided

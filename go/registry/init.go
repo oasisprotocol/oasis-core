@@ -22,14 +22,23 @@ var flagBackend string
 // New constructs a new Backend based on the configuration flags.
 func New(cmd *cobra.Command, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
+
+	var impl api.Backend
+	var err error
+
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		return memory.New(timeSource), nil
+		impl = memory.New(timeSource)
 	case tendermint.BackendName:
-		return tendermint.New(tmService)
+		impl, err = tendermint.New(tmService)
 	default:
 		return nil, fmt.Errorf("registry: unsupported backend: '%v'", backend)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return newMetricsWrapper(impl), nil
 }
 
 // RegisterFlags registers the configuration flags with the provided
