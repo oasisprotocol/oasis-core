@@ -117,31 +117,27 @@ impl fmt::Display for State {
 /// In case the state doesn't match the passed pattern, an error future is
 /// returned.
 macro_rules! require_state {
-    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*, $message:expr) => {{
-        let state = $inner.state.lock().unwrap();
-        match state.clone() {
-            $( $state )|* $(if $cond)* => {}
-            state => {
-                return future::err(Error::new(format!(
-                    "incorrect state for {}: {:?}",
-                    $message, state
-                ))).into_box()
-            }
-        }
-    }};
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*, $message:expr) => {
+        require_state_impl!(@failed_future, $inner, $( $state )|* $(if $cond)*, $message)
+    };
 
-    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr, $message:expr) => {{
-        let state = $inner.state.lock().unwrap();
-        match state.clone() {
-            $( $state )|* $(if $cond)* => $output,
-            state => {
-                return future::err(Error::new(format!(
-                    "incorrect state for {}: {:?}",
-                    $message, state
-                ))).into_box()
-            }
-        }
-    }};
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr, $message:expr) => {
+       require_state_impl!(@failed_future, $inner, $( $state )|* $(if $cond)* => $output, $message)
+    };
+}
+
+/// Helper macro for ensuring state is correct.
+///
+/// In case the state doesn't match the passed pattern, an error result is
+/// returned.
+macro_rules! require_state_result {
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*, $message:expr) => {
+        require_state_impl!(@failed_result, $inner, $( $state )|* $(if $cond)*, $message)
+    };
+
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr, $message:expr) => {
+       require_state_impl!(@failed_result, $inner, $( $state )|* $(if $cond)* => $output, $message)
+    };
 }
 
 /// Helper macro for ensuring state is correct.
@@ -149,19 +145,67 @@ macro_rules! require_state {
 /// In case the state doesn't match the passed pattern, an ok future is
 /// returned.
 macro_rules! require_state_ignore {
-    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*) => {{
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)*) => {
+        require_state_impl!(@ignore_future, $inner, $( $state )|* $(if $cond)*, "")
+    };
+
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr, $message:expr) => {
+       require_state_impl!(@ignore_future, $inner, $( $state )|* $(if $cond)* => $output, "")
+    };
+}
+
+macro_rules! require_state_impl {
+    (@failed_future $error:expr) => {
+        return future::err($error).into_box()
+    };
+
+    (@failed_result $error:expr) => {
+        return Err($error)
+    };
+
+    (@ignore_future $error:expr) => {
+        return future::ok(()).into_box()
+    };
+
+    (@ignore_result $error:expr) => {
+        return Ok(())
+    };
+
+    (
+        @$failed_handler:ident,
+        $inner:ident,
+        $( $state:pat )|* $(if $cond:expr)*,
+        $message:expr
+    ) => {{
         let state = $inner.state.lock().unwrap();
+        #[allow(unused_variables)]
         match state.clone() {
             $( $state )|* $(if $cond)* => {}
-            _ => return future::ok(()).into_box(),
+            state => {
+                require_state_impl!(@$failed_handler Error::new(format!(
+                    "incorrect state for {}: {:?}",
+                    $message, state
+                )))
+            }
         }
     }};
 
-    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr) => {{
+    (
+        @$failed_handler:ident,
+        $inner:ident,
+        $( $state:pat )|* $(if $cond:expr)* => $output:expr,
+        $message:expr
+    ) => {{
         let state = $inner.state.lock().unwrap();
+        #[allow(unused_variables)]
         match state.clone() {
             $( $state )|* $(if $cond)* => $output,
-            _ => return future::ok(()).into_box(),
+            state => {
+                require_state_impl!(@$failed_handler Error::new(format!(
+                    "incorrect state for {}: {:?}",
+                    $message, state
+                )))
+            }
         }
     }};
 }
@@ -817,10 +861,10 @@ impl RootHashFrontend {
     }
 
     /// Append contract calls to current batch for eventual processing.
-    pub fn append_batch(&self, calls: CallBatch) {
+    pub fn append_batch(&self, calls: CallBatch) -> Result<()> {
         // Ignore empty batches.
         if calls.is_empty() {
-            return;
+            return Ok(());
         }
 
         // If we are not a leader, do not append to batch.
@@ -828,7 +872,7 @@ impl RootHashFrontend {
             let state = self.inner.state.lock().unwrap();
             if !state.is_leader() {
                 warn!("Ignoring append to batch as we are not the computation group leader");
-                return;
+                return Err(Error::new("not computation group leader"));
             }
         }
 
@@ -851,14 +895,24 @@ impl RootHashFrontend {
                 .unbounded_send(Command::ProcessIncomingQueue)
                 .unwrap();
         }
+
+        Ok(())
     }
 
     /// Directly process a batch from a remote leader.
     pub fn process_remote_batch(&self, node_id: B256, batch_hash: H256) -> Result<()> {
-        // Check that batch comes from current committee leader.
-        let committee = self.inner.computation_group.check_remote_batch(node_id)?;
+        let inner = &self.inner;
 
-        self.inner
+        // Check that batch comes from current committee leader.
+        let committee = inner.computation_group.check_remote_batch(node_id)?;
+
+        require_state_result!(
+            inner,
+            State::WaitingForBatch(Role::Worker) | State::WaitingForBatch(Role::BackupWorker),
+            "requesting to process remote batch"
+        );
+
+        inner
             .command_sender
             .unbounded_send(Command::ProcessRemoteBatch(batch_hash, committee))
             .unwrap();

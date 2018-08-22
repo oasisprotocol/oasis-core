@@ -149,6 +149,7 @@ impl ContractClientManager {
                             node.connect_without_identity(inner.environment.clone()),
                         );
                         let client = ContractClient::new(
+                            inner.environment.clone(),
                             rpc,
                             inner.call_wait_manager.clone(),
                             inner.timeout.clone(),
@@ -164,7 +165,6 @@ impl ContractClientManager {
                             let leader_notify = leader_notify.take().unwrap();
                             drop(leader_notify.send(new_leader.clone()));
                         }
-
                         if let Some(previous_leader) = previous_leader.take() {
                             previous_leader.client.shutdown();
                         }

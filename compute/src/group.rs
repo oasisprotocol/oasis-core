@@ -54,6 +54,8 @@ struct Inner {
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
     /// Role subscribers.
     role_subscribers: StreamSubscribers<Option<Role>>,
+    /// Batch submission task.
+    batch_submission_task: Mutex<Option<KillHandle>>,
 }
 
 impl Inner {
@@ -102,6 +104,7 @@ impl ComputationGroup {
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
                 role_subscribers: StreamSubscribers::new(),
+                batch_submission_task: Mutex::new(None),
             }),
         };
         instance.start();
@@ -296,22 +299,32 @@ impl ComputationGroup {
         let mut request = SubmitBatchRequest::new();
         request.set_batch_hash(batch_hash.to_vec());
 
-        inner
-            .node_group
-            .call_filtered(
-                |_, node| node.role == Role::Worker,
-                move |client, _| client.submit_batch_async(&request),
-            )
-            .and_then(|results| {
-                for result in results {
-                    if let Err(error) = result {
-                        error!("Failed to submit batch to node: {}", error.message);
-                    }
-                }
+        // If a batch submission task already exists, kill it as it is out of date.
+        let mut batch_submission_task = inner.batch_submission_task.lock().unwrap();
+        if let Some(handle) = batch_submission_task.take() {
+            handle.kill();
+        }
 
-                Ok(())
-            })
-            .into_box()
+        *batch_submission_task = Some(spawn_killable(
+            inner
+                .node_group
+                .call_filtered(
+                    |_, node| node.role == Role::Worker,
+                    move |client, _| client.submit_batch_async(&request),
+                )
+                .and_then(|results| {
+                    for result in results {
+                        if let Err(error) = result {
+                            error!("Failed to submit batch to node: {}", error.message);
+                        }
+                    }
+
+                    Ok(())
+                })
+                .discard(),
+        ));
+
+        future::ok(()).into_box()
     }
 
     /// Submit batch to workers in the computation group.

@@ -1,14 +1,16 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use grpcio;
+use grpcio::{self, RpcStatus, RpcStatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::bytes::B256;
+use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
+use ekiden_common::futures::retry_until_ok;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::hash::EncodedHash;
 use ekiden_compute_api;
@@ -17,7 +19,7 @@ use ekiden_contract_common::call::{ContractCall, ContractOutput};
 /// Contract client.
 pub struct ContractClient {
     /// Underlying gRPC client.
-    rpc: ekiden_compute_api::ContractClient,
+    rpc: Arc<ekiden_compute_api::ContractClient>,
     /// Shared service for waiting for contract calls.
     call_wait_manager: Arc<super::callwait::Manager>,
     /// Optional call timeout.
@@ -26,11 +28,14 @@ pub struct ContractClient {
     shutdown_receiver: future::Shared<oneshot::Receiver<()>>,
     /// Shutdown signal (sender).
     shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
+    /// Environment.
+    environment: Arc<Environment>,
 }
 
 impl ContractClient {
     /// Create new client instance.
     pub fn new(
+        environment: Arc<Environment>,
         rpc: ekiden_compute_api::ContractClient,
         call_wait_manager: Arc<super::callwait::Manager>,
         timeout: Option<Duration>,
@@ -38,11 +43,12 @@ impl ContractClient {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         ContractClient {
-            rpc,
+            rpc: Arc::new(rpc),
             call_wait_manager,
             timeout,
             shutdown_receiver: shutdown_receiver.shared(),
             shutdown_sender: Mutex::new(Some(shutdown_sender)),
+            environment,
         }
     }
 
@@ -61,36 +67,62 @@ impl ContractClient {
         let call_wait = self.call_wait_manager.create_wait();
         let call_id = request.get_data().get_encoded_hash();
 
-        // Set timeout if configured.
-        let mut options = grpcio::CallOption::default();
-        if let Some(timeout) = self.timeout {
-            options = options.timeout(timeout);
-        }
+        let rpc_timeout = self.timeout.clone();
+        let rpc = self.rpc.clone();
+        let rpc_call = retry_until_ok(
+            move || {
+                // Set timeout if configured.
+                let mut options = grpcio::CallOption::default();
+                if let Some(timeout) = rpc_timeout {
+                    options = options.timeout(timeout);
+                }
 
-        match self.rpc.submit_tx_async_opt(&request, options) {
-            Ok(call) => {
-                call.map_err(|error| error.into())
-                    .and_then(move |_| {
-                        call_wait.wait_for(call_id).and_then(|output| {
-                            // TODO: Submit proof of publication, get decryption.
-                            Ok(output)
-                        })
-                    })
-                    .select(
-                        self.shutdown_receiver
-                            .clone()
-                            .then(|_result| -> BoxFuture<Vec<u8>> {
-                                // However the shutdown receiver future completes, we need to abort as
-                                // it has either been dropped or an explicit shutdown signal was sent.
-                                future::err(Error::new("contract client closed")).into_box()
-                            }),
-                    )
-                    .map(|(result, _)| result)
-                    .map_err(|(error, _)| error)
-                    .into_box()
-            }
-            Err(error) => future::err(error.into()).into_box(),
-        }
+                match rpc.submit_tx_async_opt(&request.clone(), options) {
+                    Ok(call) => call.into_box(),
+                    Err(error) => future::err(error.into()).into_box(),
+                }
+            },
+            |error| {
+                match error {
+                    // If the compute node returns that it is Unavailable, this may be because it
+                    // does not yet consider itself leader. In this case, we need to retry.
+                    grpcio::Error::RpcFailure(RpcStatus {
+                        status: RpcStatusCode::Unavailable,
+                        ..
+                    }) => false,
+                    // Consider all other errors permanent.
+                    _ => true,
+                }
+            },
+        ).map_err(|error| error.into())
+            .and_then(move |_| {
+                call_wait.wait_for(call_id).and_then(|output| {
+                    // TODO: Submit proof of publication, get decryption.
+                    Ok(output)
+                })
+            })
+            .select(
+                self.shutdown_receiver
+                    .clone()
+                    .then(|_result| -> BoxFuture<Vec<u8>> {
+                        // However the shutdown receiver future completes, we need to abort as
+                        // it has either been dropped or an explicit shutdown signal was sent.
+                        future::err(Error::new("contract client closed")).into_box()
+                    }),
+            )
+            .map(|(result, _)| result)
+            .map_err(|(error, _)| error)
+            .into_box();
+
+        // Spawn background task which handles the call.
+        let (response_tx, response_rx) = oneshot::channel();
+        self.environment
+            .spawn(rpc_call.then(|result| response_tx.send(result)).discard());
+
+        response_rx
+            .map_err(|error| error.into())
+            .and_then(|result| result)
+            .into_box()
     }
 
     /// Queue a contract call.

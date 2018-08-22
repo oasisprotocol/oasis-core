@@ -119,6 +119,8 @@ impl<S: Stream> StreamExt for S {}
 pub use self::killable::{killable, KillHandle};
 pub use self::retry::retry;
 #[cfg(not(target_env = "sgx"))]
+pub use self::retry::{retry_until_ok, retry_until_ok_or_max};
+#[cfg(not(target_env = "sgx"))]
 pub use self::spawn::*;
 
 pub mod stream {

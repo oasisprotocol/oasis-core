@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use grpcio;
+use grpcio::{RpcStatus, RpcStatusCode};
 
 use ekiden_compute_api::{Contract, SubmitTxRequest, SubmitTxResponse};
 use ekiden_core::contract::batch::CallBatch;
@@ -40,8 +41,14 @@ impl Contract for ContractService {
 
         let batch = CallBatch(vec![request.take_data()]);
 
-        self.inner.roothash_frontend.append_batch(batch);
+        let result = match self.inner.roothash_frontend.append_batch(batch) {
+            Ok(()) => sink.success(SubmitTxResponse::new()),
+            Err(error) => sink.fail(RpcStatus::new(
+                RpcStatusCode::Unavailable,
+                Some(error.description().to_owned()),
+            )),
+        };
 
-        ctx.spawn(sink.success(SubmitTxResponse::new()).map_err(|_error| ()));
+        ctx.spawn(result.map_err(|_error| ()));
     }
 }
