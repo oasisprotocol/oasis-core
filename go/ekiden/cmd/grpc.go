@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -14,7 +16,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/service"
 )
 
-var _ grpclog.LoggerV2 = (*grpcLogAdapter)(nil)
+const cfgGRPCPort = "grpc.port"
+
+var (
+	grpcPort uint16
+
+	_ grpclog.LoggerV2 = (*grpcLogAdapter)(nil)
+)
 
 type grpcLogAdapter struct {
 	logger    *logging.Logger
@@ -224,10 +232,12 @@ func (s *grpcService) Cleanup() {
 	}
 }
 
-func newGrpcService(port uint16) (*grpcService, error) {
+func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
+	port, _ := cmd.Flags().GetUint16(cfgGRPCPort)
+
 	svc := *service.NewBaseBackgroundService("grpc")
 
-	svc.Logger.Debug("gRPC Server Params", "port", grpcPort)
+	svc.Logger.Debug("gRPC Server Params", "port", port)
 
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
@@ -248,4 +258,15 @@ func newGrpcService(port uint16) (*grpcService, error) {
 		ln: ln,
 		s:  grpc.NewServer(sOpts...),
 	}, nil
+}
+
+func registerGrpcFlags(cmd *cobra.Command) {
+	// Flags specific to the root command.
+	cmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
+
+	for _, v := range []string{
+		cfgGRPCPort,
+	} {
+		viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
 }

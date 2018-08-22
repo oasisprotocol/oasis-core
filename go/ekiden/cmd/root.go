@@ -21,9 +21,6 @@ const (
 	cfgLogFile  = "log.file"
 	cfgLogFmt   = "log.format"
 	cfgLogLevel = "log.level"
-
-	cfgGRPCPort    = "grpc.port"
-	cfgMetricsPort = "metrics.port"
 )
 
 var (
@@ -33,10 +30,6 @@ var (
 	logFile  string
 	logFmt   string
 	logLevel string
-
-	// Root (aka node) command config flags.
-	grpcPort    uint16
-	metricsPort uint16
 
 	rootCmd = &cobra.Command{
 		Use:     "ekiden",
@@ -78,8 +71,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	// Except tendermint does this on it's own, sigh.
 
 	// Initialize the gRPC server.
-	grpcPort, _ = cmd.Flags().GetUint16(cfgGRPCPort)
-	env.grpcSrv, err = newGrpcService(grpcPort)
+	env.grpcSrv, err = newGrpcService(cmd)
 	if err != nil {
 		rootLog.Error("failed to initialize gRPC server",
 			"err", err,
@@ -89,8 +81,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(env.grpcSrv)
 
 	// Initialize the metrics server.
-	metricsPort, _ = cmd.Flags().GetUint16(cfgMetricsPort)
-	metrics, err := newMetrics(metricsPort)
+	metrics, err := newMetrics(cmd)
 	if err != nil {
 		rootLog.Error("failed to initialize metrics server",
 			"err", err,
@@ -207,19 +198,10 @@ func init() {
 		viper.BindPFlag(v, rootCmd.PersistentFlags().Lookup(v))
 	}
 
-	// Flags specific to the root command.
-	rootCmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
-	rootCmd.Flags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
-
-	for _, v := range []string{
-		cfgGRPCPort,
-		cfgMetricsPort,
-	} {
-		viper.BindPFlag(v, rootCmd.Flags().Lookup(v))
-	}
-
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
+		registerMetricsFlags,
+		registerGrpcFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
 		registry.RegisterFlags,
