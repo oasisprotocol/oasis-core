@@ -124,5 +124,6 @@ func VerifySchedulerRunsAllTransactions(t *testing.T, sn string, s Scheduler) {
 }
 
 func TestAllTransactionsGetScheduled(t *testing.T) {
-	VerifySchedulerRunsAllTransactions(t, "greedy subgraph", NewGreedySubgraphs(10, ExecutionTime(10)))
+	VerifySchedulerRunsAllTransactions(t, "greedy subgraph", NewGreedySubgraphsScheduler(10, ExecutionTime(10)))
+	VerifySchedulerRunsAllTransactions(t, "greedy subgraph adaptive queuing", NewGreedySubgraphsAdaptiveQueuingScheduler(10, 0.25, ExecutionTime(10)))
 }

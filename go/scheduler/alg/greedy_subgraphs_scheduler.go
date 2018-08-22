@@ -22,12 +22,12 @@ type GreedySubgraphsScheduler struct {
 	logger     *logging.Logger
 }
 
-// NewGreedySubgraphs constructs a new greedy subgraph scheduler object.  Only maxPending and
-// maxTime are exposed in the ctor interface to control when the scheduler might emit a
-// schedule and the maximum subgraph / commutative batch size used to generate the schedule.
-// NB: the scheduler is unaware of the number of compute committees available, and there is
-// usually many small batches.
-func NewGreedySubgraphs(maxP int, maxT ExecutionTime) *GreedySubgraphsScheduler {
+// NewGreedySubgraphsScheduler constructs a new greedy subgraph scheduler object.  Only
+// maxPending and maxTime are exposed in the ctor interface to control when the scheduler might
+// emit a schedule and the maximum subgraph / commutative batch size used to generate the
+// schedule.  NB: the scheduler is unaware of the number of compute committees available, and
+// there is usually many small batches.
+func NewGreedySubgraphsScheduler(maxP int, maxT ExecutionTime) *GreedySubgraphsScheduler {
 	return &GreedySubgraphsScheduler{
 		maxPending: maxP,
 		maxTime:    maxT,
@@ -72,7 +72,7 @@ TransactionLoop:
 		gs.logger.Debug("New write-set: %s", t.WriteSet.String())
 		// Check for read/write and write/write conflicts that might be created by this
 		// transaction's write-set.
-		if t.WriteSet.MemberIteratorCallbackWithEarlyExit(func(loc Location) bool {
+		if t.WriteSet.Find(func(loc Location) bool {
 			// Check for write/write conflicts.
 			if sgix := writeMap[loc]; sgix != 0 {
 				if candidate != 0 && candidate != sgix {
@@ -117,7 +117,7 @@ TransactionLoop:
 		// Check for read/write conflicts where a scheduled
 		// transaction is writing to a location read by the
 		// transaction under consideration.
-		if t.ReadSet.MemberIteratorCallbackWithEarlyExit(func(loc Location) bool {
+		if t.ReadSet.Find(func(loc Location) bool {
 			if sgix := writeMap[loc]; sgix != 0 {
 				if candidate != 0 && candidate != sgix {
 					// TODO: consider merging these two subgraphs
@@ -140,11 +140,11 @@ TransactionLoop:
 			outGraphs = append(outGraphs, NewSubgraph())
 		}
 		outGraphs[candidate].AddTransaction(t)
-		t.ReadSet.MemberIteratorCallbackWithEarlyExit(func(loc Location) bool {
+		t.ReadSet.Find(func(loc Location) bool {
 			readMap[loc] = append(readMap[loc], candidate)
 			return false
 		})
-		t.WriteSet.MemberIteratorCallbackWithEarlyExit(func(loc Location) bool {
+		t.WriteSet.Find(func(loc Location) bool {
 			writeMap[loc] = candidate
 			return false
 		})

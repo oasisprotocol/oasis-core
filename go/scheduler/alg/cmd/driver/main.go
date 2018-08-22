@@ -359,9 +359,9 @@ func adversaryFactory(acnf adversaryConfig, ts simulator.TransactionSource) simu
 
 func schedulerFactory(scnf schedulerConfig) alg.Scheduler {
 	if scnf.name == "greedy-subgraph-adaptive" {
-		return alg.NewGreedySubgraphsAdaptiveQueuing(scnf.maxPending, scnf.excessFraction, alg.ExecutionTime(scnf.maxTime))
+		return alg.NewGreedySubgraphsAdaptiveQueuingScheduler(scnf.maxPending, scnf.excessFraction, alg.ExecutionTime(scnf.maxTime))
 	} else if scnf.name == "greedy-subgraph" {
-		return alg.NewGreedySubgraphs(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
+		return alg.NewGreedySubgraphsScheduler(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
 	}
 	panic(fmt.Sprintf("Scheduler %s not recognized", scnf.name))
 }

@@ -45,7 +45,7 @@ func (lsf *LogicalShardingFilter) Get(seqno uint) (*alg.Transaction, error) {
 // updateSet -- consistently update the LocationSet by logging random choices in topMap.
 func (lsf *LogicalShardingFilter) updateSet(ls *alg.LocationSet) {
 	repl := alg.NewLocationSet()
-	ls.MemberIteratorCallbackWithEarlyExit(func(loc alg.Location) bool {
+	ls.Find(func(loc alg.Location) bool {
 		tloc := loc.(alg.TestLocation)
 		iloc := int64(tloc)
 		if 0 <= iloc && iloc < int64(lsf.shardTopN) {
