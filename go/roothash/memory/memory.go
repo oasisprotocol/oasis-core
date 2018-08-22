@@ -31,6 +31,8 @@ var (
 	errNoSuchContract = errors.New("roothash/memory: no such contract")
 	errNoSuchBlocks   = errors.New("roothash/memory: no such block(s) exist for contract")
 	errNoRound        = errors.New("roothash/memory: no round in progress")
+
+	_ (api.MetricsMonitorable) = (*memoryRootHash)(nil)
 )
 
 type commitCmd struct {
@@ -52,6 +54,8 @@ type contractState struct {
 	cmdCh         chan *commitCmd
 	blockNotifier *pubsub.Broker
 	eventNotifier *pubsub.Broker
+
+	rootHash *memoryRootHash
 }
 
 func (s *contractState) getLatestBlock() (*api.Block, error) {
@@ -129,6 +133,8 @@ func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
 		s.logger.Debug("worker: finalized round",
 			"round", blockNr,
 		)
+
+		s.rootHash.allBlockNotifier.Broadcast(block)
 
 		s.Lock()
 		defer s.Unlock()
@@ -282,6 +288,8 @@ type memoryRootHash struct {
 	storage   storage.Backend
 
 	contracts map[signature.MapKey]*contractState
+
+	allBlockNotifier *pubsub.Broker
 }
 
 func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
@@ -388,6 +396,14 @@ func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, com
 	return err
 }
 
+func (r *memoryRootHash) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscription) {
+	sub := r.allBlockNotifier.Subscribe()
+	ch := make(chan *api.Block)
+	sub.Unwrap(ch)
+
+	return ch, sub
+}
+
 func (r *memoryRootHash) getContractState(id signature.PublicKey) (*contractState, error) {
 	k := id.ToMapKey()
 
@@ -420,6 +436,7 @@ func (r *memoryRootHash) onContractRegistration(contract *contract.Contract) err
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
+		rootHash:      r,
 	}
 
 	go s.worker(r.scheduler)
@@ -457,10 +474,11 @@ func (r *memoryRootHash) worker(registry registry.Backend) {
 // New constructs a new in-memory (centralized) root hash backend.
 func New(scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) api.Backend {
 	r := &memoryRootHash{
-		logger:    logging.GetLogger("roothash/memory"),
-		scheduler: scheduler,
-		storage:   storage,
-		contracts: make(map[signature.MapKey]*contractState),
+		logger:           logging.GetLogger("roothash/memory"),
+		scheduler:        scheduler,
+		storage:          storage,
+		contracts:        make(map[signature.MapKey]*contractState),
+		allBlockNotifier: pubsub.NewBroker(false),
 	}
 	go r.worker(registry)
 

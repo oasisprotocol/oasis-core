@@ -113,3 +113,13 @@ type Event struct {
 	// RoundFailed is the error that is set when a round fails.
 	RoundFailed error
 }
+
+// MetricsMonitorable is the interface exposed by backends capable of
+// providing metrics data.
+type MetricsMonitorable interface {
+	// WatchAllBlocks returns a channel that produces a stream of blocks.
+	//
+	// All blocks from all runtimes (contracts) will be pushed into the
+	// stream immediately as they are finalized.
+	WatchAllBlocks() (<-chan *Block, *pubsub.Subscription)
+}
