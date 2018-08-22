@@ -38,18 +38,17 @@ var (
 )
 
 type boltBackend struct {
-	logger     *logging.Logger
-	timeSource epochtime.Backend
-	db         *bolt.DB
-	sweeper    *api.Sweeper
+	logger  *logging.Logger
+	db      *bolt.DB
+	sweeper *api.Sweeper
 
 	closeOnce sync.Once
 }
 
 func (b *boltBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
-	epoch, _, err := b.timeSource.GetEpoch(ctx)
-	if err != nil {
-		return nil, err
+	epoch := b.sweeper.GetEpoch()
+	if epoch == epochtime.EpochInvalid {
+		return nil, api.ErrIncoherentTime
 	}
 
 	var value []byte
@@ -74,10 +73,7 @@ func (b *boltBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 }
 
 func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
-	epoch, _, err := b.timeSource.GetEpoch(ctx)
-	if err != nil {
-		return err
-	}
+	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return api.ErrIncoherentTime
 	}
@@ -190,9 +186,8 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 	}
 
 	b := &boltBackend{
-		logger:     logging.GetLogger("storage/bolt"),
-		timeSource: timeSource,
-		db:         db,
+		logger: logging.GetLogger("storage/bolt"),
+		db:     db,
 	}
 	b.sweeper = api.NewSweeper(b, timeSource)
 

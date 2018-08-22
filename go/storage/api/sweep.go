@@ -17,12 +17,23 @@ type SweepableBackend interface {
 // Sweeper is a generic storage sweeper that removes expired storage
 // entries.
 type Sweeper struct {
+	sync.Mutex
 	sync.Once
 
 	backend SweepableBackend
 
 	closeCh  chan interface{}
 	closedCh chan interface{}
+
+	epoch epochtime.EpochTime
+}
+
+// GetEpoch returns the sweeper's idea of the current epoch.
+func (s *Sweeper) GetEpoch() epochtime.EpochTime {
+	s.Lock()
+	defer s.Unlock()
+
+	return s.epoch
 }
 
 // Close terminates the Sweeper worker.
@@ -39,7 +50,6 @@ func (s *Sweeper) worker(timeSource epochtime.Backend) {
 	epochCh, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 
-	epoch := epochtime.EpochInvalid
 	for {
 		select {
 		case <-s.closeCh:
@@ -48,13 +58,15 @@ func (s *Sweeper) worker(timeSource epochtime.Backend) {
 			if !ok {
 				return
 			}
-			if epoch == newEpoch {
+			if s.epoch == newEpoch {
 				continue
 			}
-			epoch = newEpoch
+			s.Lock()
+			s.epoch = newEpoch
+			s.Unlock()
 		}
 
-		s.backend.PurgeExpired(epoch)
+		s.backend.PurgeExpired(s.epoch)
 	}
 }
 
@@ -64,6 +76,7 @@ func NewSweeper(backend SweepableBackend, timeSource epochtime.Backend) *Sweeper
 		backend:  backend,
 		closeCh:  make(chan interface{}),
 		closedCh: make(chan interface{}),
+		epoch:    epochtime.EpochInvalid,
 	}
 
 	go s.worker(timeSource)

@@ -28,16 +28,15 @@ type memoryEntry struct {
 type memoryBackend struct {
 	sync.RWMutex
 
-	logger     *logging.Logger
-	timeSource epochtime.Backend
-	store      map[api.Key]*memoryEntry
-	sweeper    *api.Sweeper
+	logger  *logging.Logger
+	store   map[api.Key]*memoryEntry
+	sweeper *api.Sweeper
 }
 
 func (b *memoryBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
-	epoch, _, err := b.timeSource.GetEpoch(ctx)
-	if err != nil {
-		return nil, err
+	epoch := b.sweeper.GetEpoch()
+	if epoch == epochtime.EpochInvalid {
+		return nil, api.ErrIncoherentTime
 	}
 
 	b.RLock()
@@ -55,10 +54,7 @@ func (b *memoryBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 }
 
 func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
-	epoch, _, err := b.timeSource.GetEpoch(ctx)
-	if err != nil {
-		return err
-	}
+	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return api.ErrIncoherentTime
 	}
@@ -123,9 +119,8 @@ func (b *memoryBackend) Cleanup() {
 // New constructs a new memory backed storage Backend instance.
 func New(timeSource epochtime.Backend) api.Backend {
 	b := &memoryBackend{
-		logger:     logging.GetLogger("storage/memory"),
-		timeSource: timeSource,
-		store:      make(map[api.Key]*memoryEntry),
+		logger: logging.GetLogger("storage/memory"),
+		store:  make(map[api.Key]*memoryEntry),
 	}
 	b.sweeper = api.NewSweeper(b, timeSource)
 
