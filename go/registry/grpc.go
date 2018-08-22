@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -20,38 +19,6 @@ var (
 	_ pb.ContractRegistryServer = (*grpcServer)(nil)
 )
 
-var registryFailures = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "ekiden_registry_failures",
-		Help: "Number of registry failures.",
-	},
-	[]string{"call"},
-)
-var registryNodes = prometheus.NewCounter(
-	prometheus.CounterOpts{
-		Name: "ekiden_registry_nodes",
-		Help: "Number of registry nodes.",
-	},
-)
-var registryEntities = prometheus.NewGauge(
-	prometheus.GaugeOpts{
-		Name: "ekiden_registry_entities",
-		Help: "Number of registry entities.",
-	},
-)
-var registryContracts = prometheus.NewGauge(
-	prometheus.GaugeOpts{
-		Name: "ekiden_registry_contracts",
-		Help: "Number of registry contracts.",
-	},
-)
-var registeryCollectors = []prometheus.Collector{
-	registryFailures,
-	registryNodes,
-	registryEntities,
-	registryContracts,
-}
-
 type grpcServer struct {
 	backend api.Backend
 }
@@ -63,11 +30,9 @@ func (s *grpcServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest
 	}
 
 	if err := s.backend.RegisterEntity(ctx, &ent); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "registerEntity"}).Inc()
 		return nil, err
 	}
 
-	registryEntities.Inc()
 	return &pb.RegisterResponse{}, nil
 }
 
@@ -78,11 +43,9 @@ func (s *grpcServer) DeregisterEntity(ctx context.Context, req *pb.DeregisterReq
 	}
 
 	if err := s.backend.DeregisterEntity(ctx, &id); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "deregisterEntity"}).Inc()
 		return nil, err
 	}
 
-	registryEntities.Dec()
 	return &pb.DeregisterResponse{}, nil
 }
 
@@ -157,11 +120,9 @@ func (s *grpcServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 	}
 
 	if err := s.backend.RegisterNode(ctx, &node); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "registerNode"}).Inc()
 		return nil, err
 	}
 
-	registryNodes.Inc()
 	return &pb.RegisterNodeResponse{}, nil
 }
 
@@ -286,11 +247,9 @@ func (s *grpcServer) RegisterContract(ctx context.Context, req *pb.RegisterContr
 	}
 
 	if err := s.backend.RegisterContract(ctx, &con); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "registerContract"}).Inc()
 		return nil, err
 	}
 
-	registryContracts.Inc()
 	return &pb.RegisterContractResponse{}, nil
 }
 
@@ -342,8 +301,6 @@ func (s *grpcServer) GetContracts(req *pb.ContractsRequest, stream pb.ContractRe
 // NewGRPCServer initializes and registers a new gRPC registry server
 // backed by the provided Backend.
 func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
-	prometheus.MustRegister(registeryCollectors...)
-
 	s := &grpcServer{
 		backend: backend,
 	}
