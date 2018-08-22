@@ -97,6 +97,16 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	return t.mux.Register(app)
 }
 
+func (t *tendermintService) ForceInitialize() error {
+	var err error
+	if !t.isInitialized {
+		t.Logger.Debug("Force-initializing tendermint local node.")
+		err = t.lazyInit()
+	}
+
+	return err
+}
+
 func (t *tendermintService) lazyInit() error {
 	if t.isInitialized {
 		return nil

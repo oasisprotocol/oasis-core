@@ -147,7 +147,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 
 func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	// Initialize the various backends.
-	timeSource, err := epochtime.New(cmd)
+	timeSource, err := epochtime.New(cmd, env.svcTmnt)
 	if err != nil {
 		return err
 	}
