@@ -1,14 +1,13 @@
 //! Computation group structures.
 use std::sync::{Arc, Mutex};
 
-use super::statetransfer::transition_keys;
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
 use ekiden_core::bytes::{B256, H256};
+use ekiden_core::crash;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
-use ekiden_core::futures::sync::mpsc;
 use ekiden_core::identity::NodeIdentity;
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
@@ -19,12 +18,81 @@ use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
 use ekiden_storage_base::BatchStorage;
 use ekiden_storage_frontend::StorageClient;
 
+use super::statetransfer::transition_keys;
+
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
-    /// Submit batch to workers.
-    Submit(H256),
     /// Update committee.
     UpdateCommittee(EpochTime, Vec<CommitteeNode>),
+}
+
+struct Epoch {
+    /// Current epoch number.
+    number: EpochTime,
+    /// Computation node group.
+    node_group: NodeGroup<ComputationGroupClient, CommitteeNode>,
+    /// Computation committee metadata.
+    committee: Vec<CommitteeNode>,
+    /// Node metadata.
+    nodes: Vec<Node>,
+    /// Local node's role. Can be `None` if node is not part of committee.
+    role: Option<Role>,
+    /// Kill handle for the task handling the epoch transition.
+    transition_task: Option<KillHandle>,
+    /// Batch submission task.
+    batch_submission_task: Option<KillHandle>,
+    /// Storage transfer task.
+    storage_transfer_task: Option<KillHandle>,
+}
+
+impl Epoch {
+    fn new(number: EpochTime, committee: Vec<CommitteeNode>, public_key: B256) -> Self {
+        // Find our role.
+        let role = committee
+            .iter()
+            .filter(|node| node.public_key == public_key)
+            .map(|node| node.role.clone())
+            .next();
+
+        Epoch {
+            number,
+            node_group: NodeGroup::new(),
+            committee,
+            nodes: vec![],
+            role,
+            transition_task: None,
+            batch_submission_task: None,
+            storage_transfer_task: None,
+        }
+    }
+}
+
+impl Drop for Epoch {
+    fn drop(&mut self) {
+        // Ensure storage transfer task is killed when the epoch is dropped.
+        if let Some(storage_transfer_task) = self.storage_transfer_task.take() {
+            storage_transfer_task.kill();
+        }
+
+        // Ensure batch submission task is killed when the epoch is dropped.
+        if let Some(batch_submission_task) = self.batch_submission_task.take() {
+            batch_submission_task.kill();
+        }
+
+        // Ensure the task handling the epoch transition is killed when the
+        // epoch is dropped.
+        if let Some(transition_task) = self.transition_task.take() {
+            transition_task.kill();
+        }
+    }
+}
+
+#[derive(Default)]
+struct EpochTransitionState {
+    /// Active epoch.
+    active: Option<Epoch>,
+    /// Epoch we are transitioning to.
+    transitioning: Option<Epoch>,
 }
 
 struct Inner {
@@ -34,42 +102,18 @@ struct Inner {
     scheduler: Arc<Scheduler>,
     /// Entity registry.
     entity_registry: Arc<EntityRegistryBackend>,
-    /// Computation node group.
-    node_group: NodeGroup<ComputationGroupClient, CommitteeNode>,
-    /// Computation committee metadata.
-    committee: Mutex<Vec<CommitteeNode>>,
     /// Compute node's public key.
     public_key: B256,
     /// Storage backend for pulling active storage keys.
     storage: Arc<BatchStorage>,
-    /// Current leader of the computation committee.
-    leader: Arc<Mutex<Option<CommitteeNode>>>,
     /// Environment.
     environment: Arc<Environment>,
     /// Node identity,
     identity: Arc<NodeIdentity>,
-    /// Command sender.
-    command_sender: mpsc::UnboundedSender<Command>,
-    /// Command receiver (until initialized).
-    command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
     /// Role subscribers.
     role_subscribers: StreamSubscribers<Option<Role>>,
-    /// Batch submission task.
-    batch_submission_task: Mutex<Option<KillHandle>>,
-}
-
-impl Inner {
-    /// Get local node's role in the committee.
-    ///
-    /// May be `None` in case the local node is not part of the computation group.
-    fn get_role(&self) -> Option<Role> {
-        let committee = self.committee.lock().unwrap();
-        committee
-            .iter()
-            .filter(|node| node.public_key == self.public_key)
-            .map(|node| node.role.clone())
-            .next()
-    }
+    /// Current epoch transition state.
+    epochs: Mutex<EpochTransitionState>,
 }
 
 /// Structure that maintains connections to the current compute committee.
@@ -87,24 +131,17 @@ impl ComputationGroup {
         identity: Arc<NodeIdentity>,
         storage: Arc<BatchStorage>,
     ) -> Self {
-        let (command_sender, command_receiver) = mpsc::unbounded();
-
         let instance = Self {
             inner: Arc::new(Inner {
                 contract_id,
                 scheduler,
                 entity_registry,
-                node_group: NodeGroup::new(),
-                committee: Mutex::new(vec![]),
                 public_key: identity.get_public_key(),
                 storage,
-                leader: Arc::new(Mutex::new(None)),
                 environment,
                 identity,
-                command_sender,
-                command_receiver: Mutex::new(Some(command_receiver)),
                 role_subscribers: StreamSubscribers::new(),
-                batch_submission_task: Mutex::new(None),
+                epochs: Mutex::new(EpochTransitionState::default()),
             }),
         };
         instance.start();
@@ -136,19 +173,6 @@ impl ComputationGroup {
                 .into_box(),
         );
 
-        // Receive commands.
-        let command_receiver = self.inner
-            .command_receiver
-            .lock()
-            .unwrap()
-            .take()
-            .expect("start already called");
-        event_sources.push(
-            command_receiver
-                .map_err(|_| Error::new("command channel closed"))
-                .into_box(),
-        );
-
         // Process commands.
         self.inner.environment.spawn({
             let inner = self.inner.clone();
@@ -157,7 +181,6 @@ impl ComputationGroup {
                 module_path!(),
                 "Unexpected error while processing group commands",
                 move |command| match command {
-                    Command::Submit(batch_hash) => Self::handle_submit(inner.clone(), batch_hash),
                     Command::UpdateCommittee(epoch, members) => {
                         measure_counter_inc!("committee_updates_count");
 
@@ -168,155 +191,221 @@ impl ComputationGroup {
         });
     }
 
+    /// Start storage transfer from previous epoch.
+    fn start_storage_transfer(inner: Arc<Inner>, epochs: &mut EpochTransitionState) {
+        if epochs.active.is_none() {
+            // No previous epoch, so no need to transfer anything.
+            return;
+        }
+
+        let storage_transfer_task = {
+            let active_epoch = epochs.active.as_ref().unwrap();
+            let next_epoch = epochs
+                .transitioning
+                .as_ref()
+                .expect("transitioning to epoch");
+            if next_epoch.role != Some(Role::Leader) && next_epoch.role != Some(Role::Worker) {
+                return;
+            }
+
+            info!(
+                "Starting storage transfer {} -> {}",
+                active_epoch.number, next_epoch.number
+            );
+
+            // TODO: smarter choice of remote node.
+            let storage_transfer_task;
+            if let Some(node) = active_epoch.nodes.first() {
+                let remote_client = Arc::new(StorageClient::from_node(
+                    &node,
+                    inner.environment.clone(),
+                    inner.identity.clone(),
+                ));
+
+                // Get active key list.
+                storage_transfer_task = Some(spawn_killable(transition_keys(
+                    remote_client,
+                    inner.storage.persistent_storage().clone(),
+                )));
+            } else {
+                warn!("No nodes in previous committee, skipping storage transfer");
+                storage_transfer_task = None;
+            }
+
+            storage_transfer_task
+        };
+
+        let next_epoch = epochs.transitioning.as_mut().unwrap();
+        next_epoch.storage_transfer_task = storage_transfer_task;
+    }
+
     /// Handle committee update.
     fn handle_update_committee(
         inner: Arc<Inner>,
         epoch: EpochTime,
         members: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
-        info!("Starting update of computation group committee");
+        let mut epochs = inner.epochs.lock().unwrap();
+        let previous_epoch = epochs.active.as_ref().map_or(0, |e| e.number);
+        info!(
+            "Entering new epoch {} (previous epoch {})",
+            epoch, previous_epoch
+        );
+        trace!("Committee for epoch {}: {:?}", epoch, members);
 
-        // Clear previous group.
-        {
-            let mut committee = inner.committee.lock().unwrap();
-            if *committee == members {
-                info!("Not updating committee as membership has not changed");
-                return future::ok(()).into_box();
-            }
-
-            committee.clear();
-        }
-        inner.node_group.clear();
-
-        // Clear the current leader as well.
-        *inner.leader.lock().unwrap() = None;
-
-        // Check if we are still part of the committee. If we are not, do not populate the node
-        // group with any nodes as it is not needed.
-        if !members
-            .iter()
-            .any(|node| node.public_key == inner.public_key)
-        {
-            info!("No longer a member of the computation group");
-            inner.role_subscribers.notify(&None);
-            return Box::new(future::ok(()));
+        // Start epoch transition. The previous epoch (if any) will remain active until the
+        // transition completes. If a previous transition is still in progress, be sure to
+        // stop it.
+        if let Some(previous_transition) = epochs.transitioning.take() {
+            measure_counter_inc!("killed_transition_task_count");
+            warn!(
+                "Transition to previous epoch ({}) is still in progress, will be killed",
+                previous_transition.number,
+            );
+            drop(previous_transition);
         }
 
-        // Find new leader.
-        *inner.leader.lock().unwrap() = members
-            .iter()
-            .find(|node| node.role == Role::Leader)
-            .cloned();
+        let inner = inner.clone();
+        let mut next_epoch = Epoch::new(epoch, members, inner.public_key);
+        let transitioning_epoch_number = next_epoch.number;
+        next_epoch.transition_task = Some(spawn_killable(
+            inner
+                .entity_registry
+                .get_nodes(epoch)
+                .and_then(move |nodes| {
+                    let mut epochs = inner.epochs.lock().unwrap();
 
-        // Resolve nodes via the entity registry.
-        // TODO: Support group fetch to avoid multiple requests to registry or make scheduler return nodes.
-        let nodes: Vec<BoxFuture<(Node, CommitteeNode)>> = members
-            .iter()
-            .filter(|node| node.public_key != inner.public_key)
-            .filter(|node| node.role == Role::Worker || node.role == Role::Leader)
-            .map(|node| {
-                let node = node.clone();
-
-                inner
-                    .entity_registry
-                    .get_node(node.public_key)
-                    .and_then(move |reg_node| Ok((reg_node, node.clone())))
-                    .into_box()
-            })
-            .collect();
-
-        // Trace current and previous epoch number.
-        trace!("Current epoch is {}", epoch);
-        let pre_epoch = if epoch > 1 { epoch - 1 } else { 1 };
-        trace!("Previous epoch is {}", pre_epoch);
-        let pre_nodes_handle = inner.entity_registry.get_nodes(pre_epoch);
-
-        Box::new(
-            future::join_all(nodes)
-                .join(pre_nodes_handle)
-                .and_then(move |(nodes, pre_nodes_handle)| {
-                    // Update group.
-                    for (node, committee_node) in nodes {
-                        let channel =
-                            node.connect(inner.environment.clone(), inner.identity.clone());
-                        let client = ComputationGroupClient::new(channel);
-                        inner.node_group.add_node(client, committee_node);
-                    }
-
-                    trace!("New committee: {:?}", members);
-
-                    let old_role = inner.get_role();
-
-                    // Update current committee.
                     {
-                        let mut committee = inner.committee.lock().unwrap();
-                        *committee = members;
+                        let epoch = epochs
+                            .transitioning
+                            .as_mut()
+                            .expect("transitioning epoch to be set");
+                        // Check if we are still processing the correct epoch as we might have been
+                        // killed while waiting for the epochs lock.
+                        if epoch.number != transitioning_epoch_number {
+                            return Ok(());
+                        }
+                        // Clear transition task handle as we are done.
+                        drop(epoch.transition_task.take());
+
+                        // Filter nodes by committee.
+                        let nodes: Vec<_> = nodes
+                            .iter()
+                            .filter_map(|node| {
+                                epoch
+                                    .committee
+                                    .iter()
+                                    .find(|m| m.public_key == node.id)
+                                    .map(|member| (node, member.clone()))
+                            })
+                            .collect();
+
+                        // Update group.
+                        for (node, member) in nodes {
+                            let channel =
+                                node.connect(inner.environment.clone(), inner.identity.clone());
+                            let client = ComputationGroupClient::new(channel);
+                            epoch.nodes.push(node.clone());
+                            epoch.node_group.add_node(client, member);
+                        }
+
+                        assert_eq!(epoch.nodes.len(), epoch.committee.len());
                     }
 
-                    let new_role = inner.get_role();
-                    if new_role != old_role {
-                        info!("Our new role is: {:?}", &new_role.unwrap());
-                        inner.role_subscribers.notify(&new_role);
-                    }
-
-                    info!("Update of computation group committee finished");
-                    // Optimistic fetch of previous epoch keys.
+                    // Perform storage transfer.
                     // FIXME: storage transfer temporarily disabled (#818)
-                    if false && epoch > 1
-                        && (new_role == Some(Role::Leader) || new_role == Some(Role::Worker))
-                        && !pre_nodes_handle.is_empty()
-                    {
-                        let pre_nodes_unwrap = pre_nodes_handle.clone();
-                        // TODO: smarter choice of remote node.
-                        let remote_client = Arc::new(StorageClient::from_node(
-                            &pre_nodes_unwrap[0].clone(),
-                            inner.environment.clone(),
-                            inner.identity.clone(),
-                        ));
-
-                        // Get active key list.
-                        inner.environment.spawn(transition_keys(
-                            remote_client,
-                            inner.storage.persistent_storage().clone(),
-                        ));
+                    if false {
+                        Self::start_storage_transfer(inner.clone(), &mut epochs);
                     }
+
+                    // Finish epoch transition.
+                    if let Some(ref active_epoch) = epochs.active {
+                        info!(
+                            "Epoch transition {} -> {} complete",
+                            active_epoch.number,
+                            epochs.transitioning.as_ref().unwrap().number
+                        );
+                    } else {
+                        info!(
+                            "Epoch transition None -> {} complete",
+                            epochs.transitioning.as_ref().unwrap().number
+                        );
+                    }
+
+                    epochs.active = epochs.transitioning.take();
+
+                    let active_epoch = epochs.active.as_mut().expect("transition to an epoch");
+                    if let Some(ref role) = active_epoch.role {
+                        info!(
+                            "Our new role in epoch {} is: {:?}",
+                            active_epoch.number, role
+                        );
+                        inner.role_subscribers.notify(&active_epoch.role);
+                    } else {
+                        info!(
+                            "No longer a member of the computation group in epoch {}",
+                            active_epoch.number
+                        );
+                    }
+
                     Ok(())
                 })
                 .or_else(|error| {
-                    error!(
-                        "Failed to resolve computation group from registry: {}",
-                        error.message
+                    // Crash as this leaves the node in an inconsistent state.
+                    crash!(
+                        "Failed to resolve computation group from registry: {:?}",
+                        error
                     );
+
+                    #[allow(unreachable_code)]
                     Ok(())
                 }),
-        )
+        ));
+
+        epochs.transitioning = Some(next_epoch);
+
+        future::ok(()).into_box()
     }
 
-    /// Handle batch submission.
-    fn handle_submit(inner: Arc<Inner>, batch_hash: H256) -> BoxFuture<()> {
+    /// Submit batch to workers in the computation group.
+    pub fn submit(&self, batch_hash: H256) -> Vec<CommitteeNode> {
         trace!("Submitting batch to workers");
 
-        // Submit batch.
+        // Prepare request.
         let mut request = SubmitBatchRequest::new();
         request.set_batch_hash(batch_hash.to_vec());
 
+        let mut epochs = self.inner.epochs.lock().unwrap();
+        let active_epoch = epochs.active.as_mut().expect("no active epoch");
+
         // If a batch submission task already exists, kill it as it is out of date.
-        let mut batch_submission_task = inner.batch_submission_task.lock().unwrap();
-        if let Some(handle) = batch_submission_task.take() {
+        if let Some(handle) = active_epoch.batch_submission_task.take() {
+            measure_counter_inc!("killed_batch_submission_task_count");
+            warn!("Previous batch submission is still in progress, will be killed");
             handle.kill();
         }
 
-        *batch_submission_task = Some(spawn_killable(
-            inner
+        let inner = self.inner.clone();
+        let active_epoch_number = active_epoch.number;
+        active_epoch.batch_submission_task = Some(spawn_killable(
+            active_epoch
                 .node_group
                 .call_filtered(
                     |_, node| node.role == Role::Worker,
                     move |client, _| client.submit_batch_async(&request),
                 )
-                .and_then(|results| {
+                .and_then(move |results| {
                     for result in results {
                         if let Err(error) = result {
                             error!("Failed to submit batch to node: {}", error.message);
+                        }
+                    }
+
+                    // Clear batch submission task.
+                    let mut epochs = inner.epochs.lock().unwrap();
+                    if let Some(active_epoch) = epochs.active.as_mut() {
+                        if active_epoch.number == active_epoch_number {
+                            drop(active_epoch.batch_submission_task.take());
                         }
                     }
 
@@ -325,26 +414,18 @@ impl ComputationGroup {
                 .discard(),
         ));
 
-        future::ok(()).into_box()
-    }
-
-    /// Submit batch to workers in the computation group.
-    pub fn submit(&self, batch_hash: H256) -> Vec<CommitteeNode> {
-        self.inner
-            .command_sender
-            .unbounded_send(Command::Submit(batch_hash))
-            .unwrap();
-
-        let committee = self.inner.committee.lock().unwrap();
-        committee.clone()
+        active_epoch.committee.clone()
     }
 
     /// Check if given node public key belongs to the current committee leader.
     ///
     /// Returns current committee.
     pub fn check_remote_batch(&self, node_id: B256) -> Result<Vec<CommitteeNode>> {
-        let committee = self.inner.committee.lock().unwrap();
-        if !committee
+        let epochs = self.inner.epochs.lock().unwrap();
+        let active_epoch = epochs.active.as_ref().expect("no active epoch");
+
+        if !active_epoch
+            .committee
             .iter()
             .any(|node| node.role == Role::Leader && node.public_key == node_id)
         {
@@ -352,7 +433,7 @@ impl ComputationGroup {
             return Err(Error::new("not current committee leader"));
         }
 
-        Ok(committee.clone())
+        Ok(active_epoch.committee.clone())
     }
 
     /// Subscribe to notifications on our current role in the computation committee.
@@ -360,8 +441,11 @@ impl ComputationGroup {
         self.inner.role_subscribers.subscribe().1
     }
 
-    /// Get current committee.
+    /// Get committee for active epoch.
     pub fn get_committee(&self) -> Vec<CommitteeNode> {
-        self.inner.committee.lock().unwrap().clone()
+        let epochs = self.inner.epochs.lock().unwrap();
+        let active_epoch = epochs.active.as_ref().expect("no active epoch");
+
+        active_epoch.committee.clone()
     }
 }
