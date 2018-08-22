@@ -2,11 +2,15 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
-	"strconv"
+	"strings"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -14,21 +18,33 @@ import (
 )
 
 const (
-	cfgMetricsPort = "metrics.port"
+	cfgMetricsMode              = "metrics.mode"
+	cfgMetricsAddr              = "metrics.address"
+	cfgMetricsPushJobName       = "metrics.push.job-name"
+	cfgMetricsPushInstanceLabel = "metrics.push.instance-label"
+	cfgMetricsPushInterval      = "metrics.push.interval"
+
+	metricsModePull = "pull"
+	metricsModePush = "push"
 )
 
 var (
-	metricsPort uint16
+	metricsMode string
+	metricsAddr string
+
+	metricsPushJobName       string
+	metricsPushInstanceLabel string
+	metricsPushInterval      time.Duration
 )
 
-type metrics struct {
+type metricsPullService struct {
 	service.BaseBackgroundService
 
 	ln net.Listener
 	s  *http.Server
 }
 
-func (s *metrics) Start() error {
+func (s *metricsPullService) Start() error {
 	go func() {
 		var ln net.Listener
 		ln, s.ln = s.ln, nil
@@ -44,44 +60,130 @@ func (s *metrics) Start() error {
 	return nil
 }
 
-func (s *metrics) Stop() {
+func (s *metricsPullService) Stop() {
 	if s.s != nil {
 		s.s.Shutdown(context.Background())
 		s.s = nil
 	}
 }
 
-func (s *metrics) Cleanup() {
+func (s *metricsPullService) Cleanup() {
 	if s.ln != nil {
 		_ = s.ln.Close()
 		s.ln = nil
 	}
 }
 
-func newMetrics(cmd *cobra.Command) (*metrics, error) {
-	port, _ := cmd.Flags().GetUint16(cfgMetricsPort)
+func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error) {
+	addr, _ := cmd.Flags().GetString(cfgMetricsAddr)
 
 	svc := *service.NewBaseBackgroundService("metrics")
 
-	svc.Logger.Debug("Metric Server Params", "port", port)
+	svc.Logger.Debug("Metrics Server Params",
+		"mode", metricsModePull,
+		"addr", addr,
+	)
 
-	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	return &metrics{
+	return &metricsPullService{
 		BaseBackgroundService: svc,
 		ln: ln,
 		s:  &http.Server{Handler: promhttp.Handler()},
 	}, nil
 }
 
+type metricsPushService struct {
+	service.BaseBackgroundService
+
+	pusher   *push.Pusher
+	interval time.Duration
+}
+
+func (s *metricsPushService) Start() error {
+	s.pusher = s.pusher.Gatherer(prometheus.DefaultGatherer)
+
+	go s.worker()
+	return nil
+}
+
+func (s *metricsPushService) worker() {
+	t := time.NewTicker(s.interval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-s.Quit():
+			break
+		case <-t.C:
+		}
+
+		if err := s.pusher.Push(); err != nil {
+			s.Logger.Warn("Push: failed",
+				"err", err,
+			)
+		}
+	}
+}
+
+func newMetricsPushService(cmd *cobra.Command) (service.BackgroundService, error) {
+	addr, _ := cmd.Flags().GetString(cfgMetricsAddr)
+	jobName, _ := cmd.Flags().GetString(cfgMetricsPushJobName)
+	instanceLabel, _ := cmd.Flags().GetString(cfgMetricsPushInstanceLabel)
+	interval, _ := cmd.Flags().GetDuration(cfgMetricsPushInterval)
+
+	if jobName == "" {
+		return nil, fmt.Errorf("metrics: metrics.push.job-name required for push mode")
+	}
+	if instanceLabel == "" {
+		return nil, fmt.Errorf("metrics: metrics.push.instance-label required for push mode")
+	}
+
+	svc := *service.NewBaseBackgroundService("metrics")
+
+	svc.Logger.Debug("Metrics Server Params",
+		"mode", metricsModePush,
+		"addr", addr,
+		"job_name", jobName,
+		"instance_label", instanceLabel,
+		"push_interval", interval,
+	)
+
+	return &metricsPushService{
+		BaseBackgroundService: svc,
+		pusher:                push.New(addr, jobName).Grouping("instance", instanceLabel),
+		interval:              interval,
+	}, nil
+}
+
+func newMetrics(cmd *cobra.Command) (service.BackgroundService, error) {
+	mode, _ := cmd.Flags().GetString(cfgMetricsMode)
+	switch strings.ToLower(mode) {
+	case metricsModePull:
+		return newMetricsPullService(cmd)
+	case metricsModePush:
+		return newMetricsPushService(cmd)
+	default:
+		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
+	}
+}
+
 func registerMetricsFlags(cmd *cobra.Command) {
-	cmd.Flags().Uint16Var(&metricsPort, cfgMetricsPort, 3000, "metrics server port")
+	cmd.Flags().StringVar(&metricsMode, cfgMetricsMode, metricsModePull, "metrics (prometheus) mode")
+	cmd.Flags().StringVar(&metricsAddr, cfgMetricsAddr, "0.0.0.0:3000", "metrics pull/push address")
+	cmd.Flags().StringVar(&metricsPushJobName, cfgMetricsPushJobName, "", "metrics push job name")
+	cmd.Flags().StringVar(&metricsPushInstanceLabel, cfgMetricsPushInstanceLabel, "", "metrics push instance label")
+	cmd.Flags().DurationVar(&metricsPushInterval, cfgMetricsPushInterval, 5*time.Second, "metrics push interval")
 
 	for _, v := range []string{
-		cfgMetricsPort,
+		cfgMetricsMode,
+		cfgMetricsAddr,
+		cfgMetricsPushJobName,
+		cfgMetricsPushInstanceLabel,
+		cfgMetricsPushInterval,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
