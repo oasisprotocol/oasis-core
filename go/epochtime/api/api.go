@@ -44,3 +44,12 @@ type SetableBackend interface {
 	// the begining of the current epoch.
 	SetEpoch(context.Context, EpochTime, uint64) error
 }
+
+// BlockBackend is a Backend that is backed by a blockchain.
+type BlockBackend interface {
+	Backend
+
+	// GetBlockEpoch returns the epoch at the specified block height,
+	// and the number of blocks since the begining of said epoch.
+	GetBlockEpoch(context.Context, int64) (epoch EpochTime, elapsed uint64, err error)
+}
