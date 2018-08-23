@@ -68,7 +68,7 @@ impl TryFrom<api::Header> for Header {
         Ok(Header {
             version: a.get_version() as u16,
             namespace: B256::try_from(a.get_namespace())?,
-            round: U256::from_little_endian(a.get_round()),
+            round: U256::try_from(a.get_round())?,
             previous_hash: H256::try_from(a.get_previous_hash())?,
             group_hash: H256::try_from(a.get_group_hash())?,
             input_hash: H256::try_from(a.get_input_hash())?,
@@ -84,7 +84,7 @@ impl Into<api::Header> for Header {
         let mut h = api::Header::new();
         h.set_version(self.version as u32);
         h.set_namespace(self.namespace.to_vec());
-        h.set_round(self.round.to_vec());
+        h.set_round(self.round.to_vec_big_endian());
         h.set_previous_hash(self.previous_hash.to_vec());
         h.set_group_hash(self.group_hash.to_vec());
         h.set_input_hash(self.input_hash.to_vec());
