@@ -116,6 +116,10 @@ func (b *memoryBackend) Cleanup() {
 	b.sweeper.Close()
 }
 
+func (b *memoryBackend) Initialized() <-chan struct{} {
+	return b.sweeper.Initialized()
+}
+
 // New constructs a new memory backed storage Backend instance.
 func New(timeSource epochtime.Backend) api.Backend {
 	b := &memoryBackend{

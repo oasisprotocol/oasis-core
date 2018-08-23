@@ -61,6 +61,10 @@ type Backend interface {
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()
+
+	// Initialized returns a channel that will be closed when the
+	// backend is initialized and ready to service requests.
+	Initialized() <-chan struct{}
 }
 
 // HashStorageKey generates a storage key from it's value.

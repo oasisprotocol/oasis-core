@@ -153,6 +153,10 @@ func (b *boltBackend) Cleanup() {
 	})
 }
 
+func (b *boltBackend) Initialized() <-chan struct{} {
+	return b.sweeper.Initialized()
+}
+
 // New constructs a new BoltDB backed storage Backend instance, using
 // the provided path for the database.
 func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
