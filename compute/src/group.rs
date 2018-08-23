@@ -261,6 +261,7 @@ impl ComputationGroup {
 
                     info!("Update of computation group committee finished");
                     // Optimistic fetch of previous epoch keys.
+                    // FIXME: storage transfer temporarily disabled (#818)
                     if false && epoch > 1
                         && (new_role == Some(Role::Leader) || new_role == Some(Role::Worker))
                         && !pre_nodes_handle.is_empty()
