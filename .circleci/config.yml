@@ -52,6 +52,7 @@ jobs:
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
             --exclude ekiden-keymanager-trusted \
+            --exclude ekiden-ethereum \
             --exclude token
 
       # Integration tests.
