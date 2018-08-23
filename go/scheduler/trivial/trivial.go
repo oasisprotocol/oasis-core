@@ -63,6 +63,7 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 
 	nodeList := s.nodeLists[s.epoch]
 	beacon := s.beacons[s.epoch]
+	nrNodes := len(nodeList)
 
 	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage} {
 		var sz int
@@ -81,17 +82,17 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 		if sz == 0 {
 			return errors.New("scheduler: empty committee not allowed")
 		}
-		if sz > len(nodeList) {
+		if sz > nrNodes {
 			return errors.New("scheduler: committee size exceeds available nodes")
 		}
 
-		drbg, err := drbg.New(crypto.SHA512, beacon, nil, ctx)
+		drbg, err := drbg.New(crypto.SHA512, beacon, con.ID[:], ctx)
 		if err != nil {
 			return err
 		}
 		rngSrc := mathrand.New(drbg)
 		rng := rand.New(rngSrc)
-		idxs := rng.Perm(sz)
+		idxs := rng.Perm(nrNodes)
 
 		committee := &api.Committee{
 			Kind:     kind,
