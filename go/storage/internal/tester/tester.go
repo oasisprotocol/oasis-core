@@ -19,21 +19,10 @@ var testValues = [][]byte{
 	[]byte("There shines not one shall leave alive the battlefield!"),
 }
 
-func waitForTimeCoherency(t *testing.T, timeSource epochtime.Backend) {
-	ch, sub := timeSource.WatchEpochs()
-	defer sub.Close()
-
-	select {
-	case <-ch:
-	case <-time.After(1 * time.Second):
-		t.Fatalf("Timed out waiting for timekeeping to settle")
-	}
-}
-
 // StorageImplementationTest exercises the basic functionality of
 // a storage backend.
 func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource epochtime.SetableBackend) {
-	waitForTimeCoherency(t, timeSource)
+	<-backend.Initialized()
 
 	var hashes []storage.Key
 	for _, v := range testValues {

@@ -16,16 +16,18 @@ type SweepableBackend interface {
 
 // Sweeper is a generic storage sweeper that removes expired storage
 // entries.
-type Sweeper struct {
-	sync.Mutex
+type Sweeper struct { // nolint: maligned
 	sync.Once
+	sync.Mutex
 
 	backend SweepableBackend
 
-	closeCh  chan interface{}
-	closedCh chan interface{}
+	closeCh  chan struct{}
+	closedCh chan struct{}
+	initCh   chan struct{}
 
-	epoch epochtime.EpochTime
+	epoch        epochtime.EpochTime
+	signaledInit bool
 }
 
 // GetEpoch returns the sweeper's idea of the current epoch.
@@ -44,6 +46,12 @@ func (s *Sweeper) Close() {
 	})
 }
 
+// Initialized returns a channel that will be closed when the sweeper
+// is fully initialized.
+func (s *Sweeper) Initialized() <-chan struct{} {
+	return s.initCh
+}
+
 func (s *Sweeper) worker(timeSource epochtime.Backend) {
 	defer close(s.closedCh)
 
@@ -57,6 +65,10 @@ func (s *Sweeper) worker(timeSource epochtime.Backend) {
 		case newEpoch, ok := <-epochCh:
 			if !ok {
 				return
+			}
+			if !s.signaledInit {
+				s.signaledInit = true
+				close(s.initCh)
 			}
 			if s.epoch == newEpoch {
 				continue
@@ -74,8 +86,9 @@ func (s *Sweeper) worker(timeSource epochtime.Backend) {
 func NewSweeper(backend SweepableBackend, timeSource epochtime.Backend) *Sweeper {
 	s := &Sweeper{
 		backend:  backend,
-		closeCh:  make(chan interface{}),
-		closedCh: make(chan interface{}),
+		closeCh:  make(chan struct{}),
+		closedCh: make(chan struct{}),
+		initCh:   make(chan struct{}),
 		epoch:    epochtime.EpochInvalid,
 	}
 

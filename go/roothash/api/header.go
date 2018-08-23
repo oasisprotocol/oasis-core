@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding"
 	"encoding/binary"
 	"encoding/hex"
@@ -108,14 +109,7 @@ func (r *Round) Increment() Round {
 
 // MarshalBinary encodes a round into binary form.
 func (r *Round) MarshalBinary() (data []byte, err error) {
-	var offset int
-	for offset = 0; offset < RoundSize; offset++ {
-		if r[offset] != 0 {
-			break
-		}
-	}
-
-	data = append([]byte{}, r[offset:]...)
+	data = append([]byte{}, bytes.TrimLeft(r[:], "\x00")...)
 	return
 }
 
@@ -128,6 +122,9 @@ func (r *Round) UnmarshalBinary(data []byte) error {
 		return ErrMalformedRound
 	}
 
+	for i := range r {
+		r[i] = 0
+	}
 	copy(r[RoundSize-len(data):], data)
 
 	_, err := r.ToU64()

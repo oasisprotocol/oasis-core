@@ -30,7 +30,14 @@ macro_rules! wrap_uint_type {
             pub fn to_vec(&self) -> Vec<u8> {
                 let mut vec = Vec::new();
                 vec.resize($size, 0);
-                &self.0.to_little_endian(vec.deref_mut());
+                self.0.to_little_endian(vec.deref_mut());
+                vec
+            }
+
+            pub fn to_vec_big_endian(&self) -> Vec<u8> {
+                let mut vec = Vec::new();
+                vec.resize($size, 0);
+                self.0.to_big_endian(vec.deref_mut());
                 vec
             }
 
