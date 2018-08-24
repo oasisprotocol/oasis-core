@@ -46,4 +46,9 @@ fmt:
 lint:
 	gometalinter ./...
 
-.PHONY: all prepare dep generate build lint
+# Test.
+test:
+	@test -d $(DOCKER_EKIDEN_GOPATH) && cd $(DOCKER_EKIDEN_GOPATH)/go; \
+	go test -race -v ./...
+
+.PHONY: all prepare dep generate build lint test
