@@ -107,9 +107,6 @@ members = [
     "node/dummy",
     "node/dummy/api",
 
-    # Ethereum backend components.
-    "ethereum",
-
     # Key manager.
     "key-manager/api",
     "key-manager/common",

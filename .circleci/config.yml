@@ -17,15 +17,12 @@ jobs:
       - checkout
       - run:
           name: Checking if rust code has changed
-          command: ./scripts/ci-changed.sh \.circleci beacon clients common compute contract contracts core db di enclave epochtime ethereum instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
+          command: ./scripts/ci-changed.sh \.circleci beacon clients common compute contract contracts core db di enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
           name: Checking if all Ekiden crates have the same version
           command: test `find . -name "Cargo.toml" -print0 | xargs -0 grep '^version = "' | cut -d'"' -f2 | sort | uniq | wc -l` == 1
-
-      # Install the NPM truffle dependencies
-      - run: cd ethereum && npm install
 
       # Install ekiden-tools.
       - run: cargo install --force --path tools
@@ -52,7 +49,6 @@ jobs:
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
             --exclude ekiden-keymanager-trusted \
-            --exclude ekiden-ethereum \
             --exclude token
 
       # Integration tests.
@@ -71,7 +67,6 @@ jobs:
             - target/debug/test-long-term-client
             - target/enclave/token.so
             - target/enclave/token.mrenclave
-            - ethereum/build/contracts
             - tests
             - scripts
   cover-rust:
@@ -83,8 +78,6 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       - checkout
-      # Install the NPM truffle dependencies
-      - run: cd ethereum && npm install
       - run: cargo build
       # install & tarpaulin test.
       - run: |
@@ -98,7 +91,6 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-trusted \
             --exclude ekiden-db-untrusted \
-            --exclude ekiden-ethereum \
             --exclude ekiden-contract-untrusted \
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
@@ -228,15 +220,6 @@ jobs:
           command: kubectl port-forward service/parity 8545:8545
           background: true
 
-      - run: cd ethereum && npm install && cp -r /workspace/ethereum/build ./build
-      - run:
-          name: Drive Block Mining
-          command: cd ethereum && node test/web3.js http://localhost:8545/ 1000
-          background: true
-      - run: |
-          cd ethereum && truffle migrate --network=testnet --reset | grep "ENV_" | ../docker/deployment/set-env.sh
-          pkill node
-
       # Build deployment image.
       - run: BUILD_IMAGES_NO_ENTER=1 ./docker/deployment/build-images.sh
       # Push deployment image.
@@ -249,28 +232,7 @@ jobs:
           REPO_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' oasislabs/testnet:$BUILD_IMAGE_TAG)
           kubectl set image deployments/ekiden-token-node-dummy ekiden-node-dummy=$REPO_DIGEST
           kubectl set image deployments/ekiden-token ekiden-compute=$REPO_DIGEST
-  deployclient:
-    <<: *defaults
-    steps:
-      # Set up
-      - run: echo 'PS1='"'"'\$ '"'"'; . /root/.bashrc' >> $BASH_ENV
-      - checkout
-      - setup_remote_docker
 
-      - attach_workspace:
-          at: /workspace
-
-      - run:
-          name: Load current docker tag
-          command: echo 'BUILD_IMAGE_TAG=`cat /workspace/build_image_tag`' >> $BASH_ENV
-
-      # Build image.
-      - run: |
-          docker build --rm --force-rm -t oasislabs/transactionclient:$BUILD_IMAGE_TAG --build-arg TXCLIENT_COMMIT_SHA=${CIRCLE_SHA1} -f docker/transactionclient/Dockerfile .
-      # Push image.
-      - run: |
-          echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-          docker push oasislabs/transactionclient:$BUILD_IMAGE_TAG
   promote-to-production:
     <<: *defaults
     resource_class: large
@@ -301,18 +263,6 @@ jobs:
           name: Push the new production tag of ekiden to dockerhub
           command: docker push oasislabs/testnet:$PRODUCTION_TAG
 
-      - run:
-          name: Download the tag of transactionclient for this current workflow
-          command: docker pull oasislabs/transactionclient:$BUILD_IMAGE_TAG
-
-      - run:
-          name: Tag the transactionclient build on this workflow for production
-          command: docker tag oasislabs/transactionclient:$BUILD_IMAGE_TAG oasislabs/transactionclient:$PRODUCTION_TAG
-
-      - run:
-          name: Update the txclient tag to production by setting the tag to latest
-          command: docker push oasislabs/transactionclient:$PRODUCTION_TAG
-
 workflows:
   version: 2
   build:
@@ -336,14 +286,6 @@ workflows:
             - set-docker-tag
             - build-rust
             - build-go
-      - deployclient:
-          filters:
-            branches:
-              only: master
-          requires:
-            - set-docker-tag
-            - build-rust
-            - build-go
       - hold-for-production:
           type: approval
           filters:
@@ -351,7 +293,6 @@ workflows:
               only: master
           requires:
             - deploy
-            - deployclient
       - promote-to-production:
           requires:
             - hold-for-production

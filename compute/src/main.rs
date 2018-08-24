@@ -46,7 +46,6 @@ extern crate pretty_env_logger;
 
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
-extern crate ekiden_ethereum;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
 extern crate ekiden_roothash_client;
@@ -75,7 +74,6 @@ fn register_components(known_components: &mut KnownComponents) {
     // Environment.
     ekiden_core::environment::GrpcEnvironment::register(known_components);
     // Time.
-    ekiden_ethereum::EthereumMockTimeViaWebsocket::register(known_components);
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Storage.
     ekiden_storage_frontend::ImmediateClient::register(known_components);
@@ -92,9 +90,6 @@ fn register_components(known_components: &mut KnownComponents) {
     // Local identities.
     ekiden_core::identity::LocalEntityIdentity::register(known_components);
     ekiden_core::identity::LocalNodeIdentity::register(known_components);
-    // Ethereum services.
-    ekiden_ethereum::web3_di::Web3Factory::register(known_components);
-    ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(known_components);
     // Instrumentation.
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
 }
