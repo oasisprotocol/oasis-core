@@ -30,7 +30,7 @@ func New(cmd *cobra.Command, timeSource epochtime.Backend, tmService service.Ten
 	case memory.BackendName:
 		impl = memory.New(timeSource)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(tmService)
+		impl, err = tendermint.New(timeSource, tmService)
 	default:
 		return nil, fmt.Errorf("registry: unsupported backend: '%v'", backend)
 	}

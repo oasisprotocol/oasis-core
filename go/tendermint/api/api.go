@@ -95,7 +95,22 @@ func BroadcastTx(client tmcli.Client, tag byte, tx interface{}) error {
 }
 
 // Query transmits a query to the Ekiden ABCI application.
+//
+// The query is performed at the latest block height. If you need to specify a custom
+// height use QueryWithOptions.
 func Query(client tmcli.Client, path string, query interface{}) ([]byte, error) {
+	opts := tmcli.ABCIQueryOptions{
+		// Query at latest height by default.
+		Height: 0,
+		// Since we are querying the local in-memory node we trust it.
+		Trusted: true,
+	}
+
+	return QueryWithOptions(client, path, query, opts)
+}
+
+// QueryWithOptions transmits a query to the Ekiden ABCI application with custom options.
+func QueryWithOptions(client tmcli.Client, path string, query interface{}, opts tmcli.ABCIQueryOptions) ([]byte, error) {
 	var data []byte
 	if query != nil {
 		data = cbor.Marshal(query)

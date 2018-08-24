@@ -2,7 +2,9 @@
 package api
 
 import (
+	"bytes"
 	"errors"
+	"sort"
 
 	"golang.org/x/net/context"
 
@@ -219,4 +221,11 @@ func VerifyRegisterContractArgs(logger *logging.Logger, sigCon *contract.SignedC
 	// TODO: Who should sign the contract? Current compute node assumes an entity (deployer).
 
 	return &con, nil
+}
+
+// SortNodeList sorts the given node list to ensure a canonical order.
+func SortNodeList(nodes []*node.Node) {
+	sort.Slice(nodes, func(i, j int) bool {
+		return bytes.Compare(nodes[i].ID, nodes[j].ID) == -1
+	})
 }
