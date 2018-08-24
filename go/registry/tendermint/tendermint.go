@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	tmapps "github.com/oasislabs/ekiden/go/tendermint/apps"
@@ -35,7 +36,10 @@ type tendermintBackend struct {
 
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
+	nodeListNotifier *pubsub.Broker
 	contractNotifier *pubsub.Broker
+
+	lastEpoch epochtime.EpochTime
 }
 
 func (r *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
@@ -166,8 +170,11 @@ func (r *tendermintBackend) WatchNodes() (<-chan *api.NodeEvent, *pubsub.Subscri
 }
 
 func (r *tendermintBackend) WatchNodeList() (<-chan *api.NodeList, *pubsub.Subscription) {
-	// TODO: Need Tendermint-based epochs first.
-	return nil, nil
+	typedCh := make(chan *api.NodeList)
+	sub := r.nodeListNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
 }
 
 func (r *tendermintBackend) RegisterContract(ctx context.Context, sigCon *contract.SignedContract) error {
@@ -224,7 +231,7 @@ func (r *tendermintBackend) getContracts(ctx context.Context) ([]*contract.Contr
 	return contracts, nil
 }
 
-func (r *tendermintBackend) worker() {
+func (r *tendermintBackend) workerEvents() {
 	// Subscribe to transactions which modify state.
 	ctx := context.Background()
 	txChannel := make(chan interface{})
@@ -238,7 +245,7 @@ func (r *tendermintBackend) worker() {
 	for {
 		rawTx, ok := <-txChannel
 		if !ok {
-			r.logger.Error("worker: terminating")
+			r.logger.Debug("worker: terminating")
 			return
 		}
 
@@ -286,8 +293,76 @@ func (r *tendermintBackend) worker() {
 	}
 }
 
+func (r *tendermintBackend) workerPerEpochList(timeSource epochtime.BlockBackend) {
+	epochEvents, sub := timeSource.WatchEpochs()
+	defer sub.Close()
+	for {
+		newEpoch, ok := <-epochEvents
+		if !ok {
+			r.logger.Debug("worker: terminating")
+			return
+		}
+
+		height, err := timeSource.GetEpochBlock(context.Background(), newEpoch)
+		if err != nil {
+			r.logger.Error("worker: failed to get block height for epoch",
+				"epoch", newEpoch,
+			)
+			continue
+		}
+
+		r.logger.Debug("worker: epoch transition",
+			"prev_epoch", r.lastEpoch,
+			"epoch", newEpoch,
+			"block_height", height,
+		)
+
+		if newEpoch == r.lastEpoch {
+			continue
+		}
+
+		r.buildNodeList(newEpoch, height)
+		r.lastEpoch = newEpoch
+	}
+}
+
+func (r *tendermintBackend) buildNodeList(newEpoch epochtime.EpochTime, height int64) {
+	opts := tmcli.ABCIQueryOptions{
+		Height:  height,
+		Trusted: true,
+	}
+	response, err := tmapi.QueryWithOptions(r.client, tmapi.QueryRegistryGetNodes, nil, opts)
+	if err != nil {
+		panic(err)
+	}
+
+	var nodes []*node.Node
+	if err := cbor.Unmarshal(response, &nodes); err != nil {
+		panic(err)
+	}
+
+	api.SortNodeList(nodes)
+
+	r.logger.Debug("worker: built node list",
+		"newEpoch", newEpoch,
+		"height", height,
+		"nodes", nodes,
+	)
+
+	r.nodeListNotifier.Broadcast(&api.NodeList{
+		Epoch: newEpoch,
+		Nodes: nodes,
+	})
+}
+
 // New constructs a new tendermint backed registry Backend instance.
-func New(service service.TendermintService) (api.Backend, error) {
+func New(timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+	// We can only work with a block-based epochtime.
+	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
+	if !ok {
+		return nil, errors.New("registry/tendermint: need a block-based epochtime backend")
+	}
+
 	// Initialze and register the tendermint service component.
 	app := tmapps.NewRegistryApplication()
 	if err := service.RegisterApplication(app); err != nil {
@@ -295,10 +370,12 @@ func New(service service.TendermintService) (api.Backend, error) {
 	}
 
 	r := &tendermintBackend{
-		logger:         logging.GetLogger("registry/tendermint"),
-		client:         service.GetClient(),
-		entityNotifier: pubsub.NewBroker(false),
-		nodeNotifier:   pubsub.NewBroker(false),
+		logger:           logging.GetLogger("registry/tendermint"),
+		client:           service.GetClient(),
+		entityNotifier:   pubsub.NewBroker(false),
+		nodeNotifier:     pubsub.NewBroker(false),
+		nodeListNotifier: pubsub.NewBroker(true),
+		lastEpoch:        epochtime.EpochInvalid,
 	}
 	r.contractNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
@@ -315,7 +392,8 @@ func New(service service.TendermintService) (api.Backend, error) {
 		}
 	})
 
-	go r.worker()
+	go r.workerEvents()
+	go r.workerPerEpochList(blockTimeSource)
 
 	return r, nil
 }

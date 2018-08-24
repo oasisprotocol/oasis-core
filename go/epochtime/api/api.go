@@ -52,4 +52,8 @@ type BlockBackend interface {
 	// GetBlockEpoch returns the epoch at the specified block height,
 	// and the number of blocks since the begining of said epoch.
 	GetBlockEpoch(context.Context, int64) (epoch EpochTime, elapsed uint64, err error)
+
+	// GetEpochBlock returns the block height at the start of the said
+	// epoch.
+	GetEpochBlock(context.Context, EpochTime) (int64, error)
 }

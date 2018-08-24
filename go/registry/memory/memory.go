@@ -2,8 +2,6 @@
 package memory
 
 import (
-	"bytes"
-	"sort"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -260,9 +258,7 @@ func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
 		panic(err)
 	}
 
-	sort.Slice(nodes, func(i, j int) bool {
-		return bytes.Compare(nodes[i].ID, nodes[j].ID) == -1
-	})
+	api.SortNodeList(nodes)
 
 	r.logger.Debug("worker: built node list",
 		"epoch", newEpoch,

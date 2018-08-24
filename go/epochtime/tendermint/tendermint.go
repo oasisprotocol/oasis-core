@@ -54,6 +54,12 @@ func (t *tendermintBackend) GetBlockEpoch(ctx context.Context, height int64) (ap
 	return epoch, elapsed, nil
 }
 
+func (t *tendermintBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
+	height := int64(epoch) * t.interval
+
+	return height, nil
+}
+
 func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
 	typedCh := make(chan api.EpochTime)
 	sub := t.notifier.Subscribe()
