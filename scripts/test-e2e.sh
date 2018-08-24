@@ -261,12 +261,16 @@ run_test scenario_basic "e2e-basic-client-starts-first-rust" token 1 run_dummy_n
 run_test scenario_basic "e2e-basic-client-starts-first-go" token 1 run_dummy_node_go_default 0 0 1
 
 # Go node.
+#
+# Note: e2e-fail-worker-after-[registration,commit] both advance the epoch once
+# prior to the tests to ensure that the leader of the committee is not the node
+# that will crash (node #2), as the tests do not handle leader failure.
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_default
 run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_default 0 3
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_default
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_default
-run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_default
-run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_default
+run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_default 0 1
+run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_default 0 1
 run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_go_default
 run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_go_default
 
