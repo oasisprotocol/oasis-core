@@ -13,7 +13,7 @@ import (
 // into the set becomes too large (much greater than sqrt of the number of possible Location
 // values), then the sampling could take a long time.
 type RandomDistributionTransactionSource struct {
-	numTrans, numReads, numWrites uint
+	numTrans, numReads, numWrites int
 	rg                            randgen.Rng
 }
 
@@ -21,13 +21,16 @@ type RandomDistributionTransactionSource struct {
 // RandomDistributionTransactionSource that will generate nt transactions before quitting, with
 // each transaction containing nr TestLocation values in the read set, and nw TestLocation
 // values in the write set.
-func NewRandomDistributionTransactionSource(nt, nr, nw uint, rg randgen.Rng) *RandomDistributionTransactionSource {
+func NewRandomDistributionTransactionSource(nt, nr, nw int, rg randgen.Rng) *RandomDistributionTransactionSource {
+	if nt < 0 || nr < 0 || nw < 0 {
+		panic("Invariance violation: number of transactions, read/write locations per transaction must be non-negative")
+	}
 	return &RandomDistributionTransactionSource{numTrans: nt, numReads: nr, numWrites: nw, rg: rg}
 }
 
 // Get generates a new transaction with the given sequence number, and read-set / write-set
 // contents as dictated by the random number generator.
-func (rdt *RandomDistributionTransactionSource) Get(seqno uint) (*alg.Transaction, error) {
+func (rdt *RandomDistributionTransactionSource) Get(seqno int) (*alg.Transaction, error) {
 	if rdt.numTrans == 0 {
 		return nil, errors.New("All requested transactions generated")
 	}
@@ -40,10 +43,9 @@ func (rdt *RandomDistributionTransactionSource) Get(seqno uint) (*alg.Transactio
 	return t, nil
 }
 
-func (rdt *RandomDistributionTransactionSource) sample(set *alg.LocationSet, count uint) {
-	var n uint
+func (rdt *RandomDistributionTransactionSource) sample(set *alg.LocationSet, count int) {
 	var loc alg.TestLocation
-	for n = 0; n < count; n++ {
+	for n := 0; n < count; n++ {
 		for {
 			loc = alg.TestLocation(rdt.rg.Generate())
 			if !set.Contains(loc) {

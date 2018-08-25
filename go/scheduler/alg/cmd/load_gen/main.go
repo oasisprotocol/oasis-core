@@ -26,10 +26,10 @@ var verbosity int
 var seed int64
 var distribution string
 var alpha float64
-var numLocations uint
-var numReadLocs uint
-var numWriteLocs uint
-var numTransactions uint
+var numLocations int
+var numReadLocs int
+var numWriteLocs int
+var numTransactions int
 
 func init() {
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
@@ -42,25 +42,23 @@ func init() {
 	// locations are in (pseudo) equivalence classes, i.e., if a
 	// contract reads one of the locations, then it is almost
 	// certainly going to read the rest, and similarly for writes.
-	flag.UintVar(&numLocations, "numLocations", 1<<20, "number of possible locations")
-	flag.UintVar(&numReadLocs, "numReads", 0, "number of read locations")
-	flag.UintVar(&numWriteLocs, "numWrites", 2, "number of write locations")
-	flag.UintVar(&numTransactions, "numTransactions", 1<<20, "number of transactions to generate")
+	flag.IntVar(&numLocations, "numLocations", 1<<20, "number of possible locations")
+	flag.IntVar(&numReadLocs, "numReads", 0, "number of read locations")
+	flag.IntVar(&numWriteLocs, "numWrites", 2, "number of write locations")
+	flag.IntVar(&numTransactions, "numTransactions", 1<<20, "number of transactions to generate")
 }
 
 func generateTransactions( // nolint: gosec
-	numTrans, numReads, numWrites uint,
+	numTrans, numReads, numWrites int,
 	gen randgen.Rng,
 	out *bufio.Writer) {
 
-	var tid uint
-	for tid = 0; tid < numTrans; tid++ {
+	for tid := 0; tid < numTrans; tid++ {
 		t := alg.NewTransaction()
-		var n uint
-		for n = 0; n < numReads; n++ {
+		for n := 0; n < numReads; n++ {
 			t.ReadSet.Add(alg.TestLocation(gen.Generate()))
 		}
-		for n = 0; n < numWrites; n++ {
+		for n := 0; n < numWrites; n++ {
 			t.WriteSet.Add(alg.TestLocation(gen.Generate()))
 		}
 		t.TimeCost = 1
@@ -81,7 +79,6 @@ func main() {
 	if numLocations <= 0 {
 		panic("Number of memory locations too small")
 	}
-	numLocations := int(numLocations)
 	var rg randgen.Rng
 	var err error
 	if distribution == "zipf" {

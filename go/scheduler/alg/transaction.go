@@ -23,7 +23,7 @@ import (
 // ExecutionTime models the (estimated) cost of a transaction; depending on whether we want to
 // use gas cost, wall clock time (in what units?), CPU cyles, etc, this may have to be changed
 // to be a wider integral type.
-type ExecutionTime uint32
+type ExecutionTime int32
 
 // Transaction is the abstraction for atomic units that get scheduled.  It contains the
 // information needed to determine whether a transaction will have read/write or write/write
@@ -44,7 +44,7 @@ type Transaction struct {
 	// Id TransactionIdType ?
 	ReadSet, WriteSet *LocationSet
 	TimeCost          ExecutionTime
-	CreationSeqno     uint // to keep track of delay
+	CreationSeqno     int // to keep track of delay
 }
 
 // NewTransaction is a factory that constructs and returns a Transaction object.

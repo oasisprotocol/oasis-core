@@ -30,9 +30,9 @@ func NewLogicalShardingFilter(seed int64, shardN, shardF int, ts TransactionSour
 // address is randomly mapped to one of shardFactor addresses, and this mapping is consistent:
 // if the address occurs in both the read and write sets, then they will both be mapped to the
 // same random location.
-func (lsf *LogicalShardingFilter) Get(seqno uint) (*alg.Transaction, error) {
+func (lsf *LogicalShardingFilter) Get(tid int) (*alg.Transaction, error) {
 	lsf.topMap = make([]int64, lsf.shardTopN) // zeros means no value
-	t, e := lsf.ts.Get(seqno)
+	t, e := lsf.ts.Get(tid)
 	if e == nil {
 		// iterate over t's read-set and write-set, replace all elements 0 <= e <
 		// lsf.shardTopN with a random negative value (memoized)

@@ -34,7 +34,7 @@ func NewFileTransactionSource(fn string) (*FileTransactionSource, error) { // no
 
 // Get reads the next transaction from the data file.  It will stop at *any* errors, e.g.,
 // badly formatted transactions, and not just EOF.
-func (ft *FileTransactionSource) Get(_ uint) (*alg.Transaction, error) {
+func (ft *FileTransactionSource) Get(_ int) (*alg.Transaction, error) {
 	return alg.ReadNewTransaction(alg.TestLocation(0), ft.in)
 }
 

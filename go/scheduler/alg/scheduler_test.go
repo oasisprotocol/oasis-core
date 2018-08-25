@@ -73,7 +73,7 @@ func (tss *TransactionSliceSource) GetTransactions() []*Transaction {
 			}
 			ts[ix].WriteSet.Add(loc)
 		}
-		ts[ix].CreationSeqno = uint(tss.nextTid)
+		ts[ix].CreationSeqno = tss.nextTid
 		tss.nextTid++
 	}
 	return ts
