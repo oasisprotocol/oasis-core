@@ -1,11 +1,11 @@
 package tendermint
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmnode "github.com/tendermint/tendermint/node"
@@ -24,11 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-var (
-	errAlreadyStarted = errors.New("tendermint: service already started")
-
-	_ service.TendermintService = (*tendermintService)(nil)
-)
+var _ service.TendermintService = (*tendermintService)(nil)
 
 type tendermintService struct {
 	cmservice.BaseBackgroundService
@@ -51,7 +47,7 @@ func (t *tendermintService) Start() error {
 		return err
 	}
 	if err := t.node.Start(); err != nil {
-		return err
+		return errors.Wrap(err, "tendermint: failed to start service")
 	}
 	t.internalClient = t.GetClient()
 
@@ -98,7 +94,7 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 		}
 	}
 	if t.isStarted {
-		return errAlreadyStarted
+		return errors.New("tendermint: service already started")
 	}
 
 	return t.mux.Register(app)
@@ -112,6 +108,15 @@ func (t *tendermintService) ForceInitialize() error {
 	}
 
 	return err
+}
+
+func (t *tendermintService) GetBlock(height int64) (*tmtypes.Block, error) {
+	result, err := t.internalClient.Block(&height)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: block query failed")
+	}
+
+	return result.Block, nil
 }
 
 func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
@@ -181,7 +186,7 @@ func (t *tendermintService) lazyInit() error {
 		},
 	)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "tendermint: failed to create node")
 	}
 
 	t.isInitialized = true

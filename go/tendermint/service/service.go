@@ -26,6 +26,9 @@ type TendermintService interface {
 	// and will succeed.
 	ForceInitialize() error
 
+	// GetBlock returns the Tendermint block at the specified height.
+	GetBlock(height int64) (*tmtypes.Block, error)
+
 	// WatchBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
