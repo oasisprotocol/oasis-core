@@ -7,15 +7,17 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
-	tendermintConfig "github.com/tendermint/tendermint/config"
-	tendermintNode "github.com/tendermint/tendermint/node"
-	tendermintPriv "github.com/tendermint/tendermint/privval"
-	tendermintProxy "github.com/tendermint/tendermint/proxy"
+	tmconfig "github.com/tendermint/tendermint/config"
+	tmnode "github.com/tendermint/tendermint/node"
+	tmpriv "github.com/tendermint/tendermint/privval"
+	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
-	tendermintTypes "github.com/tendermint/tendermint/types"
+	tmtypes "github.com/tendermint/tendermint/types"
+	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
@@ -31,8 +33,10 @@ var (
 type tendermintService struct {
 	cmservice.BaseBackgroundService
 
-	mux  *abci.ApplicationServer
-	node *tendermintNode.Node
+	mux            *abci.ApplicationServer
+	node           *tmnode.Node
+	internalClient tmcli.Client
+	blockNotifier  *pubsub.Broker
 
 	dataDir                  string
 	isInitialized, isStarted bool
@@ -49,6 +53,9 @@ func (t *tendermintService) Start() error {
 	if err := t.node.Start(); err != nil {
 		return err
 	}
+	t.internalClient = t.GetClient()
+
+	go t.worker()
 
 	t.isStarted = true
 
@@ -107,6 +114,14 @@ func (t *tendermintService) ForceInitialize() error {
 	return err
 }
 
+func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
+	typedCh := make(chan *tmtypes.Block)
+	sub := t.blockNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
+}
+
 func (t *tendermintService) lazyInit() error {
 	if t.isInitialized {
 		return nil
@@ -129,37 +144,37 @@ func (t *tendermintService) lazyInit() error {
 	}
 
 	// Create Tendermint node.
-	tenderConfig := tendermintConfig.DefaultConfig()
+	tenderConfig := tmconfig.DefaultConfig()
 	viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
 
-	tendermintPV := tendermintPriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
-	var tenderminGenesisProvider tendermintNode.GenesisDocProvider
+	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
+	var tenderminGenesisProvider tmnode.GenesisDocProvider
 	genFile := tenderConfig.GenesisFile()
 	if _, err = os.Lstat(genFile); err != nil && os.IsNotExist(err) {
 		t.Logger.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
-		genDoc := tendermintTypes.GenesisDoc{
+		genDoc := tmtypes.GenesisDoc{
 			ChainID:         "0xa515",
 			GenesisTime:     time.Now(),
-			ConsensusParams: tendermintTypes.DefaultConsensusParams(),
+			ConsensusParams: tmtypes.DefaultConsensusParams(),
 		}
-		genDoc.Validators = []tendermintTypes.GenesisValidator{{
+		genDoc.Validators = []tmtypes.GenesisValidator{{
 			PubKey: tendermintPV.GetPubKey(),
 			Power:  10,
 		}}
-		tenderminGenesisProvider = func() (*tendermintTypes.GenesisDoc, error) {
+		tenderminGenesisProvider = func() (*tmtypes.GenesisDoc, error) {
 			return &genDoc, nil
 		}
 	} else {
-		tenderminGenesisProvider = tendermintNode.DefaultGenesisDocProviderFunc(tenderConfig)
+		tenderminGenesisProvider = tmnode.DefaultGenesisDocProviderFunc(tenderConfig)
 	}
 
-	t.node, err = tendermintNode.NewNode(tenderConfig,
+	t.node, err = tmnode.NewNode(tenderConfig,
 		tendermintPV,
-		tendermintProxy.NewLocalClientCreator(t.mux.Mux()),
+		tmproxy.NewLocalClientCreator(t.mux.Mux()),
 		tenderminGenesisProvider,
 		bolt.BoltDBProvider,
-		tendermintNode.DefaultMetricsProvider,
+		tmnode.DefaultMetricsProvider,
 		&abci.LogAdapter{
 			Logger:           logging.GetLogger("tendermint"),
 			IsTendermintCore: true,
@@ -174,10 +189,37 @@ func (t *tendermintService) lazyInit() error {
 	return nil
 }
 
+func (t *tendermintService) worker() {
+	// Subscribe to other events here as needed, no need to spawn additional
+	// workers.
+	evCh := make(chan interface{})
+	if err := t.internalClient.Subscribe(context.Background(), "tendermint/worker", tmtypes.EventQueryNewBlock, evCh); err != nil {
+		t.Logger.Error("worker: failed to subscribe to new block events",
+			"err", err,
+		)
+		return
+	}
+
+	for {
+		select {
+		case <-t.node.Quit():
+			return
+		case v, ok := <-evCh:
+			if !ok {
+				return
+			}
+
+			ev := v.(tmtypes.EventDataNewBlock)
+			t.blockNotifier.Broadcast(ev.Block)
+		}
+	}
+}
+
 // New creates a new Tendermint service.
 func New(dataDir string) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
+		blockNotifier:         pubsub.NewBroker(false),
 		dataDir:               dataDir,
 	}
 }

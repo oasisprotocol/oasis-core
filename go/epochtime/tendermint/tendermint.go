@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
-	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmtypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/net/context"
 
@@ -29,7 +28,7 @@ type tendermintBackend struct {
 
 	logger *logging.Logger
 
-	client   tmcli.Client
+	service  service.TendermintService
 	notifier *pubsub.Broker
 
 	interval int64
@@ -69,22 +68,16 @@ func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscri
 }
 
 func (t *tendermintBackend) worker() {
-	blockCh := make(chan interface{})
-	if err := t.client.Subscribe(context.Background(), "epochtime/tendermint", tmtypes.EventQueryNewBlock, blockCh); err != nil {
-		t.logger.Error("worker: failed to subscribe to new block events",
-			"err", err,
-		)
-		return
-	}
+	ch, sub := t.service.WatchBlocks()
+	defer sub.Close()
 
 	for {
-		v, ok := <-blockCh
+		block, ok := <-ch
 		if !ok {
 			return
 		}
 
-		ev := v.(tmtypes.EventDataNewBlock)
-		t.updateCached(ev.Block)
+		t.updateCached(block)
 	}
 }
 
@@ -116,7 +109,7 @@ func New(service service.TendermintService, interval int64) (api.Backend, error)
 
 	r := &tendermintBackend{
 		logger:   logging.GetLogger("epochtime/tendermint"),
-		client:   service.GetClient(),
+		service:  service,
 		interval: interval,
 	}
 	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
