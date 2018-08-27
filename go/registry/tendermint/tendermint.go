@@ -21,7 +21,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	tmapps "github.com/oasislabs/ekiden/go/tendermint/apps"
+	tmregistry "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -418,7 +418,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	}
 
 	// Initialze and register the tendermint service component.
-	app := tmapps.NewRegistryApplication()
+	app := tmregistry.New()
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

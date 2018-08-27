@@ -1,5 +1,5 @@
-// Package apps implements the Oasis Tendermint applications.
-package apps
+// Package registry implements the registry application.
+package registry
 
 import (
 	"encoding/hex"
@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	_ abci.Application = (*RegistryApplication)(nil)
+	_ abci.Application = (*registryApplication)(nil)
 )
 
 const (
@@ -43,67 +43,35 @@ const (
 	lastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 )
 
-// RegistryApplication is a Tendermint-based registry Application.
-type RegistryApplication struct {
+type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 }
 
-// Name returns the name of the Application.
-//
-// Note: The name is also used as a prefix for de-multiplexing SetOption
-// and Query calls.
-func (app *RegistryApplication) Name() string {
+func (app *registryApplication) Name() string {
 	return api.RegistryAppName
 }
 
-// TransactionTag returns the transaction tag used to disambiguate
-// CheckTx and DeliverTx calls.
-func (app *RegistryApplication) TransactionTag() byte {
+func (app *registryApplication) TransactionTag() byte {
 	return api.RegistryTransactionTag
 }
 
-// Blessed returns true iff the Application should be considered
-// "blessed", and able to alter the validation set and handle the
-// access control related standard ABCI queries.
-//
-// Only one Application instance may be Blessed per multiplexer
-// instance.
-func (app *RegistryApplication) Blessed() bool {
+func (app *registryApplication) Blessed() bool {
 	return false
 }
 
-// OnRegister is the function that is called when the Application
-// is registered with the multiplexer instance.
-func (app *RegistryApplication) OnRegister(state *abci.ApplicationState) {
+func (app *registryApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
 }
 
-// OnCleanup is the function that is called when the ApplicationServer
-// has been halted.
-func (app *RegistryApplication) OnCleanup() {
+func (app *registryApplication) OnCleanup() {
 }
 
-// SetOption sets set an application option.
-//
-// It is expected that the key is prefixed by the application name
-// followed by a '/' (eg: `foo/<some key here>`).
-func (app *RegistryApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
+func (app *registryApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
 	return types.ResponseSetOption{}
 }
 
-// Query queries for state.
-//
-// It is expected that the path is prefixed by the application name
-// followed by a '/' (eg: `foo/<some path here>`), or only contains
-// the application name if the application does not use paths.
-//
-// Implementations MUST restrict their state operations to versioned
-// Get operations with versions <= BlockHeight.
-//
-// FIXME: https://github.com/tendermint/iavl/issues/68 hints at
-// the possiblity of unbound memory growth (DoS hazzard).
-func (app *RegistryApplication) Query(query types.RequestQuery) types.ResponseQuery { // nolint: gocyclo
+func (app *registryApplication) Query(query types.RequestQuery) types.ResponseQuery { // nolint: gocyclo
 	// Get state snapshot based on specified version.
 	version := query.GetHeight()
 	if version <= 0 || version > app.state.BlockHeight() {
@@ -156,10 +124,7 @@ func (app *RegistryApplication) Query(query types.RequestQuery) types.ResponseQu
 	}
 }
 
-// CheckTx validates a transaction via the mempool.
-//
-// Implementations MUST only alter the ApplicationState CheckTxTree.
-func (app *RegistryApplication) CheckTx(tx []byte) error {
+func (app *registryApplication) CheckTx(tx []byte) error {
 	request := &api.TxRegistry{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("CheckTx: failed to unmarshal",
@@ -175,18 +140,14 @@ func (app *RegistryApplication) CheckTx(tx []byte) error {
 	return nil
 }
 
-// InitChain initializes the blockchain with validators and other
-// info from TendermintCore.
-func (app *RegistryApplication) InitChain(request types.RequestInitChain) types.ResponseInitChain {
+func (app *registryApplication) InitChain(request types.RequestInitChain) types.ResponseInitChain {
 	return types.ResponseInitChain{}
 }
 
-// BeginBlock signals the beginning of a block.
-func (app *RegistryApplication) BeginBlock(request types.RequestBeginBlock) {
+func (app *registryApplication) BeginBlock(request types.RequestBeginBlock) {
 }
 
-// DeliverTx delivers a transaction for full processing.
-func (app *RegistryApplication) DeliverTx(tx []byte) (*abci.TxOutput, error) {
+func (app *registryApplication) DeliverTx(tx []byte) (*abci.TxOutput, error) {
 	request := &api.TxRegistry{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("DeliverTx: failed to unmarshal",
@@ -198,14 +159,12 @@ func (app *RegistryApplication) DeliverTx(tx []byte) (*abci.TxOutput, error) {
 	return app.executeTx(app.state.DeliverTxTree(), request, false)
 }
 
-// EndBlock signals the end of a block, returning changes to the
-// validator set.
-func (app *RegistryApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
+func (app *registryApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
 	return types.ResponseEndBlock{}
 }
 
 // Perform GetById query.
-func (app *RegistryApplication) queryGetByID(stateKey string, data []byte, snapshot *iavl.ImmutableTree) ([]byte, error) {
+func (app *registryApplication) queryGetByID(stateKey string, data []byte, snapshot *iavl.ImmutableTree) ([]byte, error) {
 	request := &api.QueryGetByIDRequest{}
 	if err := cbor.Unmarshal(data, request); err != nil {
 		return nil, registry.ErrInvalidArgument
@@ -219,7 +178,7 @@ func (app *RegistryApplication) queryGetByID(stateKey string, data []byte, snaps
 }
 
 // Perform GetAll query.
-func (app *RegistryApplication) queryGetAll(
+func (app *registryApplication) queryGetAll(
 	stateKey string,
 	snapshot *iavl.ImmutableTree,
 	item common.Cloneable,
@@ -244,7 +203,7 @@ func (app *RegistryApplication) queryGetAll(
 }
 
 // Execute transaction against given state.
-func (app *RegistryApplication) executeTx(
+func (app *registryApplication) executeTx(
 	state *iavl.MutableTree,
 	tx *api.TxRegistry,
 	checkOnly bool,
@@ -263,7 +222,7 @@ func (app *RegistryApplication) executeTx(
 }
 
 // Perform actual entity registration.
-func (app *RegistryApplication) registerEntity(
+func (app *registryApplication) registerEntity(
 	state *iavl.MutableTree,
 	checkOnly bool,
 	sigEnt *entity.SignedEntity,
@@ -299,7 +258,7 @@ func (app *RegistryApplication) registerEntity(
 }
 
 // Perform actual entity deregistration.
-func (app *RegistryApplication) deregisterEntity(
+func (app *registryApplication) deregisterEntity(
 	state *iavl.MutableTree,
 	checkOnly bool,
 	sigID *signature.SignedPublicKey,
@@ -356,7 +315,7 @@ func (app *RegistryApplication) deregisterEntity(
 }
 
 // Perform actual node registration.
-func (app *RegistryApplication) registerNode(
+func (app *registryApplication) registerNode(
 	state *iavl.MutableTree,
 	checkOnly bool,
 	sigNode *node.SignedNode,
@@ -407,7 +366,7 @@ func (app *RegistryApplication) registerNode(
 }
 
 // Perform actual contract registration.
-func (app *RegistryApplication) registerContract(
+func (app *registryApplication) registerContract(
 	state *iavl.MutableTree,
 	checkOnly bool,
 	sigCon *contract.SignedContract,
@@ -442,9 +401,9 @@ func (app *RegistryApplication) registerContract(
 	}, nil
 }
 
-// NewRegistryApplication constructs a new RegistryApplication instance.
-func NewRegistryApplication() abci.Application {
-	return &RegistryApplication{
+// New constructs a new registry application instance.
+func New() abci.Application {
+	return &registryApplication{
 		logger: logging.GetLogger("tendermint/registry"),
 	}
 }
