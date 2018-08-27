@@ -142,7 +142,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
-	randomBeacon, err := beacon.New(cmd, timeSource)
+	randomBeacon, err := beacon.New(cmd, timeSource, env.svcTmnt)
 	if err != nil {
 		return err
 	}

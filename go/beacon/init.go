@@ -10,7 +10,9 @@ import (
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/beacon/insecure"
+	"github.com/oasislabs/ekiden/go/beacon/tendermint"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 const cfgBackend = "beacon.backend"
@@ -18,11 +20,13 @@ const cfgBackend = "beacon.backend"
 var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
-func New(cmd *cobra.Command, timeSource epochtime.Backend) (api.Backend, error) {
+func New(cmd *cobra.Command, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case insecure.BackendName:
 		return insecure.New(timeSource), nil
+	case tendermint.BackendName:
+		return tendermint.New(timeSource, tmService)
 	default:
 		return nil, fmt.Errorf("beacon: unsupported backend: '%v'", backend)
 	}
