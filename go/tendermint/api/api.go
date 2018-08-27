@@ -56,10 +56,10 @@ func (c Code) String() string {
 // processed the given transaction. Value is the given application name.
 var TagApplication = []byte("ekiden.app")
 
-// GetTxTag looks up a specific tag in a list of tags and returns its value if any.
+// GetTag looks up a specific tag in a list of tags and returns its value if any.
 //
 // When no tag exists it returns nil.
-func GetTxTag(tags []tmcommon.KVPair, tag []byte) []byte {
+func GetTag(tags []tmcommon.KVPair, tag []byte) []byte {
 	for _, pair := range tags {
 		if bytes.Equal(pair.GetKey(), tag) {
 			return pair.GetValue()

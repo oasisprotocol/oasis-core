@@ -13,7 +13,6 @@ import (
 
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	tmcmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 
@@ -34,15 +33,6 @@ const (
 
 	stateKeyGenesisDigest = "OasisGenesisDigest"
 )
-
-// TxOutput is the result of processing a transaction.
-type TxOutput struct {
-	// Output data to be serialized.
-	Data interface{}
-
-	// Tags used for easy searching/filtering transactions.
-	Tags []tmcmn.KVPair
-}
 
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
@@ -86,21 +76,45 @@ type Application interface {
 	// CheckTx validates a transaction via the mempool.
 	//
 	// Implementations MUST only alter the ApplicationState CheckTxTree.
-	CheckTx([]byte) error
+	CheckTx(*Context, []byte) error
+
+	// ForeignCheckTx validates a transaction of another application via
+	// the mempool.
+	//
+	// This can be used to run post-tx hooks when dependencies exist
+	// between applications.
+	//
+	// Implementations MUST only alter the ApplicationState CheckTxTree.
+	ForeignCheckTx(*Context, Application, []byte) error
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
 	InitChain(types.RequestInitChain) types.ResponseInitChain
 
 	// BeginBlock signals the beginning of a block.
-	BeginBlock(types.RequestBeginBlock)
+	//
+	// Returned tags will be added to the current block.
+	BeginBlock(*Context, types.RequestBeginBlock)
 
 	// DeliverTx delivers a transaction for full processing.
-	DeliverTx([]byte) (*TxOutput, error)
+	DeliverTx(*Context, []byte) error
+
+	// ForeignDeliverTx delivers a transaction of another application for
+	// full processing.
+	//
+	// This can be used to run post-tx hooks when dependencies exist
+	// between applications.
+	//
+	// This method may mutate state.
+	ForeignDeliverTx(*Context, Application, []byte) error
 
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
 	EndBlock(types.RequestEndBlock) types.ResponseEndBlock
+
+	// FireTimer is called within BeginBlock before any other processing
+	// takes place for each timer that should fire.
+	FireTimer(*Context, *Timer)
 
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.
@@ -183,6 +197,7 @@ type abciMux struct {
 	appBlessed     Application
 
 	lastBeginBlock int64
+	currentTime    int64
 }
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
@@ -268,10 +283,26 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 		"tx", hex.EncodeToString(tx),
 	)
 
-	if err := app.CheckTx(tx[1:]); err != nil {
+	ctx := NewContext(ContextCheckTx, mux.currentTime)
+	if err := app.CheckTx(ctx, tx[1:]); err != nil {
 		return types.ResponseCheckTx{
 			Code: api.CodeTransactionFailed.ToInt(),
 			Info: err.Error(),
+		}
+	}
+
+	// Run ForeignCheckTx on all other applications so they can
+	// run their post-tx hooks.
+	for _, foreignApp := range mux.appsByRegOrder {
+		if foreignApp == app {
+			continue
+		}
+
+		if err := foreignApp.ForeignCheckTx(ctx, app, tx[1:]); err != nil {
+			return types.ResponseCheckTx{
+				Code: api.CodeTransactionFailed.ToInt(),
+				Info: err.Error(),
+			}
 		}
 	}
 
@@ -320,12 +351,28 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		panic("mux: redundant BeginBlock")
 	}
 	mux.lastBeginBlock = blockHeight
+	mux.currentTime = req.Header.Time
 
+	ctx := NewContext(ContextBeginBlock, mux.currentTime)
+
+	// Fire all application timers first.
 	for _, app := range mux.appsByRegOrder {
-		app.BeginBlock(req)
+		fireTimers(ctx, mux.state, app)
 	}
 
-	return mux.BaseApplication.BeginBlock(req)
+	// Dispatch BeginBlock to all applications.
+	for _, app := range mux.appsByRegOrder {
+		app.BeginBlock(ctx, req)
+	}
+
+	response := mux.BaseApplication.BeginBlock(req)
+
+	ctx.fireOnCommitHooks(mux.state)
+
+	if tags := ctx.Tags(); tags != nil {
+		response.Tags = append(response.Tags, tags...)
+	}
+	return response
 }
 
 func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
@@ -344,7 +391,11 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 		"tx", hex.EncodeToString(tx),
 	)
 
-	output, err := app.DeliverTx(tx[1:])
+	// Append application name tag.
+	ctx := NewContext(ContextDeliverTx, mux.currentTime)
+	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+
+	err = app.DeliverTx(ctx, tx[1:])
 	if err != nil {
 		return types.ResponseDeliverTx{
 			Code: api.CodeTransactionFailed.ToInt(),
@@ -352,13 +403,27 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 		}
 	}
 
-	// Append application name tag.
-	output.Tags = append(output.Tags, tmcmn.KVPair{api.TagApplication, []byte(app.Name())})
+	// Run ForeignDeliverTx on all other applications so they can
+	// run their post-tx hooks.
+	for _, foreignApp := range mux.appsByRegOrder {
+		if foreignApp == app {
+			continue
+		}
+
+		if err := foreignApp.ForeignDeliverTx(ctx, app, tx[1:]); err != nil {
+			return types.ResponseDeliverTx{
+				Code: api.CodeTransactionFailed.ToInt(),
+				Info: err.Error(),
+			}
+		}
+	}
+
+	ctx.fireOnCommitHooks(mux.state)
 
 	return types.ResponseDeliverTx{
 		Code: api.CodeOK.ToInt(),
-		Data: cbor.Marshal(output.Data),
-		Tags: output.Tags,
+		Data: cbor.Marshal(ctx.Data()),
+		Tags: ctx.Tags(),
 	}
 }
 

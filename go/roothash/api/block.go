@@ -1,10 +1,16 @@
 package api
 
 import (
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 
 	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
+)
+
+var (
+	_ cbor.Marshaler   = (*Block)(nil)
+	_ cbor.Unmarshaler = (*Block)(nil)
 )
 
 // Block is an Oasis block.
@@ -71,6 +77,16 @@ func (b *Block) ToProto() *pbRoothash.Block {
 	}
 
 	return resp
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (b *Block) MarshalCBOR() []byte {
+	return cbor.Marshal(b)
+}
+
+// UnmarshalCBOR decodes a CBOR marshaled block.
+func (b *Block) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, b)
 }
 
 // IsInternallyConsistent returns true iff the block is internally consistent.

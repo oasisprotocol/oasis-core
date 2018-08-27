@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	tmcmn "github.com/tendermint/tendermint/libs/common"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/contract"
@@ -97,7 +96,7 @@ func (app *registryApplication) queryGetContracts(s interface{}, r interface{}) 
 	return state.GetContractsRaw()
 }
 
-func (app *registryApplication) CheckTx(tx []byte) error {
+func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
 	request := &api.TxRegistry{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("CheckTx: failed to unmarshal",
@@ -106,10 +105,14 @@ func (app *registryApplication) CheckTx(tx []byte) error {
 		return errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	if _, err := app.executeTx(app.state.CheckTxTree(), request, true); err != nil {
+	if err := app.executeTx(ctx, app.state.CheckTxTree(), request); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -117,118 +120,121 @@ func (app *registryApplication) InitChain(request types.RequestInitChain) types.
 	return types.ResponseInitChain{}
 }
 
-func (app *registryApplication) BeginBlock(request types.RequestBeginBlock) {
+func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
 }
 
-func (app *registryApplication) DeliverTx(tx []byte) (*abci.TxOutput, error) {
+func (app *registryApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 	request := &api.TxRegistry{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("DeliverTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
 		)
-		return nil, errors.Wrap(err, "registry: failed to unmarshal")
+		return errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	return app.executeTx(app.state.DeliverTxTree(), request, false)
+	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+}
+
+func (app *registryApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+	return nil
 }
 
 func (app *registryApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
 	return types.ResponseEndBlock{}
 }
 
+func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
+}
+
 // Execute transaction against given state.
 func (app *registryApplication) executeTx(
+	ctx *abci.Context,
 	tree *iavl.MutableTree,
 	tx *api.TxRegistry,
-	checkOnly bool,
-) (*abci.TxOutput, error) {
+) error {
 	state := NewMutableState(tree)
 
 	if tx.TxRegisterEntity != nil {
-		return app.registerEntity(state, checkOnly, &tx.TxRegisterEntity.Entity)
+		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
 	} else if tx.TxDeregisterEntity != nil {
-		return app.deregisterEntity(state, checkOnly, &tx.TxDeregisterEntity.ID)
+		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.ID)
 	} else if tx.TxRegisterNode != nil {
-		return app.registerNode(state, checkOnly, &tx.TxRegisterNode.Node)
+		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
 	} else if tx.TxRegisterContract != nil {
-		return app.registerContract(state, checkOnly, &tx.TxRegisterContract.Contract)
+		return app.registerContract(ctx, state, &tx.TxRegisterContract.Contract)
 	} else {
-		return nil, registry.ErrInvalidArgument
+		return registry.ErrInvalidArgument
 	}
 }
 
 // Perform actual entity registration.
 func (app *registryApplication) registerEntity(
+	ctx *abci.Context,
 	state *MutableState,
-	checkOnly bool,
 	sigEnt *entity.SignedEntity,
-) (*abci.TxOutput, error) {
+) error {
 	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	state.CreateEntity(ent)
 
-	if !checkOnly {
+	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterEntity: registered",
 			"entity", ent,
 		)
-	}
 
-	return &abci.TxOutput{
-		Data: &api.OutputRegistry{
+		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterEntity: &api.OutputRegisterEntity{
 				Entity: *ent,
 			},
-		},
-		Tags: []tmcmn.KVPair{
-			{api.TagRegistryEntityRegistered, ent.ID},
-		},
-	}, nil
+		})
+		ctx.EmitTag(api.TagRegistryEntityRegistered, ent.ID)
+	}
+
+	return nil
 }
 
 // Perform actual entity deregistration.
 func (app *registryApplication) deregisterEntity(
+	ctx *abci.Context,
 	state *MutableState,
-	checkOnly bool,
 	sigID *signature.SignedPublicKey,
-) (*abci.TxOutput, error) {
+) error {
 	id, err := registry.VerifyDeregisterEntityArgs(app.logger, sigID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	removedEntity, removedNodes := state.RemoveEntity(id)
 
-	if !checkOnly {
+	if !ctx.IsCheckOnly() {
 		app.logger.Debug("DeregisterEntity: complete",
 			"entity_id", id,
 		)
-	}
 
-	return &abci.TxOutput{
-		Data: &api.OutputRegistry{
+		ctx.EmitData(&api.OutputRegistry{
 			OutputDeregisterEntity: &api.OutputDeregisterEntity{
 				Entity: removedEntity,
 				Nodes:  removedNodes,
 			},
-		},
-		Tags: []tmcmn.KVPair{
-			{api.TagRegistryEntityDeregistered, id},
-		},
-	}, nil
+		})
+		ctx.EmitTag(api.TagRegistryEntityDeregistered, id)
+	}
+
+	return nil
 }
 
 // Perform actual node registration.
 func (app *registryApplication) registerNode(
+	ctx *abci.Context,
 	state *MutableState,
-	checkOnly bool,
 	sigNode *node.SignedNode,
-) (*abci.TxOutput, error) {
+) error {
 	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = state.CreateNode(node)
@@ -236,56 +242,52 @@ func (app *registryApplication) registerNode(
 		app.logger.Error("RegisterNode: unknown entity in node registration",
 			"node", node,
 		)
-		return nil, registry.ErrBadEntityForNode
+		return registry.ErrBadEntityForNode
 	}
 
-	if !checkOnly {
+	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterNode: registered",
 			"node", node,
 		)
-	}
 
-	return &abci.TxOutput{
-		Data: &api.OutputRegistry{
+		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterNode: &api.OutputRegisterNode{
 				Node: *node,
 			},
-		},
-		Tags: []tmcmn.KVPair{
-			{api.TagRegistryNodeRegistered, node.ID},
-		},
-	}, nil
+		})
+		ctx.EmitTag(api.TagRegistryNodeRegistered, node.ID)
+	}
+
+	return nil
 }
 
 // Perform actual contract registration.
 func (app *registryApplication) registerContract(
+	ctx *abci.Context,
 	state *MutableState,
-	checkOnly bool,
 	sigCon *contract.SignedContract,
-) (*abci.TxOutput, error) {
+) error {
 	con, err := registry.VerifyRegisterContractArgs(app.logger, sigCon)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	state.CreateContract(con)
 
-	if !checkOnly {
+	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterContract: registered",
 			"contract", con,
 		)
-	}
 
-	return &abci.TxOutput{
-		Data: &api.OutputRegistry{
+		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterContract: &api.OutputRegisterContract{
 				Contract: *con,
 			},
-		},
-		Tags: []tmcmn.KVPair{
-			{api.TagRegistryContractRegistered, con.ID},
-		},
-	}, nil
+		})
+		ctx.EmitTag(api.TagRegistryContractRegistered, con.ID)
+	}
+
+	return nil
 }
 
 // New constructs a new registry application instance.

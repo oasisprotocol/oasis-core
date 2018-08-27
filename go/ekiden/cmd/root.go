@@ -183,7 +183,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
-	rootHash, err := roothash.New(cmd, sched, store, reg)
+	rootHash, err := roothash.New(cmd, timeSource, sched, store, reg, env.svcTmnt)
 	if err != nil {
 		return err
 	}

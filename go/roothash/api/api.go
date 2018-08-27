@@ -27,6 +27,9 @@ var (
 	// ErrMalformedHash is the error returned when a hash is malformed.
 	ErrMalformedHash = errors.New("roothash: malformed hash")
 
+	// ErrInvalidArgument is the error returned on malformed argument(s).
+	ErrInvalidArgument = errors.New("roothash: invalid argument")
+
 	_ encoding.BinaryMarshaler   = (*Commitment)(nil)
 	_ encoding.BinaryUnmarshaler = (*Commitment)(nil)
 )
