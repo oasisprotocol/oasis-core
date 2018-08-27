@@ -36,6 +36,7 @@ type tendermintService struct {
 
 	dataDir                  string
 	isInitialized, isStarted bool
+	startedCh                chan struct{}
 }
 
 func (t *tendermintService) Start() error {
@@ -53,6 +54,7 @@ func (t *tendermintService) Start() error {
 
 	go t.worker()
 
+	close(t.startedCh)
 	t.isStarted = true
 
 	return nil
@@ -76,6 +78,10 @@ func (t *tendermintService) Stop() {
 	}
 
 	t.mux.Stop()
+}
+
+func (t *tendermintService) Started() <-chan struct{} {
+	return t.startedCh
 }
 
 func (t *tendermintService) GetClient() tmcli.Client {
@@ -226,6 +232,7 @@ func New(dataDir string) service.TendermintService {
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
 		dataDir:               dataDir,
+		startedCh:             make(chan struct{}),
 	}
 }
 

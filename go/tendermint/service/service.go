@@ -14,6 +14,10 @@ import (
 type TendermintService interface {
 	service.BackgroundService
 
+	// Started returns the channel that will be closed when the
+	// tendermint service has been started.
+	Started() <-chan struct{}
+
 	// GetClient creates a Tendermint client that talks to this service instance.
 	GetClient() tmcli.Client
 
