@@ -8,7 +8,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	tmconfig "github.com/tendermint/tendermint/config"
+	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 	tmnode "github.com/tendermint/tendermint/node"
+	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmpriv "github.com/tendermint/tendermint/privval"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
@@ -26,6 +28,8 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
+const configDir = "config"
+
 var _ service.TendermintService = (*tendermintService)(nil)
 
 type tendermintService struct {
@@ -37,6 +41,7 @@ type tendermintService struct {
 	blockNotifier *pubsub.Broker
 
 	validatorKey             *signature.PrivateKey
+	nodeKey                  *signature.PrivateKey
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
@@ -135,6 +140,18 @@ func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscr
 	return typedCh, sub
 }
 
+func (t *tendermintService) NodeKey() *signature.PublicKey {
+	// Should *never* happen unless this is called prior to any backends
+	// being initialized.
+	if t.nodeKey == nil {
+		panic("node key not available yet")
+	}
+
+	pk := t.nodeKey.Public()
+
+	return &pk
+}
+
 func (t *tendermintService) lazyInit() error {
 	if t.isInitialized {
 		return nil
@@ -155,6 +172,16 @@ func (t *tendermintService) lazyInit() error {
 	if err = initDataDir(tendermintDataDir); err != nil {
 		return err
 	}
+
+	// Initialize the node (P2P) key.  Tendermint doesn't allow
+	// passing this in in a sensible format, so force load/generate
+	// it in the expected location.
+	if t.nodeKey, err = initNodeKey(tendermintDataDir); err != nil {
+		return err
+	}
+	t.Logger.Debug("loaded/generated P2P key",
+		"public_key", t.nodeKey.Public(),
+	)
 
 	// Create Tendermint node.
 	tenderConfig := tmconfig.DefaultConfig()
@@ -253,7 +280,7 @@ func New(dataDir string, identity *signature.PrivateKey) service.TendermintServi
 
 func initDataDir(dataDir string) error {
 	subDirs := []string{
-		"config",
+		configDir,
 
 		// This *could* also create "data", but both the built in and
 		// BoltDB providers handle it being missing gracefully.
@@ -270,4 +297,19 @@ func initDataDir(dataDir string) error {
 	}
 
 	return nil
+}
+
+func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
+	f := filepath.Join(dataDir, configDir, "node_key.json")
+	nk, err := tmp2p.LoadOrGenNodeKey(f)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to load/generate node key")
+	}
+	tk, ok := nk.PrivKey.(tmed.PrivKeyEd25519)
+	if !ok {
+		return nil, errors.New("tendermint: incompatible node key")
+	}
+
+	k := crypto.PrivateKeyFromTendermint(&tk)
+	return &k, nil
 }
