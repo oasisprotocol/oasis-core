@@ -3,14 +3,12 @@ package registry
 
 import (
 	"encoding/hex"
-	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -24,23 +22,6 @@ import (
 
 var (
 	_ abci.Application = (*registryApplication)(nil)
-)
-
-const (
-	// Entity map state key prefix.
-	stateEntityMap = "registry/entity/%s"
-
-	// Node map state key prefix.
-	stateNodeMap = "registry/node/%s"
-	// Node by entity map state key prefix.
-	stateNodeByEntityMap = "registry/node_by_entity/%s/%s"
-
-	// Contract map state key prefix.
-	stateContractMap = "registry/contract/%s"
-
-	// Highest hex-encoded node/entity/contract identifier.
-	// TODO: Should we move this to common?
-	lastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 )
 
 type registryApplication struct {
@@ -60,8 +41,16 @@ func (app *registryApplication) Blessed() bool {
 	return false
 }
 
-func (app *registryApplication) OnRegister(state *abci.ApplicationState) {
+func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
 	app.state = state
+
+	// Register query handlers.
+	queryRouter.AddRoute(api.QueryRegistryGetEntity, &api.QueryGetByIDRequest{}, app.queryGetEntity)
+	queryRouter.AddRoute(api.QueryRegistryGetEntities, nil, app.queryGetEntities)
+	queryRouter.AddRoute(api.QueryRegistryGetNode, &api.QueryGetByIDRequest{}, app.queryGetNode)
+	queryRouter.AddRoute(api.QueryRegistryGetNodes, nil, app.queryGetNodes)
+	queryRouter.AddRoute(api.QueryRegistryGetContract, &api.QueryGetByIDRequest{}, app.queryGetContract)
+	queryRouter.AddRoute(api.QueryRegistryGetContracts, nil, app.queryGetContracts)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -71,57 +60,41 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 	return types.ResponseSetOption{}
 }
 
-func (app *registryApplication) Query(query types.RequestQuery) types.ResponseQuery { // nolint: gocyclo
-	// Get state snapshot based on specified version.
-	version := query.GetHeight()
-	if version <= 0 || version > app.state.BlockHeight() {
-		version = app.state.BlockHeight()
-	}
+func (app *registryApplication) GetState(height int64) (interface{}, error) {
+	return NewImmutableState(app.state, height)
+}
 
-	snapshot, err := app.state.DeliverTxTree().GetImmutable(version)
-	if err != nil {
-		return types.ResponseQuery{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
-		}
-	}
+func (app *registryApplication) queryGetEntity(s interface{}, r interface{}) ([]byte, error) {
+	request := r.(*api.QueryGetByIDRequest)
+	state := s.(*ImmutableState)
+	return state.GetEntityRaw(request.ID)
+}
 
-	var response []byte
-	switch query.GetPath() {
-	case api.QueryRegistryGetEntity:
-		response, err = app.queryGetByID(stateEntityMap, query.GetData(), snapshot)
-	case api.QueryRegistryGetEntities:
-		response, err = app.queryGetAll(stateEntityMap, snapshot, &entity.Entity{})
-	case api.QueryRegistryGetNode:
-		response, err = app.queryGetByID(stateNodeMap, query.GetData(), snapshot)
-	case api.QueryRegistryGetNodes:
-		response, err = app.queryGetAll(stateNodeMap, snapshot, &node.Node{})
-	case api.QueryRegistryGetContract:
-		response, err = app.queryGetByID(stateContractMap, query.GetData(), snapshot)
-	case api.QueryRegistryGetContracts:
-		response, err = app.queryGetAll(stateContractMap, snapshot, &contract.Contract{})
-	default:
-		return types.ResponseQuery{
-			Code: api.CodeInvalidQuery.ToInt(),
-		}
-	}
+func (app *registryApplication) queryGetEntities(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*ImmutableState)
+	return state.GetEntitiesRaw()
+}
 
-	if err != nil {
-		return types.ResponseQuery{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
-		}
-	}
-	if response == nil {
-		return types.ResponseQuery{
-			Code: api.CodeNotFound.ToInt(),
-		}
-	}
+func (app *registryApplication) queryGetNode(s interface{}, r interface{}) ([]byte, error) {
+	request := r.(*api.QueryGetByIDRequest)
+	state := s.(*ImmutableState)
+	return state.GetNodeRaw(request.ID)
+}
 
-	return types.ResponseQuery{
-		Code:  api.CodeOK.ToInt(),
-		Value: response,
-	}
+func (app *registryApplication) queryGetNodes(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*ImmutableState)
+	return state.GetNodesRaw()
+}
+
+func (app *registryApplication) queryGetContract(s interface{}, r interface{}) ([]byte, error) {
+	request := r.(*api.QueryGetByIDRequest)
+	state := s.(*ImmutableState)
+	return state.GetContractRaw(request.ID)
+}
+
+func (app *registryApplication) queryGetContracts(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*ImmutableState)
+	return state.GetContractsRaw()
 }
 
 func (app *registryApplication) CheckTx(tx []byte) error {
@@ -163,51 +136,14 @@ func (app *registryApplication) EndBlock(request types.RequestEndBlock) types.Re
 	return types.ResponseEndBlock{}
 }
 
-// Perform GetById query.
-func (app *registryApplication) queryGetByID(stateKey string, data []byte, snapshot *iavl.ImmutableTree) ([]byte, error) {
-	request := &api.QueryGetByIDRequest{}
-	if err := cbor.Unmarshal(data, request); err != nil {
-		return nil, registry.ErrInvalidArgument
-	}
-
-	_, value := snapshot.Get(
-		[]byte(fmt.Sprintf(stateKey, request.ID.String())),
-	)
-
-	return value, nil
-}
-
-// Perform GetAll query.
-func (app *registryApplication) queryGetAll(
-	stateKey string,
-	snapshot *iavl.ImmutableTree,
-	item common.Cloneable,
-) ([]byte, error) {
-	var items []interface{}
-	snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateKey, "")),
-		[]byte(fmt.Sprintf(stateKey, lastID)),
-		true,
-		func(key, value []byte, version int64) bool {
-			itemCopy := item.Clone()
-			cbor.MustUnmarshal(value, &itemCopy)
-
-			items = append(items, itemCopy)
-			return false
-		},
-	)
-
-	value := cbor.Marshal(items)
-
-	return value, nil
-}
-
 // Execute transaction against given state.
 func (app *registryApplication) executeTx(
-	state *iavl.MutableTree,
+	tree *iavl.MutableTree,
 	tx *api.TxRegistry,
 	checkOnly bool,
 ) (*abci.TxOutput, error) {
+	state := NewMutableState(tree)
+
 	if tx.TxRegisterEntity != nil {
 		return app.registerEntity(state, checkOnly, &tx.TxRegisterEntity.Entity)
 	} else if tx.TxDeregisterEntity != nil {
@@ -223,7 +159,7 @@ func (app *registryApplication) executeTx(
 
 // Perform actual entity registration.
 func (app *registryApplication) registerEntity(
-	state *iavl.MutableTree,
+	state *MutableState,
 	checkOnly bool,
 	sigEnt *entity.SignedEntity,
 ) (*abci.TxOutput, error) {
@@ -232,18 +168,13 @@ func (app *registryApplication) registerEntity(
 		return nil, err
 	}
 
-	if checkOnly {
-		return nil, nil
+	state.CreateEntity(ent)
+
+	if !checkOnly {
+		app.logger.Debug("RegisterEntity: registered",
+			"entity", ent,
+		)
 	}
-
-	state.Set(
-		[]byte(fmt.Sprintf(stateEntityMap, ent.ID.String())),
-		ent.MarshalCBOR(),
-	)
-
-	app.logger.Debug("RegisterEntity: registered",
-		"entity", ent,
-	)
 
 	return &abci.TxOutput{
 		Data: &api.OutputRegistry{
@@ -259,7 +190,7 @@ func (app *registryApplication) registerEntity(
 
 // Perform actual entity deregistration.
 func (app *registryApplication) deregisterEntity(
-	state *iavl.MutableTree,
+	state *MutableState,
 	checkOnly bool,
 	sigID *signature.SignedPublicKey,
 ) (*abci.TxOutput, error) {
@@ -268,38 +199,13 @@ func (app *registryApplication) deregisterEntity(
 		return nil, err
 	}
 
-	if checkOnly {
-		return nil, nil
-	}
+	removedEntity, removedNodes := state.RemoveEntity(id)
 
-	var removedEntity entity.Entity
-	var removedNodes []node.Node
-	data, removed := state.Remove([]byte(fmt.Sprintf(stateEntityMap, id.String())))
-	if removed {
-		// Remove any associated nodes.
-		state.IterateRangeInclusive(
-			[]byte(fmt.Sprintf(stateNodeByEntityMap, id.String(), "")),
-			[]byte(fmt.Sprintf(stateNodeByEntityMap, id.String(), lastID)),
-			true,
-			func(key, value []byte, version int64) bool {
-				// Remove all dependent nodes.
-				nodeData, _ := state.Remove([]byte(fmt.Sprintf(stateNodeMap, value)))
-				state.Remove([]byte(fmt.Sprintf(stateNodeByEntityMap, id.String(), value)))
-
-				var removedNode node.Node
-				cbor.MustUnmarshal(nodeData, &removedNode)
-
-				removedNodes = append(removedNodes, removedNode)
-				return false
-			},
+	if !checkOnly {
+		app.logger.Debug("DeregisterEntity: complete",
+			"entity_id", id,
 		)
-
-		cbor.MustUnmarshal(data, &removedEntity)
 	}
-
-	app.logger.Debug("DeregisterEntity: complete",
-		"entity_id", id,
-	)
 
 	return &abci.TxOutput{
 		Data: &api.OutputRegistry{
@@ -316,7 +222,7 @@ func (app *registryApplication) deregisterEntity(
 
 // Perform actual node registration.
 func (app *registryApplication) registerNode(
-	state *iavl.MutableTree,
+	state *MutableState,
 	checkOnly bool,
 	sigNode *node.SignedNode,
 ) (*abci.TxOutput, error) {
@@ -325,33 +231,19 @@ func (app *registryApplication) registerNode(
 		return nil, err
 	}
 
-	// Ensure that the entity exists.
-	_, ent := state.Get(
-		[]byte(fmt.Sprintf(stateEntityMap, node.EntityID.String())),
-	)
-	if ent == nil {
+	err = state.CreateNode(node)
+	if err != nil {
 		app.logger.Error("RegisterNode: unknown entity in node registration",
 			"node", node,
 		)
 		return nil, registry.ErrBadEntityForNode
 	}
 
-	if checkOnly {
-		return nil, nil
+	if !checkOnly {
+		app.logger.Debug("RegisterNode: registered",
+			"node", node,
+		)
 	}
-
-	state.Set(
-		[]byte(fmt.Sprintf(stateNodeMap, node.ID.String())),
-		node.MarshalCBOR(),
-	)
-	state.Set(
-		[]byte(fmt.Sprintf(stateNodeByEntityMap, node.EntityID.String(), node.ID.String())),
-		[]byte(node.ID.String()),
-	)
-
-	app.logger.Debug("RegisterNode: registered",
-		"node", node,
-	)
 
 	return &abci.TxOutput{
 		Data: &api.OutputRegistry{
@@ -367,7 +259,7 @@ func (app *registryApplication) registerNode(
 
 // Perform actual contract registration.
 func (app *registryApplication) registerContract(
-	state *iavl.MutableTree,
+	state *MutableState,
 	checkOnly bool,
 	sigCon *contract.SignedContract,
 ) (*abci.TxOutput, error) {
@@ -376,18 +268,13 @@ func (app *registryApplication) registerContract(
 		return nil, err
 	}
 
-	if checkOnly {
-		return nil, nil
+	state.CreateContract(con)
+
+	if !checkOnly {
+		app.logger.Debug("RegisterContract: registered",
+			"contract", con,
+		)
 	}
-
-	state.Set(
-		[]byte(fmt.Sprintf(stateContractMap, con.ID.String())),
-		con.MarshalCBOR(),
-	)
-
-	app.logger.Debug("RegisterContract: registered",
-		"contract", con,
-	)
 
 	return &abci.TxOutput{
 		Data: &api.OutputRegistry{

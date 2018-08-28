@@ -65,9 +65,13 @@ type Application interface {
 	// instance.
 	Blessed() bool
 
+	// GetState returns an application-specific state structure for the
+	// given block height.
+	GetState(int64) (interface{}, error)
+
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
-	OnRegister(state *ApplicationState)
+	OnRegister(state *ApplicationState, queryRouter QueryRouter)
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -78,16 +82,6 @@ type Application interface {
 	// It is expected that the key is prefixed by the application name
 	// followed by a '/' (eg: `foo/<some key here>`).
 	SetOption(types.RequestSetOption) types.ResponseSetOption
-
-	// Query queries for state.
-	//
-	// It is expected that the path is prefixed by the application name
-	// followed by a '/' (eg: `foo/<some path here>`), or only contains
-	// the application name if the application does not use paths.
-	//
-	// Implementations MUST restrict their state operations to versioned
-	// Get operations with versions <= BlockHeight.
-	Query(types.RequestQuery) types.ResponseQuery
 
 	// CheckTx validates a transaction via the mempool.
 	//
@@ -179,8 +173,9 @@ func NewApplicationServer(dataDir string) (*ApplicationServer, error) {
 type abciMux struct {
 	types.BaseApplication
 
-	logger *logging.Logger
-	state  *ApplicationState
+	logger      *logging.Logger
+	state       *ApplicationState
+	queryRouter QueryRouter
 
 	appsByName     map[string]Application
 	appsByTxTag    map[byte]Application
@@ -228,7 +223,7 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 			mux.logger.Debug("Query: dispatching p2p/filter query",
 				"req", req,
 			)
-			return mux.appBlessed.Query(req)
+			return mux.queryRouter.WithApp(mux.appBlessed).Route(req)
 		}
 
 		// There's no blessed app set, blindly allow everything.
@@ -249,23 +244,12 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 		}
 	}
 
-	app, err := mux.extractAppFromKeyPath(queryPath)
-	if err != nil {
-		mux.logger.Error("Query: failed to de-multiplex",
-			"req", req,
-			"err", err,
-		)
-		return types.ResponseQuery{
-			Code: api.CodeInvalidApplication.ToInt(),
-		}
-	}
-
 	mux.logger.Debug("Query: dispatching",
-		"app", app.Name(),
+		"path", queryPath,
 		"req", req,
 	)
 
-	return app.Query(req)
+	return mux.queryRouter.Route(req)
 }
 
 func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
@@ -438,7 +422,7 @@ func (mux *abciMux) doRegister(app Application) error {
 	mux.appsByRegOrder = append(mux.appsByRegOrder, app)
 	mux.appsByTxTag[app.TransactionTag()] = app
 
-	app.OnRegister(mux.state)
+	app.OnRegister(mux.state, mux.queryRouter.WithApp(app))
 	mux.logger.Debug("Registered new application",
 		"app", app.Name(),
 	)
@@ -483,6 +467,7 @@ func newABCIMux(dataDir string) (*abciMux, error) {
 	mux := &abciMux{
 		logger:         logging.GetLogger("abci-mux"),
 		state:          state,
+		queryRouter:    NewQueryRouter(),
 		appsByName:     make(map[string]Application),
 		appsByTxTag:    make(map[byte]Application),
 		lastBeginBlock: -1,
