@@ -29,10 +29,10 @@ var _ service.TendermintService = (*tendermintService)(nil)
 type tendermintService struct {
 	cmservice.BaseBackgroundService
 
-	mux            *abci.ApplicationServer
-	node           *tmnode.Node
-	internalClient tmcli.Client
-	blockNotifier  *pubsub.Broker
+	mux           *abci.ApplicationServer
+	node          *tmnode.Node
+	client        tmcli.Client
+	blockNotifier *pubsub.Broker
 
 	dataDir                  string
 	isInitialized, isStarted bool
@@ -50,7 +50,6 @@ func (t *tendermintService) Start() error {
 	if err := t.node.Start(); err != nil {
 		return errors.Wrap(err, "tendermint: failed to start service")
 	}
-	t.internalClient = t.GetClient()
 
 	go t.worker()
 
@@ -89,7 +88,7 @@ func (t *tendermintService) GetClient() tmcli.Client {
 		panic("tendermint: GetClient() called, when no tendermint backends enabled")
 	}
 
-	return tmcli.NewLocal(t.node)
+	return t.client
 }
 
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
@@ -117,7 +116,7 @@ func (t *tendermintService) ForceInitialize() error {
 }
 
 func (t *tendermintService) GetBlock(height int64) (*tmtypes.Block, error) {
-	result, err := t.internalClient.Block(&height)
+	result, err := t.client.Block(&height)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: block query failed")
 	}
@@ -194,6 +193,7 @@ func (t *tendermintService) lazyInit() error {
 	if err != nil {
 		return errors.Wrap(err, "tendermint: failed to create node")
 	}
+	t.client = tmcli.NewLocal(t.node)
 
 	t.isInitialized = true
 
@@ -204,7 +204,7 @@ func (t *tendermintService) worker() {
 	// Subscribe to other events here as needed, no need to spawn additional
 	// workers.
 	evCh := make(chan interface{})
-	if err := t.internalClient.Subscribe(context.Background(), "tendermint/worker", tmtypes.EventQueryNewBlock, evCh); err != nil {
+	if err := t.client.Subscribe(context.Background(), "tendermint/worker", tmtypes.EventQueryNewBlock, evCh); err != nil {
 		t.Logger.Error("worker: failed to subscribe to new block events",
 			"err", err,
 		)
