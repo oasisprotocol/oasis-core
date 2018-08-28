@@ -18,7 +18,6 @@ ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
-ekiden-ethereum = { path = "../../ethereum", version = "0.2.0-alpha" }
 ekiden-node-dummy-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-registry-api = { path = "../../registry/api", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }

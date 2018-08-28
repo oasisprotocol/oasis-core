@@ -10,7 +10,6 @@ extern crate ekiden_beacon_dummy;
 extern crate ekiden_common;
 extern crate ekiden_di;
 extern crate ekiden_epochtime;
-extern crate ekiden_ethereum;
 extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_node_dummy;
@@ -35,13 +34,10 @@ fn main() {
     ekiden_storage_dynamodb::DynamoDbBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
     ekiden_beacon_dummy::InsecureDummyRandomBeacon::register(&mut known_components);
-    ekiden_ethereum::web3_di::Web3Factory::register(&mut known_components);
     ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(&mut known_components);
     ekiden_epochtime::local::MockTimeNotifier::register(&mut known_components);
     ekiden_epochtime::local::MockTimeRpcNotifier::register(&mut known_components);
-    ekiden_ethereum::EthereumMockTime::register(&mut known_components);
-    ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(&mut known_components);
 
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(&mut known_components);
 

@@ -133,7 +133,6 @@ See our [contributing guidelines](CONTRIBUTING.md).
 - `docker`: Docker environment definitions
 - `enclave`: Enclave loader and identity attestation
 - `epochtime`: Time synchronization
-- `ethereum`: Contract definitions of the `beacon`, `roothash`, `epochtime`, `registry`, and `stake` components
 - `instrumentation`: Metric collection and instrumentation utilities
 - `node`: Centralized "backend" for centralized implemnetations of APIs (e.g. a location to use as a pretend AWS)
 - `registry`: Management of which hosts are online in the system

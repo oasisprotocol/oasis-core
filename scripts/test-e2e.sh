@@ -20,7 +20,6 @@ run_dummy_node_go_default() {
 
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend dummy \
@@ -30,7 +29,6 @@ run_dummy_node_default() {
 run_dummy_node_storage_dynamodb() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
         --time-source-notifier mockrpc \
-        --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --storage-backend dynamodb \
         --storage-dynamodb-region us-west-2 \
@@ -40,7 +38,6 @@ run_dummy_node_storage_dynamodb() {
 
 run_dummy_node_persistent_state_storage() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend dummy \
@@ -59,7 +56,6 @@ run_compute_node() {
     ${WORKDIR}/target/debug/ekiden-compute \
         --no-persist-identity \
         --max-batch-size 1 \
-        --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage immediate_remote \
         --port ${port} \
@@ -82,7 +78,6 @@ run_compute_node_storage_multilayer() {
         --no-persist-identity \
         --max-batch-size 1 \
         --compute-replicas 2 \
-        --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage multilayer \
         --storage-multilayer-sled-storage-base "$db_dir" \
@@ -109,7 +104,6 @@ run_compute_node_storage_multilayer_remote() {
         --no-persist-identity \
         --max-batch-size 1 \
         --compute-replicas 2 \
-        --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage multilayer \
         --storage-multilayer-sled-storage-base "$db_dir" \

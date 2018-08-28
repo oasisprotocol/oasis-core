@@ -2,7 +2,6 @@
 use ekiden_core;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_epochtime;
-use ekiden_ethereum;
 use ekiden_instrumentation_prometheus;
 use ekiden_registry_client;
 use ekiden_roothash_client;
@@ -15,13 +14,9 @@ pub fn register_components(known_components: &mut KnownComponents) {
     ekiden_core::environment::GrpcEnvironment::register(known_components);
     // Time Notifier.
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
-    // Beacon.
-    ekiden_ethereum::EthereumRandomBeaconViaWebsocket::register(known_components);
     // Local identities.
     ekiden_core::identity::LocalEntityIdentity::register(known_components);
     ekiden_core::identity::LocalNodeIdentity::register(known_components);
-    // Ethereum service.
-    ekiden_ethereum::web3_di::Web3Factory::register(known_components);
     // Instrumentation.
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
     // Scheduler.
