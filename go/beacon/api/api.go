@@ -34,3 +34,14 @@ type GenerateEvent struct {
 	Epoch  epochtime.EpochTime
 	Beacon []byte
 }
+
+// BlockBackend is a Backend that is backed by a blockchain.
+type BlockBackend interface {
+	Backend
+
+	// GetBeaconBlock gets the beacon for the provided block height
+	// iff it exists.  Calling this routine after the epoch
+	// notification when an appropriate timesource is used should
+	// be generally safe.
+	GetBeaconBlock(context.Context, int64) ([]byte, error)
+}

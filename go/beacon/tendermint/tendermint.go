@@ -21,7 +21,8 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend = (*tendermintBackend)(nil)
+	_ api.Backend      = (*tendermintBackend)(nil)
+	_ api.BlockBackend = (*tendermintBackend)(nil)
 
 	tendermintContext = []byte("EkB-tmnt")
 
@@ -62,6 +63,15 @@ func (t *tendermintBackend) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.S
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
+}
+
+func (t *tendermintBackend) GetBeaconBlock(ctx context.Context, height int64) ([]byte, error) {
+	epoch, _, err := t.timeSource.GetBlockEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.GetBeacon(ctx, epoch)
 }
 
 func (t *tendermintBackend) getBeaconImpl(ctx context.Context, epoch epochtime.EpochTime) ([]byte, error) {

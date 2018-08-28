@@ -18,7 +18,8 @@ type TendermintService interface {
 	// tendermint service has been started.
 	Started() <-chan struct{}
 
-	// GetClient creates a Tendermint client that talks to this service instance.
+	// GetClient returns a tendermint client that talks to this
+	// service instance.
 	GetClient() tmcli.Client
 
 	// RegisterApplication registers an ABCI multiplexer application
