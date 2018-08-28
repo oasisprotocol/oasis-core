@@ -64,8 +64,19 @@ func (dcnf *DistributionConfig) NumLocationsIter(incr, end int) ParamIncr {
 	return NewIntParamIncr(&dcnf.numLocations, incr, end, "num-locations")
 }
 
+// NumReadLocationsIter allows iterating over numReadLocs
 func (dcnf *DistributionConfig) NumReadLocationsIter(incr, end int) ParamIncr {
 	return NewIntParamIncr(&dcnf.numReadLocs, incr, end, "num-reads")
+}
+
+// NumWriteLocationsIter allows iterating over numWriteLocs
+func (dcnf *DistributionConfig) NumWriteLocationsIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&dcnf.numWriteLocs, incr, end, "num-writes")
+}
+
+// NumTransactionsIter allows iterating over numTransactions
+func (dcnf *DistributionConfig) NumTransactionsIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&dcnf.numTransactions, incr, end, "num-transactions")
 }
 
 // Show prints the config parameters.  For verbosity level where execution parameters ought to
@@ -359,14 +370,12 @@ func UpdateAndCheckConfigFlags() {
 }
 
 // ShowConfigFlags prints the current command-line flag values to the io.Writer stream.
-func ShowConfigFlags(bw io.Writer) {
-	if verbosity > 0 {
-		DistributionConfigFromFlags.Show(bw)
-		AdversaryConfigFromFlags.Show(bw)
-		LogicalShardingConfigFromFlags.Show(bw)
-		SchedulerConfigFromFlags.Show(bw)
-		ExecutionConfigFromFlags.Show(bw)
-	}
+func ShowConfigFlags(bw io.Writer, dcnf DistributionConfig, acnf AdversaryConfig, lcnf LogicalShardingConfig, scnf SchedulerConfig, xcnf ExecutionConfig) {
+	dcnf.Show(bw)
+	acnf.Show(bw)
+	lcnf.Show(bw)
+	scnf.Show(bw)
+	xcnf.Show(bw)
 }
 
 // transactionSourceFactory consults the DistributionConfig arg to build and return a
@@ -577,7 +586,7 @@ func RunSimulationWithConfigs(
 	return SimulationResults{
 		LinearExecutionTime: int64(linearExecutionTime),
 		ActualExecutionTime: int64(totalExecutionTime),
-		NumberOfSchedules: schedNum,
+		NumberOfSchedules:   schedNum,
 	}
 }
 

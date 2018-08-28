@@ -29,7 +29,14 @@ func main() {
 	}(bw)
 
 	simulator.UpdateAndCheckConfigFlags()
-	simulator.ShowConfigFlags(bw)
+	simulator.ShowConfigFlags(
+		bw,
+		simulator.DistributionConfigFromFlags,
+		simulator.AdversaryConfigFromFlags,
+		simulator.LogicalShardingConfigFromFlags,
+		simulator.SchedulerConfigFromFlags,
+		simulator.ExecutionConfigFromFlags,
+	)
 
 	// Check for I/O errors _now_ instead of running the whole simulation and
 	// catching it in the deferred function, since the simulation is relatively
