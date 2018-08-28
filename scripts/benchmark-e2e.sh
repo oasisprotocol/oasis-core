@@ -6,7 +6,6 @@ LOGDIR=/tmp/ekiden-benchmarks
 
 run_dummy_node_storage_dummy() {
     ${WORKDIR}/target/release/ekiden-node-dummy \
-        --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend dummy \
@@ -18,7 +17,6 @@ run_dummy_node_storage_persistent() {
     rm -rf ${db_dir}
 
     ${WORKDIR}/target/release/ekiden-node-dummy \
-        --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend persistent \
@@ -31,7 +29,6 @@ run_dummy_node_storage_roothash() {
     rm -rf ${db_dir}
 
     ${WORKDIR}/target/release/ekiden-node-dummy \
-        --random-beacon-backend dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --time-source-notifier mockrpc \
         --storage-backend dummy \
@@ -52,7 +49,6 @@ run_compute_node() {
         --max-batch-size 20 \
         --max-batch-timeout 100 \
         --compute-replicas 1 \
-        --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage immediate_remote \
         --port ${port} \
@@ -78,7 +74,6 @@ run_compute_node_storage_multilayer_remote() {
         --max-batch-size 20 \
         --max-batch-timeout 100 \
         --compute-replicas 1 \
-        --time-source-notifier system \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --batch-storage multilayer \
         --storage-multilayer-sled-storage-base "$db_dir" \
