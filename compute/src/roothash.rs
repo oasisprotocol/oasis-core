@@ -183,7 +183,7 @@ macro_rules! require_state_impl {
             $( $state )|* $(if $cond)* => {}
             state => {
                 require_state_impl!(@$failed_handler Error::new(format!(
-                    "incorrect state for {}: {:?}",
+                    "incorrect state for {}: {}",
                     $message, state
                 )))
             }
@@ -202,7 +202,7 @@ macro_rules! require_state_impl {
             $( $state )|* $(if $cond)* => $output,
             state => {
                 require_state_impl!(@$failed_handler Error::new(format!(
-                    "incorrect state for {}: {:?}",
+                    "incorrect state for {}: {}",
                     $message, state
                 )))
             }
