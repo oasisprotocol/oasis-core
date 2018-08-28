@@ -16,11 +16,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
+	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -34,6 +36,7 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 
+	validatorKey             *signature.PrivateKey
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
@@ -159,6 +162,17 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.SetRoot(tendermintDataDir)
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
+	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
+	if !tenderValIdent.Equals(tendermintPV.PrivKey) {
+		// The private validator must have been just generated.  Force
+		// it to use the oasis identity rather than the new key.
+		t.Logger.Debug("fixing up tendermint private validator identity")
+		tendermintPV.PrivKey = tenderValIdent
+		tendermintPV.PubKey = tenderValIdent.PubKey()
+		tendermintPV.Address = tendermintPV.PubKey.Address()
+		tendermintPV.Save()
+	}
+
 	var tenderminGenesisProvider tmnode.GenesisDocProvider
 	genFile := tenderConfig.GenesisFile()
 	if _, err = os.Lstat(genFile); err != nil && os.IsNotExist(err) {
@@ -227,10 +241,11 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(dataDir string) service.TendermintService {
+func New(dataDir string, identity *signature.PrivateKey) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
+		validatorKey:          identity,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 	}

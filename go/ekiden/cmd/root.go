@@ -2,10 +2,14 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/beacon"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
@@ -50,9 +54,10 @@ func Execute() {
 }
 
 type nodeEnv struct {
-	svcMgr  *backgroundServiceManager
-	grpcSrv *grpcService
-	svcTmnt service.TendermintService
+	svcMgr   *backgroundServiceManager
+	identity *signature.PrivateKey
+	grpcSrv  *grpcService
+	svcTmnt  service.TendermintService
 }
 
 func nodeMain(cmd *cobra.Command, args []string) {
@@ -67,8 +72,14 @@ func nodeMain(cmd *cobra.Command, args []string) {
 
 	var err error
 
-	// XXX: Generate/Load the node identity.
-	// Except tendermint does this on it's own, sigh.
+	// Generate/Load the node identity.
+	env.identity, err = initIdentity(dataDir)
+	if err != nil {
+		rootLog.Error("failed to load/generate identity",
+			"err", err,
+		)
+		return
+	}
 
 	// Initialize the gRPC server.
 	env.grpcSrv, err = newGrpcService(cmd)
@@ -91,7 +102,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize tendermint.
-	env.svcTmnt = tendermint.New(dataDir)
+	env.svcTmnt = tendermint.New(dataDir, env.identity)
 	env.svcMgr.Register(env.svcTmnt)
 
 	// Initialize the varous node backends.
@@ -134,6 +145,20 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	// Wait for the services to catch on fire or otherwise
 	// terminate.
 	env.svcMgr.Wait()
+}
+
+func initIdentity(dataDir string) (*signature.PrivateKey, error) {
+	var k signature.PrivateKey
+
+	if err := k.LoadPEM(filepath.Join(dataDir, "identity.pem"), rand.Reader); err != nil {
+		return nil, err
+	}
+
+	rootLog.Info("loaded/generated node identity",
+		"public_key", k.Public(),
+	)
+
+	return &k, nil
 }
 
 func initNode(cmd *cobra.Command, env *nodeEnv) error {
