@@ -118,6 +118,7 @@ run_benchmark() {
 
     # Run the client.
     ${WORKDIR}/target/release/${client}-client \
+        --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \

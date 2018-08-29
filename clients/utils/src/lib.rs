@@ -28,6 +28,7 @@ extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_frontend;
+extern crate ekiden_storage_multilayer;
 
 #[cfg(feature = "benchmark")]
 pub mod benchmark;

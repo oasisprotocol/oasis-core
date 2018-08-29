@@ -153,6 +153,7 @@ run_test() {
     # Run the client. We run the client first so that we test whether it waits for the
     # committee to be elected and connects to the leader.
     ${WORKDIR}/target/debug/${client}-client \
+        --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 &
     client_pid=$!
