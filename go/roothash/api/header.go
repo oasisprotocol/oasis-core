@@ -152,6 +152,9 @@ type Header struct {
 	// Round is the block round.
 	Round Round `codec:"round"`
 
+	// Timestamp is the block timestamp (POSIX time).
+	Timestamp uint64 `codec:"timestamp"`
+
 	// PreviousHash is the previous block hash.
 	PreviousHash hash.Hash `codec:"previous_hash"`
 
@@ -204,6 +207,7 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.Round.UnmarshalBinary(pb.GetRound()); err != nil {
 		return err
 	}
+	h.Timestamp = pb.GetTimestamp()
 	if err := h.PreviousHash.UnmarshalBinary(pb.GetPreviousHash()); err != nil {
 		return err
 	}
@@ -233,6 +237,7 @@ func (h *Header) ToProto() *pbRoothash.Header {
 	pb.Version = uint32(h.Version)
 	pb.Namespace, _ = h.Namespace.MarshalBinary()
 	pb.Round, _ = h.Round.MarshalBinary()
+	pb.Timestamp = h.Timestamp
 	pb.PreviousHash, _ = h.PreviousHash.MarshalBinary()
 	pb.GroupHash, _ = h.GroupHash.MarshalBinary()
 	pb.InputHash, _ = h.InputHash.MarshalBinary()

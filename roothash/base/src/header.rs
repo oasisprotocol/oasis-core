@@ -20,6 +20,8 @@ pub struct Header {
     pub namespace: B256,
     /// Round.
     pub round: U256,
+    /// Timestamp (POSIX time).
+    pub timestamp: u64,
     /// Hash of the previous block.
     pub previous_hash: H256,
     /// Computation group hash.
@@ -48,7 +50,7 @@ impl Serialize for Header {
     where
         S: Serializer,
     {
-        let mut header = serializer.serialize_struct("Header", 9)?;
+        let mut header = serializer.serialize_struct("Header", 10)?;
         header.serialize_field("commitments_hash", &self.commitments_hash)?;
         header.serialize_field("group_hash", &self.group_hash)?;
         header.serialize_field("input_hash", &self.input_hash)?;
@@ -57,6 +59,7 @@ impl Serialize for Header {
         header.serialize_field("previous_hash", &self.previous_hash)?;
         header.serialize_field("round", &self.round)?;
         header.serialize_field("state_root", &self.state_root)?;
+        header.serialize_field("timestamp", &self.timestamp)?;
         header.serialize_field("version", &self.version)?;
         header.end()
     }
@@ -69,6 +72,7 @@ impl TryFrom<api::Header> for Header {
             version: a.get_version() as u16,
             namespace: B256::try_from(a.get_namespace())?,
             round: U256::try_from(a.get_round())?,
+            timestamp: a.get_timestamp(),
             previous_hash: H256::try_from(a.get_previous_hash())?,
             group_hash: H256::try_from(a.get_group_hash())?,
             input_hash: H256::try_from(a.get_input_hash())?,
@@ -85,6 +89,7 @@ impl Into<api::Header> for Header {
         h.set_version(self.version as u32);
         h.set_namespace(self.namespace.to_vec());
         h.set_round(self.round.to_vec_big_endian());
+        h.set_timestamp(self.timestamp);
         h.set_previous_hash(self.previous_hash.to_vec());
         h.set_group_hash(self.group_hash.to_vec());
         h.set_input_hash(self.input_hash.to_vec());

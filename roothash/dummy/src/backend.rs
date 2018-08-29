@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::path::Path;
 use std::process::abort;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_cbor;
 
@@ -749,11 +749,14 @@ impl DummyRootHashBackend {
     }
 
     fn get_genesis_block(contract_id: B256) -> Block {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+
         let mut block = Block {
             header: Header {
                 version: 0,
                 namespace: contract_id,
                 round: U256::from(0),
+                timestamp: now.as_secs(),
                 previous_hash: H256::zero(),
                 group_hash: H256::zero(),
                 input_hash: empty_hash(),
