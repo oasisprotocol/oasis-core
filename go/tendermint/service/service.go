@@ -5,6 +5,7 @@ import (
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
@@ -37,4 +38,7 @@ type TendermintService interface {
 	// WatchBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
+
+	// NodeKey returns the node's P2P (link) authentication public key.
+	NodeKey() *signature.PublicKey
 }
