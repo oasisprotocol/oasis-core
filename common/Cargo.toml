@@ -17,6 +17,11 @@ protobuf = "~2.0"
 byteorder = "1.2.1"
 rustc-hex = "1.0"
 ring = { git = "https://github.com/oasislabs/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
+# We need aes, block-modes, and crypto-ops as well, since ring doesn't export AES-CTR stuff, nor does it export a secure memset :/
+aes-soft = "0.1.0"
+block-modes = "0.1.0"
+crypto-ops = "0.1.1"
+sodalite = "0.3.0"
 untrusted = "0.5.1"
 bigint = { version = "4.4.0", features = ["std"] }
 chrono = "0.4.2"
@@ -42,6 +47,7 @@ tokio = "~0.1.7"
 
 [dev-dependencies]
 serde_json = { git = "https://github.com/oasislabs/json" }
+base64 = "0.9.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dev-dependencies]
 tokio-core = "0.1.17"
