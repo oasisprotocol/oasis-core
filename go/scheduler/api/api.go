@@ -170,3 +170,12 @@ type Backend interface {
 	// be sent immediately.
 	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
 }
+
+// BlockBackend is a Backend that is backed by a blockchain.
+type BlockBackend interface {
+	Backend
+
+	// GetBlockCommittees returns the vector of committees for a given
+	// contract ID, at the specified block height.
+	GetBlockCommittees(context.Context, signature.PublicKey, int64) ([]*Committee, error)
+}
