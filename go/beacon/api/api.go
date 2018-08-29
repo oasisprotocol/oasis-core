@@ -39,9 +39,9 @@ type GenerateEvent struct {
 type BlockBackend interface {
 	Backend
 
-	// GetBeaconBlock gets the beacon for the provided block height
+	// GetBlockBeacon gets the beacon for the provided block height
 	// iff it exists.  Calling this routine after the epoch
 	// notification when an appropriate timesource is used should
 	// be generally safe.
-	GetBeaconBlock(context.Context, int64) ([]byte, error)
+	GetBlockBeacon(context.Context, int64) ([]byte, error)
 }

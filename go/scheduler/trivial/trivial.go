@@ -1,9 +1,9 @@
 package trivial
 
 import (
+	"bytes"
 	"crypto"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -28,14 +28,21 @@ import (
 const BackendName = "trivial"
 
 var (
-	_ api.Backend = (*trivialScheduler)(nil)
+	_ api.Backend      = (*trivialScheduler)(nil)
+	_ api.BlockBackend = (*trivialScheduler)(nil)
 
 	rngContextCompute = []byte("EkS-Dummy-Compute")
 	rngContextStorage = []byte("EkS-Dummy-Storage")
+
+	errIncompatibleBackends = fmt.Errorf("scheduler/trivial: incompatible backend(s) for block operations")
 )
 
 type trivialScheduler struct {
 	logger *logging.Logger
+
+	timeSource epochtime.Backend
+	beacon     beacon.Backend
+	registry   registry.Backend
 
 	state *trivialSchedulerState
 
@@ -58,11 +65,32 @@ func (s *trivialSchedulerState) canElect() bool {
 	return s.nodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil
 }
 
-func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.Broker) error { //nolint:gocyclo
+func (s *trivialSchedulerState) elect(con *contract.Contract, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
 	var committees []*api.Committee
 
-	nodeList := s.nodeLists[s.epoch]
-	beacon := s.beacons[s.epoch]
+	maybeBroadcast := func() {
+		if notifier != nil {
+			for _, committee := range committees {
+				notifier.Broadcast(committee)
+			}
+		}
+	}
+
+	// Initialize the map for this epoch iff it is missing.
+	if s.committees[epoch] == nil {
+		s.committees[epoch] = make(map[signature.MapKey][]*api.Committee)
+	}
+	comMap := s.committees[epoch]
+
+	// This may be cached due to an external entity polling for this.
+	conID := con.ID.ToMapKey()
+	if committees = comMap[conID]; committees != nil {
+		maybeBroadcast()
+		return committees, nil
+	}
+
+	nodeList := s.nodeLists[epoch]
+	beacon := s.beacons[epoch]
 	nrNodes := len(nodeList)
 
 	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage} {
@@ -76,19 +104,19 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 			sz = int(con.StorageGroupSize)
 			ctx = rngContextStorage
 		default:
-			return fmt.Errorf("scheduler: invalid committee type: %v", kind)
+			return nil, fmt.Errorf("scheduler: invalid committee type: %v", kind)
 		}
 
 		if sz == 0 {
-			return errors.New("scheduler: empty committee not allowed")
+			return nil, fmt.Errorf("scheduler: empty committee not allowed")
 		}
 		if sz > nrNodes {
-			return errors.New("scheduler: committee size exceeds available nodes")
+			return nil, fmt.Errorf("scheduler: committee size exceeds available nodes")
 		}
 
 		drbg, err := drbg.New(crypto.SHA512, beacon, con.ID[:], ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		rngSrc := mathrand.New(drbg)
 		rng := rand.New(rngSrc)
@@ -97,7 +125,7 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 		committee := &api.Committee{
 			Kind:     kind,
 			Contract: con,
-			ValidFor: s.epoch,
+			ValidFor: epoch,
 		}
 
 		for i := 0; i < sz; i++ {
@@ -119,16 +147,10 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, notifier *pubsub.B
 		committees = append(committees, committee)
 	}
 
-	if s.committees[s.epoch] == nil {
-		s.committees[s.epoch] = make(map[signature.MapKey][]*api.Committee)
-	}
-	comMap := s.committees[s.epoch]
-	comMap[con.ID.ToMapKey()] = committees
-	for _, committee := range committees {
-		notifier.Broadcast(committee)
-	}
+	comMap[conID] = committees
+	maybeBroadcast()
 
-	return nil
+	return committees, nil
 }
 
 func (s *trivialSchedulerState) prune() {
@@ -184,11 +206,75 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
+func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) { // nolint: gocyclo
+	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
+	if !ok {
+		return nil, errIncompatibleBackends
+	}
+	beacon, ok := s.beacon.(beacon.BlockBackend)
+	if !ok {
+		return nil, errIncompatibleBackends
+	}
+	reg, ok := s.registry.(registry.BlockBackend)
+	if !ok {
+		return nil, errIncompatibleBackends
+	}
+
+	epoch, _, err := timeSource.GetBlockEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	conID := id.ToMapKey()
+
+	s.state.Lock()
+	defer s.state.Unlock()
+
+	// Service the request from the cache if possible.
+	if comMap := s.state.committees[epoch]; comMap != nil {
+		if committees := comMap[conID]; committees != nil {
+			return committees, nil
+		}
+	}
+
+	// Do the election for the contract now.  Since rescheduling isn't
+	// allowed, this will give identical output to what the worker will
+	// do eventually.
+	//
+	// Note: Since we're likely racing ahead of the worker, we need to
+	// poll the other backends for what we need to elect.
+
+	if b := s.state.beacons[epoch]; b == nil {
+		b, err = beacon.GetBlockBeacon(ctx, height)
+		if err != nil {
+			return nil, err
+		}
+		s.state.beacons[epoch] = b
+	}
+
+	if nodeList := s.state.nodeLists[epoch]; nodeList == nil {
+		var nl *registry.NodeList
+		nl, err = reg.GetBlockNodeList(ctx, height)
+		if err != nil {
+			return nil, err
+		}
+		s.state.nodeLists[epoch] = nl.Nodes
+	}
+
+	con, err := reg.GetContract(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.state.elect(con, epoch, nil)
+}
+
 func (s *trivialScheduler) electSingle(con *contract.Contract, notifier *pubsub.Broker) {
 	s.state.Lock()
 	defer s.state.Unlock()
 
-	if err := s.state.elect(con, s.notifier); err != nil {
+	committees, err := s.state.elect(con, s.state.epoch, s.notifier)
+	if err != nil {
 		s.logger.Debug("worker: failed to elect (single)",
 			"contract", con,
 			"err", err,
@@ -198,7 +284,7 @@ func (s *trivialScheduler) electSingle(con *contract.Contract, notifier *pubsub.
 
 	s.logger.Debug("worker: election (single)",
 		"contract", con,
-		"committees", s.state.committees[s.state.epoch][con.ID.ToMapKey()],
+		"committees", committees,
 	)
 }
 
@@ -207,7 +293,8 @@ func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
 	defer s.state.Unlock()
 
 	for _, v := range s.state.contracts {
-		if err := s.state.elect(v, s.notifier); err != nil {
+		committees, err := s.state.elect(v, s.state.epoch, s.notifier)
+		if err != nil {
 			s.logger.Debug("worker: failed to elect",
 				"contract", v,
 				"err", err,
@@ -217,24 +304,24 @@ func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
 
 		s.logger.Debug("worker: election",
 			"contract", v,
-			"committees", s.state.committees[s.state.epoch][v.ID.ToMapKey()],
+			"committees", committees,
 		)
 	}
 
 	s.state.lastElect = s.state.epoch
 }
 
-func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend) { //nolint:gocyclo
-	timeCh, sub := timeSource.WatchEpochs()
+func (s *trivialScheduler) worker() { //nolint:gocyclo
+	timeCh, sub := s.timeSource.WatchEpochs()
 	defer sub.Close()
 
-	contractCh, sub := reg.WatchContracts()
+	contractCh, sub := s.registry.WatchContracts()
 	defer sub.Close()
 
-	nodeListCh, sub := reg.WatchNodeList()
+	nodeListCh, sub := s.registry.WatchNodeList()
 	defer sub.Close()
 
-	beaconCh, sub := beacon.WatchBeacons()
+	beaconCh, sub := s.beacon.WatchBeacons()
 	defer sub.Close()
 
 	for {
@@ -250,24 +337,25 @@ func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Bac
 			s.state.updateEpoch(epoch)
 			s.state.prune()
 		case ev := <-nodeListCh:
-			if s.state.nodeLists[ev.Epoch] != nil {
-				s.logger.Error("worker: node list when already received",
-					"epoch", ev.Epoch,
-				)
-				continue
-			}
+			// TODO: Check to see if there is an existing *different*
+			// node list, and ignore the new one.
+			//
+			// Omitting the check is mostly harmess, since a changing
+			// node list within an epoch is an invariant violation.
 			s.logger.Debug("worker: node list for epoch",
 				"epoch", ev.Epoch,
 			)
 			s.state.nodeLists[ev.Epoch] = ev.Nodes
 		case ev := <-beaconCh:
 			if b := s.state.beacons[ev.Epoch]; b != nil {
-				s.logger.Error("worker: beacon when already received",
-					"epoch", ev.Epoch,
-					"beacon", hex.EncodeToString(b),
-					"new_beacon", hex.EncodeToString(ev.Beacon),
-				)
-				continue
+				if !bytes.Equal(b, ev.Beacon) {
+					s.logger.Error("worker: beacon when already received",
+						"epoch", ev.Epoch,
+						"beacon", hex.EncodeToString(b),
+						"new_beacon", hex.EncodeToString(ev.Beacon),
+					)
+					continue
+				}
 			}
 			s.logger.Debug("worker: beacon for epoch",
 				"epoch", ev.Epoch,
@@ -306,9 +394,12 @@ func (s *trivialScheduler) worker(timeSource epochtime.Backend, reg registry.Bac
 }
 
 // New constracts a new trivial scheduler Backend instance.
-func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend) api.Backend {
+func New(timeSource epochtime.Backend, registry registry.Backend, beacon beacon.Backend) api.Backend {
 	s := &trivialScheduler{
-		logger: logging.GetLogger("scheduler/trivial"),
+		logger:     logging.GetLogger("scheduler/trivial"),
+		timeSource: timeSource,
+		registry:   registry,
+		beacon:     beacon,
 		state: &trivialSchedulerState{
 			nodeLists:  make(map[epochtime.EpochTime][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
@@ -346,7 +437,7 @@ func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backe
 		}
 	})
 
-	go s.worker(timeSource, reg, beacon)
+	go s.worker()
 
 	return s
 }
