@@ -3,6 +3,7 @@ package tendermint
 
 import (
 	"encoding/hex"
+	"sync"
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
@@ -27,18 +28,26 @@ import (
 // BackendName is the name of this implementation.
 const BackendName = "tendermint"
 
-var _ api.Backend = (*tendermintBackend)(nil)
+var (
+	_ api.Backend      = (*tendermintBackend)(nil)
+	_ api.BlockBackend = (*tendermintBackend)(nil)
+)
 
 type tendermintBackend struct {
 	logger *logging.Logger
 
-	client tmcli.Client
+	timeSource epochtime.BlockBackend
+	client     tmcli.Client
 
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
 	nodeListNotifier *pubsub.Broker
 	contractNotifier *pubsub.Broker
 
+	cached struct {
+		sync.Mutex
+		nodeLists map[epochtime.EpochTime]*api.NodeList
+	}
 	lastEpoch epochtime.EpochTime
 }
 
@@ -217,6 +226,15 @@ func (r *tendermintBackend) WatchContracts() (<-chan *contract.Contract, *pubsub
 	return typedCh, sub
 }
 
+func (r *tendermintBackend) GetBlockNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+	epoch, _, err := r.timeSource.GetBlockEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.getNodeList(ctx, epoch)
+}
+
 func (r *tendermintBackend) getContracts(ctx context.Context) ([]*contract.Contract, error) {
 	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetContracts, nil)
 	if err != nil {
@@ -293,8 +311,8 @@ func (r *tendermintBackend) workerEvents() {
 	}
 }
 
-func (r *tendermintBackend) workerPerEpochList(timeSource epochtime.BlockBackend) {
-	epochEvents, sub := timeSource.WatchEpochs()
+func (r *tendermintBackend) workerPerEpochList() {
+	epochEvents, sub := r.timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
 		newEpoch, ok := <-epochEvents
@@ -303,56 +321,92 @@ func (r *tendermintBackend) workerPerEpochList(timeSource epochtime.BlockBackend
 			return
 		}
 
-		height, err := timeSource.GetEpochBlock(context.Background(), newEpoch)
-		if err != nil {
-			r.logger.Error("worker: failed to get block height for epoch",
-				"epoch", newEpoch,
-			)
-			continue
-		}
-
 		r.logger.Debug("worker: epoch transition",
 			"prev_epoch", r.lastEpoch,
 			"epoch", newEpoch,
-			"block_height", height,
 		)
 
 		if newEpoch == r.lastEpoch {
 			continue
 		}
 
-		r.buildNodeList(newEpoch, height)
+		nl, err := r.getNodeList(context.Background(), newEpoch)
+		if err != nil {
+			r.logger.Error("worker: failed to generate node list for epoch",
+				"err", err,
+				"epoch", newEpoch,
+			)
+			continue
+		}
+
+		r.logger.Debug("worker: built node list",
+			"newEpoch", newEpoch,
+			"nodes", nl.Nodes,
+		)
+
+		r.nodeListNotifier.Broadcast(nl)
+		r.sweepNodeLists(newEpoch)
 		r.lastEpoch = newEpoch
 	}
 }
 
-func (r *tendermintBackend) buildNodeList(newEpoch epochtime.EpochTime, height int64) {
+func (r *tendermintBackend) getNodeList(ctx context.Context, epoch epochtime.EpochTime) (*api.NodeList, error) {
+	r.cached.Lock()
+	defer r.cached.Unlock()
+
+	// Service the request from the cache if possible.
+	nl, ok := r.cached.nodeLists[epoch]
+	if ok {
+		return nl, nil
+	}
+
+	// Generate the nodelist.
+	height, err := r.timeSource.GetEpochBlock(ctx, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: failed to query block height")
+	}
+
 	opts := tmcli.ABCIQueryOptions{
 		Height:  height,
 		Trusted: true,
 	}
 	response, err := tmapi.QueryWithOptions(r.client, tmapi.QueryRegistryGetNodes, nil, opts)
 	if err != nil {
-		panic(err)
+		return nil, errors.Wrap(err, "registry: failed to query nodes")
 	}
 
 	var nodes []*node.Node
 	if err := cbor.Unmarshal(response, &nodes); err != nil {
-		panic(err)
+		return nil, errors.Wrap(err, "registry: failed node deserialization")
 	}
 
 	api.SortNodeList(nodes)
 
-	r.logger.Debug("worker: built node list",
-		"newEpoch", newEpoch,
-		"height", height,
-		"nodes", nodes,
-	)
-
-	r.nodeListNotifier.Broadcast(&api.NodeList{
-		Epoch: newEpoch,
+	nl = &api.NodeList{
+		Epoch: epoch,
 		Nodes: nodes,
-	})
+	}
+
+	r.cached.nodeLists[epoch] = nl
+
+	return nl, nil
+}
+
+func (r *tendermintBackend) sweepNodeLists(epoch epochtime.EpochTime) {
+	const nrKept = 3
+
+	if epoch < nrKept {
+		return
+	}
+
+	r.cached.Lock()
+	defer r.cached.Unlock()
+
+	for k := range r.cached.nodeLists {
+		if k < epoch-nrKept {
+			delete(r.cached.nodeLists, k)
+		}
+	}
 }
 
 // New constructs a new tendermint backed registry Backend instance.
@@ -371,12 +425,14 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 
 	r := &tendermintBackend{
 		logger:           logging.GetLogger("registry/tendermint"),
+		timeSource:       blockTimeSource,
 		client:           service.GetClient(),
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 		lastEpoch:        epochtime.EpochInvalid,
 	}
+	r.cached.nodeLists = make(map[epochtime.EpochTime]*api.NodeList)
 	r.contractNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
 		contracts, err := r.getContracts(context.Background())
@@ -393,7 +449,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	})
 
 	go r.workerEvents()
-	go r.workerPerEpochList(blockTimeSource)
+	go r.workerPerEpochList()
 
 	return r, nil
 }

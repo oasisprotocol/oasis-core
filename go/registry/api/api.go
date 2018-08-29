@@ -133,6 +133,14 @@ type NodeList struct {
 	Nodes []*node.Node
 }
 
+// BlockBackend is a Backend that is backed by a blockchain.
+type BlockBackend interface {
+	Backend
+
+	// GetBlockNodeList returns the NodeList at the specified block height.
+	GetBlockNodeList(context.Context, int64) (*NodeList, error)
+}
+
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity) (*entity.Entity, error) {
 	// XXX: Ensure ent is well-formed.
