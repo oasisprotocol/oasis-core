@@ -1,5 +1,6 @@
 //! Block type.
 use std::convert::TryFrom;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
@@ -26,11 +27,14 @@ pub struct Block {
 impl Block {
     /// Generate a parent block from given child.
     pub fn new_parent_of(child: &Block) -> Block {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+
         let mut block = Block {
             header: Header {
                 version: child.header.version,
                 namespace: child.header.namespace,
                 round: child.header.round + U256::from(1),
+                timestamp: now.as_secs(),
                 previous_hash: child.header.get_encoded_hash(),
                 group_hash: H256::zero(),
                 input_hash: H256::zero(),

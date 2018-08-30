@@ -3,6 +3,7 @@ package memory
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -168,6 +169,7 @@ func (r *round) tryFinalize() (*api.Block, error) {
 	// Generate the final block.
 	block := new(api.Block)
 	block.Header = *header
+	block.Header.Timestamp = uint64(time.Now().Unix())
 	block.ComputationGroup = r.roundState.committee.Members
 	for _, node := range r.roundState.committee.Members {
 		id := node.PublicKey.ToMapKey()

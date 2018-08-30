@@ -32,12 +32,13 @@ message Header {
   uint32 version = 1;
   bytes namespace = 2;
   bytes round = 3;
-  bytes previous_hash = 4;
-  bytes group_hash = 5;
-  bytes input_hash = 6;
-  bytes output_hash = 7;
-  bytes state_root = 8;
-  bytes commitments_hash = 9;
+  uint64 timestamp = 4;
+  bytes previous_hash = 5;
+  bytes group_hash = 6;
+  bytes input_hash = 7;
+  bytes output_hash = 8;
+  bytes state_root = 9;
+  bytes commitments_hash = 10;
 }
 
 message LatestBlockRequest {
