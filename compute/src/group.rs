@@ -15,7 +15,7 @@ use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_epochtime::interface::EpochTime;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
-use ekiden_storage_base::BatchStorage;
+use ekiden_storage_base::StorageBackend;
 use ekiden_storage_frontend::StorageClient;
 
 use super::statetransfer::transition_keys;
@@ -105,7 +105,7 @@ struct Inner {
     /// Compute node's public key.
     public_key: B256,
     /// Storage backend for pulling active storage keys.
-    storage: Arc<BatchStorage>,
+    storage: Arc<StorageBackend>,
     /// Environment.
     environment: Arc<Environment>,
     /// Node identity,
@@ -129,7 +129,7 @@ impl ComputationGroup {
         entity_registry: Arc<EntityRegistryBackend>,
         environment: Arc<Environment>,
         identity: Arc<NodeIdentity>,
-        storage: Arc<BatchStorage>,
+        storage: Arc<StorageBackend>,
     ) -> Self {
         let instance = Self {
             inner: Arc::new(Inner {
@@ -225,7 +225,10 @@ impl ComputationGroup {
                 // Get active key list.
                 storage_transfer_task = Some(spawn_killable(transition_keys(
                     remote_client,
-                    inner.storage.persistent_storage().clone(),
+                    // TODO: Pass a storage backend that, when using multilayer storage, would
+                    // allow transition_keys to insert into the local layer without hassling the
+                    // last resort layer.
+                    unimplemented!(),
                 )));
             } else {
                 warn!("No nodes in previous committee, skipping storage transfer");

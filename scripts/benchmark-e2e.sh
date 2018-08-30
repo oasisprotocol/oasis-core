@@ -50,7 +50,7 @@ run_compute_node() {
         --max-batch-timeout 100 \
         --compute-replicas 1 \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --batch-storage immediate_remote \
+        --storage-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
@@ -63,7 +63,7 @@ run_compute_node_storage_multilayer_remote() {
     shift
     local extra_args=$*
 
-    local db_dir=/tmp/ekiden-test-storage-multilayer-sled-$id
+    local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
     rm -rf ${db_dir}
 
     # Generate port number.
@@ -75,8 +75,8 @@ run_compute_node_storage_multilayer_remote() {
         --max-batch-timeout 100 \
         --compute-replicas 1 \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --batch-storage multilayer \
-        --storage-multilayer-sled-storage-base "$db_dir" \
+        --storage-backend multilayer \
+        --storage-multilayer-local-storage-base "$db_dir" \
         --storage-multilayer-bottom-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
@@ -118,6 +118,7 @@ run_benchmark() {
 
     # Run the client.
     ${WORKDIR}/target/release/${client}-client \
+        --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \

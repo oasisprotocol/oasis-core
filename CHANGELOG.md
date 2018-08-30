@@ -19,8 +19,8 @@
   node key pair format in a backward-incompatible way.
 * **BACKWARD INCOMPATIBLE:** Make commitment and reveal message format consensus backend
   dependent and introduce `ConsensusSigner` interface to generate them.
-* **BACKWARD INCOMPATIBLE:** Compute node now requires `--batch-storage IMPL` option. Use
-  `--batch-storage immediate_remote` for original behavior.
+* **BACKWARD INCOMPATIBLE:** Compute node now requires `--storage-backend IMPL` option. Use
+  `--storage-backend remote` for original behavior.
 * **BACKWARD INCOMPATIBLE:** Use TLS client authentication for gRPC channels, encode
   node Ed25519 public key in TLS certificates, remove custom signed RPC arguments.
 * **BACKWARD INCOMPATIBLE:** Rename `build-contract` to `build-enclave`.

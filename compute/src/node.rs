@@ -21,7 +21,7 @@ use ekiden_roothash_base::{RootHashBackend, RootHashSigner};
 use ekiden_rpc_api;
 use ekiden_scheduler_base::Scheduler;
 use ekiden_storage_api::create_storage;
-use ekiden_storage_base::{BatchStorage, StorageService};
+use ekiden_storage_base::{StorageBackend, StorageService};
 use ekiden_tools::get_contract_identity;
 
 use super::group::ComputationGroup;
@@ -78,9 +78,12 @@ impl ComputeNode {
         let contract_registry = container.inject::<ContractRegistryBackend>()?;
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
         let scheduler = container.inject::<Scheduler>()?;
-        let storage_backend = container.inject::<BatchStorage>()?;
+        let storage_backend = container.inject::<StorageBackend>()?;
         let storage_service = create_storage(StorageService::new(
-            storage_backend.persistent_storage().clone(),
+            // TODO: Pass a storage backend that, when using multilayer storage, would allow
+            // transition_keys to replicate the appropriate content from the local layer without
+            // hassling the last resort layer.
+            storage_backend.clone(),
         ));
         let roothash_backend = container.inject::<RootHashBackend>()?;
         let roothash_signer = container.inject::<RootHashSigner>()?;
@@ -151,7 +154,12 @@ impl ComputeNode {
         let grpc_environment = environment.grpc();
 
         // Create worker.
-        let worker = Arc::new(Worker::new(config.worker, ias, storage_backend.clone()));
+        let worker = Arc::new(Worker::new(
+            config.worker,
+            ias,
+            environment.clone(),
+            storage_backend.clone(),
+        ));
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
