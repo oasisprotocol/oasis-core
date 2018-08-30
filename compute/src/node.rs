@@ -152,7 +152,12 @@ impl ComputeNode {
         let grpc_environment = environment.grpc();
 
         // Create worker.
-        let worker = Arc::new(Worker::new(config.worker, ias, storage_backend.clone()));
+        let worker = Arc::new(Worker::new(
+            config.worker,
+            ias,
+            environment.clone(),
+            storage_backend.clone(),
+        ));
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
