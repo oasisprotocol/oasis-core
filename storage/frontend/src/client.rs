@@ -10,7 +10,7 @@ use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_storage_api as api;
-use ekiden_storage_base::{BatchStorage, StorageBackend};
+use ekiden_storage_base::StorageBackend;
 
 /// Storage client implements the storage interface.  It exposes storage calls across a gRPC channel.
 pub struct StorageClient(api::StorageClient);
@@ -102,83 +102,6 @@ create_component!(
         Arg::with_name("storage-client-port")
             .long("storage-client-port")
             .help("(remote storage backend) Port that the storage client should connect to")
-            .takes_value(true)
-            .default_value("42261")
-    ]
-);
-
-/// For a gRPC storage endpoint that does not defer persistence, this struct implements
-/// BatchStorage.
-pub struct ImmediateClient(Arc<StorageBackend>);
-
-impl ImmediateClient {
-    pub fn new(delegate: StorageClient) -> Self {
-        ImmediateClient(Arc::new(delegate))
-    }
-}
-
-impl StorageBackend for ImmediateClient {
-    fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
-        self.0.get(key)
-    }
-
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
-        self.0.insert(value, expiry)
-    }
-
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
-        self.0.get_keys()
-    }
-}
-
-/// This implementation does no bookkeeping. It is up to the write operations themselves to wait
-/// for data to be persisted.
-impl BatchStorage for ImmediateClient {
-    fn start_batch(&self) {}
-
-    fn end_batch(&self) -> BoxFuture<()> {
-        Box::new(future::ok(()))
-    }
-
-    fn persistent_storage(&self) -> Arc<StorageBackend> {
-        self.0.clone()
-    }
-}
-
-// Register for dependency injection.
-create_component!(
-    immediate_remote,
-    "batch-storage",
-    ImmediateClient,
-    BatchStorage,
-    (|container: &mut Container| -> Result<Box<Any>> {
-        let environment: Arc<Environment> = container.inject()?;
-
-        let args = container.get_arguments().unwrap();
-        let channel = ChannelBuilder::new(environment.grpc())
-            .max_receive_message_len(i32::max_value())
-            .max_send_message_len(i32::max_value())
-            .connect(&format!(
-                "{}:{}",
-                args.value_of("batch-storage-immediate-client-host")
-                    .unwrap(),
-                args.value_of("batch-storage-immediate-client-port")
-                    .unwrap(),
-            ));
-
-        let client = StorageClient::new(channel);
-        let instance: Arc<BatchStorage> = Arc::new(ImmediateClient::new(client));
-        Ok(Box::new(instance))
-    }),
-    [
-        Arg::with_name("batch-storage-immediate-client-host")
-            .long("batch-storage-immediate-client-host")
-            .help("(immediate remote batch storage) Host that the storage client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1"),
-        Arg::with_name("batch-storage-immediate-client-port")
-            .long("batch-storage-immediate-client-port")
-            .help("(immediate remote batch storage) Port that the storage client should connect to")
             .takes_value(true)
             .default_value("42261")
     ]

@@ -1,113 +1,65 @@
 //! Batch storage backend.
-use std;
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::environment::Environment;
-use ekiden_common::futures::{self, future, stream, BoxFuture, Future, FutureExt, Stream};
-use ekiden_epochtime::interface::TimeSourceNotifier;
+use ekiden_common::error::Error;
+use ekiden_common::futures::{self, BoxFuture, Future, FutureExt, Stream};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
-use ekiden_storage_dummy::DummyStorageBackend;
 
 struct Inner {
-    /// Always-available backend to store uncommitted data.
-    always_available: Arc<StorageBackend>,
-    /// Storage backend for committed data.
-    committed: Arc<StorageBackend>,
-    /// Items inserted during the last transaction.
-    inserts: Mutex<Vec<(H256, u64)>>,
-    /// Maximum number of retries.
-    retries: usize,
-    /// Epoch information.
-    time_notifier: Arc<TimeSourceNotifier>,
-    /// Active key list.
-    key_list: Mutex<Arc<Vec<(H256, u64)>>>,
-    /// Accumulated key list.
-    accu_key_list: Mutex<Vec<(H256, u64)>>,
+    /// We do some writeback operations on the shared executor.
+    env: Arc<Environment>,
+    /// This map lets us answer consistently when we insert an item and try to get it before it is
+    /// persisted.
+    writeback: Arc<Mutex<HashMap<H256, Vec<u8>>>>,
+    /// Forward requests to this.
+    delegate: Arc<StorageBackend>,
+    /// A channel for transferring errors from asynchronous writes to the flush call.
+    error_tx: futures::sync::mpsc::UnboundedSender<Error>,
+    /// A channel for transferring errors from asynchronous writes to the flush call.
+    error_rx: futures::sync::mpsc::UnboundedReceiver<Error>,
 }
 
-/// Virtual storage backend which processes a batch of inserts.
-///
-/// This storage backend uses two actual storage backends:
-/// * The first is an always-available backend which is used to queue all inserts until
-///   a `commit` is issued. Currently, this uses an in-memory storage backend.
-/// * The second is backend is the actual backend where data should be committed to
-///   after the batch has been processed and a `commit` issued.
-///
-/// All gets first hit the always-available backend and in case of missing keys, they
-/// hit the committed backend.
 pub struct BatchStorageBackend {
-    inner: Arc<Inner>,
+    /// We cut this off when we flush, simulating the disposal of this object. We can't actually
+    /// consume this backend because many consumers have an Arc of the backend instead of owning
+    /// it.
+    inner: RwLock<Option<Inner>>,
 }
 
 impl BatchStorageBackend {
-    pub fn new(
-        committed: Arc<StorageBackend>,
-        retries: usize,
-        time_notifier: Arc<TimeSourceNotifier>,
-        environment: Arc<Environment>,
-    ) -> Self {
-        let instance = Self {
-            inner: Arc::new(Inner {
-                // TODO: Should we use persistent storage instead of holding a batch in memory?
-                always_available: Arc::new(DummyStorageBackend::new()),
-                committed,
-                inserts: Mutex::new(vec![]),
-                retries,
-                time_notifier,
-                key_list: Mutex::new(Arc::new(vec![])),
-                accu_key_list: Mutex::new(vec![]),
-            }),
-        };
-        instance.start(environment);
-        instance
+    pub fn new(env: Arc<Environment>, delegate: Arc<StorageBackend>) -> Self {
+        let (error_tx, error_rx) = futures::sync::mpsc::unbounded();
+        BatchStorageBackend {
+            inner: RwLock::new(Some(Inner {
+                env,
+                writeback: Arc::new(Mutex::new(HashMap::new())),
+                delegate,
+                error_tx,
+                error_rx,
+            })),
+        }
     }
 
-    /// Start tracking accumulated key list in each epoch.
-    fn start(&self, environment: Arc<Environment>) {
-        environment.spawn({
-            let shared_inner = self.inner.clone();
-            Box::new(
-                self.inner
-                    .time_notifier
-                    .watch_epochs()
-                    .for_each(move |_| {
-                        let mut accu_key_list = shared_inner.accu_key_list.lock().unwrap();
-                        let mut key_list = shared_inner.key_list.lock().unwrap();
-                        // Get active key list.
-                        *key_list = Arc::new(std::mem::replace(&mut *accu_key_list, vec![]));
-                        Ok(())
-                    })
-                    .then(|_| future::ok(())),
-            )
-        })
-    }
-
-    /// Commit all inserts to the committed backend.
-    pub fn commit(&self) -> BoxFuture<()> {
-        // Get insert log.
-        let inserts = {
-            let mut inserts = self.inner.inserts.lock().unwrap();
-            std::mem::replace(&mut *inserts, vec![])
-        };
-
-        // Iterate over log and insert all values, with retry.
-        let retries = self.inner.retries;
-        let always_available = self.inner.always_available.clone();
-        let committed = self.inner.committed.clone();
-
-        stream::iter_ok(inserts.into_iter())
-            .for_each(move |(key, expiry)| {
-                let committed = committed.clone();
-
-                always_available.get(key).and_then(move |value| {
-                    futures::retry(retries, move || committed.insert(value.clone(), expiry))
-                        .or_else(|error| {
-                            warn!("Failed to commit to storage: {:?}", error);
-
-                            Err(error)
-                        })
-                })
+    /// Wait for inserts to be persisted to the delegate backend. Report any errors from inserts
+    /// issued in this batch.
+    pub fn flush(&self) -> BoxFuture<()> {
+        self.inner
+            .write()
+            .unwrap()
+            .take()
+            .unwrap()
+            .error_rx
+            .collect()
+            .then(|result| {
+                let errors = result.unwrap();
+                if errors.is_empty() {
+                    Ok(())
+                } else {
+                    Err(Error::new(format!("Some inserts failed: {:?}", errors)))
+                }
             })
             .into_box()
     }
@@ -115,98 +67,112 @@ impl BatchStorageBackend {
 
 impl StorageBackend for BatchStorageBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
-        let committed = self.inner.committed.clone();
-        let retries = self.inner.retries;
-
-        self.inner
-            .always_available
-            .get(key)
-            .or_else(move |_error| futures::retry(retries, move || committed.get(key)))
-            .into_box()
+        let inner_guard = self.inner.read().unwrap();
+        let inner = inner_guard.as_ref().unwrap();
+        if let Some(value) = inner.writeback.lock().unwrap().get(&key) {
+            return futures::future::ok(value.clone()).into_box();
+        }
+        inner.delegate.get(key)
     }
 
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
-        let inner = self.inner.clone();
         let key = hash_storage_key(&value);
-
-        self.inner
-            .always_available
-            .insert(value, expiry)
-            .and_then(move |_| {
-                let mut inserts = inner.inserts.lock().unwrap();
-                inserts.push((key, expiry));
-                let mut accu_key_list = inner.accu_key_list.lock().unwrap();
-                accu_key_list.push((key, expiry));
-                Ok(())
-            })
-            .into_box()
+        let inner_guard = self.inner.read().unwrap();
+        let inner = inner_guard.as_ref().unwrap();
+        let mut writeback_guard = inner.writeback.lock().unwrap();
+        if writeback_guard.contains_key(&key) {
+            warn!(
+                "insert: tried to insert key {} which is already writeback. ignoring",
+                key
+            );
+        } else {
+            writeback_guard.insert(key, value.clone());
+            let writeback = inner.writeback.clone();
+            let error_tx = inner.error_tx.clone();
+            inner.env.spawn(
+                inner
+                    .delegate
+                    .insert(value, expiry)
+                    .then(move |result| {
+                        match result {
+                            Ok(()) => {
+                                writeback.lock().unwrap().remove(&key);
+                            }
+                            Err(error) => {
+                                warn!(
+                                    "insert: unable to persist key {} to delegate: {:?}",
+                                    key, error
+                                );
+                                error_tx.unbounded_send(error).unwrap();
+                                // Writeback entry remains, keeping storage consistent. But flush
+                                // will fail.
+                            }
+                        }
+                        Ok(())
+                    })
+                    .into_box(),
+            );
+        }
+        futures::future::ok(()).into_box()
     }
 
-    /// Get the active key list.
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
-        let inner = self.inner.clone();
-
-        Box::new(future::lazy(move || {
-            let key_list = inner.key_list.lock().unwrap();
-            Ok(key_list.clone())
-        }))
+        unimplemented!()
     }
 }
 
 #[cfg(test)]
 mod test {
-    extern crate grpcio;
-    use super::*;
-    use ekiden_common::environment::GrpcEnvironment;
-    use ekiden_epochtime::interface::EPOCH_INTERVAL;
-    use ekiden_epochtime::local::{LocalTimeSourceNotifier, MockTimeSource};
     use std::sync::Arc;
-    use std::{thread, time};
+
+    use ekiden_common;
+    use ekiden_common::environment::GrpcEnvironment;
+    use ekiden_common::futures::Future;
+    use ekiden_storage_base::{hash_storage_key, StorageBackend};
+    use ekiden_storage_dummy::DummyStorageBackend;
+    extern crate grpcio;
+
+    use BatchStorageBackend;
 
     #[test]
     fn test_batch() {
+        ekiden_common::testing::try_init_logging();
         let grpc_environment = grpcio::EnvBuilder::new().build();
         let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
-        let time_source = Arc::new(MockTimeSource::new());
-        let time_notifier = Arc::new(LocalTimeSourceNotifier::new(time_source.clone()));
-        let committed = Arc::new(DummyStorageBackend::new());
-        let batch = BatchStorageBackend::new(
-            committed.clone(),
-            1,
-            time_notifier.clone(),
-            environment.clone(),
-        );
 
-        let key = hash_storage_key(b"value");
-        let delay = time::Duration::from_millis(1000);
+        let delegate = Arc::new(DummyStorageBackend::new());
 
-        // Force progression of epoch.
-        time_source.set_mock_time(0, EPOCH_INTERVAL).unwrap();
-        time_notifier.notify_subscribers().unwrap();
-        thread::sleep(delay);
+        {
+            let batch = Arc::new(BatchStorageBackend::new(
+                environment.clone(),
+                delegate.clone(),
+            ));
+            let storage: Arc<StorageBackend> = batch.clone();
 
-        assert!(batch.get(key).wait().is_err());
-        batch.insert(b"value".to_vec(), 10).wait().unwrap();
-        assert_eq!(batch.get(key).wait(), Ok(b"value".to_vec()));
+            let key = hash_storage_key(b"value");
+            assert!(storage.get(key).wait().is_err());
 
-        // Force progression of epoch.
-        time_source.set_mock_time(1, EPOCH_INTERVAL).unwrap();
-        time_notifier.notify_subscribers().unwrap();
-        thread::sleep(delay);
+            // Test that key is available immediately from same interface.
+            storage.insert(b"value".to_vec(), 10).wait().unwrap();
+            assert_eq!(storage.get(key).wait(), Ok(b"value".to_vec()));
 
-        // Test that key has not been inserted into committed backend.
-        assert!(committed.get(key).wait().is_err());
+            // Flush.
+            batch.flush().wait().unwrap();
 
-        // Commit.
-        batch.commit().wait().unwrap();
-        assert_eq!(committed.get(key).wait(), Ok(b"value".to_vec()));
-        // Get the active key list.
-        let list = batch.get_keys().wait().unwrap();
-        println!("Active key list is {:?}", list);
+            // Test that key is available in delegate after committing.
+            assert_eq!(delegate.get(key).wait(), Ok(b"value".to_vec()));
+        }
 
-        // Insert directly to committed and expect the backend to find it.
-        let key = hash_storage_key(b"another");
-        committed.insert(b"another".to_vec(), 10).wait().unwrap();
-        assert_eq!(batch.get(key).wait(), Ok(b"another".to_vec()));
+        {
+            let batch = Arc::new(BatchStorageBackend::new(
+                environment.clone(),
+                delegate.clone(),
+            ));
+
+            // Insert directly to delegate and expect to find it in this interface.
+            let key = hash_storage_key(b"another");
+            delegate.insert(b"another".to_vec(), 10).wait().unwrap();
+            assert_eq!(batch.get(key).wait(), Ok(b"another".to_vec()));
+        }
     }
 }

@@ -20,7 +20,7 @@ use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
 use ekiden_roothash_base::{Block, Event, RootHashBackend, RootHashSigner};
 use ekiden_scheduler_base::{CommitteeNode, Role};
-use ekiden_storage_base::{hash_storage_key, BatchStorage};
+use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 use super::group::ComputationGroup;
 use super::worker::{ComputedBatch, Worker};
@@ -239,7 +239,7 @@ struct Inner {
     /// Consensus signer.
     signer: Arc<RootHashSigner>,
     /// Storage backend.
-    storage: Arc<BatchStorage>,
+    storage: Arc<StorageBackend>,
     /// Worker that can process batches.
     worker: Arc<Worker>,
     /// Computation group that can process batches.
@@ -295,7 +295,7 @@ impl RootHashFrontend {
         computation_group: Arc<ComputationGroup>,
         backend: Arc<RootHashBackend>,
         signer: Arc<RootHashSigner>,
-        storage: Arc<BatchStorage>,
+        storage: Arc<StorageBackend>,
     ) -> Self {
         measure_configure!(
             "batch_insert_size",
@@ -644,12 +644,10 @@ impl RootHashFrontend {
                 State::ProcessingBatch(Role::Leader, Arc::new(batch.into())),
             );
 
-            inner.storage.start_batch();
             measure_histogram!("batch_insert_size", encoded_batch.len());
             inner
                 .storage
                 .insert(encoded_batch, 1)
-                .join(inner.storage.end_batch())
                 .and_then(move |_| {
                     require_state!(
                         inner,
@@ -812,13 +810,10 @@ impl RootHashFrontend {
         // Store outputs and then commit to block.
         let inner_clone = inner.clone();
 
-        inner.storage.start_batch();
         measure_histogram!("outputs_insert_size", encoded_outputs.len());
         inner
             .storage
             .insert(encoded_outputs, 2)
-            .join(inner.storage.end_batch())
-            .and_then(|((), ())| Ok(()))
             .or_else(|error| {
                 // Failed to store outputs, abort current batch.
                 Self::fail_batch(

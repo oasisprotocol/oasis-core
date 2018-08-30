@@ -3,7 +3,7 @@ use std::result::Result as StdResult;
 use std::sync::Arc;
 
 use ekiden_core::futures::prelude::*;
-use ekiden_storage_base::{BatchStorage, StorageBackend};
+use ekiden_storage_base::StorageBackend;
 
 enum KeyState {
     Present,

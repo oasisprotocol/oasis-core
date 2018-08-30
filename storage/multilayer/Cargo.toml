@@ -21,3 +21,6 @@ ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-storage-dynamodb = { path = "../dynamodb", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../frontend", version = "0.2.0-alpha" }
 ekiden-storage-persistent = { path = "../persistent", version = "0.2.0-alpha" }
+
+[dev-dependencies]
+ekiden-storage-dummy = { path = "../dummy", version = "0.2.0-alpha" }

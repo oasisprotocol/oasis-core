@@ -76,7 +76,7 @@ fn register_components(known_components: &mut KnownComponents) {
     // Time.
     ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Storage.
-    ekiden_storage_frontend::ImmediateClient::register(known_components);
+    ekiden_storage_frontend::StorageClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
     // Root hash.
     ekiden_roothash_client::RootHashClient::register(known_components);
