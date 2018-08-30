@@ -6,6 +6,7 @@ extern crate sgx_urts;
 extern crate ekiden_common;
 extern crate ekiden_contract_common;
 extern crate ekiden_enclave_untrusted;
+extern crate ekiden_roothash_base;
 
 #[doc(hidden)]
 pub mod ecall_proxy;

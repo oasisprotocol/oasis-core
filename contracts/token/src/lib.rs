@@ -19,6 +19,7 @@ use ekiden_core::futures::prelude::*;
 #[cfg(target_env = "sgx")]
 use ekiden_storage_base::backend::StorageBackend;
 use ekiden_trusted::contract::create_contract;
+use ekiden_trusted::contract::dispatcher::ContractCallContext;
 #[cfg(target_env = "sgx")]
 use ekiden_trusted::db::untrusted::UntrustedStorageBackend;
 use ekiden_trusted::enclave::enclave_init;
@@ -30,12 +31,12 @@ with_api! {
     create_contract!(api);
 }
 
-pub fn null(_request: &bool) -> Result<()> {
+pub fn null(_request: &bool, _ctx: &ContractCallContext) -> Result<()> {
     Ok(())
 }
 
 #[cfg(target_env = "sgx")]
-pub fn null_storage_insert(request: &u64) -> Result<()> {
+pub fn null_storage_insert(request: &u64, _ctx: &ContractCallContext) -> Result<()> {
     let backend = UntrustedStorageBackend::new();
 
     for _ in 0..*request {
@@ -46,12 +47,12 @@ pub fn null_storage_insert(request: &u64) -> Result<()> {
 }
 
 #[cfg(not(target_env = "sgx"))]
-pub fn null_storage_insert(_request: &u64) -> Result<()> {
+pub fn null_storage_insert(_request: &u64, _ctx: &ContractCallContext) -> Result<()> {
     panic!("only supported on sgx");
 }
 
 #[cfg(target_env = "sgx")]
-pub fn list_storage_insert(request: &Vec<Vec<u8>>) -> Result<()> {
+pub fn list_storage_insert(request: &Vec<Vec<u8>>, _ctx: &ContractCallContext) -> Result<()> {
     let backend = UntrustedStorageBackend::new();
 
     for item in request.iter() {
@@ -62,11 +63,11 @@ pub fn list_storage_insert(request: &Vec<Vec<u8>>) -> Result<()> {
 }
 
 #[cfg(not(target_env = "sgx"))]
-pub fn list_storage_insert(_request: &Vec<String>) -> Result<()> {
+pub fn list_storage_insert(_request: &Vec<String>, _ctx: &ContractCallContext) -> Result<()> {
     panic!("only supported on sgx");
 }
 
-pub fn create(request: &CreateRequest) -> Result<CreateResponse> {
+pub fn create(request: &CreateRequest, _ctx: &ContractCallContext) -> Result<CreateResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
@@ -80,7 +81,7 @@ pub fn create(request: &CreateRequest) -> Result<CreateResponse> {
     Ok(CreateResponse::new())
 }
 
-pub fn transfer(request: &TransferRequest) -> Result<TransferResponse> {
+pub fn transfer(request: &TransferRequest, _ctx: &ContractCallContext) -> Result<TransferResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
@@ -93,7 +94,10 @@ pub fn transfer(request: &TransferRequest) -> Result<TransferResponse> {
     Ok(TransferResponse::new())
 }
 
-pub fn get_balance(request: &GetBalanceRequest) -> Result<GetBalanceResponse> {
+pub fn get_balance(
+    request: &GetBalanceRequest,
+    _ctx: &ContractCallContext,
+) -> Result<GetBalanceResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
