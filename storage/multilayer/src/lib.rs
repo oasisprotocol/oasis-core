@@ -15,6 +15,7 @@ extern crate grpcio;
 use grpcio::ChannelBuilder;
 extern crate log;
 use log::debug;
+use log::trace;
 extern crate rusoto_core;
 extern crate tokio_core;
 
@@ -80,9 +81,10 @@ impl StorageBackend for MultilayerBackend {
         self.local
             .get(key)
             .or_else(move |error| {
-                debug!(
+                trace!(
                     "get: unable to get key {} from local layer: {:?}",
-                    key, error
+                    key,
+                    error
                 );
                 let incoming_cleanup = incoming.clone();
                 let mut incoming_guard = incoming.lock().unwrap();

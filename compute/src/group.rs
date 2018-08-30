@@ -225,6 +225,9 @@ impl ComputationGroup {
                 // Get active key list.
                 storage_transfer_task = Some(spawn_killable(transition_keys(
                     remote_client,
+                    // TODO: Pass a storage backend that, when using multilayer storage, would
+                    // allow transition_keys to insert into the local layer without hassling the
+                    // last resort layer.
                     unimplemented!(),
                 )));
             } else {

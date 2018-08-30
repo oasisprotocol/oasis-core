@@ -88,7 +88,7 @@ impl StorageBackend for BatchStorageBackend {
             .expect("BatchStorageBackend access after flush");
         let mut writeback_guard = inner.writeback.lock().unwrap();
         if writeback_guard.contains_key(&key) {
-            warn!(
+            debug!(
                 "insert: tried to insert key {} which is already writeback. ignoring",
                 key
             );

@@ -80,7 +80,9 @@ impl ComputeNode {
         let scheduler = container.inject::<Scheduler>()?;
         let storage_backend = container.inject::<StorageBackend>()?;
         let storage_service = create_storage(StorageService::new(
-            // TODO: Expose a backend that appropriately tracks active storage items.
+            // TODO: Pass a storage backend that, when using multilayer storage, would allow
+            // transition_keys to replicate the appropriate content from the local layer without
+            // hassling the last resort layer.
             storage_backend.clone(),
         ));
         let roothash_backend = container.inject::<RootHashBackend>()?;
