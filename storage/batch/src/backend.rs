@@ -22,6 +22,9 @@ struct Inner {
     error_rx: futures::sync::mpsc::UnboundedReceiver<Error>,
 }
 
+/// This storage backend forwards calls to a delegate and makes inserts return successfully
+/// immediately and performs them asynchronously. Call its `flush` method to disconnect from the
+/// delegate and wait for asynchronous inserts to finish.
 pub struct BatchStorageBackend {
     /// We cut this off when we flush, simulating the disposal of this object. We can't actually
     /// consume this backend because many consumers have an Arc of the backend instead of owning
@@ -50,7 +53,7 @@ impl BatchStorageBackend {
             .write()
             .unwrap()
             .take()
-            .unwrap()
+            .expect("BatchStorageBackend access after flush")
             .error_rx
             .collect()
             .then(|result| {
@@ -68,7 +71,9 @@ impl BatchStorageBackend {
 impl StorageBackend for BatchStorageBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
         let inner_guard = self.inner.read().unwrap();
-        let inner = inner_guard.as_ref().unwrap();
+        let inner = inner_guard
+            .as_ref()
+            .expect("BatchStorageBackend access after flush");
         if let Some(value) = inner.writeback.lock().unwrap().get(&key) {
             return futures::future::ok(value.clone()).into_box();
         }
@@ -78,7 +83,9 @@ impl StorageBackend for BatchStorageBackend {
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         let key = hash_storage_key(&value);
         let inner_guard = self.inner.read().unwrap();
-        let inner = inner_guard.as_ref().unwrap();
+        let inner = inner_guard
+            .as_ref()
+            .expect("BatchStorageBackend access after flush");
         let mut writeback_guard = inner.writeback.lock().unwrap();
         if writeback_guard.contains_key(&key) {
             warn!(
