@@ -112,8 +112,7 @@ func (t *tendermintBackend) getBeaconImpl(ctx context.Context, epoch epochtime.E
 }
 
 func (t *tendermintBackend) getEntropyGenesis() ([]byte, error) {
-	client := t.service.GetClient()
-	res, err := client.Genesis()
+	res, err := t.service.Genesis()
 	if err != nil {
 		return nil, err
 	}

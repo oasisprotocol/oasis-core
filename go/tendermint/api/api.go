@@ -5,14 +5,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	tmcommon "github.com/tendermint/tendermint/libs/common"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
-	tmcli "github.com/tendermint/tendermint/rpc/client"
-
-	"github.com/oasislabs/ekiden/go/common/cbor"
 )
 
 // Code is a status code for ABCI requests.
@@ -59,73 +55,6 @@ func (c Code) String() string {
 // TagApplication is an ABCI transaction tag for denoting which application
 // processed the given transaction. Value is the given application name.
 var TagApplication = []byte("ekiden.app")
-
-// MarshalTx marshals a CBOR-encodable transaction with given application tag
-// prefix.
-//
-// Messages marshalled using this function can be used as transactions to
-// ABCI applications. The application tag must belong to a valid application
-// otherwise such a transaction is invalid.
-func MarshalTx(tag byte, tx interface{}) []byte {
-	message := cbor.Marshal(tx)
-	return append([]byte{tag}, message...)
-}
-
-// BroadcastTx broadcasts a transaction for Ekiden ABCI application.
-//
-// The CBOR-encodable transaction together with the given application tag is
-// first marshalled and then transmitted using BroadcastTxCommit via the
-// given Tendermint client.
-func BroadcastTx(client tmcli.Client, tag byte, tx interface{}) error {
-	data := MarshalTx(tag, tx)
-
-	response, err := client.BroadcastTxCommit(data)
-	if err != nil {
-		return errors.Wrap(err, "broadcast tx: commit failed")
-	}
-
-	if response.CheckTx.Code != CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: check tx failed: %s", response.CheckTx.Info)
-	}
-	if response.DeliverTx.Code != CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: deliver tx failed: %s", response.DeliverTx.Info)
-	}
-
-	return nil
-}
-
-// Query transmits a query to the Ekiden ABCI application.
-//
-// The query is performed at the latest block height. If you need to specify a custom
-// height use QueryWithOptions.
-func Query(client tmcli.Client, path string, query interface{}) ([]byte, error) {
-	opts := tmcli.ABCIQueryOptions{
-		// Query at latest height by default.
-		Height: 0,
-		// Since we are querying the local in-memory node we trust it.
-		Trusted: true,
-	}
-
-	return QueryWithOptions(client, path, query, opts)
-}
-
-// QueryWithOptions transmits a query to the Ekiden ABCI application with custom options.
-func QueryWithOptions(client tmcli.Client, path string, query interface{}, opts tmcli.ABCIQueryOptions) ([]byte, error) {
-	var data []byte
-	if query != nil {
-		data = cbor.Marshal(query)
-	}
-	response, err := client.ABCIQuery(path, data)
-	if err != nil {
-		return nil, errors.Wrap(err, "query: request failed")
-	}
-
-	if response.Response.GetCode() != CodeOK.ToInt() {
-		return nil, fmt.Errorf("query: failed (code=%s)", Code(response.Response.GetCode()))
-	}
-
-	return response.Response.GetValue(), nil
-}
 
 // GetTxTag looks up a specific tag in a list of tags and returns its value if any.
 //

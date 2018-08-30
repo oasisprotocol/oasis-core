@@ -1,28 +1,34 @@
 package tendermint
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	tmabci "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmed "github.com/tendermint/tendermint/crypto/ed25519"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmpriv "github.com/tendermint/tendermint/privval"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -91,12 +97,70 @@ func (t *tendermintService) Started() <-chan struct{} {
 	return t.startedCh
 }
 
-func (t *tendermintService) GetClient() tmcli.Client {
+func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
 	if !t.isInitialized {
-		panic("tendermint: GetClient() called, when no tendermint backends enabled")
+		panic("tendermint: BroadcastTx() called, when no tendermint backends enabled")
 	}
 
-	return t.client
+	message := cbor.Marshal(tx)
+	data := append([]byte{tag}, message...)
+
+	response, err := t.client.BroadcastTxCommit(data)
+	if err != nil {
+		return errors.Wrap(err, "broadcast tx: commit failed")
+	}
+
+	if response.CheckTx.Code != api.CodeOK.ToInt() {
+		return fmt.Errorf("broadcast tx: check tx failed: %s", response.CheckTx.Info)
+	}
+	if response.DeliverTx.Code != api.CodeOK.ToInt() {
+		return fmt.Errorf("broadcast tx: deliver tx failed: %s", response.DeliverTx.Info)
+	}
+
+	return nil
+}
+
+func (t *tendermintService) Query(path string, query interface{}, height int64) ([]byte, error) {
+	if !t.isInitialized {
+		panic("tendermint: Query() called, when no tendermint backends enabled")
+	}
+
+	var data []byte
+	if query != nil {
+		data = cbor.Marshal(query)
+	}
+
+	// We submit queries directly to our application instance as going through
+	// tendermint's local client enforces a global mutex for all application
+	// requests, blocking queries from within the application itself.
+	//
+	// This is safe to do as long as all application query handlers only access
+	// state through the immutable tree.
+	request := tmabci.RequestQuery{
+		Data:   data,
+		Path:   path,
+		Height: height,
+		Prove:  false,
+	}
+	response := t.mux.Mux().Query(request)
+
+	if response.GetCode() != api.CodeOK.ToInt() {
+		return nil, fmt.Errorf("query: failed (code=%s)", api.Code(response.GetCode()))
+	}
+
+	return response.GetValue(), nil
+}
+
+func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error {
+	return t.node.EventBus().Subscribe(ctx, subscriber, query, out)
+}
+
+func (t *tendermintService) Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error {
+	return t.node.EventBus().Unsubscribe(ctx, subscriber, query)
+}
+
+func (t *tendermintService) Genesis() (*tmrpctypes.ResultGenesis, error) {
+	return t.client.Genesis()
 }
 
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
