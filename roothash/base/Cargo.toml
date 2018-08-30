@@ -8,12 +8,14 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
-ekiden-roothash-api = { path = "../api", version = "0.2.0-alpha" }
-protobuf = "~2.0"
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 serde = "1.0.71"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"
 serde_bytes = "~0.10"
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+ekiden-roothash-api = { path = "../api", version = "0.2.0-alpha" }
+ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
+protobuf = "~2.0"
