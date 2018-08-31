@@ -5,6 +5,7 @@ use sgx_types::*;
 use ekiden_common::error::{Error, Result};
 use ekiden_contract_common::batch::{CallBatch, OutputBatch};
 use ekiden_enclave_untrusted::Enclave;
+use ekiden_roothash_base::Header;
 
 use super::ecall_proxy;
 
@@ -13,13 +14,16 @@ pub trait EnclaveContract {
     const MAX_RESPONSE_SIZE: usize = 16 * 1024;
 
     /// Invoke a contract on a batch of calls and return the (encrypted) outputs.
-    fn contract_call_batch(&self, batch: &CallBatch) -> Result<OutputBatch>;
+    fn contract_call_batch(&self, batch: &CallBatch, header: &Header) -> Result<OutputBatch>;
 }
 
 impl EnclaveContract for Enclave {
-    fn contract_call_batch(&self, batch: &CallBatch) -> Result<OutputBatch> {
+    fn contract_call_batch(&self, batch: &CallBatch, header: &Header) -> Result<OutputBatch> {
         // Encode input batch.
         let batch_encoded = serde_cbor::to_vec(batch)?;
+
+        // Encode block header.
+        let header_encoded = serde_cbor::to_vec(header)?;
 
         // Reserve space up to the maximum size of serialized response.
         let mut response: Vec<u8> = Vec::with_capacity(Self::MAX_RESPONSE_SIZE * 1024);
@@ -30,6 +34,8 @@ impl EnclaveContract for Enclave {
                 self.get_id(),
                 batch_encoded.as_ptr() as *const u8,
                 batch_encoded.len(),
+                header_encoded.as_ptr() as *const u8,
+                header_encoded.len(),
                 response.as_mut_ptr() as *mut u8,
                 response.capacity(),
                 &mut response_length,

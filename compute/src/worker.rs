@@ -123,7 +123,7 @@ impl WorkerInner {
     fn call_contract_batch_fallible(
         &mut self,
         batch: &CallBatch,
-        root_hash: &H256,
+        block: &Block,
     ) -> Result<(OutputBatch, H256)> {
         measure_histogram!("contract_call_batch_size", batch.len());
 
@@ -133,6 +133,8 @@ impl WorkerInner {
             self.storage.clone(),
         ));
 
+        let root_hash = &block.header.state_root;
+
         // Run in storage context.
         let (new_state_root, outputs) =
             self.contract
@@ -140,7 +142,7 @@ impl WorkerInner {
                     measure_histogram_timer!("contract_call_batch_enclave_time");
 
                     // Execute batch.
-                    self.contract.contract_call_batch(batch)
+                    self.contract.contract_call_batch(batch, &block.header)
                 })?;
 
         // Commit batch storage.
@@ -183,7 +185,7 @@ impl WorkerInner {
         block: Block,
         sender: oneshot::Sender<Result<ComputedBatch>>,
     ) {
-        let result = self.call_contract_batch_fallible(&calls, &block.header.state_root);
+        let result = self.call_contract_batch_fallible(&calls, &block);
 
         match result {
             Ok((outputs, new_state_root)) => {

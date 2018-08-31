@@ -11,6 +11,7 @@ extern crate serde_derive;
 extern crate ekiden_common;
 extern crate ekiden_contract_common;
 extern crate ekiden_enclave_trusted;
+extern crate ekiden_roothash_base;
 
 pub mod dispatcher;
 #[doc(hidden)]

@@ -1,12 +1,15 @@
 //! Block header type.
+#[cfg(not(target_env = "sgx"))]
 use std::convert::TryFrom;
 
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 
+#[cfg(not(target_env = "sgx"))]
 use ekiden_roothash_api as api;
 
 use ekiden_common::bytes::{B256, H256};
+#[cfg(not(target_env = "sgx"))]
 use ekiden_common::error::Error;
 use ekiden_common::hash::EncodedHash;
 use ekiden_common::uint::U256;
@@ -65,6 +68,7 @@ impl Serialize for Header {
     }
 }
 
+#[cfg(not(target_env = "sgx"))]
 impl TryFrom<api::Header> for Header {
     type Error = Error;
     fn try_from(a: api::Header) -> Result<Self, self::Error> {
@@ -83,6 +87,7 @@ impl TryFrom<api::Header> for Header {
     }
 }
 
+#[cfg(not(target_env = "sgx"))]
 impl Into<api::Header> for Header {
     fn into(self) -> api::Header {
         let mut h = api::Header::new();
