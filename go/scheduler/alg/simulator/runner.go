@@ -145,6 +145,16 @@ type LogicalShardingConfig struct {
 	shardFactor int
 }
 
+// ShardTopNIter allows iterating over shardTopN
+func (lcnf *LogicalShardingConfig) ShardTopNIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&lcnf.shardTopN, incr, end, "shard-top")
+}
+
+// ShardFactorIter allows iterating over shardFactor
+func (lcnf *LogicalShardingConfig) ShardFactorIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&lcnf.shardFactor, incr, end, "shard-factor")
+}
+
 // Show prints the LogicalShardingConfig configuration parameters.
 func (lcnf *LogicalShardingConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nLogical Sharding Parameters\n")

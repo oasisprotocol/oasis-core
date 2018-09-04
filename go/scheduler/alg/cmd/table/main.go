@@ -27,13 +27,14 @@ import (
 // IterationConfig is used to control how to step through various simulation parameters in
 // table generator.
 type IterationConfig struct {
-	sortOrder string
-	// from DistributionConfig
-	alphaIter           string
+	sortOrder           string
+	alphaIter           string // from DistributionConfig
 	numLocIter          string
 	numReadIter         string
 	numWriteIter        string
 	numTransactionsIter string
+	shardTopNIter       string // from LogicalShardingConfig
+	shardFactorIter     string
 }
 
 var iterationConfig IterationConfig
@@ -42,7 +43,7 @@ var iterationConfig IterationConfig
 // we vary the right-most simulation parameter first, carry to the left, etc, just like a
 // typical numeric counter.
 
-const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes"
+const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor"
 
 func init() {
 	iterationConfig = IterationConfig{}
@@ -55,6 +56,10 @@ func init() {
 	iterNameLocMap["num-reads-iter"] = &iterationConfig.numReadIter
 	iterNameLocMap["num-writes-iter"] = &iterationConfig.numWriteIter
 	iterNameLocMap["num-transactions-iter"] = &iterationConfig.numTransactionsIter
+	iterNameLocMap["shard-top-iter"] = &iterationConfig.shardTopNIter
+	iterNameLocMap["shard-factor-iter"] = &iterationConfig.shardFactorIter
+
+	flag.StringVar(&iterationConfig.sortOrder, "iterations-order", defaultIterationSortOrder, "the order in which to vary simulation parameters (odometric order)")
 
 	flagSetter := func(name, descr string) {
 		if _, found := iterNameLocMap[name]; !found {
@@ -68,8 +73,8 @@ func init() {
 	flagSetter("num-reads-iter", "number of read locations in a transaction iteration control: step:end")
 	flagSetter("num-writes-iter", "number of write locations in a transaction iteration control: step:end")
 	flagSetter("num-transactions-iter", "number of transactions in a transaction iteration control: step:end")
-
-	flag.StringVar(&iterationConfig.sortOrder, "iterations-order", defaultIterationSortOrder, "the order in which to vary simulation parameters (odometric order)")
+	flagSetter("shard-top-iter", "number of highest-probability locations to shard iteration control: step:end")
+	flagSetter("shard-factor-iter", "number of shards per original location iteration control: step:end")
 }
 
 // IterSortOrder takes a string representing the parameter positions in odometric order
@@ -167,6 +172,7 @@ func addInt64Iter(iters *[]simulator.ParamIncr, name, s string, builder func(int
 // initial state is okay and initialized seeds, etc.
 func (ic *IterationConfig) Iterators(
 	dcnf *simulator.DistributionConfig,
+	lcnf *simulator.LogicalShardingConfig,
 	//	acnf simulator.DistributionConfig,
 ) ([]simulator.ParamIncr, error) {
 	iters := make([]simulator.ParamIncr, 0)
@@ -194,6 +200,16 @@ func (ic *IterationConfig) Iterators(
 	}
 	if err = addIntIter(&iters, "num-transactions-iter", ic.numTransactionsIter, func(i, e int) simulator.ParamIncr {
 		return dcnf.NumTransactionsIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "shard-top-iter", ic.shardTopNIter, func(i, e int) simulator.ParamIncr {
+		return lcnf.ShardTopNIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "shard-factor-iter", ic.shardFactorIter, func(i, e int) simulator.ParamIncr {
+		return lcnf.ShardFactorIter(i, e)
 	}); err != nil {
 		return nil, err
 	}
@@ -227,7 +243,7 @@ func main() {
 		panic("I/O error")
 	}
 
-	paramIncrs, err := iterationConfig.Iterators(&dcnf)
+	paramIncrs, err := iterationConfig.Iterators(&dcnf, &lcnf)
 	if err != nil {
 		panic(fmt.Sprintf("Iterator parsing error: %s", err.Error()))
 	}
