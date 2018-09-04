@@ -7,7 +7,6 @@ import (
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
-	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmtypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/net/context"
 
@@ -21,7 +20,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	tmapps "github.com/oasislabs/ekiden/go/tendermint/apps"
+	tmregistry "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -37,7 +36,7 @@ type tendermintBackend struct {
 	logger *logging.Logger
 
 	timeSource epochtime.BlockBackend
-	client     tmcli.Client
+	service    service.TendermintService
 
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
@@ -58,7 +57,7 @@ func (r *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.S
 		},
 	}
 
-	if err := tmapi.BroadcastTx(r.client, tmapi.RegistryTransactionTag, tx); err != nil {
+	if err := r.service.BroadcastTx(tmapi.RegistryTransactionTag, tx); err != nil {
 		return errors.Wrap(err, "registry: register entity failed")
 	}
 
@@ -72,7 +71,7 @@ func (r *tendermintBackend) DeregisterEntity(ctx context.Context, sigID *signatu
 		},
 	}
 
-	if err := tmapi.BroadcastTx(r.client, tmapi.RegistryTransactionTag, tx); err != nil {
+	if err := r.service.BroadcastTx(tmapi.RegistryTransactionTag, tx); err != nil {
 		return errors.Wrap(err, "registry: deregister entity failed")
 	}
 
@@ -84,7 +83,7 @@ func (r *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKe
 		ID: id,
 	}
 
-	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetEntity, query)
+	response, err := r.service.Query(tmapi.QueryRegistryGetEntity, query, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get entity query failed")
 	}
@@ -98,7 +97,7 @@ func (r *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKe
 }
 
 func (r *tendermintBackend) GetEntities(ctx context.Context) ([]*entity.Entity, error) {
-	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetEntities, nil)
+	response, err := r.service.Query(tmapi.QueryRegistryGetEntities, nil, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get entities query failed")
 	}
@@ -126,7 +125,7 @@ func (r *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.Sign
 		},
 	}
 
-	if err := tmapi.BroadcastTx(r.client, tmapi.RegistryTransactionTag, tx); err != nil {
+	if err := r.service.BroadcastTx(tmapi.RegistryTransactionTag, tx); err != nil {
 		return errors.Wrap(err, "registry: register node failed")
 	}
 
@@ -138,7 +137,7 @@ func (r *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey)
 		ID: id,
 	}
 
-	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetNode, query)
+	response, err := r.service.Query(tmapi.QueryRegistryGetNode, query, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get node query failed")
 	}
@@ -152,7 +151,7 @@ func (r *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey)
 }
 
 func (r *tendermintBackend) GetNodes(ctx context.Context) ([]*node.Node, error) {
-	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetNodes, nil)
+	response, err := r.service.Query(tmapi.QueryRegistryGetNodes, nil, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get nodes query failed")
 	}
@@ -193,7 +192,7 @@ func (r *tendermintBackend) RegisterContract(ctx context.Context, sigCon *contra
 		},
 	}
 
-	if err := tmapi.BroadcastTx(r.client, tmapi.RegistryTransactionTag, tx); err != nil {
+	if err := r.service.BroadcastTx(tmapi.RegistryTransactionTag, tx); err != nil {
 		return errors.Wrap(err, "registry: register contract failed")
 	}
 
@@ -205,7 +204,7 @@ func (r *tendermintBackend) GetContract(ctx context.Context, id signature.Public
 		ID: id,
 	}
 
-	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetContract, query)
+	response, err := r.service.Query(tmapi.QueryRegistryGetContract, query, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get contract query failed")
 	}
@@ -236,7 +235,7 @@ func (r *tendermintBackend) GetBlockNodeList(ctx context.Context, height int64) 
 }
 
 func (r *tendermintBackend) getContracts(ctx context.Context) ([]*contract.Contract, error) {
-	response, err := tmapi.Query(r.client, tmapi.QueryRegistryGetContracts, nil)
+	response, err := r.service.Query(tmapi.QueryRegistryGetContracts, nil, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get contracts query failed")
 	}
@@ -254,10 +253,10 @@ func (r *tendermintBackend) workerEvents() {
 	ctx := context.Background()
 	txChannel := make(chan interface{})
 
-	if err := r.client.Subscribe(ctx, "ekiden-registry-worker", tmapi.QueryRegistryApp, txChannel); err != nil {
+	if err := r.service.Subscribe(ctx, "registry-worker", tmapi.QueryRegistryApp, txChannel); err != nil {
 		panic("worker: failed to subscribe")
 	}
-	defer r.client.Unsubscribe(ctx, "ekiden-registry-worker", tmapi.QueryRegistryApp) // nolint: errcheck
+	defer r.service.Unsubscribe(ctx, "registry-worker", tmapi.QueryRegistryApp) // nolint: errcheck
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
@@ -366,11 +365,7 @@ func (r *tendermintBackend) getNodeList(ctx context.Context, epoch epochtime.Epo
 		return nil, errors.Wrap(err, "registry: failed to query block height")
 	}
 
-	opts := tmcli.ABCIQueryOptions{
-		Height:  height,
-		Trusted: true,
-	}
-	response, err := tmapi.QueryWithOptions(r.client, tmapi.QueryRegistryGetNodes, nil, opts)
+	response, err := r.service.Query(tmapi.QueryRegistryGetNodes, nil, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: failed to query nodes")
 	}
@@ -418,7 +413,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	}
 
 	// Initialze and register the tendermint service component.
-	app := tmapps.NewRegistryApplication()
+	app := tmregistry.New()
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
@@ -426,7 +421,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	r := &tendermintBackend{
 		logger:           logging.GetLogger("registry/tendermint"),
 		timeSource:       blockTimeSource,
-		client:           service.GetClient(),
+		service:          service,
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),

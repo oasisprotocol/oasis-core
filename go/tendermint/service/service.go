@@ -2,8 +2,10 @@
 package service
 
 import (
-	tmcli "github.com/tendermint/tendermint/rpc/client"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
+	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -18,10 +20,6 @@ type TendermintService interface {
 	// Started returns the channel that will be closed when the
 	// tendermint service has been started.
 	Started() <-chan struct{}
-
-	// GetClient returns a tendermint client that talks to this
-	// service instance.
-	GetClient() tmcli.Client
 
 	// RegisterApplication registers an ABCI multiplexer application
 	// with this service instance.
@@ -41,4 +39,22 @@ type TendermintService interface {
 
 	// NodeKey returns the node's P2P (link) authentication public key.
 	NodeKey() *signature.PublicKey
+
+	// BroadcastTx broadcasts a transaction for Ekiden ABCI application.
+	//
+	// The CBOR-encodable transaction together with the given application
+	// tag is first marshalled and then transmitted using BroadcastTxCommit.
+	BroadcastTx(tag byte, tx interface{}) error
+
+	// Query performs a query against the tendermint application.
+	Query(path string, query interface{}, height int64) ([]byte, error)
+
+	// Subscribe subscribes to tendermint events.
+	Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error
+
+	// Unsubscribe unsubscribes from tendermint events.
+	Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error
+
+	// Genesis returns the tendermint genesis block information.
+	Genesis() (*tmrpctypes.ResultGenesis, error)
 }

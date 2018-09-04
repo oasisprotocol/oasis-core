@@ -22,6 +22,9 @@ import (
 )
 
 const (
+	// BackendName is the name of this implementation.
+	BackendName = "memory"
+
 	roundTimeout    = 10 * time.Second
 	infiniteTimeout = time.Duration(math.MaxInt64)
 )
@@ -32,6 +35,7 @@ var (
 	errNoSuchBlocks   = errors.New("roothash/memory: no such block(s) exist for contract")
 	errNoRound        = errors.New("roothash/memory: no round in progress")
 
+	_ api.Backend              = (*memoryRootHash)(nil)
 	_ (api.MetricsMonitorable) = (*memoryRootHash)(nil)
 )
 

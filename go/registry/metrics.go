@@ -95,6 +95,15 @@ func (w *metricsWrapper) RegisterContract(ctx context.Context, sigCon *contract.
 	return nil
 }
 
+type blockMetricsWrapper struct {
+	metricsWrapper
+	blockBackend api.BlockBackend
+}
+
+func (w *blockMetricsWrapper) GetBlockNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+	return w.blockBackend.GetBlockNodeList(ctx, height)
+}
+
 func newMetricsWrapper(base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registeryCollectors...)
@@ -103,5 +112,15 @@ func newMetricsWrapper(base api.Backend) api.Backend {
 	// XXX: When the registry backends support node deregistration,
 	// handle this on the metrics side.
 
-	return &metricsWrapper{Backend: base}
+	wrapper := metricsWrapper{Backend: base}
+
+	blockBackend, ok := base.(api.BlockBackend)
+	if ok {
+		return &blockMetricsWrapper{
+			metricsWrapper: wrapper,
+			blockBackend:   blockBackend,
+		}
+	}
+
+	return &wrapper
 }

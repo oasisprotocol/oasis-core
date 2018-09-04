@@ -42,6 +42,7 @@ var (
 	_ encoding.BinaryUnmarshaler = (*Namespace)(nil)
 	_ encoding.BinaryMarshaler   = (*Round)(nil)
 	_ encoding.BinaryUnmarshaler = (*Round)(nil)
+	_ cbor.Marshaler             = (*Header)(nil)
 	_ cbor.Unmarshaler           = (*Header)(nil)
 )
 
@@ -246,6 +247,11 @@ func (h *Header) ToProto() *pbRoothash.Header {
 	pb.CommitmentsHash, _ = h.CommitmentsHash.MarshalBinary()
 
 	return pb
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (h *Header) MarshalCBOR() []byte {
+	return cbor.Marshal(h)
 }
 
 // UnmarshalCBOR decodes a CBOR marshaled header.
