@@ -18,6 +18,24 @@ run_dummy_node_go_default() {
         &
 }
 
+run_dummy_node_go_tm() {
+    local datadir=/tmp/ekiden-dummy-data
+    rm -rf ${datadir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level debug \
+        --grpc.port 42261 \
+        --epochtime.backend tendermint \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --storage.backend memory \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --datadir ${datadir} \
+        &
+}
+
 run_dummy_node_default() {
     ${WORKDIR}/target/debug/ekiden-node-dummy \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
@@ -141,7 +159,7 @@ run_test() {
     if [[ "${pre_epochs}" > 0 ]]; then
         for epoch in $(seq $pre_epochs); do
             sleep 1
-            ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch
+            ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch || true
         done
     fi
 
@@ -173,7 +191,7 @@ run_test() {
     let epochs+=pre_epochs
     for epoch in $(seq $epochs_offset $epochs); do
         sleep 2
-        ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch
+        ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch || true
     done
 
     # Wait on the client and check its exit status.
@@ -251,11 +269,18 @@ scenario_fail_worker_after_commit() {
     run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 1
 }
 
-# Alternate starting order (client before dummy node)
+# Go node (tendermint backends).
+run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_tm
+run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_tm
+run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_tm
+# TODO: Port other E2E tests.
+
+# Alternate starting order (client before dummy node).
 run_test scenario_basic "e2e-basic-client-starts-first-rust" token 1 run_dummy_node_default 0 0 1
 run_test scenario_basic "e2e-basic-client-starts-first-go" token 1 run_dummy_node_go_default 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first-go-tm" token 1 run_dummy_node_go_tm 0 0 1
 
-# Go node.
+# Go node (dummy backends).
 #
 # Note: e2e-fail-worker-after-[registration,commit] both advance the epoch once
 # prior to the tests to ensure that the leader of the committee is not the node
