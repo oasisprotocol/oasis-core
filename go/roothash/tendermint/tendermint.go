@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -25,8 +26,12 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-// BackendName is the name of this implementation.
-const BackendName = "tendermint"
+const (
+	// BackendName is the name of this implementation.
+	BackendName = "tendermint"
+
+	roundHeightMapCacheSize = 10000
+)
 
 var _ api.Backend = (*tendermintBackend)(nil)
 
@@ -37,6 +42,8 @@ type contractBrokers struct {
 	eventNotifier *pubsub.Broker
 
 	lastBlock *api.Block
+
+	roundHeightMapCache *lru.Cache
 }
 
 type tendermintBackend struct {
@@ -44,7 +51,8 @@ type tendermintBackend struct {
 
 	logger *logging.Logger
 
-	service service.TendermintService
+	service         service.TendermintService
+	lastBlockHeight int64
 
 	allBlockNotifier  *pubsub.Broker
 	contractNotifiers map[signature.MapKey]*contractBrokers
@@ -91,12 +99,31 @@ func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.Blo
 func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.Round) (<-chan *api.Block, *pubsub.Subscription, error) {
 	notifiers := r.getContractNotifiers(id)
 
+	startRound, err := round.ToU64()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
+		// NOTE: Due to taking the notifiers lock, block replay blocks any events for
+		// this contract (and others since they share a worker) from being processed.
 		notifiers.Lock()
 		defer notifiers.Unlock()
 
 		if notifiers.lastBlock != nil {
-			// TODO: Find blocks (>= round AND < notifiers.lastBlock.Header.Round.ToU64()).
+			lastRound, _ := notifiers.lastBlock.Header.Round.ToU64()
+
+			for round := startRound; round < lastRound; round++ {
+				block := r.findBlockForRound(id, round, notifiers)
+				if block == nil {
+					r.logger.Error("WatchBlocksSince: failed to replay block for round",
+						"round", round,
+					)
+					break
+				}
+
+				ch.In() <- block
+			}
 
 			ch.In() <- notifiers.lastBlock
 		}
@@ -105,6 +132,87 @@ func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.R
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
+}
+
+func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *contractBrokers) *api.Block {
+	lastRound, _ := notifiers.lastBlock.Header.Round.ToU64()
+	if notifiers.lastBlock == nil || round > lastRound {
+		return nil
+	} else if round == lastRound {
+		return notifiers.lastBlock
+	}
+
+	// First we need to map the roothash round number into a Tendermint
+	// block. To do this, we first consult the local cache and if the
+	// round is not available we do a backwards linear scan.
+	cache := notifiers.roundHeightMapCache
+	blockHeight, ok := cache.Get(round)
+	if ok {
+		return r.getBlockFromTmBlock(blockHeight.(int64), round, cache)
+	}
+
+	// Perform a linear scan to get the block height. This will also
+	// populate the cache so we should have all the items available.
+	r.Lock()
+	currentHeight := r.lastBlockHeight
+	r.Unlock()
+
+	for blockHeight := currentHeight; blockHeight >= 0; blockHeight-- {
+		if block := r.getBlockFromTmBlock(blockHeight, round, cache); block != nil {
+			return block
+		}
+	}
+
+	return nil
+}
+
+func (r *tendermintBackend) getBlockFromTmBlock(
+	height int64,
+	round uint64,
+	cache *lru.Cache,
+) *api.Block {
+	// Fetch results for given block to get the tags.
+	results, err := r.service.GetBlockResults(height)
+	if err != nil {
+		r.logger.Error("getBlockFromTmBlock: failed to get block results",
+			"block_height", height,
+			"err", err,
+		)
+		return nil
+	}
+
+	extractBlock := func(tags []tmcmn.KVPair) *api.Block {
+		for _, pair := range tags {
+			if bytes.Equal(pair.GetKey(), tmapi.TagRootHashFinalized) {
+				var block api.Block
+				if err := block.UnmarshalCBOR(pair.GetValue()); err != nil {
+					r.logger.Error("getBlockFromTmBlock: corrupted block tag",
+						"err", err,
+					)
+					return nil
+				}
+
+				blockRound, _ := block.Header.Round.ToU64()
+				cache.Add(blockRound, height)
+				if blockRound == round {
+					return &block
+				}
+				return nil
+			}
+		}
+
+		return nil
+	}
+
+	if block := extractBlock(results.Results.BeginBlock.GetTags()); block != nil {
+		return block
+	}
+	for _, tx := range results.Results.DeliverTx {
+		if block := extractBlock(tx.GetTags()); block != nil {
+			return block
+		}
+	}
+	return extractBlock(results.Results.EndBlock.GetTags())
 }
 
 func (r *tendermintBackend) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscription) {
@@ -155,6 +263,12 @@ func (r *tendermintBackend) getContractNotifiers(id signature.PublicKey) *contra
 			eventNotifier: pubsub.NewBroker(false),
 			lastBlock:     block,
 		}
+		var err error
+		notifiers.roundHeightMapCache, err = lru.New(roundHeightMapCacheSize)
+		if err != nil {
+			panic(err)
+		}
+
 		r.contractNotifiers[k] = notifiers
 	}
 
@@ -172,7 +286,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 	defer r.service.Unsubscribe(ctx, "roothash-worker", tmapi.QueryRootHashUpdate) // nolint: errcheck
 
 	// Process transactions and emit notifications for our subscribers.
-PROCESS_LOOP:
+ProcessLoop:
 	for {
 		event, ok := <-txChannel
 		if !ok {
@@ -185,8 +299,16 @@ PROCESS_LOOP:
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
 			tags = append(ev.ResultBeginBlock.GetTags(), ev.ResultEndBlock.GetTags()...)
+
+			r.Lock()
+			r.lastBlockHeight = ev.Block.Header.Height
+			r.Unlock()
 		case tmtypes.EventDataTx:
 			tags = ev.Result.GetTags()
+
+			r.Lock()
+			r.lastBlockHeight = ev.Height
+			r.Unlock()
 		default:
 			continue
 		}
@@ -215,7 +337,7 @@ PROCESS_LOOP:
 						"contract", id,
 						"err", err,
 					)
-					continue PROCESS_LOOP
+					continue ProcessLoop
 				}
 
 				// Ensure latest block is set.
@@ -236,7 +358,7 @@ PROCESS_LOOP:
 						"contract", id,
 						"err", err,
 					)
-					continue PROCESS_LOOP
+					continue ProcessLoop
 				}
 
 				notifiers.eventNotifier.Broadcast(&api.Event{DiscrepancyDetected: &batchID})
