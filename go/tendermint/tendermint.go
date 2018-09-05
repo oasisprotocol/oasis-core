@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	tmabci "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
@@ -34,9 +35,19 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-const configDir = "config"
+const (
+	configDir = "config"
 
-var _ service.TendermintService = (*tendermintService)(nil)
+	cfgConsensusTimeoutCommit     = "tendermint.consensus.timeout_commit"
+	cfgConsensusSkipTimeoutCommit = "tendermint.consensus.skip_timeout_commit"
+)
+
+var (
+	_ service.TendermintService = (*tendermintService)(nil)
+
+	flagConsensusTimeoutCommit     time.Duration
+	flagConsensusSkipTimeoutCommit bool
+)
 
 type tendermintService struct {
 	cmservice.BaseBackgroundService
@@ -46,6 +57,7 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 
+	cmd                      *cobra.Command
 	validatorKey             *signature.PrivateKey
 	nodeKey                  *signature.PrivateKey
 	dataDir                  string
@@ -251,6 +263,9 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig := tmconfig.DefaultConfig()
 	viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
+	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
+	tenderConfig.Consensus.TimeoutCommit = int(timeoutCommit / time.Millisecond)
+	tenderConfig.Consensus.SkipTimeoutCommit, _ = t.cmd.Flags().GetBool(cfgConsensusSkipTimeoutCommit)
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
 	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
@@ -332,10 +347,11 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(dataDir string, identity *signature.PrivateKey) service.TendermintService {
+func New(cmd *cobra.Command, dataDir string, identity *signature.PrivateKey) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
+		cmd:                   cmd,
 		validatorKey:          identity,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
@@ -376,4 +392,18 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 
 	k := crypto.PrivateKeyFromTendermint(&tk)
 	return &k, nil
+}
+
+// RegisterFlags registers the configuration flags with the provided
+// command.
+func RegisterFlags(cmd *cobra.Command) {
+	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
+	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
+
+	for _, v := range []string{
+		cfgConsensusTimeoutCommit,
+		cfgConsensusSkipTimeoutCommit,
+	} {
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+	}
 }

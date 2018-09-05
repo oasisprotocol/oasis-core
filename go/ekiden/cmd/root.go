@@ -102,7 +102,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize tendermint.
-	env.svcTmnt = tendermint.New(dataDir, env.identity)
+	env.svcTmnt = tendermint.New(cmd, dataDir, env.identity)
 	env.svcMgr.Register(env.svcTmnt)
 
 	// Initialize the varous node backends.
@@ -233,6 +233,7 @@ func init() {
 		roothash.RegisterFlags,
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
+		tendermint.RegisterFlags,
 	} {
 		v(rootCmd)
 	}
