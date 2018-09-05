@@ -42,7 +42,7 @@ func NewGreedySubgraphsAdaptiveQueuingScheduler(maxP int, xsF float64, maxT Exec
 		excessFraction: xsF,
 		maxTime:        maxT,
 		inQueue:        nil,
-		logger:         logging.GetLogger("GreedySubgraphsAdaptiveQueuingScheduler"),
+		logger:         logging.GetLogger("go/scheduler/alg/greedy_subgraphs_adaptive_queuing_scheduler"),
 	}
 }
 
@@ -67,9 +67,7 @@ func (gs *GreedySubgraphsAdaptiveQueuingScheduler) NumDeferred() int {
 
 // Schedule actually performs scheduling and returns a slice containing mutually commutative
 // subgraphs.
-//
-// nolint: gocyclo
-func (gs *GreedySubgraphsAdaptiveQueuingScheduler) Schedule() []*Subgraph {
+func (gs *GreedySubgraphsAdaptiveQueuingScheduler) Schedule() []*Subgraph { // nolint: gocyclo
 	deferred := make([]*Transaction, 0)
 	readMap := make(map[Location][]int)
 	writeMap := make(map[Location]int)

@@ -287,7 +287,7 @@ func init() {
 	flag.IntVar(&sconfigFromFlags.maxPending, "max-pending", -1,
 		"scheduling when there are this many transactions (default 2 * max-subgraph-time * num-committees")
 	flag.Float64Var(&sconfigFromFlags.excessFraction, "excess-fraction", 0.75,
-		"adaptive max-pending (default 4, updated max-pending = (1 + excessFraction) * previousBatchSize")
+		"excess-fraction value used by the greedy-subgraph-adaptive scheduler to adjust the max-pending after each schedule (default 0.75, new max-pending = (1 + excess-fraction) * previousBatchSize")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
 	flag.UintVar(&sconfigFromFlags.maxTime, "max-subgraph-time", 20,
