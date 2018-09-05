@@ -1,0 +1,24 @@
+linters-settings:
+  gofmt:
+    simplify: false
+  govet:
+    check-shadowing: true
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - errcheck
+    - goconst
+    - gocyclo
+    - gofmt
+    - golint
+    - gas
+    - typecheck
+    - ineffassign
+    - megacheck
+    - structcheck
+    - unconvert
+    - varcheck
+    - govet
+    - maligned

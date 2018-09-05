@@ -44,7 +44,7 @@ fmt:
 
 # Lint.
 lint:
-	gometalinter ./...
+	golangci-lint run
 
 # Test.
 test:
