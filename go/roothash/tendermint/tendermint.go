@@ -7,6 +7,7 @@ import (
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
+	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/net/context"
 
@@ -173,16 +174,22 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 	// Process transactions and emit notifications for our subscribers.
 PROCESS_LOOP:
 	for {
-		rawTx, ok := <-txChannel
+		event, ok := <-txChannel
 		if !ok {
 			r.logger.Debug("worker: terminating")
 			return
 		}
 
-		// Extract output information from transaction.
-		tx := rawTx.(tmtypes.EventDataTx)
-
-		tags := tx.Result.GetTags()
+		// Extract tags from event.
+		var tags []tmcmn.KVPair
+		switch ev := event.(type) {
+		case tmtypes.EventDataNewBlock:
+			tags = append(ev.ResultBeginBlock.GetTags(), ev.ResultEndBlock.GetTags()...)
+		case tmtypes.EventDataTx:
+			tags = ev.Result.GetTags()
+		default:
+			continue
+		}
 
 		var id signature.PublicKey
 		rawID := tmapi.GetTag(tags, tmapi.TagRootHashID)
