@@ -35,11 +35,12 @@
 
 [[constraint]]
   name = "github.com/tendermint/iavl"
-  revision = "da94e6c675c8b150a808ca61d0553e5f9667f222"
+  version = "0.10.0"
 
 [[constraint]]
   name = "github.com/tendermint/tendermint"
-  version = "=v0.22.8"
+  source = "https://github.com/oasislabs/tendermint"
+  version = "=v0.23.1"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
@@ -79,7 +80,11 @@
 
 [[override]]
   name = "github.com/tendermint/iavl"
-  revision = "da94e6c675c8b150a808ca61d0553e5f9667f222"
+  version = "0.10.0"
+
+[[override]]
+  name = "github.com/tendermint/tendermint"
+  version = "=0.23.1"
 
 [[override]]
   name = "github.com/prometheus/client_golang"
