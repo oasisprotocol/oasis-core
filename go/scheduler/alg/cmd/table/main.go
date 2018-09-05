@@ -35,6 +35,10 @@ type IterationConfig struct {
 	numTransactionsIter string
 	shardTopNIter       string // from LogicalShardingConfig
 	shardFactorIter     string
+	injectionProbIter   string // from AdversaryConfig
+	targetFractionIter  string
+	readFractionIter    string
+	dosBatchSizeIter    string
 }
 
 var iterationConfig IterationConfig
@@ -43,7 +47,7 @@ var iterationConfig IterationConfig
 // we vary the right-most simulation parameter first, carry to the left, etc, just like a
 // typical numeric counter.
 
-const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor"
+const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor,dos-injection-prob,dos-target-fraction,dos-read-fraction,dos-batch-size"
 
 func init() {
 	iterationConfig = IterationConfig{}
@@ -58,6 +62,10 @@ func init() {
 	iterNameLocMap["num-transactions-iter"] = &iterationConfig.numTransactionsIter
 	iterNameLocMap["shard-top-iter"] = &iterationConfig.shardTopNIter
 	iterNameLocMap["shard-factor-iter"] = &iterationConfig.shardFactorIter
+	iterNameLocMap["dos-injection-prob-iter"] = &iterationConfig.injectionProbIter
+	iterNameLocMap["dos-target-fraction-iter"] = &iterationConfig.targetFractionIter
+	iterNameLocMap["dos-read-fraction-iter"] = &iterationConfig.readFractionIter
+	iterNameLocMap["dos-batch-size-iter"] = &iterationConfig.dosBatchSizeIter
 
 	flag.StringVar(&iterationConfig.sortOrder, "iterations-order", defaultIterationSortOrder, "the order in which to vary simulation parameters (odometric order)")
 
@@ -75,6 +83,9 @@ func init() {
 	flagSetter("num-transactions-iter", "number of transactions in a transaction iteration control: step:end")
 	flagSetter("shard-top-iter", "number of highest-probability locations to shard iteration control: step:end")
 	flagSetter("shard-factor-iter", "number of shards per original location iteration control: step:end")
+	flagSetter("dos-target-fraction-iter", "DOS transaction injection fraction iteration control: step:end")
+	flagSetter("dos-read-fraction-iter", "DOS transaction read fraction iteration control: step:end")
+	flagSetter("dos-batch-size-iter", "number of DOS transactions to inject iteration control: step:end")
 }
 
 // IterSortOrder takes a string representing the parameter positions in odometric order
@@ -170,10 +181,12 @@ func addInt64Iter(iters *[]simulator.ParamIncr, name, s string, builder func(int
 //
 // The Iterators() must be called after UpdateAndCheckConfigFlags have verified that the
 // initial state is okay and initialized seeds, etc.
+//
+// nolint: gocyclo
 func (ic *IterationConfig) Iterators(
 	dcnf *simulator.DistributionConfig,
 	lcnf *simulator.LogicalShardingConfig,
-	//	acnf simulator.DistributionConfig,
+	acnf *simulator.AdversaryConfig,
 ) ([]simulator.ParamIncr, error) {
 	iters := make([]simulator.ParamIncr, 0)
 	var err error
@@ -213,6 +226,26 @@ func (ic *IterationConfig) Iterators(
 	}); err != nil {
 		return nil, err
 	}
+	if err = addFloat64Iter(&iters, "dos-injection-prob-iter", ic.injectionProbIter, func(i, e float64) simulator.ParamIncr {
+		return acnf.InjectionProbIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addFloat64Iter(&iters, "dos-target-fraction-iter", ic.targetFractionIter, func(i, e float64) simulator.ParamIncr {
+		return acnf.TargetFractionIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addFloat64Iter(&iters, "dos-read-fraction-iter", ic.readFractionIter, func(i, e float64) simulator.ParamIncr {
+		return acnf.ReadFractionIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "dos-batch-size-iter", ic.dosBatchSizeIter, func(i, e int) simulator.ParamIncr {
+		return acnf.DosBatchSizeIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
 	return iters, nil
 }
 
@@ -243,7 +276,7 @@ func main() {
 		panic("I/O error")
 	}
 
-	paramIncrs, err := iterationConfig.Iterators(&dcnf, &lcnf)
+	paramIncrs, err := iterationConfig.Iterators(&dcnf, &lcnf, &acnf)
 	if err != nil {
 		panic(fmt.Sprintf("Iterator parsing error: %s", err.Error()))
 	}

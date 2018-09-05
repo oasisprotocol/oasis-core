@@ -192,6 +192,26 @@ type AdversaryConfig struct {
 	targets *alg.LocationRangeSet
 }
 
+// InjectionProbIter allows iterating over injectionProb
+func (acnf *AdversaryConfig) InjectionProbIter(incr, end float64) ParamIncr {
+	return NewFloat64ParamIncr(&acnf.injectionProb, incr, end, "dos-injection-prob")
+}
+
+// TargetFractionIter allows iterating over targetFrac
+func (acnf *AdversaryConfig) TargetFractionIter(incr, end float64) ParamIncr {
+	return NewFloat64ParamIncr(&acnf.targetFrac, incr, end, "dos-target-fraction")
+}
+
+// ReadFractionIter allows iterating over readFrac
+func (acnf *AdversaryConfig) ReadFractionIter(incr, end float64) ParamIncr {
+	return NewFloat64ParamIncr(&acnf.readFrac, incr, end, "dos-read-fraction")
+}
+
+// DosBatchSizeIter allows iterating over dosBatchSize
+func (acnf *AdversaryConfig) DosBatchSizeIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&acnf.dosBatchSize, incr, end, "dos-batch-size")
+}
+
 // Show prints the AdversaryConfig configuration parameters.
 func (acnf *AdversaryConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nAdversary (DOS) Transaction Generator Parameters\n")
