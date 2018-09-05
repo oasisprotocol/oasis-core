@@ -34,10 +34,10 @@ type Context struct {
 }
 
 // NewContext creates a new Context of the given type.
-func NewContext(outputType ContextType, now int64) *Context {
+func NewContext(outputType ContextType, now time.Time) *Context {
 	return &Context{
 		outputType:    outputType,
-		currentTime:   time.Unix(now, 0),
+		currentTime:   now,
 		onCommitHooks: make(map[string]OnCommitHook),
 	}
 }

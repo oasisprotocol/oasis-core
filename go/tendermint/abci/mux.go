@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
@@ -197,7 +198,7 @@ type abciMux struct {
 	appBlessed     Application
 
 	lastBeginBlock int64
-	currentTime    int64
+	currentTime    time.Time
 }
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {

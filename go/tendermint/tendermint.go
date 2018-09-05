@@ -304,7 +304,7 @@ func (t *tendermintService) lazyInit() error {
 		tmproxy.NewLocalClientCreator(t.mux.Mux()),
 		tenderminGenesisProvider,
 		bolt.BoltDBProvider,
-		tmnode.DefaultMetricsProvider,
+		tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
 		&abci.LogAdapter{
 			Logger:           logging.GetLogger("tendermint"),
 			IsTendermintCore: true,
