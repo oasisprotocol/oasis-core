@@ -7,6 +7,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 
 	"golang.org/x/net/context"
 
@@ -20,14 +21,18 @@ import (
 const BackendName = "insecure"
 
 var (
-	_ api.Backend = (*insecureDummy)(nil)
+	_ api.Backend      = (*insecureDummy)(nil)
+	_ api.BlockBackend = (*insecureDummy)(nil)
 
 	dummyContext = []byte("EkB-Dumm")
+
+	errIncompatibleBackend = errors.New("beacon/insecure: incompatible backend for block operations")
 )
 
 type insecureDummy struct {
-	logger   *logging.Logger
-	notifier *pubsub.Broker
+	logger     *logging.Logger
+	notifier   *pubsub.Broker
+	timeSource epochtime.Backend
 
 	lastEpoch epochtime.EpochTime
 }
@@ -53,8 +58,22 @@ func (r *insecureDummy) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.Subsc
 	return typedCh, sub
 }
 
-func (r *insecureDummy) worker(timeSource epochtime.Backend) {
-	epochEvents, sub := timeSource.WatchEpochs()
+func (r *insecureDummy) GetBlockBeacon(ctx context.Context, height int64) ([]byte, error) {
+	blockTimeSource, ok := r.timeSource.(epochtime.BlockBackend)
+	if !ok {
+		return nil, errIncompatibleBackend
+	}
+
+	epoch, _, err := blockTimeSource.GetBlockEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.GetBeacon(ctx, epoch)
+}
+
+func (r *insecureDummy) worker() {
+	epochEvents, sub := r.timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
 		newEpoch, ok := <-epochEvents
@@ -94,12 +113,13 @@ func (r *insecureDummy) worker(timeSource epochtime.Backend) {
 // production setting.
 func New(timeSource epochtime.Backend) api.Backend {
 	r := &insecureDummy{
-		logger:    logging.GetLogger("beacon/insecure"),
-		notifier:  pubsub.NewBroker(true),
-		lastEpoch: epochtime.EpochInvalid,
+		logger:     logging.GetLogger("beacon/insecure"),
+		notifier:   pubsub.NewBroker(true),
+		timeSource: timeSource,
+		lastEpoch:  epochtime.EpochInvalid,
 	}
 
-	go r.worker(timeSource)
+	go r.worker()
 
 	return r
 }
