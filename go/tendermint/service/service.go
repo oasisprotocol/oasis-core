@@ -33,6 +33,10 @@ type TendermintService interface {
 	// GetBlock returns the Tendermint block at the specified height.
 	GetBlock(height int64) (*tmtypes.Block, error)
 
+	// GetBlockResults returns the ABCI results from processing a block
+	// at a specific height.
+	GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error)
+
 	// WatchBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
