@@ -33,21 +33,24 @@ type IterationConfig struct {
 	numReadIter         string
 	numWriteIter        string
 	numTransactionsIter string
-	shardTopNIter       string // from LogicalShardingConfig
-	shardFactorIter     string
 	injectionProbIter   string // from AdversaryConfig
 	targetFractionIter  string
 	readFractionIter    string
 	dosBatchSizeIter    string
+	shardTopNIter       string // from LogicalShardingConfig
+	shardFactorIter     string
+	maxPendingIter      string // from SchedulerConfig
+	maxSubgraphTimeIter string
+	numCommitteesIter   string // from ExecutionConfig
 }
 
 var iterationConfig IterationConfig
 
-// iteration order: list keys in odometric order, so when we iterate over the parameter space,
+// Iteration order: list keys in odometric order, so when we iterate over the parameter space,
 // we vary the right-most simulation parameter first, carry to the left, etc, just like a
-// typical numeric counter.
+// typical numeric counter.  The names here must match the flag names.
 
-const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor,dos-injection-prob,dos-target-fraction,dos-read-fraction,dos-batch-size"
+const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor,dos-injection-prob,dos-target-fraction,dos-read-fraction,dos-batch-size,max-pending,max-subgraph-time,num-committees"
 
 func init() {
 	iterationConfig = IterationConfig{}
@@ -60,12 +63,15 @@ func init() {
 	iterNameLocMap["num-reads-iter"] = &iterationConfig.numReadIter
 	iterNameLocMap["num-writes-iter"] = &iterationConfig.numWriteIter
 	iterNameLocMap["num-transactions-iter"] = &iterationConfig.numTransactionsIter
-	iterNameLocMap["shard-top-iter"] = &iterationConfig.shardTopNIter
-	iterNameLocMap["shard-factor-iter"] = &iterationConfig.shardFactorIter
 	iterNameLocMap["dos-injection-prob-iter"] = &iterationConfig.injectionProbIter
 	iterNameLocMap["dos-target-fraction-iter"] = &iterationConfig.targetFractionIter
 	iterNameLocMap["dos-read-fraction-iter"] = &iterationConfig.readFractionIter
 	iterNameLocMap["dos-batch-size-iter"] = &iterationConfig.dosBatchSizeIter
+	iterNameLocMap["shard-top-iter"] = &iterationConfig.shardTopNIter
+	iterNameLocMap["shard-factor-iter"] = &iterationConfig.shardFactorIter
+	iterNameLocMap["max-pending-iter"] = &iterationConfig.maxPendingIter
+	iterNameLocMap["max-subgraph-time-iter"] = &iterationConfig.maxSubgraphTimeIter
+	iterNameLocMap["num-committees-iter"] = &iterationConfig.numCommitteesIter
 
 	flag.StringVar(&iterationConfig.sortOrder, "iterations-order", defaultIterationSortOrder, "the order in which to vary simulation parameters (odometric order)")
 
@@ -81,11 +87,14 @@ func init() {
 	flagSetter("num-reads-iter", "number of read locations in a transaction iteration control: step:end")
 	flagSetter("num-writes-iter", "number of write locations in a transaction iteration control: step:end")
 	flagSetter("num-transactions-iter", "number of transactions in a transaction iteration control: step:end")
-	flagSetter("shard-top-iter", "number of highest-probability locations to shard iteration control: step:end")
-	flagSetter("shard-factor-iter", "number of shards per original location iteration control: step:end")
 	flagSetter("dos-target-fraction-iter", "DOS transaction injection fraction iteration control: step:end")
 	flagSetter("dos-read-fraction-iter", "DOS transaction read fraction iteration control: step:end")
 	flagSetter("dos-batch-size-iter", "number of DOS transactions to inject iteration control: step:end")
+	flagSetter("shard-top-iter", "number of highest-probability locations to shard iteration control: step:end")
+	flagSetter("shard-factor-iter", "number of shards per original location iteration control: step:end")
+	flagSetter("max-pending-iter", "(initial) max pending transactions iteration control: step:end")
+	flagSetter("max-subgraph-time-iter", "max subgraph execution time iteration control: step:end")
+	flagSetter("num-committees-iter", "number of execution committees iteration control: step:end")
 }
 
 // IterSortOrder takes a string representing the parameter positions in odometric order
@@ -187,6 +196,8 @@ func (ic *IterationConfig) Iterators(
 	dcnf *simulator.DistributionConfig,
 	lcnf *simulator.LogicalShardingConfig,
 	acnf *simulator.AdversaryConfig,
+	scnf *simulator.SchedulerConfig,
+	xcnf *simulator.ExecutionConfig,
 ) ([]simulator.ParamIncr, error) {
 	iters := make([]simulator.ParamIncr, 0)
 	var err error
@@ -216,16 +227,6 @@ func (ic *IterationConfig) Iterators(
 	}); err != nil {
 		return nil, err
 	}
-	if err = addIntIter(&iters, "shard-top-iter", ic.shardTopNIter, func(i, e int) simulator.ParamIncr {
-		return lcnf.ShardTopNIter(i, e)
-	}); err != nil {
-		return nil, err
-	}
-	if err = addIntIter(&iters, "shard-factor-iter", ic.shardFactorIter, func(i, e int) simulator.ParamIncr {
-		return lcnf.ShardFactorIter(i, e)
-	}); err != nil {
-		return nil, err
-	}
 	if err = addFloat64Iter(&iters, "dos-injection-prob-iter", ic.injectionProbIter, func(i, e float64) simulator.ParamIncr {
 		return acnf.InjectionProbIter(i, e)
 	}); err != nil {
@@ -243,6 +244,31 @@ func (ic *IterationConfig) Iterators(
 	}
 	if err = addIntIter(&iters, "dos-batch-size-iter", ic.dosBatchSizeIter, func(i, e int) simulator.ParamIncr {
 		return acnf.DosBatchSizeIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "shard-top-iter", ic.shardTopNIter, func(i, e int) simulator.ParamIncr {
+		return lcnf.ShardTopNIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "shard-factor-iter", ic.shardFactorIter, func(i, e int) simulator.ParamIncr {
+		return lcnf.ShardFactorIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "max-pending-iter", ic.maxPendingIter, func(i, e int) simulator.ParamIncr {
+		return scnf.MaxPendingIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "max-subgraph-time-iter", ic.maxSubgraphTimeIter, func(i, e int) simulator.ParamIncr {
+		return scnf.MaxSubgraphTimeIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
+	if err = addIntIter(&iters, "num-committees-iter", ic.numCommitteesIter, func(i, e int) simulator.ParamIncr {
+		return xcnf.NumCommitteesIter(i, e)
 	}); err != nil {
 		return nil, err
 	}
@@ -276,7 +302,7 @@ func main() {
 		panic("I/O error")
 	}
 
-	paramIncrs, err := iterationConfig.Iterators(&dcnf, &lcnf, &acnf)
+	paramIncrs, err := iterationConfig.Iterators(&dcnf, &lcnf, &acnf, &scnf, &xcnf)
 	if err != nil {
 		panic(fmt.Sprintf("Iterator parsing error: %s", err.Error()))
 	}

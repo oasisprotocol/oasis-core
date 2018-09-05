@@ -268,6 +268,16 @@ type SchedulerConfig struct {
 	maxTime int
 }
 
+// MaxPendingIter allows iterating over maxPending
+func (scnf *SchedulerConfig) MaxPendingIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&scnf.maxPending, incr, end, "max-pending")
+}
+
+// MaxSubgraphTimeIter allows iterating over maxTime
+func (scnf *SchedulerConfig) MaxSubgraphTimeIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&scnf.maxTime, incr, end, "max-subgraph-time")
+}
+
 // Show prints the SchedulerConfig fields.  NB: not all schedulers will use all fields.
 func (scnf *SchedulerConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nScheduler Configuration Parameters\n")
@@ -296,6 +306,11 @@ type ExecutionConfig struct {
 	numCommittees int
 }
 
+// NumCommitteesIter allows iterating over numCommittees
+func (xcnf *ExecutionConfig) NumCommitteesIter(incr, end int) ParamIncr {
+	return NewIntParamIncr(&xcnf.numCommittees, incr, end, "num-committees")
+}
+
 // Show prints the ExecutionConfig.
 func (xcnf *ExecutionConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nExecution Simulator Parameters\n")
@@ -321,9 +336,9 @@ var ExecutionConfigFromFlags ExecutionConfig
 // is invoked.
 func init() {
 	DistributionConfigFromFlags = DistributionConfig{}
-	SchedulerConfigFromFlags = SchedulerConfig{}
-	LogicalShardingConfigFromFlags = LogicalShardingConfig{}
 	AdversaryConfigFromFlags = AdversaryConfig{}
+	LogicalShardingConfigFromFlags = LogicalShardingConfig{}
+	SchedulerConfigFromFlags = SchedulerConfig{}
 	ExecutionConfigFromFlags = ExecutionConfig{}
 
 	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
@@ -356,14 +371,6 @@ func init() {
 	flag.IntVar(&DistributionConfigFromFlags.numTransactions, "num-transactions", 1000000,
 		"number of transactions to generate")
 
-	// Logical sharding filter configuration parameters
-	flag.Int64Var(&LogicalShardingConfigFromFlags.seed, "shard-seed", 0,
-		"pseudorandom number generator seed for logical sharding filter (default: UnixNano)")
-	flag.IntVar(&LogicalShardingConfigFromFlags.shardTopN, "shard-top", 0,
-		"shard the highest <shard-top> probable locations")
-	flag.IntVar(&LogicalShardingConfigFromFlags.shardFactor, "shard-factor", 16,
-		"number of new (negative) shards per original location")
-
 	// Adversary configuration parameters
 
 	flag.Int64Var(&AdversaryConfigFromFlags.seed, "dos-seed", 0, "seed for rng used to randomize DOS-spam adversary actions")
@@ -373,6 +380,15 @@ func init() {
 	flag.IntVar(&AdversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to DOS spam is made")
 	flag.StringVar(&AdversaryConfigFromFlags.targetAddresses, "dos-target-addresses", "0:15,128:131", "comma-separated list of integers or start-end integer ranges")
 	flag.IntVar(&AdversaryConfigFromFlags.seqno, "dos-seqno", 1000000, "starting seqno/id for DOS spam transactions")
+
+	// Logical sharding filter configuration parameters
+
+	flag.Int64Var(&LogicalShardingConfigFromFlags.seed, "shard-seed", 0,
+		"pseudorandom number generator seed for logical sharding filter (default: UnixNano)")
+	flag.IntVar(&LogicalShardingConfigFromFlags.shardTopN, "shard-top", 0,
+		"shard the highest <shard-top> probable locations")
+	flag.IntVar(&LogicalShardingConfigFromFlags.shardFactor, "shard-factor", 16,
+		"number of new (negative) shards per original location")
 
 	// Scheduler configuration parameters
 
@@ -464,7 +480,7 @@ func adversaryFactory(acnf AdversaryConfig, ts TransactionSource) TransactionSou
 
 func schedulerFactory(scnf SchedulerConfig) alg.Scheduler {
 	if scnf.name == "greedy-subgraph" {
-		return alg.NewGreedySubgraphs(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
+		return alg.NewGreedySubgraphsScheduler(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
 	}
 	panic(fmt.Sprintf("Scheduler %s not recognized", scnf.name))
 }
