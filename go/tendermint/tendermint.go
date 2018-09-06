@@ -208,6 +208,15 @@ func (t *tendermintService) GetBlock(height int64) (*tmtypes.Block, error) {
 	return result.Block, nil
 }
 
+func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error) {
+	result, err := t.client.BlockResults(&height)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: block results query failed")
+	}
+
+	return result, nil
+}
+
 func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
 	typedCh := make(chan *tmtypes.Block)
 	sub := t.blockNotifier.Subscribe()
