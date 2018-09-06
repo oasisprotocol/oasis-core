@@ -47,8 +47,6 @@ func (h *Hash) UnmarshalBinary(data []byte) error {
 // From sets the hash to that of an arbitrary CBOR serializeable interface.
 func (h *Hash) From(v interface{}) {
 	h.FromBytes(cbor.Marshal(v))
-
-	return
 }
 
 // FromBytes sets the hash to that of an arbitrary byte string.

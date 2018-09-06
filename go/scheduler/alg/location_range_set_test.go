@@ -55,7 +55,7 @@ func TestLocationRangeSetRead(t *testing.T) {
 
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
-	lrs.Write(bufw)
+	_, _ = lrs.Write(bufw)
 	err = bufw.Flush()
 	assert.NoError(err, "Could not write as string")
 	ws := outputBuffer.String()
@@ -114,7 +114,7 @@ func TestReadNewLocationRange(t *testing.T) {
 	assert.NoError(err, "Could not parse input '%s'", input)
 	t.Logf("parsed: %s\n", lr.String())
 
-	input = "100:1"
+	input = "100:1" // nolint: goconst
 	lr, err = helper(input)
 	if err == nil && lr != nil {
 		t.Logf("parsed %s as %s\n", input, lr.String())

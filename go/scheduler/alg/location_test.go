@@ -15,7 +15,7 @@ func ReadAndWriteLocation(t *testing.T, input string) {
 	}
 	outputBuffer := new(bytes.Buffer)
 	bufw := bufio.NewWriter(outputBuffer)
-	loc.Write(bufw)
+	_, _ = loc.Write(bufw)
 	err = bufw.Flush()
 	if err != nil {
 		t.Errorf("Could not write as string")

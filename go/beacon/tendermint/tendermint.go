@@ -103,9 +103,9 @@ func (t *tendermintBackend) getBeaconImpl(ctx context.Context, epoch epochtime.E
 	binary.LittleEndian.PutUint64(tmp[:], uint64(epoch))
 
 	h := sha512.New512_256()
-	h.Write(tendermintContext)
-	h.Write(entropy)
-	h.Write(tmp[:])
+	_, _ = h.Write(tendermintContext)
+	_, _ = h.Write(entropy)
+	_, _ = h.Write(tmp[:])
 	ret := h.Sum(nil)
 
 	return ret, nil
@@ -204,7 +204,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 
 	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
 	if !ok {
-
+		return nil, errors.New("beacon/tendermint: need a block-based epochtime backend")
 	}
 
 	t := &tendermintBackend{

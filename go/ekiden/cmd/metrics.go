@@ -62,7 +62,7 @@ func (s *metricsPullService) Start() error {
 
 func (s *metricsPullService) Stop() {
 	if s.s != nil {
-		s.s.Shutdown(context.Background())
+		_ = s.s.Shutdown(context.Background())
 		s.s = nil
 	}
 }
@@ -91,8 +91,8 @@ func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error
 
 	return &metricsPullService{
 		BaseBackgroundService: svc,
-		ln: ln,
-		s:  &http.Server{Handler: promhttp.Handler()},
+		ln:                    ln,
+		s:                     &http.Server{Handler: promhttp.Handler()},
 	}, nil
 }
 
@@ -185,6 +185,6 @@ func registerMetricsFlags(cmd *cobra.Command) {
 		cfgMetricsPushInstanceLabel,
 		cfgMetricsPushInterval,
 	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
 }

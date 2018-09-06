@@ -76,12 +76,12 @@ func (s *sivImpl) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 	aadLen, pLen := len(additionalData), len(plaintext)
 
 	mac := hmac.New(sha256.New, s.macKey)
-	mac.Write(nonce)
+	_, _ = mac.Write(nonce)
 	if err := writeLenVec(mac, aadLen, pLen); err != nil {
 		panic(err)
 	}
-	mac.Write(additionalData)
-	mac.Write(plaintext)
+	_, _ = mac.Write(additionalData)
+	_, _ = mac.Write(plaintext)
 	siv := mac.Sum(nil)[:TagSize]
 
 	ret, out := sliceForAppend(dst, pLen+TagSize)
@@ -112,11 +112,11 @@ func (s *sivImpl) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, e
 
 	// Start MACing first.
 	mac := hmac.New(sha256.New, s.macKey)
-	mac.Write(nonce)
+	_, _ = mac.Write(nonce)
 	if err := writeLenVec(mac, aadLen, pLen); err != nil {
 		return nil, err
 	}
-	mac.Write(additionalData)
+	_, _ = mac.Write(additionalData)
 
 	var siv []byte
 	ciphertext, siv = ciphertext[:pLen], ciphertext[pLen:]
@@ -129,7 +129,7 @@ func (s *sivImpl) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, e
 	ctr := cipher.NewCTR(blk, siv)
 	ctr.XORKeyStream(out, ciphertext)
 
-	mac.Write(out)
+	_, _ = mac.Write(out)
 
 	sivCmp := mac.Sum(nil)[:TagSize]
 	if !hmac.Equal(siv, sivCmp) {

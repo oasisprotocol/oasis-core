@@ -53,7 +53,8 @@ func TestBeaconInsecure(t *testing.T) {
 		uint64(farFuture),
 	)
 
-	timeSource.SetEpoch(context.Background(), farFuture, 0)
+	err = timeSource.SetEpoch(context.Background(), farFuture, 0)
+	require.NoError(t, err, "SetEpoch(farFuture)")
 
 	select {
 	case ev := <-ch:
