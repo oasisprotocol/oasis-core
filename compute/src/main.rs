@@ -13,7 +13,6 @@ extern crate reqwest;
 extern crate serde_cbor;
 extern crate thread_local;
 
-extern crate ekiden_beacon_base;
 extern crate ekiden_compute_api;
 extern crate ekiden_core;
 extern crate ekiden_registry_base;
@@ -49,7 +48,6 @@ extern crate ekiden_epochtime;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_registry_client;
 extern crate ekiden_roothash_client;
-extern crate ekiden_roothash_dummy;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
@@ -73,14 +71,12 @@ use self::worker::WorkerConfiguration;
 fn register_components(known_components: &mut KnownComponents) {
     // Environment.
     ekiden_core::environment::GrpcEnvironment::register(known_components);
-    // Time.
-    ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Storage.
     ekiden_storage_frontend::StorageClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
     // Root hash.
     ekiden_roothash_client::RootHashClient::register(known_components);
-    ekiden_roothash_dummy::DummyRootHashSigner::register(known_components);
+    ekiden_roothash_client::InternalRootHashSigner::register(known_components);
     // Scheduler.
     ekiden_scheduler_client::SchedulerClient::register(known_components);
     // Entity registry.

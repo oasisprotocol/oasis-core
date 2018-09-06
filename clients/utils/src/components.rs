@@ -1,7 +1,6 @@
 //! DI components for use in clients.
 use ekiden_core;
 use ekiden_di::{Component, KnownComponents};
-use ekiden_epochtime;
 use ekiden_instrumentation_prometheus;
 use ekiden_registry_client;
 use ekiden_roothash_client;
@@ -13,8 +12,6 @@ use ekiden_storage_multilayer;
 pub fn register_components(known_components: &mut KnownComponents) {
     // Environment.
     ekiden_core::environment::GrpcEnvironment::register(known_components);
-    // Time Notifier.
-    ekiden_epochtime::local::LocalTimeSourceNotifier::register(known_components);
     // Local identities.
     ekiden_core::identity::LocalEntityIdentity::register(known_components);
     ekiden_core::identity::LocalNodeIdentity::register(known_components);

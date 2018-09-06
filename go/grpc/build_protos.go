@@ -22,9 +22,9 @@ import (
 // It is assumed that each proto file explicitly specifies the Go package
 // via the `option go_package` directive.
 var protoFiles = [][]string{
-	{"beacon/api/src/beacon.proto"},
+	{"go/grpc/beacon/beacon.proto"},
 	{"common/api/src/common.proto"},
-	{"node/dummy/api/src/dummy_debug.proto"},
+	{"go/grpc/dummydebug/dummy_debug.proto"},
 	{
 		"registry/api/src/contract.proto",
 		"registry/api/src/entity.proto",

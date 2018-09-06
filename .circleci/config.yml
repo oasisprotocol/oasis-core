@@ -60,8 +60,6 @@ jobs:
           root: .
           paths:
             - go/ekiden/ekiden
-            - target/debug/ekiden-node-dummy
-            - target/debug/ekiden-node-dummy-controller
             - target/debug/ekiden-compute
             - target/debug/token-client
             - target/debug/test-long-term-client

@@ -70,6 +70,11 @@ func nodeMain(cmd *cobra.Command, args []string) {
 
 	rootLog.Info("starting ekiden node")
 
+	if dataDir == "" {
+		rootLog.Error("data directory not configured")
+		return
+	}
+
 	var err error
 
 	// Generate/Load the node identity.
@@ -212,7 +217,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logFile, cfgLogFile, "", "log file")
 	rootCmd.PersistentFlags().StringVar(&logFmt, cfgLogFmt, "Logfmt", "log format")
 	rootCmd.PersistentFlags().StringVar(&logLevel, cfgLogLevel, "INFO", "log level")
-	rootCmd.MarkPersistentFlagRequired(cfgDataDir)
 
 	for _, v := range []string{
 		cfgDataDir,
