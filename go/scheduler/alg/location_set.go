@@ -74,15 +74,17 @@ func (ls *LocationSet) Merge(other *LocationSet) {
 	}
 }
 
-// MemberIteratorCallbackWithEarlyExit invokes the callback function `cb` on each element of
-// the receiver LocationSet `ls`, in no particular order.  If `cb` returns true to indicate
-// early exit, then the iteration stops and MemberIteratorCallbackWithEarlyAbort return true to
-// indicate early exit (though `cb` may actually return true only on the last element in the
-// set, so in that sense it may not be literally early).  Otherwise,
-// MemberIteratorCallbackWithEarlyAbort returns false.
-func (ls *LocationSet) MemberIteratorCallbackWithEarlyExit(cb func(Location) bool) bool {
+// Find invokes the boolean predicate function `pred` on each Location element of the receiver
+// LocationSet, in no particular order.  If the predicate returns true to indicate that an
+// element satisfying whatever criteria the predicate defines has been found, the
+// iteration/scanning stops and `Find` return true to indicate that.  Otherwise, `Find` returns
+// false.
+//
+// Find may also be used to iterate through all Location values in the set, using a predicate
+// that always returns false.
+func (ls *LocationSet) Find(pred func(Location) bool) bool {
 	for loc := range ls.locations {
-		if cb(loc) {
+		if pred(loc) {
 			return true
 		}
 	}

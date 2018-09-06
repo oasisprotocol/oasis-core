@@ -139,3 +139,21 @@ func TestLocationSetOverlapsIntersects(t *testing.T) {
 	assert.False(ls1.Overlaps(ls4), "the two sets do not overlap")
 	assert.False(ls4.Overlaps(ls1), "the two sets do not overlap")
 }
+
+func TestLocationSetFind(t *testing.T) {
+	assert := assert.New(t)
+	ls, err := LocationSetFromString(TestLocation(0), "{11, 9, 7, 5, 3, 1}")
+	assert.NoError(err, "TestLocationSetFind setup failed")
+	assert.True(ls.Find(func(loc Location) bool {
+		return loc.(TestLocation) == 5
+	}))
+	assert.False(ls.Find(func(loc Location) bool {
+		return loc.(TestLocation) == 6
+	}))
+	assert.True(ls.Find(func(loc Location) bool {
+		return loc.(TestLocation) == 1
+	}))
+	assert.True(ls.Find(func(loc Location) bool {
+		return loc.(TestLocation) == 11
+	}))
+}
