@@ -57,9 +57,7 @@ func (gs *GreedySubgraphsScheduler) NumDeferred() int {
 
 // Schedule actually performs scheduling and returns a slice containing mutually commutative
 // subgraphs.
-//
-// nolint: gocyclo
-func (gs *GreedySubgraphsScheduler) Schedule() []*Subgraph {
+func (gs *GreedySubgraphsScheduler) Schedule() []*Subgraph { // nolint: gocyclo
 	deferred := make([]*Transaction, 0)
 	readMap := make(map[Location][]int)
 	writeMap := make(map[Location]int)

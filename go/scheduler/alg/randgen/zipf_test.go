@@ -33,8 +33,7 @@ func TestZipfNew(t *testing.T) {
 	assert.Error(err, "MaxInt values should not work")
 }
 
-// nolint: gocyclo
-func TestZipfCdf(t *testing.T) {
+func TestZipfCdf(t *testing.T) { // nolint: gocyclo
 	assert := assert.New(t)
 	const maxValue = 1000000
 	handleTestSeed(t.Logf, &zipfSeed, "zipf CDF test")

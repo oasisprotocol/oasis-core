@@ -155,9 +155,7 @@ func (ls LocationSet) Write(w *bufio.Writer) {
 // merges it into the receiver LocationSet.  The Location interface argument `l` is needed
 // because LocationSet objects do not know what is the actual type that implements the Location
 // interface, so `l.Read` is used to read in the individual locations from the `*bufio.Reader`.
-//
-// nolint: gocyclo
-func (ls *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) {
+func (ls *LocationSet) ReadMerge(l Location, r *bufio.Reader) (err error) { // nolint: gocyclo
 	if err = expectRune('{', r); err != nil {
 		return err
 	}

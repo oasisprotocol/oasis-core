@@ -89,9 +89,7 @@ func (a choiceSort) Less(i, j int) bool { return a[i] < a[j] }
 
 // mapTargets: given a slice of random values `choice` all in half open interval [0,
 // `countTargets(targets)`), return a slice of the `TestLocation` associated with that value.
-//
-// nolint: gocyclo
-func mapTargets(targets *alg.LocationRangeSet, choice []int64) []alg.Location {
+func mapTargets(targets *alg.LocationRangeSet, choice []int64) []alg.Location { // nolint: gocyclo
 	if targets.IsEmpty() || len(choice) == 0 {
 		return nil
 	}

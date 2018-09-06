@@ -92,8 +92,7 @@ func TestMustReadLocationRange(t *testing.T) {
 	assert.NotNil(lr, "MustReadNewLocationRange should work")
 }
 
-// nolint: gocyclo
-func TestReadNewLocationRange(t *testing.T) {
+func TestReadNewLocationRange(t *testing.T) { // nolint: gocyclo
 	assert := assert.New(t)
 	helper := func(in string) (*LocationRange, error) {
 		return ReadNewLocationRange(TestLocation(0), bufio.NewReader(bytes.NewReader([]byte(in))))
@@ -161,8 +160,7 @@ func TestReadNewLocationRange(t *testing.T) {
 	assert.Error(err, "Unexpected ability to parse input '%s'", input)
 }
 
-// nolint: gocyclo
-func TestLocationRangeSetParse(t *testing.T) {
+func TestLocationRangeSetParse(t *testing.T) { // nolint: gocyclo
 	assert := assert.New(t)
 	helper := func(in string) (*LocationRangeSet, error) {
 		return LocationRangeSetFromString(TestLocation(0), in)

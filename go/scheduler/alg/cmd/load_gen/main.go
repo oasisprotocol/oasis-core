@@ -48,8 +48,7 @@ func init() {
 	flag.UintVar(&numTransactions, "numTransactions", 1<<20, "number of transactions to generate")
 }
 
-// nolint: gosec
-func generateTransactions(
+func generateTransactions( // nolint: gosec
 	numTrans, numReads, numWrites uint,
 	gen randgen.Rng,
 	out *bufio.Writer) {
