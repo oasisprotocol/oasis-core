@@ -61,7 +61,7 @@ var (
 
 // TxRegistry is a transaction to be accepted by the registry app.
 type TxRegistry struct {
-	_struct struct{} `codec:",omitempty"`
+	_struct struct{} `codec:",omitempty"` // nolint
 
 	*TxRegisterEntity   `codec:"RegisterEntity"`
 	*TxDeregisterEntity `codec:"DeregisterEntity"`
@@ -92,7 +92,7 @@ type TxRegisterContract struct {
 
 // OutputRegistry is an output of an registry app transaction.
 type OutputRegistry struct {
-	_struct struct{} `codec:",omitempty"`
+	_struct struct{} `codec:",omitempty"` // nolint
 
 	*OutputRegisterEntity   `codec:"RegisterEntity"`
 	*OutputDeregisterEntity `codec:"DeregisterEntity"`

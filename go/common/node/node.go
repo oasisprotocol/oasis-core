@@ -62,7 +62,7 @@ const (
 //
 // This structure format is compatible with Rust's SocketAddr serialization.
 type Address struct {
-	_struct struct{} `codec:",toarray"`
+	_struct struct{} `codec:",toarray"` // nolint
 
 	// Family is an address family.
 	Family string
@@ -86,7 +86,7 @@ func NewAddress(family string, ip []byte, port uint16) (*Address, error) {
 //
 // This structure format is compatible with Rust's SocketAddr serialization.
 type AddressTuple struct {
-	_struct struct{} `codec:",toarray"`
+	_struct struct{} `codec:",toarray"` // nolint
 
 	// IP address.
 	IP []byte

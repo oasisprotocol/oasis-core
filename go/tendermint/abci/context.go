@@ -69,7 +69,7 @@ func (c *Context) EmitData(data interface{}) {
 
 // EmitTag emits a key-value tag for the current transaction/block.
 func (c *Context) EmitTag(key []byte, value []byte) {
-	c.tags = append(c.tags, tmcmn.KVPair{key, value})
+	c.tags = append(c.tags, tmcmn.KVPair{Key: key, Value: value})
 }
 
 // GetTag returns a specific tag's value if it exists.

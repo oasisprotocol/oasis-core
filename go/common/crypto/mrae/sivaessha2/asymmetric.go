@@ -68,7 +68,7 @@ func DeriveSymmetricKey(key *[KeySize]byte, publicKey, privateKey *[32]byte) {
 	curve25519.ScalarMult(&pmk, privateKey, publicKey)
 
 	kdf := hmac.New(sha512.New384, boxKDFTweak)
-	kdf.Write(pmk[:])
+	_, _ = kdf.Write(pmk[:])
 	bzero(pmk[:])
 	tmp := kdf.Sum(nil)
 

@@ -125,9 +125,9 @@ type Application interface {
 // that multiplexes multiple Oasis-specific "applications".
 type ApplicationServer struct {
 	mux         *abciMux
-	cleanupOnce sync.Once
 	quitChannel chan struct{}
 	started     bool
+	cleanupOnce sync.Once
 }
 
 // Start starts the ApplicationServer.
@@ -325,7 +325,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// clearly separating chain instances based on the initialization
 	// state, forever.
 	tmp := bytes.NewBuffer(nil)
-	types.WriteMessage(&req, tmp)
+	_ = types.WriteMessage(&req, tmp)
 	genesisDigest := sha512.Sum512_256(tmp.Bytes())
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisDigest), genesisDigest[:])
 

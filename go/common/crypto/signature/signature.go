@@ -470,8 +470,8 @@ func digest(context, message []byte) ([]byte, error) {
 	}
 
 	h := sha512.New512_256()
-	h.Write(context)
-	h.Write(message)
+	_, _ = h.Write(context)
+	_, _ = h.Write(message)
 	sum := h.Sum(nil)
 
 	return sum[:], nil

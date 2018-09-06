@@ -63,7 +63,7 @@ var (
 
 // TxRootHash is a transaction to be accepted by the roothash app.
 type TxRootHash struct {
-	_struct struct{} `codec:",omitempty"`
+	_struct struct{} `codec:",omitempty"` // nolint
 
 	*TxCommit `codec:"Commit"`
 }

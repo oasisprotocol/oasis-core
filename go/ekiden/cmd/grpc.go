@@ -255,8 +255,8 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 
 	return &grpcService{
 		BaseBackgroundService: svc,
-		ln: ln,
-		s:  grpc.NewServer(sOpts...),
+		ln:                    ln,
+		s:                     grpc.NewServer(sOpts...),
 	}, nil
 }
 
@@ -267,6 +267,6 @@ func registerGrpcFlags(cmd *cobra.Command) {
 	for _, v := range []string{
 		cfgGRPCPort,
 	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
 }

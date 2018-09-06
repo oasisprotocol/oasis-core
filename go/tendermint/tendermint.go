@@ -261,7 +261,7 @@ func (t *tendermintService) lazyInit() error {
 
 	// Create Tendermint node.
 	tenderConfig := tmconfig.DefaultConfig()
-	viper.Unmarshal(&tenderConfig)
+	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
 	tenderConfig.Consensus.TimeoutCommit = int(timeoutCommit / time.Millisecond)
