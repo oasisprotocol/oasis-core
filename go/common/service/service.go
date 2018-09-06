@@ -87,6 +87,6 @@ func (s *cleanupOnlyService) Cleanup() {
 func NewCleanupOnlyService(svc CleanupAble) BackgroundService {
 	return &cleanupOnlyService{
 		BaseBackgroundService: *NewBaseBackgroundService("<unknown>"),
-		svc:                   svc,
+		svc: svc,
 	}
 }

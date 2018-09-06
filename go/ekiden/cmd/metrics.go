@@ -91,8 +91,8 @@ func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error
 
 	return &metricsPullService{
 		BaseBackgroundService: svc,
-		ln:                    ln,
-		s:                     &http.Server{Handler: promhttp.Handler()},
+		ln: ln,
+		s:  &http.Server{Handler: promhttp.Handler()},
 	}, nil
 }
 

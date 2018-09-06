@@ -255,8 +255,8 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 
 	return &grpcService{
 		BaseBackgroundService: svc,
-		ln:                    ln,
-		s:                     grpc.NewServer(sOpts...),
+		ln: ln,
+		s:  grpc.NewServer(sOpts...),
 	}, nil
 }
 
