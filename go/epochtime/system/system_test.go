@@ -63,7 +63,7 @@ func testAPIs(t *testing.T) {
 	select {
 	case epoch = <-ch:
 		require.InDelta(t, uint64(currentEpoch), uint64(epoch), 1, "WatchEpochs() initial")
-	case <-time.After(1 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatalf("Failed to receive current epoch on WatchEpochs()")
 	}
 

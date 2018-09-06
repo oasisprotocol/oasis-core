@@ -3,6 +3,7 @@ package system
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/eapache/channels"
@@ -22,6 +23,8 @@ var (
 )
 
 type systemBackend struct {
+	sync.Mutex
+
 	logger   *logging.Logger
 	notifier *pubsub.Broker
 
@@ -51,8 +54,12 @@ func (s *systemBackend) worker() {
 				"prev_epoch", s.lastNotified,
 				"epoch", newEpoch,
 			)
-			s.notifier.Broadcast(newEpoch)
+
+			s.Lock()
 			s.lastNotified = newEpoch
+			s.Unlock()
+
+			s.notifier.Broadcast(newEpoch)
 		}
 	}
 }
@@ -74,7 +81,15 @@ func New(interval int64) (api.Backend, error) {
 			panic(err)
 		}
 
-		ch.In() <- epoch
+		// Iff the notifications for the current epoch went out,
+		// broadcast the current epoch on subscribe, otherwise,
+		// assume that the event mechanism will handle it.
+		s.Lock()
+		defer s.Unlock()
+
+		if epoch == s.lastNotified {
+			ch.In() <- epoch
+		}
 	})
 
 	s.logger.Debug("initialized",
