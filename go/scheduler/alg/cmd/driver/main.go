@@ -391,12 +391,10 @@ func (h *committeeMemberHeap) Pop() interface{} {
 	return x
 }
 
-// nolint: gocyclo
-//
 // Run simulation: generate transactions and execute them -- and output results to |bw|.
 // Caller is responsible for checking I/O errors via bw.Flush.  Other errors result in panic
 // here.
-func runSimulation(
+func runSimulation( // nolint: gocyclo
 	dcnf distributionConfig,
 	acnf adversaryConfig,
 	lscnf logicalShardingConfig,

@@ -17,11 +17,8 @@ type FileTransactionSource struct {
 
 // NewFileTransactionSource is a factory for FileTransactionSources where the data is read from
 // the filename supplied in the fn formal parameter.
-//
-// nolint: gosec
-//
-// File inclusion is the intention.
-func NewFileTransactionSource(fn string) (*FileTransactionSource, error) {
+func NewFileTransactionSource(fn string) (*FileTransactionSource, error) { // nolint: gosec
+	// File inclusion is the intention.
 	// Handle "-" case to mean stdin.  This means files named "-" would have to be referred
 	// to via "./-" which is awkward.  We could instead _only_ have the empty string ""
 	// mean standard input, but that is different from the usual Unix convention.
