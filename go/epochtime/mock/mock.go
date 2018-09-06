@@ -29,8 +29,9 @@ type mockBackend struct {
 	logger   *logging.Logger
 	notifier *pubsub.Broker
 
-	epoch   api.EpochTime
-	elapsed uint64
+	lastNotified api.EpochTime
+	epoch        api.EpochTime
+	elapsed      uint64
 }
 
 func (m *mockBackend) GetEpoch(ctx context.Context) (api.EpochTime, uint64, error) {
@@ -53,6 +54,14 @@ func (m *mockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime, elapsed
 		return errInvalidElapsed
 	}
 
+	if m.updateEpoch(epoch, elapsed) {
+		m.notifier.Broadcast(epoch)
+	}
+
+	return nil
+}
+
+func (m *mockBackend) updateEpoch(epoch api.EpochTime, elapsed uint64) bool {
 	m.Lock()
 	defer m.Unlock()
 
@@ -60,14 +69,15 @@ func (m *mockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime, elapsed
 	m.epoch, m.elapsed = epoch, elapsed
 
 	if oldEpoch != epoch {
+		m.lastNotified = epoch
 		m.logger.Debug("epoch transition",
 			"prev_epoch", oldEpoch,
 			"epoch", epoch,
 		)
-		m.notifier.Broadcast(epoch)
+		return true
 	}
 
-	return nil
+	return false
 }
 
 // New constructs a new mock (user-driven) epochtime Backend instance.
@@ -76,8 +86,15 @@ func New() api.SetableBackend {
 		logger: logging.GetLogger("epochtime/mock"),
 	}
 	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
-		epoch, _, _ := s.GetEpoch(context.Background())
-		ch.In() <- epoch
+		s.Lock()
+		defer s.Unlock()
+
+		// Iff the notifications for the current epoch went out,
+		// broadcast the current epoch on subscribe, otherwise,
+		// assume that the event mechanism will handle it.
+		if s.epoch == s.lastNotified {
+			ch.In() <- s.epoch
+		}
 	})
 
 	s.logger.Debug("initialized",

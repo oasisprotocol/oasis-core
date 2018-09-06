@@ -19,9 +19,7 @@ const (
 	BackendName = "tendermint"
 )
 
-var (
-	_ api.BlockBackend = (*tendermintBackend)(nil)
-)
+var _ api.BlockBackend = (*tendermintBackend)(nil)
 
 type tendermintBackend struct {
 	sync.RWMutex
@@ -31,19 +29,17 @@ type tendermintBackend struct {
 	service  service.TendermintService
 	notifier *pubsub.Broker
 
-	interval int64
-
-	cached struct {
-		epoch   api.EpochTime
-		elapsed uint64
-	}
+	interval     int64
+	lastNotified api.EpochTime
+	epoch        api.EpochTime
+	elapsed      uint64
 }
 
 func (t *tendermintBackend) GetEpoch(ctx context.Context) (api.EpochTime, uint64, error) {
 	t.RLock()
 	defer t.RUnlock()
 
-	return t.cached.epoch, t.cached.elapsed, nil
+	return t.epoch, t.elapsed, nil
 }
 
 func (t *tendermintBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, uint64, error) {
@@ -77,27 +73,31 @@ func (t *tendermintBackend) worker() {
 			return
 		}
 
-		t.updateCached(block)
+		if t.updateCached(block) {
+			// Safe to look at `t.epoch`, only mutator is the line above.
+			t.notifier.Broadcast(t.epoch)
+		}
 	}
 }
 
-func (t *tendermintBackend) updateCached(block *tmtypes.Block) {
-	lastNotified := t.cached.epoch
-	epoch, elapsed, _ := t.GetBlockEpoch(context.Background(), block.Header.Height)
-	changed := epoch != lastNotified
-
+func (t *tendermintBackend) updateCached(block *tmtypes.Block) bool {
 	t.Lock()
-	t.cached.epoch = epoch
-	t.cached.elapsed = elapsed
-	t.Unlock()
+	defer t.Unlock()
 
-	if changed {
+	epoch, elapsed, _ := t.GetBlockEpoch(context.Background(), block.Header.Height)
+
+	t.epoch = epoch
+	t.elapsed = elapsed
+
+	if t.lastNotified != epoch {
 		t.logger.Debug("epoch transition",
-			"prev_epoch", lastNotified,
+			"prev_epoch", t.lastNotified,
 			"epoch", epoch,
 		)
-		t.notifier.Broadcast(epoch)
+		t.lastNotified = t.epoch
+		return true
 	}
+	return false
 }
 
 // New constructs a new tendermint backed epochtime Backend instance,
@@ -113,12 +113,12 @@ func New(service service.TendermintService, interval int64) (api.Backend, error)
 		interval: interval,
 	}
 	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
-		epoch, _, err := r.GetEpoch(context.Background())
-		if err != nil {
-			panic(err)
-		}
+		r.RLock()
+		defer r.RUnlock()
 
-		ch.In() <- epoch
+		if r.lastNotified == r.epoch {
+			ch.In() <- r.epoch
+		}
 	})
 
 	go r.worker()
