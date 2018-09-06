@@ -10,6 +10,9 @@ build = "build.rs"
 [dependencies]
 mktemp = "0.3.1"
 cc = "1.0"
+# (pinning transitive dependency) in 0.4.18,
+# error[E0658]: use of unstable library feature 'proc_macro' (see issue #38356)
+proc-macro2 = "=0.4.17"
 protoc = "~2.0"
 protoc-rust = "~2.0"
 protobuf = "~2.0"
