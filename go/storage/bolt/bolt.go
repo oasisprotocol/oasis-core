@@ -30,11 +30,13 @@ var (
 
 	bktMetadata = []byte("metadata")
 	keyVersion  = []byte("version")
-	dbVersion   = []byte{0x00}
+	dbVersion   = []byte{0x01}
 
-	bktStore      = []byte("store")
-	keyValue      = []byte("value")
-	keyExpiration = []byte("expiration")
+	bktValues = []byte("values")
+
+	bktExpirations  = []byte("expirations")
+	bktByKey        = []byte("byKey")
+	bktByExpiration = []byte("byExpiration")
 )
 
 type boltBackend struct {
@@ -53,16 +55,20 @@ func (b *boltBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 
 	var value []byte
 	if err := b.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bktStore)
-		if bkt = bkt.Bucket(key[:]); bkt == nil {
+		// Ensure the key is not expired.
+		bkt := tx.Bucket(bktExpirations)
+		bkt = bkt.Bucket(bktByKey)
+		rawExp := bkt.Get(key[:])
+		if rawExp == nil {
 			return api.ErrKeyNotFound
 		}
-		if boltGetExpiration(bkt) < epoch {
+		if exp := epochTimeFromRaw(rawExp); exp < epoch {
 			return api.ErrKeyExpired
 		}
 
-		v := bkt.Get(keyValue)
-		value = append([]byte{}, v...) // MUST copy.
+		// Retreive the value.
+		bkt = tx.Bucket(bktValues)
+		value = append([]byte{}, bkt.Get(key[:])...) // MUST copy.
 
 		return nil
 	}); err != nil {
@@ -88,28 +94,67 @@ func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint6
 	)
 
 	return b.db.Update(func(tx *bolt.Tx) error {
-		storeBkt := tx.Bucket(bktStore)
+		bkt := tx.Bucket(bktExpirations)
+		keys := bkt.Bucket(bktByKey)
+		exps := bkt.Bucket(bktByExpiration)
+		values := tx.Bucket(bktValues)
 
-		bkt, err := storeBkt.CreateBucketIfNotExists(key[:])
+		var err error
+
+		// Iff the key exists in the database already, remove
+		// it's by-expiration index entry.
+		if oldExp := keys.Get(key[:]); oldExp != nil {
+			// The expiration time is identical.  Nothing to do, as
+			// the value is identical by definition (or there is a hash
+			// collision).
+			if epochTimeFromRaw(oldExp) == expEpoch {
+				return nil
+			}
+
+			if bkt = exps.Bucket(oldExp); bkt != nil {
+				if err = bkt.Delete(key[:]); err != nil {
+					return err
+				}
+			}
+		}
+
+		rawExp := epochTimeToRaw(expEpoch)
+		bkt, err = exps.CreateBucketIfNotExists(rawExp)
 		if err != nil {
 			return err
 		}
-		if err = boltSetExpiration(bkt, expEpoch); err != nil {
+		if err = bkt.Put(key[:], rawExp); err != nil {
 			return err
 		}
-		return bkt.Put(keyValue, value)
+
+		if err = keys.Put(key[:], rawExp); err != nil {
+			return err
+		}
+
+		return values.Put(key[:], value)
 	})
 }
 
 func (b *boltBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
 	var kiVec []*api.KeyInfo
 
+	epoch := b.sweeper.GetEpoch()
+	if epoch == epochtime.EpochInvalid {
+		return nil, api.ErrIncoherentTime
+	}
+
 	if err := b.db.View(func(tx *bolt.Tx) error {
-		storeBkt := tx.Bucket(bktStore)
-		return storeBkt.ForEach(func(k, v []byte) error {
-			bkt := storeBkt.Bucket(k)
+		bkt := tx.Bucket(bktExpirations)
+		bkt = bkt.Bucket(bktByKey)
+		return bkt.ForEach(func(k, v []byte) error {
+			// Omit expired keys.
+			exp := epochTimeFromRaw(v)
+			if exp < epoch {
+				return nil
+			}
+
 			ki := &api.KeyInfo{
-				Expiration: boltGetExpiration(bkt),
+				Expiration: exp,
 			}
 			copy(ki.Key[:], k)
 			kiVec = append(kiVec, ki)
@@ -125,19 +170,34 @@ func (b *boltBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
 
 func (b *boltBackend) PurgeExpired(epoch epochtime.EpochTime) {
 	if err := b.db.Update(func(tx *bolt.Tx) error {
-		storeBkt := tx.Bucket(bktStore)
+		bkt := tx.Bucket(bktExpirations)
+		keys := bkt.Bucket(bktByKey)
+		exps := bkt.Bucket(bktByExpiration)
+		values := tx.Bucket(bktValues)
 
-		cur := storeBkt.Cursor()
-		for key, _ := cur.First(); key != nil; key, _ = cur.Next() {
-			bkt := storeBkt.Bucket(key)
-			if boltGetExpiration(bkt) < epoch {
-				b.logger.Debug("Expire",
-					"key", key,
-				)
-				if err := storeBkt.DeleteBucket(key); err != nil {
+		cur := exps.Cursor()
+		rawExp, _ := cur.First()
+		for rawExp != nil {
+			exp := epochTimeFromRaw(rawExp)
+			if exp >= epoch {
+				break
+			}
+
+			// Every single key in this bucket is expired.
+			keyCur := exps.Bucket(rawExp).Cursor()
+			for key, _ := keyCur.First(); key != nil; key, _ = keyCur.Next() {
+				if err := keys.Delete(key); err != nil {
+					return err
+				}
+				if err := values.Delete(key); err != nil {
 					return err
 				}
 			}
+			if err := exps.DeleteBucket(rawExp); err != nil {
+				return err
+			}
+
+			rawExp, _ = cur.Next()
 		}
 
 		return nil
@@ -166,10 +226,20 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists(bktStore); err != nil {
+		if _, err := tx.CreateBucketIfNotExists(bktValues); err != nil {
 			return err
 		}
-		bkt, err := tx.CreateBucketIfNotExists(bktMetadata)
+		bkt, err := tx.CreateBucketIfNotExists(bktExpirations)
+		if err != nil {
+			return err
+		}
+		if _, err = bkt.CreateBucketIfNotExists(bktByKey); err != nil {
+			return err
+		}
+		if _, err = bkt.CreateBucketIfNotExists(bktByExpiration); err != nil {
+			return err
+		}
+		bkt, err = tx.CreateBucketIfNotExists(bktMetadata)
 		if err != nil {
 			return err
 		}
@@ -198,19 +268,13 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 	return b, nil
 }
 
-func boltGetExpiration(bkt *bolt.Bucket) epochtime.EpochTime {
-	v := bkt.Get(keyExpiration)
-	if v == nil {
-		panic("storage/bolt: no expiration time set for entry")
-	}
-
-	exp := binary.LittleEndian.Uint64(v)
-	return epochtime.EpochTime(exp)
+func epochTimeFromRaw(b []byte) epochtime.EpochTime {
+	return epochtime.EpochTime(binary.LittleEndian.Uint64(b))
 }
 
-func boltSetExpiration(bkt *bolt.Bucket, expiration epochtime.EpochTime) error {
+func epochTimeToRaw(t epochtime.EpochTime) []byte {
 	var tmp [8]byte
-	binary.LittleEndian.PutUint64(tmp[:], uint64(expiration))
+	binary.LittleEndian.PutUint64(tmp[:], uint64(t))
 
-	return bkt.Put(keyExpiration, tmp[:])
+	return tmp[:]
 }
