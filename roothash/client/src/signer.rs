@@ -1,4 +1,4 @@
-//! Signer for the dummy root hash backend.
+//! Signer for internal root hash backends (dummy, tendermint).
 use std::sync::Arc;
 
 use ekiden_common::error::Result;
@@ -7,18 +7,18 @@ use ekiden_roothash_base::{Commitment as OpaqueCommitment, Header, RootHashSigne
 
 use super::commitment::Commitment;
 
-/// Signer for the dummy root hash backend.
-pub struct DummyRootHashSigner {
+/// Signer for the root hash backend.
+pub struct InternalRootHashSigner {
     identity: Arc<NodeIdentity>,
 }
 
-impl DummyRootHashSigner {
+impl InternalRootHashSigner {
     pub fn new(identity: Arc<NodeIdentity>) -> Self {
         Self { identity }
     }
 }
 
-impl RootHashSigner for DummyRootHashSigner {
+impl RootHashSigner for InternalRootHashSigner {
     fn sign_commitment(&self, header: &Header) -> Result<OpaqueCommitment> {
         let commitment = Commitment::new(&self.identity.get_node_signer(), header.clone());
 
@@ -28,9 +28,9 @@ impl RootHashSigner for DummyRootHashSigner {
 
 // Register for dependency injection.
 create_component!(
-    dummy,
+    internal,
     "roothash-signer",
-    DummyRootHashSigner,
+    InternalRootHashSigner,
     RootHashSigner,
     [NodeIdentity]
 );

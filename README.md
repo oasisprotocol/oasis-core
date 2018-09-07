@@ -1,8 +1,8 @@
 # Ekiden
 
-[![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)   
-[![Coverage Status](https://coveralls.io/repos/github/oasislabs/ekiden/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/ekiden) Rust   
-[![codecov](https://codecov.io/gh/oasislabs/ekiden/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/ekiden) Go   
+[![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
+[![Coverage Status](https://coveralls.io/repos/github/oasislabs/ekiden/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/ekiden) Rust
+[![codecov](https://codecov.io/gh/oasislabs/ekiden/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/ekiden) Go
 
 ## Developing and building the Ekiden system
 
@@ -90,7 +90,7 @@ To start the compute node for the token contract (you need to start two):
 
 After starting the nodes, to manually advance the epoch in the shared dummy node:
 ```
-# ./target/debug/ekiden-node-dummy-controller set-epoch --epoch 1
+# ./go/ekiden/ekiden dummy-set-epoch --epoch 1
 ```
 
 The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.
@@ -122,10 +122,9 @@ To run end-to-end tests:
 See our [contributing guidelines](CONTRIBUTING.md).
 
 ## Packages
-- `beacon`: Random beacon for preventing predictability
 - `common`: Common functionality like error handling
 - `compute`: Ekiden compute node
-- `roothash`: Ekiden root hash interface and backends
+- `roothash`: Ekiden root hash interface
 - `contracts`: Example and mangaement code to run in the Ekiden runtime (`key-manager`, `token`)
 - `core`: Core external-facing libraries (aggregates `common`, `enclave`, `rpc`, `db`, etc.)
 - `db`: Database functionality for use in enclaves

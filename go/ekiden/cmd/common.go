@@ -45,10 +45,12 @@ func initConfig() {
 	}
 
 	// Force the DataDir to be an absolute path.
-	var err error
-	dataDir, err = filepath.Abs(viper.GetString(cfgDataDir))
-	if err != nil {
-		logAndExit(err)
+	if dataDir != "" {
+		var err error
+		dataDir, err = filepath.Abs(viper.GetString(cfgDataDir))
+		if err != nil {
+			logAndExit(err)
+		}
 	}
 
 	// The command line flag values may be missing, but may be specified
@@ -65,6 +67,9 @@ func initConfig() {
 }
 
 func initDataDir() error {
+	if dataDir == "" {
+		return nil
+	}
 	return common.Mkdir(dataDir)
 }
 

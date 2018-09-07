@@ -13,19 +13,10 @@ members = [
     "common",
     "common/api",
 
-    # Random beacon.
-    "beacon/base",
-    "beacon/dummy",
-
-    # Random beacon.
-    "beacon/base",
-    "beacon/dummy",
-
     # Root hash interface.
     "roothash/api",
     "roothash/base",
     "roothash/client",
-    "roothash/dummy",
 
     # Storage interface.
     "storage/api",
@@ -89,23 +80,17 @@ members = [
     "registry/api",
     "registry/base",
     "registry/client",
-    "registry/dummy",
 
     # Scheduler.
     "scheduler/api",
     "scheduler/base",
     "scheduler/client",
-    "scheduler/dummy",
 
     # Stake escrow.
     "stake/api",
     "stake/base",
     "stake/client",
     "stake/dummy",
-
-    # Dummy shared backend node.
-    "node/dummy",
-    "node/dummy/api",
 
     # Key manager.
     "key-manager/api",

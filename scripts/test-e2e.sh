@@ -36,33 +36,6 @@ run_dummy_node_go_tm() {
         &
 }
 
-run_dummy_node_default() {
-    ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --time-source-notifier mockrpc \
-        --storage-backend dummy \
-        &
-}
-
-run_dummy_node_storage_dynamodb() {
-    ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --time-source-notifier mockrpc \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend dynamodb \
-        --storage-dynamodb-region us-west-2 \
-        --storage-dynamodb-table-name test \
-        &
-}
-
-run_dummy_node_persistent_state_storage() {
-    ${WORKDIR}/target/debug/ekiden-node-dummy \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --time-source-notifier mockrpc \
-        --storage-backend dummy \
-        --roothash-storage-path "/tmp/dummy_node-state_storage" \
-        &
-}
-
 run_compute_node() {
     local id=$1
     shift
@@ -159,7 +132,7 @@ run_test() {
     if [[ "${pre_epochs}" > 0 ]]; then
         for epoch in $(seq $pre_epochs); do
             sleep 1
-            ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch || true
+            ${WORKDIR}/go/ekiden/ekiden dummy-set-epoch --epoch $epoch
         done
     fi
 
@@ -191,7 +164,7 @@ run_test() {
     let epochs+=pre_epochs
     for epoch in $(seq $epochs_offset $epochs); do
         sleep 2
-        ${WORKDIR}/target/debug/ekiden-node-dummy-controller set-epoch --epoch $epoch || true
+        ${WORKDIR}/go/ekiden/ekiden dummy-set-epoch --epoch $epoch
     done
 
     # Wait on the client and check its exit status.
@@ -276,9 +249,8 @@ run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_
 # TODO: Port other E2E tests.
 
 # Alternate starting order (client before dummy node).
-run_test scenario_basic "e2e-basic-client-starts-first-rust" token 1 run_dummy_node_default 0 0 1
-run_test scenario_basic "e2e-basic-client-starts-first-go" token 1 run_dummy_node_go_default 0 0 1
-run_test scenario_basic "e2e-basic-client-starts-first-go-tm" token 1 run_dummy_node_go_tm 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_default 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first-tm" token 1 run_dummy_node_go_tm 0 0 1
 
 # Go node (dummy backends).
 #
@@ -293,28 +265,3 @@ run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registra
 run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_default 0 1
 run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_go_default
 run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_go_default
-
-# Rust node.
-# TODO: Remove Rust node and only test against the Go node.
-run_test scenario_basic "e2e-basic" token 1 run_dummy_node_default
-run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_default 0 3
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_default
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_default
-run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_default
-run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_default
-run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_default
-run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_default
-if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
-    run_test scenario_basic "e2e-storage-dynamodb" token 1 run_dummy_node_storage_dynamodb
-else
-    echo >&2 "Skipping DynamoDB test."
-fi
-if [ -n "$AWS_ACCESS_KEY_ID" -o -e ~/.aws/credentials ]; then
-    run_test scenario_multilayer "e2e-storage-multilayer" token 1 run_dummy_node_storage_dynamodb
-else
-    echo >&2 "Skipping multilayer storage backend test."
-fi
-run_test scenario_multilayer_remote "e2e-storage-multilayer-remote" token 1 run_dummy_node_default
-
-rm -rf "/tmp/dummy_node-state_storage"
-run_test scenario_basic "e2e-basic-recovery" token 2 run_dummy_node_persistent_state_storage 5

@@ -5,35 +5,53 @@ WORKDIR=${2:-$(pwd)}
 LOGDIR=/tmp/ekiden-benchmarks
 
 run_dummy_node_storage_dummy() {
-    ${WORKDIR}/target/release/ekiden-node-dummy \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --time-source-notifier mockrpc \
-        --storage-backend dummy \
+    local datadir=/tmp/ekiden-benchmark-dummy-data
+    rm -rf ${datadir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level info \
+        --grpc.port 42261 \
+        --epochtime.backend mock \
+        --beacon.backend insecure \
+        --storage.backend memory \
+        --scheduler.backend trivial \
+        --registry.backend memory \
+        --datadir ${datadir} \
         2>${LOGDIR}/dummy.log &
 }
 
 run_dummy_node_storage_persistent() {
-    local db_dir="/tmp/ekiden-benchmark-storage-persistent"
-    rm -rf ${db_dir}
+    local datadir=/tmp/ekiden-benchmark-dummy-data
+    rm -rf ${datadir}
 
-    ${WORKDIR}/target/release/ekiden-node-dummy \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --time-source-notifier mockrpc \
-        --storage-backend persistent \
-        --storage-path ${db_dir} \
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level info \
+        --grpc.port 42261 \
+        --epochtime.backend mock \
+        --beacon.backend insecure \
+        --storage.backend bolt \
+        --scheduler.backend trivial \
+        --registry.backend memory \
+        --datadir ${datadir} \
         2>${LOGDIR}/dummy.log &
 }
 
-run_dummy_node_storage_roothash() {
-    local db_dir="/tmp/ekiden-benchmark-storage-roothash"
-    rm -rf ${db_dir}
+run_dummy_node_tendermint() {
+    local datadir=/tmp/ekiden-benchmark-tendermint
+    rm -rf ${datadir}
 
-    ${WORKDIR}/target/release/ekiden-node-dummy \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --time-source-notifier mockrpc \
-        --storage-backend dummy \
-        --roothash-storage-path ${db_dir} \
-        2>${LOGDIR}/dummy.log &
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level info \
+        --grpc.port 42261 \
+        --epochtime.backend tendermint \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --storage.backend memory \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --datadir ${datadir} \
+        &
 }
 
 run_compute_node() {
@@ -113,7 +131,7 @@ run_benchmark() {
     # Advance epoch to elect a new committee.
     for epoch in $(seq $epochs); do
         sleep 2
-        ${WORKDIR}/target/release/ekiden-node-dummy-controller set-epoch --epoch $epoch
+        ${WORKDIR}/go/ekiden/ekiden dummy-set-epoch --epoch $epoch
     done
 
     # Run the client.
@@ -154,5 +172,5 @@ scenario_multilayer_remote() {
 
 run_benchmark scenario_basic "e2e-benchmark" benchmark 1 run_dummy_node_storage_dummy
 run_benchmark scenario_basic "e2e-benchmark-persistent" benchmark 1 run_dummy_node_storage_persistent
-run_benchmark scenario_basic "e2e-benchmark-persistent-roothash" benchmark 1 run_dummy_node_storage_roothash
+run_benchmark scenario_basic "e2e-benchmark-tendermint" benchmark 1 run_dummy_node_tendermint
 run_benchmark scenario_multilayer_remote "e2e-benchmark-multilayer-remote" benchmark 1 run_dummy_node_storage_dummy
