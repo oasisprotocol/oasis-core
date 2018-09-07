@@ -363,7 +363,7 @@ func main() {
 
 		res := simulator.RunSimulationWithConfigs(dcnf, acnf, lcnf, scnf, xcnf, bw)
 		speedup := float64(res.LinearExecutionTime) / float64(res.ActualExecutionTime)
-		if simulator.Verbosity > 0 {
+		if simulator.Verbosity > 1 {
 			_, _ = fmt.Fprintf(bw, "Linear execution time:    %8d\n", res.LinearExecutionTime)
 			_, _ = fmt.Fprintf(bw, "Actual execution time:    %8d\n", res.ActualExecutionTime)
 			_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", speedup)

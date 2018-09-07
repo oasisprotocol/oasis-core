@@ -456,7 +456,7 @@ func transactionSourceFactory(cnf DistributionConfig) TransactionSource {
 
 func adversaryFactory(acnf AdversaryConfig, ts TransactionSource) TransactionSource {
 	if acnf.injectionProb == 0.0 {
-		if Verbosity > 1 {
+		if Verbosity > 2 {
 			fmt.Printf("No Adversarial transactions will be injected\n")
 		}
 		return ts
@@ -559,7 +559,7 @@ func RunSimulationWithConfigs(
 			trans[0], err = ts.Get(tid)
 			if err == nil {
 				tid++
-				if Verbosity > 5 {
+				if Verbosity > 10 {
 					trans[0].Write(bw)
 					_, _ = bw.WriteRune('\n')
 				}
@@ -576,7 +576,7 @@ func RunSimulationWithConfigs(
 		}
 		if len(sgl) > 0 {
 			schedNum++
-			if Verbosity > 4 {
+			if Verbosity > 5 {
 				_, _ = fmt.Fprintf(bw, "\n\n")
 				_, _ = fmt.Fprintf(bw, "Schedule %3d\n", schedNum)
 				_, _ = fmt.Fprintf(bw, "------------\n")
@@ -606,12 +606,12 @@ func RunSimulationWithConfigs(
 					schedExecutionTime = cmt.executionTime
 				}
 				// Now show committee statistics
-				if Verbosity > 2 {
+				if Verbosity > 3 {
 					_, _ = fmt.Fprintf(bw, "\n")
 					_, _ = fmt.Fprintf(bw, "Committee member %d\n", ix)
 					_, _ = fmt.Fprintf(bw, " est execution time = %d\n", uint64(cmt.executionTime))
 					_, _ = fmt.Fprintf(bw, " number of batches = %d\n", len(cmt.batches))
-					if Verbosity > 3 {
+					if Verbosity > 4 {
 						// show the subgraphs
 						for _, sg := range cmt.batches {
 							sg.Write(bw)
