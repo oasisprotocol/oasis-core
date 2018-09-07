@@ -25,14 +25,16 @@ pub struct ContractClient {
     /// Optional call timeout.
     timeout: Option<Duration>,
     /// Shutdown signal (receiver).
-    shutdown_receiver: future::Shared<oneshot::Receiver<()>>,
+    shutdown_receiver: future::Shared<oneshot::Receiver<&'static str>>,
     /// Shutdown signal (sender).
-    shutdown_sender: Mutex<Option<oneshot::Sender<()>>>,
+    shutdown_sender: Mutex<Option<oneshot::Sender<&'static str>>>,
     /// Environment.
     environment: Arc<Environment>,
 }
 
 impl ContractClient {
+    pub const SHUTDOWN_REASON_TRANSITION: &'static str = "transitioning to new leader";
+
     /// Create new client instance.
     pub fn new(
         environment: Arc<Environment>,
@@ -104,10 +106,14 @@ impl ContractClient {
             .select(
                 self.shutdown_receiver
                     .clone()
-                    .then(|_result| -> BoxFuture<Vec<u8>> {
+                    .then(|result| -> BoxFuture<Vec<u8>> {
+                        let reason = match result {
+                            Ok(reason_shared) => *reason_shared,
+                            Err(_canceled) => "client is being dropped",
+                        };
                         // However the shutdown receiver future completes, we need to abort as
                         // it has either been dropped or an explicit shutdown signal was sent.
-                        future::err(Error::new("contract client closed")).into_box()
+                        future::err(Error::new(reason)).into_box()
                     }),
             )
             .map(|(result, _)| result)
@@ -144,13 +150,13 @@ impl ContractClient {
     }
 
     /// Cancel all pending contract calls.
-    pub fn shutdown(&self) {
+    pub fn shutdown(&self, reason: &'static str) {
         let shutdown_sender = self.shutdown_sender
             .lock()
             .unwrap()
             .take()
             .expect("shutdown already called");
-        drop(shutdown_sender.send(()));
+        drop(shutdown_sender.send(reason));
     }
 }
 

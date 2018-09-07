@@ -10,6 +10,7 @@ use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::futures::retry_until_ok_or_max;
 use ekiden_common::futures::streamfollow;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
@@ -166,7 +167,9 @@ impl ContractClientManager {
                             drop(leader_notify.send(new_leader.clone()));
                         }
                         if let Some(previous_leader) = previous_leader.take() {
-                            previous_leader.client.shutdown();
+                            previous_leader
+                                .client
+                                .shutdown(ContractClient::SHUTDOWN_REASON_TRANSITION);
                         }
                         *previous_leader = Some(new_leader);
 
@@ -198,13 +201,13 @@ impl ContractClientManager {
         });
     }
 
-    /// Queue a contract call.
-    pub fn call<C, O>(&self, method: &str, arguments: C) -> BoxFuture<O>
+    /// Queue a contract call to the current leader, waiting if there isn't a leader yet.
+    fn call_leader<C, O>(inner: Arc<Inner>, method: &str, arguments: C) -> BoxFuture<O>
     where
         C: Serialize + Send + 'static,
         O: DeserializeOwned + Send + 'static,
     {
-        let leader = self.inner.leader.read().unwrap();
+        let leader = inner.leader.read().unwrap();
 
         match *leader {
             Some(ref leader) => leader.client.call(method, arguments),
@@ -212,7 +215,7 @@ impl ContractClientManager {
                 // No leader yet, we need to wait for the leader and then make the call.
                 let method = method.to_owned();
 
-                self.inner
+                inner
                     .future_leader
                     .clone()
                     .map_err(|error| error.into())
@@ -220,5 +223,23 @@ impl ContractClientManager {
                     .into_box()
             }
         }
+    }
+
+    /// Attempt a contract call, allowing for a retry if it is interrupted by an epoch transition.
+    pub fn call<C, O>(&self, method: &'static str, arguments: C) -> BoxFuture<O>
+    where
+        C: Serialize + Send + Clone + 'static,
+        O: DeserializeOwned + Send + 'static,
+    {
+        let inner = self.inner.clone();
+        retry_until_ok_or_max(
+            move || Self::call_leader(inner.clone(), method, arguments.clone()),
+            |error| error.message == ContractClient::SHUTDOWN_REASON_TRANSITION,
+            // If the network latency and time needed to process the call is short compared to the
+            // epoch interval, it is improbable for two consecutive attempts both to be
+            // interrupted, so one retry is sufficient. If not, then a retry is not likely to
+            // succeed either.
+            1,
+        ).into_box()
     }
 }
