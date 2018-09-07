@@ -432,7 +432,7 @@ func New(timeSource epochtime.Backend, registry registry.Backend, beacon beacon.
 
 		for _, v := range comMap {
 			for _, vv := range v {
-				s.notifier.Broadcast(vv)
+				ch.In() <- vv
 			}
 		}
 	})
