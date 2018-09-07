@@ -350,9 +350,10 @@ func main() {
 	}
 	headers[len(paramIncrs)] = "Speedup"
 
-	printSeparators(bw, len(paramIncrs)+1, colWidth)
+	numCols := len(paramIncrs) + 1
+	printSeparators(bw, numCols, colWidth)
 	printFields(bw, headers, colWidth)
-	printSeparators(bw, len(paramIncrs)+1, colWidth)
+	printSeparators(bw, numCols, colWidth)
 
 	for {
 		data := make([]string, len(paramIncrs)+1)
@@ -369,12 +370,14 @@ func main() {
 			_, _ = fmt.Fprintf(bw, "Number of schedules:      %8d\n", res.NumberOfSchedules)
 		}
 		data[len(paramIncrs)] = fmt.Sprintf("%*.*g", colWidth, precision, speedup)
+
 		printFields(bw, data, colWidth)
 		if bw.Flush() != nil {
 			panic("I/O error during summary statistics")
 		}
 
 		ix := len(paramIncrs) - 1
+		printSepOnCarry := true
 		for {
 			if ix < 0 {
 				break
@@ -384,11 +387,14 @@ func main() {
 				break
 			}
 			paramIncrs[ix].Reset()
+			if printSepOnCarry {
+				printSepOnCarry = false
+				printSeparators(bw, numCols, colWidth)
+			}
 			ix--
 		}
 		if ix < 0 {
 			break
 		}
 	}
-	printSeparators(bw, len(paramIncrs)+1, colWidth)
 }
