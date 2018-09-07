@@ -65,6 +65,8 @@ func (lsf *LogicalShardingFilter) updateSet(ls *alg.LocationSet) {
 				lsf.topMap[iloc] = newIndex
 			}
 			repl.Add(alg.TestLocation(lsf.topMap[iloc]))
+		} else {
+			repl.Add(tloc)
 		}
 		return false
 	})

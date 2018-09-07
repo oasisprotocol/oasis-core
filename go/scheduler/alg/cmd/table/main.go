@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -275,6 +276,24 @@ func (ic *IterationConfig) Iterators(
 	return iters, nil
 }
 
+func printFields(w io.Writer, fields []string, colWidth int) {
+	_, _ = fmt.Fprintf(w, "|")
+	for pix := 0; pix < len(fields); pix++ {
+		_, _ = fmt.Fprintf(w, "%*s|", colWidth, fields[pix])
+	}
+	_, _ = fmt.Fprintf(w, "\n")
+}
+
+func printSeparators(w io.Writer, numCols, colWidth int) {
+	for pix := 0; pix < numCols; pix++ {
+		_, _ = fmt.Fprintf(w, "+")
+		for dash := 0; dash < colWidth; dash++ {
+			_, _ = fmt.Fprintf(w, "-")
+		}
+	}
+	_, _ = fmt.Fprintf(w, "+\n")
+}
+
 // nolint: gocyclo
 func main() {
 	flag.Parse()
@@ -323,25 +342,22 @@ func main() {
 		}
 	}
 
-	// Print out headers
+	colWidth := 16
+	precision := 4
+	headers := make([]string, len(paramIncrs)+1)
 	for pix := 0; pix < len(paramIncrs); pix++ {
-		_, _ = fmt.Fprintf(bw, "|%18s", paramIncrs[pix].Key())
+		headers[pix] = paramIncrs[pix].Key()
 	}
-	_, _ = fmt.Fprintf(bw, "|%18s|\n", "Speedup")
-	for pix := 0; pix < len(paramIncrs)+1; pix++ {
-		_, _ = fmt.Fprintf(bw, "+")
-		for dash := 0; dash < 18; dash++ {
-			_, _ = fmt.Fprintf(bw, "-")
-		}
-	}
-	fmt.Fprintf(bw, "+\n")
+	headers[len(paramIncrs)] = "Speedup"
+
+	printSeparators(bw, len(paramIncrs)+1, colWidth)
+	printFields(bw, headers, colWidth)
+	printSeparators(bw, len(paramIncrs)+1, colWidth)
+
 	for {
-		// Print out varying parameters
+		data := make([]string, len(paramIncrs)+1)
 		for pix := 0; pix < len(paramIncrs); pix++ {
-			_, _ = fmt.Fprintf(bw, "|%18s", paramIncrs[pix].Value())
-		}
-		if bw.Flush() != nil {
-			panic("I/O error for simulation configuration output (loop)")
+			data[pix] = paramIncrs[pix].Value()
 		}
 
 		res := simulator.RunSimulationWithConfigs(dcnf, acnf, lcnf, scnf, xcnf, bw)
@@ -352,7 +368,8 @@ func main() {
 			_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", speedup)
 			_, _ = fmt.Fprintf(bw, "Number of schedules:      %8d\n", res.NumberOfSchedules)
 		}
-		_, _ = fmt.Fprintf(bw, "|%18.15g|\n", speedup)
+		data[len(paramIncrs)] = fmt.Sprintf("%*.*g", colWidth, precision, speedup)
+		printFields(bw, data, colWidth)
 		if bw.Flush() != nil {
 			panic("I/O error during summary statistics")
 		}
@@ -373,4 +390,5 @@ func main() {
 			break
 		}
 	}
+	printSeparators(bw, len(paramIncrs)+1, colWidth)
 }
