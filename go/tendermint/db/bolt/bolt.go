@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"sync"
 
-	bolt "github.com/coreos/bbolt"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/node"
+	bolt "go.etcd.io/bbolt"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"

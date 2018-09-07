@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "go.etcd.io/bbolt"
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
