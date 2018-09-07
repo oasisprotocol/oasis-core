@@ -17,6 +17,7 @@ extern crate bincode;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_trusted;
+extern crate ekiden_keymanager_common;
 extern crate ekiden_storage_base;
 #[cfg(not(target_env = "sgx"))]
 extern crate ekiden_storage_dummy;
@@ -33,6 +34,8 @@ pub use handle::DatabaseHandle;
 pub mod patricia_trie;
 #[macro_use]
 pub mod schema;
+
+use ekiden_keymanager_common::ContractId;
 
 /// Database interface exposed to contracts.
 pub trait Database {
@@ -58,4 +61,9 @@ pub trait Database {
 
     /// Clear database state.
     fn clear(&mut self);
+
+    /// Run given closure in an encrypted context for given contract.
+    fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
+    where
+        F: FnOnce(&mut DatabaseHandle) -> ();
 }
