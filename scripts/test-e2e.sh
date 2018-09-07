@@ -2,7 +2,7 @@
 
 WORKDIR=${1:-$(pwd)}
 
-run_dummy_node_go_default() {
+run_dummy_node_go_dummy() {
     local datadir=/tmp/ekiden-dummy-data
     rm -rf ${datadir}
 
@@ -28,6 +28,23 @@ run_dummy_node_go_tm() {
         --epochtime.backend tendermint \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
+        --storage.backend memory \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --datadir ${datadir} \
+        &
+}
+
+run_dummy_node_go_tm_mock() {
+    local datadir=/tmp/ekiden-dummy-data
+    rm -rf ${datadir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level debug \
+        --grpc.port 42261 \
+        --epochtime.backend tendermint_mock \
+        --beacon.backend insecure \
         --storage.backend memory \
         --scheduler.backend trivial \
         --registry.backend tendermint \
@@ -158,6 +175,7 @@ run_test() {
 
     # Start compute nodes.
     $scenario
+    sleep 5
 
     # Advance epoch to elect a new committee.
     let epochs_offset=pre_epochs+1
@@ -243,25 +261,26 @@ scenario_fail_worker_after_commit() {
 }
 
 # Go node (tendermint backends).
-run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_tm
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_tm
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_tm
-# TODO: Port other E2E tests.
+run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
+run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
+run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dummy_node_go_tm_mock
+run_test scenario_discrepancy_leader "e2e-discrepancy-leader-tm" token 1 run_dummy_node_go_tm_mock
+run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration-tm" token 1 run_dummy_node_go_tm_mock
+run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit-tm" token 1 run_dummy_node_go_tm_mock
+run_test scenario_basic "e2e-long-tm" test-long-term 3 run_dummy_node_go_tm_mock
+run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 3 run_dummy_node_go_tm_mock
 
 # Alternate starting order (client before dummy node).
-run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_default 0 0 1
-run_test scenario_basic "e2e-basic-client-starts-first-tm" token 1 run_dummy_node_go_tm 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_dummy 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first-tm-full" token 1 run_dummy_node_go_tm 0 0 1
+run_test scenario_basic "e2e-basic-client-starts-first-tm" token 1 run_dummy_node_go_tm_mock 0 0 1
 
 # Go node (dummy backends).
-#
-# Note: e2e-fail-worker-after-[registration,commit] both advance the epoch once
-# prior to the tests to ensure that the leader of the committee is not the node
-# that will crash (node #2), as the tests do not handle leader failure.
-run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_default
-run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_default 0 3
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_default
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_default
-run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_default 0 1
-run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_default 0 1
-run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_go_default
-run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_go_default
+run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_dummy
+run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_dummy 0 3
+run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_dummy
+run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_dummy
+run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_dummy
+run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_dummy
+run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_go_dummy
+run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_go_dummy

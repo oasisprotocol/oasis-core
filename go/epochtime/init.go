@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/epochtime/system"
 	"github.com/oasislabs/ekiden/go/epochtime/tendermint"
+	"github.com/oasislabs/ekiden/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -39,6 +40,8 @@ func New(cmd *cobra.Command, tmService service.TendermintService) (api.Backend, 
 	case tendermint.BackendName:
 		interval, _ := cmd.Flags().GetInt64(cfgTendermintInterval)
 		return tendermint.New(tmService, interval)
+	case tendermintmock.BackendName:
+		return tendermintmock.New(tmService)
 	default:
 		return nil, fmt.Errorf("epochtime: unsupported backend: '%v'", backend)
 	}
