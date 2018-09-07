@@ -13,16 +13,16 @@ import (
 	"github.com/oasislabs/ekiden/go/scheduler/alg/randgen"
 )
 
-// Flag variables: verbosity is a single, global flag, and per-module flags are grouped
-// together in *Config structs, with a *FromFlags global instance/singleton, just like
-// verbosity.  The convention is that we use an init() function to provide initial values, help
-// strings, etc, then in main() we invoke flag.Parse(), after which we run the
-// UpdateAndCheckDefaults() method to check for contradictory flags, update defaults (e.g., if
-// an input file is specified as the source of synthetic load data, then the distribution
-// parameter that controls the pseudorandom synthetic load generation has to be unset or set to
-// "input")
-
-var verbosity int
+// Verbosity is a single, global flag, and per-module flags are grouped together in *Config
+// structs, with a *FromFlags global instance/singleton, just like verbosity.  The convention
+// is that we use an init() function to provide initial values, help strings, etc, then in
+// main() we invoke flag.Parse(), after which we run the UpdateAndCheckDefaults() method to
+// check for contradictory flags, update defaults (e.g., if an input file is specified as the
+// source of synthetic load data, then the distribution parameter that controls the
+// pseudorandom synthetic load generation has to be unset or set to "input").  For simulation
+// main programs that do not have a separate verbosity flag, this is a global.  (And this
+// module is commandeering the "-verbosity" flag name anyway.)
+var Verbosity int
 
 // SimulationResults contains summary information about how well the scheduler performed.  We
 // are primarily interested in the ActualExecutionTime vs LinearExecutionTime -- where
@@ -341,7 +341,7 @@ func init() {
 	SchedulerConfigFromFlags = SchedulerConfig{}
 	ExecutionConfigFromFlags = ExecutionConfig{}
 
-	flag.IntVar(&verbosity, "verbosity", 0, "verbosity level for debug output")
+	flag.IntVar(&Verbosity, "verbosity", 0, "verbosity level for debug output")
 
 	// Distribution generator parameters
 
@@ -456,7 +456,7 @@ func transactionSourceFactory(cnf DistributionConfig) TransactionSource {
 
 func adversaryFactory(acnf AdversaryConfig, ts TransactionSource) TransactionSource {
 	if acnf.injectionProb == 0.0 {
-		if verbosity > 0 {
+		if Verbosity > 1 {
 			fmt.Printf("No Adversarial transactions will be injected\n")
 		}
 		return ts
@@ -559,7 +559,7 @@ func RunSimulationWithConfigs(
 			trans[0], err = ts.Get(tid)
 			if err == nil {
 				tid++
-				if verbosity > 4 {
+				if Verbosity > 5 {
 					trans[0].Write(bw)
 					_, _ = bw.WriteRune('\n')
 				}
@@ -576,7 +576,7 @@ func RunSimulationWithConfigs(
 		}
 		if len(sgl) > 0 {
 			schedNum++
-			if verbosity > 3 {
+			if Verbosity > 4 {
 				_, _ = fmt.Fprintf(bw, "\n\n")
 				_, _ = fmt.Fprintf(bw, "Schedule %3d\n", schedNum)
 				_, _ = fmt.Fprintf(bw, "------------\n")
@@ -606,12 +606,12 @@ func RunSimulationWithConfigs(
 					schedExecutionTime = cmt.executionTime
 				}
 				// Now show committee statistics
-				if verbosity > 1 {
+				if Verbosity > 2 {
 					_, _ = fmt.Fprintf(bw, "\n")
 					_, _ = fmt.Fprintf(bw, "Committee member %d\n", ix)
 					_, _ = fmt.Fprintf(bw, " est execution time = %d\n", uint64(cmt.executionTime))
 					_, _ = fmt.Fprintf(bw, " number of batches = %d\n", len(cmt.batches))
-					if verbosity > 2 {
+					if Verbosity > 3 {
 						// show the subgraphs
 						for _, sg := range cmt.batches {
 							sg.Write(bw)

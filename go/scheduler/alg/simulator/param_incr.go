@@ -1,5 +1,9 @@
 package simulator
 
+import (
+	"fmt"
+)
+
 // ParamIncr is the interface for incrementing flag parameter values for which incrementing
 // makes sense.  This means int, int64, float64.  (We don't use float32.)  The ability to
 // increment such values is used to iterate through the space of design parameters to evaluate
@@ -9,6 +13,8 @@ type ParamIncr interface {
 	HasNext() bool
 	Incr()
 	Key() string
+	Value() string // current value as string; we do not use String() since Stringer
+	// interface expect something that represents the "whole" object.
 }
 
 // IntParamIncr is the concrete type implementing ParamIncr for integers.
@@ -41,6 +47,12 @@ func (ipi *IntParamIncr) Incr() {
 // used to determine the order of parameter iteration (i.e., in odometric order).
 func (ipi *IntParamIncr) Key() string {
 	return ipi.key
+}
+
+// Value returns the current parameter value as a string. This enables tabular printing
+// of parameter values with the result(s).
+func (ipi IntParamIncr) Value() string {
+	return fmt.Sprintf("%d", *ipi.vp)
 }
 
 // NewIntParamIncr creates a new ParamIncr for an int variable.
@@ -80,6 +92,12 @@ func (i64pi *Int64ParamIncr) Key() string {
 	return i64pi.key
 }
 
+// Value returns the current parameter value as a string. This enables tabular printing
+// of parameter values with the result(s).
+func (i64pi Int64ParamIncr) Value() string {
+	return fmt.Sprintf("%d", *i64pi.vp)
+}
+
 // NewInt64ParamIncr creates a new ParamIncr for an int64 variable.
 func NewInt64ParamIncr(vp *int64, incr int64, end int64, k string) ParamIncr {
 	return &Int64ParamIncr{vp: vp, orig: *vp, incr: incr, end: end, key: k}
@@ -116,6 +134,12 @@ func (f64pi *Float64ParamIncr) Incr() {
 // used to determine the order of parameter iteration (i.e., in odometric order).
 func (f64pi *Float64ParamIncr) Key() string {
 	return f64pi.key
+}
+
+// Value returns the current parameter value as a string. This enables tabular printing
+// of parameter values with the result(s).
+func (f64pi Float64ParamIncr) Value() string {
+	return fmt.Sprintf("%g", *f64pi.vp)
 }
 
 // NewFloat64ParamIncr creates a new ParamIncr for a float64 variable.

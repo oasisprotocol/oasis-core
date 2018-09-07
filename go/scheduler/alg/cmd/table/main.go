@@ -315,17 +315,44 @@ func main() {
 		panic(fmt.Sprintf("Iterator sort error: %s", err.Error()))
 	}
 
-	for {
+	// Print out all simulation parameters
+	if simulator.Verbosity > 0 {
 		simulator.ShowConfigFlags(bw, dcnf, acnf, lcnf, scnf, xcnf)
 		if bw.Flush() != nil {
 			panic("I/O error for simulation configuration output")
 		}
+	}
+
+	// Print out headers
+	for pix := 0; pix < len(paramIncrs); pix++ {
+		_, _ = fmt.Fprintf(bw, "|%18s", paramIncrs[pix].Key())
+	}
+	_, _ = fmt.Fprintf(bw, "|%18s|\n", "Speedup")
+	for pix := 0; pix < len(paramIncrs)+1; pix++ {
+		_, _ = fmt.Fprintf(bw, "+")
+		for dash := 0; dash < 18; dash++ {
+			_, _ = fmt.Fprintf(bw, "-")
+		}
+	}
+	fmt.Fprintf(bw, "+\n")
+	for {
+		// Print out varying parameters
+		for pix := 0; pix < len(paramIncrs); pix++ {
+			_, _ = fmt.Fprintf(bw, "|%18s", paramIncrs[pix].Value())
+		}
+		if bw.Flush() != nil {
+			panic("I/O error for simulation configuration output (loop)")
+		}
 
 		res := simulator.RunSimulationWithConfigs(dcnf, acnf, lcnf, scnf, xcnf, bw)
-		_, _ = fmt.Fprintf(bw, "Linear execution time:    %8d\n", res.LinearExecutionTime)
-		_, _ = fmt.Fprintf(bw, "Actual execution time:    %8d\n", res.ActualExecutionTime)
-		_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", float64(res.LinearExecutionTime)/float64(res.ActualExecutionTime))
-		_, _ = fmt.Fprintf(bw, "Number of schedules:      %8d\n", res.NumberOfSchedules)
+		speedup := float64(res.LinearExecutionTime) / float64(res.ActualExecutionTime)
+		if simulator.Verbosity > 0 {
+			_, _ = fmt.Fprintf(bw, "Linear execution time:    %8d\n", res.LinearExecutionTime)
+			_, _ = fmt.Fprintf(bw, "Actual execution time:    %8d\n", res.ActualExecutionTime)
+			_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", speedup)
+			_, _ = fmt.Fprintf(bw, "Number of schedules:      %8d\n", res.NumberOfSchedules)
+		}
+		_, _ = fmt.Fprintf(bw, "|%18.15g|\n", speedup)
 		if bw.Flush() != nil {
 			panic("I/O error during summary statistics")
 		}
