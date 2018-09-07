@@ -343,13 +343,13 @@ impl ComputationGroup {
                             "Our new role in epoch {} is: {:?}",
                             active_epoch.number, role
                         );
-                        inner.role_subscribers.notify(&active_epoch.role);
                     } else {
                         info!(
                             "No longer a member of the computation group in epoch {}",
                             active_epoch.number
                         );
                     }
+                    inner.role_subscribers.notify(&active_epoch.role);
 
                     Ok(())
                 })

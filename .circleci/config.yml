@@ -52,7 +52,14 @@ jobs:
             --exclude token
 
       # Integration tests.
+      - restore_cache:
+          keys:
+            - go-cache
       - run: make -C go
+      - save_cache:
+          key: go-cache
+          paths:
+            - "/go/pkg"
       - run: ./scripts/test-e2e.sh
 
       # Store built files.
