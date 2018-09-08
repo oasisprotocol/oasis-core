@@ -10,7 +10,7 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::tokio::timer::Interval;
 
 /// Pushes metrics to Prometheus pushgateway.
-fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()> {
+pub fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()> {
     prometheus::push_metrics(
         job_name,
         labels!{"instance".to_owned() => instance_name.to_owned(),},
