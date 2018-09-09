@@ -416,6 +416,11 @@ impl RootHashFrontend {
                     }
                     Command::ProcessBlock(block) => Self::handle_block(inner.clone(), block),
                     Command::ProcessEvent(Event::RoundFailed(error)) => {
+                        require_state_ignore!(
+                            inner,
+                            State::ProcessingBatch(..) | State::WaitingForFinalize(..)
+                        );
+
                         Self::fail_batch(inner.clone(), format!("round failed: {}", error.message))
                     }
                     Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash)) => {
