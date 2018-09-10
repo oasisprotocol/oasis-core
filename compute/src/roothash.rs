@@ -59,6 +59,9 @@ enum State {
     WaitingForFinalize(Role, Arc<CallBatch>, Block),
     /// Computation group has changed.
     ComputationGroupChanged(Option<Role>, Option<Arc<CallBatch>>),
+    /// We have locally aborted and are waiting for the root hash backend to finalize
+    /// the round.
+    LocallyAborted(Role),
 }
 
 impl State {
@@ -69,6 +72,7 @@ impl State {
             State::ProcessingBatch(role, ..) => Some(role),
             State::WaitingForFinalize(role, ..) => Some(role),
             State::ComputationGroupChanged(role, ..) => role,
+            State::LocallyAborted(role) => Some(role),
             _ => None,
         }
     }
@@ -107,6 +111,7 @@ impl fmt::Display for State {
                     format!("ComputationGroupChanged({:?})", role)
                 }
                 State::ComputationGroupChanged(None, ..) => "ComputationGroupChanged(None)".into(),
+                State::LocallyAborted(role) => format!("LocallyAborted({:?})", role),
             }
         )
     }
@@ -149,7 +154,7 @@ macro_rules! require_state_ignore {
         require_state_impl!(@ignore_future, $inner, $( $state )|* $(if $cond)*, "")
     };
 
-    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr, $message:expr) => {
+    ($inner:ident, $( $state:pat )|* $(if $cond:expr)* => $output:expr) => {
        require_state_impl!(@ignore_future, $inner, $( $state )|* $(if $cond)* => $output, "")
     };
 }
@@ -416,12 +421,7 @@ impl RootHashFrontend {
                     }
                     Command::ProcessBlock(block) => Self::handle_block(inner.clone(), block),
                     Command::ProcessEvent(Event::RoundFailed(error)) => {
-                        require_state_ignore!(
-                            inner,
-                            State::ProcessingBatch(..) | State::WaitingForFinalize(..)
-                        );
-
-                        Self::fail_batch(inner.clone(), format!("round failed: {}", error.message))
+                        Self::handle_round_failed(inner.clone(), error)
                     }
                     Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash)) => {
                         Self::handle_discrepancy_detected(inner.clone(), batch_hash)
@@ -440,27 +440,30 @@ impl RootHashFrontend {
     fn transition(inner: Arc<Inner>, to: State) {
         let mut state = inner.state.lock().unwrap();
         match (&*state, &to) {
-            // Transitions from NotReady state when node role is determined.
-            (&State::NotReady, &State::WaitingForBatch(_)) => {}
-
-            // Transitions from WaitingForBatch state. We can either transition to batch
-            // processing in the same role or switch roles in case the committee changes.
-            (&State::WaitingForBatch(role_a, ..), &State::ProcessingBatch(role_b, ..))
+            // Transitions from WaitingForBatch state. We either transition to batch processing
+            // processing in the same role.
+            (&State::WaitingForBatch(role_a), &State::ProcessingBatch(role_b, ..))
                 if role_a == role_b => {}
-            (&State::WaitingForBatch(role_a, ..), &State::WaitingForBatch(role_b, ..))
-                if role_a != role_b => {}
 
             // Transitions from the ProcessingBatch state. We can either transition to submitting
-            // a commit and waiting for round finalization in the same role, abort the current
-            // batch and return to waiting for a batch in the same role or switch roles in case
-            // the committee changes.
+            // a commit and waiting for round finalization in the same role or abort the current
+            // batch.
             (&State::ProcessingBatch(role_a, ..), &State::WaitingForFinalize(role_b, ..))
                 if role_a == role_b => {}
-            (&State::ProcessingBatch(..), &State::WaitingForBatch(_)) => {}
+            (&State::ProcessingBatch(role_a, ..), &State::LocallyAborted(role_b))
+                if role_a == role_b => {}
 
             // Transitions from WaitingForFinalize state. We can transition to waiting for new
-            // batches in either the current role or switch roles in case the committee changes.
-            (&State::WaitingForFinalize(..), &State::WaitingForBatch(_)) => {}
+            // batches in the current role or abort the current batch.
+            (&State::WaitingForFinalize(role_a, ..), &State::WaitingForBatch(role_b))
+                if role_a == role_b => {}
+            (&State::WaitingForFinalize(role_a, ..), &State::LocallyAborted(role_b))
+                if role_a == role_b => {}
+
+            // Transitions from LocallyAborted state. We can transition to waiting for new batches
+            // in the current role once the root hash backend notifies us that the round is done.
+            (&State::LocallyAborted(role_a), &State::WaitingForBatch(role_b))
+                if role_a == role_b => {}
 
             // Compute committee can change in any state.
             (_, &State::ComputationGroupChanged(..)) => {}
@@ -561,6 +564,27 @@ impl RootHashFrontend {
 
         let committee = inner.computation_group.get_committee();
         Self::handle_remote_batch(inner, batch_hash, committee)
+    }
+
+    /// Handle round failed event.
+    fn handle_round_failed(inner: Arc<Inner>, error: Error) -> BoxFuture<()> {
+        // We are only interested in round failed events if we are currently participating
+        // in the round, either by processing a batch for a round, having proposed a block
+        // in a round or having already locally aborted the round.
+        let role = require_state_ignore!(
+            inner,
+            State::ProcessingBatch(role, ..) |
+            State::WaitingForFinalize(role, ..) |
+            State::LocallyAborted(role, ..) => role
+        );
+
+        // Local abort.
+        Self::fail_batch(inner.clone(), format!("round failed: {}", error.message));
+
+        // Ready for next round.
+        Self::transition(inner.clone(), State::WaitingForBatch(role));
+
+        future::ok(()).into_box()
     }
 
     /// Handle new block from root hash backend.
@@ -734,8 +758,10 @@ impl RootHashFrontend {
             }
 
             // Determine new state.
-            if let Some(role) = state.get_role() {
+            if let State::ComputationGroupChanged(Some(role), ..) = *state {
                 State::WaitingForBatch(role)
+            } else if let Some(role) = state.get_role() {
+                State::LocallyAborted(role)
             } else {
                 State::NotReady
             }
