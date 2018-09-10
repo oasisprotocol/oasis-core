@@ -49,6 +49,7 @@ run_dummy_node_go_tm_mock() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --tendermint.consensus.timeout_commit 250ms \
         --datadir ${datadir} \
         &
 }
@@ -181,7 +182,7 @@ run_test() {
     let epochs_offset=pre_epochs+1
     let epochs+=pre_epochs
     for epoch in $(seq $epochs_offset $epochs); do
-        sleep 2
+        sleep 3
         ${WORKDIR}/go/ekiden/ekiden dummy-set-epoch --epoch $epoch
     done
 
@@ -267,8 +268,8 @@ run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dum
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_basic "e2e-long-tm" test-long-term 3 run_dummy_node_go_tm_mock
-run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 3 run_dummy_node_go_tm_mock
+run_test scenario_basic "e2e-long-tm" test-long-term 2 run_dummy_node_go_tm_mock
+run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 2 run_dummy_node_go_tm_mock
 
 # Alternate starting order (client before dummy node).
 run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_dummy 0 0 1
@@ -282,5 +283,5 @@ run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_dummy
 run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_dummy
 run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_dummy
-run_test scenario_basic "e2e-long" test-long-term 3 run_dummy_node_go_dummy
-run_test scenario_one_idle "e2e-long-one-idle" test-long-term 3 run_dummy_node_go_dummy
+run_test scenario_basic "e2e-long" test-long-term 2 run_dummy_node_go_dummy
+run_test scenario_one_idle "e2e-long-one-idle" test-long-term 2 run_dummy_node_go_dummy
