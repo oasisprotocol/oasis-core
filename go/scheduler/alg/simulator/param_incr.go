@@ -13,7 +13,7 @@ type ParamIncr interface {
 	HasNext() bool
 	Incr()
 	Key() string
-	Value() string // current value as string; we do not use String() since Stringer
+	Value(colWidth, precision int) string // current value as string; we do not use String() since Stringer
 	// interface expect something that represents the "whole" object.
 }
 
@@ -51,8 +51,8 @@ func (ipi *IntParamIncr) Key() string {
 
 // Value returns the current parameter value as a string. This enables tabular printing
 // of parameter values with the result(s).
-func (ipi IntParamIncr) Value() string {
-	return fmt.Sprintf("%d", *ipi.vp)
+func (ipi IntParamIncr) Value(colWidth, precision int) string {
+	return fmt.Sprintf("%*d", colWidth, *ipi.vp)
 }
 
 // NewIntParamIncr creates a new ParamIncr for an int variable.
@@ -94,8 +94,8 @@ func (i64pi *Int64ParamIncr) Key() string {
 
 // Value returns the current parameter value as a string. This enables tabular printing
 // of parameter values with the result(s).
-func (i64pi Int64ParamIncr) Value() string {
-	return fmt.Sprintf("%d", *i64pi.vp)
+func (i64pi Int64ParamIncr) Value(colWidth, precision int) string {
+	return fmt.Sprintf("%*d", colWidth, *i64pi.vp)
 }
 
 // NewInt64ParamIncr creates a new ParamIncr for an int64 variable.
@@ -138,8 +138,8 @@ func (f64pi *Float64ParamIncr) Key() string {
 
 // Value returns the current parameter value as a string. This enables tabular printing
 // of parameter values with the result(s).
-func (f64pi Float64ParamIncr) Value() string {
-	return fmt.Sprintf("%g", *f64pi.vp)
+func (f64pi Float64ParamIncr) Value(colWidth, precision int) string {
+	return fmt.Sprintf("%*.*g", colWidth, precision, *f64pi.vp)
 }
 
 // NewFloat64ParamIncr creates a new ParamIncr for a float64 variable.

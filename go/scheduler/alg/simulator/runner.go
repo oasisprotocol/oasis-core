@@ -263,6 +263,9 @@ type SchedulerConfig struct {
 	// Buffer at most this many transactions before generating a schedule.
 	maxPending int
 
+	// Additional fraction of previous scheduled transactions to use in max-pending update
+	excessFraction float64
+
 	// maxTime is per subgraph execution time, but post-schedule generation subgraph merging
 	// will result in higher total execution times per compute committee.
 	maxTime int
@@ -271,6 +274,11 @@ type SchedulerConfig struct {
 // MaxPendingIter allows iterating over maxPending
 func (scnf *SchedulerConfig) MaxPendingIter(incr, end int) ParamIncr {
 	return NewIntParamIncr(&scnf.maxPending, incr, end, "max-pending")
+}
+
+// ExcessFractionIter allows iterating over exccessFraction
+func (scnf *SchedulerConfig) ExcessFractionIter(incr, end float64) ParamIncr {
+	return NewFloat64ParamIncr(&scnf.excessFraction, incr, end, "excess-fraction")
 }
 
 // MaxSubgraphTimeIter allows iterating over maxTime
@@ -283,6 +291,7 @@ func (scnf *SchedulerConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "\nScheduler Configuration Parameters\n")
 	_, _ = fmt.Fprintf(bw, "  scheduler = \"%s\"\n", scnf.name)
 	_, _ = fmt.Fprintf(bw, "  max-pending = %d\n", scnf.maxPending)
+	_, _ = fmt.Fprintf(bw, "  excess-fraction = %g\n", scnf.excessFraction)
 	_, _ = fmt.Fprintf(bw, "  max-subgraph-time = %d\n", scnf.maxTime)
 }
 
@@ -396,6 +405,8 @@ func init() {
 		"scheduling algorithm (greedy-subgraph)")
 	flag.IntVar(&SchedulerConfigFromFlags.maxPending, "max-pending", -1,
 		"scheduling when there are this many transactions (default 2 * max-subgraph-time * num-committees")
+	flag.Float64Var(&SchedulerConfigFromFlags.excessFraction, "excess-fraction", 0.2,
+		"additional fraction of actual number of transactions scheduled in previous batch to use for max-pending for the next batch")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
 	flag.IntVar(&SchedulerConfigFromFlags.maxTime, "max-subgraph-time", 20,
@@ -479,7 +490,9 @@ func adversaryFactory(acnf AdversaryConfig, ts TransactionSource) TransactionSou
 }
 
 func schedulerFactory(scnf SchedulerConfig) alg.Scheduler {
-	if scnf.name == "greedy-subgraph" {
+	if scnf.name == "greedy-subgraph-adaptive" {
+		return alg.NewGreedySubgraphsAdaptiveQueuingScheduler(scnf.maxPending, scnf.excessFraction, alg.ExecutionTime(scnf.maxTime))
+	} else if scnf.name == "greedy-subgraph" {
 		return alg.NewGreedySubgraphsScheduler(scnf.maxPending, alg.ExecutionTime(scnf.maxTime))
 	}
 	panic(fmt.Sprintf("Scheduler %s not recognized", scnf.name))

@@ -41,6 +41,7 @@ type IterationConfig struct {
 	shardTopNIter       string // from LogicalShardingConfig
 	shardFactorIter     string
 	maxPendingIter      string // from SchedulerConfig
+	excessFractionIter  string
 	maxSubgraphTimeIter string
 	numCommitteesIter   string // from ExecutionConfig
 }
@@ -51,7 +52,7 @@ var iterationConfig IterationConfig
 // we vary the right-most simulation parameter first, carry to the left, etc, just like a
 // typical numeric counter.  The names here must match the flag names.
 
-const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor,dos-injection-prob,dos-target-fraction,dos-read-fraction,dos-batch-size,max-pending,max-subgraph-time,num-committees"
+const defaultIterationSortOrder string = "alpha,num-locations,num-reads,num-writes,shard-top,shard-factor,dos-injection-prob,dos-target-fraction,dos-read-fraction,dos-batch-size,max-pending,max-subgraph-time,num-committees,excess-fraction"
 
 func init() {
 	iterationConfig = IterationConfig{}
@@ -71,6 +72,7 @@ func init() {
 	iterNameLocMap["shard-top-iter"] = &iterationConfig.shardTopNIter
 	iterNameLocMap["shard-factor-iter"] = &iterationConfig.shardFactorIter
 	iterNameLocMap["max-pending-iter"] = &iterationConfig.maxPendingIter
+	iterNameLocMap["excess-fraction-iter"] = &iterationConfig.excessFractionIter
 	iterNameLocMap["max-subgraph-time-iter"] = &iterationConfig.maxSubgraphTimeIter
 	iterNameLocMap["num-committees-iter"] = &iterationConfig.numCommitteesIter
 
@@ -94,6 +96,7 @@ func init() {
 	flagSetter("shard-top-iter", "number of highest-probability locations to shard iteration control: step:end")
 	flagSetter("shard-factor-iter", "number of shards per original location iteration control: step:end")
 	flagSetter("max-pending-iter", "(initial) max pending transactions iteration control: step:end")
+	flagSetter("excess-fraction-iter", "extra fraction of actual number of transactions scheduled from previous schedule to use as max-pending for next schedule iteration control: step:end")
 	flagSetter("max-subgraph-time-iter", "max subgraph execution time iteration control: step:end")
 	flagSetter("num-committees-iter", "number of execution committees iteration control: step:end")
 }
@@ -263,6 +266,11 @@ func (ic *IterationConfig) Iterators(
 	}); err != nil {
 		return nil, err
 	}
+	if err = addFloat64Iter(&iters, "excess-fraction-iter", ic.excessFractionIter, func(i, e float64) simulator.ParamIncr {
+		return scnf.ExcessFractionIter(i, e)
+	}); err != nil {
+		return nil, err
+	}
 	if err = addIntIter(&iters, "max-subgraph-time-iter", ic.maxSubgraphTimeIter, func(i, e int) simulator.ParamIncr {
 		return scnf.MaxSubgraphTimeIter(i, e)
 	}); err != nil {
@@ -358,7 +366,7 @@ func main() {
 	for {
 		data := make([]string, len(paramIncrs)+1)
 		for pix := 0; pix < len(paramIncrs); pix++ {
-			data[pix] = paramIncrs[pix].Value()
+			data[pix] = paramIncrs[pix].Value(colWidth, precision)
 		}
 
 		res := simulator.RunSimulationWithConfigs(dcnf, acnf, lcnf, scnf, xcnf, bw)
