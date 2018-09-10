@@ -67,14 +67,12 @@ message EventRequest {
 }
 
 message Event {
-  message CommitmentsReceived {
-    bool discrepancy = 1;
-  }
   message RoundFailed {
     string error = 1;
   }
   message DiscrepancyDetected {
     bytes batch_hash = 1;
+    Header block_header = 2;
   }
 
   oneof event {

@@ -183,7 +183,10 @@ func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
 		)
 
 		s.eventNotifier.Broadcast(&api.Event{
-			DiscrepancyDetected: &inputHash,
+			DiscrepancyDetected: &api.DiscrepancyDetectedEvent{
+				BatchHash:   &inputHash,
+				BlockHeader: &latestBlock.Header,
+			},
 		})
 
 		// Re-arm the timer.  The rust code waits till the first discrepancy

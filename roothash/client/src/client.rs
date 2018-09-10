@@ -12,7 +12,7 @@ use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
-use ekiden_roothash_base::{Block, Commitment, Event, RootHashBackend};
+use ekiden_roothash_base::{Block, Commitment, Event, Header, RootHashBackend};
 
 /// Root hash client implements the root hash interface.
 pub struct RootHashClient(api::RootHashClient);
@@ -82,9 +82,12 @@ impl RootHashBackend for RootHashClient {
                             event.get_round_failed().get_error().to_owned(),
                         )))
                     } else if event.has_discrepancy_detected() {
-                        Ok(Event::DiscrepancyDetected(H256::from(
-                            event.get_discrepancy_detected().get_batch_hash(),
-                        )))
+                        Ok(Event::DiscrepancyDetected(
+                            H256::from(event.get_discrepancy_detected().get_batch_hash()),
+                            Header::try_from(
+                                event.get_discrepancy_detected().get_block_header().clone(),
+                            )?,
+                        ))
                     } else {
                         Err(Error::new("unknown event type"))
                     }

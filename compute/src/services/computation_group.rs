@@ -1,4 +1,5 @@
 //! Inter-node service.
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use grpcio;
@@ -9,6 +10,7 @@ use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::x509::get_node_id;
+use ekiden_roothash_base::Header;
 
 use super::super::roothash::RootHashFrontend;
 
@@ -44,10 +46,11 @@ impl ComputationGroup for ComputationGroupService {
         let f = || -> Result<()> {
             let node_id = get_node_id(&ctx)?;
             let batch_hash = H256::try_from(request.get_batch_hash())?;
+            let block_header = Header::try_from(request.get_block_header().clone())?;
 
             self.inner
                 .roothash_frontend
-                .process_remote_batch(node_id, batch_hash)?;
+                .process_remote_batch(node_id, batch_hash, block_header)?;
 
             Ok(())
         };

@@ -18,7 +18,7 @@ use ekiden_core::futures::streamfollow;
 use ekiden_core::futures::sync::mpsc;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
-use ekiden_roothash_base::{Block, Event, RootHashBackend, RootHashSigner};
+use ekiden_roothash_base::{Block, Event, Header, RootHashBackend, RootHashSigner};
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
@@ -28,7 +28,7 @@ use super::worker::{ComputedBatch, Worker};
 /// Commands for communicating with the root hash frontend from other tasks.
 enum Command {
     /// Process remote batch.
-    ProcessRemoteBatch(H256, Vec<CommitteeNode>),
+    ProcessRemoteBatch(H256, Header, Vec<CommitteeNode>),
     /// Process incoming queue.
     ProcessIncomingQueue,
     /// Process root hash block.
@@ -52,8 +52,13 @@ enum State {
     /// * `Worker`: We are waiting for a new remote batch from leader.
     /// * `BackupWorker`: We are waiting for a new remote batch from the root hash backend.
     WaitingForBatch(Role),
+    /// Based on our role:
+    /// * `Worker`: We are waiting to see a specific block, specified by the leader.
+    /// * `BackupWorker`: We are waiting to see a specific block, specified by the root hash
+    ///   backend.
+    WaitingForBlock(Role, Arc<CallBatch>, Header, Vec<CommitteeNode>),
     /// A batch has been dispatched to the worker for processing.
-    ProcessingBatch(Role, Arc<CallBatch>),
+    ProcessingBatch(Role, Arc<CallBatch>, Block),
     /// We have committed to a specific batch in the current root hash round and are
     /// waiting for the root hash backend to finalize the block.
     WaitingForFinalize(Role, Arc<CallBatch>, Block),
@@ -69,6 +74,7 @@ impl State {
     pub fn get_role(&self) -> Option<Role> {
         match *self {
             State::WaitingForBatch(role) => Some(role),
+            State::WaitingForBlock(role, ..) => Some(role),
             State::ProcessingBatch(role, ..) => Some(role),
             State::WaitingForFinalize(role, ..) => Some(role),
             State::ComputationGroupChanged(role, ..) => role,
@@ -80,7 +86,8 @@ impl State {
     /// Return current batch based on state.
     pub fn get_batch(&self) -> Option<Arc<CallBatch>> {
         match *self {
-            State::ProcessingBatch(_, ref batch) => Some(batch.clone()),
+            State::WaitingForBlock(_, ref batch, ..) => Some(batch.clone()),
+            State::ProcessingBatch(_, ref batch, _) => Some(batch.clone()),
             State::WaitingForFinalize(_, ref batch, ..) => Some(batch.clone()),
             State::ComputationGroupChanged(_, ref maybe_batch) => maybe_batch.as_ref().cloned(),
             _ => None,
@@ -105,6 +112,7 @@ impl fmt::Display for State {
             match *self {
                 State::NotReady => "NotReady".into(),
                 State::WaitingForBatch(role, ..) => format!("WaitingForBatch({:?})", role),
+                State::WaitingForBlock(role, ..) => format!("WaitingForBlock({:?})", role),
                 State::ProcessingBatch(role, ..) => format!("ProcessingBatch({:?})", role),
                 State::WaitingForFinalize(role, ..) => format!("WaitingForFinalize({:?})", role),
                 State::ComputationGroupChanged(Some(role), ..) => {
@@ -249,6 +257,8 @@ struct Inner {
     worker: Arc<Worker>,
     /// Computation group that can process batches.
     computation_group: Arc<ComputationGroup>,
+    /// The most recent block as reported by the root hash backend.
+    latest_block: Mutex<Option<Block>>,
     /// Command sender.
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
@@ -329,6 +339,7 @@ impl RootHashFrontend {
                 storage,
                 worker,
                 computation_group,
+                latest_block: Mutex::new(None),
                 command_sender,
                 command_receiver: Mutex::new(Some(command_receiver)),
                 incoming_queue: Mutex::new(None),
@@ -413,8 +424,8 @@ impl RootHashFrontend {
                 module_path!(),
                 "Unexpected error while processing commands",
                 move |command| match command {
-                    Command::ProcessRemoteBatch(batch_hash, committee) => {
-                        Self::handle_remote_batch(inner.clone(), batch_hash, committee)
+                    Command::ProcessRemoteBatch(batch_hash, header, committee) => {
+                        Self::handle_remote_batch(inner.clone(), batch_hash, header, committee)
                     }
                     Command::ProcessIncomingQueue => {
                         Self::check_and_process_incoming_queue(inner.clone())
@@ -423,8 +434,8 @@ impl RootHashFrontend {
                     Command::ProcessEvent(Event::RoundFailed(error)) => {
                         Self::handle_round_failed(inner.clone(), error)
                     }
-                    Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash)) => {
-                        Self::handle_discrepancy_detected(inner.clone(), batch_hash)
+                    Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash, header)) => {
+                        Self::handle_discrepancy_detected(inner.clone(), batch_hash, header)
                     }
                     Command::UpdateRole(role) => Self::handle_update_role(inner.clone(), role),
                 },
@@ -443,6 +454,14 @@ impl RootHashFrontend {
             // Transitions from WaitingForBatch state. We either transition to batch processing
             // processing in the same role.
             (&State::WaitingForBatch(role_a), &State::ProcessingBatch(role_b, ..))
+                if role_a == role_b => {}
+            (&State::WaitingForBatch(role_a), &State::WaitingForBlock(role_b, ..))
+                if role_a == role_b => {}
+
+            // Transitions from WaitingForBlock state.
+            (&State::WaitingForBlock(role_a, ..), &State::ProcessingBatch(role_b, ..))
+                if role_a == role_b => {}
+            (&State::WaitingForBlock(role_a, ..), &State::LocallyAborted(role_b, ..))
                 if role_a == role_b => {}
 
             // Transitions from the ProcessingBatch state. We can either transition to submitting
@@ -507,6 +526,7 @@ impl RootHashFrontend {
     fn handle_remote_batch(
         inner: Arc<Inner>,
         batch_hash: H256,
+        block_header: Header,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
         let role = require_state!(
@@ -532,9 +552,35 @@ impl RootHashFrontend {
                     Err(error) => return future::err(Error::from(error)).into_box(),
                 };
 
-                Self::transition(inner.clone(), State::ProcessingBatch(role, batch));
+                // Check if we have the correct block already available. In this case we can transition
+                // directly to batch processing, otherwise we have to wait for the block to appear.
+                let latest_block = inner.latest_block.lock().unwrap().clone();
+                if let Some(ref block) = latest_block {
+                    if block.header == block_header {
+                        // We are all cought up and can directly start processing the batch.
+                        Self::transition(
+                            inner.clone(),
+                            State::ProcessingBatch(role, batch, block.clone()),
+                        );
+                        return Self::process_batch(inner, committee);
+                    } else if block.header.round > block_header.round {
+                        // We have already seen a newer block. Do not even start to process this batch.
+                        warn!("Already seen a newer block than expected for latest batch, not processing");
+                        return future::ok(()).into_box();
+                    }
+                }
 
-                Self::process_batch(inner.clone(), committee)
+                // Wait for block to appear.
+                info!(
+                    "Waiting for block at round {:?} to appear",
+                    block_header.round
+                );
+                Self::transition(
+                    inner,
+                    State::WaitingForBlock(role, batch, block_header, committee),
+                );
+
+                future::ok(()).into_box()
             })
             .or_else(move |error| {
                 // Failed to fetch remote batch from storage.
@@ -549,7 +595,11 @@ impl RootHashFrontend {
     }
 
     /// Handle discrepancy detected event from root hash backend.
-    fn handle_discrepancy_detected(inner: Arc<Inner>, batch_hash: H256) -> BoxFuture<()> {
+    fn handle_discrepancy_detected(
+        inner: Arc<Inner>,
+        batch_hash: H256,
+        block_header: Header,
+    ) -> BoxFuture<()> {
         measure_counter_inc!("discrepancy_detected_count");
 
         warn!(
@@ -563,7 +613,7 @@ impl RootHashFrontend {
         info!("Backup worker activating and processing batch");
 
         let committee = inner.computation_group.get_committee();
-        Self::handle_remote_batch(inner, batch_hash, committee)
+        Self::handle_remote_batch(inner, batch_hash, block_header, committee)
     }
 
     /// Handle round failed event.
@@ -574,6 +624,7 @@ impl RootHashFrontend {
         let role = require_state_ignore!(
             inner,
             State::ProcessingBatch(role, ..) |
+            State::WaitingForBlock(role, ..) |
             State::WaitingForFinalize(role, ..) |
             State::LocallyAborted(role, ..) => role
         );
@@ -594,37 +645,64 @@ impl RootHashFrontend {
             block.header.round
         );
 
-        // Check if this is a block for the same round that we proposed.
-        let should_transition = {
-            let state = inner.state.lock().unwrap();
-            match &*state {
-                &State::WaitingForFinalize(role, _, ref proposed_block) => {
-                    if proposed_block.header.round >= block.header.round {
-                        Some(role)
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
+        // Update latest block.
+        {
+            let mut latest_block = inner.latest_block.lock().unwrap();
+            if let Some(previous_block) = latest_block.take() {
+                assert!(block.header.round > previous_block.header.round);
             }
-        };
 
-        if let Some(role) = should_transition {
-            info!("Block is for the same round or newer as recently proposed block");
-            info!("Considering the round finalized");
-
-            // TODO: We should actually check if the proposed block was included.
-
-            Self::transition(inner.clone(), State::WaitingForBatch(role));
-
-            // Since the round is finalized, we start processing a new batch immediately.
-            inner
-                .command_sender
-                .unbounded_send(Command::ProcessIncomingQueue)
-                .unwrap();
+            *latest_block = Some(block.clone());
         }
 
-        future::ok(()).into_box()
+        // Decide what to do based on current state.
+        let state = inner.state.lock().unwrap().clone();
+        match state {
+            State::NotReady | State::WaitingForBatch(..) | State::ComputationGroupChanged(..) => {
+                future::ok(()).into_box()
+            }
+            State::WaitingForBlock(role, batch, header, committee) => {
+                // New block has been seen while waiting for a block. Check if it is the
+                // block we are waiting for.
+                if block.header == header {
+                    info!("Received all blocks needed to process next batch");
+
+                    Self::transition(inner.clone(), State::ProcessingBatch(role, batch, block));
+
+                    Self::process_batch(inner, committee)
+                } else if block.header.round >= header.round {
+                    // New block has been seen while waiting for a historic block, abort.
+                    Self::fail_batch(inner.clone(), "seen newer block".into());
+                    Self::transition(inner, State::WaitingForBatch(role));
+                    future::ok(()).into_box()
+                } else {
+                    info!("Still waiting for block at round {:?}", header.round);
+                    future::ok(()).into_box()
+                }
+            }
+            State::ProcessingBatch(role, ..) => {
+                // New block has been seen while processing a batch, abort.
+                Self::fail_batch(inner.clone(), "seen newer block".into());
+                Self::transition(inner, State::WaitingForBatch(role));
+                future::ok(()).into_box()
+            }
+            State::LocallyAborted(role) | State::WaitingForFinalize(role, ..) => {
+                // Round has been finalized.
+                info!("Considering the round finalized");
+
+                // TODO: We should actually check if the proposed block was included.
+
+                Self::transition(inner.clone(), State::WaitingForBatch(role));
+
+                // Since the round is finalized, we start processing a new batch immediately.
+                inner
+                    .command_sender
+                    .unbounded_send(Command::ProcessIncomingQueue)
+                    .unwrap();
+
+                future::ok(()).into_box()
+            }
+        }
     }
 
     /// Check if we need to send the current batch for processing.
@@ -640,6 +718,16 @@ impl RootHashFrontend {
 
         // Clear incoming queue notified flag to allow new notifies from appends.
         inner.incoming_queue_notified.store(false, Ordering::SeqCst);
+
+        // Check if a block is available from the roothash backend.
+        let block = {
+            if let Some(ref block) = *inner.latest_block.lock().unwrap() {
+                block.clone()
+            } else {
+                warn!("No block available from roothash backend, cannot process queue");
+                return future::ok(()).into_box();
+            }
+        };
 
         // Check if we should process.
         let mut incoming_queue = inner.incoming_queue.lock().unwrap();
@@ -670,7 +758,7 @@ impl RootHashFrontend {
             // Note that we can only be a leader here.
             Self::transition(
                 inner.clone(),
-                State::ProcessingBatch(Role::Leader, Arc::new(batch.into())),
+                State::ProcessingBatch(Role::Leader, Arc::new(batch.into()), block),
             );
 
             measure_histogram!("batch_insert_size", encoded_batch.len());
@@ -678,14 +766,14 @@ impl RootHashFrontend {
                 .storage
                 .insert(encoded_batch, 1)
                 .and_then(move |_| {
-                    require_state!(
+                    let block = require_state!(
                         inner,
-                        State::ProcessingBatch(Role::Leader, _),
+                        State::ProcessingBatch(Role::Leader, _, block) => block,
                         "processing batch"
                     );
 
                     // Submit signed batch hash to the rest of the computation group so they can start work.
-                    let committee = inner.computation_group.submit(batch_hash);
+                    let committee = inner.computation_group.submit(batch_hash, block.header);
                     // Process batch locally.
                     Self::process_batch(inner, committee)
                 })
@@ -703,29 +791,24 @@ impl RootHashFrontend {
 
     /// Process given batch locally and propose it when done.
     fn process_batch(inner: Arc<Inner>, committee: Vec<CommitteeNode>) -> BoxFuture<()> {
-        require_state!(inner, State::ProcessingBatch(..), "processing batch");
+        let (batch, block) = require_state!(
+            inner,
+            State::ProcessingBatch(_, batch, block) => (batch, block),
+            "processing batch"
+        );
 
-        // Fetch the latest block and request the worker to process the batch.
+        measure_counter_inc!("processing_batch_count");
+
+        // Send block and channel to worker.
+        let process_batch = inner.worker.contract_call_batch((*batch).clone(), block);
+
+        // After the batch is processed, propose the batch.
         let shared_inner = inner.clone();
-
-        inner
-            .backend
-            .get_latest_block(inner.contract_id)
-            .and_then(|block| {
-                let batch = require_state!(inner, State::ProcessingBatch(_, batch) => batch, "processing batch");
-                measure_counter_inc!("processing_batch_count");
-
-                // Send block and channel to worker.
-                let process_batch = inner.worker.contract_call_batch((*batch).clone(), block);
-
-                // After the batch is processed, propose the batch.
-                process_batch
-                    .map_err(|_| Error::new("channel closed"))
-                    .and_then(|result| Self::propose_batch(inner, result, committee))
-                    .into_box()
-            })
+        process_batch
+            .map_err(|_| Error::new("channel closed"))
+            .and_then(|result| Self::propose_batch(inner, result, committee))
             .or_else(|error| {
-                // Failed to get latest block, abort current batch.
+                // Failed to process batch, abort current batch.
                 Self::fail_batch(
                     shared_inner,
                     format!("failed to process batch: {}", error.message),
@@ -781,7 +864,11 @@ impl RootHashFrontend {
         computed_batch: Result<ComputedBatch>,
         committee: Vec<CommitteeNode>,
     ) -> BoxFuture<()> {
-        let (role, batch) = require_state!(inner, State::ProcessingBatch(role, batch) => (role, batch), "proposing batch");
+        let (role, batch) = require_state!(
+            inner,
+            State::ProcessingBatch(role, batch, _) => (role, batch),
+            "proposing batch"
+        );
 
         // Check result of batch computation.
         let mut computed_batch = match computed_batch {
@@ -926,7 +1013,12 @@ impl RootHashFrontend {
     }
 
     /// Directly process a batch from a remote leader.
-    pub fn process_remote_batch(&self, node_id: B256, batch_hash: H256) -> Result<()> {
+    pub fn process_remote_batch(
+        &self,
+        node_id: B256,
+        batch_hash: H256,
+        block_header: Header,
+    ) -> Result<()> {
         let inner = &self.inner;
 
         // Check that batch comes from current committee leader.
@@ -940,7 +1032,11 @@ impl RootHashFrontend {
 
         inner
             .command_sender
-            .unbounded_send(Command::ProcessRemoteBatch(batch_hash, committee))
+            .unbounded_send(Command::ProcessRemoteBatch(
+                batch_hash,
+                block_header,
+                committee,
+            ))
             .unwrap();
 
         Ok(())

@@ -149,7 +149,7 @@ impl SimulatedNode {
                             // Round has failed, so the test should abort.
                             panic!("round failed: {}", error);
                         }
-                        Event::DiscrepancyDetected(_) => {
+                        Event::DiscrepancyDetected(..) => {
                             // Discrepancy has been detected.
                             panic!("unexpected discrepancy detected during test");
                         }

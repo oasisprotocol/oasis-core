@@ -12,10 +12,11 @@ pub enum Event {
     /// Discrepancy resolution required.
     ///
     /// This signals to the backup workers that they should re-execute the computation,
-    /// where the argument is the hash of the [`CallBatch`].
+    /// where the argument is the hash of the [`CallBatch`]. The second argument is the
+    /// block [`Header`] which the computation should be based upon.
     ///
     /// [`CallBatch`]: ekiden_contract_common::batch::CallBatch
-    DiscrepancyDetected(H256),
+    DiscrepancyDetected(H256, Header),
     /// Round failed.
     RoundFailed(Error),
 }

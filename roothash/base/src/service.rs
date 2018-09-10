@@ -126,9 +126,10 @@ impl api::RootHash for RootHashService {
                         args.set_error(error.message.to_owned());
                         event.set_round_failed(args);
                     }
-                    Event::DiscrepancyDetected(batch_hash) => {
+                    Event::DiscrepancyDetected(batch_hash, block_header) => {
                         let mut args = api::Event_DiscrepancyDetected::new();
                         args.set_batch_hash(batch_hash.to_vec());
+                        args.set_block_header(block_header.into());
                         event.set_discrepancy_detected(args);
                     }
                 };

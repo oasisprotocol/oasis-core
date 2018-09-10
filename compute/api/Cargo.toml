@@ -8,6 +8,7 @@ repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
 
 [dependencies]
+ekiden-roothash-api = { path = "../../roothash/api", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 futures = "0.1"

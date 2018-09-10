@@ -92,7 +92,8 @@ func (s *grpcServer) GetEvents(req *pb.EventRequest, stream pb.RootHash_GetEvent
 		if ev.DiscrepancyDetected != nil {
 			pev.Event = &pb.Event_DiscrepancyDetected_{
 				DiscrepancyDetected: &pb.Event_DiscrepancyDetected{
-					BatchHash: append([]byte{}, ev.DiscrepancyDetected[:]...),
+					BatchHash:   append([]byte{}, ev.DiscrepancyDetected.BatchHash[:]...),
+					BlockHeader: ev.DiscrepancyDetected.BlockHeader.ToProto(),
 				},
 			}
 		} else if ev.RoundFailed != nil {
