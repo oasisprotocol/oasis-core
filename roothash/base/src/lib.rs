@@ -27,8 +27,6 @@ pub mod block;
 #[cfg(not(target_env = "sgx"))]
 pub mod commitment;
 pub mod header;
-#[cfg(not(target_env = "sgx"))]
-pub mod service;
 
 #[cfg(not(target_env = "sgx"))]
 pub use backend::*;
@@ -37,8 +35,3 @@ pub use block::*;
 #[cfg(not(target_env = "sgx"))]
 pub use commitment::*;
 pub use header::*;
-#[cfg(not(target_env = "sgx"))]
-pub use service::*;
-
-#[cfg(not(target_env = "sgx"))]
-pub mod test;
