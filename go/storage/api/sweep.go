@@ -13,7 +13,7 @@ var (
 	sweepLatency = prometheus.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "ekiden_storage_purge_expired_latency",
-			Help: "Storage purge_expired latency (usec).",
+			Help: "Storage purge_expired latency (sec).",
 		},
 	)
 	sweepCalls = prometheus.NewCounter(
@@ -105,7 +105,7 @@ func (s *Sweeper) worker(timeSource epochtime.Backend) {
 
 		start := time.Now()
 		s.backend.PurgeExpired(s.epoch)
-		sweepLatency.Observe(float64(time.Since(start) / time.Microsecond))
+		sweepLatency.Observe(time.Since(start).Seconds())
 		sweepCalls.Inc()
 	}
 }
