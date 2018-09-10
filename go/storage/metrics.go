@@ -27,7 +27,7 @@ var (
 	storageGetLatency = prometheus.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "ekiden_storage_get_latency",
-			Help: "Storage get latency (usec).",
+			Help: "Storage get latency (sec).",
 		},
 	)
 	storageInsertCalls = prometheus.NewCounter(
@@ -39,7 +39,7 @@ var (
 	storageInsertLatency = prometheus.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "ekiden_storage_insert_latency",
-			Help: "Storage insert latency (usec).",
+			Help: "Storage insert latency (sec).",
 		},
 	)
 	storageGetKeysCalls = prometheus.NewCounter(
@@ -51,7 +51,7 @@ var (
 	storageGetKeysLatency = prometheus.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "ekiden_storage_get_keys_latency",
-			Help: "Storage get_keys latency (usec).",
+			Help: "Storage get_keys latency (sec).",
 		},
 	)
 
@@ -77,7 +77,7 @@ type metricsWrapper struct {
 func (w *metricsWrapper) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	start := time.Now()
 	value, err := w.Backend.Get(ctx, key)
-	storageGetLatency.Observe(float64(time.Since(start) / time.Microsecond))
+	storageGetLatency.Observe(time.Since(start).Seconds())
 	if err != nil {
 		storageFailures.With(prometheus.Labels{"call": "get"}).Inc()
 		return nil, err
@@ -90,7 +90,7 @@ func (w *metricsWrapper) Get(ctx context.Context, key api.Key) ([]byte, error) {
 func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration uint64) error {
 	start := time.Now()
 	err := w.Backend.Insert(ctx, value, expiration)
-	storageInsertLatency.Observe(float64(time.Since(start) / time.Microsecond))
+	storageInsertLatency.Observe(time.Since(start).Seconds())
 	if err != nil {
 		storageFailures.With(prometheus.Labels{"call": "insert"}).Inc()
 		return err
@@ -103,7 +103,7 @@ func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration ui
 func (w *metricsWrapper) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
 	start := time.Now()
 	kiVec, err := w.Backend.GetKeys(ctx)
-	storageGetKeysLatency.Observe(float64(time.Since(start) / time.Microsecond))
+	storageGetKeysLatency.Observe(time.Since(start).Seconds())
 	if err != nil {
 		storageFailures.With(prometheus.Labels{"call": "get_keys"}).Inc()
 		return nil, err
