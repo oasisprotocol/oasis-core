@@ -2,8 +2,33 @@ package api
 
 import (
 	"sync"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+)
+
+var (
+	sweepLatency = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "ekiden_storage_purge_expired_latency",
+			Help: "Storage purge_expired latency (usec).",
+		},
+	)
+	sweepCalls = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "ekiden_storage_sweep_calls",
+			Help: "Number of storage purge_expired calls.",
+		},
+	)
+
+	sweepCollectors = []prometheus.Collector{
+		sweepLatency,
+		sweepCalls,
+	}
+
+	sweepMetricsOnce sync.Once
 )
 
 // SweepableBackend is a Backend capable of being cleaned by a Sweeper.
@@ -78,12 +103,19 @@ func (s *Sweeper) worker(timeSource epochtime.Backend) {
 			s.Unlock()
 		}
 
+		start := time.Now()
 		s.backend.PurgeExpired(s.epoch)
+		sweepLatency.Observe(float64(time.Since(start) / time.Microsecond))
+		sweepCalls.Inc()
 	}
 }
 
 // NewSweeper constructs a new Sweeper for the provided Backend.
 func NewSweeper(backend SweepableBackend, timeSource epochtime.Backend) *Sweeper {
+	sweepMetricsOnce.Do(func() {
+		prometheus.MustRegister(sweepCollectors...)
+	})
+
 	s := &Sweeper{
 		backend:  backend,
 		closeCh:  make(chan struct{}),

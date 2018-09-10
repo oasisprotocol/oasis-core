@@ -21,16 +21,24 @@ var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
 func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
+	var impl api.Backend
+	var err error
+
 	backend, _ := cmd.Flags().GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		return memory.New(timeSource), nil
+		impl = memory.New(timeSource)
 	case bolt.BackendName:
 		fn := filepath.Join(dataDir, bolt.DBFile)
-		return bolt.New(fn, timeSource)
+		impl, err = bolt.New(fn, timeSource)
 	default:
-		return nil, fmt.Errorf("storage: unsupported backend: '%v'", backend)
+		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return newMetricsWrapper(impl), nil
 }
 
 // RegisterFlags registers the configuration flags with the provided
