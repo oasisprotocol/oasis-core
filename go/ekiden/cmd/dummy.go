@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"time"
-
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -39,14 +37,12 @@ func dummyController(cmd *cobra.Command, args []string) {
 
 	client := dummydebug.NewDummyDebugClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
 	dummyLog.Info("setting epoch",
 		"epoch", epoch,
 	)
 
-	_, err = client.SetEpoch(ctx, &dummydebug.SetEpochRequest{Epoch: epoch})
+	// Use background context to block until mock epoch transition is done.
+	_, err = client.SetEpoch(context.Background(), &dummydebug.SetEpochRequest{Epoch: epoch})
 	if err != nil {
 		dummyLog.Error("failed to set epoch",
 			"err", err,
