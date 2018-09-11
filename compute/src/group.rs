@@ -14,6 +14,7 @@ use ekiden_core::node_group::NodeGroup;
 use ekiden_core::subscribers::StreamSubscribers;
 use ekiden_epochtime::interface::EpochTime;
 use ekiden_registry_base::EntityRegistryBackend;
+use ekiden_roothash_base::Header;
 use ekiden_scheduler_base::{CommitteeNode, CommitteeType, Role, Scheduler};
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_frontend::StorageClient;
@@ -371,12 +372,13 @@ impl ComputationGroup {
     }
 
     /// Submit batch to workers in the computation group.
-    pub fn submit(&self, batch_hash: H256) -> Vec<CommitteeNode> {
+    pub fn submit(&self, batch_hash: H256, block_header: Header) -> Vec<CommitteeNode> {
         trace!("Submitting batch to workers");
 
         // Prepare request.
         let mut request = SubmitBatchRequest::new();
         request.set_batch_hash(batch_hash.to_vec());
+        request.set_block_header(block_header.into());
 
         let mut epochs = self.inner.epochs.lock().unwrap();
         let active_epoch = epochs.active.as_mut().expect("no active epoch");

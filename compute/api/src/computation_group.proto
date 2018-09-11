@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "roothash/api/src/roothash.proto";
+
 package computation_group;
 
 service ComputationGroup {
@@ -9,6 +11,7 @@ service ComputationGroup {
 
 message SubmitBatchRequest {
     bytes batch_hash = 1;
+    roothash.Header block_header = 2;
 }
 
 message SubmitBatchResponse {

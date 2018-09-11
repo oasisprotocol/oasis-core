@@ -13,7 +13,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -352,8 +351,8 @@ ProcessLoop:
 				notifiers.blockNotifier.Broadcast(&block)
 			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashDiscrepancyDetected) {
 				// Discrepancy detected.
-				var batchID hash.Hash
-				if err := batchID.UnmarshalBinary(pair.GetValue()); err != nil {
+				var event api.DiscrepancyDetectedEvent
+				if err := event.UnmarshalCBOR(pair.GetValue()); err != nil {
 					r.logger.Error("worker: corrupted discrepancy detected tag",
 						"contract", id,
 						"err", err,
@@ -361,7 +360,7 @@ ProcessLoop:
 					continue ProcessLoop
 				}
 
-				notifiers.eventNotifier.Broadcast(&api.Event{DiscrepancyDetected: &batchID})
+				notifiers.eventNotifier.Broadcast(&api.Event{DiscrepancyDetected: &event})
 			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashRoundFailed) {
 				// Round failed.
 				notifiers.eventNotifier.Broadcast(&api.Event{RoundFailed: errors.New(string(pair.GetValue()))})

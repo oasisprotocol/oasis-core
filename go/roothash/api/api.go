@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -32,6 +33,8 @@ var (
 
 	_ encoding.BinaryMarshaler   = (*Commitment)(nil)
 	_ encoding.BinaryUnmarshaler = (*Commitment)(nil)
+	_ cbor.Marshaler             = (*DiscrepancyDetectedEvent)(nil)
+	_ cbor.Unmarshaler           = (*DiscrepancyDetectedEvent)(nil)
 )
 
 // Commitment is a backend specific commitment from a compute node.
@@ -106,12 +109,34 @@ type Backend interface {
 	Commit(context.Context, signature.PublicKey, *Commitment) error
 }
 
+// DiscrepancyDetectedEvent is a discrepancy detected event.
+type DiscrepancyDetectedEvent struct {
+	// BatchHash is the CallBatch hash that is set when a discrepancy
+	// is detected to signal to the backup workers that a computation
+	// should be re-executed.
+	BatchHash *hash.Hash
+
+	// BlockHeader is the block header of the block on which the backup
+	// computation should be based.
+	BlockHeader *Header
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (e *DiscrepancyDetectedEvent) MarshalCBOR() []byte {
+	return cbor.Marshal(e)
+}
+
+// UnmarshalCBOR decodes a CBOR marshaled block.
+func (e *DiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, e)
+}
+
 // Event is a protocol event.
 type Event struct {
 	// DiscrepancyDetected is the CallBatch hash that is set when a
 	// discrepancy is detected to signal to the backup workers that a
 	// computation should be re-executed.
-	DiscrepancyDetected *hash.Hash
+	DiscrepancyDetected *DiscrepancyDetectedEvent
 
 	// RoundFailed is the error that is set when a round fails.
 	RoundFailed error

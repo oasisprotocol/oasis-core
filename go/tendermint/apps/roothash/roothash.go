@@ -468,10 +468,14 @@ func (app *rootHashApplication) tryFinalize(
 			"input_hash", inputHash,
 		)
 
-		inputHashRaw, _ := inputHash.MarshalBinary()
+		event := roothash.DiscrepancyDetectedEvent{
+			BatchHash:   &inputHash,
+			BlockHeader: &latestBlock.Header,
+		}
+
 		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 		ctx.EmitTag(api.TagRootHashID, id)
-		ctx.EmitTag(api.TagRootHashDiscrepancyDetected, inputHashRaw)
+		ctx.EmitTag(api.TagRootHashDiscrepancyDetected, event.MarshalCBOR())
 
 		// Re-arm the timer.  The rust code waits till the first discrepancy
 		// commit to do this, but there is 0 guarantee that said commit will
