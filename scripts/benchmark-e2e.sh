@@ -43,15 +43,15 @@ run_dummy_node_tendermint() {
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level info \
         --grpc.port 42261 \
-        --epochtime.backend tendermint \
-        --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
+        --epochtime.backend tendermint_mock \
+        --beacon.backend insecure \
         --storage.backend memory \
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --tendermint.consensus.timeout_commit 250ms \
         --datadir ${datadir} \
-        &
+        2>${LOGDIR}/dummy.log &
 }
 
 run_compute_node() {
@@ -109,6 +109,7 @@ run_benchmark() {
     local client=$3
     local epochs=$4
     local dummy_node_runner=$5
+    local rq_per_thread=${6:-1000}
 
     if [[ "${OUTPUT_FORMAT}" == "text" ]]; then
         echo -e "\n\e[36;7;1mRUNNING BENCHMARK:\e[27m ${description}\e[0m\n"
@@ -140,6 +141,7 @@ run_benchmark() {
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \
+        --benchmark-runs ${rq_per_thread} \
         --output-format ${OUTPUT_FORMAT} \
         --output-title-prefix "${description}" \
         2>${LOGDIR}/client.log &
@@ -172,5 +174,5 @@ scenario_multilayer_remote() {
 
 run_benchmark scenario_basic "e2e-benchmark" benchmark 1 run_dummy_node_storage_dummy
 run_benchmark scenario_basic "e2e-benchmark-persistent" benchmark 1 run_dummy_node_storage_persistent
-run_benchmark scenario_basic "e2e-benchmark-tendermint" benchmark 1 run_dummy_node_tendermint
+run_benchmark scenario_basic "e2e-benchmark-tendermint" benchmark 1 run_dummy_node_tendermint 100
 run_benchmark scenario_multilayer_remote "e2e-benchmark-multilayer-remote" benchmark 1 run_dummy_node_storage_dummy
