@@ -12,7 +12,7 @@ use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
 use ekiden_core::uint::U256;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
-use ekiden_db_trusted::Database;
+use ekiden_db_trusted::{Database, DatabaseHandle};
 use ekiden_di::Container;
 use ekiden_roothash_base::{Block, RootHashBackend};
 use ekiden_storage_base::BackendIdentityMapper;
@@ -46,6 +46,13 @@ impl Database for Snapshot {
 
     fn clear(&mut self) {
         panic!("Can't clear Snapshot")
+    }
+
+    fn with_encryption<F>(&mut self, _contract_id: H256, _f: F)
+    where
+        F: FnOnce(&mut DatabaseHandle) -> (),
+    {
+        unimplemented!();
     }
 }
 
