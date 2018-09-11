@@ -90,7 +90,7 @@ To start the compute node for the token contract (you need to start two):
 
 After starting the nodes, to manually advance the epoch in the shared dummy node:
 ```
-# ./go/ekiden/ekiden dummy-set-epoch --epoch 1
+# ./go/ekiden/ekiden dummy set-epoch --epoch 1
 ```
 
 The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.

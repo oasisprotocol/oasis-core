@@ -126,13 +126,14 @@ run_benchmark() {
     $dummy_node_runner
     sleep 1
 
-    # Start compute nodes.
+    # Start compute nodes and wait for them to register.
     $scenario
+    ${WORKDIR}/go/ekiden/ekiden dummy wait-nodes --nodes 2
 
     # Advance epoch to elect a new committee.
     for epoch in $(seq $epochs); do
         sleep 2
-        ${WORKDIR}/go/ekiden/ekiden dummy-set-epoch --epoch $epoch
+        ${WORKDIR}/go/ekiden/ekiden dummy set-epoch --epoch $epoch
     done
 
     # Run the client.

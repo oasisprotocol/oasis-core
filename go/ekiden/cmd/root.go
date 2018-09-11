@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/beacon"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/dummydebug"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/registry"
 	"github.com/oasislabs/ekiden/go/roothash"
@@ -201,6 +202,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	roothash.NewGRPCServer(env.grpcSrv.s, rootHash)
 	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
 	storage.NewGRPCServer(env.grpcSrv.s, store)
+	dummydebug.NewGRPCServer(env.grpcSrv.s, timeSource, reg)
 
 	rootLog.Debug("backends initialized")
 

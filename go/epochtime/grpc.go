@@ -1,22 +1,16 @@
 package epochtime
 
 import (
-	"errors"
-
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/common"
-	dbgPB "github.com/oasislabs/ekiden/go/grpc/dummydebug"
 )
 
 var (
-	errIncompatibleBackend = errors.New("epochtime/grpc: incompatible backend for call")
-
-	_ pb.TimeSourceServer    = (*grpcServer)(nil)
-	_ dbgPB.DummyDebugServer = (*grpcServer)(nil)
+	_ pb.TimeSourceServer = (*grpcServer)(nil)
 )
 
 type grpcServer struct {
@@ -62,21 +56,6 @@ func (s *grpcServer) WatchEpochs(req *pb.WatchEpochRequest, stream pb.TimeSource
 	return nil
 }
 
-func (s *grpcServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
-	mockTS, ok := s.backend.(api.SetableBackend)
-	if !ok {
-		return nil, errIncompatibleBackend
-	}
-
-	epoch := api.EpochTime(req.GetEpoch())
-	err := mockTS.SetEpoch(ctx, epoch, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dbgPB.SetEpochResponse{}, nil
-}
-
 // NewGRPCServer initializes and registers a gRPC epochtime server
 // backed by the provided Backend.
 func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
@@ -84,7 +63,4 @@ func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
 		backend: backend,
 	}
 	pb.RegisterTimeSourceServer(srv, s)
-	if _, ok := s.backend.(api.SetableBackend); ok {
-		dbgPB.RegisterDummyDebugServer(srv, s)
-	}
 }
