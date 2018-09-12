@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
@@ -19,7 +22,36 @@ import (
 const cfgGRPCPort = "grpc.port"
 
 var (
-	grpcPort uint16
+	grpcPort        uint16
+	grpcMetricsOnce sync.Once
+
+	grpcCalls = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ekiden_grpc_calls",
+			Help: "Number of gRPC calls.",
+		},
+		[]string{"call"},
+	)
+	grpcLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_grpc_latency",
+			Help: "gRPC call latency.",
+		},
+		[]string{"call"},
+	)
+	grpcStreamWrites = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ekiden_grpc_stream_writes",
+			Help: "Number of gRPC stream writes",
+		},
+		[]string{"call"},
+	)
+
+	grpcCollectors = []prometheus.Collector{
+		grpcCalls,
+		grpcLatency,
+		grpcStreamWrites,
+	}
 
 	_ grpclog.LoggerV2 = (*grpcLogAdapter)(nil)
 )
@@ -31,6 +63,7 @@ type grpcLogAdapter struct {
 	verbosity int
 	reqSeq    uint64
 	streamSeq uint64
+	isDebug   bool
 }
 
 func (l *grpcLogAdapter) Info(args ...interface{}) {
@@ -94,13 +127,19 @@ func (l *grpcLogAdapter) V(level int) bool {
 func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 	// TODO: Pull useful things out of ctx for logging.
 	seq := atomic.AddUint64(&l.reqSeq, 1)
-	l.reqLogger.Debug("request",
-		"method", info.FullMethod,
-		"req_seq", seq,
-		"req", req,
-	)
+	if l.isDebug {
+		l.reqLogger.Debug("request",
+			"method", info.FullMethod,
+			"req_seq", seq,
+			"req", req,
+		)
+	}
+
+	start := time.Now()
+	grpcCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
 
 	resp, err = handler(ctx, req)
+	grpcLatency.With(prometheus.Labels{"call": info.FullMethod}).Observe(time.Since(start).Seconds())
 	switch err {
 	case nil:
 		l.reqLogger.Debug("request succeeded",
@@ -121,10 +160,12 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info 
 
 func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	seq := atomic.AddUint64(&l.streamSeq, 1)
-	l.reqLogger.Debug("stream",
-		"method", info.FullMethod,
-		"stream_seq", seq,
-	)
+	if l.isDebug {
+		l.reqLogger.Debug("stream",
+			"method", info.FullMethod,
+			"stream_seq", seq,
+		)
+	}
 
 	stream := &grpcStreamLogger{
 		ServerStream: ss,
@@ -133,19 +174,24 @@ func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, inf
 		seq:          seq,
 	}
 
+	grpcCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
+
 	err := handler(srv, stream)
-	switch err {
-	case nil:
-		l.reqLogger.Debug("stream closed",
-			"method", info.FullMethod,
-			"stream_seq", seq,
-		)
-	default:
-		l.reqLogger.Error("stream closed (failure)",
-			"method", info.FullMethod,
-			"stream_seq", seq,
-			"err", err,
-		)
+
+	if l.isDebug {
+		switch err {
+		case nil:
+			l.reqLogger.Debug("stream closed",
+				"method", info.FullMethod,
+				"stream_seq", seq,
+			)
+		default:
+			l.reqLogger.Error("stream closed (failure)",
+				"method", info.FullMethod,
+				"stream_seq", seq,
+				"err", err,
+			)
+		}
 	}
 
 	return err
@@ -162,6 +208,7 @@ func newGrpcLogAdapter(baseLogger *logging.Logger) *grpcLogAdapter {
 		logger:    logging.GetLoggerEx("grpc", 2),
 		reqLogger: baseLogger,
 		verbosity: 2,
+		isDebug:   logging.GetLevel() == logging.LevelDebug,
 	}
 }
 
@@ -175,21 +222,25 @@ type grpcStreamLogger struct {
 }
 
 func (s *grpcStreamLogger) SendMsg(m interface{}) error {
+	grpcStreamWrites.With(prometheus.Labels{"call": s.method}).Inc()
 	err := s.ServerStream.SendMsg(m)
-	switch err {
-	case nil:
-		s.logAdapter.reqLogger.Debug("SendMsg",
-			"method", s.method,
-			"stream_seq", s.seq,
-			"msg", m,
-		)
-	default:
-		s.logAdapter.reqLogger.Debug("SendMsg failed",
-			"method", s.method,
-			"stream_seq", s.seq,
-			"msg", m,
-			"err", err,
-		)
+
+	if s.logAdapter.isDebug {
+		switch err {
+		case nil:
+			s.logAdapter.reqLogger.Debug("SendMsg",
+				"method", s.method,
+				"stream_seq", s.seq,
+				"msg", m,
+			)
+		default:
+			s.logAdapter.reqLogger.Debug("SendMsg failed",
+				"method", s.method,
+				"stream_seq", s.seq,
+				"msg", m,
+				"err", err,
+			)
+		}
 	}
 
 	return err
@@ -233,6 +284,10 @@ func (s *grpcService) Cleanup() {
 }
 
 func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
+	grpcMetricsOnce.Do(func() {
+		prometheus.MustRegister(grpcCollectors...)
+	})
+
 	port, _ := cmd.Flags().GetUint16(cfgGRPCPort)
 
 	svc := *service.NewBaseBackgroundService("grpc")
@@ -248,10 +303,8 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 	grpclog.SetLoggerV2(logAdapter)
 
 	var sOpts []grpc.ServerOption
-	if logging.GetLevel() == logging.LevelDebug {
-		sOpts = append(sOpts, grpc.UnaryInterceptor(logAdapter.unaryLogger))
-		sOpts = append(sOpts, grpc.StreamInterceptor(logAdapter.streamLogger))
-	}
+	sOpts = append(sOpts, grpc.UnaryInterceptor(logAdapter.unaryLogger))
+	sOpts = append(sOpts, grpc.StreamInterceptor(logAdapter.streamLogger))
 
 	return &grpcService{
 		BaseBackgroundService: svc,
