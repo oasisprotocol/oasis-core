@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -37,6 +38,8 @@ var (
 	bktExpirations  = []byte("expirations")
 	bktByKey        = []byte("byKey")
 	bktByExpiration = []byte("byExpiration")
+
+	errIdempotent = errors.New("storage/bolt: write has no effect")
 )
 
 type boltBackend struct {
@@ -93,7 +96,7 @@ func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint6
 		"expiration", expEpoch,
 	)
 
-	return b.db.Update(func(tx *bolt.Tx) error {
+	err := b.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bktExpirations)
 		keys := bkt.Bucket(bktByKey)
 		exps := bkt.Bucket(bktByExpiration)
@@ -108,7 +111,7 @@ func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint6
 			// the value is identical by definition (or there is a hash
 			// collision).
 			if epochTimeFromRaw(oldExp) == expEpoch {
-				return nil
+				return errIdempotent
 			}
 
 			if bkt = exps.Bucket(oldExp); bkt != nil {
@@ -133,6 +136,13 @@ func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint6
 
 		return values.Put(key[:], value)
 	})
+	if err == errIdempotent {
+		// Squelch internal error used to roll back the transaction for
+		// the case where the value already is in the store.
+		err = nil
+	}
+
+	return err
 }
 
 func (b *boltBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
