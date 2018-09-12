@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"time"
+	"os"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
@@ -14,17 +14,29 @@ import (
 var (
 	address string
 	epoch   uint64
+	nodes   uint64
 
 	dummyCmd = &cobra.Command{
-		Use:   "dummy-set-epoch",
-		Short: "Dummy epochtime controller",
-		Run:   dummyController,
+		Use:   "dummy",
+		Short: "control dummy node during tests",
+	}
+
+	dummySetEpochCmd = &cobra.Command{
+		Use:   "set-epoch",
+		Short: "set mock epochtime",
+		Run:   dummySetEpoch,
+	}
+
+	dummyWaitNodesCmd = &cobra.Command{
+		Use:   "wait-nodes",
+		Short: "wait for specific number of nodes to register",
+		Run:   dummyWaitNodes,
 	}
 
 	dummyLog = logging.GetLogger("dummy")
 )
 
-func dummyController(cmd *cobra.Command, args []string) {
+func connect() (*grpc.ClientConn, dummydebug.DummyDebugClient) {
 	initCommon()
 
 	// Establish gRPC connection to node.
@@ -33,31 +45,57 @@ func dummyController(cmd *cobra.Command, args []string) {
 		dummyLog.Error("failed to establish connection with node",
 			"err", err,
 		)
-		return
+		os.Exit(1)
 	}
-	defer conn.Close()
 
 	client := dummydebug.NewDummyDebugClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+	return conn, client
+}
+
+func dummySetEpoch(cmd *cobra.Command, args []string) {
+	conn, client := connect()
+	defer conn.Close()
 
 	dummyLog.Info("setting epoch",
 		"epoch", epoch,
 	)
 
-	_, err = client.SetEpoch(ctx, &dummydebug.SetEpochRequest{Epoch: epoch})
+	// Use background context to block until mock epoch transition is done.
+	_, err := client.SetEpoch(context.Background(), &dummydebug.SetEpochRequest{Epoch: epoch})
 	if err != nil {
 		dummyLog.Error("failed to set epoch",
 			"err", err,
 		)
-		return
 	}
+}
+
+func dummyWaitNodes(cmd *cobra.Command, args []string) {
+	conn, client := connect()
+	defer conn.Close()
+
+	dummyLog.Info("waiting for nodes",
+		"nodes", nodes,
+	)
+
+	// Use background context to block until all nodes register.
+	_, err := client.WaitNodes(context.Background(), &dummydebug.WaitNodesRequest{Nodes: nodes})
+	if err != nil {
+		dummyLog.Error("failed to wait for nodes",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	dummyLog.Info("enough nodes have been registered")
 }
 
 func init() {
 	dummyCmd.PersistentFlags().StringVarP(&address, "address", "a", "127.0.0.1:42261", "node gRPC address")
-	dummyCmd.Flags().Uint64VarP(&epoch, "epoch", "e", 0, "set epoch to given value")
+	dummySetEpochCmd.Flags().Uint64VarP(&epoch, "epoch", "e", 0, "set epoch to given value")
+	dummyWaitNodesCmd.Flags().Uint64VarP(&nodes, "nodes", "n", 1, "number of nodes to wait for")
 
 	rootCmd.AddCommand(dummyCmd)
+	dummyCmd.AddCommand(dummySetEpochCmd)
+	dummyCmd.AddCommand(dummyWaitNodesCmd)
 }
