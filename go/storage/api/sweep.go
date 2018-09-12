@@ -18,7 +18,7 @@ var (
 	)
 	sweepCalls = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "ekiden_storage_sweep_calls",
+			Name: "ekiden_storage_purge_expired_calls",
 			Help: "Number of storage purge_expired calls.",
 		},
 	)
