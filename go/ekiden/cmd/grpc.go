@@ -135,9 +135,9 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info 
 		)
 	}
 
-	start := time.Now()
 	grpcCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
 
+	start := time.Now()
 	resp, err = handler(ctx, req)
 	grpcLatency.With(prometheus.Labels{"call": info.FullMethod}).Observe(time.Since(start).Seconds())
 	switch err {
