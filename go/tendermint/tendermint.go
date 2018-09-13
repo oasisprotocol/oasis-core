@@ -275,6 +275,7 @@ func (t *tendermintService) lazyInit() error {
 	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
 	tenderConfig.Consensus.TimeoutCommit = int(timeoutCommit / time.Millisecond)
 	tenderConfig.Consensus.SkipTimeoutCommit, _ = t.cmd.Flags().GetBool(cfgConsensusSkipTimeoutCommit)
+	tenderConfig.Instrumentation.Prometheus = true
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
 	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
