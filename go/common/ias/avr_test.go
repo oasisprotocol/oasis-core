@@ -14,14 +14,7 @@ func TestAVR(t *testing.T) {
 }
 
 func testAVRv2(t *testing.T) {
-	raw, err := ioutil.ReadFile("testdata/avr_v2_body_group_out_of_date.json")
-	require.NoError(t, err, "Read test vector")
-
-	sig, err := ioutil.ReadFile("testdata/avr_v2_body_group_out_of_date.sig")
-	require.NoError(t, err, "Read signature")
-
-	certs, err := ioutil.ReadFile("testdata/avr_certificates_urlencoded.pem")
-	require.NoError(t, err, "Read certificate chain")
+	raw, sig, certs := loadAVRv2(t)
 
 	avr, err := DecodeAVR(raw, sig, certs, time.Now())
 	require.NoError(t, err, "DecodeAVR")
@@ -44,4 +37,18 @@ func testAVRv2(t *testing.T) {
 
 	epidPseudonym, _ := base64.StdEncoding.DecodeString("auQFGj3IeH7TlfmxhO0QLcXzGppYufXjzWKyNXHnoXp5+jGvusQJV+4PjbNYxb8HJm3LLKu3iu/4nvcMLkVXsPVM96Faafv7cSmwkNla1X9v2ei7C+5LN+EXgAJXpZVjTkCvD0WyPo+NmDRWVJeu83aDb+ktEiafMGo34Zk4m4Q=")
 	require.Equal(t, epidPseudonym, avr.EPIDPseudonym, "epidPseudonym")
+}
+
+func loadAVRv2(t *testing.T) (raw, sig, certs []byte) {
+	var err error
+	raw, err = ioutil.ReadFile("testdata/avr_v2_body_group_out_of_date.json")
+	require.NoError(t, err, "Read test vector")
+
+	sig, err = ioutil.ReadFile("testdata/avr_v2_body_group_out_of_date.sig")
+	require.NoError(t, err, "Read signature")
+
+	certs, err = ioutil.ReadFile("testdata/avr_certificates_urlencoded.pem")
+	require.NoError(t, err, "Read certificate chain")
+
+	return
 }

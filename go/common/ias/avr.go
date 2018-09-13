@@ -161,7 +161,6 @@ type AttestationVerificationReport struct {
 
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 	const (
-		quoteLen           = 432
 		pseManifestHashLen = 32
 		nonceMaxLen        = 32
 		epidPseudonymLen   = 64 + 64
