@@ -107,6 +107,24 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	}
 	env.svcMgr.Register(metrics)
 
+	// Initialize the profiling server.
+	profiling, err := newPprofService(cmd)
+	if err != nil {
+		rootLog.Error("failed to initialize pprof server",
+			"err", err,
+		)
+		return
+	}
+	env.svcMgr.Register(profiling)
+
+	// Start the profiling server.
+	if err = profiling.Start(); err != nil {
+		rootLog.Error("failed to start pprof server",
+			"err", err,
+		)
+		return
+	}
+
 	// Initialize tendermint.
 	env.svcTmnt = tendermint.New(cmd, dataDir, env.identity)
 	env.svcMgr.Register(env.svcTmnt)
@@ -233,6 +251,7 @@ func init() {
 	for _, v := range []func(*cobra.Command){
 		registerMetricsFlags,
 		registerGrpcFlags,
+		registerPprofFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
 		registry.RegisterFlags,
