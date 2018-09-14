@@ -2,6 +2,7 @@
 package bolt
 
 import (
+	"bytes"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -279,18 +280,33 @@ func (d *boltDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator
 	bkt := iter.tx.Bucket(bktContents)
 	cur := bkt.Cursor()
 
-	var firstFn func() ([]byte, []byte)
+	// Seek to the first applicable key/value pair.
+	dbStart := toBoltDBKey(start)
+	var k, v []byte
+
 	switch isForward {
 	case true:
 		iter.nextFn = cur.Next
-		firstFn = cur.First
+		if start == nil {
+			k, v = cur.First()
+		} else {
+			k, v = cur.Seek(dbStart)
+		}
 	case false:
 		iter.nextFn = cur.Prev
-		firstFn = cur.Last
+		if start == nil {
+			k, v = cur.Last()
+		} else {
+			k, v = cur.Seek(dbStart)
+			if k != nil {
+				if bytes.Compare(start, fromBoltDBKeyNoCopy(k)) < 0 {
+					k, v = cur.Prev()
+				}
+			} else {
+				k, v = cur.Last()
+			}
+		}
 	}
-
-	// Seek to the first applicable key/value pair.
-	k, v := firstFn()
 	if k == nil {
 		// Empty database, invalid iterator.
 		return iter
