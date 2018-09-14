@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"github.com/spf13/viper"
 	tmabci "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
-	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
@@ -258,9 +258,7 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
-	// Initialize the node (P2P) key.  Tendermint doesn't allow
-	// passing this in in a sensible format, so force load/generate
-	// it in the expected location.
+	// Initialize the node (P2P) key.
 	if t.nodeKey, err = initNodeKey(tendermintDataDir); err != nil {
 		return err
 	}
@@ -311,6 +309,7 @@ func (t *tendermintService) lazyInit() error {
 
 	t.node, err = tmnode.NewNode(tenderConfig,
 		tendermintPV,
+		&tmp2p.NodeKey{PrivKey: crypto.PrivateKeyToTendermint(t.nodeKey)},
 		tmproxy.NewLocalClientCreator(t.mux.Mux()),
 		tenderminGenesisProvider,
 		bolt.BoltDBProvider,
@@ -390,17 +389,12 @@ func initDataDir(dataDir string) error {
 }
 
 func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
-	f := filepath.Join(dataDir, configDir, "node_key.json")
-	nk, err := tmp2p.LoadOrGenNodeKey(f)
-	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to load/generate node key")
-	}
-	tk, ok := nk.PrivKey.(tmed.PrivKeyEd25519)
-	if !ok {
-		return nil, errors.New("tendermint: incompatible node key")
+	var k signature.PrivateKey
+
+	if err := k.LoadPEM(filepath.Join(dataDir, "p2p.pem"), rand.Reader); err != nil {
+		return nil, err
 	}
 
-	k := crypto.PrivateKeyFromTendermint(&tk)
 	return &k, nil
 }
 

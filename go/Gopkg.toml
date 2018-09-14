@@ -40,7 +40,7 @@
 [[constraint]]
   name = "github.com/tendermint/tendermint"
   source = "https://github.com/oasislabs/tendermint"
-  branch = "ekiden"
+  version = "=v0.24.0-ekiden1"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
@@ -88,7 +88,7 @@
 
 [[override]]
   name = "github.com/tendermint/tendermint"
-  branch = "ekiden"
+  version = "=v0.24.0-ekiden1"
 
 [[override]]
   name = "github.com/prometheus/client_golang"
