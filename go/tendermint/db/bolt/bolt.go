@@ -2,6 +2,7 @@
 package bolt
 
 import (
+	"bytes"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -279,29 +280,44 @@ func (d *boltDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator
 	bkt := iter.tx.Bucket(bktContents)
 	cur := bkt.Cursor()
 
-	var firstFn func() ([]byte, []byte)
+	// Seek to the first applicable key/value pair.
+	dbStart := toBoltDBKey(start)
+	var k, v []byte
+
 	switch isForward {
 	case true:
 		iter.nextFn = cur.Next
-		firstFn = cur.First
+		if start == nil {
+			k, v = cur.First()
+		} else {
+			k, v = cur.Seek(dbStart)
+		}
 	case false:
 		iter.nextFn = cur.Prev
-		firstFn = cur.Last
+		if start == nil {
+			k, v = cur.Last()
+		} else {
+			k, v = cur.Seek(dbStart)
+			if k != nil {
+				if bytes.Compare(start, fromBoltDBKeyNoCopy(k)) < 0 {
+					k, v = cur.Prev()
+				}
+			} else {
+				k, v = cur.Last()
+			}
+		}
 	}
-
-	// Seek to the first applicable key/value pair.
-	k, v := firstFn()
 	if k == nil {
 		// Empty database, invalid iterator.
 		return iter
 	}
 
-	k = fromBoltDBKey(k)
+	k = fromBoltDBKeyNoCopy(k)
 	iter.isValid = true // Assume valid, seeking will reset.
 	if dbm.IsKeyInDomain(k, start, end, !isForward) {
 		// First key happens to be in the domain.
 		iter.current.key = k
-		iter.current.value = append([]byte{}, v...)
+		iter.current.value = v
 		return iter
 	}
 
@@ -317,6 +333,9 @@ type boltDBIterator struct {
 
 	start, end []byte
 
+	// WARNING: These values are only valid while isValid is true (ie:
+	// tx is live).  The backing pages can/will be unmapped when tx
+	// is rolled back via Close().
 	current struct {
 		key, value []byte
 	}
@@ -340,10 +359,10 @@ func (iter *boltDBIterator) Next() {
 
 	// Traverse the BoltDB cursor to find the next applicable key.
 	for k, v := iter.nextFn(); k != nil; k, v = iter.nextFn() {
-		k = fromBoltDBKey(k)
+		k = fromBoltDBKeyNoCopy(k)
 		if dbm.IsKeyInDomain(k, iter.start, iter.end, !iter.isForward) {
 			iter.current.key = k
-			iter.current.value = append([]byte{}, v...)
+			iter.current.value = v
 			return
 		}
 	}
@@ -359,7 +378,7 @@ func (iter *boltDBIterator) Key() []byte {
 		panic("Key() with invalid iterator")
 	}
 
-	return iter.current.key
+	return append([]byte{}, iter.current.key...)
 }
 
 func (iter *boltDBIterator) Value() []byte {
@@ -367,7 +386,7 @@ func (iter *boltDBIterator) Value() []byte {
 		panic("Value() with invalid iterator")
 	}
 
-	return iter.current.value
+	return append([]byte{}, iter.current.value...)
 }
 
 func (iter *boltDBIterator) Close() {
@@ -442,7 +461,7 @@ func toBoltDBKey(key []byte) []byte {
 	return ret
 }
 
-func fromBoltDBKey(key []byte) []byte {
+func fromBoltDBKeyNoCopy(key []byte) []byte {
 	if len(key) < 1 {
 		panic("BUG: zero-length key in BoltDB database")
 	}
@@ -450,8 +469,5 @@ func fromBoltDBKey(key []byte) []byte {
 		panic("BUG: unknown key version byte")
 	}
 
-	ret := make([]byte, 0, len(key)-1)
-	ret = append(ret, key[1:]...)
-
-	return ret
+	return key[1:]
 }
