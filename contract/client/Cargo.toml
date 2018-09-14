@@ -9,12 +9,15 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
+ekiden-tracing = { path = "../../tracing", version = "0.2.0-alpha" }
 ekiden-contract-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "../../compute/api", version = "0.2.0-alpha" }
+rustracing = "0.1.7"
+rustracing_jaeger = "0.1.7"
 serde = "1.0.71"
 serde_cbor = "0.8.2"
 log = "0.4"

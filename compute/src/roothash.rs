@@ -7,6 +7,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use rustracing::tag;
+use rustracing_jaeger::span::SpanContext;
+use rustracing_jaeger::span::SpanHandle;
+use rustracing_jaeger::Span;
+use rustracing_jaeger::Tracer;
 use serde_cbor;
 
 use ekiden_core::bytes::{B256, H256};
@@ -223,12 +228,20 @@ macro_rules! require_state_impl {
     }};
 }
 
+/// A call plus bookkeeping for tracing correlation.
+struct CallInfo {
+    data: Vec<u8>,
+    /// Correlation for when the call is first enqueued, or None if it was enqueued before and
+    /// has returned.
+    context: Option<SpanContext>,
+}
+
 /// Queue of incoming contract calls which are pending to be included in a batch.
 struct IncomingQueue {
     /// Instant when first item was queued.
     start: Instant,
     /// Queued contract calls.
-    calls: VecDeque<Vec<u8>>,
+    calls: VecDeque<CallInfo>,
 }
 
 impl Default for IncomingQueue {
@@ -273,6 +286,8 @@ struct Inner {
     test_only_config: RootHashTestOnlyConfiguration,
     /// Notify incoming queue.
     incoming_queue_notified: AtomicBool,
+    /// Object used for tracing.
+    tracer: Mutex<Tracer>,
 }
 
 /// Root hash frontend test-only configuration.
@@ -311,6 +326,7 @@ impl RootHashFrontend {
         backend: Arc<RootHashBackend>,
         signer: Arc<RootHashSigner>,
         storage: Arc<StorageBackend>,
+        tracer: Tracer,
     ) -> Self {
         measure_configure!(
             "batch_insert_size",
@@ -347,6 +363,7 @@ impl RootHashFrontend {
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 test_only_config: config.test_only.clone(),
                 incoming_queue_notified: AtomicBool::new(false),
+                tracer: Mutex::new(tracer),
             }),
         };
         instance.start();
@@ -562,7 +579,9 @@ impl RootHashFrontend {
                             inner.clone(),
                             State::ProcessingBatch(role, batch, block.clone()),
                         );
-                        return Self::process_batch(inner, committee);
+                        // TODO: Correlate to an event source
+                        let sh = Span::inactive().handle();
+                        return Self::process_batch(inner, committee, sh);
                     } else if block.header.round > block_header.round {
                         // We have already seen a newer block. Do not even start to process this batch.
                         warn!("Already seen a newer block than expected for latest batch, not processing");
@@ -669,7 +688,9 @@ impl RootHashFrontend {
 
                     Self::transition(inner.clone(), State::ProcessingBatch(role, batch, block));
 
-                    Self::process_batch(inner, committee)
+                    // TODO: Correlate with what leads up to this
+                    let sh = Span::inactive().handle();
+                    Self::process_batch(inner, committee, sh)
                 } else if block.header.round >= header.round {
                     // New block has been seen while waiting for a historic block, abort.
                     Self::fail_batch(inner.clone(), "seen newer block".into());
@@ -739,14 +760,30 @@ impl RootHashFrontend {
         };
 
         if should_process {
+            let tracer = inner.tracer.lock().unwrap().clone();
+            let mut sso = Some(
+                tracer
+                    .span("process_incoming_queue")
+                    .tag(tag::StdTag::span_kind("consumer")),
+            );
+
             // Take calls from incoming queue for processing. We only take up to max_batch_size
             // and leave the rest for the next batch, resetting the timestamp.
-            let mut batch = incoming_queue.take().unwrap().calls;
-            if batch.len() > inner.max_batch_size {
-                let mut remaining = batch.split_off(inner.max_batch_size);
+            let mut batch_info = incoming_queue.take().unwrap().calls;
+            if batch_info.len() > inner.max_batch_size {
+                let mut remaining = batch_info.split_off(inner.max_batch_size);
                 let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
                 incoming_queue.calls.append(&mut remaining);
             }
+            let batch: Vec<_> = batch_info
+                .into_iter()
+                .map(|call_info| {
+                    sso = Some(sso.take().unwrap().follows_from(&call_info.context));
+                    call_info.data
+                })
+                .collect();
+            let span = sso.unwrap().start();
+            let sh = span.handle();
 
             // Persist batch into storage so that the workers can get it.
             // Save it for one epoch so that the current committee can access it.
@@ -775,7 +812,7 @@ impl RootHashFrontend {
                     // Submit signed batch hash to the rest of the computation group so they can start work.
                     let committee = inner.computation_group.submit(batch_hash, block.header);
                     // Process batch locally.
-                    Self::process_batch(inner, committee)
+                    Self::process_batch(inner, committee, sh)
                 })
                 .or_else(move |error| {
                     Self::fail_batch(
@@ -790,7 +827,12 @@ impl RootHashFrontend {
     }
 
     /// Process given batch locally and propose it when done.
-    fn process_batch(inner: Arc<Inner>, committee: Vec<CommitteeNode>) -> BoxFuture<()> {
+    /// `sh` should come from the source that causes us to transition into ProcessingBatch.
+    fn process_batch(
+        inner: Arc<Inner>,
+        committee: Vec<CommitteeNode>,
+        sh: SpanHandle,
+    ) -> BoxFuture<()> {
         let (batch, block) = require_state!(
             inner,
             State::ProcessingBatch(_, batch, block) => (batch, block),
@@ -800,7 +842,9 @@ impl RootHashFrontend {
         measure_counter_inc!("processing_batch_count");
 
         // Send block and channel to worker.
-        let process_batch = inner.worker.contract_call_batch((*batch).clone(), block);
+        let process_batch = inner
+            .worker
+            .contract_call_batch((*batch).clone(), block, sh);
 
         // After the batch is processed, propose the batch.
         let shared_inner = inner.clone();
@@ -834,7 +878,12 @@ impl RootHashFrontend {
                 let mut incoming_queue = inner.incoming_queue.lock().unwrap();
                 let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
                 for item in batch.iter().rev() {
-                    incoming_queue.calls.push_front(item.clone());
+                    incoming_queue.calls.push_front(CallInfo {
+                        data: item.clone(),
+                        // We should have already correlated the original enqueueing site when we
+                        // got these items out of `incoming_queue` the first time.
+                        context: None,
+                    });
                 }
 
                 measure_gauge!("incoming_queue_size", incoming_queue.calls.len());
@@ -973,13 +1022,8 @@ impl RootHashFrontend {
             .into_box()
     }
 
-    /// Append contract calls to current batch for eventual processing.
-    pub fn append_batch(&self, calls: CallBatch) -> Result<()> {
-        // Ignore empty batches.
-        if calls.is_empty() {
-            return Ok(());
-        }
-
+    /// Append a contract call to current batch for eventual processing.
+    pub fn append_batch(&self, data: Vec<u8>, context: Option<SpanContext>) -> Result<()> {
         // If we are not a leader, do not append to batch.
         {
             let state = self.inner.state.lock().unwrap();
@@ -993,7 +1037,7 @@ impl RootHashFrontend {
         {
             let mut incoming_queue = self.inner.incoming_queue.lock().unwrap();
             let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
-            incoming_queue.calls.append(&mut calls.into());
+            incoming_queue.calls.push_back(CallInfo { data, context });
 
             measure_gauge!("incoming_queue_size", incoming_queue.calls.len());
         }

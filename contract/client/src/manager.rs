@@ -3,6 +3,9 @@ use std;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
+use rustracing::tag;
+use rustracing_jaeger::span::SpanHandle;
+use rustracing_jaeger::Tracer;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -57,6 +60,8 @@ struct Inner {
 /// The manager handles things like leader discovery and epoch transitions.
 pub struct ContractClientManager {
     inner: Arc<Inner>,
+    /// Object used for tracing.
+    tracer: Tracer,
 }
 
 impl ContractClientManager {
@@ -69,6 +74,7 @@ impl ContractClientManager {
         entity_registry: Arc<EntityRegistryBackend>,
         roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
+        tracer: Tracer,
     ) -> Self {
         let call_wait_manager = Arc::new(super::callwait::Manager::new(
             environment.clone(),
@@ -90,6 +96,7 @@ impl ContractClientManager {
                 future_leader: future_leader.shared(),
                 leader_notify: Mutex::new(Some(leader_notify)),
             }),
+            tracer,
         };
         manager.start();
 
@@ -202,7 +209,12 @@ impl ContractClientManager {
     }
 
     /// Queue a contract call to the current leader, waiting if there isn't a leader yet.
-    fn call_leader<C, O>(inner: Arc<Inner>, method: &str, arguments: C) -> BoxFuture<O>
+    fn call_leader<C, O>(
+        inner: Arc<Inner>,
+        method: &str,
+        arguments: C,
+        sh: SpanHandle,
+    ) -> BoxFuture<O>
     where
         C: Serialize + Send + 'static,
         O: DeserializeOwned + Send + 'static,
@@ -210,7 +222,7 @@ impl ContractClientManager {
         let leader = inner.leader.read().unwrap();
 
         match *leader {
-            Some(ref leader) => leader.client.call(method, arguments),
+            Some(ref leader) => leader.client.call(method, arguments, sh),
             None => {
                 // No leader yet, we need to wait for the leader and then make the call.
                 let method = method.to_owned();
@@ -219,7 +231,7 @@ impl ContractClientManager {
                     .future_leader
                     .clone()
                     .map_err(|error| error.into())
-                    .and_then(move |leader| leader.client.call(&method, arguments))
+                    .and_then(move |leader| leader.client.call(&method, arguments, sh))
                     .into_box()
             }
         }
@@ -231,15 +243,24 @@ impl ContractClientManager {
         C: Serialize + Send + Clone + 'static,
         O: DeserializeOwned + Send + 'static,
     {
+        let span = self.tracer
+            .span("client_manager_call")
+            .tag(tag::Tag::new("ekiden.contract_method", method))
+            .start();
+        let sh = span.handle();
         let inner = self.inner.clone();
         retry_until_ok_or_max(
-            move || Self::call_leader(inner.clone(), method, arguments.clone()),
+            move || Self::call_leader(inner.clone(), method, arguments.clone(), sh.clone()),
             |error| error.message == ContractClient::SHUTDOWN_REASON_TRANSITION,
             // If the network latency and time needed to process the call is short compared to the
             // epoch interval, it is improbable for two consecutive attempts both to be
             // interrupted, so one retry is sufficient. If not, then a retry is not likely to
             // succeed either.
             1,
-        ).into_box()
+        ).then(|result| {
+            drop(span);
+            result
+        })
+            .into_box()
     }
 }

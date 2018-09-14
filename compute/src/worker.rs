@@ -9,6 +9,8 @@ use std::time::Duration;
 
 use protobuf;
 use protobuf::Message;
+use rustracing::tag;
+use rustracing_jaeger::span::SpanHandle;
 use thread_local::ThreadLocal;
 
 use ekiden_core::bytes::H256;
@@ -50,7 +52,12 @@ enum Command {
     /// RPC call from a client.
     RpcCall(Vec<u8>, BytesSender),
     /// Contract call batch process request.
-    ContractCallBatch(CallBatch, Block, oneshot::Sender<Result<ComputedBatch>>),
+    ContractCallBatch(
+        CallBatch,
+        Block,
+        oneshot::Sender<Result<ComputedBatch>>,
+        SpanHandle,
+    ),
 }
 
 struct WorkerInner {
@@ -120,10 +127,12 @@ impl WorkerInner {
         (contract, identity_proof)
     }
 
+    /// `handle_sh` is from when we handled the CallContractBatch command.
     fn call_contract_batch_fallible(
         &mut self,
         batch: &CallBatch,
         block: &Block,
+        handle_sh: SpanHandle,
     ) -> Result<(OutputBatch, H256)> {
         measure_histogram!("contract_call_batch_size", batch.len());
 
@@ -134,20 +143,25 @@ impl WorkerInner {
         ));
 
         let root_hash = &block.header.state_root;
+        let enclave_sh;
 
-        // Run in storage context.
-        let (new_state_root, outputs) =
+        let (new_state_root, outputs) = {
+            measure_histogram_timer!("contract_call_batch_enclave_time");
+            let span = handle_sh.child("call_contract_batch_enclave", |sso| sso.start());
+            enclave_sh = span.handle();
+
+            // Run in storage context.
             self.contract
                 .with_storage(batch_storage.clone(), root_hash, || {
-                    measure_histogram_timer!("contract_call_batch_enclave_time");
-
                     // Execute batch.
                     self.contract.contract_call_batch(batch, &block.header)
-                })?;
+                })?
+        };
 
         // Commit batch storage.
         {
             measure_histogram_timer!("contract_call_storage_commit_time");
+            let _span = enclave_sh.follower("contract_call_storage_commit", |sso| sso.start());
             batch_storage.flush().wait()?;
         }
 
@@ -179,13 +193,18 @@ impl WorkerInner {
     }
 
     /// Handle contract call batch.
+    /// `sh` is from when we submitted the CallContractBatch command.
     fn handle_contract_batch(
         &mut self,
         calls: CallBatch,
         block: Block,
         sender: oneshot::Sender<Result<ComputedBatch>>,
+        sh: SpanHandle,
     ) {
-        let result = self.call_contract_batch_fallible(&calls, &block);
+        let span = sh.follower("handle_contract_batch", |sso| {
+            sso.tag(tag::StdTag::span_kind("consumer")).start()
+        });
+        let result = self.call_contract_batch_fallible(&calls, &block, span.handle());
 
         match result {
             Ok((outputs, new_state_root)) => {
@@ -219,9 +238,9 @@ impl WorkerInner {
 
                     measure_counter_inc!("rpc_call_processed");
                 }
-                Command::ContractCallBatch(calls, block, sender) => {
+                Command::ContractCallBatch(calls, block, sender, sh) => {
                     // Process batch of contract calls.
-                    self.handle_contract_batch(calls, block, sender);
+                    self.handle_contract_batch(calls, block, sender, sh);
 
                     measure_counter_inc!("contract_call_processed");
                 }
@@ -297,12 +316,21 @@ impl Worker {
         &self,
         calls: CallBatch,
         block: Block,
+        sh: SpanHandle,
     ) -> oneshot::Receiver<Result<ComputedBatch>> {
         measure_counter_inc!("contract_call_request");
+        let span = sh.child("send_contract_call_batch", |sso| {
+            sso.tag(tag::StdTag::span_kind("producer")).start()
+        });
 
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
-            .send(Command::ContractCallBatch(calls, block, response_sender))
+            .send(Command::ContractCallBatch(
+                calls,
+                block,
+                response_sender,
+                span.handle(),
+            ))
             .unwrap();
 
         response_receiver

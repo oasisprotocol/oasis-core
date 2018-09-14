@@ -6,6 +6,7 @@ pub use ekiden_core::bytes::B256;
 pub use ekiden_core::enclave::quote::MrEnclave;
 pub use ekiden_instrumentation::set_boxed_metric_collector;
 pub use ekiden_instrumentation::MetricCollector;
+pub use ekiden_tracing::report_forever;
 
 #[macro_export]
 macro_rules! default_app {
@@ -61,6 +62,9 @@ macro_rules! contract_client {
             $crate::macros::set_boxed_metric_collector(metrics).unwrap();
         }
 
+        // Initialize tracing.
+        let tracer = $crate::macros::report_forever("contract-client");
+
         $contract::Client::new(
             $crate::args::get_contract_id(&$args),
             value_t_or_exit!($args, "mr-enclave", MrEnclave),
@@ -77,6 +81,7 @@ macro_rules! contract_client {
             $container.inject().unwrap(),
             $container.inject().unwrap(),
             $container.inject().unwrap(),
+            tracer,
         )
     }};
     ($contract:ident) => {{

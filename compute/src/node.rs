@@ -4,6 +4,7 @@ use std::process::abort;
 use std::sync::Arc;
 
 use grpcio;
+use rustracing_jaeger::Tracer;
 
 use ekiden_compute_api;
 use ekiden_core::bytes::B256;
@@ -71,7 +72,11 @@ pub struct ComputeNode {
 
 impl ComputeNode {
     /// Create new compute node.
-    pub fn new(config: ComputeNodeConfiguration, mut container: Container) -> Result<Self> {
+    pub fn new(
+        config: ComputeNodeConfiguration,
+        mut container: Container,
+        tracer: Tracer,
+    ) -> Result<Self> {
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias)?);
 
@@ -181,6 +186,7 @@ impl ComputeNode {
             roothash_backend.clone(),
             roothash_signer.clone(),
             storage_backend.clone(),
+            tracer.clone(),
         ));
 
         // Create compute node gRPC server.
@@ -188,8 +194,10 @@ impl ComputeNode {
 
         let enclave_rpc_service =
             ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(worker));
-        let contract_service =
-            ekiden_compute_api::create_contract(ContractService::new(roothash_frontend.clone()));
+        let contract_service = ekiden_compute_api::create_contract(ContractService::new(
+            roothash_frontend.clone(),
+            tracer,
+        ));
         let inter_node_service = ekiden_compute_api::create_computation_group(
             ComputationGroupService::new(roothash_frontend.clone()),
         );
