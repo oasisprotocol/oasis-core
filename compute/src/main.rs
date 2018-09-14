@@ -247,7 +247,7 @@ fn main() {
     set_boxed_metric_collector(metrics).unwrap();
 
     // Initialize tracing.
-    let tracer = ekiden_tracing::report_forever("ekiden-compute");
+    ekiden_tracing::report_forever("ekiden-compute");
 
     let environment = container.inject::<Environment>().unwrap();
 
@@ -322,7 +322,6 @@ fn main() {
             },
         },
         container,
-        tracer,
     ).expect("failed to initialize compute node");
 
     // Start compute node.

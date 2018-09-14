@@ -62,9 +62,6 @@ macro_rules! contract_client {
             $crate::macros::set_boxed_metric_collector(metrics).unwrap();
         }
 
-        // Initialize tracing.
-        let tracer = $crate::macros::report_forever("contract-client");
-
         $contract::Client::new(
             $crate::args::get_contract_id(&$args),
             value_t_or_exit!($args, "mr-enclave", MrEnclave),
@@ -81,7 +78,6 @@ macro_rules! contract_client {
             $container.inject().unwrap(),
             $container.inject().unwrap(),
             $container.inject().unwrap(),
-            tracer,
         )
     }};
     ($contract:ident) => {{
@@ -94,6 +90,9 @@ macro_rules! contract_client {
         let mut container = known_components
             .build_with_arguments(&args)
             .expect("failed to initialize component container");
+
+        // Initialize tracing.
+        $crate::macros::report_forever("contract-client");
 
         contract_client!($contract, args, container)
     }};
@@ -153,6 +152,9 @@ macro_rules! benchmark_app {
         $crate::macros::set_boxed_metric_collector(metrics).unwrap();
 
         let container = Arc::new(Mutex::new(container));
+
+        // Initialize tracing.
+        $crate::macros::report_forever("contract-client");
 
         (args, container)
     }};

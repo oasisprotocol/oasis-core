@@ -5,10 +5,10 @@ use grpcio;
 use grpcio::{RpcStatus, RpcStatusCode};
 use rustracing::tag;
 use rustracing_jaeger::span::SpanContext;
-use rustracing_jaeger::Tracer;
 
 use ekiden_compute_api::{Contract, SubmitTxRequest, SubmitTxResponse};
 use ekiden_core::futures::prelude::*;
+use ekiden_tracing;
 use ekiden_tracing::MetadataCarrier;
 
 use super::super::roothash::RootHashFrontend;
@@ -21,15 +21,13 @@ struct ContractServiceInner {
 #[derive(Clone)]
 pub struct ContractService {
     inner: Arc<ContractServiceInner>,
-    tracer: Tracer,
 }
 
 impl ContractService {
     /// Create new compute server instance.
-    pub fn new(roothash_frontend: Arc<RootHashFrontend>, tracer: Tracer) -> Self {
+    pub fn new(roothash_frontend: Arc<RootHashFrontend>) -> Self {
         ContractService {
             inner: Arc::new(ContractServiceInner { roothash_frontend }),
-            tracer,
         }
     }
 }
@@ -43,7 +41,8 @@ impl Contract for ContractService {
     ) {
         measure_histogram_timer!("submit_tx_time");
         measure_counter_inc!("submit_tx_calls");
-        let mut sso = self.tracer
+        let tracer = ekiden_tracing::get_tracer();
+        let mut sso = tracer
             .span("submit_tx")
             .tag(tag::StdTag::span_kind("server"));
         match SpanContext::extract_from_http_header(&MetadataCarrier(ctx.request_headers())) {

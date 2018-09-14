@@ -2,13 +2,14 @@
 name = "ekiden-tracing"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
-description = "Shared initialization routines related to tracing"
+description = "Shared ownership and routines related to tracing"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 clap = "2.29.1"
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+lazy_static = "1.0"
 log = "0.4"
 rustracing = "0.1.7"
 rustracing_jaeger = "0.1.7"

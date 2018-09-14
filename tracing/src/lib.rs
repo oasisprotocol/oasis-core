@@ -1,16 +1,25 @@
 #![feature(use_extern_macros)]
 
+use std::sync::Mutex;
+
 extern crate grpcio;
+extern crate lazy_static;
+use lazy_static::lazy_static;
 extern crate log;
 use log::error;
 extern crate rustracing;
 extern crate rustracing_jaeger;
+use rustracing_jaeger::Tracer;
 extern crate trackable;
 use trackable::error::ErrorKindExt;
 use trackable::track;
 
-pub fn report_forever(service_name: &str) -> rustracing_jaeger::Tracer {
-    let (tracer, span_rx) = rustracing_jaeger::Tracer::new(rustracing::sampler::AllSampler);
+lazy_static! {
+    static ref GLOBAL_TRACER: Mutex<Option<Tracer>> = Mutex::new(None);
+}
+
+pub fn report_forever(service_name: &str) {
+    let (tracer, span_rx) = Tracer::new(rustracing::sampler::AllSampler);
     let reporter = rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name).unwrap();
 
     std::thread::spawn(move || {
@@ -21,7 +30,18 @@ pub fn report_forever(service_name: &str) -> rustracing_jaeger::Tracer {
             }
         }
     });
-    tracer
+
+    let mut guard = GLOBAL_TRACER.lock().unwrap();
+    assert!(guard.is_none(), "Reinitializing tracer");
+    *guard = Some(tracer);
+}
+
+pub fn get_tracer() -> Tracer {
+    GLOBAL_TRACER
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("Getting tracer before initialization")
 }
 
 pub struct MetadataBuilderCarrier(pub grpcio::MetadataBuilder);

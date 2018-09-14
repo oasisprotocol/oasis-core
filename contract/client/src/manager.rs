@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
-use rustracing_jaeger::Tracer;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -23,6 +22,7 @@ use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_roothash_base::backend::RootHashBackend;
 use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
+use ekiden_tracing;
 
 use super::client::ContractClient;
 
@@ -60,8 +60,6 @@ struct Inner {
 /// The manager handles things like leader discovery and epoch transitions.
 pub struct ContractClientManager {
     inner: Arc<Inner>,
-    /// Object used for tracing.
-    tracer: Tracer,
 }
 
 impl ContractClientManager {
@@ -74,7 +72,6 @@ impl ContractClientManager {
         entity_registry: Arc<EntityRegistryBackend>,
         roothash: Arc<RootHashBackend>,
         storage: Arc<StorageBackend>,
-        tracer: Tracer,
     ) -> Self {
         let call_wait_manager = Arc::new(super::callwait::Manager::new(
             environment.clone(),
@@ -96,7 +93,6 @@ impl ContractClientManager {
                 future_leader: future_leader.shared(),
                 leader_notify: Mutex::new(Some(leader_notify)),
             }),
-            tracer,
         };
         manager.start();
 
@@ -243,7 +239,7 @@ impl ContractClientManager {
         C: Serialize + Send + Clone + 'static,
         O: DeserializeOwned + Send + 'static,
     {
-        let span = self.tracer
+        let span = ekiden_tracing::get_tracer()
             .span("client_manager_call")
             .tag(tag::Tag::new("ekiden.contract_method", method))
             .start();

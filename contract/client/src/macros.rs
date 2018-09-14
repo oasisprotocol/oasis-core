@@ -61,7 +61,6 @@ macro_rules! create_contract_client {
                     entity_registry: Arc<EntityRegistryBackend>,
                     roothash: Arc<RootHashBackend>,
                     storage: Arc<StorageBackend>,
-                    tracer: Tracer,
                 ) -> Self {
                     Client {
                         manager: ContractClientManager::new(
@@ -73,7 +72,6 @@ macro_rules! create_contract_client {
                             entity_registry,
                             roothash,
                             storage,
-                            tracer,
                         ),
                     }
                 }

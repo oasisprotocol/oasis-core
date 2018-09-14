@@ -11,7 +11,6 @@ use rustracing::tag;
 use rustracing_jaeger::span::SpanContext;
 use rustracing_jaeger::span::SpanHandle;
 use rustracing_jaeger::Span;
-use rustracing_jaeger::Tracer;
 use serde_cbor;
 
 use ekiden_core::bytes::{B256, H256};
@@ -26,6 +25,7 @@ use ekiden_core::uint::U256;
 use ekiden_roothash_base::{Block, Event, Header, RootHashBackend, RootHashSigner};
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_tracing;
 
 use super::group::ComputationGroup;
 use super::worker::{ComputedBatch, Worker};
@@ -286,8 +286,6 @@ struct Inner {
     test_only_config: RootHashTestOnlyConfiguration,
     /// Notify incoming queue.
     incoming_queue_notified: AtomicBool,
-    /// Object used for tracing.
-    tracer: Mutex<Tracer>,
 }
 
 /// Root hash frontend test-only configuration.
@@ -326,7 +324,6 @@ impl RootHashFrontend {
         backend: Arc<RootHashBackend>,
         signer: Arc<RootHashSigner>,
         storage: Arc<StorageBackend>,
-        tracer: Tracer,
     ) -> Self {
         measure_configure!(
             "batch_insert_size",
@@ -363,7 +360,6 @@ impl RootHashFrontend {
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 test_only_config: config.test_only.clone(),
                 incoming_queue_notified: AtomicBool::new(false),
-                tracer: Mutex::new(tracer),
             }),
         };
         instance.start();
@@ -760,7 +756,7 @@ impl RootHashFrontend {
         };
 
         if should_process {
-            let tracer = inner.tracer.lock().unwrap().clone();
+            let tracer = ekiden_tracing::get_tracer();
             let mut sso = Some(
                 tracer
                     .span("process_incoming_queue")
