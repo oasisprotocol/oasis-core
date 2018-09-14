@@ -9,6 +9,9 @@ members = [
     "instrumentation",
     "instrumentation/prometheus",
 
+    # Tracing.
+    "tracing",
+
     # Common.
     "common",
     "common/api",
