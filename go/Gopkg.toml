@@ -35,7 +35,8 @@
 
 [[constraint]]
   name = "github.com/tendermint/iavl"
-  version = "0.11.0"
+  source = "https://github.com/oasislabs/iavl"
+  version = "=0.11.0-ekiden1"
 
 [[constraint]]
   name = "github.com/tendermint/tendermint"
@@ -84,7 +85,7 @@
 
 [[override]]
   name = "github.com/tendermint/iavl"
-  version = "0.11.0"
+  version = "=0.11.0-ekiden1"
 
 [[override]]
   name = "github.com/tendermint/tendermint"
