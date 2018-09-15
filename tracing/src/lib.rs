@@ -19,7 +19,7 @@ lazy_static! {
 }
 
 pub fn report_forever(service_name: &str) {
-    let (tracer, span_rx) = Tracer::new(rustracing::sampler::AllSampler);
+    let (tracer, span_rx) = Tracer::new(rustracing::sampler::ProbabilisticSampler::new(0.001).unwrap());
     let reporter = rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name).unwrap();
 
     std::thread::spawn(move || {
