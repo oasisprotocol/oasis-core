@@ -6,6 +6,7 @@ pub use ekiden_core::bytes::B256;
 pub use ekiden_core::enclave::quote::MrEnclave;
 pub use ekiden_instrumentation::set_boxed_metric_collector;
 pub use ekiden_instrumentation::MetricCollector;
+pub use ekiden_tracing::get_arguments as get_tracing_arguments;
 pub use ekiden_tracing::report_forever;
 
 #[macro_export]
@@ -49,6 +50,7 @@ macro_rules! default_app {
                     .help("Mark nodes that take longer than this many seconds as failed")
                     .takes_value(true),
             )
+            .args(&$crate::macros::get_tracing_arguments())
     }};
 }
 
@@ -92,7 +94,7 @@ macro_rules! contract_client {
             .expect("failed to initialize component container");
 
         // Initialize tracing.
-        $crate::macros::report_forever("contract-client");
+        $crate::macros::report_forever("contract-client", &args);
 
         contract_client!($contract, args, container)
     }};
@@ -154,7 +156,7 @@ macro_rules! benchmark_app {
         let container = Arc::new(Mutex::new(container));
 
         // Initialize tracing.
-        $crate::macros::report_forever("contract-client");
+        $crate::macros::report_forever("contract-client", &args);
 
         (args, container)
     }};

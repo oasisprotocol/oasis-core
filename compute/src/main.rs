@@ -217,6 +217,7 @@ fn main() {
                 .hidden(true)
         )
         .args(&known_components.get_arguments())
+        .args(&ekiden_tracing::get_arguments())
         .get_matches();
 
     // Initialize logger.
@@ -247,7 +248,7 @@ fn main() {
     set_boxed_metric_collector(metrics).unwrap();
 
     // Initialize tracing.
-    ekiden_tracing::report_forever("ekiden-compute");
+    ekiden_tracing::report_forever("ekiden-compute", &matches);
 
     let environment = container.inject::<Environment>().unwrap();
 

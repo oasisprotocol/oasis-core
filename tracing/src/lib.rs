@@ -2,6 +2,8 @@
 
 use std::sync::Mutex;
 
+extern crate clap;
+use clap::value_t_or_exit;
 extern crate grpcio;
 extern crate lazy_static;
 use lazy_static::lazy_static;
@@ -14,23 +16,47 @@ extern crate trackable;
 use trackable::error::ErrorKindExt;
 use trackable::track;
 
+pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
+    vec![
+        clap::Arg::with_name("tracing-enable").long("tracing-enable"),
+        clap::Arg::with_name("tracing-sample-probability")
+            .long("tracing-probability")
+            .takes_value(true)
+            .default_value("0.001")
+            .requires("tracing-enable"),
+    ]
+}
+
 lazy_static! {
     static ref GLOBAL_TRACER: Mutex<Option<Tracer>> = Mutex::new(None);
 }
 
-pub fn report_forever(service_name: &str) {
-    let (tracer, span_rx) = Tracer::new(rustracing::sampler::ProbabilisticSampler::new(0.001).unwrap());
-    let reporter = rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name).unwrap();
+pub fn report_forever(service_name: &str, matches: &clap::ArgMatches) {
+    let tracer = if matches.is_present("tracing-enable") {
+        let (tracer, span_rx) = Tracer::new(
+            rustracing::sampler::ProbabilisticSampler::new(value_t_or_exit!(
+                matches,
+                "tracing-sample-probability",
+                f64
+            )).unwrap(),
+        );
+        let reporter =
+            rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name).unwrap();
 
-    std::thread::spawn(move || {
-        // TODO: is it better to batch these?
-        for span in span_rx {
-            if let Err(error) = reporter.report(&[span]) {
-                error!("Failed to report span: {:?}", error);
+        std::thread::spawn(move || {
+            // TODO: is it better to batch these?
+            for span in span_rx {
+                if let Err(error) = reporter.report(&[span]) {
+                    error!("Failed to report span: {:?}", error);
+                }
             }
-        }
-    });
-
+        });
+        tracer
+    } else {
+        let (tracer, _span_rx) = Tracer::new(rustracing::sampler::NullSampler);
+        // Drop the span receiver, and spans will fail to send themselves and ignore the error.
+        tracer
+    };
     let mut guard = GLOBAL_TRACER.lock().unwrap();
     assert!(guard.is_none(), "Reinitializing tracer");
     *guard = Some(tracer);
