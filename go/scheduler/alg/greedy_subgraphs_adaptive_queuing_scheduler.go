@@ -167,6 +167,6 @@ TransactionLoop:
 	// filtration.
 	outGraphs = outGraphs[1:]
 	// sort result in estimated execution time order, highest first
-	sort.Sort(subgraphOrder(outGraphs))
+	sort.Stable(subgraphOrder(outGraphs))
 	return outGraphs
 }

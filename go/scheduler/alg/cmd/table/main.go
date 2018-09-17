@@ -25,9 +25,11 @@ import (
 	"github.com/oasislabs/ekiden/go/scheduler/alg/simulator"
 )
 
+var averageNumSample int
 var iterationOrder string
 
 func init() {
+	flag.IntVar(&averageNumSample, "average-samples", 1, "compute speedup by averaging over this many runs")
 	flag.StringVar(&iterationOrder, "iteration-order", "", "comma-separated list specifying the iteration order")
 }
 
@@ -122,6 +124,8 @@ func main() {
 	// Print out all simulation parameters
 	if simulator.Verbosity > 0 {
 		simulator.ShowConfigFlags(bw, *dcnf, *acnf, *lcnf, *scnf, *xcnf)
+		fmt.Fprintf(bw, "\naverage-samples = %d\n", averageNumSample)
+		fmt.Fprintf(bw, "iteration-order = \"%s\"\n", iterationOrder)
 		if bw.Flush() != nil {
 			panic("I/O error for simulation configuration output")
 		}
@@ -159,15 +163,21 @@ func main() {
 			}
 		}
 
-		res := simulator.RunSimulationWithConfigs(*dcnf, *acnf, *lcnf, *scnf, *xcnf, bw)
-		speedup := float64(res.LinearExecutionTime) / float64(res.ActualExecutionTime)
+		speedupSum := 0.0
+		var res simulator.SimulationResults
+		for sample := 0; sample < averageNumSample; sample++ {
+			res = simulator.RunSimulationWithConfigs(dcnf, acnf, lcnf, scnf, xcnf, bw)
+			speedup := float64(res.LinearExecutionTime) / float64(res.ActualExecutionTime)
+			speedupSum += speedup
+		}
+		avgSpeedup := speedupSum / float64(averageNumSample)
 		if simulator.Verbosity > 1 {
 			_, _ = fmt.Fprintf(bw, "Linear execution time:    %8d\n", res.LinearExecutionTime)
 			_, _ = fmt.Fprintf(bw, "Actual execution time:    %8d\n", res.ActualExecutionTime)
-			_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", speedup)
+			_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", avgSpeedup)
 			_, _ = fmt.Fprintf(bw, "Number of schedules:      %8d\n", res.NumberOfSchedules)
 		}
-		data[numVarying] = fmt.Sprintf("%*.*g", colWidth, precision, speedup)
+		data[numVarying] = fmt.Sprintf("%*.*g", colWidth, precision, avgSpeedup)
 
 		printFields(bw, data, colWidth)
 		if bw.Flush() != nil {

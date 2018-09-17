@@ -157,3 +157,21 @@ func TestLocationSetFind(t *testing.T) {
 		return loc.(TestLocation) == 11
 	}))
 }
+
+func TestLocationSetConsistentFind(t *testing.T) {
+	assert := assert.New(t)
+	ls, err := LocationSetFromString(TestLocation(0), "{11, 9, 7, 5, 3, 1}")
+	assert.NoError(err, "TestLocationSetFind setup failed")
+	assert.True(ls.ConsistentFind(func(loc Location) bool {
+		return loc.(TestLocation) == 5
+	}))
+	assert.False(ls.ConsistentFind(func(loc Location) bool {
+		return loc.(TestLocation) == 6
+	}))
+	assert.True(ls.ConsistentFind(func(loc Location) bool {
+		return loc.(TestLocation) == 1
+	}))
+	assert.True(ls.ConsistentFind(func(loc Location) bool {
+		return loc.(TestLocation) == 11
+	}))
+}

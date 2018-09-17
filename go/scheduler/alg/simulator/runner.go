@@ -43,6 +43,7 @@ type SimulationResults struct {
 // the config value(s) appropriate for the selected TransactionSource.
 type DistributionConfig struct {
 	seed             int64
+	seedRng          *rand.Rand
 	distributionName string
 	inputFile        string // "-" means standard input
 	outputFile       string
@@ -82,6 +83,7 @@ func (dcnf *DistributionConfig) UpdateAndCheckDefaults() {
 	if dcnf.seed == 0 {
 		dcnf.seed = time.Now().UTC().UnixNano()
 	}
+	dcnf.seedRng = rand.New(rand.NewSource(dcnf.seed))
 	if dcnf.inputFile != "" {
 		if dcnf.distributionName == "" || dcnf.distributionName == useInput {
 			dcnf.distributionName = useInput
@@ -117,6 +119,7 @@ var DistributionConfigFromFlags DistributionConfig
 // inject DOS transactions that contain (maximally) conflicting read/write-set locations.
 type AdversaryConfig struct {
 	seed            int64
+	seedRng         *rand.Rand
 	injectionProb   float64
 	targetFrac      float64
 	readFrac        float64
@@ -147,6 +150,7 @@ func (acnf *AdversaryConfig) UpdateAndCheckDefaults() {
 	if acnf.seed == 0 {
 		acnf.seed = time.Now().UTC().UnixNano()
 	}
+	acnf.seedRng = rand.New(rand.NewSource(acnf.seed))
 	if acnf.injectionProb < 0 || 1.0 <= acnf.injectionProb {
 		panic(fmt.Sprintf("dos-injection-prob has to be in [0,1)."))
 	}
@@ -174,6 +178,7 @@ var AdversaryConfigFromFlags AdversaryConfig
 // performs sharding.
 type LogicalShardingConfig struct {
 	seed        int64
+	seedRng     *rand.Rand
 	shardTopN   int
 	shardFactor int
 }
@@ -192,6 +197,7 @@ func (lcnf *LogicalShardingConfig) UpdateAndCheckDefaults() {
 	if lcnf.seed == 0 {
 		lcnf.seed = time.Now().UTC().UnixNano()
 	}
+	lcnf.seedRng = rand.New(rand.NewSource(lcnf.seed))
 }
 
 // LogicalShardingConfigFromFlags is the logical sharding filter configurations as set by
@@ -291,28 +297,28 @@ func init() {
 		"read transactions from file instead of generating")
 	flag.StringVar(&DistributionConfigFromFlags.outputFile, "output", "",
 		"write transactions to file in addition to scheduling")
-	iterflag.Float64Var(&DistributionConfigFromFlags.alpha, "alpha", 1.0, 0.0, 0.0,
+	iterflag.Float64Var(&DistributionConfigFromFlags.alpha, "alpha", 0.6, 1.001, 0.2,
 		"zipf distribution alpha parameter")
 	// For the Ethereum world, the number of possible locations is 2^{160+256}, but it is
 	// extremely sparse.  Furthermore, many locations are in (pseudo) equivalence classes,
 	// i.e., if a contract reads one of the locations, then it is almost certainly going to
 	// read the rest, and similarly for writes.
 	iterflag.IntVar(&DistributionConfigFromFlags.numLocations, "num-locations",
-		1000000, 0, 0, "number of possible memory locations")
+		1000000, 1000000, 0, "number of possible memory locations")
 	iterflag.IntVar(&DistributionConfigFromFlags.numReadLocs, "num-reads", 0, 0, 0,
 		"number of read locations in a transaction")
-	iterflag.IntVar(&DistributionConfigFromFlags.numWriteLocs, "num-writes", 2, 0, 0,
+	iterflag.IntVar(&DistributionConfigFromFlags.numWriteLocs, "num-writes", 2, 2, 0,
 		"number of write locations in a transaction")
 	iterflag.IntVar(&DistributionConfigFromFlags.numTransactions, "num-transactions",
-		1000000, 0, 0, "number of transactions to generate")
+		1000000, 1000000, 0, "number of transactions to generate")
 
 	// Adversary configuration parameters
 
 	flag.Int64Var(&AdversaryConfigFromFlags.seed, "dos-seed", 0, "seed for rng used to randomize DOS-spam adversary actions")
 	iterflag.Float64Var(&AdversaryConfigFromFlags.injectionProb, "dos-injection-prob", 0.0, 0.0, 0.0, "probability of deciding to inject (possibly many) DOS transactions (0 disables adversary)")
-	iterflag.Float64Var(&AdversaryConfigFromFlags.targetFrac, "dos-target-fraction", 0.9, 0.0, 0.0, "fraction of DOS addresses that will be attacked")
+	iterflag.Float64Var(&AdversaryConfigFromFlags.targetFrac, "dos-target-fraction", 0.9, 0.9, 0.0, "fraction of DOS addresses that will be attacked")
 	iterflag.Float64Var(&AdversaryConfigFromFlags.readFrac, "dos-read-fraction", 0.0, 0.0, 0.0, "fraction of DOS addresses under attack that go to the read set (rest go to the write set)")
-	iterflag.IntVar(&AdversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, 0, 0, "number of DOS transactions to inject, once decision to DOS spam is made")
+	iterflag.IntVar(&AdversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, 100, 0, "number of DOS transactions to inject, once decision to DOS spam is made")
 	flag.StringVar(&AdversaryConfigFromFlags.targetAddresses, "dos-target-addresses", "0:15,128:131", "comma-separated list of integers or start-end integer ranges")
 	flag.IntVar(&AdversaryConfigFromFlags.seqno, "dos-seqno", 1000000, "starting seqno/id for DOS spam transactions")
 
@@ -320,27 +326,27 @@ func init() {
 
 	flag.Int64Var(&LogicalShardingConfigFromFlags.seed, "shard-seed", 0,
 		"pseudorandom number generator seed for logical sharding filter (default: UnixNano)")
-	iterflag.IntVar(&LogicalShardingConfigFromFlags.shardTopN, "shard-top", 0, 16, 4,
+	iterflag.IntVar(&LogicalShardingConfigFromFlags.shardTopN, "shard-top", 0, 33, 8,
 		"shard the highest <shard-top> probable locations")
-	iterflag.IntVar(&LogicalShardingConfigFromFlags.shardFactor, "shard-factor", 16, 0, 0,
+	iterflag.IntVar(&LogicalShardingConfigFromFlags.shardFactor, "shard-factor", 16, 16, 0,
 		"number of new (negative) shards per original location")
 
 	// Scheduler configuration parameters
 
-	flag.StringVar(&SchedulerConfigFromFlags.name, "scheduler", "greedy-subgraph",
-		"scheduling algorithm (greedy-subgraph)")
-	iterflag.IntVar(&SchedulerConfigFromFlags.maxPending, "max-pending", -1, 0, 0,
+	flag.StringVar(&SchedulerConfigFromFlags.name, "scheduler", "greedy-subgraph-adaptive",
+		"scheduling algorithm (greedy-subgraph or greedy-subgraph-adaptive)")
+	iterflag.IntVar(&SchedulerConfigFromFlags.maxPending, "max-pending", -1, -1, 0,
 		"run scheduling when there are this many transactions (-1 means 2 * max-time * num-committees); for the greedy-subgraph-adaptive algorithm, this is just the initial value and will be dynamically adjusted")
 	iterflag.Float64Var(&SchedulerConfigFromFlags.excessFraction, "excess-fraction",
-		0.2, 0.0, 0.0,
+		0.2, 0.2, 0.0,
 		"additional fraction of actual number of transactions scheduled in previous batch to use for max-pending for the next batch")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
-	iterflag.IntVar(&SchedulerConfigFromFlags.maxTime, "max-subgraph-time", 20, 0, 0,
+	iterflag.IntVar(&SchedulerConfigFromFlags.maxTime, "max-subgraph-time", 20, 20, 0,
 		"disallow adding to a subgraph if the total estimated execution time would exceed this")
 
 	// Execution Committees configuration parameters
-	iterflag.IntVar(&ExecutionConfigFromFlags.numCommittees, "num-committees", 40, 0, 0,
+	iterflag.IntVar(&ExecutionConfigFromFlags.numCommittees, "num-committees", 50, 451, 100,
 		"number of execution committees")
 }
 
@@ -365,7 +371,7 @@ func ShowConfigFlags(bw io.Writer, dcnf DistributionConfig, acnf AdversaryConfig
 // transactionSourceFactory consults the DistributionConfig arg to build and return a
 // TransactionSource, which may be from a canned input data file, from random generator of
 // transactions (with various memory access distributions), etc.
-func transactionSourceFactory(cnf DistributionConfig) TransactionSource {
+func transactionSourceFactory(cnf *DistributionConfig) TransactionSource {
 	var err error
 	if cnf.distributionName == useInput {
 		var fts TransactionSource
@@ -378,12 +384,13 @@ func transactionSourceFactory(cnf DistributionConfig) TransactionSource {
 
 	var rg randgen.Rng
 
+	rng := rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
 	if cnf.distributionName == "uniform" {
-		if rg, err = randgen.NewUniform(cnf.numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
+		if rg, err = randgen.NewUniform(cnf.numLocations, rng); err != nil {
 			panic(err.Error())
 		}
 	} else if cnf.distributionName == "zipf" {
-		if rg, err = randgen.NewZipf(cnf.alpha, cnf.numLocations, rand.New(rand.NewSource(cnf.seed))); err != nil {
+		if rg, err = randgen.NewZipf(cnf.alpha, cnf.numLocations, rng); err != nil {
 			panic(err.Error())
 		}
 	} else {
@@ -392,15 +399,16 @@ func transactionSourceFactory(cnf DistributionConfig) TransactionSource {
 	return NewRandomDistributionTransactionSource(cnf.numTransactions, cnf.numReadLocs, cnf.numWriteLocs, rg)
 }
 
-func adversaryFactory(acnf AdversaryConfig, ts TransactionSource) TransactionSource {
+func adversaryFactory(acnf *AdversaryConfig, ts TransactionSource) TransactionSource {
 	if acnf.injectionProb == 0.0 {
 		if Verbosity > 2 {
 			fmt.Printf("No Adversarial transactions will be injected\n")
 		}
 		return ts
 	}
+	seed := int64(acnf.seedRng.Uint64())
 	ats, err := NewAdversarialTransactionSource(
-		acnf.seed,
+		seed,
 		acnf.injectionProb,
 		acnf.targetFrac,
 		acnf.readFrac,
@@ -416,7 +424,7 @@ func adversaryFactory(acnf AdversaryConfig, ts TransactionSource) TransactionSou
 	return ats
 }
 
-func schedulerFactory(scnf SchedulerConfig) alg.Scheduler {
+func schedulerFactory(scnf *SchedulerConfig) alg.Scheduler {
 	if scnf.name == "greedy-subgraph-adaptive" {
 		return alg.NewGreedySubgraphsAdaptiveQueuingScheduler(scnf.maxPending, scnf.excessFraction, alg.ExecutionTime(scnf.maxTime))
 	} else if scnf.name == "greedy-subgraph" {
@@ -460,11 +468,11 @@ func (h *committeeMemberHeap) Pop() interface{} {
 //
 // nolint: gocyclo
 func RunSimulationWithConfigs(
-	dcnf DistributionConfig,
-	acnf AdversaryConfig,
-	lscnf LogicalShardingConfig,
-	scnf SchedulerConfig,
-	xcnf ExecutionConfig,
+	dcnf *DistributionConfig,
+	acnf *AdversaryConfig,
+	lcnf *LogicalShardingConfig,
+	scnf *SchedulerConfig,
+	xcnf *ExecutionConfig,
 	bw *bufio.Writer) SimulationResults {
 
 	totalExecutionTime := alg.ExecutionTime(0)
@@ -485,8 +493,9 @@ func RunSimulationWithConfigs(
 		}
 	}
 
-	if lscnf.shardTopN > 0 {
-		ts = NewLogicalShardingFilter(lscnf.seed, lscnf.shardTopN, lscnf.shardFactor, ts)
+	if lcnf.shardTopN > 0 {
+		seed := int64(lcnf.seedRng.Uint64())
+		ts = NewLogicalShardingFilter(seed, lcnf.shardTopN, lcnf.shardFactor, ts)
 	}
 
 	schedNum := 0
@@ -578,5 +587,5 @@ func RunSimulationWithConfigs(
 
 // RunSimulation runs the simulator with the command-line provided flags.
 func RunSimulation(bw *bufio.Writer) SimulationResults {
-	return RunSimulationWithConfigs(DistributionConfigFromFlags, AdversaryConfigFromFlags, LogicalShardingConfigFromFlags, SchedulerConfigFromFlags, ExecutionConfigFromFlags, bw)
+	return RunSimulationWithConfigs(&DistributionConfigFromFlags, &AdversaryConfigFromFlags, &LogicalShardingConfigFromFlags, &SchedulerConfigFromFlags, &ExecutionConfigFromFlags, bw)
 }

@@ -47,7 +47,10 @@ func (lsf *LogicalShardingFilter) Get(tid int) (*alg.Transaction, error) {
 // updateSet -- consistently update the LocationSet by logging random choices in topMap.
 func (lsf *LogicalShardingFilter) updateSet(ls *alg.LocationSet) {
 	repl := alg.NewLocationSet()
-	ls.Find(func(loc alg.Location) bool {
+	// In order to have replicatable experiments, we cannot just use Find which visits set
+	// elements in different orders from run to run.  That results in changes in the
+	// assignment of shard IDs, making the speedup results change.
+	ls.ConsistentFind(func(loc alg.Location) bool {
 		tloc := loc.(alg.TestLocation)
 		i64loc := int64(tloc)
 		if 0 <= i64loc && i64loc < int64(lsf.shardTopN) {

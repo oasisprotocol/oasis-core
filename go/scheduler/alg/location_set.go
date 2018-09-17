@@ -88,7 +88,23 @@ func (ls *LocationSet) Find(pred func(Location) bool) bool {
 			return true
 		}
 	}
-	return false // no abort
+	return false // no early abort
+}
+
+// ConsistentFind is just like Find, but it guarantees that we will iterate through
+// the set members in a consistent (sorted) order.
+func (ls *LocationSet) ConsistentFind(pred func(Location) bool) bool {
+	locs := make([]Location, 0)
+	for loc := range ls.locations {
+		locs = append(locs, loc)
+	}
+	sort.Sort(LocationOrder(locs))
+	for _, loc := range locs {
+		if pred(loc) {
+			return true
+		}
+	}
+	return false // no early abort
 }
 
 // Overlaps is a boolean predicate to determine of this recevier LocationSet `ls` and the

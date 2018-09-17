@@ -62,8 +62,9 @@ func init() {
 // the value at `*loc` goes pass `end`.  If `start < end` then `incr > 0` should hold, and if
 // `start > end` then `incr < 0` should hold.  If `incr == 0`, then the flag will not iterate.
 func IntVar(loc *int, flagName string, start, end, incr int, descr string) {
-	p := &paramRegistration{"", NewIntIterControl(loc, flagName, start, end, incr)}
-	flag.StringVar(&p.spec, flagName, "", descr)
+	c := NewIntIterControl(loc, flagName, start, end, incr)
+	p := &paramRegistration{"", c}
+	flag.StringVar(&p.spec, flagName, c.String(), descr)
 	params = append(params, p)
 }
 
@@ -73,8 +74,9 @@ func IntVar(loc *int, flagName string, start, end, incr int, descr string) {
 // and if `start > end` then `incr < 0` should hold.  If `incr == 0`, then the flag will not
 // iterate.
 func Int64Var(loc *int64, flagName string, start, end, incr int64, descr string) {
-	p := &paramRegistration{"", NewInt64IterControl(loc, flagName, start, end, incr)}
-	flag.StringVar(&p.spec, flagName, "", descr)
+	c := NewInt64IterControl(loc, flagName, start, end, incr)
+	p := &paramRegistration{"", c}
+	flag.StringVar(&p.spec, flagName, c.String(), descr)
 	params = append(params, p)
 }
 
@@ -84,8 +86,9 @@ func Int64Var(loc *int64, flagName string, start, end, incr int64, descr string)
 // and if `start > end` then `incr < 0` should hold.  If `incr == 0`, then the flag will not
 // iterate.
 func Float64Var(loc *float64, flagName string, start, end, incr float64, descr string) {
-	p := &paramRegistration{"", NewFloat64IterControl(loc, flagName, start, end, incr)}
-	flag.StringVar(&p.spec, flagName, "", descr)
+	c := NewFloat64IterControl(loc, flagName, start, end, incr)
+	p := &paramRegistration{"", c}
+	flag.StringVar(&p.spec, flagName, c.String(), descr)
 	params = append(params, p)
 }
 
