@@ -6,31 +6,49 @@ package iterflag
 /// parameter loops are nested, e.g., the order of the flags when incremented in odometric
 /// order.
 ///
-/// Usage:
+/// Example usage:
 ///
 ///	fooFlag int
 ///	barFlag float64
 ///	bazFlag int64
 ///
-///	iterflag.IntVar(&fooFlag, "foo", 0, 10, 1, "foo controls the simulator...")
-///	iterflag.Float64Var(&barFlag, "bar", 1.0, 10.0, 0.1, "bar controls...")
-///	iterflag.Int64Var(&bazFlag, "baz", 10, 15, 1, "baz controls...")
-///	iterflag.IterationOrder("foo,bar,baz") // default is registration order
+///	func init() {
+///		iterflag.IntVar(&fooFlag, "foo", 0, 10, 1, "foo controls the simulator...")
+///		iterflag.Float64Var(&barFlag, "bar", 1.0, 10.0, 0.1, "bar controls...")
+///		iterflag.Int64Var(&bazFlag, "baz", 10, 15, 1, "baz controls...")
+///	}
 ///
-///	iterflag.Parse()
+///	func main() {
+///		iterflag.Parse()
 ///
-///	colWidth=20
-///	precision=10 // for float64 values
-///	printFlagValues() // under control of flag module
-/// TODO(bsy) fill in example
+///		colWidth=16
+///		precision=4 // for float64 values
+///
+///		iterator := iterflag.MakeIterator()
+///		// Print varying headers
+///		for _, c := range iterator.Control {
+///			if c.WillIterate() {
+///				fmt.Printf("|%*s", colWidth, c.Key())
+///			}
+///		}
+///		fmt.Printf("|\n")
+///		for {
+///			for _, c := range iterator.Control {
+///				if c.WillIterate() {
+///					fmt.Printf("|%*s", colWidth, c.Value(colWidth, precision))
+///				}
+///			}
+///			fmt.Printf("|%*.*g|\n", colWidth, precision, runSimulation())
+///		}
+///	}
 ///
 /// $ ./a.out --foo=0:10:1 --bar=1.0:10:0.1 -baz=9
 ///
 /// foo will iterate through 0, 1, 2, ..., 9; bar will iterate through 1.0, 1.1, ... 9.9 (but
 /// beware of floating point rounding: this may go to 10.0-epsilon as well); and baz will only
-/// take on the value 9.  Because the flag baz does not iterate, it will not show up in the
-/// it.KeyValues() list for the sample command-line execution, since invariant parameters can
-/// be factored out and shown separately.
+/// take on the value 9.  Because the flag baz does not iterate, it will be suppressed in the
+/// tabular output via the WillIterate test.  (We omit the code to printout the controls that
+/// do not iterate along with their values.)
 
 import (
 	"flag"
