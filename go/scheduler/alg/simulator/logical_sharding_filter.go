@@ -30,9 +30,11 @@ func NewLogicalShardingFilter(seed int64, shardN, shardF int, ts TransactionSour
 // address is randomly mapped to one of shardFactor addresses, and this mapping is consistent:
 // if the address occurs in both the read and write sets, then they will both be mapped to the
 // same random location.
-func (lsf *LogicalShardingFilter) Get(seqno uint) (*alg.Transaction, error) {
-	lsf.topMap = make([]int64, lsf.shardTopN) // zeros means no value
-	t, e := lsf.ts.Get(seqno)
+func (lsf *LogicalShardingFilter) Get(tid int) (*alg.Transaction, error) {
+	// topMap is fresh/new for every transaction, so that we get a new random choice each
+	// time for the top N addresses.
+	lsf.topMap = make([]int64, lsf.shardTopN) // zeros means no value chosen yet
+	t, e := lsf.ts.Get(tid)
 	if e == nil {
 		// iterate over t's read-set and write-set, replace all elements 0 <= e <
 		// lsf.shardTopN with a random negative value (memoized)
@@ -45,17 +47,29 @@ func (lsf *LogicalShardingFilter) Get(seqno uint) (*alg.Transaction, error) {
 // updateSet -- consistently update the LocationSet by logging random choices in topMap.
 func (lsf *LogicalShardingFilter) updateSet(ls *alg.LocationSet) {
 	repl := alg.NewLocationSet()
-	ls.Find(func(loc alg.Location) bool {
+	// In order to have replicatable experiments, we cannot just use Find which visits set
+	// elements in different orders from run to run.  That results in changes in the
+	// assignment of shard IDs, making the speedup results change.
+	ls.ConsistentFind(func(loc alg.Location) bool {
 		tloc := loc.(alg.TestLocation)
-		iloc := int64(tloc)
-		if 0 <= iloc && iloc < int64(lsf.shardTopN) {
-			loc := int(iloc)
-			if lsf.topMap[loc] == 0 {
+		i64loc := int64(tloc)
+		if 0 <= i64loc && i64loc < int64(lsf.shardTopN) {
+			iloc := int(i64loc) // array indices are ints.
+			if lsf.topMap[iloc] == 0 {
 				shard := int64(lsf.r.Intn(lsf.shardFactor))
-				shardBase := int64(loc * lsf.shardFactor)
-				lsf.topMap[loc] = -(1 + shardBase + shard)
+				if !(0 <= shard && shard < int64(lsf.shardFactor)) {
+					panic("Intn range error")
+				}
+				shardBase := i64loc * int64(lsf.shardFactor)
+				newIndex := -(1 + shardBase + shard)
+				if !(-int64(lsf.shardFactor*lsf.shardTopN) <= newIndex && newIndex < 0) {
+					panic("newIndex out of range")
+				}
+				lsf.topMap[iloc] = newIndex
 			}
-			repl.Add(alg.TestLocation(lsf.topMap[loc]))
+			repl.Add(alg.TestLocation(lsf.topMap[iloc]))
+		} else {
+			repl.Add(tloc)
 		}
 		return false
 	})

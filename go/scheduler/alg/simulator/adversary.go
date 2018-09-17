@@ -53,7 +53,7 @@ type AdversarialTransactionSource struct {
 
 	batchSize int
 	ts        TransactionSource
-	spamSeqno uint
+	spamSeqno int
 
 	numTargets int64
 	step       int
@@ -179,7 +179,7 @@ func NewAdversarialTransactionSource(
 	targets *alg.LocationRangeSet,
 	batchSize int,
 	ts TransactionSource,
-	spamSeqno uint,
+	spamSeqno int,
 ) (*AdversarialTransactionSource, error) {
 	if inj < 0.0 {
 		return nil, fmt.Errorf("NewAdversarialTransactionSource: Injection probability must be at least 0.0, got %g", inj)
@@ -224,7 +224,7 @@ func NewAdversarialTransactionSource(
 
 // Get the next Transaction from this source.  The result may be from the underlying wrapped
 // TransactionSource, or it may be a bogus DOS transaction injected into the request stream.
-func (ats *AdversarialTransactionSource) Get(tid uint) (*alg.Transaction, error) {
+func (ats *AdversarialTransactionSource) Get(tid int) (*alg.Transaction, error) {
 	var txn *alg.Transaction
 	var err error
 	if ats.step > 0 {

@@ -34,8 +34,8 @@ func NewLoggingTransactionSource(fn string, ts TransactionSource) (*LoggingTrans
 
 // Get returns the next transaction from the wrapped TransactionSource and, if non-nil, logs it
 // before returning it.
-func (lts *LoggingTransactionSource) Get(seqno uint) (*alg.Transaction, error) {
-	t, e := lts.ts.Get(seqno)
+func (lts *LoggingTransactionSource) Get(tid int) (*alg.Transaction, error) {
+	t, e := lts.ts.Get(tid)
 	if e == nil {
 		t.Write(lts.bw)
 		// We ignore errors from WriteRune, since the convention is to check bw.Flush()

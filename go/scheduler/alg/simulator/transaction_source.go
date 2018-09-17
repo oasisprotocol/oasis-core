@@ -8,7 +8,7 @@ import (
 type TransactionSource interface {
 	// Get a new Transaction. The error return value is non-nil if there is an error or if
 	// the source is exhausted (end-of-file, total number desired already generated, etc).
-	Get(seqno uint) (*alg.Transaction, error)
+	Get(tid int) (*alg.Transaction, error)
 
 	// Close is used to do whatever wrap up is needed, e.g., flushing output buffers (for
 	// logging transactions), closing I/O descriptors (for logging or replaying-from-file
