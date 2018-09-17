@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/oasislabs/ekiden/go/scheduler/alg"
+	"github.com/oasislabs/ekiden/go/scheduler/alg/iterflag"
 	"github.com/oasislabs/ekiden/go/scheduler/alg/randgen"
 )
 
@@ -53,31 +54,6 @@ type DistributionConfig struct {
 }
 
 const useInput = "input"
-
-// AlphaIter allows iterating over alpha values
-func (dcnf *DistributionConfig) AlphaIter(incr, end float64) ParamIncr {
-	return NewFloat64ParamIncr(&dcnf.alpha, incr, end, "alpha")
-}
-
-// NumLocationsIter allows iterating over numLocations
-func (dcnf *DistributionConfig) NumLocationsIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&dcnf.numLocations, incr, end, "num-locations")
-}
-
-// NumReadLocationsIter allows iterating over numReadLocs
-func (dcnf *DistributionConfig) NumReadLocationsIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&dcnf.numReadLocs, incr, end, "num-reads")
-}
-
-// NumWriteLocationsIter allows iterating over numWriteLocs
-func (dcnf *DistributionConfig) NumWriteLocationsIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&dcnf.numWriteLocs, incr, end, "num-writes")
-}
-
-// NumTransactionsIter allows iterating over numTransactions
-func (dcnf *DistributionConfig) NumTransactionsIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&dcnf.numTransactions, incr, end, "num-transactions")
-}
 
 // Show prints the config parameters.  For verbosity level where execution parameters ought to
 // be shown.  Use flag names instead of variable names.  Instead of flag.PrintDefaults(), what
@@ -137,46 +113,6 @@ func (dcnf *DistributionConfig) UpdateAndCheckDefaults() {
 // configuration parameters.
 var DistributionConfigFromFlags DistributionConfig
 
-// LogicalShardingConfig holds configuration variables that control how LogicalShardingFilter
-// performs sharding.
-type LogicalShardingConfig struct {
-	seed        int64
-	shardTopN   int
-	shardFactor int
-}
-
-// ShardTopNIter allows iterating over shardTopN
-func (lcnf *LogicalShardingConfig) ShardTopNIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&lcnf.shardTopN, incr, end, "shard-top")
-}
-
-// ShardFactorIter allows iterating over shardFactor
-func (lcnf *LogicalShardingConfig) ShardFactorIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&lcnf.shardFactor, incr, end, "shard-factor")
-}
-
-// Show prints the LogicalShardingConfig configuration parameters.
-func (lcnf *LogicalShardingConfig) Show(bw io.Writer) {
-	_, _ = fmt.Fprintf(bw, "\nLogical Sharding Parameters\n")
-	_, _ = fmt.Fprintf(bw, "  shard-seed = %d\n", lcnf.seed)
-	_, _ = fmt.Fprintf(bw, "  shard-top = %d\n", lcnf.shardTopN)
-	_, _ = fmt.Fprintf(bw, "  shard-factor = %d\n", lcnf.shardFactor)
-}
-
-// UpdateAndCheckDefaults sets the RNG seed for the sharding RNG, if unspecified by a
-// command-line flag.
-func (lcnf *LogicalShardingConfig) UpdateAndCheckDefaults() {
-	if lcnf.seed == 0 {
-		lcnf.seed = time.Now().UTC().UnixNano()
-	}
-}
-
-// LogicalShardingConfigFromFlags is the logical sharding filter configurations as set by
-// command-line flags.  This is visible for the table-generator so that it can vary the
-// simulation parameters to generate data showing how a particular algorithm responds to
-// configuration parameters.
-var LogicalShardingConfigFromFlags LogicalShardingConfig
-
 // AdversaryConfig contains the configuration parameters for how an adversary may attempt to
 // inject DOS transactions that contain (maximally) conflicting read/write-set locations.
 type AdversaryConfig struct {
@@ -190,26 +126,6 @@ type AdversaryConfig struct {
 
 	// not set via config, but during param validation to avoid dup work
 	targets *alg.LocationRangeSet
-}
-
-// InjectionProbIter allows iterating over injectionProb
-func (acnf *AdversaryConfig) InjectionProbIter(incr, end float64) ParamIncr {
-	return NewFloat64ParamIncr(&acnf.injectionProb, incr, end, "dos-injection-prob")
-}
-
-// TargetFractionIter allows iterating over targetFrac
-func (acnf *AdversaryConfig) TargetFractionIter(incr, end float64) ParamIncr {
-	return NewFloat64ParamIncr(&acnf.targetFrac, incr, end, "dos-target-fraction")
-}
-
-// ReadFractionIter allows iterating over readFrac
-func (acnf *AdversaryConfig) ReadFractionIter(incr, end float64) ParamIncr {
-	return NewFloat64ParamIncr(&acnf.readFrac, incr, end, "dos-read-fraction")
-}
-
-// DosBatchSizeIter allows iterating over dosBatchSize
-func (acnf *AdversaryConfig) DosBatchSizeIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&acnf.dosBatchSize, incr, end, "dos-batch-size")
 }
 
 // Show prints the AdversaryConfig configuration parameters.
@@ -254,6 +170,36 @@ func (acnf *AdversaryConfig) UpdateAndCheckDefaults() {
 // configuration parameters.
 var AdversaryConfigFromFlags AdversaryConfig
 
+// LogicalShardingConfig holds configuration variables that control how LogicalShardingFilter
+// performs sharding.
+type LogicalShardingConfig struct {
+	seed        int64
+	shardTopN   int
+	shardFactor int
+}
+
+// Show prints the LogicalShardingConfig configuration parameters.
+func (lcnf *LogicalShardingConfig) Show(bw io.Writer) {
+	_, _ = fmt.Fprintf(bw, "\nLogical Sharding Parameters\n")
+	_, _ = fmt.Fprintf(bw, "  shard-seed = %d\n", lcnf.seed)
+	_, _ = fmt.Fprintf(bw, "  shard-top = %d\n", lcnf.shardTopN)
+	_, _ = fmt.Fprintf(bw, "  shard-factor = %d\n", lcnf.shardFactor)
+}
+
+// UpdateAndCheckDefaults sets the RNG seed for the sharding RNG, if unspecified by a
+// command-line flag.
+func (lcnf *LogicalShardingConfig) UpdateAndCheckDefaults() {
+	if lcnf.seed == 0 {
+		lcnf.seed = time.Now().UTC().UnixNano()
+	}
+}
+
+// LogicalShardingConfigFromFlags is the logical sharding filter configurations as set by
+// command-line flags.  This is visible for the table-generator so that it can vary the
+// simulation parameters to generate data showing how a particular algorithm responds to
+// configuration parameters.
+var LogicalShardingConfigFromFlags LogicalShardingConfig
+
 // SchedulerConfig contains the configuration parametres for the scheduler(s).  Since more than
 // one scheduling algorithm may be chosen, this essentially contains the union of all
 // configuration flags that these schedulers need.
@@ -269,21 +215,6 @@ type SchedulerConfig struct {
 	// maxTime is per subgraph execution time, but post-schedule generation subgraph merging
 	// will result in higher total execution times per compute committee.
 	maxTime int
-}
-
-// MaxPendingIter allows iterating over maxPending
-func (scnf *SchedulerConfig) MaxPendingIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&scnf.maxPending, incr, end, "max-pending")
-}
-
-// ExcessFractionIter allows iterating over exccessFraction
-func (scnf *SchedulerConfig) ExcessFractionIter(incr, end float64) ParamIncr {
-	return NewFloat64ParamIncr(&scnf.excessFraction, incr, end, "excess-fraction")
-}
-
-// MaxSubgraphTimeIter allows iterating over maxTime
-func (scnf *SchedulerConfig) MaxSubgraphTimeIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&scnf.maxTime, incr, end, "max-subgraph-time")
 }
 
 // Show prints the SchedulerConfig fields.  NB: not all schedulers will use all fields.
@@ -313,11 +244,6 @@ var SchedulerConfigFromFlags SchedulerConfig
 // it only contains the number of execution committees.
 type ExecutionConfig struct {
 	numCommittees int
-}
-
-// NumCommitteesIter allows iterating over numCommittees
-func (xcnf *ExecutionConfig) NumCommitteesIter(incr, end int) ParamIncr {
-	return NewIntParamIncr(&xcnf.numCommittees, incr, end, "num-committees")
 }
 
 // Show prints the ExecutionConfig.
@@ -365,28 +291,28 @@ func init() {
 		"read transactions from file instead of generating")
 	flag.StringVar(&DistributionConfigFromFlags.outputFile, "output", "",
 		"write transactions to file in addition to scheduling")
-	flag.Float64Var(&DistributionConfigFromFlags.alpha, "alpha", 1.0,
+	iterflag.Float64Var(&DistributionConfigFromFlags.alpha, "alpha", 1.0, 0.0, 0.0,
 		"zipf distribution alpha parameter")
 	// For the Ethereum world, the number of possible locations is 2^{160+256}, but it is
 	// extremely sparse.  Furthermore, many locations are in (pseudo) equivalence classes,
 	// i.e., if a contract reads one of the locations, then it is almost certainly going to
 	// read the rest, and similarly for writes.
-	flag.IntVar(&DistributionConfigFromFlags.numLocations, "num-locations", 100000,
-		"number of possible memory locations")
-	flag.IntVar(&DistributionConfigFromFlags.numReadLocs, "num-reads", 0,
+	iterflag.IntVar(&DistributionConfigFromFlags.numLocations, "num-locations",
+		1000000, 0, 0, "number of possible memory locations")
+	iterflag.IntVar(&DistributionConfigFromFlags.numReadLocs, "num-reads", 0, 0, 0,
 		"number of read locations in a transaction")
-	flag.IntVar(&DistributionConfigFromFlags.numWriteLocs, "num-writes", 2,
+	iterflag.IntVar(&DistributionConfigFromFlags.numWriteLocs, "num-writes", 2, 0, 0,
 		"number of write locations in a transaction")
-	flag.IntVar(&DistributionConfigFromFlags.numTransactions, "num-transactions", 1000000,
-		"number of transactions to generate")
+	iterflag.IntVar(&DistributionConfigFromFlags.numTransactions, "num-transactions",
+		1000000, 0, 0, "number of transactions to generate")
 
 	// Adversary configuration parameters
 
 	flag.Int64Var(&AdversaryConfigFromFlags.seed, "dos-seed", 0, "seed for rng used to randomize DOS-spam adversary actions")
-	flag.Float64Var(&AdversaryConfigFromFlags.injectionProb, "dos-injection-prob", 0.0, "probability of deciding to inject (possibly many) DOS transactions (0 disables adversary)")
-	flag.Float64Var(&AdversaryConfigFromFlags.targetFrac, "dos-target-fraction", 0.9, "fraction of DOS addresses that will be attacked")
-	flag.Float64Var(&AdversaryConfigFromFlags.readFrac, "dos-read-fraction", 0.0, "fraction of DOS addresses under attack that go to the read set (rest go to the write set)")
-	flag.IntVar(&AdversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, "number of DOS transactions to inject, once decision to DOS spam is made")
+	iterflag.Float64Var(&AdversaryConfigFromFlags.injectionProb, "dos-injection-prob", 0.0, 0.0, 0.0, "probability of deciding to inject (possibly many) DOS transactions (0 disables adversary)")
+	iterflag.Float64Var(&AdversaryConfigFromFlags.targetFrac, "dos-target-fraction", 0.9, 0.0, 0.0, "fraction of DOS addresses that will be attacked")
+	iterflag.Float64Var(&AdversaryConfigFromFlags.readFrac, "dos-read-fraction", 0.0, 0.0, 0.0, "fraction of DOS addresses under attack that go to the read set (rest go to the write set)")
+	iterflag.IntVar(&AdversaryConfigFromFlags.dosBatchSize, "dos-batch-size", 100, 0, 0, "number of DOS transactions to inject, once decision to DOS spam is made")
 	flag.StringVar(&AdversaryConfigFromFlags.targetAddresses, "dos-target-addresses", "0:15,128:131", "comma-separated list of integers or start-end integer ranges")
 	flag.IntVar(&AdversaryConfigFromFlags.seqno, "dos-seqno", 1000000, "starting seqno/id for DOS spam transactions")
 
@@ -394,26 +320,27 @@ func init() {
 
 	flag.Int64Var(&LogicalShardingConfigFromFlags.seed, "shard-seed", 0,
 		"pseudorandom number generator seed for logical sharding filter (default: UnixNano)")
-	flag.IntVar(&LogicalShardingConfigFromFlags.shardTopN, "shard-top", 0,
+	iterflag.IntVar(&LogicalShardingConfigFromFlags.shardTopN, "shard-top", 0, 16, 4,
 		"shard the highest <shard-top> probable locations")
-	flag.IntVar(&LogicalShardingConfigFromFlags.shardFactor, "shard-factor", 16,
+	iterflag.IntVar(&LogicalShardingConfigFromFlags.shardFactor, "shard-factor", 16, 0, 0,
 		"number of new (negative) shards per original location")
 
 	// Scheduler configuration parameters
 
 	flag.StringVar(&SchedulerConfigFromFlags.name, "scheduler", "greedy-subgraph",
 		"scheduling algorithm (greedy-subgraph)")
-	flag.IntVar(&SchedulerConfigFromFlags.maxPending, "max-pending", -1,
-		"scheduling when there are this many transactions (default 2 * max-subgraph-time * num-committees")
-	flag.Float64Var(&SchedulerConfigFromFlags.excessFraction, "excess-fraction", 0.2,
+	iterflag.IntVar(&SchedulerConfigFromFlags.maxPending, "max-pending", -1, 0, 0,
+		"run scheduling when there are this many transactions (-1 means 2 * max-time * num-committees); for the greedy-subgraph-adaptive algorithm, this is just the initial value and will be dynamically adjusted")
+	iterflag.Float64Var(&SchedulerConfigFromFlags.excessFraction, "excess-fraction",
+		0.2, 0.0, 0.0,
 		"additional fraction of actual number of transactions scheduled in previous batch to use for max-pending for the next batch")
 	// In the python simulator, this was 'block_size', and we may still want to have a
 	// maximum transactions as well as maximum execution time.
-	flag.IntVar(&SchedulerConfigFromFlags.maxTime, "max-subgraph-time", 20,
+	iterflag.IntVar(&SchedulerConfigFromFlags.maxTime, "max-subgraph-time", 20, 0, 0,
 		"disallow adding to a subgraph if the total estimated execution time would exceed this")
 
 	// Execution Committees configuration parameters
-	flag.IntVar(&ExecutionConfigFromFlags.numCommittees, "num-committees", 40,
+	iterflag.IntVar(&ExecutionConfigFromFlags.numCommittees, "num-committees", 40, 0, 0,
 		"number of execution committees")
 }
 

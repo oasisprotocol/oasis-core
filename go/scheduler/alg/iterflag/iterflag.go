@@ -57,12 +57,21 @@ func init() {
 	nameToIter = make(map[string]IterControl)
 }
 
+// IntVar registers a location `loc` as an int flag variable with name `flagName`, that will
+// iterate starting with the value `start`, incrementing by `incr` each time, stopping before
+// the value at `*loc` goes pass `end`.  If `start < end` then `incr > 0` should hold, and if
+// `start > end` then `incr < 0` should hold.  If `incr == 0`, then the flag will not iterate.
 func IntVar(loc *int, flagName string, start, end, incr int, descr string) {
 	p := &paramRegistration{"", NewIntIterControl(loc, flagName, start, end, incr)}
 	flag.StringVar(&p.spec, flagName, "", descr)
 	params = append(params, p)
 }
 
+// Int64Var registers a location `loc` as an int64 flag variable with name `flagName`, that
+// will iterate starting with the value `start`, incrementing by `incr` each time, stopping
+// before the value at `*loc` goes pass `end`.  If `start < end` then `incr > 0` should hold,
+// and if `start > end` then `incr < 0` should hold.  If `incr == 0`, then the flag will not
+// iterate.
 func Int64Var(loc *int64, flagName string, start, end, incr int64, descr string) {
 	p := &paramRegistration{"", NewInt64IterControl(loc, flagName, start, end, incr)}
 	flag.StringVar(&p.spec, flagName, "", descr)
@@ -72,13 +81,26 @@ func Int64Var(loc *int64, flagName string, start, end, incr int64, descr string)
 // Float64Var registers a location `loc` as a float64 flag variable with name `flagName`, that
 // will iterate starting with the value `start`, incrementing by `incr` each time, stopping
 // before the value at `*loc` goes pass `end`.  If `start < end` then `incr > 0` should hold,
-// and if `start > end` then `incr < 0` should hold.
+// and if `start > end` then `incr < 0` should hold.  If `incr == 0`, then the flag will not
+// iterate.
 func Float64Var(loc *float64, flagName string, start, end, incr float64, descr string) {
 	p := &paramRegistration{"", NewFloat64IterControl(loc, flagName, start, end, incr)}
 	flag.StringVar(&p.spec, flagName, "", descr)
 	params = append(params, p)
 }
 
+// AllIterableFlags returns a string slice containing all the registered iterable flag names.
+// This is used for specifying a particular loop nesting order via MakeIteratorFlags.
+func AllIterableFlags() []string {
+	names := make([]string, 0)
+	for _, p := range params {
+		names = append(names, p.control.Key())
+	}
+	return names
+}
+
+// Parse parses the iterflag command-line flags for the start, end, incr values and performs
+// internal bookkeeping to make it easier to construct the nested iterator Iterator object.
 func Parse() {
 	for _, pr := range params {
 		if pr.spec != "" {
@@ -141,6 +163,8 @@ func (it *Iterator) Incr() bool {
 				it.Control[pos].Reset()
 				// carry to next control
 			}
+		} else {
+			it.Control[pos].Reset() // in case simulation code changed it
 		}
 		pos--
 	}
