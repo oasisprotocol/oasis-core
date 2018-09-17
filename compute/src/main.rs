@@ -10,6 +10,8 @@ extern crate log;
 extern crate lru_cache;
 extern crate protobuf;
 extern crate reqwest;
+extern crate rustracing;
+extern crate rustracing_jaeger;
 extern crate serde_cbor;
 extern crate thread_local;
 
@@ -26,6 +28,7 @@ extern crate ekiden_storage_batch;
 extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_multilayer;
 extern crate ekiden_tools;
+extern crate ekiden_tracing;
 extern crate ekiden_untrusted;
 #[macro_use]
 extern crate ekiden_instrumentation;
@@ -214,6 +217,7 @@ fn main() {
                 .hidden(true)
         )
         .args(&known_components.get_arguments())
+        .args(&ekiden_tracing::get_arguments())
         .get_matches();
 
     // Initialize logger.
@@ -242,6 +246,9 @@ fn main() {
         .inject_owned::<MetricCollector>()
         .expect("failed to inject MetricCollector");
     set_boxed_metric_collector(metrics).unwrap();
+
+    // Initialize tracing.
+    ekiden_tracing::report_forever("ekiden-compute", &matches);
 
     let environment = container.inject::<Environment>().unwrap();
 

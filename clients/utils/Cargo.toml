@@ -17,6 +17,7 @@ histogram = { version = "0.6.8", optional = true }
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
 ekiden-roothash-client = { path = "../../roothash/client", version = "0.2.0-alpha" }
+ekiden-tracing = { path = "../../tracing", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-db-trusted = { path = "../../db/trusted", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }

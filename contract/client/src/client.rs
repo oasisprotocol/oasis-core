@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use grpcio::{self, RpcStatus, RpcStatusCode};
+use grpcio::{self, MetadataBuilder, RpcStatus, RpcStatusCode};
+use rustracing::tag;
+use rustracing_jaeger::span::SpanHandle;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
@@ -15,6 +17,7 @@ use ekiden_common::futures::sync::oneshot;
 use ekiden_common::hash::EncodedHash;
 use ekiden_compute_api;
 use ekiden_contract_common::call::{ContractCall, ContractOutput};
+use ekiden_tracing::MetadataBuilderCarrier;
 
 /// Contract client.
 pub struct ContractClient {
@@ -55,7 +58,7 @@ impl ContractClient {
     }
 
     /// Queue a raw contract call.
-    pub fn call_raw<C>(&self, call: C) -> BoxFuture<Vec<u8>>
+    pub fn call_raw<C>(&self, call: C, sh: SpanHandle) -> BoxFuture<Vec<u8>>
     where
         C: Serialize,
     {
@@ -79,8 +82,29 @@ impl ContractClient {
                     options = options.timeout(timeout);
                 }
 
+                let span = sh.child("submit_tx_async_opt", |opts| {
+                    opts.tag(tag::StdTag::span_kind("client")).start()
+                });
+                if let Some(sc) = span.context() {
+                    let mut carrier = MetadataBuilderCarrier(MetadataBuilder::with_capacity(1));
+                    match sc.inject_to_http_header(&mut carrier) {
+                        Ok(()) => {
+                            options = options.headers(carrier.0.build());
+                        }
+                        Err(error) => {
+                            error!(
+                                "Tracing provider unable to inject span context: {:?}",
+                                error
+                            );
+                        }
+                    }
+                }
+
                 match rpc.submit_tx_async_opt(&request.clone(), options) {
-                    Ok(call) => call.into_box(),
+                    Ok(call) => call.then(|result| {
+                        drop(span);
+                        result
+                    }).into_box(),
                     Err(error) => future::err(error.into()).into_box(),
                 }
             },
@@ -132,7 +156,7 @@ impl ContractClient {
     }
 
     /// Queue a contract call.
-    pub fn call<C, O>(&self, method: &str, arguments: C) -> BoxFuture<O>
+    pub fn call<C, O>(&self, method: &str, arguments: C, sh: SpanHandle) -> BoxFuture<O>
     where
         C: Serialize,
         O: DeserializeOwned + Send + 'static,
@@ -144,7 +168,7 @@ impl ContractClient {
             arguments,
         };
 
-        self.call_raw(call)
+        self.call_raw(call, sh)
             .and_then(|output| parse_call_output(output))
             .into_box()
     }
