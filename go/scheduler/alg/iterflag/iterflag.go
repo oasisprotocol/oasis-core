@@ -93,6 +93,10 @@ func Parse() {
 			panic(fmt.Sprintf("iterflag: Duplicate flag %s found", pr.control.Key()))
 		}
 		nameToIter[pr.control.Key()] = pr.control
+		pr.control.Reset()
+		// We do Reset() here so relying code can print values before creating an
+		// Iterator object, since relying code has direct access to the location
+		// holding the flag value.
 	}
 }
 
@@ -197,6 +201,8 @@ func MakeIteratorForFlags(flagName []string) (*Iterator, error) {
 		}
 		it := nameToIter[fn]
 		it.Reset()
+		// We Reset() here in case the relying code creates two iterators to run
+		// sequentially where the same flag(s) get iterated.
 		iter = append(iter, it)
 	}
 	err = SortIterControl(iter, order)
