@@ -22,8 +22,7 @@ pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
         clap::Arg::with_name("tracing-sample-probability")
             .long("tracing-probability")
             .takes_value(true)
-            .default_value("0.001")
-            .requires("tracing-enable"),
+            .default_value("0.001"),
     ]
 }
 
