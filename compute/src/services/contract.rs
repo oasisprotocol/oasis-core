@@ -42,12 +42,12 @@ impl Contract for ContractService {
         measure_histogram_timer!("submit_tx_time");
         measure_counter_inc!("submit_tx_calls");
         let tracer = ekiden_tracing::get_tracer();
-        let mut sso = tracer
+        let mut opts = tracer
             .span("submit_tx")
             .tag(tag::StdTag::span_kind("server"));
         match SpanContext::extract_from_http_header(&MetadataCarrier(ctx.request_headers())) {
             Ok(Some(sc)) => {
-                sso = sso.child_of(&sc);
+                opts = opts.child_of(&sc);
             }
             Ok(None) => {}
             Err(error) => {
@@ -57,11 +57,11 @@ impl Contract for ContractService {
                 );
             }
         }
-        let submit_span = sso.start();
+        let submit_span = opts.start();
 
         let data = request.take_data();
-        let append_span = submit_span.handle().child("append_batch", |sso| {
-            sso.tag(tag::StdTag::span_kind("producer")).start()
+        let append_span = submit_span.handle().child("append_batch", |opts| {
+            opts.tag(tag::StdTag::span_kind("producer")).start()
         });
 
         let result = match self.inner

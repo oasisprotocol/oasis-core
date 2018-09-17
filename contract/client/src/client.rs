@@ -82,8 +82,8 @@ impl ContractClient {
                     options = options.timeout(timeout);
                 }
 
-                let span = sh.child("submit_tx_async_opt", |sso| {
-                    sso.tag(tag::StdTag::span_kind("client")).start()
+                let span = sh.child("submit_tx_async_opt", |opts| {
+                    opts.tag(tag::StdTag::span_kind("client")).start()
                 });
                 if let Some(sc) = span.context() {
                     let mut carrier = MetadataBuilderCarrier(MetadataBuilder::with_capacity(1));

@@ -147,7 +147,7 @@ impl WorkerInner {
 
         let (new_state_root, outputs) = {
             measure_histogram_timer!("contract_call_batch_enclave_time");
-            let span = handle_sh.child("call_contract_batch_enclave", |sso| sso.start());
+            let span = handle_sh.child("call_contract_batch_enclave", |opts| opts.start());
             enclave_sh = span.handle();
 
             // Run in storage context.
@@ -161,7 +161,7 @@ impl WorkerInner {
         // Commit batch storage.
         {
             measure_histogram_timer!("contract_call_storage_commit_time");
-            let _span = enclave_sh.follower("contract_call_storage_commit", |sso| sso.start());
+            let _span = enclave_sh.follower("contract_call_storage_commit", |opts| opts.start());
             batch_storage.flush().wait()?;
         }
 
@@ -201,8 +201,8 @@ impl WorkerInner {
         sender: oneshot::Sender<Result<ComputedBatch>>,
         sh: SpanHandle,
     ) {
-        let span = sh.follower("handle_contract_batch", |sso| {
-            sso.tag(tag::StdTag::span_kind("consumer")).start()
+        let span = sh.follower("handle_contract_batch", |opts| {
+            opts.tag(tag::StdTag::span_kind("consumer")).start()
         });
         let result = self.call_contract_batch_fallible(&calls, &block, span.handle());
 
@@ -319,8 +319,8 @@ impl Worker {
         sh: SpanHandle,
     ) -> oneshot::Receiver<Result<ComputedBatch>> {
         measure_counter_inc!("contract_call_request");
-        let span = sh.child("send_contract_call_batch", |sso| {
-            sso.tag(tag::StdTag::span_kind("producer")).start()
+        let span = sh.child("send_contract_call_batch", |opts| {
+            opts.tag(tag::StdTag::span_kind("producer")).start()
         });
 
         let (response_sender, response_receiver) = oneshot::channel();

@@ -757,7 +757,7 @@ impl RootHashFrontend {
 
         if should_process {
             let tracer = ekiden_tracing::get_tracer();
-            let mut sso = Some(
+            let mut opts = Some(
                 tracer
                     .span("process_incoming_queue")
                     .tag(tag::StdTag::span_kind("consumer")),
@@ -774,11 +774,11 @@ impl RootHashFrontend {
             let batch: Vec<_> = batch_info
                 .into_iter()
                 .map(|call_info| {
-                    sso = Some(sso.take().unwrap().follows_from(&call_info.context));
+                    opts = Some(opts.take().unwrap().follows_from(&call_info.context));
                     call_info.data
                 })
                 .collect();
-            let span = sso.unwrap().start();
+            let span = opts.unwrap().start();
             let sh = span.handle();
 
             // Persist batch into storage so that the workers can get it.
