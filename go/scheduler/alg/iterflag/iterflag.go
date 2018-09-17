@@ -19,6 +19,7 @@ package iterflag
 ///	}
 ///
 ///	func main() {
+///		flag.Parse()
 ///		iterflag.Parse()
 ///
 ///		colWidth=16
@@ -31,7 +32,7 @@ package iterflag
 ///				fmt.Printf("|%*s", colWidth, c.Key())
 ///			}
 ///		}
-///		fmt.Printf("|\n")
+///		fmt.Printf("|%*s|\n", colWidth, "Results")
 ///		for {
 ///			for _, c := range iterator.Control {
 ///				if c.WillIterate() {
@@ -39,6 +40,9 @@ package iterflag
 ///				}
 ///			}
 ///			fmt.Printf("|%*.*g|\n", colWidth, precision, runSimulation())
+///		}
+///		if !iterator.Incr() {
+///			break
 ///		}
 ///	}
 ///
