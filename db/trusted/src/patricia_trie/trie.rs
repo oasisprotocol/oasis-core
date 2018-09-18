@@ -630,7 +630,7 @@ mod test {
         assert_eq!(tree.get(Some(new_root), b"hello"), Some(b"world".to_vec()));
         assert_eq!(
             new_root,
-            H256::from("0x6c827e77a5905c918a0b50f7298640bade5d49cbc03ef1bfb24376f8e0c83279")
+            H256::from("0xc747dbbb1752fc6755f23799d373df9c3f991ba76a44eac05fdddcc5f6821a73")
         );
 
         let pairs = [
@@ -653,7 +653,7 @@ mod test {
 
         assert_eq!(
             new_root,
-            H256::from("0xe05e3f3fcd5bc388e1c430c8efc5b7c7ab758929bc33fb42627a12309f6f6d47")
+            H256::from("0xeddda540b0c7386cc0c7503e1cea5e27eea86ab1ec98d67cbcfb7b554e7b1bf0")
         );
 
         for &(ref key, _) in pairs.iter() {
@@ -664,7 +664,7 @@ mod test {
         // Should be equal as before all items were inserted.
         assert_eq!(
             new_root,
-            H256::from("0x6c827e77a5905c918a0b50f7298640bade5d49cbc03ef1bfb24376f8e0c83279")
+            H256::from("0xc747dbbb1752fc6755f23799d373df9c3f991ba76a44eac05fdddcc5f6821a73")
         );
 
         assert_eq!(tree.get(Some(new_root), b"foo"), Some(b"bar".to_vec()));
