@@ -129,7 +129,7 @@ func AllIterableFlags() []string {
 func Parse() {
 	for _, pr := range params {
 		if pr.spec != "" {
-			err := pr.control.Parse(pr.spec)
+			err := pr.control.parse(pr.spec)
 			if err != nil {
 				panic(fmt.Sprintf("Could not parse param %s: %s", pr.control.Key(), err.Error()))
 			}
@@ -140,8 +140,8 @@ func Parse() {
 			panic(fmt.Sprintf("iterflag: Duplicate flag %s found", pr.control.Key()))
 		}
 		nameToIter[pr.control.Key()] = pr.control
-		pr.control.Reset()
-		// We do Reset() here so relying code can print values before creating an
+		pr.control.reset()
+		// We do reset() here so relying code can print values before creating an
 		// Iterator object, since relying code has direct access to the location
 		// holding the flag value.
 	}
@@ -160,7 +160,7 @@ func (it *Iterator) AtStart(numIters int) bool {
 			return true
 		}
 		if it.Control[position].WillIterate() {
-			if !it.Control[position].AtStart() {
+			if !it.Control[position].atStart() {
 				return false
 			}
 			count++
@@ -181,15 +181,15 @@ func (it *Iterator) Incr() bool {
 			break
 		}
 		if it.Control[pos].WillIterate() {
-			if it.Control[pos].HasNext() {
-				it.Control[pos].Incr()
+			if it.Control[pos].hasNext() {
+				it.Control[pos].increment()
 				break // done!
 			} else {
-				it.Control[pos].Reset()
+				it.Control[pos].reset()
 				// carry to next control
 			}
 		} else {
-			it.Control[pos].Reset() // in case simulation code changed it
+			it.Control[pos].reset() // in case simulation code changed it
 		}
 		pos--
 	}
@@ -218,10 +218,10 @@ func (a iterOrder) Len() int           { return len(a.data) }
 func (a iterOrder) Swap(i, j int)      { a.data[i], a.data[j] = a.data[j], a.data[i] }
 func (a iterOrder) Less(i, j int) bool { return a.order[a.data[i].Key()] < a.order[a.data[j].Key()] }
 
-// SortParamIncrs sorts the entries referred to by the spi formal parameter in place, using the
+// sortIterControl sorts the entries referred to by the sic formal parameter in place, using the
 // ordering specified by the order formal parameter, returning nil if successful or an error if
 // there was a problem.
-func SortIterControl(sic []IterControl, order map[string]int) error {
+func sortIterControl(sic []IterControl, order map[string]int) error {
 	for _, ic := range sic {
 		if _, ok := order[ic.Key()]; !ok {
 			return fmt.Errorf("Sort parameter %s not specified in enumeration order", ic.Key())
@@ -249,12 +249,12 @@ func MakeIteratorForFlags(flagName []string) (*Iterator, error) {
 			return nil, fmt.Errorf("flag name %s not valid", fn)
 		}
 		it := nameToIter[fn]
-		it.Reset()
-		// We Reset() here in case the relying code creates two iterators to run
+		it.reset()
+		// We reset() here in case the relying code creates two iterators to run
 		// sequentially where the same flag(s) get iterated.
 		iter = append(iter, it)
 	}
-	err = SortIterControl(iter, order)
+	err = sortIterControl(iter, order)
 	if err != nil {
 		return nil, err
 	}

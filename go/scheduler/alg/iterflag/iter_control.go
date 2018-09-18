@@ -8,16 +8,16 @@ import (
 // sense.  This means int, int64, float64.  (We don't use float32.)  The ability to increment
 // such values is used to iterate through the space of simulation parameters.
 type IterControl interface {
-	Reset()
-	AtStart() bool
-	HasNext() bool
+	reset()
+	atStart() bool
+	hasNext() bool
 	WillIterate() bool
-	Incr()
+	increment()
 	Key() string
 	Value(colWidth, precision int) string
 	// Displays the current value as string; we do not use String() since Stringer
 	// interface expect something that represents the "whole" object (end/incr)
-	Parse(input string) error
+	parse(input string) error
 	String() string
 	// To output for reproducible simulations: fmt.Printf("-%s=%s", ic.Key(), ic.String())
 }
@@ -37,20 +37,20 @@ type IntIterControl struct {
 	incr  int
 }
 
-// Reset resets the parameter being incremented to the initial value.  This is used when, for
+// reset resets the parameter being incremented to the initial value.  This is used when, for
 // example, the parameter being controlled is not in the outer-most loop.
-func (iic *IntIterControl) Reset() {
+func (iic *IntIterControl) reset() {
 	*iic.vp = iic.start
 }
 
-// AtStart return true if the control is at the starting value
-func (iic *IntIterControl) AtStart() bool {
+// atStart return true if the control is at the starting value
+func (iic *IntIterControl) atStart() bool {
 	return *iic.vp == iic.start
 }
 
-// HasNext returns true when it is permissible to invoke Incr, i.e., we have not reached the
-// end of iteration for this parameter value.
-func (iic *IntIterControl) HasNext() bool {
+// hasNext returns true when it is permissible to invoke increment(), i.e., we have not reached
+// the end of iteration for this parameter value.
+func (iic *IntIterControl) hasNext() bool {
 	if iic.incr == 0 {
 		return false
 	} else if iic.incr > 0 {
@@ -68,8 +68,8 @@ func (iic *IntIterControl) WillIterate() bool {
 	return iic.incr != 0
 }
 
-// Incr increments the parameter value to the next value as controlled by this iterator.
-func (iic *IntIterControl) Incr() {
+// increment increments the parameter value to the next value as controlled by this iterator.
+func (iic *IntIterControl) increment() {
 	*iic.vp += iic.incr
 }
 
@@ -91,11 +91,11 @@ func (iic IntIterControl) String() string {
 	return fmt.Sprintf("%d:%d:%d", iic.start, iic.end, iic.incr)
 }
 
-// Parse decodes a string representing an IntIterControl and sets the internal state
+// parse decodes a string representing an IntIterControl and sets the internal state
 // accordingly. A non-nil error is returned if there is a parsing error.  There are two input
 // formats accepted: %d:%d:%d or %d.  The first form is the triple start:end:incr.  The latter
 // is just the start value, with end=start and incr=0, i.e., the value will not change.
-func (iic *IntIterControl) Parse(input string) error {
+func (iic *IntIterControl) parse(input string) error {
 	var start, end, incr int
 	// Note that Sscanf is "loose" in that extraneous characters after the last %d are ignored.
 	scanned, err := fmt.Sscanf(input, "%d:%d:%d", &start, &end, &incr)
@@ -138,20 +138,20 @@ type Int64IterControl struct {
 	incr  int64
 }
 
-// Reset resets the parameter being incremented to the initial value.  This is used when, for
+// reset resets the parameter being incremented to the initial value.  This is used when, for
 // example, the parameter being controlled is not in the outer-most loop.
-func (i64ic *Int64IterControl) Reset() {
+func (i64ic *Int64IterControl) reset() {
 	*i64ic.vp = i64ic.start
 }
 
-// AtStart return true if the control is at the starting value
-func (i64ic *Int64IterControl) AtStart() bool {
+// atStart return true if the control is at the starting value
+func (i64ic *Int64IterControl) atStart() bool {
 	return *i64ic.vp == i64ic.start
 }
 
-// HasNext returns true when it is permissible to invoke Incr, i.e., we have not reached the
-// end of iteration for this parameter value.
-func (i64ic *Int64IterControl) HasNext() bool {
+// hasNext returns true when it is permissible to invoke increment(), i.e., we have not reached
+// the end of iteration for this parameter value.
+func (i64ic *Int64IterControl) hasNext() bool {
 	if i64ic.incr == 0 {
 		return false
 	} else if i64ic.incr > 0 {
@@ -169,8 +169,8 @@ func (i64ic *Int64IterControl) WillIterate() bool {
 	return i64ic.incr != 0
 }
 
-// Incr increments the parameter value to the next value as controlled by this iterator.
-func (i64ic *Int64IterControl) Incr() {
+// increment increments the parameter value to the next value as controlled by this iterator.
+func (i64ic *Int64IterControl) increment() {
 	*i64ic.vp += i64ic.incr
 }
 
@@ -192,11 +192,11 @@ func (i64ic Int64IterControl) String() string {
 	return fmt.Sprintf("%d:%d:%d", i64ic.start, i64ic.end, i64ic.incr)
 }
 
-// Parse decodes a string representing an IntIterControl and sets the internal state
+// parse decodes a string representing an IntIterControl and sets the internal state
 // accordingly. A non-nil error is returned if there is a parsing error.  There are two input
 // formats accepted: %d:%d:%d or %d.  The first form is the triple start:end:incr.  The latter
 // is just the start value, with end=start and incr=0, i.e., the value will not change.
-func (i64ic *Int64IterControl) Parse(input string) error {
+func (i64ic *Int64IterControl) parse(input string) error {
 	var start, end, incr int64
 	// Note that Sscanf is "loose" in that extraneous characters after the last %d are ignored.
 	scanned, err := fmt.Sscanf(input, "%d:%d:%d", &start, &end, &incr)
@@ -240,20 +240,20 @@ type Float64IterControl struct {
 	incr  float64
 }
 
-// Reset resets the parameter being incremented to the initial value.  This is used when, for
+// reset resets the parameter being incremented to the initial value.  This is used when, for
 // example, the parameter being controlled is not in the outer-most loop.
-func (f64ic *Float64IterControl) Reset() {
+func (f64ic *Float64IterControl) reset() {
 	*f64ic.vp = f64ic.start
 }
 
-// AtStart return true if the control is at the starting value
-func (f64ic *Float64IterControl) AtStart() bool {
+// atStart return true if the control is at the starting value
+func (f64ic *Float64IterControl) atStart() bool {
 	return *f64ic.vp == f64ic.start
 }
 
-// HasNext returns true when it is permissible to invoke Incr, i.e., we have not reached the
-// end of iteration for this parameter value.
-func (f64ic *Float64IterControl) HasNext() bool {
+// hasNext returns true when it is permissible to invoke increment(), i.e., we have not reached
+// the end of iteration for this parameter value.
+func (f64ic *Float64IterControl) hasNext() bool {
 	// NB: negative zero in IEEE754 will compare equal to zero.
 	if f64ic.incr == 0.0 {
 		return false
@@ -273,8 +273,8 @@ func (f64ic *Float64IterControl) WillIterate() bool {
 	return f64ic.incr != 0.0
 }
 
-// Incr increments the parameter value to the next value as controlled by this iterator.
-func (f64ic *Float64IterControl) Incr() {
+// increment increments the parameter value to the next value as controlled by this iterator.
+func (f64ic *Float64IterControl) increment() {
 	*f64ic.vp += f64ic.incr
 }
 
@@ -296,11 +296,11 @@ func (f64ic Float64IterControl) String() string {
 	return fmt.Sprintf("%g:%g:%g", f64ic.start, f64ic.end, f64ic.incr)
 }
 
-// Parse decodes a string representing an IntIterControl and sets the internal state
+// parse decodes a string representing an IntIterControl and sets the internal state
 // accordingly. A non-nil error is returned if there is a parsing error.  There are two input
 // formats accepted: %d:%d:%d or %d.  The first form is the triple start:end:incr.  The latter
 // is just the start value, with end=start and incr=0, i.e., the value will not change.
-func (f64ic *Float64IterControl) Parse(input string) error {
+func (f64ic *Float64IterControl) parse(input string) error {
 	var start, end, incr float64
 	// Note that Sscanf is "loose" in that extraneous characters after the last %d are ignored.
 	scanned, err := fmt.Sscanf(input, "%g:%g:%g", &start, &end, &incr)
