@@ -630,7 +630,7 @@ func (s *ApplicationState) doCommit() error {
 
 		// Reset CheckTx state to latest version. This is safe because Tendermint
 		// holds a lock on the mempool for commit.
-		cerr := s.checkTxTree.LoadVersionFast(blockHeight)
+		_, cerr := s.checkTxTree.LoadVersionFast(blockHeight)
 		if cerr != nil {
 			panic(cerr)
 		}
