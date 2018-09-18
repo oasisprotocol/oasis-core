@@ -251,7 +251,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_db_encryption_nested() {
-        let mut db = DatabaseHandle::instance();
+        let mut db = DatabaseHandle::new();
 
         db.clear();
 

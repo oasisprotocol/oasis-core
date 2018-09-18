@@ -43,13 +43,14 @@ jobs:
             --exclude ekiden-untrusted \
             --exclude ekiden-enclave-untrusted \
             --exclude ekiden-rpc-untrusted \
-            --exclude ekiden-db-trusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-contract-untrusted \
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
             --exclude ekiden-keymanager-trusted \
-            --exclude token
+            --exclude token \
+            -- \
+            --test-threads 1
 
       # Integration tests.
       - restore_cache:
