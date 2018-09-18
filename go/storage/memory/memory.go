@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"sync"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -71,6 +72,8 @@ func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uin
 		"expiration", ent.expiration,
 	)
 
+	span, _ := opentracing.StartSpanFromContext(ctx, "storage-memory-lock-set", opentracing.Tag{"ekiden.storage_key", key})
+
 	b.Lock()
 	defer b.Unlock()
 
@@ -78,6 +81,8 @@ func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uin
 	// of existing entries.  Should it do something better?  (eg: Use
 	// the longer of the two.)
 	b.store[key] = ent
+
+	span.Finish()
 
 	return nil
 }

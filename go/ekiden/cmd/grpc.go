@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -303,8 +305,8 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 	grpclog.SetLoggerV2(logAdapter)
 
 	var sOpts []grpc.ServerOption
-	sOpts = append(sOpts, grpc.UnaryInterceptor(logAdapter.unaryLogger))
-	sOpts = append(sOpts, grpc.StreamInterceptor(logAdapter.streamLogger))
+	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(logAdapter.unaryLogger, grpc_opentracing.UnaryServerInterceptor())))
+	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(logAdapter.streamLogger, grpc_opentracing.StreamServerInterceptor())))
 
 	return &grpcService{
 		BaseBackgroundService: svc,
