@@ -73,8 +73,13 @@ impl Certificate {
         // Extract P-256 EC public key.
         let key = certificate.public_key()?.public_key_to_der()?;
         // Extract and verify signature of the public key.
-        let raw_signature = certificate.serial_number().to_bn()?.to_vec();
-        if raw_signature.len() != 96 {
+        let mut raw_signature = certificate.serial_number().to_bn()?.to_vec();
+        if raw_signature.len() < 96 {
+            // Pad with leading zeros as those are stripped.
+            let mut padding = vec![0; 96 - raw_signature.len()];
+            padding.append(&mut raw_signature);
+            raw_signature = padding;
+        } else if raw_signature.len() != 96 {
             return Err(Error::new("invalid certificate node signature"));
         }
 
@@ -222,4 +227,47 @@ pub fn get_node_id(ctx: &grpcio::RpcContext) -> Result<B256> {
     }
 
     return Err(Error::new("request not authenticated"));
+}
+
+#[cfg(test)]
+mod test {
+    use super::super::ring::rand::SystemRandom;
+    use super::super::ring::signature::Ed25519KeyPair;
+    use super::super::signature::InMemorySigner;
+    use super::super::untrusted;
+
+    use super::Certificate;
+
+    #[test]
+    fn test_x509_serialization() {
+        // Generate new node private key and certificate.
+        let rng = SystemRandom::new();
+        let seed = Ed25519KeyPair::generate_pkcs8(&rng).unwrap().to_vec();
+        let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&seed)).unwrap();
+        let signer = InMemorySigner::new(key_pair);
+        let (tls_certificate, _) = Certificate::generate(&signer).unwrap();
+
+        // Verify generated certificate.
+        Certificate::validate_pem(String::from_utf8(tls_certificate.get_pem().unwrap()).unwrap())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_x509_leading_zeros() {
+        // This is a seed that generates a public key with a leading zero.
+        let seed = vec![
+            48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 200, 51, 74, 67, 177, 177,
+            167, 15, 108, 31, 165, 136, 81, 211, 202, 85, 128, 62, 227, 0, 59, 196, 229, 214, 236,
+            244, 251, 107, 156, 29, 110, 44, 161, 35, 3, 33, 0, 0, 119, 20, 60, 61, 22, 67, 43, 82,
+            145, 237, 122, 169, 2, 247, 83, 169, 32, 27, 134, 173, 168, 195, 121, 190, 101, 4, 198,
+            236, 179, 135, 7,
+        ];
+        let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&seed)).unwrap();
+        let signer = InMemorySigner::new(key_pair);
+        let (tls_certificate, _) = Certificate::generate(&signer).unwrap();
+
+        // Verify generated certificate.
+        Certificate::validate_pem(String::from_utf8(tls_certificate.get_pem().unwrap()).unwrap())
+            .unwrap();
+    }
 }
