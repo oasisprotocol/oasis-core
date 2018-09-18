@@ -72,7 +72,7 @@ func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uin
 		"expiration", ent.expiration,
 	)
 
-	span, _ := opentracing.StartSpanFromContext(ctx, "storage-memory-lock-set", opentracing.Tag{"ekiden.storage_key", key})
+	span, _ := opentracing.StartSpanFromContext(ctx, "storage-memory-lock-set", opentracing.Tag{Key: "ekiden.storage_key", Value: key})
 
 	b.Lock()
 	defer b.Unlock()
