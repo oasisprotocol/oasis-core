@@ -25,7 +25,7 @@ prepare:
 dep:
 	@echo "Ensuring package dependencies"
 	@test -d $(DOCKER_EKIDEN_GOPATH) && cd $(DOCKER_EKIDEN_GOPATH)/go; \
-	dep ensure
+	dep ensure -v
 
 # Generate required files.
 generate:
