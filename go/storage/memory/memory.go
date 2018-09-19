@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"sync"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
