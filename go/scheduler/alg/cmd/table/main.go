@@ -27,13 +27,22 @@ import (
 
 var averageNumSample int
 var iterationOrder string
+var printMarkdown bool
 
 func init() {
 	flag.IntVar(&averageNumSample, "average-samples", 1, "compute speedup by averaging over this many runs")
 	flag.StringVar(&iterationOrder, "iteration-order", "", "comma-separated list specifying the iteration order")
+	flag.BoolVar(&printMarkdown, "markdown", false, "print tables using Markdown table extension notation")
 }
 
 func printFields(w io.Writer, fields []string, colWidth int) {
+	if printMarkdown {
+		for col := 0; col < len(fields); col++ {
+			_, _ = fmt.Fprintf(w, "| %s ", fields[col])
+		}
+		_, _ = fmt.Fprintf(w, "|\n")
+		return
+	}
 	for col := 0; col < len(fields); col++ {
 		_, _ = fmt.Fprintf(w, "|%*s", colWidth, fields[col])
 	}
@@ -41,6 +50,13 @@ func printFields(w io.Writer, fields []string, colWidth int) {
 }
 
 func printSeparators(w io.Writer, numCols, colWidth int, dashRune string) {
+	if printMarkdown {
+		for col := 0; col < numCols; col++ {
+			fmt.Fprintf(w, "| -------: ")
+		}
+		fmt.Fprintf(w, "|\n")
+		return
+	}
 	for col := 0; col < numCols; col++ {
 		_, _ = fmt.Fprintf(w, "+")
 		for dash := 0; dash < colWidth; dash++ {
@@ -122,9 +138,15 @@ func main() {
 
 	// Print out all simulation parameters
 	if simulator.Verbosity > 0 {
+		if printMarkdown {
+			fmt.Fprintf(bw, "```\n")
+		}
 		simulator.ShowConfigFlags(bw, *dcnf, *acnf, *lcnf, *scnf, *xcnf)
 		fmt.Fprintf(bw, "\naverage-samples = %d\n", averageNumSample)
-		fmt.Fprintf(bw, "iteration-order = \"%s\"\n", iterationOrder)
+		fmt.Fprintf(bw, "iteration-order = \"%s\"\n\n", iterationOrder)
+		if printMarkdown {
+			fmt.Fprintf(bw, "```\n\n")
+		}
 		if bw.Flush() != nil {
 			panic("I/O error for simulation configuration output")
 		}
@@ -144,14 +166,21 @@ func main() {
 	precision := 4
 
 	numCols := numVarying + 1
-	printHeavySeparators(bw, numCols, colWidth)
+	if !printMarkdown {
+		printHeavySeparators(bw, numCols, colWidth)
+	}
 	printFields(bw, vHeaders, colWidth)
+	if printMarkdown {
+		printLightSeparators(bw, numCols, colWidth)
+	}
 
 	for {
-		if iterator.AtStart(2) {
-			printHeavySeparators(bw, numCols, colWidth)
-		} else if iterator.AtStart(1) {
-			printLightSeparators(bw, numCols, colWidth)
+		if !printMarkdown {
+			if iterator.AtStart(2) {
+				printHeavySeparators(bw, numCols, colWidth)
+			} else if iterator.AtStart(1) {
+				printLightSeparators(bw, numCols, colWidth)
+			}
 		}
 		data := make([]string, numCols)
 		ix := 0
@@ -186,5 +215,7 @@ func main() {
 			break
 		}
 	}
-	printHeavySeparators(bw, numCols, colWidth)
+	if !printMarkdown {
+		printHeavySeparators(bw, numCols, colWidth)
+	}
 }
