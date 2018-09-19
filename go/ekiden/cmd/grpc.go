@@ -285,6 +285,8 @@ func (s *grpcService) Cleanup() {
 	}
 }
 
+// This internally takes a snapshot of the current global tracer, so
+// make sure you initialize the global tracer before calling this.
 func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
