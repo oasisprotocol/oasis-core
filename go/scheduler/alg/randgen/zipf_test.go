@@ -41,7 +41,7 @@ func TestZipfCdf(t *testing.T) { // nolint: gocyclo
 	if err != nil {
 		t.Errorf("NewZipf failed: %s", err.Error())
 	}
-	cdf := z.cdf
+	cdf := z.(*Zipf).cdf
 	assert.Equal(0.0, cdf[0], "zeroth element should be zero exactly")
 
 	if cdf[1000000] != 1.0 {

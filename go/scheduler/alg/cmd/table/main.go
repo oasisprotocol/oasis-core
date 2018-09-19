@@ -70,7 +70,6 @@ func main() {
 		}
 	}(bw)
 
-	// Initial values.
 	simulator.UpdateAndCheckConfigFlags()
 
 	dcnf := &simulator.DistributionConfigFromFlags
