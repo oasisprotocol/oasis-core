@@ -20,6 +20,7 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
 use ekiden_core::futures::sync::mpsc;
+use ekiden_core::hash::EncodedHash;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
 use ekiden_roothash_base::{Block, Event, Header, RootHashBackend, RootHashSigner};
@@ -1058,11 +1059,17 @@ impl RootHashFrontend {
         node_id: B256,
         batch_hash: H256,
         block_header: Header,
+        group_hash: H256,
     ) -> Result<()> {
         let inner = &self.inner;
 
         // Check that batch comes from current committee leader.
         let committee = inner.computation_group.check_remote_batch(node_id)?;
+
+        // Check that the current committee matches the leader's view.
+        if group_hash != committee.get_encoded_hash() {
+            return Err(Error::new("inconsistent view of computation group"));
+        }
 
         require_state_result!(
             inner,
