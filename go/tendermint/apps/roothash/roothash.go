@@ -117,10 +117,10 @@ func (app *rootHashApplication) InitChain(request types.RequestInitChain) types.
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
-	app.checkCommittees()
+	app.checkCommittees(ctx)
 }
 
-func (app *rootHashApplication) checkCommittees() { // nolint: gocyclo
+func (app *rootHashApplication) checkCommittees(ctx *abci.Context) { // nolint: gocyclo
 	// Only perform checks on epoch changes.
 	if app.state.BlockHeight() == 0 {
 		return
@@ -200,6 +200,7 @@ func (app *rootHashApplication) checkCommittees() { // nolint: gocyclo
 			"round", blockNr,
 		)
 
+		contract.Timer.Stop(ctx)
 		contract.Round = newRound(committee, block)
 		state.UpdateContractState(contract)
 	}

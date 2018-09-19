@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/contract"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -155,6 +156,15 @@ func (c *Committee) ToProto() *pbSched.Committee {
 	pb.ValidFor = uint64(c.ValidFor)
 
 	return pb
+}
+
+// EncodedMembersHash returns the encoded cryptographic hash of the committee members.
+func (c *Committee) EncodedMembersHash() hash.Hash {
+	var hh hash.Hash
+
+	hh.From(c.Members)
+
+	return hh
 }
 
 // Backend is a scheduler implementation.

@@ -8,6 +8,7 @@ use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
+use ekiden_core::hash::EncodedHash;
 use ekiden_core::identity::NodeIdentity;
 use ekiden_core::node::Node;
 use ekiden_core::node_group::NodeGroup;
@@ -375,13 +376,14 @@ impl ComputationGroup {
     pub fn submit(&self, batch_hash: H256, block_header: Header) -> Vec<CommitteeNode> {
         trace!("Submitting batch to workers");
 
+        let mut epochs = self.inner.epochs.lock().unwrap();
+        let active_epoch = epochs.active.as_mut().expect("no active epoch");
+
         // Prepare request.
         let mut request = SubmitBatchRequest::new();
         request.set_batch_hash(batch_hash.to_vec());
         request.set_block_header(block_header.into());
-
-        let mut epochs = self.inner.epochs.lock().unwrap();
-        let active_epoch = epochs.active.as_mut().expect("no active epoch");
+        request.set_group_hash(active_epoch.committee.get_encoded_hash().to_vec());
 
         // If a batch submission task already exists, kill it as it is out of date.
         if let Some(handle) = active_epoch.batch_submission_task.take() {

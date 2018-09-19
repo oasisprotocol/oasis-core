@@ -102,6 +102,11 @@ func (s *contractState) onNewCommittee(committee *scheduler.Committee) {
 		"round", blockNr,
 	)
 
+	if !s.timer.Stop() {
+		<-s.timer.C
+	}
+	s.timer.Reset(infiniteTimeout)
+
 	s.round = newRound(s.storage, s.contract, committee, block)
 }
 
