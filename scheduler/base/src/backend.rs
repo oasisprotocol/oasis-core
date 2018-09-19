@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use serde::ser::SerializeStruct;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 use ekiden_common::bytes::B256;
@@ -50,12 +51,26 @@ impl<'de> Deserialize<'de> for Role {
 }
 
 /// A node participating in a committee.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct CommitteeNode {
     /// Node role.
     pub role: Role,
     /// Node public key.
     pub public_key: B256,
+}
+
+// NOTE: We need to implement a custom Serialize because we need canonical encoding,
+//       e.g., fields sorted by name.
+impl Serialize for CommitteeNode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut node = serializer.serialize_struct("CommitteeNode", 2)?;
+        node.serialize_field("public_key", &self.public_key)?;
+        node.serialize_field("role", &self.role)?;
+        node.end()
+    }
 }
 
 impl TryFrom<api::CommitteeNode> for CommitteeNode {

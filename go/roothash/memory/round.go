@@ -131,6 +131,12 @@ func (r *round) addCommitment(commitment *commitment) error {
 		return errors.New("roothash/memory: submitted header is not based on previous block")
 	}
 
+	// Check if the block is based on the same committee.
+	committeeHash := r.roundState.committee.EncodedMembersHash()
+	if !header.GroupHash.Equal(&committeeHash) {
+		return errors.New("tendermint/roothash: submitted header is not for the current committee")
+	}
+
 	// Check if the header refers to hashes in storage.
 	if err := r.ensureHashesInStorage(header); err != nil {
 		return err

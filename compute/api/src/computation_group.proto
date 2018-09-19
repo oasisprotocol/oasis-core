@@ -12,6 +12,7 @@ service ComputationGroup {
 message SubmitBatchRequest {
     bytes batch_hash = 1;
     roothash.Header block_header = 2;
+    bytes group_hash = 3;
 }
 
 message SubmitBatchResponse {

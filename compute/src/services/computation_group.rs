@@ -47,10 +47,14 @@ impl ComputationGroup for ComputationGroupService {
             let node_id = get_node_id(&ctx)?;
             let batch_hash = H256::try_from(request.get_batch_hash())?;
             let block_header = Header::try_from(request.get_block_header().clone())?;
+            let group_hash = H256::try_from(request.get_group_hash())?;
 
-            self.inner
-                .roothash_frontend
-                .process_remote_batch(node_id, batch_hash, block_header)?;
+            self.inner.roothash_frontend.process_remote_batch(
+                node_id,
+                batch_hash,
+                block_header,
+                group_hash,
+            )?;
 
             Ok(())
         };
