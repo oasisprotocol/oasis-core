@@ -39,6 +39,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use:     "ekiden",
 		Short:   "Ekiden",
+		Long:    "This program uses jaeger-client-go. See https://godoc.org/github.com/uber/jaeger-client-go/config#Configuration for how to configure tracing with environment variables.",
 		Version: "0.2.0-alpha",
 		Run:     nodeMain,
 	}
