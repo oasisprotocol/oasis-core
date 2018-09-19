@@ -188,8 +188,6 @@ func (it *Iterator) Incr() bool {
 				it.Control[pos].reset()
 				// carry to next control
 			}
-		} else {
-			it.Control[pos].reset() // in case simulation code changed it
 		}
 		pos--
 	}
@@ -249,9 +247,15 @@ func MakeIteratorForFlags(flagName []string) (*Iterator, error) {
 			return nil, fmt.Errorf("flag name %s not valid", fn)
 		}
 		it := nameToIter[fn]
-		it.reset()
-		// We reset() here in case the relying code creates two iterators to run
-		// sequentially where the same flag(s) get iterated.
+		if it.WillIterate() {
+			it.reset()
+			// We reset() here in case the relying code creates two iterators to
+			// run sequentially where the same flag(s) get iterated.  However, only
+			// WillIterate() flags get this treatment, since flags can have default
+			// values that cause them to be set based on other values, and when run
+			// in that way they do not iterate, and resetting the flag to the
+			// signalling default value would be wrong.
+		}
 		iter = append(iter, it)
 	}
 	err = sortIterControl(iter, order)

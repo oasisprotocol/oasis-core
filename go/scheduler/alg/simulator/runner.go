@@ -50,7 +50,10 @@ type DistributionConfig struct {
 	alpha            float64
 	numLocations     int
 	numReadLocs      int
+	readZipfAlpha    float64
 	numWriteLocs     int
+	writeZipfAlpha   float64
+	writeZipfMin     int
 	numTransactions  int
 }
 
@@ -70,7 +73,10 @@ func (dcnf *DistributionConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "  alpha = %f\n", dcnf.alpha)
 	_, _ = fmt.Fprintf(bw, "  num-locations = %d\n", dcnf.numLocations)
 	_, _ = fmt.Fprintf(bw, "  num-reads = %d\n", dcnf.numReadLocs)
+	_, _ = fmt.Fprintf(bw, "  read-zipf-alpha = %f\n", dcnf.readZipfAlpha)
 	_, _ = fmt.Fprintf(bw, "  num-writes = %d\n", dcnf.numWriteLocs)
+	_, _ = fmt.Fprintf(bw, "  write-zipf-alpha = %f\n", dcnf.writeZipfAlpha)
+	_, _ = fmt.Fprintf(bw, "  write-zipf-min = %d\n", dcnf.writeZipfMin)
 	_, _ = fmt.Fprintf(bw, "  num-transactions = %d\n", dcnf.numTransactions)
 }
 
@@ -234,9 +240,9 @@ func (scnf *SchedulerConfig) Show(bw io.Writer) {
 
 // UpdateAndCheckDefaults sets the maxPending configuration based on other configuration
 // values if it had not been set by a command-line flag.
-func (scnf *SchedulerConfig) UpdateAndCheckDefaults(xcnf ExecutionConfig) {
+func (scnf *SchedulerConfig) UpdateAndCheckDefaults(numCommittees int) {
 	if scnf.maxPending < 0 {
-		scnf.maxPending = 2 * scnf.maxTime * xcnf.numCommittees
+		scnf.maxPending = 2 * scnf.maxTime * numCommittees
 	}
 }
 
@@ -305,10 +311,19 @@ func init() {
 	// read the rest, and similarly for writes.
 	iterflag.IntVar(&DistributionConfigFromFlags.numLocations, "num-locations",
 		1000000, 1000000, 0, "number of possible memory locations")
+
 	iterflag.IntVar(&DistributionConfigFromFlags.numReadLocs, "num-reads", 0, 0, 0,
 		"number of read locations in a transaction")
+	iterflag.Float64Var(&DistributionConfigFromFlags.readZipfAlpha, "reads-zipf-alpha",
+		0.0, 0.0, 0.0, "Zipf alpha parameter for num-reads Rng, from [0, num-reads+1); use 0.0 to use num-reads as a constant")
+
 	iterflag.IntVar(&DistributionConfigFromFlags.numWriteLocs, "num-writes", 2, 2, 0,
 		"number of write locations in a transaction")
+	iterflag.Float64Var(&DistributionConfigFromFlags.writeZipfAlpha, "writes-zipf-alpha",
+		0.0, 0.0, 0.0, "Zipf alpha parameter for num-writes Rng, from zipf-write-min + [0, num-writes); use 0.0 to use num-writes as a constant")
+	iterflag.IntVar(&DistributionConfigFromFlags.writeZipfMin, "writes-zipf-min",
+		2, 2, 0, "Zipf generation parameter for num-writes Rng, generating zipf-write-min + [0, num-writes)")
+
 	iterflag.IntVar(&DistributionConfigFromFlags.numTransactions, "num-transactions",
 		1000000, 1000000, 0, "number of transactions to generate")
 
@@ -355,7 +370,7 @@ func UpdateAndCheckConfigFlags() {
 	DistributionConfigFromFlags.UpdateAndCheckDefaults()
 	AdversaryConfigFromFlags.UpdateAndCheckDefaults()
 	LogicalShardingConfigFromFlags.UpdateAndCheckDefaults()
-	SchedulerConfigFromFlags.UpdateAndCheckDefaults(ExecutionConfigFromFlags)
+	SchedulerConfigFromFlags.UpdateAndCheckDefaults(ExecutionConfigFromFlags.numCommittees)
 	ExecutionConfigFromFlags.UpdateAndCheckDefaults()
 }
 
@@ -396,7 +411,31 @@ func transactionSourceFactory(cnf *DistributionConfig) TransactionSource {
 	} else {
 		panic(fmt.Sprintf("Random distribution name not recognized: %s", cnf.distributionName))
 	}
-	return NewRandomDistributionTransactionSource(cnf.numTransactions, cnf.numReadLocs, cnf.numWriteLocs, rg)
+
+	var rdRng, wrRng randgen.Rng
+	if cnf.readZipfAlpha == 0.0 {
+		rdRng = randgen.NewFixed(cnf.numReadLocs)
+	} else {
+		uniformRng := rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
+		rdRng, err = randgen.NewZipf(cnf.readZipfAlpha, cnf.numReadLocs+1, uniformRng)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+	if cnf.writeZipfAlpha == 0.0 {
+		wrRng = randgen.NewFixed(cnf.numWriteLocs)
+	} else {
+		uniformRng := rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
+		wrRng, err = randgen.NewZipf(cnf.writeZipfAlpha, cnf.numWriteLocs, uniformRng)
+		if err != nil {
+			panic(err.Error())
+		}
+		// 1 + [0, numWriteLocs) since 0 write locations make no sense: a read-only
+		// view transaction should not get scheduled.
+		wrRng = randgen.NewAdd([]randgen.Rng{wrRng, randgen.NewFixed(cnf.writeZipfMin)})
+	}
+
+	return NewRandomDistributionRandNumLocationsTransactionSource(cnf.numTransactions, rdRng, wrRng, rg)
 }
 
 func adversaryFactory(acnf *AdversaryConfig, ts TransactionSource) TransactionSource {
