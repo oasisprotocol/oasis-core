@@ -39,7 +39,6 @@ var (
 	rootCmd = &cobra.Command{
 		Use:     "ekiden",
 		Short:   "Ekiden",
-		Long:    "This program uses jaeger-client-go. See https://godoc.org/github.com/uber/jaeger-client-go/config#Configuration for how to configure tracing with environment variables.",
 		Version: "0.2.0-alpha",
 		Run:     nodeMain,
 	}
@@ -89,7 +88,7 @@ func nodeMain(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize the tracing client.
-	tracingCloser, err := initTracing("ekiden-node")
+	tracingCloser, err := initTracing(cmd, "ekiden-node")
 	if err != nil {
 		rootLog.Error("failed to initialize tracing",
 			"err", err,
@@ -262,6 +261,7 @@ func init() {
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
 		registerMetricsFlags,
+		registerTracingFlags,
 		registerGrpcFlags,
 		registerPprofFlags,
 		beacon.RegisterFlags,
