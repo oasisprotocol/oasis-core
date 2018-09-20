@@ -1,8 +1,9 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 # Our development image sets up the PATH in .bashrc. Source that.
 PS1='\$'
 . ~/.bashrc
+set -x
 
 # Abort on unclean packaging area.
 if [ -e target/docker-deployment/context ]; then
