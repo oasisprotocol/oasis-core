@@ -47,6 +47,7 @@ func registerTracingFlags(cmd *cobra.Command) {
 
 	for _, v := range []string{
 		cfgTracingEnabled,
+		cfgTracingReporterFlushInterval,
 		cfgTracingSamplerParam,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
