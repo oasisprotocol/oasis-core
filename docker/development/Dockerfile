@@ -35,7 +35,7 @@ RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5
 # install Linux SGX SDK
 # Note: myelin-ml is a lightly modified version of the intel sgx sdk at 2.1.3 with the baidu patch applied.
 # https://github.com/baidu/rust-sgx-sdk/tree/master/dockerfile/experimental
-RUN git clone https://github.com/myelin-ml/linux-sgx.git && cd linux-sgx && \
+RUN git clone https://github.com/oasislabs/linux-sgx.git && cd linux-sgx && \
     ./download_prebuilt.sh && make -j sdk && make -j sdk_install_pkg && \
     ./linux/installer/bin/sgx_linux_x64_sdk_*.bin --prefix /opt && \
     echo "source /opt/sgxsdk/environment" >> /root/.bashrc
