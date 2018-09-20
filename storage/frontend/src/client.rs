@@ -1,7 +1,8 @@
 //! Storage gRPC client.
 use std::sync::Arc;
 
-use grpcio::{Channel, ChannelBuilder};
+use grpcio::{CallOption, Channel, ChannelBuilder};
+use rustracing::tag;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::environment::Environment;
@@ -11,6 +12,7 @@ use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_storage_api as api;
 use ekiden_storage_base::StorageBackend;
+use ekiden_tracing::{self, inject_to_options};
 
 /// Storage client implements the storage interface.  It exposes storage calls across a gRPC channel.
 pub struct StorageClient(api::StorageClient);
@@ -47,9 +49,19 @@ impl StorageBackend for StorageClient {
         req.set_data(value);
         req.set_expiry(expiry);
 
-        match self.0.insert_async(&req) {
+        // TODO: correlate with whatever initiates this
+        let span = ekiden_tracing::get_tracer()
+            .span("storage-client-insert")
+            .tag(tag::StdTag::span_kind("client"))
+            .start();
+        let options = inject_to_options(CallOption::default(), span.context());
+
+        match self.0.insert_async_opt(&req, options) {
             Ok(f) => Box::new(
-                f.map(|_r| ())
+                f.then(|result| {
+                    drop(span);
+                    result
+                }).map(|_r| ())
                     .map_err(|error| Error::new(format!("{:?}", error))),
             ),
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),

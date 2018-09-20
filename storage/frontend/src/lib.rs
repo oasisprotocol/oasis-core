@@ -6,8 +6,10 @@ extern crate ekiden_registry_base;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
+extern crate ekiden_tracing;
 
 extern crate grpcio;
+extern crate rustracing;
 
 pub mod client;
 pub mod frontend;
