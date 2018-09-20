@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use grpcio::{self, MetadataBuilder, RpcStatus, RpcStatusCode};
+use grpcio::{self, RpcStatus, RpcStatusCode};
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
 use serde::de::DeserializeOwned;
@@ -17,7 +17,7 @@ use ekiden_common::futures::sync::oneshot;
 use ekiden_common::hash::EncodedHash;
 use ekiden_compute_api;
 use ekiden_contract_common::call::{ContractCall, ContractOutput};
-use ekiden_tracing::MetadataBuilderCarrier;
+use ekiden_tracing::inject_to_options;
 
 /// Contract client.
 pub struct ContractClient {
@@ -85,20 +85,7 @@ impl ContractClient {
                 let span = sh.child("submit_tx_async_opt", |opts| {
                     opts.tag(tag::StdTag::span_kind("client")).start()
                 });
-                if let Some(sc) = span.context() {
-                    let mut carrier = MetadataBuilderCarrier(MetadataBuilder::with_capacity(1));
-                    match sc.inject_to_http_header(&mut carrier) {
-                        Ok(()) => {
-                            options = options.headers(carrier.0.build());
-                        }
-                        Err(error) => {
-                            error!(
-                                "Tracing provider unable to inject span context: {:?}",
-                                error
-                            );
-                        }
-                    }
-                }
+                options = inject_to_options(options, span.context());
 
                 match rpc.submit_tx_async_opt(&request.clone(), options) {
                     Ok(call) => call.then(|result| {

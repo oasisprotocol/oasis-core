@@ -7,10 +7,13 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
+rustracing = "0.1.7"
+
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-registry-base = { path = "../../registry/base", version = "0.2.0-alpha" }
 ekiden-storage-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
+ekiden-tracing = { path = "../../tracing", version = "0.2.0-alpha" }
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }

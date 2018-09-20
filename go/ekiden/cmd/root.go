@@ -87,7 +87,18 @@ func nodeMain(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Initialize the tracing client.
+	tracingCloser, err := initTracing(cmd, "ekiden-node")
+	if err != nil {
+		rootLog.Error("failed to initialize tracing",
+			"err", err,
+		)
+		return
+	}
+	defer tracingCloser.Close()
+
 	// Initialize the gRPC server.
+	// Depends on global tracer.
 	env.grpcSrv, err = newGrpcService(cmd)
 	if err != nil {
 		rootLog.Error("failed to initialize gRPC server",
@@ -250,6 +261,7 @@ func init() {
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
 		registerMetricsFlags,
+		registerTracingFlags,
 		registerGrpcFlags,
 		registerPprofFlags,
 		beacon.RegisterFlags,

@@ -12,9 +12,9 @@ type Uniform struct {
 	rng      *rand.Rand
 }
 
-// NewUniform returns a newly constructed Uniform object.  This is a thin wrapper around rand's
-// Intn.
-func NewUniform(m int, r *rand.Rand) (*Uniform, error) {
+// NewUniform returns a newly constructed Uniform Rng object.  This is a thin wrapper around
+// rand's Intn.
+func NewUniform(m int, r *rand.Rand) (Rng, error) {
 	if m <= 0 {
 		return nil, fmt.Errorf("uniform distribution with zero or fewer (%d) elements?", m)
 	}
