@@ -29,9 +29,9 @@ type Zipf struct {
 	cdf      []float64 // cumulative distribution function via table lookup
 }
 
-// NewZipf returns a newly constructed Zipf object.  Because a cumulative-distribution table is
-// generated, this will be expensive when the MaxValue is large.
-func NewZipf(a float64, m int, r *rand.Rand) (*Zipf, error) {
+// NewZipf returns a newly constructed Zipf Rng object.  Because a cumulative-distribution
+// table is generated, this will be expensive when the MaxValue is large.
+func NewZipf(a float64, m int, r *rand.Rand) (Rng, error) {
 	if m <= 0 {
 		return nil, errors.New("zipf distribution with zero elements?")
 	}

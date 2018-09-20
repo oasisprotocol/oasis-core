@@ -1,5 +1,6 @@
 #![feature(use_extern_macros)]
 
+use std::net::ToSocketAddrs;
 use std::sync::Mutex;
 
 extern crate clap;
@@ -24,6 +25,11 @@ pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
             .long("tracing-sample-probability")
             .takes_value(true)
             .default_value("0.001"),
+        clap::Arg::with_name("tracing-agent-addr")
+            .long("tracing-agent-addr")
+            .help("Address of the Jaeger agent's compact thrift UDP port")
+            .takes_value(true)
+            .default_value("127.0.0.1:6831"),
     ]
 }
 
@@ -42,8 +48,16 @@ pub fn report_forever(service_name: &str, matches: &clap::ArgMatches) {
                 f64
             )).unwrap(),
         );
-        let reporter =
+        let agent_addr = matches
+            .value_of("tracing-agent-addr")
+            .unwrap()
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .unwrap();
+        let mut reporter =
             rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name).unwrap();
+        reporter.set_agent_addr(agent_addr);
 
         std::thread::spawn(move || {
             // TODO: is it better to batch these?
