@@ -90,7 +90,7 @@ jobs:
           name: Installing Tarpaulin
           command: git clone https://github.com/xd009642/tarpaulin && cd tarpaulin && git checkout tags/0.6.5 && rm Cargo.lock && sed -i 's/proc-macro2 = "/proc-macro2 = "=/' Cargo.toml && cargo install
           working_directory: /root/
-      - run:
+      - run: |
           cargo tarpaulin --all \
             --ignore-tests \
             --out Xml \
@@ -273,6 +273,7 @@ workflows:
     jobs:
       - build-go
       - build-rust
+      - cover-rust
       - lint-git
       - set-docker-tag:
           # FIXME: The master filter for this and the deploy steps is a
