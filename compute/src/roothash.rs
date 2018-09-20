@@ -512,7 +512,7 @@ impl RootHashFrontend {
             ),
         }
 
-        trace!("Root hash frontend transitioning to {}", to);
+        trace!("Root hash frontend transitioning {} -> {}", state, to);
         *state = to;
     }
 

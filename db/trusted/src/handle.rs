@@ -93,7 +93,7 @@ impl DatabaseHandle {
     }
 
     /// Return the root hash of the database state.
-    pub(crate) fn get_root_hash(&mut self) -> Result<H256> {
+    pub fn get_root_hash(&mut self) -> Result<H256> {
         match self.root_hash {
             Some(root_hash) => Ok(root_hash),
             None => Ok(empty_hash()),
