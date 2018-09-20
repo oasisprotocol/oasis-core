@@ -164,7 +164,8 @@ run_test() {
     ${WORKDIR}/target/debug/${client}-client \
         --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 &
+        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        &
     client_pid=$!
 
     if [[ "${start_client_first}" == 1 ]]; then

@@ -17,6 +17,7 @@ extern crate trackable;
 use trackable::error::ErrorKindExt;
 use trackable::track;
 
+/// Create a Vec of args for App::args(&...) with configuration options for tracing.
 pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
     vec![
         clap::Arg::with_name("tracing-enable").long("tracing-enable"),
@@ -36,6 +37,8 @@ lazy_static! {
     static ref GLOBAL_TRACER: Mutex<Option<Tracer>> = Mutex::new(None);
 }
 
+/// Read options from an ArgMatches (use get_arguments). Start a thread that reports to the Jaeger
+/// agent under a given service name.
 pub fn report_forever(service_name: &str, matches: &clap::ArgMatches) {
     let tracer = if matches.is_present("tracing-enable") {
         let (tracer, span_rx) = Tracer::new(
@@ -75,6 +78,7 @@ pub fn report_forever(service_name: &str, matches: &clap::ArgMatches) {
     *guard = Some(tracer);
 }
 
+/// Obtain a copy of the global Tracer object.
 pub fn get_tracer() -> Tracer {
     GLOBAL_TRACER
         .lock()
@@ -83,6 +87,7 @@ pub fn get_tracer() -> Tracer {
         .expect("Getting tracer before initialization")
 }
 
+/// A SetHttpHeaderField adapter for GRPC metadata.
 pub struct MetadataBuilderCarrier(pub grpcio::MetadataBuilder);
 
 impl rustracing::carrier::SetHttpHeaderField for MetadataBuilderCarrier {
@@ -96,6 +101,29 @@ impl rustracing::carrier::SetHttpHeaderField for MetadataBuilderCarrier {
     }
 }
 
+/// Inject a span context as the only headers of a GRPC CallOption.
+pub fn inject_to_options(
+    mut options: grpcio::CallOption,
+    context: Option<&rustracing_jaeger::span::SpanContext>,
+) -> grpcio::CallOption {
+    if let Some(sc) = context {
+        let mut carrier = MetadataBuilderCarrier(grpcio::MetadataBuilder::with_capacity(1));
+        match sc.inject_to_http_header(&mut carrier) {
+            Ok(()) => {
+                options = options.headers(carrier.0.build());
+            }
+            Err(error) => {
+                error!(
+                    "Tracing provider unable to inject span context: {:?}",
+                    error
+                );
+            }
+        }
+    }
+    options
+}
+
+/// An IterHttpHeaderFields adpter for GRPC metadata.
 pub struct MetadataCarrier<'a>(pub &'a grpcio::Metadata);
 
 impl<'a> rustracing::carrier::IterHttpHeaderFields<'a> for MetadataCarrier<'a> {
