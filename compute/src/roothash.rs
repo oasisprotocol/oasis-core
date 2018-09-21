@@ -31,6 +31,11 @@ use ekiden_tracing;
 use super::group::ComputationGroup;
 use super::worker::{ComputedBatch, Worker};
 
+/// Error message for trying to append when not computation group leader.
+pub const ERROR_APPEND_NOT_LEADER: &'static str = "not computation group leader";
+/// Error message for trying to append a too large call.
+pub const ERROR_APPEND_TOO_LARGE: &'static str = "call too large";
+
 /// Commands for communicating with the root hash frontend from other tasks.
 enum Command {
     /// Process remote batch.
@@ -281,6 +286,8 @@ struct Inner {
     incoming_queue: Mutex<Option<IncomingQueue>>,
     /// Maximum batch size.
     max_batch_size: usize,
+    /// Maximum batch size in bytes.
+    max_batch_size_bytes: usize,
     /// Maximum batch timeout.
     max_batch_timeout: Duration,
     /// Test-only configuration.
@@ -303,6 +310,8 @@ pub struct RootHashTestOnlyConfiguration {
 pub struct RootHashConfiguration {
     /// Maximum batch size.
     pub max_batch_size: usize,
+    /// Maximum batch size in bytes.
+    pub max_batch_size_bytes: usize,
     /// Maximum batch timeout.
     pub max_batch_timeout: u64,
     /// Test-only configuration.
@@ -360,6 +369,7 @@ impl RootHashFrontend {
                 command_receiver: Mutex::new(Some(command_receiver)),
                 incoming_queue: Mutex::new(None),
                 max_batch_size: config.max_batch_size,
+                max_batch_size_bytes: config.max_batch_size_bytes,
                 max_batch_timeout: Duration::from_millis(config.max_batch_timeout),
                 test_only_config: config.test_only.clone(),
                 incoming_queue_notified: AtomicBool::new(false),
@@ -752,7 +762,13 @@ impl RootHashFrontend {
         // Check if we should process.
         let mut incoming_queue = inner.incoming_queue.lock().unwrap();
         let should_process = if let Some(ref incoming_queue) = *incoming_queue {
+            let queue_size_bytes = incoming_queue
+                .calls
+                .iter()
+                .fold(0, |acc, call| acc + call.data.len());
+
             incoming_queue.calls.len() >= inner.max_batch_size
+                || queue_size_bytes >= inner.max_batch_size_bytes
                 || incoming_queue.start.elapsed() >= inner.max_batch_timeout
         } else {
             false
@@ -766,14 +782,34 @@ impl RootHashFrontend {
                     .tag(tag::StdTag::span_kind("consumer")),
             );
 
-            // Take calls from incoming queue for processing. We only take up to max_batch_size
-            // and leave the rest for the next batch, resetting the timestamp.
-            let mut batch_info = incoming_queue.take().unwrap().calls;
-            if batch_info.len() > inner.max_batch_size {
-                let mut remaining = batch_info.split_off(inner.max_batch_size);
-                let incoming_queue = incoming_queue.get_or_insert_with(|| IncomingQueue::default());
-                incoming_queue.calls.append(&mut remaining);
+            // Take calls from incoming queue for processing. We only take up to max_batch_size,
+            // taking into account max_batch_size_bytes and leave the rest for the next batch.
+            let mut batch_info = VecDeque::new();
+            let mut current_batch_size = 0;
+            let mut new_incoming_queue = IncomingQueue::default();
+
+            for item in incoming_queue.take().unwrap().calls {
+                if batch_info.len() + 1 > inner.max_batch_size {
+                    // Batch would overflow, put all remaining items back.
+                    new_incoming_queue.calls.push_back(item);
+                    continue;
+                }
+
+                if current_batch_size + item.data.len() > inner.max_batch_size_bytes {
+                    // Batch would overflow, put the item back.
+                    new_incoming_queue.calls.push_back(item);
+                    continue;
+                }
+
+                current_batch_size += item.data.len();
+                batch_info.push_back(item);
             }
+
+            // If there are any items left over, put them back into the incoming queue.
+            if !new_incoming_queue.calls.is_empty() {
+                *incoming_queue = Some(new_incoming_queue);
+            }
+
             let batch: Vec<_> = batch_info
                 .into_iter()
                 .map(|call_info| {
@@ -1028,7 +1064,15 @@ impl RootHashFrontend {
             let state = self.inner.state.lock().unwrap();
             if !state.is_leader() {
                 warn!("Ignoring append to batch as we are not the computation group leader");
-                return Err(Error::new("not computation group leader"));
+                return Err(Error::new(ERROR_APPEND_NOT_LEADER));
+            }
+        }
+
+        // If call is too big to process, reject it.
+        {
+            if data.len() > self.inner.max_batch_size_bytes {
+                warn!("Rejecting oversized call ({} bytes)", data.len());
+                return Err(Error::new(ERROR_APPEND_TOO_LARGE));
             }
         }
 
