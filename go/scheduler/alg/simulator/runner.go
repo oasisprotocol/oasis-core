@@ -44,7 +44,7 @@ type SimulationResults struct {
 type DistributionConfig struct {
 	seed             int64
 	seedRng          *rand.Rand
-	distributionName string
+	distributionName string // "uniform", "zipf", "cryptokitties"
 	inputFile        string // "-" means standard input
 	outputFile       string
 	alpha            float64
@@ -54,6 +54,9 @@ type DistributionConfig struct {
 	numWriteLocs     int
 	writeZipfAlpha   float64
 	writeZipfMin     int
+	damZipfAlpha     float64
+	sireZipfAlpha    float64
+	numAutoBirthers  int
 	numTransactions  int
 }
 
@@ -77,6 +80,9 @@ func (dcnf *DistributionConfig) Show(bw io.Writer) {
 	_, _ = fmt.Fprintf(bw, "  num-writes = %d\n", dcnf.numWriteLocs)
 	_, _ = fmt.Fprintf(bw, "  write-zipf-alpha = %f\n", dcnf.writeZipfAlpha)
 	_, _ = fmt.Fprintf(bw, "  write-zipf-min = %d\n", dcnf.writeZipfMin)
+	_, _ = fmt.Fprintf(bw, "  dam-zipf-alpha = %f\n", dcnf.damZipfAlpha)
+	_, _ = fmt.Fprintf(bw, "  sire-zipf-alpha = %f\n", dcnf.sireZipfAlpha)
+	_, _ = fmt.Fprintf(bw, "  num-auto-birthers = %d\n", dcnf.numAutoBirthers)
 	_, _ = fmt.Fprintf(bw, "  num-transactions = %d\n", dcnf.numTransactions)
 }
 
@@ -112,6 +118,9 @@ func (dcnf *DistributionConfig) UpdateAndCheckDefaults() {
 	}
 	if dcnf.numTransactions <= 0 {
 		panic("Number of transactions to generate (num-transactions) must be positive")
+	}
+	if dcnf.numAutoBirthers <= 0 {
+		panic("Number of auto-birthers must be positive")
 	}
 }
 
@@ -314,15 +323,22 @@ func init() {
 
 	iterflag.IntVar(&DistributionConfigFromFlags.numReadLocs, "num-reads", 0, 0, 0,
 		"number of read locations in a transaction")
-	iterflag.Float64Var(&DistributionConfigFromFlags.readZipfAlpha, "reads-zipf-alpha",
+	iterflag.Float64Var(&DistributionConfigFromFlags.readZipfAlpha, "read-zipf-alpha",
 		0.0, 0.0, 0.0, "Zipf alpha parameter for num-reads Rng, from [0, num-reads+1); use 0.0 to use num-reads as a constant")
 
 	iterflag.IntVar(&DistributionConfigFromFlags.numWriteLocs, "num-writes", 2, 2, 0,
 		"number of write locations in a transaction")
-	iterflag.Float64Var(&DistributionConfigFromFlags.writeZipfAlpha, "writes-zipf-alpha",
+	iterflag.Float64Var(&DistributionConfigFromFlags.writeZipfAlpha, "write-zipf-alpha",
 		0.0, 0.0, 0.0, "Zipf alpha parameter for num-writes Rng, from zipf-write-min + [0, num-writes); use 0.0 to use num-writes as a constant")
-	iterflag.IntVar(&DistributionConfigFromFlags.writeZipfMin, "writes-zipf-min",
+	iterflag.IntVar(&DistributionConfigFromFlags.writeZipfMin, "write-zipf-min",
 		2, 2, 0, "Zipf generation parameter for num-writes Rng, generating zipf-write-min + [0, num-writes)")
+
+	iterflag.Float64Var(&DistributionConfigFromFlags.damZipfAlpha, "dam-zipf-alpha",
+		0.5, 0.5, 0.0, "Zipf alpha parameter for cryptokitties distribution, dam kitties")
+	iterflag.Float64Var(&DistributionConfigFromFlags.sireZipfAlpha, "sire-zipf-alpha",
+		0.7, 0.7, 0.0, "Zipf alpha parameter for cryptokitties distribution, sire kitties")
+	iterflag.IntVar(&DistributionConfigFromFlags.numAutoBirthers, "num-auto-birthers",
+		1000, 1000, 0, "number of auto-birthers for cryptokitties distribution")
 
 	iterflag.IntVar(&DistributionConfigFromFlags.numTransactions, "num-transactions",
 		1000000, 1000000, 0, "number of transactions to generate")
@@ -387,16 +403,41 @@ func ShowConfigFlags(bw io.Writer, dcnf DistributionConfig, acnf AdversaryConfig
 // TransactionSource, which may be from a canned input data file, from random generator of
 // transactions (with various memory access distributions), etc.
 func transactionSourceFactory(cnf *DistributionConfig) TransactionSource {
-	var err error
 	if cnf.distributionName == useInput {
-		var fts TransactionSource
-		fts, err = NewFileTransactionSource(cnf.inputFile)
+		fts, err := NewFileTransactionSource(cnf.inputFile)
 		if err != nil {
 			panic(fmt.Sprintf("Error: %s; cannot open \"%s\"", err.Error(), cnf.inputFile))
 		}
 		return fts
 	}
 
+	if cnf.distributionName == "cryptokitties" {
+		coinRng := rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
+
+		uniformRng := rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
+		damRng, err := randgen.NewZipf(cnf.damZipfAlpha, cnf.numLocations-1, uniformRng)
+		if err != nil {
+			panic(fmt.Sprintf("dam Rng: %s", err.Error()))
+		}
+		damRng = randgen.NewAdd([]randgen.Rng{damRng, randgen.NewFixed(1)})
+
+		uniformRng = rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
+		sireRng, err := randgen.NewZipf(cnf.sireZipfAlpha, cnf.numLocations-1, uniformRng)
+		if err != nil {
+			panic(fmt.Sprintf("sire Rng: %s", err.Error()))
+		}
+		sireRng = randgen.NewAdd([]randgen.Rng{sireRng, randgen.NewFixed(1)})
+
+		uniformRng = rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
+		birtherRng, err := randgen.NewUniform(cnf.numAutoBirthers, uniformRng)
+		if err != nil {
+			panic(fmt.Sprintf("birther Rand: %s", err.Error()))
+		}
+
+		return NewCryptoKittiesTransactionSource(cnf.numTransactions, coinRng, damRng, sireRng, birtherRng)
+	}
+
+	var err error
 	var rg randgen.Rng
 
 	rng := rand.New(rand.NewSource(int64(cnf.seedRng.Uint64())))
