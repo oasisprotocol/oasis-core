@@ -807,7 +807,10 @@ impl RootHashFrontend {
 
             // If there are any items left over, put them back into the incoming queue.
             if !new_incoming_queue.calls.is_empty() {
+                measure_gauge!("incoming_queue_size", new_incoming_queue.calls.len());
                 *incoming_queue = Some(new_incoming_queue);
+            } else {
+                measure_gauge!("incoming_queue_size", 0);
             }
 
             let batch: Vec<_> = batch_info
