@@ -330,7 +330,9 @@ impl RootHashFrontend {
             "batch_insert_size",
             "Size of values inserted into storage for saving a batch of contract calls.",
             MetricConfig::Histogram {
-                buckets: vec![0., 1., 4., 16., 64., 256., 1024., 4096., 16384.],
+                buckets: vec![
+                    1024., 4096., 16384., 65536., 262144., 1048576., 4194304., 16777216., 67108864.,
+                ],
             }
         );
         measure_configure!(

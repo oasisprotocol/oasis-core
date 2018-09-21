@@ -32,11 +32,19 @@ var (
 		},
 		[]string{"call"},
 	)
+	storageValueSize = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_storage_value_size",
+			Help: "Storage call value size",
+		},
+		[]string{"call"},
+	)
 
 	storageCollectors = []prometheus.Collector{
 		storageFailures,
 		storageCalls,
 		storageLatency,
+		storageValueSize,
 	}
 
 	labelGet     = prometheus.Labels{"call": "get"}
@@ -56,6 +64,7 @@ func (w *metricsWrapper) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	start := time.Now()
 	value, err := w.Backend.Get(ctx, key)
 	storageLatency.With(labelGet).Observe(time.Since(start).Seconds())
+	storageValueSize.With(labelGet).Observe(float64(len(value)))
 	if err != nil {
 		storageFailures.With(labelGet).Inc()
 		return nil, err
@@ -69,6 +78,7 @@ func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration ui
 	start := time.Now()
 	err := w.Backend.Insert(ctx, value, expiration)
 	storageLatency.With(labelInsert).Observe(time.Since(start).Seconds())
+	storageValueSize.With(labelInsert).Observe(float64(len(value)))
 	if err != nil {
 		storageFailures.With(labelInsert).Inc()
 		return err
