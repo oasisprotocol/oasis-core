@@ -240,9 +240,10 @@ impl WorkerInner {
                 }
                 Command::ContractCallBatch(calls, block, sender, sh) => {
                     // Process batch of contract calls.
+                    let call_count = calls.len();
                     self.handle_contract_batch(calls, block, sender, sh);
 
-                    measure_counter_inc!("contract_call_processed");
+                    measure_counter_inc!("contract_call_processed", call_count);
                 }
             }
         }
