@@ -1,6 +1,6 @@
 defaults: &defaults
   docker:
-    - image: ekiden/testing:0.2.0
+    - image: nhdh/testing:0.2.0
 
 version: 2
 jobs:
