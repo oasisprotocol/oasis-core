@@ -55,8 +55,6 @@ This same API definition can be used to generate both enclaves and clients. This
 In order to create an enclave contract implementation using the API we just defined, we need to import the API and instruct the contract system to generate some glue code that will call our method implementations.
 This can be done as follows:
 ```rust
-#![feature(use_extern_macros)]
-
 use ekiden_trusted::contract::create_contract;
 use dummy_api::with_api;
 
@@ -76,8 +74,6 @@ fn hello_world(request: &u64) -> Result<u64> {
 
 To create a contract client for our API, we need to again import the API definitions and generate the required glue code:
 ```rust
-#![feature(use_extern_macros)]
-
 use ekiden_contract_client::create_contract_client;
 use dummy_api::with_api;
 

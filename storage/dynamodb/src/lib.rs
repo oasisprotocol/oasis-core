@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
