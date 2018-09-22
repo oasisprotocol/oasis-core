@@ -1,3 +1,5 @@
+#![feature(try_from)]
+
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;
 
