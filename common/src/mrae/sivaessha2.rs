@@ -278,6 +278,8 @@ pub fn box_open(
 
 #[cfg(test)]
 mod tests {
+    #![feature(test)]
+
     extern crate base64;
     extern crate serde_json;
     extern crate test;
