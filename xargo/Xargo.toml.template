@@ -6,12 +6,12 @@ panic_abort = {}
 [dependencies.std]
 features = ["backtrace", "stdio", "untrusted_time"]
 git = "https://github.com/oasislabs/rust-sgx-sdk"
-tag = "v1.0.1-ekiden1"
+tag = "v1.0.1-ekiden2"
 stage = 2
 
 [dependencies.xargo_sgx_rand]
 git = "https://github.com/oasislabs/rust-sgx-sdk"
-tag = "v1.0.1-ekiden1"
+tag = "v1.0.1-ekiden2"
 stage = 3
 
 [dependencies.xargo_sgx_serialize]
@@ -21,5 +21,5 @@ stage = 3
 
 [dependencies.xargo_sgx_tunittest]
 git = "https://github.com/oasislabs/rust-sgx-sdk"
-tag = "v1.0.1-ekiden1"
+tag = "v1.0.1-ekiden2"
 stage = 3

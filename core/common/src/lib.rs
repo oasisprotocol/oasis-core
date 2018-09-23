@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 extern crate ekiden_common;
 extern crate ekiden_contract_common;
 extern crate ekiden_enclave_common;

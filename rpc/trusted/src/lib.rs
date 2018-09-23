@@ -1,4 +1,3 @@
-#![feature(use_extern_macros)]
 #![feature(core_intrinsics)]
 
 #[cfg(target_env = "sgx")]

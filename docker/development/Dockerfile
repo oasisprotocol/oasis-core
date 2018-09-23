@@ -1,13 +1,32 @@
+FROM ubuntu:18.04 as intermediate
+
+# build linux-sgx-sdk but don't include build files in final image
+RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
+    # for SGX SDK
+    build-essential git cmake \
+    wget python pkg-config software-properties-common \
+    autoconf automake libtool ocaml ocamlbuild \
+    # for SGX PSW
+    libssl-dev libcurl4-openssl-dev
+
+RUN mkdir /root/.ssh/
+COPY deploy_key /root/.ssh/id_rsa
+RUN chmod 600 /root/.ssh/id_rsa && \
+    ssh-keyscan github.com >> /root/.ssh/known_hosts && \
+    git clone --depth 1 -b ekiden git@github.com:oasislabs/linux-sgx.git && \
+    cd linux-sgx && \
+    ./download_prebuilt.sh && make -j sdk && make -j sdk_install_pkg && \
+    ./linux/installer/bin/sgx_linux_x64_sdk_*.bin --prefix /opt && \
+    cd -
+
 FROM ubuntu:18.04
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
-    build-essential git gdb \
+    build-essential git gdb cmake \
     curl wget unzip \
-    pkg-config software-properties-common cmake \
+    pkg-config software-properties-common \
     python python-pyelftools \
-    # for SGX SDK
-    autoconf automake libtool ocaml ocamlbuild \
-    # for SGX PSW
+    # for rust openssl
     libssl-dev libcurl4-openssl-dev \
     # for rocksdb
     libsnappy-dev librocksdb-dev \
@@ -35,15 +54,13 @@ RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5
 # install Linux SGX SDK
 # Note: myelin-ml is a lightly modified version of the intel sgx sdk at 2.1.3 with the baidu patch applied.
 # https://github.com/baidu/rust-sgx-sdk/tree/master/dockerfile/experimental
-RUN git clone https://github.com/oasislabs/linux-sgx.git && cd linux-sgx && \
-    ./download_prebuilt.sh && make -j sdk && make -j sdk_install_pkg && \
-    ./linux/installer/bin/sgx_linux_x64_sdk_*.bin --prefix /opt && \
-    echo "source /opt/sgxsdk/environment" >> /root/.bashrc
+COPY --from=intermediate /opt/sgxsdk /opt/sgxsdk
+RUN echo "source /opt/sgxsdk/environment" >> /root/.bashrc
 
 # install rust (versions based on those found successful in https://github.com/oasislabs/rust-sgx-sdk/blob/v1.0.1-ekiden1/dockerfile/Dockerfile)
 # Note: 03-16 is the officially supported rust for sgx 0.9.8.
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
-    sh rustup.sh -y --default-toolchain nightly-2018-07-16 && \
+    sh rustup.sh -y --default-toolchain nightly-2018-08-25 && \
     rustup component add rust-src && \
     # rustfmt-nightly is crazily unstable, with no versions appearing to exist that
     # work with the 3-16 nightly.

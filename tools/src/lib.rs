@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 extern crate ansi_term;
 extern crate cc;
 extern crate error_chain;

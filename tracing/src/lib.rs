@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 use std::net::ToSocketAddrs;
 use std::sync::Mutex;
 

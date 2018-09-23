@@ -1,4 +1,4 @@
-#![feature(use_extern_macros, try_from, test)]
+#![feature(test, try_from)]
 
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;

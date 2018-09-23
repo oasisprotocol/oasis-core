@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 extern crate ekiden_contract_untrusted;
 extern crate ekiden_db_untrusted;
 extern crate ekiden_enclave_untrusted;

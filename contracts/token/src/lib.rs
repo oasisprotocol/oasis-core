@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 extern crate protobuf;
 
 extern crate ekiden_core;

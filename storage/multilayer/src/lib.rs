@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::Path;

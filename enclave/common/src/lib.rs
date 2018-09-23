@@ -1,5 +1,3 @@
-#![feature(use_extern_macros)]
-
 extern crate sgx_types;
 
 extern crate base64;

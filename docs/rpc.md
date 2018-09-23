@@ -33,8 +33,6 @@ This same API definition can be used to generate both enclaves and clients. This
 In order to create an enclave RPC server using the API we just defined, we need to import the API and instruct the RPC system to generate some glue code that will call our method implementations.
 This can be done as follows:
 ```rust
-#![feature(use_extern_macros)]
-
 use ekiden_trusted::rpc::create_enclave_rpc;
 use dummy_api::{with_api, HelloWorldRequest, HelloWorldResponse};
 
@@ -57,8 +55,6 @@ fn hello_world(request: &HelloWorldRequest) -> Result<HelloWorldResponse> {
 
 To create an RPC client for our API, we need to again import the API definitions and generate the required glue code:
 ```rust
-#![feature(use_extern_macros)]
-
 use ekiden_rpc_client::create_client_rpc;
 use dummy_api::{with_api, HelloWorldRequest, HelloWorldResponse};
 

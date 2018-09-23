@@ -14,7 +14,7 @@ ekiden-rpc-common = { path = "../../rpc/common", version = "0.2.0-alpha" }
 ekiden-keymanager-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-keymanager-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-enclave-logger = { path = "../../enclave/logger", version = "0.2.0-alpha" }
-lazy_static = { version = "1.0", features = ["spin_no_std"] }
+lazy_static = { version = "1.1.0", features = ["spin_no_std"] }
 serde = "1.0.71"
 serde_cbor = "0.8.2"
 
