@@ -26,6 +26,8 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     curl wget unzip \
     pkg-config software-properties-common \
     python python-pyelftools \
+    # for rust openssl
+    libssl-dev libcurl4-openssl-dev \
     # for rocksdb
     libsnappy-dev librocksdb-dev \
     # for benchmarks
