@@ -51,8 +51,22 @@ Open http://127.0.0.1:16686/ in your browser.
 ### Testnet
 Configure an ingress to the query service and open that in your
 browser.
-Or, if don't want to set up an ingress, port forward the query service
-and open that in your browser.
+
+Or, if don't want to set up an ingress, then follow these steps to
+forward your browser traffic to the query service:
+
+1. Forward traffic from your host computer to the bridge network in
+   the ops shell container. Do this by adding `-p
+   127.0.0.1:16686:16687` to the command line that `make shell` would
+   run.
+2. Forward traffic from the container's bridge network interface to
+   its loopback interface. Do this by running `apt-get install socat`
+   and `socat TCP-LISTEN:16687,fork TCP:127.0.0.1:16686 &`.
+3. Forward traffic from the container's loopback interface to the
+   query service. Do this by running
+   `kubectl port-forward services/jaeger-query 16686:80 &`.
+
+Then open http://127.0.0.1:16686/ in your browser.
 
 ## Adding tracing
 See OpenTracing's specification
