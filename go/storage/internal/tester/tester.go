@@ -19,6 +19,13 @@ var testValues = [][]byte{
 	[]byte("There shines not one shall leave alive the battlefield!"),
 }
 
+var testValuesBatch = [][]byte{
+	[]byte("No longer be! Arise! obtain renown! destroy thy foes!"),
+	[]byte("Fight for the kingdom waiting thee when thou hast vanquished those."),
+	[]byte("By Me they fall- not thee! the stroke of death is dealt them now,"),
+	[]byte("Even as they show thus gallantly; My instrument art thou!"),
+}
+
 // StorageImplementationTest exercises the basic functionality of
 // a storage backend.
 func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource epochtime.SetableBackend) {
@@ -41,6 +48,42 @@ func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource
 		require.NoError(t, err, "Get(%d)", i)
 		require.EqualValues(t, testValues[i], v, "Get(%d)", i)
 	}
+
+	var batchHashes []storage.Key
+	var batchValues []storage.Value
+	for _, v := range testValuesBatch {
+		batchHashes = append(batchHashes, storage.HashStorageKey(v))
+		batchValues = append(batchValues, storage.Value{Data: v, Expiration: 1})
+	}
+
+	err := backend.InsertBatch(context.Background(), batchValues)
+	require.NoError(t, err, "InsertBatch(testValuesBatch)")
+
+	v, err := backend.GetBatch(context.Background(), hashes)
+	require.NoError(t, err, "GetBatch(hashes)")
+	require.EqualValues(t, testValues, v, "GetBatch(hashes)")
+
+	v, err = backend.GetBatch(context.Background(), batchHashes)
+	require.NoError(t, err, "GetBatch(batchHashes)")
+	require.EqualValues(t, testValuesBatch, v, "GetBatch(batchHashes)")
+
+	var missingKey storage.Key
+	copy(missingKey[:], []byte("00000000000000000000000000000000"))
+
+	v, err = backend.GetBatch(
+		context.Background(),
+		[]storage.Key{
+			hashes[0],
+			missingKey,
+			hashes[1],
+		},
+	)
+	require.NoError(t, err, "GetBatch(missing key)")
+	require.EqualValues(t, [][]byte{
+		testValues[0],
+		nil,
+		testValues[1],
+	}, v, "GetBatch(missing key)")
 
 	seenKeys := make(map[storage.Key]bool)
 	keyInfos, err := backend.GetKeys(context.Background())

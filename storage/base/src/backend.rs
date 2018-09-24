@@ -10,9 +10,20 @@ pub trait StorageBackend: Sync + Send {
     /// Fetch the value for a specific immutable key.
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>>;
 
+    /// Fetch multiple values for specific immutable keys.
+    fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>>;
+
     /// Store a specific value into storage. It can be later retrieved by its hash.
     /// Expiry represents a number of Epochs for which the value should remain available.
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()>;
+
+    /// Store multiple values into storage. They can be later retrieved by their
+    /// hashes. The first element in the passed tuple is the value and the second
+    /// element is the expiry time in the number of Epochs.
+    ///
+    /// If the storage backend is unable to store any of the values, no values will
+    /// be stored.
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()>;
 
     // Get keys in the storage database, along with expiratons.
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>>;

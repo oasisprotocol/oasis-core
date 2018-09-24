@@ -131,10 +131,22 @@ impl StorageBackend for MultilayerBackend {
             .into_box()
     }
 
+    fn get_batch(&self, _keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        unimplemented!();
+    }
+
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         self.local
             .insert(value.clone(), expiry)
             .join(self.bottom.insert(value, expiry))
+            .and_then(|((), ())| Ok(()))
+            .into_box()
+    }
+
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        self.local
+            .insert_batch(values.clone())
+            .join(self.bottom.insert_batch(values))
             .and_then(|((), ())| Ok(()))
             .into_box()
     }

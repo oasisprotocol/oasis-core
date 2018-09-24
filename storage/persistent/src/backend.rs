@@ -2,7 +2,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use exonum_rocksdb::{IteratorMode, DB};
+use exonum_rocksdb::{IteratorMode, WriteBatch, DB};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
@@ -10,7 +10,7 @@ use ekiden_common::futures::prelude::*;
 use ekiden_storage_base::{hash_storage_key, StorageBackend};
 
 struct Inner {
-    /// LevelDB database.
+    /// RocksDB database.
     db: DB,
 }
 
@@ -40,12 +40,45 @@ impl StorageBackend for PersistentStorageBackend {
         }).into_box()
     }
 
+    fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        let inner = self.inner.clone();
+
+        future::lazy(move || {
+            let mut results = vec![];
+
+            for key in keys {
+                results.push(match inner.db.get(&key)? {
+                    Some(value) => Some(value.to_vec()),
+                    None => None,
+                });
+            }
+
+            Ok(results)
+        }).into_box()
+    }
+
     fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
 
         future::lazy(move || {
             inner.db.put(&key, &value)?;
+
+            Ok(())
+        }).into_box()
+    }
+
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        let inner = self.inner.clone();
+
+        future::lazy(move || {
+            let mut batch = WriteBatch::default();
+            for (value, _expiry) in values {
+                let key = hash_storage_key(&value);
+                batch.put(&key, &value)?;
+            }
+
+            inner.db.write(batch)?;
 
             Ok(())
         }).into_box()

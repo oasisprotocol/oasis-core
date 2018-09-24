@@ -17,7 +17,6 @@ use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
-use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::Future;
@@ -63,8 +62,6 @@ enum Command {
 struct WorkerInner {
     /// Contract running in an enclave.
     contract: Enclave,
-    /// Executor for asynchronous storage inserts.
-    environment: Arc<Environment>,
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Enclave identity proof.
@@ -73,12 +70,7 @@ struct WorkerInner {
 }
 
 impl WorkerInner {
-    fn new(
-        config: WorkerConfiguration,
-        ias: Arc<IAS>,
-        environment: Arc<Environment>,
-        storage: Arc<StorageBackend>,
-    ) -> Self {
+    fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
         measure_configure!(
             "contract_call_batch_size",
             "Contract call batch sizes.",
@@ -92,7 +84,6 @@ impl WorkerInner {
 
         Self {
             contract,
-            environment,
             storage,
             identity_proof,
         }
@@ -137,10 +128,7 @@ impl WorkerInner {
         measure_histogram!("contract_call_batch_size", batch.len());
 
         // Prepare batch storage.
-        let batch_storage = Arc::new(BatchStorageBackend::new(
-            self.environment.clone(),
-            self.storage.clone(),
-        ));
+        let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone()));
 
         let root_hash = &block.header.state_root;
         let enclave_sh;
@@ -162,7 +150,7 @@ impl WorkerInner {
         {
             measure_histogram_timer!("contract_call_storage_commit_time");
             let _span = enclave_sh.follower("contract_call_storage_commit", |opts| opts.start());
-            batch_storage.flush().wait()?;
+            batch_storage.commit().wait()?;
         }
 
         Ok((outputs?, new_state_root))
@@ -273,16 +261,11 @@ pub struct Worker {
 
 impl Worker {
     /// Create new contract worker.
-    pub fn new(
-        config: WorkerConfiguration,
-        ias: Arc<IAS>,
-        environment: Arc<Environment>,
-        storage: Arc<StorageBackend>,
-    ) -> Self {
+    pub fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
         // Spawn inner worker in a separate thread.
         let (command_sender, command_receiver) = channel();
         thread::spawn(move || {
-            WorkerInner::new(config, ias, environment, storage).work(command_receiver);
+            WorkerInner::new(config, ias, storage).work(command_receiver);
         });
 
         Self {

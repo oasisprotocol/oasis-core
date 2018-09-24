@@ -45,15 +45,40 @@ type KeyInfo struct {
 	Expiration epochtime.EpochTime
 }
 
+// Value is a data blob and it's associated metadata in storage.
+type Value struct {
+	// Data is the data blob.
+	Data []byte
+
+	// Expiration is the expiration time of the data blob.
+	Expiration uint64
+}
+
+// String returns a string representation of a value.
+func (v Value) String() string {
+	return hex.EncodeToString(v.Data)
+}
+
 // Backend is a storage backend implementation.
 type Backend interface {
 	// Get returns the value for a specific immutable key.
 	Get(context.Context, Key) ([]byte, error)
 
+	// Fetch multiple values for specific immutable keys.
+	GetBatch(context.Context, []Key) ([][]byte, error)
+
 	// Insert inserts a specific value, which can later be retreived by
 	// it's hash.  The expiration is the number of epochs for which the
 	// value should remain available.
 	Insert(context.Context, []byte, uint64) error
+
+	// InsertBatch inserts multiple values into storage. They can be later
+	// retrieved by their hashes. The expiration is the number of epochs
+	// for which the value should remain available.
+	//
+	// If the storage backend is unable to store any of the values, no
+	// values will be stored.
+	InsertBatch(context.Context, []Value) error
 
 	// GetKeys returns all of the keys in the storage database, along
 	// with their associated metadata.

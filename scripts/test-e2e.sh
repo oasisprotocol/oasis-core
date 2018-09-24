@@ -74,45 +74,20 @@ run_compute_node() {
         ${WORKDIR}/target/enclave/token.so &
 }
 
-run_compute_node_storage_multilayer() {
-    local id=$1
-    shift
-    local extra_args=$*
-
-    local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
-    # Generate port number.
-    let "port=id + 10000"
-
-    ${WORKDIR}/target/debug/ekiden-compute \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --compute-replicas 2 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend multilayer \
-        --storage-multilayer-local-storage-base "$db_dir" \
-        --storage-multilayer-bottom-backend dynamodb \
-        --storage-multilayer-aws-region us-west-2 \
-        --storage-multilayer-aws-table-name test \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so &
-}
-
 run_compute_node_storage_multilayer_remote() {
     local id=$1
     shift
     local extra_args=$*
 
     local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
+    rm -rf ${db_dir}
+
     # Generate port number.
     let "port=id + 10000"
 
     ${WORKDIR}/target/debug/ekiden-compute \
         --no-persist-identity \
         --max-batch-size 1 \
-        --compute-replicas 2 \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
         --storage-backend multilayer \
         --storage-multilayer-local-storage-base "$db_dir" \
@@ -229,21 +204,12 @@ scenario_one_idle() {
     run_compute_node 3 --compute-replicas 1
 }
 
-scenario_multilayer() {
-    run_compute_node_storage_multilayer 1
-    # Give the first compute node some time to register.
-    sleep 1
-    run_compute_node_storage_multilayer 2
-    sleep 1
-    run_compute_node_storage_multilayer 3
-}
-
 scenario_multilayer_remote() {
-    run_compute_node_storage_multilayer_remote 1
+    run_compute_node_storage_multilayer_remote 1 --compute-replicas 2
     sleep 1
-    run_compute_node_storage_multilayer_remote 2
+    run_compute_node_storage_multilayer_remote 2 --compute-replicas 2
     sleep 1
-    run_compute_node_storage_multilayer_remote 3
+    run_compute_node_storage_multilayer_remote 3 --compute-replicas 2
 }
 
 scenario_fail_worker_after_registration() {
@@ -265,6 +231,7 @@ scenario_fail_worker_after_commit() {
 # Go node (tendermint backends).
 run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
 run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
+run_test scenario_multilayer_remote "e2e-multilayer-remote-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_discrepancy_leader "e2e-discrepancy-leader-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration-tm" token 1 run_dummy_node_go_tm_mock

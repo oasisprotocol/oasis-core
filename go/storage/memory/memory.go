@@ -54,6 +54,25 @@ func (b *memoryBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	return append([]byte{}, ent.value...), nil
 }
 
+func (b *memoryBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte, error) {
+	var values [][]byte
+	for _, key := range keys {
+		value, err := b.Get(ctx, key)
+		if err != nil {
+			switch err {
+			case nil, api.ErrKeyNotFound, api.ErrKeyExpired:
+				break
+			default:
+				return nil, err
+			}
+		}
+
+		values = append(values, value)
+	}
+
+	return values, nil
+}
+
 func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
@@ -83,6 +102,17 @@ func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uin
 	b.store[key] = ent
 
 	span.Finish()
+
+	return nil
+}
+
+func (b *memoryBackend) InsertBatch(ctx context.Context, values []api.Value) error {
+	// No atomicity for in-memory backend, we just repeatedly insert.
+	for _, value := range values {
+		if err := b.Insert(ctx, value.Data, value.Expiration); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

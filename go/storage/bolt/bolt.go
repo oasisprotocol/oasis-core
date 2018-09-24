@@ -51,90 +51,131 @@ type boltBackend struct {
 }
 
 func (b *boltBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
+	v, err := b.GetBatch(ctx, []api.Key{key})
+	if err != nil {
+		return nil, err
+	}
+
+	if v[0] == nil {
+		return nil, api.ErrKeyNotFound
+	}
+
+	return v[0], nil
+}
+
+func (b *boltBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte, error) {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return nil, api.ErrIncoherentTime
 	}
 
-	var value []byte
+	var values [][]byte
 	if err := b.db.View(func(tx *bolt.Tx) error {
-		// Ensure the key is not expired.
-		bkt := tx.Bucket(bktExpirations)
-		bkt = bkt.Bucket(bktByKey)
-		rawExp := bkt.Get(key[:])
-		if rawExp == nil {
-			return api.ErrKeyNotFound
-		}
-		if exp := epochTimeFromRaw(rawExp); exp < epoch {
-			return api.ErrKeyExpired
-		}
+		for _, key := range keys {
+			// Ensure the key is not expired.
+			bkt := tx.Bucket(bktExpirations)
+			bkt = bkt.Bucket(bktByKey)
+			rawExp := bkt.Get(key[:])
+			if rawExp == nil {
+				values = append(values, nil)
+				continue
+			}
+			if exp := epochTimeFromRaw(rawExp); exp < epoch {
+				values = append(values, nil)
+				continue
+			}
 
-		// Retreive the value.
-		bkt = tx.Bucket(bktValues)
-		value = append([]byte{}, bkt.Get(key[:])...) // MUST copy.
+			// Retreive the value.
+			bkt = tx.Bucket(bktValues)
+			value := append([]byte{}, bkt.Get(key[:])...) // MUST copy.
+			values = append(values, value)
+		}
 
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	return value, nil
+	return values, nil
 }
 
 func (b *boltBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
+	return b.InsertBatch(ctx, []api.Value{api.Value{Data: value, Expiration: expiration}})
+}
+
+func (b *boltBackend) InsertBatch(ctx context.Context, values []api.Value) error {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return api.ErrIncoherentTime
 	}
 
-	key := api.HashStorageKey(value)
-	expEpoch := epoch + epochtime.EpochTime(expiration)
-
-	b.logger.Debug("Insert",
-		"key", key,
-		"value", hex.EncodeToString(value),
-		"expiration", expEpoch,
+	b.logger.Debug("InsertBatch",
+		"values", values,
 	)
 
+	// Hash all values first to avoid doing it inside the transaction which
+	// holds a write lock.
+	var hashes []api.Key
+	for _, value := range values {
+		hashes = append(hashes, api.HashStorageKey(value.Data))
+	}
+
 	err := b.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bktExpirations)
-		keys := bkt.Bucket(bktByKey)
-		exps := bkt.Bucket(bktByExpiration)
-		values := tx.Bucket(bktValues)
+		modified := false
 
-		var err error
+		for index, value := range values {
+			bkt := tx.Bucket(bktExpirations)
+			keys := bkt.Bucket(bktByKey)
+			exps := bkt.Bucket(bktByExpiration)
+			values := tx.Bucket(bktValues)
 
-		// Iff the key exists in the database already, remove
-		// it's by-expiration index entry.
-		if oldExp := keys.Get(key[:]); oldExp != nil {
-			// The expiration time is identical.  Nothing to do, as
-			// the value is identical by definition (or there is a hash
-			// collision).
-			if epochTimeFromRaw(oldExp) == expEpoch {
-				return errIdempotent
-			}
+			key := hashes[index]
+			expEpoch := epoch + epochtime.EpochTime(value.Expiration)
 
-			if bkt = exps.Bucket(oldExp); bkt != nil {
-				if err = bkt.Delete(key[:]); err != nil {
-					return err
+			var err error
+
+			// Iff the key exists in the database already, remove
+			// it's by-expiration index entry.
+			if oldExp := keys.Get(key[:]); oldExp != nil {
+				// The expiration time is identical.  Nothing to do, as
+				// the value is identical by definition (or there is a hash
+				// collision).
+				if epochTimeFromRaw(oldExp) == expEpoch {
+					continue
+				}
+
+				if bkt = exps.Bucket(oldExp); bkt != nil {
+					if err = bkt.Delete(key[:]); err != nil {
+						return err
+					}
 				}
 			}
+
+			rawExp := epochTimeToRaw(expEpoch)
+			bkt, err = exps.CreateBucketIfNotExists(rawExp)
+			if err != nil {
+				return err
+			}
+			if err = bkt.Put(key[:], rawExp); err != nil {
+				return err
+			}
+
+			if err = keys.Put(key[:], rawExp); err != nil {
+				return err
+			}
+
+			if err = values.Put(key[:], value.Data); err != nil {
+				return err
+			}
+
+			modified = true
 		}
 
-		rawExp := epochTimeToRaw(expEpoch)
-		bkt, err = exps.CreateBucketIfNotExists(rawExp)
-		if err != nil {
-			return err
-		}
-		if err = bkt.Put(key[:], rawExp); err != nil {
-			return err
+		if !modified {
+			return errIdempotent
 		}
 
-		if err = keys.Put(key[:], rawExp); err != nil {
-			return err
-		}
-
-		return values.Put(key[:], value)
+		return nil
 	})
 	if err == errIdempotent {
 		// Squelch internal error used to roll back the transaction for

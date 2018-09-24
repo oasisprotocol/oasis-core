@@ -41,6 +41,21 @@ impl StorageBackend for DummyStorageBackend {
         }))
     }
 
+    fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        let inner = self.inner.clone();
+
+        Box::new(future::lazy(move || {
+            let inner = inner.lock().unwrap();
+            let mut results = vec![];
+
+            for key in keys {
+                results.push(inner.storage.get(&key).cloned());
+            }
+
+            Ok(results)
+        }))
+    }
+
     fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
@@ -49,6 +64,21 @@ impl StorageBackend for DummyStorageBackend {
             let mut inner = inner.lock().unwrap();
 
             inner.storage.insert(key, value);
+
+            Ok(())
+        }))
+    }
+
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        let inner = self.inner.clone();
+
+        Box::new(future::lazy(move || {
+            let mut inner = inner.lock().unwrap();
+
+            for (value, _expiry) in values {
+                let key = hash_storage_key(&value);
+                inner.storage.insert(key, value);
+            }
 
             Ok(())
         }))
