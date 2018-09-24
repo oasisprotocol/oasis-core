@@ -10,6 +10,7 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     libssl-dev libcurl4-openssl-dev
 
 RUN mkdir /root/.ssh/
+# read-only github deploy key for oasislabs/linux-sgx repo
 COPY deploy_key /root/.ssh/id_rsa
 RUN chmod 600 /root/.ssh/id_rsa && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts && \
@@ -57,8 +58,7 @@ RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5
 COPY --from=intermediate /opt/sgxsdk /opt/sgxsdk
 RUN echo "source /opt/sgxsdk/environment" >> /root/.bashrc
 
-# install rust (versions based on those found successful in https://github.com/oasislabs/rust-sgx-sdk/blob/v1.0.1-ekiden1/dockerfile/Dockerfile)
-# Note: 03-16 is the officially supported rust for sgx 0.9.8.
+# install rust version supported by rust-sgx-sdk
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     sh rustup.sh -y --default-toolchain nightly-2018-08-25 && \
     rustup component add rust-src && \

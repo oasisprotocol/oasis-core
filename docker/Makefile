@@ -8,7 +8,7 @@ IMAGES = development testing
 all: $(IMAGES)
 
 development: development/Dockerfile
-	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER) -f $<
+	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER)
 
 testing: testing/Dockerfile development/Dockerfile
-	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER) -f $<
+	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER)
