@@ -7,7 +7,10 @@ use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_common::hash::empty_hash;
 use ekiden_common::mrae::sivaessha2::{SivAesSha2, KEY_SIZE, NONCE_SIZE};
-use ekiden_common::ring::digest;
+use ekiden_enclave_common::quote::MrEnclave;
+use ekiden_keymanager_client::KeyManager;
+#[cfg(not(target_env = "sgx"))]
+use ekiden_keymanager_client::NetworkRpcClientBackendConfig;
 use ekiden_keymanager_common::ContractId;
 use ekiden_storage_base::mapper::BackendIdentityMapper;
 #[cfg(not(target_env = "sgx"))]
@@ -41,6 +44,18 @@ enum Operation {
     Remove,
 }
 
+/// Key manager configuration.
+///
+/// This is needed for connecting to the key manager when using the method
+/// db.with_encryption().  Pass the struct with db.configure_key_manager().
+pub struct DBKeyManagerConfig {
+    /// Identity of key manager enclave.
+    mrenclave: MrEnclave,
+    /// gRPC config parameters (only if not running in an enclave).
+    #[cfg(not(target_env = "sgx"))]
+    grpc_config: NetworkRpcClientBackendConfig,
+}
+
 /// Database handle.
 ///
 /// This is a concrete implementation of the [`Database`] interface.
@@ -55,6 +70,8 @@ pub struct DatabaseHandle {
     pending_ops: HashMap<Vec<u8>, Operation>,
     /// Encryption context with which to perform all operations (optional).
     enc_ctx: Option<EncryptionContext>,
+    /// Key manager config (optional).
+    key_manager_config: Option<DBKeyManagerConfig>,
 }
 
 lazy_static! {
@@ -83,6 +100,7 @@ impl DatabaseHandle {
             root_hash: None,
             pending_ops: HashMap::new(),
             enc_ctx: None,
+            key_manager_config: None,
         }
     }
 
@@ -127,6 +145,11 @@ impl DatabaseHandle {
             Some(root_hash) => Ok(root_hash),
             None => Ok(empty_hash()),
         }
+    }
+
+    /// Set up key manager configuration.
+    pub fn configure_key_manager(&mut self, config: DBKeyManagerConfig) {
+        self.key_manager_config.get_or_insert(config);
     }
 }
 
@@ -193,22 +216,41 @@ impl Database for DatabaseHandle {
     where
         F: FnOnce(&mut DatabaseHandle) -> (),
     {
-        // TODO: Get encryption key from the key manager.
-
-        // Set up dummy encryption key for now!
-        let hash = digest::digest(&digest::SHA512, &contract_id.to_vec());
-        let key: Vec<u8> = hash.as_ref()[..KEY_SIZE].to_vec();
-        let nonce: Vec<u8> = hash.as_ref()[KEY_SIZE..KEY_SIZE + NONCE_SIZE].to_vec();
-
         // Make sure that the encryption context doesn't already exist,
         // as we don't support nested contexts.
         assert!(self.enc_ctx.is_none());
 
-        // Set up encryption context.
-        self.enc_ctx = Some(EncryptionContext {
-            mrae_ctx: SivAesSha2::new(key).unwrap(),
-            nonce,
-        });
+        // Make sure that the user has set a valid key manager configuration
+        // with db.configure_key_manager() before calling us.
+        assert!(self.key_manager_config.is_some());
+
+        // Get encryption key from the key manager and set up encryption context.
+        match KeyManager::get() {
+            Ok(mut km) => {
+                // First, configure the key manager client.
+                let cfg = self.key_manager_config.as_ref().unwrap();
+
+                #[cfg(not(target_env = "sgx"))]
+                km.configure_backend(cfg.grpc_config.clone());
+
+                km.set_contract(cfg.mrenclave);
+
+                // Get state key from KM, then split it into two parts:
+                // the MRAE key and the nonce.
+                let (_pk, state_key) = km.get_or_create_secret_keys(contract_id).unwrap();
+                let key: Vec<u8> = state_key.as_ref()[..KEY_SIZE].to_vec();
+                let nonce: Vec<u8> = state_key.as_ref()[KEY_SIZE..KEY_SIZE + NONCE_SIZE].to_vec();
+
+                // Set up encryption context.
+                self.enc_ctx = Some(EncryptionContext {
+                    mrae_ctx: SivAesSha2::new(key).unwrap(),
+                    nonce,
+                });
+            }
+            Err(e) => {
+                panic!("Cannot get key manager instance: {}", e.description());
+            }
+        }
 
         // Run provided function.
         f(self);
@@ -226,6 +268,8 @@ mod tests {
     use ekiden_keymanager_common::ContractId;
 
     use super::{Database, DatabaseHandle};
+
+    use std::str::FromStr;
 
     #[test]
     fn test_basic_operations() {
@@ -299,11 +343,14 @@ mod tests {
     fn test_db_encryption_nested() {
         let mut db = DatabaseHandle::new();
 
+        let id_0 = ContractId::from_str(&"0".repeat(64)).unwrap();
+        let id_1 = ContractId::from_str(&"1".repeat(64)).unwrap();
+
         // Nesting encryption contexts isn't supported and should panic!
-        db.with_encryption(ContractId::from([0u8; 32]), |db| {
+        db.with_encryption(id_0, |db| {
             db.insert(b"encrypted", b"top secret");
 
-            db.with_encryption(ContractId::from([42u8; 32]), |db| {
+            db.with_encryption(id_1, |db| {
                 db.insert(b"also_encrypted", b"bottom secret");
             });
         });
