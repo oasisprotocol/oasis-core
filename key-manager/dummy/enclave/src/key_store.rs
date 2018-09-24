@@ -68,6 +68,8 @@ impl KeyStore {
                 random::get_random_bytes(&mut seed)?;
                 sodalite::box_keypair_seed(&mut public_key, &mut private_key, &seed);
 
+                random::get_random_bytes(&mut state_key)?;
+
                 entry
                     .insert(ContractKey::new(public_key, private_key, state_key))
                     .clone()
