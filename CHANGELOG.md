@@ -13,7 +13,6 @@
 * **BACKWARD INCOMPATIBLE:** Dummy node now requires `--storage-backend BACKEND` option.
   Use backend `dummy` for original behavior.
 * **BACKWARD INCOMPATIBLE:** Bump `protobuf` dependency to `2.0`.
-* **BACKWARD INCOMPATIBLE:** Remove unused key manager support from compute node.
 * **BACKWARD INCOMPATIBLE:** Use TLS for compute node gRPC channels.
 * **BACKWARD INCOMPATIBLE:** Separate node/entity key pair arguments and change serialized
   node key pair format in a backward-incompatible way.

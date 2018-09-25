@@ -33,6 +33,7 @@ extern crate ekiden_untrusted;
 extern crate ekiden_instrumentation;
 
 mod group;
+mod handlers;
 mod node;
 mod roothash;
 mod services;
@@ -60,6 +61,7 @@ use log::LevelFilter;
 
 use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
+use ekiden_core::identity::NodeIdentity;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_untrusted::enclave::ias;
@@ -67,7 +69,7 @@ use ekiden_untrusted::enclave::ias;
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
 use self::roothash::{RootHashConfiguration, RootHashTestOnlyConfiguration};
-use self::worker::WorkerConfiguration;
+use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
 
 /// Register known components for dependency injection.
 fn register_components(known_components: &mut KnownComponents) {
@@ -134,6 +136,21 @@ fn main() {
                 .takes_value(true)
                 .requires("ias-spid"),
         )
+        .arg(
+            Arg::with_name("key-manager-host")
+                .long("key-manager-host")
+                .takes_value(true)
+                .default_value("127.0.0.1")
+                .required_unless("disable-key-manager"),
+        )
+        .arg(
+            Arg::with_name("key-manager-port")
+                .long("key-manager-port")
+                .takes_value(true)
+                .default_value("9003")
+                .required_unless("disable-key-manager"),
+        )
+        .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
         // TODO: Remove this once we have independent contract registration.
         .arg(
             Arg::with_name("compute-replicas")
@@ -316,6 +333,20 @@ fn main() {
                             value_t_or_exit!(matches, "forwarded-rpc-timeout", u64),
                             0,
                         ))
+                    } else {
+                        None
+                    },
+                    // Key manager configuration.
+                    key_manager: if !matches.is_present("disable-key-manager") {
+                        Some(KeyManagerConfiguration {
+                            host: matches.value_of("key-manager-host").unwrap().to_owned(),
+                            port: value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
+                            cert: container
+                                .inject::<NodeIdentity>()
+                                .unwrap()
+                                .get_tls_certificate()
+                                .to_owned(),
+                        })
                     } else {
                         None
                     },
