@@ -50,7 +50,7 @@ For building enclaves we have our own Cargo extension which should be installed:
 
 To build the token enclave:
 ```
-# cd contracts/token
+# cd /code/contracts/token
 # cargo ekiden build-enclave --output-identity
 ```
 
@@ -58,9 +58,22 @@ The built enclave will be stored under `target/enclave/token.so`.
 
 To build the token client:
 ```
-# cd clients/token
+# cd /code/clients/token
 # cargo build
 ```
+
+## Building the key manager enclave
+
+The key manager enclave handles secure storage of keys.
+
+To build it:
+```
+# cd /code/key-manager/dummy/enclave
+# cargo ekiden build-enclave --output-identity
+```
+
+The built enclave will be stored under `target/enclave/ekiden-keymanager-trusted.so`.
+
 
 ## Running an Ekiden node
 
@@ -72,6 +85,12 @@ Starting directory is
 You need to run multiple Ekiden services, so it is recommended to run each of these in a
 separate container shell, attached to the same container. The following examples use the
 token contract, but the process is the same for any contract.
+
+To start the key manager:
+```
+# cargo run -p ekiden-keymanager-node -- \
+    --enclave target/enclave/ekiden-keymanager-trusted.so
+```
 
 To start the shared dummy node:
 ```

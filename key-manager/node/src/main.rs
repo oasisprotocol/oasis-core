@@ -54,7 +54,7 @@ fn main() {
                 .long("port")
                 .short("p")
                 .takes_value(true)
-                .default_value("9001")
+                .default_value("9003")
                 .help("gRPC server port")
                 .display_order(1),
         )

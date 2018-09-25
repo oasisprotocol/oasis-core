@@ -99,6 +99,14 @@ run_compute_node_storage_multilayer_remote() {
         ${WORKDIR}/target/enclave/token.so &
 }
 
+run_keymanager_node() {
+    local extra_args=$*
+
+    ${WORKDIR}/target/debug/ekiden-keymanager-node \
+        --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
+        ${extra_args} &
+}
+
 run_test() {
     local scenario=$1
     local description=$2
@@ -113,6 +121,10 @@ run_test() {
 
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT
+
+    # Start the key manager before starting anything else.
+    run_keymanager_node
+    sleep 1
 
     if [[ "${start_client_first}" == 0 ]]; then
         # Start dummy node.
