@@ -17,6 +17,7 @@ use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
+use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::Future;
@@ -62,6 +63,8 @@ enum Command {
 struct WorkerInner {
     /// Contract running in an enclave.
     contract: Enclave,
+    /// Executor for asynchronous storage inserts.
+    environment: Arc<Environment>,
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Enclave identity proof.
@@ -70,7 +73,12 @@ struct WorkerInner {
 }
 
 impl WorkerInner {
-    fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
+    fn new(
+        config: WorkerConfiguration,
+        ias: Arc<IAS>,
+        environment: Arc<Environment>,
+        storage: Arc<StorageBackend>,
+    ) -> Self {
         measure_configure!(
             "contract_call_batch_size",
             "Contract call batch sizes.",
@@ -91,6 +99,7 @@ impl WorkerInner {
 
         Self {
             contract,
+            environment,
             storage,
             identity_proof,
         }
@@ -277,7 +286,7 @@ impl Worker {
         // Spawn inner worker in a separate thread.
         let (command_sender, command_receiver) = channel();
         thread::spawn(move || {
-            WorkerInner::new(config, ias, storage).work(command_receiver);
+            WorkerInner::new(config, ias, environment, storage).work(command_receiver);
         });
 
         Self {
