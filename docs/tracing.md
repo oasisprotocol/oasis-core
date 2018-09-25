@@ -68,6 +68,14 @@ forward your browser traffic to the query service:
 
 Then open http://127.0.0.1:16686/ in your browser.
 
+Aside:
+A change to Kubernetes
+([issue](https://github.com/kubernetes/kubernetes/issues/43962),
+[PR](https://github.com/kubernetes/kubernetes/pull/46517)) is under
+development that will allow `kubectl port-forward` to listen on
+interfaces other than loopback, which would make the `socat` step
+unnecessary.
+
 ## Adding tracing
 See OpenTracing's specification
 https://github.com/opentracing/specification/blob/master/specification.md
