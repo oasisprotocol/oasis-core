@@ -140,10 +140,24 @@ impl StorageBackend for StorageFrontend {
         )
     }
 
+    fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        Box::new(
+            self.get_storage(self.inner.retries)
+                .and_then(move |s| s.get_batch(keys)),
+        )
+    }
+
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         Box::new(
             self.get_storage(self.inner.retries)
                 .and_then(move |s| s.insert(value, expiry)),
+        )
+    }
+
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        Box::new(
+            self.get_storage(self.inner.retries)
+                .and_then(move |s| s.insert_batch(values)),
         )
     }
 

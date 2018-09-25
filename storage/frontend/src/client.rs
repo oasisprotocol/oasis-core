@@ -44,6 +44,21 @@ impl StorageBackend for StorageClient {
         }
     }
 
+    fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        let mut req = api::GetBatchRequest::new();
+        req.set_ids(keys.iter().map(|k| k.to_vec()).collect());
+        match self.0.get_batch_async(&req) {
+            Ok(f) => Box::new(f.map(|mut resp| -> Vec<Option<Vec<u8>>> {
+                let mut data = resp.take_data().to_vec();
+                let items = data.drain(..)
+                    .map(|item| if item.is_empty() { None } else { Some(item) })
+                    .collect();
+                items
+            }).map_err(|error| Error::new(format!("{:?}", error)))),
+            Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
+        }
+    }
+
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         let mut req = api::InsertRequest::new();
         req.set_data(value);
@@ -57,6 +72,34 @@ impl StorageBackend for StorageClient {
         let options = inject_to_options(CallOption::default(), span.context());
 
         match self.0.insert_async_opt(&req, options) {
+            Ok(f) => Box::new(
+                f.then(|result| {
+                    drop(span);
+                    result
+                }).map(|_r| ())
+                    .map_err(|error| Error::new(format!("{:?}", error))),
+            ),
+            Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
+        }
+    }
+
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        let mut req = api::InsertBatchRequest::new();
+        for (value, expiry) in values {
+            let mut item = api::InsertRequest::new();
+            item.set_data(value);
+            item.set_expiry(expiry);
+            req.items.push(item);
+        }
+
+        // TODO: correlate with whatever initiates this
+        let span = ekiden_tracing::get_tracer()
+            .span("storage-client-insert-batch")
+            .tag(tag::StdTag::span_kind("client"))
+            .start();
+        let options = inject_to_options(CallOption::default(), span.context());
+
+        match self.0.insert_batch_async_opt(&req, options) {
             Ok(f) => Box::new(
                 f.then(|result| {
                     drop(span);

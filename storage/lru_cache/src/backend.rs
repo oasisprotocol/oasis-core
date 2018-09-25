@@ -59,6 +59,10 @@ impl StorageBackend for LruCacheStorageBackend {
         }).into_box()
     }
 
+    fn get_batch(&self, _keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        unimplemented!();
+    }
+
     fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
@@ -74,6 +78,10 @@ impl StorageBackend for LruCacheStorageBackend {
                 Ok(())
             })
             .into_box()
+    }
+
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        unimplemented!();
     }
 
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {

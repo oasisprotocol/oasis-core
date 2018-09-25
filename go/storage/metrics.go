@@ -47,9 +47,11 @@ var (
 		storageValueSize,
 	}
 
-	labelGet     = prometheus.Labels{"call": "get"}
-	labelInsert  = prometheus.Labels{"call": "insert"}
-	labelGetKeys = prometheus.Labels{"call": "get_keys"}
+	labelGet         = prometheus.Labels{"call": "get"}
+	labelGetBatch    = prometheus.Labels{"call": "get_batch"}
+	labelInsert      = prometheus.Labels{"call": "insert"}
+	labelInsertBatch = prometheus.Labels{"call": "insert_batch"}
+	labelGetKeys     = prometheus.Labels{"call": "get_keys"}
 
 	_ api.Backend = (*metricsWrapper)(nil)
 
@@ -74,6 +76,26 @@ func (w *metricsWrapper) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	return value, err
 }
 
+func (w *metricsWrapper) GetBatch(ctx context.Context, keys []api.Key) ([][]byte, error) {
+	start := time.Now()
+	values, err := w.Backend.GetBatch(ctx, keys)
+	storageLatency.With(labelGetBatch).Observe(time.Since(start).Seconds())
+
+	var size int
+	for _, value := range values {
+		size += len(value)
+	}
+	storageValueSize.With(labelGetBatch).Observe(float64(size))
+
+	if err != nil {
+		storageFailures.With(labelGetBatch).Inc()
+		return nil, err
+	}
+
+	storageCalls.With(labelGetBatch).Inc()
+	return values, err
+}
+
 func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration uint64) error {
 	start := time.Now()
 	err := w.Backend.Insert(ctx, value, expiration)
@@ -85,6 +107,26 @@ func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration ui
 	}
 
 	storageCalls.With(labelInsert).Inc()
+	return err
+}
+
+func (w *metricsWrapper) InsertBatch(ctx context.Context, values []api.Value) error {
+	start := time.Now()
+	err := w.Backend.InsertBatch(ctx, values)
+	storageLatency.With(labelInsertBatch).Observe(time.Since(start).Seconds())
+
+	var size int
+	for _, value := range values {
+		size += len(value.Data)
+	}
+	storageValueSize.With(labelInsertBatch).Observe(float64(size))
+
+	if err != nil {
+		storageFailures.With(labelInsertBatch).Inc()
+		return err
+	}
+
+	storageCalls.With(labelInsertBatch).Inc()
 	return err
 }
 

@@ -46,6 +46,15 @@ impl api::Storage for StorageService {
         }).map_err(|_e| ()));
     }
 
+    fn get_batch(
+        &self,
+        _ctx: RpcContext,
+        _req: api::GetBatchRequest,
+        _sink: UnarySink<api::GetBatchResponse>,
+    ) {
+        unimplemented!();
+    }
+
     fn insert(
         &self,
         ctx: RpcContext,
@@ -65,6 +74,15 @@ impl api::Storage for StorageService {
                 invalid_rpc!(sink, Internal, error)
             }
         }).map_err(|_e| ()));
+    }
+
+    fn insert_batch(
+        &self,
+        _ctx: RpcContext,
+        _req: api::InsertBatchRequest,
+        _sink: UnarySink<api::InsertBatchResponse>,
+    ) {
+        unimplemented!();
     }
 
     fn get_keys(

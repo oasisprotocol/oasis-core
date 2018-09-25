@@ -105,6 +105,10 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
         }))
     }
 
+    fn get_batch(&self, _keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        unimplemented!();
+    }
+
     fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
         let key = ekiden_storage_base::hash_storage_key(&value);
         let client = self.client.clone();
@@ -140,6 +144,10 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
             Ok(_output) => Ok(()),
             Err(e) => Err(e.into()),
         }))
+    }
+
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        unimplemented!();
     }
 
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
