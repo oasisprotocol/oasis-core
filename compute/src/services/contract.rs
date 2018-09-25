@@ -11,7 +11,7 @@ use ekiden_core::futures::prelude::*;
 use ekiden_tracing;
 use ekiden_tracing::MetadataCarrier;
 
-use super::super::roothash::RootHashFrontend;
+use super::super::roothash::{self, RootHashFrontend};
 
 struct ContractServiceInner {
     /// Root hash frontend.
@@ -70,7 +70,11 @@ impl Contract for ContractService {
         {
             Ok(()) => sink.success(SubmitTxResponse::new()),
             Err(error) => sink.fail(RpcStatus::new(
-                RpcStatusCode::Unavailable,
+                match error.description() {
+                    roothash::ERROR_APPEND_NOT_LEADER => RpcStatusCode::Unavailable,
+                    roothash::ERROR_APPEND_TOO_LARGE => RpcStatusCode::ResourceExhausted,
+                    _ => RpcStatusCode::Internal,
+                },
                 Some(error.description().to_owned()),
             )),
         };

@@ -166,6 +166,13 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("max-batch-size-bytes")
+                .long("max-batch-size-bytes")
+                .help("Maximum size (in bytes) of a batch of requests")
+                .default_value("16777216")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("max-batch-timeout")
                 .long("max-batch-timeout")
                 .help("Maximum timeout when waiting for a batch (in ms)")
@@ -267,6 +274,8 @@ fn main() {
             // Root hash frontend configuration.
             roothash: RootHashConfiguration {
                 max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),
+                max_batch_size_bytes: value_t!(matches, "max-batch-size-bytes", usize)
+                    .unwrap_or(16777216),
                 max_batch_timeout: value_t!(matches, "max-batch-timeout", u64).unwrap_or(1000),
                 test_only: RootHashTestOnlyConfiguration {
                     inject_discrepancy: matches.is_present("test-inject-discrepancy"),
