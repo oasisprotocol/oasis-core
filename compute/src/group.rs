@@ -1,4 +1,5 @@
 //! Computation group structures.
+use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
@@ -21,6 +22,29 @@ use ekiden_storage_base::StorageBackend;
 use ekiden_storage_frontend::StorageClient;
 
 use super::statetransfer::transition_keys;
+
+/// A node's role in a specific committee.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GroupRole {
+    /// Role.
+    pub role: Role,
+    /// Committee.
+    pub committee: Vec<CommitteeNode>,
+    /// Epoch.
+    pub epoch: EpochTime,
+}
+
+impl fmt::Display for GroupRole {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:?}/{}/{}",
+            self.role,
+            self.committee.get_encoded_hash(),
+            self.epoch
+        )
+    }
+}
 
 /// Commands for communicating with the computation group from other tasks.
 enum Command {
@@ -113,7 +137,7 @@ struct Inner {
     /// Node identity,
     identity: Arc<NodeIdentity>,
     /// Role subscribers.
-    role_subscribers: StreamSubscribers<Option<Role>>,
+    role_subscribers: StreamSubscribers<Option<GroupRole>>,
     /// Current epoch transition state.
     epochs: Mutex<EpochTransitionState>,
 }
@@ -351,7 +375,14 @@ impl ComputationGroup {
                             active_epoch.number
                         );
                     }
-                    inner.role_subscribers.notify(&active_epoch.role);
+
+                    inner
+                        .role_subscribers
+                        .notify(&active_epoch.role.map(|role| GroupRole {
+                            role,
+                            committee: active_epoch.committee.clone(),
+                            epoch: active_epoch.number,
+                        }));
 
                     Ok(())
                 })
@@ -373,11 +404,16 @@ impl ComputationGroup {
     }
 
     /// Submit batch to workers in the computation group.
-    pub fn submit(&self, batch_hash: H256, block_header: Header) -> Vec<CommitteeNode> {
+    pub fn submit(&self, batch_hash: H256, block_header: Header, role: &GroupRole) -> bool {
         trace!("Submitting batch to workers");
 
         let mut epochs = self.inner.epochs.lock().unwrap();
         let active_epoch = epochs.active.as_mut().expect("no active epoch");
+
+        // Ensure that the active epoch committee is still the same as before.
+        if &role.committee != &active_epoch.committee || role.epoch != active_epoch.number {
+            return false;
+        }
 
         // Prepare request.
         let mut request = SubmitBatchRequest::new();
@@ -421,7 +457,7 @@ impl ComputationGroup {
                 .discard(),
         ));
 
-        active_epoch.committee.clone()
+        true
     }
 
     /// Check if given node public key belongs to the current committee leader.
@@ -444,15 +480,7 @@ impl ComputationGroup {
     }
 
     /// Subscribe to notifications on our current role in the computation committee.
-    pub fn watch_role(&self) -> BoxStream<Option<Role>> {
+    pub fn watch_role(&self) -> BoxStream<Option<GroupRole>> {
         self.inner.role_subscribers.subscribe().1
-    }
-
-    /// Get committee for active epoch.
-    pub fn get_committee(&self) -> Vec<CommitteeNode> {
-        let epochs = self.inner.epochs.lock().unwrap();
-        let active_epoch = epochs.active.as_ref().expect("no active epoch");
-
-        active_epoch.committee.clone()
     }
 }
