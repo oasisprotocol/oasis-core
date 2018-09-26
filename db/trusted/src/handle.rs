@@ -7,9 +7,13 @@ use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_common::hash::empty_hash;
 use ekiden_common::mrae::sivaessha2::{SivAesSha2, KEY_SIZE, NONCE_SIZE};
+#[cfg(test)]
+use ekiden_common::ring::digest;
 use ekiden_enclave_common::quote::MrEnclave;
+#[cfg(not(test))]
 use ekiden_keymanager_client::KeyManager;
 #[cfg(not(target_env = "sgx"))]
+#[cfg(not(test))]
 use ekiden_keymanager_client::NetworkRpcClientBackendConfig;
 use ekiden_keymanager_common::ContractId;
 use ekiden_storage_base::mapper::BackendIdentityMapper;
@@ -53,6 +57,7 @@ pub struct DBKeyManagerConfig {
     mrenclave: MrEnclave,
     /// gRPC config parameters (only if not running in an enclave).
     #[cfg(not(target_env = "sgx"))]
+    #[cfg(not(test))]
     grpc_config: NetworkRpcClientBackendConfig,
 }
 
@@ -224,7 +229,27 @@ impl Database for DatabaseHandle {
         // with db.configure_key_manager() before calling us.
         assert!(self.key_manager_config.is_some());
 
-        // Get encryption key from the key manager and set up encryption context.
+        let state_key: [u8; 64];
+
+        // When running tests, we don't have a key manager running, so we need
+        // to generate a fake key to test DB encryption.
+        #[cfg(test)]
+        {
+            // In test mode, the enclave should be set to zero.
+            assert_eq!(
+                self.key_manager_config.as_ref().unwrap().mrenclave,
+                MrEnclave::zero()
+            );
+
+            // Generate a dummy key based on the contract ID for testing.
+            let hash = digest::digest(&digest::SHA512, &contract_id.to_vec());
+            let mut sk = [0u8; 64];
+            sk.copy_from_slice(hash.as_ref());
+            state_key = sk;
+        }
+
+        // Get encryption key from the key manager.
+        #[cfg(not(test))]
         match KeyManager::get() {
             Ok(mut km) => {
                 // First, configure the key manager client.
@@ -235,22 +260,35 @@ impl Database for DatabaseHandle {
 
                 km.set_contract(cfg.mrenclave);
 
-                // Get state key from KM, then split it into two parts:
-                // the MRAE key and the nonce.
-                let (_pk, state_key) = km.get_or_create_secret_keys(contract_id).unwrap();
-                let key: Vec<u8> = state_key.as_ref()[..KEY_SIZE].to_vec();
-                let nonce: Vec<u8> = state_key.as_ref()[KEY_SIZE..KEY_SIZE + NONCE_SIZE].to_vec();
+                // Get state key from the key manager.
+                let secret_keys = km.get_or_create_secret_keys(contract_id);
 
-                // Set up encryption context.
-                self.enc_ctx = Some(EncryptionContext {
-                    mrae_ctx: SivAesSha2::new(key).unwrap(),
-                    nonce,
-                });
+                match secret_keys {
+                    Ok(pk_sk) => {
+                        state_key = pk_sk.1;
+                    }
+                    Err(e) => {
+                        panic!(
+                            "Failed to get state key from key manager: {}",
+                            e.description()
+                        );
+                    }
+                }
             }
             Err(e) => {
                 panic!("Cannot get key manager instance: {}", e.description());
             }
         }
+
+        // Split the state_key into a MRAE key and nonce.
+        let key: Vec<u8> = state_key.as_ref()[..KEY_SIZE].to_vec();
+        let nonce: Vec<u8> = state_key.as_ref()[KEY_SIZE..KEY_SIZE + NONCE_SIZE].to_vec();
+
+        // Set up encryption context.
+        self.enc_ctx = Some(EncryptionContext {
+            mrae_ctx: SivAesSha2::new(key).unwrap(),
+            nonce,
+        });
 
         // Run provided function.
         f(self);
@@ -265,9 +303,10 @@ impl Database for DatabaseHandle {
 #[cfg(test)]
 mod tests {
     use ekiden_common::hash::empty_hash;
+    use ekiden_enclave_common::quote::MrEnclave;
     use ekiden_keymanager_common::ContractId;
 
-    use super::{Database, DatabaseHandle};
+    use super::{DBKeyManagerConfig, Database, DatabaseHandle};
 
     use std::str::FromStr;
 
@@ -306,13 +345,19 @@ mod tests {
         assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
     }
 
-    #[test]
     fn test_db_encryption() {
         let mut db = DatabaseHandle::new();
 
         db.insert(b"unencrypted", b"hello world");
 
-        db.with_encryption(ContractId::from([0u8; 32]), |db| {
+        let id_0 = ContractId::from_str(&"0".repeat(64)).unwrap();
+        let id_1 = ContractId::from_str(&"1".repeat(64)).unwrap();
+
+        db.configure_key_manager(DBKeyManagerConfig {
+            mrenclave: MrEnclave::zero(),
+        });
+
+        db.with_encryption(id_0, |db| {
             db.insert(b"encrypted", b"top secret");
             assert!(db.contains_key(b"encrypted"));
         });
@@ -324,12 +369,12 @@ mod tests {
         assert_eq!(db.get(b"unencrypted"), Some(b"hello world".to_vec()));
 
         // Accessing encrypted value with a different contract ID should fail.
-        db.with_encryption(ContractId::from([42u8; 32]), |db| {
+        db.with_encryption(id_1, |db| {
             assert_ne!(db.get(b"encrypted"), Some(b"top secret".to_vec()));
         });
 
         // Accessing encrypted value with the original contract ID should succeed.
-        db.with_encryption(ContractId::from([0u8; 32]), |db| {
+        db.with_encryption(id_0, |db| {
             assert_eq!(db.get(b"encrypted"), Some(b"top secret".to_vec()));
         });
 
@@ -345,6 +390,10 @@ mod tests {
 
         let id_0 = ContractId::from_str(&"0".repeat(64)).unwrap();
         let id_1 = ContractId::from_str(&"1".repeat(64)).unwrap();
+
+        db.configure_key_manager(DBKeyManagerConfig {
+            mrenclave: MrEnclave::zero(),
+        });
 
         // Nesting encryption contexts isn't supported and should panic!
         db.with_encryption(id_0, |db| {
