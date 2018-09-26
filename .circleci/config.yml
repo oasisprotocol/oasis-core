@@ -76,6 +76,7 @@ jobs:
             - target/debug/token-client
             - target/debug/test-long-term-client
             - target/debug/ekiden-keymanager-node
+            - target/debug/ekiden-keymanager-test-client
             - target/enclave/token.so
             - target/enclave/token.mrenclave
             - target/enclave/ekiden-keymanager-trusted.so
