@@ -271,8 +271,10 @@ func (t *tendermintService) lazyInit() error {
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
-	tenderConfig.Consensus.TimeoutCommit = int(timeoutCommit / time.Millisecond)
+	timeoutCommitMsec := int(timeoutCommit / time.Millisecond)
+	tenderConfig.Consensus.TimeoutCommit = timeoutCommitMsec
 	tenderConfig.Consensus.SkipTimeoutCommit, _ = t.cmd.Flags().GetBool(cfgConsensusSkipTimeoutCommit)
+	tenderConfig.Consensus.BlockTimeIota = timeoutCommitMsec
 	tenderConfig.Instrumentation.Prometheus = true
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
