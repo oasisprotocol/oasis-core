@@ -1,4 +1,4 @@
-package bolt
+package leveldb
 
 import (
 	"io/ioutil"
@@ -12,8 +12,8 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/internal/tester"
 )
 
-func TestStorageBolt(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "ekiden-storage-bolt-test")
+func TestStorageLevelDB(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "ekiden-storage-leveldb-test")
 	require.NoError(t, err, "TempDir()")
 	defer os.RemoveAll(tmpDir)
 
@@ -22,5 +22,5 @@ func TestStorageBolt(t *testing.T) {
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 
-	tester.StorageImplementationTest(t, backend, timeSource, true)
+	tester.StorageImplementationTest(t, backend, timeSource, false)
 }

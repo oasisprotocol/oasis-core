@@ -12,6 +12,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/bolt"
+	"github.com/oasislabs/ekiden/go/storage/leveldb"
 	"github.com/oasislabs/ekiden/go/storage/memory"
 )
 
@@ -31,6 +32,9 @@ func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (api.
 	case bolt.BackendName:
 		fn := filepath.Join(dataDir, bolt.DBFile)
 		impl, err = bolt.New(fn, timeSource)
+	case leveldb.BackendName:
+		fn := filepath.Join(dataDir, leveldb.DBFile)
+		impl, err = leveldb.New(fn, timeSource)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
