@@ -12,5 +12,5 @@ func TestStorageMemory(t *testing.T) {
 	backend := New(timeSource)
 	defer backend.Cleanup()
 
-	tester.StorageImplementationTest(t, backend, timeSource)
+	tester.StorageImplementationTest(t, backend, timeSource, true)
 }

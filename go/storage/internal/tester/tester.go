@@ -28,7 +28,7 @@ var testValuesBatch = [][]byte{
 
 // StorageImplementationTest exercises the basic functionality of
 // a storage backend.
-func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource epochtime.SetableBackend) {
+func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource epochtime.SetableBackend, expiry bool) {
 	<-backend.Initialized()
 
 	var hashes []storage.Key
@@ -84,6 +84,10 @@ func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource
 		nil,
 		testValues[1],
 	}, v, "GetBatch(missing key)")
+
+	if !expiry {
+		return
+	}
 
 	seenKeys := make(map[storage.Key]bool)
 	keyInfos, err := backend.GetKeys(context.Background())
