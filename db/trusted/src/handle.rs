@@ -1,4 +1,5 @@
 //! Low-level key-value database interface.
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{Mutex, MutexGuard};
 
@@ -31,6 +32,15 @@ struct EncryptionContext {
     nonce: Vec<u8>,
 }
 
+/// Pending database operation.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Operation {
+    /// Insert key with given value.
+    Insert(Vec<u8>),
+    /// Remove key.
+    Remove,
+}
+
 /// Database handle.
 ///
 /// This is a concrete implementation of the [`Database`] interface.
@@ -41,6 +51,8 @@ pub struct DatabaseHandle {
     state: PatriciaTrie,
     /// Root hash.
     root_hash: Option<H256>,
+    /// Pending operations since the last root hash was set.
+    pending_ops: HashMap<Vec<u8>, Operation>,
     /// Encryption context with which to perform all operations (optional).
     enc_ctx: Option<EncryptionContext>,
 }
@@ -69,6 +81,7 @@ impl DatabaseHandle {
         DatabaseHandle {
             state: PatriciaTrie::new(mapper),
             root_hash: None,
+            pending_ops: HashMap::new(),
             enc_ctx: None,
         }
     }
@@ -89,12 +102,27 @@ impl DatabaseHandle {
             self.root_hash = Some(root_hash);
         }
 
+        self.pending_ops.clear();
+
         Ok(())
     }
 
     /// Return the root hash of the database state.
     pub fn get_root_hash(&mut self) -> Result<H256> {
-        match self.root_hash {
+        // Commit all pending writes to the trie.
+        let mut root_hash = self.root_hash.clone();
+        for (key, value) in self.pending_ops.drain() {
+            match value {
+                Operation::Insert(value) => {
+                    root_hash = Some(self.state.insert(root_hash, &key, &value));
+                }
+                Operation::Remove => {
+                    root_hash = self.state.remove(root_hash, &key);
+                }
+            }
+        }
+
+        match root_hash {
             Some(root_hash) => Ok(root_hash),
             None => Ok(empty_hash()),
         }
@@ -107,7 +135,13 @@ impl Database for DatabaseHandle {
     }
 
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        let value = self.state.get(self.root_hash, key);
+        // Fetch the current value by first checking the list of pending operations if they
+        // affect the given key.
+        let value = match self.pending_ops.get(key) {
+            Some(Operation::Insert(value)) => Some(value.clone()),
+            Some(Operation::Remove) => None,
+            None => self.state.get(self.root_hash, key),
+        };
 
         if self.enc_ctx.is_some() && value.is_some() {
             // Decrypt value using the encryption context.
@@ -124,34 +158,36 @@ impl Database for DatabaseHandle {
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
         let previous_value = self.get(key);
 
-        if self.enc_ctx.is_some() {
-            // Encrypt value using the encryption context.
-            let ctx = self.enc_ctx.as_ref().unwrap();
-            let encrypted_value = &ctx.mrae_ctx
-                .seal(ctx.nonce.clone(), value.to_vec(), vec![])
-                .unwrap();
+        let value = match self.enc_ctx {
+            Some(ref ctx) => {
+                // Encrypt value using the encryption context.
+                ctx.mrae_ctx
+                    .seal(ctx.nonce.clone(), value.to_vec(), vec![])
+                    .unwrap()
+            }
+            None => value.to_vec(),
+        };
 
-            self.root_hash = Some(self.state.insert(self.root_hash, key, encrypted_value));
-        } else {
-            self.root_hash = Some(self.state.insert(self.root_hash, key, value));
-        }
+        // Add a pending insert operation for the given key.
+        self.pending_ops
+            .insert(key.to_vec(), Operation::Insert(value));
 
         previous_value
     }
 
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
         let previous_value = self.get(key);
-        self.root_hash = self.state.remove(self.root_hash, key);
+
+        // Add a pending remove operation for the given key.
+        self.pending_ops.insert(key.to_vec(), Operation::Remove);
 
         previous_value
     }
 
-    /// Clear database state.
-    fn clear(&mut self) {
-        self.root_hash = None;
+    fn rollback(&mut self) {
+        self.pending_ops.clear();
     }
 
-    /// Run given closure in an encrypted context for given contract.
     fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
     where
         F: FnOnce(&mut DatabaseHandle) -> (),
@@ -192,9 +228,8 @@ mod tests {
 
     #[test]
     fn test_basic_operations() {
-        let mut db = DatabaseHandle::instance();
+        let mut db = DatabaseHandle::new();
 
-        db.clear();
         db.insert(b"foo", b"hello world");
         db.insert(b"bar", b"another data value");
 
@@ -209,7 +244,7 @@ mod tests {
         assert!(db.contains_key(b"bar"));
         assert_eq!(db.get(b"foo"), None);
 
-        db.clear();
+        db.rollback();
 
         assert!(!db.contains_key(b"bar"));
         assert_eq!(db.get_root_hash(), Ok(empty_hash()));
@@ -217,9 +252,8 @@ mod tests {
 
     #[test]
     fn test_db_encryption() {
-        let mut db = DatabaseHandle::instance();
+        let mut db = DatabaseHandle::new();
 
-        db.clear();
         db.insert(b"unencrypted", b"hello world");
 
         db.with_encryption(ContractId::from([0u8; 32]), |db| {
@@ -243,7 +277,7 @@ mod tests {
             assert_eq!(db.get(b"encrypted"), Some(b"top secret".to_vec()));
         });
 
-        db.clear();
+        db.rollback();
         assert!(!db.contains_key(b"unencrypted"));
         assert!(!db.contains_key(b"encrypted"));
     }
@@ -252,8 +286,6 @@ mod tests {
     #[should_panic]
     fn test_db_encryption_nested() {
         let mut db = DatabaseHandle::new();
-
-        db.clear();
 
         // Nesting encryption contexts isn't supported and should panic!
         db.with_encryption(ContractId::from([0u8; 32]), |db| {

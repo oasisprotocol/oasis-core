@@ -37,7 +37,7 @@ mod tests {
     fn test_operations() {
         {
             let mut db = DatabaseHandle::instance();
-            db.clear();
+            db.rollback();
         }
 
         let schema = TestSchema::new();
@@ -74,7 +74,7 @@ mod tests {
     fn test_namespaces() {
         {
             let mut db = DatabaseHandle::instance();
-            db.clear();
+            db.rollback();
         }
 
         let schema1 = TestSchema::new();
@@ -100,7 +100,7 @@ mod tests {
     fn bench_map_insert_random(b: &mut Bencher) {
         {
             let mut db = DatabaseHandle::instance();
-            db.clear();
+            db.rollback();
         }
 
         let schema = BenchSchema::new();
