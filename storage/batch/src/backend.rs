@@ -35,6 +35,17 @@ impl BatchStorageBackend {
         }
     }
 
+    /// Return the number of items in this batch.
+    pub fn get_batch_size(&self) -> usize {
+        let inner_guard = self.inner.read().unwrap();
+        let inner = inner_guard
+            .as_ref()
+            .expect("BatchStorageBackend access after commit");
+        let size = inner.writeback.lock().unwrap().len();
+
+        size
+    }
+
     /// Commit batch to delegate backend.
     pub fn commit(&self) -> BoxFuture<()> {
         let inner = self.inner

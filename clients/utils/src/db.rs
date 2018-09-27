@@ -44,8 +44,8 @@ impl Database for Snapshot {
         panic!("Can't remove from Snapshot")
     }
 
-    fn clear(&mut self) {
-        panic!("Can't clear Snapshot")
+    fn rollback(&mut self) {
+        panic!("Can't rollback Snapshot")
     }
 
     fn with_encryption<F>(&mut self, _contract_id: H256, _f: F)

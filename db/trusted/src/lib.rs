@@ -58,8 +58,8 @@ pub trait Database {
     /// in the database.
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
-    /// Clear database state.
-    fn clear(&mut self);
+    /// Rollback any pending changes.
+    fn rollback(&mut self);
 
     /// Run given closure in an encrypted context for given contract.
     fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
