@@ -78,6 +78,13 @@ impl WorkerInner {
                 buckets: vec![0., 1., 5., 10., 20., 50., 100., 200., 500., 1000.],
             }
         );
+        measure_configure!(
+            "contract_call_storage_inserts",
+            "Number of storage inserts from processing a batch.",
+            MetricConfig::Histogram {
+                buckets: vec![0., 1., 5., 10., 50., 100., 200., 500., 1000., 5000., 10000.],
+            }
+        );
 
         let (contract, identity_proof) =
             Self::create_contract(&config.contract_filename, ias, config.saved_identity_path);
@@ -145,6 +152,11 @@ impl WorkerInner {
                     self.contract.contract_call_batch(batch, &block.header)
                 })?
         };
+
+        measure_histogram!(
+            "contract_call_storage_inserts",
+            batch_storage.get_batch_size()
+        );
 
         // Commit batch storage.
         {
