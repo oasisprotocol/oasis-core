@@ -34,7 +34,7 @@ macro_rules! create_contract {
                                 name: stringify!($method_name).to_owned(),
                             },
                             |args: &$arguments_type,
-                             ctx: &ContractCallContext| -> Result<$output_type> {
+                             ctx: &mut ContractCallContext| -> Result<$output_type> {
                                 $method_name(args, ctx)
                             },
                         )
