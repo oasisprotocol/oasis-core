@@ -1,4 +1,5 @@
 //! Contract call batch dispatcher.
+use std::any::Any;
 use std::collections::HashMap;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
@@ -12,8 +13,24 @@ use serde::Serialize;
 use serde_cbor;
 
 use ekiden_common::error::Result;
+use ekiden_contract_common::batch::{CallBatch, OutputBatch};
 use ekiden_contract_common::call::{ContractCall, ContractOutput, Generic};
 use ekiden_roothash_base::header::Header;
+
+/// Custom batch handler.
+///
+/// A custom batch handler can be configured on the `Dispatcher` and will have
+/// its `start_batch` and `end_batch` methods called at the appropriate times.
+pub trait BatchHandler: Sync + Send {
+    /// Called before the first call in a batch is dispatched.
+    ///
+    /// The context may be mutated and will be available as read-only to all
+    /// runtime calls.
+    fn start_batch(&self, ctx: &mut ContractCallContext);
+
+    /// Called after all calls has been dispatched.
+    fn end_batch(&self, ctx: &mut ContractCallContext);
+}
 
 /// Descriptor of a contract API method.
 #[derive(Clone, Debug)]
@@ -43,6 +60,20 @@ where
 pub struct ContractCallContext {
     /// The block header accompanying this contract call.
     pub header: Header,
+    /// Runtime-specific context.
+    pub runtime: Box<Any>,
+}
+
+struct NoRuntimeContext;
+
+impl ContractCallContext {
+    /// Construct new contract call context.
+    pub fn new(header: Header) -> Self {
+        Self {
+            header,
+            runtime: Box::new(NoRuntimeContext),
+        }
+    }
 }
 
 /// Dispatcher for a contract method.
@@ -130,6 +161,8 @@ lazy_static! {
 pub struct Dispatcher {
     /// Registered contract methods.
     methods: HashMap<String, ContractMethod>,
+    /// Registered batch handler.
+    batch_handler: Option<Box<BatchHandler>>,
 }
 
 impl Dispatcher {
@@ -137,6 +170,7 @@ impl Dispatcher {
     pub fn new() -> Self {
         Dispatcher {
             methods: HashMap::new(),
+            batch_handler: None,
         }
     }
 
@@ -151,6 +185,32 @@ impl Dispatcher {
     /// Register a new method in the dispatcher.
     pub fn add_method(&mut self, method: ContractMethod) {
         self.methods.insert(method.get_name().clone(), method);
+    }
+
+    /// Configure batch handler.
+    pub fn set_batch_handler<H>(&mut self, handler: H)
+    where
+        H: BatchHandler + 'static,
+    {
+        self.batch_handler = Some(Box::new(handler));
+    }
+
+    /// Dispatches a batch of runtime requests.
+    pub fn dispatch_batch(&self, batch: CallBatch, mut ctx: ContractCallContext) -> OutputBatch {
+        // Invoke start batch handler.
+        if let Some(ref handler) = self.batch_handler {
+            handler.start_batch(&mut ctx);
+        }
+
+        // Process batch.
+        let outputs = OutputBatch(batch.iter().map(|call| self.dispatch(call, &ctx)).collect());
+
+        // Invoke end batch handler.
+        if let Some(ref handler) = self.batch_handler {
+            handler.end_batch(&mut ctx);
+        }
+
+        outputs
     }
 
     /// Dispatches a raw contract invocation request.
@@ -221,12 +281,10 @@ mod tests {
         };
         let call_encoded = serde_cbor::to_vec(&call).unwrap();
 
-        let ctx = ContractCallContext {
-            header: Header {
-                timestamp: TEST_TIMESTAMP,
-                ..Default::default()
-            },
-        };
+        let ctx = ContractCallContext::new(Header {
+            timestamp: TEST_TIMESTAMP,
+            ..Default::default()
+        });
 
         // Call contract.
         let dispatcher = Dispatcher::get();

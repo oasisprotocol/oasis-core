@@ -16,8 +16,8 @@ use ekiden_core::error::Result;
 use ekiden_core::futures::prelude::*;
 #[cfg(target_env = "sgx")]
 use ekiden_storage_base::backend::StorageBackend;
-use ekiden_trusted::contract::create_contract;
-use ekiden_trusted::contract::dispatcher::ContractCallContext;
+use ekiden_trusted::contract::dispatcher::{BatchHandler, ContractCallContext};
+use ekiden_trusted::contract::{configure_runtime_dispatch_batch_handler, create_contract};
 #[cfg(target_env = "sgx")]
 use ekiden_trusted::db::untrusted::UntrustedStorageBackend;
 use ekiden_trusted::enclave::enclave_init;
@@ -28,6 +28,24 @@ enclave_init!();
 with_api! {
     create_contract!(api);
 }
+
+struct MyCustomContext {
+    bar: u8,
+}
+
+struct TokenBatchHandler;
+impl BatchHandler for TokenBatchHandler {
+    fn start_batch(&self, ctx: &mut ContractCallContext) {
+        ctx.runtime = Box::new(MyCustomContext { bar: 42 });
+    }
+
+    fn end_batch(&self, ctx: &mut ContractCallContext) {
+        let my_ctx = ctx.runtime.downcast_ref::<MyCustomContext>().unwrap();
+        assert_eq!(my_ctx.bar, 42);
+    }
+}
+
+configure_runtime_dispatch_batch_handler!(TokenBatchHandler);
 
 pub fn null(_request: &bool, _ctx: &ContractCallContext) -> Result<()> {
     Ok(())
@@ -79,7 +97,11 @@ pub fn create(request: &CreateRequest, _ctx: &ContractCallContext) -> Result<Cre
     Ok(CreateResponse::new())
 }
 
-pub fn transfer(request: &TransferRequest, _ctx: &ContractCallContext) -> Result<TransferResponse> {
+pub fn transfer(request: &TransferRequest, ctx: &ContractCallContext) -> Result<TransferResponse> {
+    // Check that custom runtime context works.
+    let my_ctx = ctx.runtime.downcast_ref::<MyCustomContext>().unwrap();
+    assert_eq!(my_ctx.bar, 42);
+
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.

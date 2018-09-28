@@ -1,5 +1,5 @@
 //! ECALLs provided by the contract interface.
-use ekiden_contract_common::batch::{CallBatch, OutputBatch};
+use ekiden_contract_common::batch::CallBatch;
 use ekiden_enclave_trusted::utils::{read_enclave_request, write_enclave_response};
 use ekiden_roothash_base::header::Header;
 
@@ -20,22 +20,11 @@ pub extern "C" fn contract_call_batch(
     let batch: CallBatch = read_enclave_request(call_batch_data, call_batch_length);
     let header: Header = read_enclave_request(block_header_data, block_header_length);
 
-    // TODO: Actually decrypt batch.
-
     // Build the contract call context to be used for this batch.
-    let ctx = ContractCallContext { header };
-
-    // TODO: Do something clever with the roothash block header
-    // like extracting the timestamp.
+    let ctx = ContractCallContext::new(header);
 
     // Dispatch all contract invocations in the batch.
-    let dispatcher = Dispatcher::get();
-    let outputs = OutputBatch(
-        batch
-            .iter()
-            .map(|call| dispatcher.dispatch(call, &ctx))
-            .collect(),
-    );
+    let outputs = Dispatcher::get().dispatch_batch(batch, ctx);
 
     // Copy back output batch.
     write_enclave_response(
