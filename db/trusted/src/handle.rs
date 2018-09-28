@@ -125,7 +125,7 @@ impl DatabaseHandle {
     }
 
     /// Set the root hash of the database state.
-    pub(crate) fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
+    pub fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
         if root_hash == empty_hash() {
             self.root_hash = None;
         } else {
@@ -138,7 +138,18 @@ impl DatabaseHandle {
     }
 
     /// Return the root hash of the database state.
-    pub fn get_root_hash(&mut self) -> Result<H256> {
+    ///
+    /// Note that without calling `commit` this will exclude any uncommitted
+    /// modifications to the database state.
+    pub fn get_root_hash(&self) -> H256 {
+        match self.root_hash {
+            Some(root_hash) => root_hash,
+            None => empty_hash(),
+        }
+    }
+
+    /// Commit all database changes to the underlying store.
+    pub fn commit(&mut self) -> Result<H256> {
         // Commit all pending writes to the trie.
         let mut root_hash = self.root_hash.clone();
         for (key, value) in self.pending_ops.drain() {
@@ -153,10 +164,7 @@ impl DatabaseHandle {
         }
 
         self.root_hash = root_hash;
-        match root_hash {
-            Some(root_hash) => Ok(root_hash),
-            None => Ok(empty_hash()),
-        }
+        Ok(self.get_root_hash())
     }
 
     /// Set up key manager configuration.
@@ -372,17 +380,18 @@ mod tests {
         db.rollback();
 
         assert!(!db.contains_key(b"bar"));
-        assert_eq!(db.get_root_hash(), Ok(empty_hash()));
+        assert_eq!(db.get_root_hash(), empty_hash());
     }
 
     #[test]
-    fn test_get_after_flush() {
+    fn test_get_root_hash_after_commit() {
         let mut db = DatabaseHandle::new();
 
         db.insert(b"foo", b"hello world");
-
         assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
-        assert_ne!(db.get_root_hash(), Ok(empty_hash()));
+
+        db.commit().unwrap();
+        assert_ne!(db.get_root_hash(), empty_hash());
         assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
     }
 

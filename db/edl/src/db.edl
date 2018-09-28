@@ -12,7 +12,7 @@ enclave {
             [in] uint8_t root_hash[32]
         );
 
-        public void db_get_root_hash(
+        public void db_commit(
             [out] uint8_t root_hash[32]
         );
     };

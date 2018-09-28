@@ -11,7 +11,11 @@ pub extern "C" fn db_set_root_hash(root_hash: *const u8) {
 }
 
 #[no_mangle]
-pub extern "C" fn db_get_root_hash(root_hash: *mut u8) {
+pub extern "C" fn db_commit(root_hash: *mut u8) {
     let dst = unsafe { from_raw_parts_mut(root_hash, H256::len()) };
-    dst.clone_from_slice(&DatabaseHandle::instance().get_root_hash().unwrap());
+    let mut db = DatabaseHandle::instance();
+
+    // Commit all pending changes and then get the root hash.
+    db.commit().expect("database commit failed");
+    dst.clone_from_slice(&db.get_root_hash());
 }
