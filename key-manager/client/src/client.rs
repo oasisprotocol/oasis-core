@@ -71,7 +71,7 @@ lazy_static! {
 
 impl KeyManager {
     /// Construct new key manager interface.
-    fn new() -> Self {
+    pub fn new() -> Self {
         KeyManager {
             mr_enclave: None,
             client: None,
@@ -151,7 +151,7 @@ impl KeyManager {
     ///
     /// Calling this method will take a lock on the global instance, which will
     /// be released once the value goes out of scope.
-    pub fn get<'a>() -> Result<MutexGuard<'a, KeyManager>> {
+    pub fn instance<'a>() -> Result<MutexGuard<'a, KeyManager>> {
         Ok(KEY_MANAGER.lock().unwrap())
     }
 

@@ -17,15 +17,20 @@ use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
+use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::Future;
 use ekiden_core::rpc::api;
+use ekiden_core::rpc::client::ClientEndpoint;
+use ekiden_core::x509::Certificate;
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_batch::BatchStorageBackend;
+use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
+use super::handlers;
 use super::ias::IAS;
 
 /// Result bytes.
@@ -250,6 +255,17 @@ impl WorkerInner {
     }
 }
 
+/// Key manager configuration.
+#[derive(Clone, Debug)]
+pub struct KeyManagerConfiguration {
+    /// Key manager node host.
+    pub host: String,
+    /// Key manager node port.
+    pub port: u16,
+    /// Key manager node certificate.
+    pub cert: Certificate,
+}
+
 /// Worker configuration.
 #[derive(Clone, Debug)]
 pub struct WorkerConfiguration {
@@ -260,6 +276,8 @@ pub struct WorkerConfiguration {
     /// Time limit for forwarded gRPC calls. If an RPC takes longer
     /// than this, we treat it as failed.
     pub forwarded_rpc_timeout: Option<Duration>,
+    /// Key manager configuration.
+    pub key_manager: Option<KeyManagerConfiguration>,
 }
 
 /// Worker which executes contracts in secure enclaves.
@@ -273,7 +291,30 @@ pub struct Worker {
 
 impl Worker {
     /// Create new contract worker.
-    pub fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
+    pub fn new(
+        config: WorkerConfiguration,
+        ias: Arc<IAS>,
+        environment: Arc<Environment>,
+        storage: Arc<StorageBackend>,
+    ) -> Self {
+        // Setup enclave RPC routing.
+        // TODO: This sets up the routing globally, we should set it up the same as storage.
+        {
+            let mut router = RpcRouter::get_mut();
+
+            // Key manager endpoint.
+            if let Some(ref key_manager) = config.key_manager {
+                router.add_handler(handlers::ContractForwarder::new(
+                    ClientEndpoint::KeyManager,
+                    environment.clone(),
+                    config.forwarded_rpc_timeout,
+                    key_manager.host.clone(),
+                    key_manager.port,
+                    key_manager.cert.clone(),
+                ));
+            }
+        }
+
         // Spawn inner worker in a separate thread.
         let (command_sender, command_receiver) = channel();
         thread::spawn(move || {

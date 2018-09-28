@@ -99,6 +99,15 @@ run_compute_node_storage_multilayer_remote() {
         ${WORKDIR}/target/enclave/token.so &
 }
 
+run_keymanager_node() {
+    local extra_args=$*
+
+    ${WORKDIR}/target/debug/ekiden-keymanager-node \
+        --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
+        --node-key-pair ${WORKDIR}/tests/keymanager/km.key \
+        ${extra_args} &
+}
+
 run_test() {
     local scenario=$1
     local description=$2
@@ -108,11 +117,23 @@ run_test() {
     local restart_dummy_after=${6:-0}
     local pre_epochs=${7:-0}
     local start_client_first=${8:-0}
+    local test_km=${9:-0}
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
 
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT
+
+    # Start the key manager before starting anything else.
+    run_keymanager_node
+    sleep 1
+
+    if [[ "${test_km}" > 0 ]]; then
+        # Test the key manager.
+        ${WORKDIR}/target/debug/ekiden-keymanager-test-client \
+            --mrenclave $(cat ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.mrenclave) \
+            --node-key-pair ${WORKDIR}/tests/keymanager/km.key
+    fi
 
     if [[ "${start_client_first}" == 0 ]]; then
         # Start dummy node.
@@ -229,7 +250,7 @@ scenario_fail_worker_after_commit() {
 }
 
 # Go node (tendermint backends).
-run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
+run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm 0 0 0 1
 run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_multilayer_remote "e2e-multilayer-remote-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dummy_node_go_tm_mock
