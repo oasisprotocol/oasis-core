@@ -29,7 +29,7 @@ pub trait BatchHandler: Sync + Send {
     fn start_batch(&self, ctx: &mut ContractCallContext);
 
     /// Called after all calls has been dispatched.
-    fn end_batch(&self, ctx: &mut ContractCallContext);
+    fn end_batch(&self, ctx: ContractCallContext);
 }
 
 /// Descriptor of a contract API method.
@@ -212,7 +212,7 @@ impl Dispatcher {
 
         // Invoke end batch handler.
         if let Some(ref handler) = self.batch_handler {
-            handler.end_batch(&mut ctx);
+            handler.end_batch(ctx);
         }
 
         outputs
