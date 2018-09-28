@@ -77,6 +77,10 @@ pub struct DatabaseHandle {
     enc_ctx: Option<EncryptionContext>,
     /// Key manager config (optional).
     key_manager_config: Option<DBKeyManagerConfig>,
+    /// Key manager instance (only if not running in an enclave).
+    #[cfg(not(target_env = "sgx"))]
+    #[cfg(not(test))]
+    key_manager: Option<Mutex<KeyManager>>,
 }
 
 lazy_static! {
@@ -106,6 +110,9 @@ impl DatabaseHandle {
             pending_ops: HashMap::new(),
             enc_ctx: None,
             key_manager_config: None,
+            #[cfg(not(target_env = "sgx"))]
+            #[cfg(not(test))]
+            key_manager: None,
         }
     }
 
@@ -155,6 +162,26 @@ impl DatabaseHandle {
     /// Set up key manager configuration.
     pub fn configure_key_manager(&mut self, config: DBKeyManagerConfig) {
         self.key_manager_config.get_or_insert(config);
+
+        // If we're not in an enclave, we can just make a new instance of
+        // the key manager and configure it once.
+        #[cfg(not(target_env = "sgx"))]
+        #[cfg(not(test))]
+        {
+            let cfg = self.key_manager_config.as_ref().unwrap();
+            let mut km = KeyManager::new();
+
+            // Configure the key manager.
+            km.configure_backend(cfg.grpc_config.clone());
+            km.set_contract(cfg.mrenclave);
+
+            // Save the configured key manager instance for later use.
+            self.key_manager = Some(Mutex::new(km));
+        }
+
+        // However, in an enclave, there is only a global key manager instance
+        // available, so we must reconfigure it everytime we obtain the lock.
+        // This is done in the `with_encryption` method below.
     }
 }
 
@@ -248,35 +275,49 @@ impl Database for DatabaseHandle {
             state_key = sk;
         }
 
-        // Get encryption key from the key manager.
+        // Get or create a key manager instance and fetch the state key.
         #[cfg(not(test))]
-        match KeyManager::get() {
-            Ok(mut km) => {
-                // First, configure the key manager client.
-                let cfg = self.key_manager_config.as_ref().unwrap();
-
-                #[cfg(not(target_env = "sgx"))]
-                km.configure_backend(cfg.grpc_config.clone());
-
-                km.set_contract(cfg.mrenclave);
-
-                // Get state key from the key manager.
-                let secret_keys = km.get_or_create_secret_keys(contract_id);
-
-                match secret_keys {
-                    Ok(pk_sk) => {
-                        state_key = pk_sk.1;
-                    }
-                    Err(e) => {
-                        panic!(
-                            "Failed to get state key from key manager: {}",
-                            e.description()
-                        );
-                    }
+        {
+            // If we're not in an enclave, we can just use the pre-configured
+            // instance that we've made in `configure_key_manager`.
+            #[cfg(not(target_env = "sgx"))]
+            let mut key_manager = match self.key_manager {
+                None => {
+                    panic!("You forgot to call db.configure_key_manager() before calling db.with_encryption()!");
                 }
-            }
-            Err(e) => {
-                panic!("Cannot get key manager instance: {}", e.description());
+                Some(ref mut km) => km.lock().unwrap(),
+            };
+
+            // In an enclave, there is only one global instance, so we need to
+            // get access to that instead and reconfigure it every time.
+            #[cfg(target_env = "sgx")]
+            let mut key_manager = match KeyManager::instance() {
+                Ok(mut km) => {
+                    let cfg = self.key_manager_config.as_ref().unwrap();
+
+                    // Configure the key manager.
+                    km.set_contract(cfg.mrenclave);
+
+                    km
+                }
+                Err(e) => {
+                    panic!("Cannot get key manager instance: {}", e.description());
+                }
+            };
+
+            // Finally, get the state key from the key manager.
+            let secret_keys = key_manager.get_or_create_secret_keys(contract_id);
+
+            match secret_keys {
+                Ok(pk_sk) => {
+                    state_key = pk_sk.1;
+                }
+                Err(e) => {
+                    panic!(
+                        "Failed to get state key from key manager: {}",
+                        e.description()
+                    );
+                }
             }
         }
 
@@ -345,6 +386,7 @@ mod tests {
         assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
     }
 
+    #[test]
     fn test_db_encryption() {
         let mut db = DatabaseHandle::new();
 

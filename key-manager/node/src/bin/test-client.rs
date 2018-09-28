@@ -83,7 +83,7 @@ fn main() {
 
     let timeout = Some(Duration::new(5, 0));
 
-    match KeyManager::get() {
+    match KeyManager::instance() {
         Ok(mut keymanager) => {
             keymanager.configure_backend(NetworkRpcClientBackendConfig {
                 environment: environment.clone(),
