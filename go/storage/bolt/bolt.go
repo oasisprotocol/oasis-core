@@ -276,31 +276,99 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 		return nil, err
 	}
 
+	logger := logging.GetLogger("storage/bolt")
+
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists(bktValues); err != nil {
-			return err
-		}
-		bkt, err := tx.CreateBucketIfNotExists(bktExpirations)
-		if err != nil {
-			return err
-		}
-		if _, err = bkt.CreateBucketIfNotExists(bktByKey); err != nil {
-			return err
-		}
-		if _, err = bkt.CreateBucketIfNotExists(bktByExpiration); err != nil {
-			return err
-		}
-		bkt, err = tx.CreateBucketIfNotExists(bktMetadata)
+		bkt, err := tx.CreateBucketIfNotExists(bktMetadata)
 		if err != nil {
 			return err
 		}
 
 		ver := bkt.Get(keyVersion)
+
 		if ver == nil {
-			return bkt.Put(keyVersion, dbVersion)
+			// Create the schema from scratch.
+			if err = bkt.Put(keyVersion, dbVersion); err != nil {
+				return err
+			}
+
+			if _, err = tx.CreateBucketIfNotExists(bktValues); err != nil {
+				return err
+			}
+			expirations, err2 := tx.CreateBucketIfNotExists(bktExpirations)
+			if err2 != nil {
+				return err2
+			}
+			if _, err = expirations.CreateBucketIfNotExists(bktByKey); err != nil {
+				return err
+			}
+			if _, err = expirations.CreateBucketIfNotExists(bktByExpiration); err != nil {
+				return err
+			}
+
+			return nil
 		}
 
-		if !bytes.Equal(ver, dbVersion) {
+		if bytes.Equal(ver, dbVersion) {
+			// Great, we're loading a store with a compatible version.
+			return nil
+		}
+
+		logger.Info("New migrating", "from", ver, "to", dbVersion)
+
+		if err = bkt.Put(keyVersion, dbVersion); err != nil {
+			return err
+		}
+
+		if bytes.Equal(ver, []byte{0x00}) {
+			v0bktStore := []byte("store")
+			v0keyValue := []byte("value")
+			v0keyExpiration := []byte("expiration")
+
+			values, err := tx.CreateBucketIfNotExists(bktValues)
+			if err != nil {
+				return err
+			}
+			bkt, err := tx.CreateBucketIfNotExists(bktExpirations)
+			if err != nil {
+				return err
+			}
+			keys, err := bkt.CreateBucketIfNotExists(bktByKey)
+			if err != nil {
+				return err
+			}
+			exps, err := bkt.CreateBucketIfNotExists(bktByExpiration)
+			if err != nil {
+				return err
+			}
+
+			store := tx.Bucket(v0bktStore)
+			if err = store.ForEach(func(k, v []byte) error {
+				bkt := store.Bucket(k)
+				value := bkt.Get(v0keyValue)
+				rawExp := bkt.Get(v0keyExpiration)
+
+				bkt, err = exps.CreateBucketIfNotExists(rawExp)
+				if err != nil {
+					return err
+				}
+				if err = bkt.Put(k, rawExp); err != nil {
+					return err
+				}
+
+				if err = keys.Put(k, rawExp); err != nil {
+					return err
+				}
+
+				return values.Put(k, value)
+			}); err != nil {
+				return err
+			}
+
+			if err = tx.DeleteBucket(v0bktStore); err != nil {
+				return err
+			}
+		} else {
 			return fmt.Errorf("storage/bolt: incompatible BoltDB store version: '%v'", hex.EncodeToString(ver))
 		}
 
@@ -311,7 +379,7 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 	}
 
 	b := &boltBackend{
-		logger: logging.GetLogger("storage/bolt"),
+		logger: logger,
 		db:     db,
 	}
 	b.sweeper = api.NewSweeper(b, timeSource)
