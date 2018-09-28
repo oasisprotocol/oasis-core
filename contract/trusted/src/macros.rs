@@ -34,7 +34,7 @@ macro_rules! create_contract {
                                 name: stringify!($method_name).to_owned(),
                             },
                             |args: &$arguments_type,
-                             ctx: &ContractCallContext| -> Result<$output_type> {
+                             ctx: &mut ContractCallContext| -> Result<$output_type> {
                                 $method_name(args, ctx)
                             },
                         )
@@ -43,4 +43,20 @@ macro_rules! create_contract {
             }
         }
     }
+}
+
+/// Configure the runtime dispatch batch handler.
+#[macro_export]
+macro_rules! configure_runtime_dispatch_batch_handler {
+    ($handler:ident) => {
+        #[cfg(target_env = "sgx")]
+        global_ctors_object! {
+            ENCLAVE_CONTRACT_BATCH_HANDLER_INIT, enclave_batch_handler_init = {
+                use ekiden_trusted::contract::dispatcher::Dispatcher;
+
+                let mut dispatcher = Dispatcher::get();
+                dispatcher.set_batch_handler($handler);
+            }
+        }
+    };
 }
