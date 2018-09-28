@@ -122,6 +122,7 @@ impl DatabaseHandle {
             }
         }
 
+        self.root_hash = root_hash;
         match root_hash {
             Some(root_hash) => Ok(root_hash),
             None => Ok(empty_hash()),
@@ -248,6 +249,17 @@ mod tests {
 
         assert!(!db.contains_key(b"bar"));
         assert_eq!(db.get_root_hash(), Ok(empty_hash()));
+    }
+
+    #[test]
+    fn test_get_after_flush() {
+        let mut db = DatabaseHandle::new();
+
+        db.insert(b"foo", b"hello world");
+
+        assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
+        assert_ne!(db.get_root_hash(), Ok(empty_hash()));
+        assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
     }
 
     #[test]
