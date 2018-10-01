@@ -2,6 +2,8 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
+use rustracing_jaeger::span::SpanHandle; // tracing-demo
+
 use ekiden_compute_api::{ComputationGroupClient, SubmitBatchRequest};
 use ekiden_core::bytes::{B256, H256};
 use ekiden_core::crash;
@@ -404,7 +406,8 @@ impl ComputationGroup {
     }
 
     /// Submit batch to workers in the computation group.
-    pub fn submit(&self, batch_hash: H256, block_header: Header, role: &GroupRole) -> bool {
+//    pub fn submit(&self, batch_hash: H256, block_header: Header, role: &GroupRole) -> bool {
+    pub fn submit(&self, batch_hash: H256, block_header: Header, role: &GroupRole, sh: SpanHandle) -> bool { // tracing-demo
         trace!("Submitting batch to workers");
 
         let mut epochs = self.inner.epochs.lock().unwrap();
@@ -430,6 +433,7 @@ impl ComputationGroup {
 
         let inner = self.inner.clone();
         let active_epoch_number = active_epoch.number;
+        let span = sh.child("group_submit_batch", |opts| opts.start()); // tracing-demo
         active_epoch.batch_submission_task = Some(spawn_killable(
             active_epoch
                 .node_group
@@ -438,6 +442,7 @@ impl ComputationGroup {
                     move |client, _| client.submit_batch_async(&request),
                 )
                 .and_then(move |results| {
+                    drop(span); // tracing-demo
                     for result in results {
                         if let Err(error) = result {
                             error!("Failed to submit batch to node: {}", error.message);

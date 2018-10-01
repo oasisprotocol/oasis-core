@@ -8,6 +8,10 @@ run_dummy_node_go_dummy() {
 
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
+        --tracing.enabled \
+        --tracing.reporter.flush-interval 10ms \
+        --tracing.reporter.agent-addr jaeger:6831 \
+        --tracing.sampler.param 1 \
         --grpc.port 42261 \
         --epochtime.backend mock \
         --beacon.backend insecure \
@@ -70,6 +74,9 @@ run_compute_node() {
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --tracing-enable \
+        --tracing-sample-probability 1 \
+        --tracing-agent-addr jaeger:6831 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so &
 }
@@ -161,6 +168,9 @@ run_test() {
         --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --tracing-enable \
+        --tracing-sample-probability 1 \
+        --tracing-agent-addr jaeger:6831 \
         &
     client_pid=$!
 
@@ -250,27 +260,27 @@ scenario_fail_worker_after_commit() {
 }
 
 # Go node (tendermint backends).
-run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm 0 0 0 1
-run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_multilayer_remote "e2e-multilayer-remote-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit-tm" token 1 run_dummy_node_go_tm_mock
-run_test scenario_basic "e2e-long-tm" test-long-term 2 run_dummy_node_go_tm_mock
-run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 2 run_dummy_node_go_tm_mock
+# run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm 0 0 0 1
+# run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
+# run_test scenario_multilayer_remote "e2e-multilayer-remote-tm" token 1 run_dummy_node_go_tm_mock
+# run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dummy_node_go_tm_mock
+# run_test scenario_discrepancy_leader "e2e-discrepancy-leader-tm" token 1 run_dummy_node_go_tm_mock
+# run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration-tm" token 1 run_dummy_node_go_tm_mock
+# run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit-tm" token 1 run_dummy_node_go_tm_mock
+# run_test scenario_basic "e2e-long-tm" test-long-term 2 run_dummy_node_go_tm_mock
+# run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 2 run_dummy_node_go_tm_mock
 
 # Alternate starting order (client before dummy node).
-run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_dummy 0 0 1
-run_test scenario_basic "e2e-basic-client-starts-first-tm-full" token 1 run_dummy_node_go_tm 0 0 1
-run_test scenario_basic "e2e-basic-client-starts-first-tm" token 1 run_dummy_node_go_tm_mock 0 0 1
+# run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_dummy 0 0 1
+# run_test scenario_basic "e2e-basic-client-starts-first-tm-full" token 1 run_dummy_node_go_tm 0 0 1
+# run_test scenario_basic "e2e-basic-client-starts-first-tm" token 1 run_dummy_node_go_tm_mock 0 0 1
 
 # Go node (dummy backends).
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_dummy
-run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_dummy 0 3
-run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_dummy
-run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_dummy
-run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_dummy
-run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_dummy
-run_test scenario_basic "e2e-long" test-long-term 2 run_dummy_node_go_dummy
-run_test scenario_one_idle "e2e-long-one-idle" test-long-term 2 run_dummy_node_go_dummy
+# run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_dummy 0 3
+# run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_dummy
+# run_test scenario_discrepancy_leader "e2e-discrepancy-leader" token 1 run_dummy_node_go_dummy
+# run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registration" token 1 run_dummy_node_go_dummy
+# run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_dummy
+# run_test scenario_basic "e2e-long" test-long-term 2 run_dummy_node_go_dummy
+# run_test scenario_one_idle "e2e-long-one-idle" test-long-term 2 run_dummy_node_go_dummy
