@@ -2,18 +2,18 @@
 import argparse
 import sys
 
+parser = argparse.ArgumentParser(description='Export storage items from a storage GRPC service to stdout.')
+parser.add_argument('--remote-addr', default='localhost:42261', help='Connect to the storage GRPC service at this host:port')
+parser.add_argument('--batch-size', type=int, default=1000, help='Request this many items at a time with GetBatch')
+parser.add_argument('--max-receive-message-length', type=int, default=4 * 1024 * 1024, help='Set this limit in the GRPC client, in case the list of keys is too large')
+parser.add_argument('--force-tty', help='Force output to tty')
+args = parser.parse_args()
+
 import grpc
 import tqdm
 
 import storage_pb2
 import storage_pb2_grpc
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--remote-addr', default='localhost:42261')
-parser.add_argument('--batch-size', type=int, default=1000)
-parser.add_argument('--max-receive-message-length', type=int, default=4 * 1024 * 1024)
-parser.add_argument('--force-tty')
-args = parser.parse_args()
 
 if not args.force_tty and sys.stdout.isatty():
     print >>sys.stderr, 'stdout is tty. pass --force-tty to ignore'

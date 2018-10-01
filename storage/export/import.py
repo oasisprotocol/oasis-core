@@ -3,17 +3,17 @@ import argparse
 import itertools
 import sys
 
+parser = argparse.ArgumentParser(description='Import storage items to a storage GRPC service from stdin.')
+parser.add_argument('--remote-addr', default='localhost:42261', help='Connect to the storage GRPC service at this host:port')
+parser.add_argument('--batch-size', type=int, default=1000, help='Send this many items at a time with InsertBatch')
+parser.add_argument('--current-epoch', type=int, required=True, help='The current epoch, for sending the right expiry times')
+parser.add_argument('--force-tty', help='Force input from tty')
+args = parser.parse_args()
+
 import grpc
 
 import storage_pb2
 import storage_pb2_grpc
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--remote-addr', default='localhost:42261')
-parser.add_argument('--batch-size', type=int, default=1000)
-parser.add_argument('--current-epoch', type=int, required=True)
-parser.add_argument('--force-tty')
-args = parser.parse_args()
 
 if not args.force_tty and sys.stdin.isatty():
     print >>sys.stderr, 'stdin is tty. pass --force-tty to ignore'
