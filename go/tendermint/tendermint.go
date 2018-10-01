@@ -3,6 +3,7 @@ package tendermint
 import (
 	"crypto/rand"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,15 +39,17 @@ import (
 const (
 	configDir = "config"
 
-	cfgConsensusTimeoutCommit     = "tendermint.consensus.timeout_commit"
-	cfgConsensusSkipTimeoutCommit = "tendermint.consensus.skip_timeout_commit"
+	cfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
+	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
+	cfgConsensusEmptyBlockInterval = "tendermint.consensus.empty_block_interval"
 )
 
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
 
-	flagConsensusTimeoutCommit     time.Duration
-	flagConsensusSkipTimeoutCommit bool
+	flagConsensusTimeoutCommit      time.Duration
+	flagConsensusSkipTimeoutCommit  bool
+	flagConsensusEmptyBlockInterval time.Duration
 )
 
 type tendermintService struct {
@@ -272,8 +275,11 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
 	timeoutCommitMsec := int(timeoutCommit / time.Millisecond)
+	emptyBlockInterval, _ := t.cmd.Flags().GetDuration(cfgConsensusEmptyBlockInterval)
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommitMsec
 	tenderConfig.Consensus.SkipTimeoutCommit, _ = t.cmd.Flags().GetBool(cfgConsensusSkipTimeoutCommit)
+	tenderConfig.Consensus.CreateEmptyBlocks = true
+	tenderConfig.Consensus.CreateEmptyBlocksInterval = int(math.Ceil(emptyBlockInterval.Seconds()))
 	tenderConfig.Consensus.BlockTimeIota = timeoutCommitMsec
 	tenderConfig.Instrumentation.Prometheus = true
 
@@ -405,10 +411,12 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
+	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 5*time.Second, "tendermint empty block interval")
 
 	for _, v := range []string{
 		cfgConsensusTimeoutCommit,
 		cfgConsensusSkipTimeoutCommit,
+		cfgConsensusEmptyBlockInterval,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
