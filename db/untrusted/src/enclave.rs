@@ -108,9 +108,8 @@ impl EnclaveDb for Enclave {
         // Get the new state root hash.
         let mut root_hash = H256::zero();
 
-        let status = unsafe {
-            ecall_proxy::db_get_root_hash(self.get_id(), root_hash.as_mut_ptr() as *mut u8)
-        };
+        let status =
+            unsafe { ecall_proxy::db_commit(self.get_id(), root_hash.as_mut_ptr() as *mut u8) };
         if status != sgx_status_t::SGX_SUCCESS {
             return Err(Error::new("failed to get new state root hash from enclave"));
         }

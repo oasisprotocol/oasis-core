@@ -39,8 +39,8 @@ impl BatchHandler for TokenBatchHandler {
         ctx.runtime = Box::new(MyCustomContext { bar: 42 });
     }
 
-    fn end_batch(&self, ctx: &mut ContractCallContext) {
-        let my_ctx = ctx.runtime.downcast_ref::<MyCustomContext>().unwrap();
+    fn end_batch(&self, ctx: ContractCallContext) {
+        let my_ctx = *ctx.runtime.downcast::<MyCustomContext>().unwrap();
         assert_eq!(my_ctx.bar, 42);
     }
 }

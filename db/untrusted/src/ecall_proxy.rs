@@ -9,5 +9,5 @@ extern "C" {
 
     pub fn db_set_root_hash(eid: sgx_enclave_id_t, root_hash: *const u8) -> sgx_status_t;
 
-    pub fn db_get_root_hash(eid: sgx_enclave_id_t, root_hash: *mut u8) -> sgx_status_t;
+    pub fn db_commit(eid: sgx_enclave_id_t, root_hash: *mut u8) -> sgx_status_t;
 }
