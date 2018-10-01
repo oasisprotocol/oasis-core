@@ -32,11 +32,11 @@ directory.
 Refer to the online documentation for command line options.
 
 ```sh
-./storage/export/export.py --help
+./scripts/storage/export.py --help
 ```
 
 ```sh
-./storage/export/import.py --help
+./scripts/storage/import.py --help
 ```
 
 ## Handy invocations
@@ -44,20 +44,20 @@ Export from a storage service on localhost on the default port
 (42261), compress, and save to a file:
 
 ```sh
-./storage/export/export.py --max-receive-message-length 500000000 | gzip >/tmp/ekiden-storage.dat.gz
+./scripts/storage/export.py --max-receive-message-length 500000000 | gzip >/tmp/ekiden-storage.dat.gz
 ```
 
 Load from a file, decompress, and import to a storage service on
 localhost on the default port at epoch 190:
 
 ```sh
-pv </tmp/ekiden-storage.dat.gz | gzip -d | ./storage/export/import.py --current-epoch 190
+pv </tmp/ekiden-storage.dat.gz | gzip -d | ./scripts/storage/import.py --current-epoch 190
 ```
 
 Transfer storage from one storage service to another:
 
 ```sh
-./storage/export/export.py --remote-addr 100.69.230.183:42261 --max-receive-message-length 500000000 | ./storage/export/import.py --remote-addr 100.67.152.172:9001
+./scripts/storage/export.py --remote-addr 100.69.230.183:42261 --max-receive-message-length 500000000 | ./scripts/storage/import.py --remote-addr 100.67.152.172:9001
 ```
 
 ## Representation of storage items
