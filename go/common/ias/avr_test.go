@@ -16,7 +16,7 @@ func TestAVR(t *testing.T) {
 func testAVRv2(t *testing.T) {
 	raw, sig, certs := loadAVRv2(t)
 
-	avr, err := DecodeAVR(raw, sig, certs, time.Now())
+	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
 	require.NoError(t, err, "DecodeAVR")
 
 	require.Equal(t, "297344624956134022721154881818462408967", avr.ID, "id")

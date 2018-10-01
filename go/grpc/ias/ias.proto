@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+package ias;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/ias";
+
+service IAS {
+	// Verify attestation evidence.
+	rpc VerifyEvidence (VerifyEvidenceRequest) returns (VerifyEvidenceResponse) {}
+}
+
+message VerifyEvidenceRequest {
+	// Signed blob should be a CBOR-serialized quote + PSE manifest.
+	common.Signed evidence = 1;
+}
+
+message VerifyEvidenceResponse {
+	bytes avr = 1;
+	bytes signature = 2;
+	bytes certificate_chain = 3;
+}

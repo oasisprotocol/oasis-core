@@ -10,6 +10,7 @@ vendor/
 grpc/beacon/
 grpc/common/
 grpc/dummydebug/
+grpc/ias/
 grpc/registry/
 grpc/roothash/
 grpc/scheduler/

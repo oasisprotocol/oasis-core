@@ -25,6 +25,7 @@ var protoFiles = [][]string{
 	{"go/grpc/beacon/beacon.proto"},
 	{"common/api/src/common.proto"},
 	{"go/grpc/dummydebug/dummy_debug.proto"},
+	{"go/grpc/ias/ias.proto"},
 	{
 		"registry/api/src/runtime.proto",
 		"registry/api/src/entity.proto",
