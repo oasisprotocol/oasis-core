@@ -857,7 +857,8 @@ impl RootHashFrontend {
                     // Submit signed batch hash to the rest of the computation group so they can start work.
                     if !inner
                         .computation_group
-                        .submit(batch_hash, block.header, &role)
+//                        .submit(batch_hash, block.header, &role)
+                        .submit(batch_hash, block.header, &role, span.handle()) // tracing-demo
                     {
                         return future::err(Error::new("committee changed while processing batch"))
                             .into_box();
