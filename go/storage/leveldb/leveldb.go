@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -32,6 +34,18 @@ var (
 	dbVersion  = []byte{0x00}
 
 	prefixValues = []byte("values/")
+
+	leveldbSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "ekiden_storage_leveldb_size",
+			Help: "Total size of the leveldb table(s) (MiB)",
+		},
+	)
+	leveldbCollectors = []prometheus.Collector{
+		leveldbSize,
+	}
+
+	metricsOnce sync.Once
 )
 
 type leveldbBackend struct {
@@ -64,7 +78,6 @@ func (b *leveldbBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte
 		value, err := snapshot.Get(append(prefixValues, key[:]...), nil)
 		switch err {
 		case nil:
-			break
 		case leveldb.ErrNotFound:
 			value = nil
 		default:
@@ -94,7 +107,12 @@ func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) er
 		batch.Put(key, value.Data)
 	}
 
-	return b.db.Write(batch, nil)
+	wrErr := b.db.Write(batch, nil)
+	if wrErr == nil {
+		b.updateMetrics()
+	}
+
+	return wrErr
 }
 
 func (b *leveldbBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
@@ -131,6 +149,22 @@ func (b *leveldbBackend) Initialized() <-chan struct{} {
 	return initCh
 }
 
+func (b *leveldbBackend) updateMetrics() {
+	var stats leveldb.DBStats
+	if err := b.db.Stats(&stats); err != nil {
+		b.logger.Error("Stats",
+			"err", err,
+		)
+		return
+	}
+
+	var total int64
+	for _, v := range stats.LevelSizes {
+		total += v
+	}
+	leveldbSize.Set(float64(total) / 1024768.0)
+}
+
 func checkVersion(db *leveldb.DB) error {
 	ver, err := db.Get(keyVersion, nil)
 	switch err {
@@ -152,6 +186,10 @@ func checkVersion(db *leveldb.DB) error {
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
 func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(leveldbCollectors...)
+	})
+
 	db, err := leveldb.OpenFile(fn, &opt.Options{
 		Compression: opt.NoCompression,
 	})
