@@ -5,7 +5,7 @@ use ekiden_storage_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
 use grpcio::{RpcContext, UnarySink};
 
-use super::backend::StorageBackend;
+use super::backend::{InsertOptions, StorageBackend};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 
@@ -62,7 +62,11 @@ impl api::Storage for StorageService {
         sink: UnarySink<api::InsertResponse>,
     ) {
         let f = self.inner
-            .insert(req.get_data().to_vec(), req.get_expiry())
+            .insert(
+                req.get_data().to_vec(),
+                req.get_expiry(),
+                InsertOptions::default(),
+            )
             .then(|res| match res {
                 Ok(()) => Ok(api::InsertResponse::new()),
                 Err(e) => Err(e),

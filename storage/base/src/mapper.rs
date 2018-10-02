@@ -5,7 +5,7 @@ use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_common::futures::{future, BoxFuture, Future};
 
-use super::backend::{hash_storage_key, StorageBackend};
+use super::backend::{hash_storage_key, InsertOptions, StorageBackend};
 
 /// Storage mapper trait.
 ///
@@ -49,7 +49,7 @@ pub trait StorageMapper: Sync + Send {
     ///
     /// Since the mapper can change the value before it is sent to the storage backend,
     /// this method also returns the hash of the transformed value.
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<H256> {
+    fn insert(&self, value: Vec<u8>, expiry: u64, opts: InsertOptions) -> BoxFuture<H256> {
         let value = match self.map_insert()(value) {
             Ok(value) => value,
             Err(error) => return Box::new(future::err(error)),
@@ -58,7 +58,7 @@ pub trait StorageMapper: Sync + Send {
 
         Box::new(
             self.backend()
-                .insert(value, expiry)
+                .insert(value, expiry, opts)
                 .and_then(move |_| Ok(key)),
         )
     }

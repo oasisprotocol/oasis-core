@@ -8,7 +8,7 @@ extern crate test;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::futures::Future;
-use ekiden_storage_base::hash_storage_key;
+use ekiden_storage_base::{hash_storage_key, InsertOptions};
 use ekiden_storage_dummy::DummyStorageBackend;
 
 use test::Bencher;
@@ -22,7 +22,10 @@ fn test_dummy_backend() {
     let key = hash_storage_key(b"value");
 
     assert!(backend.get(key).wait().is_err());
-    backend.insert(b"value".to_vec(), 10).wait().unwrap();
+    backend
+        .insert(b"value".to_vec(), 10, InsertOptions::default())
+        .wait()
+        .unwrap();
     assert_eq!(backend.get(key).wait(), Ok(b"value".to_vec()));
 
     assert_eq!(
@@ -34,7 +37,10 @@ fn test_dummy_backend() {
     let key_bar = hash_storage_key(b"bar");
     assert!(
         backend
-            .insert_batch(vec![(b"foo".to_vec(), 10), (b"bar".to_vec(), 10)])
+            .insert_batch(
+                vec![(b"foo".to_vec(), 10), (b"bar".to_vec(), 10)],
+                InsertOptions::default(),
+            )
             .wait()
             .is_ok(),
     );
@@ -55,7 +61,10 @@ fn test_dummy_storage_mapper() {
     let key = hash_storage_key(b"value");
 
     assert!(mapper.get(key).wait().is_err());
-    let key_result = mapper.insert(b"value".to_vec(), 10).wait().unwrap();
+    let key_result = mapper
+        .insert(b"value".to_vec(), 10, InsertOptions::default())
+        .wait()
+        .unwrap();
     assert_eq!(key, key_result);
     assert_eq!(mapper.get(key).wait(), Ok(b"value".to_vec()));
 }
@@ -67,5 +76,10 @@ fn bench_dummy_speed(b: &mut Bencher) {
     let backend = DummyStorageBackend::new();
     let _key = hash_storage_key(b"value");
 
-    b.iter(|| backend.insert(b"value".to_vec(), 10).wait().unwrap())
+    b.iter(|| {
+        backend
+            .insert(b"value".to_vec(), 10, InsertOptions::default())
+            .wait()
+            .unwrap()
+    })
 }

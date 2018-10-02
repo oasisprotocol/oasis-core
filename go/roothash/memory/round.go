@@ -72,10 +72,10 @@ type roundState struct {
 	state            state
 }
 
-func (s *roundState) ensureValidWorker(id signature.MapKey) error {
+func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, error) {
 	node, ok := s.computationGroup[id]
 	if !ok {
-		return errors.New("roothash/memory: node not part of computation group")
+		return scheduler.Invalid, errors.New("roothash/memory: node not part of computation group")
 	}
 
 	switch s.state {
@@ -85,10 +85,10 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) error {
 		ok = node.Role == scheduler.BackupWorker
 	}
 	if !ok {
-		return errors.New("roothash/memory: node has incorrect role for current state")
+		return scheduler.Invalid, errors.New("roothash/memory: node has incorrect role for current state")
 	}
 
-	return nil
+	return node.Role, nil
 }
 
 func (s *roundState) reset() {
@@ -111,7 +111,8 @@ func (r *round) addCommitment(commitment *commitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
-	if err := r.roundState.ensureValidWorker(id); err != nil {
+	role, err := r.roundState.ensureValidWorker(id)
+	if err != nil {
 		return err
 	}
 
@@ -138,8 +139,10 @@ func (r *round) addCommitment(commitment *commitment) error {
 	}
 
 	// Check if the header refers to hashes in storage.
-	if err := r.ensureHashesInStorage(header); err != nil {
-		return err
+	if role == scheduler.Leader || role == scheduler.BackupWorker {
+		if err := r.ensureHashesInStorage(header); err != nil {
+			return err
+		}
 	}
 
 	r.roundState.commitments[id] = commitment

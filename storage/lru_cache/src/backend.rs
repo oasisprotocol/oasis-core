@@ -5,7 +5,7 @@ use lru_cache::LruCache;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::futures::{future, BoxFuture, Future, FutureExt};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct Inner {
     /// Backend.
@@ -63,14 +63,14 @@ impl StorageBackend for LruCacheStorageBackend {
         unimplemented!();
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, expiry: u64, opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
 
-        // Insert into backend and if that succeeds, insert into cache.
+        // Insert into backend and if that succeeds, inseroptst into cache.
         inner
             .backend
-            .insert(value.clone(), expiry)
+            .insert(value.clone(), expiry, opts)
             .and_then(move |_| {
                 let mut cache = inner.cache.lock().unwrap();
                 cache.insert(key, value);
@@ -80,7 +80,7 @@ impl StorageBackend for LruCacheStorageBackend {
             .into_box()
     }
 
-    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         unimplemented!();
     }
 
@@ -108,14 +108,20 @@ mod test {
         let key = hash_storage_key(b"value");
 
         assert!(cache.get(key).wait().is_err());
-        cache.insert(b"value".to_vec(), 10).wait().unwrap();
+        cache
+            .insert(b"value".to_vec(), 10, InsertOptions::default())
+            .wait()
+            .unwrap();
         assert_eq!(cache.get(key).wait(), Ok(b"value".to_vec()));
         // Test that key has been inserted into underlying backend.
         assert_eq!(backend.get(key).wait(), Ok(b"value".to_vec()));
 
         // Insert directly to backend and expect the cache to find it.
         let key = hash_storage_key(b"another");
-        backend.insert(b"another".to_vec(), 10).wait().unwrap();
+        backend
+            .insert(b"another".to_vec(), 10, InsertOptions::default())
+            .wait()
+            .unwrap();
         assert_eq!(cache.get(key).wait(), Ok(b"another".to_vec()));
     }
 }

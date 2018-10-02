@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::futures::prelude::*;
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct Inner {
     /// This map lets us answer consistently when we insert an item and try to get it before it is
@@ -47,7 +47,7 @@ impl BatchStorageBackend {
     }
 
     /// Commit batch to delegate backend.
-    pub fn commit(&self) -> BoxFuture<()> {
+    pub fn commit(&self, opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner
             .write()
             .unwrap()
@@ -59,7 +59,7 @@ impl BatchStorageBackend {
             .map(|(_key, value)| value)
             .collect();
 
-        inner.delegate.insert_batch(values)
+        inner.delegate.insert_batch(values, opts)
     }
 }
 
@@ -79,7 +79,7 @@ impl StorageBackend for BatchStorageBackend {
         unimplemented!();
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
         let key = hash_storage_key(&value);
         let inner_guard = self.inner.read().unwrap();
         let inner = inner_guard
@@ -91,7 +91,7 @@ impl StorageBackend for BatchStorageBackend {
         future::ok(()).into_box()
     }
 
-    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         unimplemented!();
     }
 
@@ -106,7 +106,7 @@ mod test {
 
     use ekiden_common;
     use ekiden_common::futures::Future;
-    use ekiden_storage_base::{hash_storage_key, StorageBackend};
+    use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
     use ekiden_storage_dummy::DummyStorageBackend;
     extern crate grpcio;
 
@@ -126,11 +126,14 @@ mod test {
             assert!(storage.get(key).wait().is_err());
 
             // Test that key is available immediately from same interface.
-            storage.insert(b"value".to_vec(), 10).wait().unwrap();
+            storage
+                .insert(b"value".to_vec(), 10, InsertOptions::default())
+                .wait()
+                .unwrap();
             assert_eq!(storage.get(key).wait(), Ok(b"value".to_vec()));
 
             // Commit.
-            batch.commit().wait().unwrap();
+            batch.commit(InsertOptions::default()).wait().unwrap();
 
             // Test that key is available in delegate after committing.
             assert_eq!(delegate.get(key).wait(), Ok(b"value".to_vec()));
@@ -141,7 +144,10 @@ mod test {
 
             // Insert directly to delegate and expect to find it in this interface.
             let key = hash_storage_key(b"another");
-            delegate.insert(b"another".to_vec(), 10).wait().unwrap();
+            delegate
+                .insert(b"another".to_vec(), 10, InsertOptions::default())
+                .wait()
+                .unwrap();
             assert_eq!(batch.get(key).wait(), Ok(b"another".to_vec()));
         }
     }

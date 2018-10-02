@@ -25,7 +25,7 @@ use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
 use ekiden_roothash_base::{Block, Event, Header, RootHashBackend, RootHashSigner};
 use ekiden_scheduler_base::{CommitteeNode, Role};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 use ekiden_tracing;
 
 use super::group::{ComputationGroup, GroupRole};
@@ -846,7 +846,7 @@ impl RootHashFrontend {
             measure_histogram!("batch_insert_size", encoded_batch.len());
             inner
                 .storage
-                .insert(encoded_batch, 1)
+                .insert(encoded_batch, 1, InsertOptions::default())
                 .and_then(move |_| {
                     let (role, block) = require_state!(
                         inner,
@@ -881,18 +881,21 @@ impl RootHashFrontend {
     /// Process given batch locally and propose it when done.
     /// `sh` should come from the source that causes us to transition into ProcessingBatch.
     fn process_batch(inner: Arc<Inner>, sh: SpanHandle) -> BoxFuture<()> {
-        let (batch, block) = require_state!(
+        let (role, batch, block) = require_state!(
             inner,
-            State::ProcessingBatch(_, batch, block) => (batch, block),
+            State::ProcessingBatch(role, batch, block) => (role, batch, block),
             "processing batch"
         );
 
         measure_counter_inc!("processing_batch_count");
 
-        // Send block and channel to worker.
-        let process_batch = inner
-            .worker
-            .contract_call_batch((*batch).clone(), block, sh);
+        // Send block and channel to worker. Only the leader and backup worker should commit
+        // updated state to storage.
+        let commit_storage = role.role == Role::Leader || role.role == Role::BackupWorker;
+        let process_batch =
+            inner
+                .worker
+                .contract_call_batch((*batch).clone(), block, sh, commit_storage);
 
         // After the batch is processed, propose the batch.
         let shared_inner = inner.clone();
@@ -1024,7 +1027,7 @@ impl RootHashFrontend {
         measure_histogram!("outputs_insert_size", encoded_outputs.len());
         inner
             .storage
-            .insert(encoded_outputs, 2)
+            .insert(encoded_outputs, 2, InsertOptions::default())
             .or_else(|error| {
                 // Failed to store outputs, abort current batch.
                 Self::fail_batch(

@@ -25,7 +25,7 @@ use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_core::x509::Certificate;
 use ekiden_roothash_base::Block;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_storage_batch::BatchStorageBackend;
 use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
@@ -61,6 +61,7 @@ enum Command {
         Block,
         oneshot::Sender<Result<ComputedBatch>>,
         SpanHandle,
+        bool,
     ),
 }
 
@@ -136,6 +137,7 @@ impl WorkerInner {
         batch: &CallBatch,
         block: &Block,
         handle_sh: SpanHandle,
+        commit_storage: bool,
     ) -> Result<(OutputBatch, H256)> {
         measure_histogram!("contract_call_batch_size", batch.len());
 
@@ -165,9 +167,13 @@ impl WorkerInner {
 
         // Commit batch storage.
         {
+            let opts = InsertOptions {
+                local_only: !commit_storage,
+            };
+
             measure_histogram_timer!("contract_call_storage_commit_time");
             let _span = enclave_sh.follower("contract_call_storage_commit", |opts| opts.start());
-            batch_storage.commit().wait()?;
+            batch_storage.commit(opts).wait()?;
         }
 
         Ok((outputs?, new_state_root))
@@ -205,11 +211,13 @@ impl WorkerInner {
         block: Block,
         sender: oneshot::Sender<Result<ComputedBatch>>,
         sh: SpanHandle,
+        commit_storage: bool,
     ) {
         let span = sh.follower("handle_contract_batch", |opts| {
             opts.tag(tag::StdTag::span_kind("consumer")).start()
         });
-        let result = self.call_contract_batch_fallible(&calls, &block, span.handle());
+        let result =
+            self.call_contract_batch_fallible(&calls, &block, span.handle(), commit_storage);
 
         match result {
             Ok((outputs, new_state_root)) => {
@@ -243,10 +251,10 @@ impl WorkerInner {
 
                     measure_counter_inc!("rpc_call_processed");
                 }
-                Command::ContractCallBatch(calls, block, sender, sh) => {
+                Command::ContractCallBatch(calls, block, sender, sh, commit_storage) => {
                     // Process batch of contract calls.
                     let call_count = calls.len();
-                    self.handle_contract_batch(calls, block, sender, sh);
+                    self.handle_contract_batch(calls, block, sender, sh, commit_storage);
 
                     measure_counter_inc!("contract_call_processed", call_count);
                 }
@@ -354,6 +362,7 @@ impl Worker {
         calls: CallBatch,
         block: Block,
         sh: SpanHandle,
+        commit_storage: bool,
     ) -> oneshot::Receiver<Result<ComputedBatch>> {
         measure_counter_inc!("contract_call_request");
         let span = sh.child("send_contract_call_batch", |opts| {
@@ -367,6 +376,7 @@ impl Worker {
                 block,
                 response_sender,
                 span.handle(),
+                commit_storage,
             ))
             .unwrap();
 

@@ -3,7 +3,7 @@ use std::result::Result as StdResult;
 use std::sync::Arc;
 
 use ekiden_core::futures::prelude::*;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{InsertOptions, StorageBackend};
 
 enum KeyState {
     Present,
@@ -62,7 +62,9 @@ pub fn transition_keys(
                         .or_else(move |_e| {
                             local_from
                                 .get(key.0)
-                                .and_then(move |value| local_to.insert(value, key.1))
+                                .and_then(move |value| {
+                                    local_to.insert(value, key.1, InsertOptions::default())
+                                })
                                 .then(|res| match res {
                                     Ok(_) => future::ok(KeyState::Moved),
                                     Err(_) => future::ok(KeyState::MoveError),

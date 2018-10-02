@@ -9,7 +9,7 @@ use ekiden_common::futures::Future;
 use ekiden_common::futures::FutureExt;
 use ekiden_common::hash::empty_hash;
 use ekiden_common::ring::digest;
-use ekiden_storage_base::StorageMapper;
+use ekiden_storage_base::{InsertOptions, StorageMapper};
 
 use super::nibble::NibbleVec;
 use super::node::{Node, NodePointer};
@@ -111,6 +111,7 @@ impl PatriciaTrie {
                     .insert(
                         bincode::serialize(&node).unwrap(),
                         PatriciaTrie::STORAGE_EXPIRY_TIME,
+                        InsertOptions::default(),
                     )
                     .wait()
                     .expect("failed to insert to storage"),
@@ -337,6 +338,7 @@ impl PatriciaTrie {
                     .insert(
                         bincode::serialize(&node).unwrap(),
                         PatriciaTrie::STORAGE_EXPIRY_TIME,
+                        InsertOptions::default(),
                     )
                     .wait()
                     .expect("failed to insert to storage")
@@ -525,6 +527,7 @@ impl PatriciaTrie {
                         .insert(
                             bincode::serialize(&node).unwrap(),
                             PatriciaTrie::STORAGE_EXPIRY_TIME,
+                            InsertOptions::default(),
                         )
                         .wait()
                         .expect("failed to insert to storage"),

@@ -9,7 +9,7 @@ use sgx_types::*;
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 /// OCALLs defined by the Ekiden enclave specification.
 extern "C" {
@@ -71,7 +71,7 @@ impl StorageBackend for UntrustedStorageBackend {
         unimplemented!();
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
         Box::new(future::lazy(move || {
             // Copy value into untrusted transfer buffer.
             {
@@ -99,7 +99,7 @@ impl StorageBackend for UntrustedStorageBackend {
         }))
     }
 
-    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         unimplemented!();
     }
 

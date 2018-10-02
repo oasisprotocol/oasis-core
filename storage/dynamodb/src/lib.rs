@@ -17,7 +17,7 @@ use ekiden_common::futures::Future;
 extern crate ekiden_di;
 use ekiden_di::create_component;
 extern crate ekiden_storage_base;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{InsertOptions, StorageBackend};
 
 /// A storage backend that uses Amazon DynamoDB.
 pub struct DynamoDbBackend {
@@ -109,7 +109,7 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
         unimplemented!();
     }
 
-    fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, _expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
         let key = ekiden_storage_base::hash_storage_key(&value);
         let client = self.client.clone();
         let table_name = self.table_name.clone();
@@ -146,7 +146,7 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
         }))
     }
 
-    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         unimplemented!();
     }
 
@@ -215,7 +215,7 @@ create_component!(
 mod tests {
     use ekiden_common;
     use ekiden_storage_base;
-    use ekiden_storage_base::StorageBackend;
+    use ekiden_storage_base::{InsertOptions, StorageBackend};
     extern crate log;
     use self::log::log;
     use self::log::warn;
@@ -244,7 +244,7 @@ mod tests {
         );
         let reference_value = vec![1, 2, 3];
         let reference_key = ekiden_storage_base::hash_storage_key(&reference_value);
-        core.run(storage.insert(reference_value.clone(), 55))
+        core.run(storage.insert(reference_value.clone(), 55, InsertOptions::default()))
             .unwrap();
         let roundtrip_value = core.run(storage.get(reference_key)).unwrap();
         assert_eq!(roundtrip_value, reference_value);

@@ -2,6 +2,7 @@ use std::slice::from_raw_parts;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::futures::Future;
+use ekiden_storage_base::InsertOptions;
 
 use super::enclave::{current_storage, with_transfer_buffer};
 
@@ -46,7 +47,10 @@ pub extern "C" fn untrusted_db_insert(value_length: usize, expiry: u64, result: 
         }
     );
     measure_histogram!("insert_size", value.len());
-    match storage.insert(value, expiry).wait() {
+    match storage
+        .insert(value, expiry, InsertOptions::default())
+        .wait()
+    {
         Ok(()) => unsafe {
             *result = 0;
         },
