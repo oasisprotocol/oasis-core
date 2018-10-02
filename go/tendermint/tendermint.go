@@ -411,7 +411,7 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 5*time.Second, "tendermint empty block interval")
+	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0, "tendermint empty block interval")
 
 	for _, v := range []string{
 		cfgConsensusTimeoutCommit,
