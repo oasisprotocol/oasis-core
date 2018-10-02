@@ -1,11 +1,13 @@
-extern crate ekiden_common;
+extern crate ekiden_core;
 extern crate sodalite;
 
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use ekiden_common::bytes::H256;
+pub mod confidential;
+
+use ekiden_core::bytes::H256;
 use serde::de::{Deserialize, Deserializer, Error, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use sodalite::*;
