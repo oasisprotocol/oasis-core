@@ -1,7 +1,7 @@
 //! Encryption utilties for web3(c) V0.5 key management.
 
-use ekiden_common::mrae::sivaessha2;
 use ekiden_core::error::{Error, Result};
+use ekiden_core::mrae::sivaessha2;
 
 use super::{PrivateKeyType, PublicKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY};
 use sodalite;
