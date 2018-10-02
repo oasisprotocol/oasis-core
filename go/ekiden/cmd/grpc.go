@@ -309,6 +309,8 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 	var sOpts []grpc.ServerOption
 	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(logAdapter.unaryLogger, grpc_opentracing.UnaryServerInterceptor())))
 	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(logAdapter.streamLogger, grpc_opentracing.StreamServerInterceptor())))
+	sOpts = append(sOpts, grpc.MaxRecvMsgSize(104857600)) // 100 MiB
+	sOpts = append(sOpts, grpc.MaxSendMsgSize(104857600)) // 100 MiB
 
 	return &grpcService{
 		BaseBackgroundService: svc,
