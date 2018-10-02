@@ -9,7 +9,7 @@ use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_scheduler_base::{Committee, CommitteeType, Scheduler};
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{InsertOptions, StorageBackend};
 
 use client::StorageClient;
 
@@ -147,17 +147,17 @@ impl StorageBackend for StorageFrontend {
         )
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, expiry: u64, opts: InsertOptions) -> BoxFuture<()> {
         Box::new(
             self.get_storage(self.inner.retries)
-                .and_then(move |s| s.insert(value, expiry)),
+                .and_then(move |s| s.insert(value, expiry, opts)),
         )
     }
 
-    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, opts: InsertOptions) -> BoxFuture<()> {
         Box::new(
             self.get_storage(self.inner.retries)
-                .and_then(move |s| s.insert_batch(values)),
+                .and_then(move |s| s.insert_batch(values, opts)),
         )
     }
 

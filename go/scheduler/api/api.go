@@ -28,19 +28,24 @@ var (
 type Role uint8
 
 const (
+	// Invalid is an invalid role (should never appear on the wire).
+	Invalid Role = 0
+
 	// Worker indicates the node is a worker.
-	Worker Role = iota
+	Worker Role = 1
 
 	// BackupWorker indicates the node is a backup worker.
-	BackupWorker
+	BackupWorker Role = 2
 
 	// Leader indicates the node is a group leader.
-	Leader
+	Leader Role = 3
 )
 
 // String returns a string representation of a Role.
 func (r Role) String() string {
 	switch r {
+	case Invalid:
+		return "invalid"
 	case Worker:
 		return "worker"
 	case BackupWorker:

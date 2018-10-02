@@ -13,9 +13,10 @@ service Scheduler {
 message CommitteeNode {
   bytes public_key = 1;
   enum Role {
-    WORKER = 0;
-    LEADER = 1;
-    BACKUP_WORKER = 2;
+    INVALID = 0;
+    WORKER = 1;
+    LEADER = 2;
+    BACKUP_WORKER = 3;
   }
   Role role = 2;
 }

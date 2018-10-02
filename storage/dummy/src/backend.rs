@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{future, BoxFuture};
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct DummyStorageBackendInner {
     /// In-memory storage.
@@ -56,7 +56,7 @@ impl StorageBackend for DummyStorageBackend {
         }))
     }
 
-    fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, _expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
 
@@ -69,7 +69,7 @@ impl StorageBackend for DummyStorageBackend {
         }))
     }
 
-    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner.clone();
 
         Box::new(future::lazy(move || {

@@ -27,7 +27,7 @@ extern crate ekiden_di;
 use ekiden_di::create_component;
 extern crate ekiden_epochtime;
 extern crate ekiden_storage_base;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{InsertOptions, StorageBackend};
 extern crate ekiden_storage_dynamodb;
 use ekiden_storage_dynamodb::DynamoDbBackend;
 extern crate ekiden_storage_frontend;
@@ -97,17 +97,19 @@ impl StorageBackend for MultilayerBackend {
                                     Ok(value) => {
                                         // Save the item to local layer.
                                         futures::future::Either::A(
-                                            local.insert(value.clone(), 2).then(move |result| {
-                                                // Clear incoming item.
-                                                incoming_cleanup.lock().unwrap().remove(&key);
-                                                match result {
-                                                    Ok(()) => Ok(value),
-                                                    Err(error) => Err(Error::new(format!(
+                                            local
+                                                .insert(value.clone(), 2, InsertOptions::default())
+                                                .then(move |result| {
+                                                    // Clear incoming item.
+                                                    incoming_cleanup.lock().unwrap().remove(&key);
+                                                    match result {
+                                                        Ok(()) => Ok(value),
+                                                        Err(error) => Err(Error::new(format!(
                                                         "unable to save item to local layer: {:?}",
                                                         error
                                                     ))),
-                                                }
-                                            }),
+                                                    }
+                                                }),
                                         )
                                     }
                                     Err(error) => {
@@ -135,20 +137,28 @@ impl StorageBackend for MultilayerBackend {
         unimplemented!();
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
-        self.local
-            .insert(value.clone(), expiry)
-            .join(self.bottom.insert(value, expiry))
-            .and_then(|((), ())| Ok(()))
-            .into_box()
+    fn insert(&self, value: Vec<u8>, expiry: u64, opts: InsertOptions) -> BoxFuture<()> {
+        if opts.local_only {
+            self.local.insert(value.clone(), expiry, opts)
+        } else {
+            self.local
+                .insert(value.clone(), expiry, opts.clone())
+                .join(self.bottom.insert(value, expiry, opts))
+                .and_then(|((), ())| Ok(()))
+                .into_box()
+        }
     }
 
-    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
-        self.local
-            .insert_batch(values.clone())
-            .join(self.bottom.insert_batch(values))
-            .and_then(|((), ())| Ok(()))
-            .into_box()
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, opts: InsertOptions) -> BoxFuture<()> {
+        if opts.local_only {
+            self.local.insert_batch(values.clone(), opts)
+        } else {
+            self.local
+                .insert_batch(values.clone(), opts.clone())
+                .join(self.bottom.insert_batch(values, opts))
+                .and_then(|((), ())| Ok(()))
+                .into_box()
+        }
     }
 
     fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
@@ -294,7 +304,7 @@ mod tests {
     use ekiden_common;
     use ekiden_common::futures::Future;
     use ekiden_storage_base;
-    use ekiden_storage_base::StorageBackend;
+    use ekiden_storage_base::{InsertOptions, StorageBackend};
     extern crate ekiden_storage_dummy;
     use self::ekiden_storage_dummy::DummyStorageBackend;
     use ekiden_storage_persistent::PersistentStorageBackend;
@@ -315,7 +325,7 @@ mod tests {
         let reference_value_local = b"hello from local".to_vec();
         let reference_key_local = ekiden_storage_base::hash_storage_key(&reference_value_local);
         local
-            .insert(reference_value_local.clone(), 55)
+            .insert(reference_value_local.clone(), 55, InsertOptions::default())
             .wait()
             .unwrap();
         let retrieve_value_local = storage.get(reference_key_local).wait().unwrap();
@@ -325,7 +335,7 @@ mod tests {
         let reference_value_bottom = b"hello from aws".to_vec();
         let reference_key_bottom = ekiden_storage_base::hash_storage_key(&reference_value_bottom);
         bottom
-            .insert(reference_value_bottom.clone(), 55)
+            .insert(reference_value_bottom.clone(), 55, InsertOptions::default())
             .wait()
             .unwrap();
         let retrieve_value_bottom = storage.get(reference_key_bottom).wait().unwrap();
@@ -334,7 +344,10 @@ mod tests {
         // Test round trip insert and get.
         let reference_value = b"hello from multilayer".to_vec();
         let reference_key = ekiden_storage_base::hash_storage_key(&reference_value);
-        storage.insert(reference_value.clone(), 55).wait().unwrap();
+        storage
+            .insert(reference_value.clone(), 55, InsertOptions::default())
+            .wait()
+            .unwrap();
         let roundtrip_value = storage.get(reference_key).wait().unwrap();
         assert_eq!(roundtrip_value, reference_value);
 

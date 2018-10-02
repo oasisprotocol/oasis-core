@@ -11,7 +11,7 @@ use ekiden_common::futures::{future, BoxFuture, Future};
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_storage_api as api;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_tracing::{self, inject_to_options};
 
 /// Storage client implements the storage interface.  It exposes storage calls across a gRPC channel.
@@ -59,7 +59,7 @@ impl StorageBackend for StorageClient {
         }
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
         let mut req = api::InsertRequest::new();
         req.set_data(value);
         req.set_expiry(expiry);
@@ -83,7 +83,7 @@ impl StorageBackend for StorageClient {
         }
     }
 
-    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         let mut req = api::InsertBatchRequest::new();
         for (value, expiry) in values {
             let mut item = api::InsertRequest::new();

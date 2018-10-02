@@ -7,7 +7,7 @@ use exonum_rocksdb::{IteratorMode, WriteBatch, DB};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
-use ekiden_storage_base::{hash_storage_key, StorageBackend};
+use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct Inner {
     /// RocksDB database.
@@ -57,7 +57,7 @@ impl StorageBackend for PersistentStorageBackend {
         }).into_box()
     }
 
-    fn insert(&self, value: Vec<u8>, _expiry: u64) -> BoxFuture<()> {
+    fn insert(&self, value: Vec<u8>, _expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner.clone();
         let key = hash_storage_key(&value);
 
@@ -68,7 +68,7 @@ impl StorageBackend for PersistentStorageBackend {
         }).into_box()
     }
 
-    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner.clone();
 
         future::lazy(move || {

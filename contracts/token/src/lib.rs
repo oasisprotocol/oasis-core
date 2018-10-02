@@ -15,7 +15,7 @@ use token_contract::TokenContract;
 use ekiden_core::error::Result;
 use ekiden_core::futures::prelude::*;
 #[cfg(target_env = "sgx")]
-use ekiden_storage_base::backend::StorageBackend;
+use ekiden_storage_base::backend::{InsertOptions, StorageBackend};
 use ekiden_trusted::contract::dispatcher::{BatchHandler, ContractCallContext};
 use ekiden_trusted::contract::{configure_runtime_dispatch_batch_handler, create_contract};
 #[cfg(target_env = "sgx")]
@@ -56,7 +56,10 @@ pub fn null_storage_insert(request: &u64, _ctx: &ContractCallContext) -> Result<
     let backend = UntrustedStorageBackend::new();
 
     for _ in 0..*request {
-        backend.insert(b"foo".to_vec(), 10).wait().unwrap();
+        backend
+            .insert(b"foo".to_vec(), 10, InsertOptions::default())
+            .wait()
+            .unwrap();
     }
 
     Ok(())
@@ -72,7 +75,10 @@ pub fn list_storage_insert(request: &Vec<Vec<u8>>, _ctx: &ContractCallContext) -
     let backend = UntrustedStorageBackend::new();
 
     for item in request.iter() {
-        backend.insert(item.clone(), 10).wait().unwrap();
+        backend
+            .insert(item.clone(), 10, InsertOptions::default())
+            .wait()
+            .unwrap();
     }
 
     Ok(())

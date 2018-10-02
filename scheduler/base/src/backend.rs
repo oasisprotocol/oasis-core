@@ -17,8 +17,10 @@ use ekiden_scheduler_api as api;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Role {
+    /// Invalid role (should never appear on the wire).
+    Invalid = 0,
     /// Worker node.
-    Worker = 0,
+    Worker,
     /// Backup worker node for discrepancy resolution.
     BackupWorker,
     /// Group leader.
@@ -40,9 +42,9 @@ impl<'de> Deserialize<'de> for Role {
         D: Deserializer<'de>,
     {
         let value = match u8::deserialize(deserializer)? {
-            0 => Role::Worker,
-            1 => Role::BackupWorker,
-            2 => Role::Leader,
+            1 => Role::Worker,
+            2 => Role::BackupWorker,
+            3 => Role::Leader,
             _ => return Err(serde::de::Error::custom("invalid role")),
         };
 
@@ -82,6 +84,7 @@ impl TryFrom<api::CommitteeNode> for CommitteeNode {
                 api::CommitteeNode_Role::WORKER => Role::Worker,
                 api::CommitteeNode_Role::BACKUP_WORKER => Role::BackupWorker,
                 api::CommitteeNode_Role::LEADER => Role::Leader,
+                _ => return Err(Error::new("invalid role")),
             },
             public_key: B256::from(a.get_public_key()),
         })
@@ -96,6 +99,7 @@ impl Into<api::CommitteeNode> for CommitteeNode {
             Role::Worker => c.set_role(api::CommitteeNode_Role::WORKER),
             Role::BackupWorker => c.set_role(api::CommitteeNode_Role::BACKUP_WORKER),
             Role::Leader => c.set_role(api::CommitteeNode_Role::LEADER),
+            _ => panic!("invalid role"),
         };
         c.set_public_key(self.public_key.to_vec());
         c
