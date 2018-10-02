@@ -28,8 +28,8 @@ use super::Database;
 
 /// Encryption context.
 ///
-/// This contains the MRAE context for encrypting and decrypting values stored
-/// in the database.
+/// This contains the MRAE context for encrypting and decrypting keys and
+/// values stored in the database.
 /// It is set up with db.with_encryption() and lasts only for the duration of
 /// the closure that's passed to that method.
 struct EncryptionContext {
@@ -199,12 +199,20 @@ impl Database for DatabaseHandle {
     }
 
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        // Encrypt key using the encryption context, if it's present.
+        let key = match self.enc_ctx {
+            Some(ref ctx) => ctx.mrae_ctx
+                .seal(ctx.nonce.clone(), key.to_vec(), vec![])
+                .unwrap(),
+            None => key.to_vec(),
+        };
+
         // Fetch the current value by first checking the list of pending operations if they
         // affect the given key.
-        let value = match self.pending_ops.get(key) {
+        let value = match self.pending_ops.get(&key) {
             Some(Operation::Insert(value)) => Some(value.clone()),
             Some(Operation::Remove) => None,
-            None => self.state.get(self.root_hash, key),
+            None => self.state.get(self.root_hash, &key),
         };
 
         if self.enc_ctx.is_some() && value.is_some() {
@@ -232,9 +240,16 @@ impl Database for DatabaseHandle {
             None => value.to_vec(),
         };
 
+        // Encrypt key using the encryption context, if it's present.
+        let key = match self.enc_ctx {
+            Some(ref ctx) => ctx.mrae_ctx
+                .seal(ctx.nonce.clone(), key.to_vec(), vec![])
+                .unwrap(),
+            None => key.to_vec(),
+        };
+
         // Add a pending insert operation for the given key.
-        self.pending_ops
-            .insert(key.to_vec(), Operation::Insert(value));
+        self.pending_ops.insert(key, Operation::Insert(value));
 
         previous_value
     }
@@ -242,8 +257,16 @@ impl Database for DatabaseHandle {
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
         let previous_value = self.get(key);
 
+        // Encrypt key using the encryption context, if it's present.
+        let key = match self.enc_ctx {
+            Some(ref ctx) => ctx.mrae_ctx
+                .seal(ctx.nonce.clone(), key.to_vec(), vec![])
+                .unwrap(),
+            None => key.to_vec(),
+        };
+
         // Add a pending remove operation for the given key.
-        self.pending_ops.insert(key.to_vec(), Operation::Remove);
+        self.pending_ops.insert(key, Operation::Remove);
 
         previous_value
     }
@@ -415,6 +438,9 @@ mod tests {
 
         // Encrypted value should actually be encrypted.
         assert_ne!(db.get(b"encrypted"), Some(b"top secret".to_vec()));
+
+        // Encrypted key should actually be encrypted.
+        assert_eq!(db.get(b"encrypted"), None);
 
         // Unencrypted value should be readable.
         assert_eq!(db.get(b"unencrypted"), Some(b"hello world".to_vec()));
