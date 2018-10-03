@@ -189,12 +189,12 @@ func (a *ApplicationServer) Register(app Application) error {
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(dataDir string) (*ApplicationServer, error) {
+func NewApplicationServer(dataDir string, pruneCfg *PruneConfig) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(dataDir)
+	mux, err := newABCIMux(dataDir, pruneCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -544,8 +544,8 @@ func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
 	return app, nil
 }
 
-func newABCIMux(dataDir string) (*abciMux, error) {
-	state, err := newApplicationState(dataDir)
+func newABCIMux(dataDir string, pruneCfg *PruneConfig) (*abciMux, error) {
+	state, err := newApplicationState(dataDir, pruneCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -614,6 +614,7 @@ type ApplicationState struct {
 	db            dbm.DB
 	deliverTxTree *iavl.MutableTree
 	checkTxTree   *iavl.MutableTree
+	statePruner   StatePruner
 
 	blockHash   []byte
 	blockHeight int64
@@ -659,6 +660,9 @@ func (s *ApplicationState) doCommit() error {
 		if cerr != nil {
 			panic(cerr)
 		}
+
+		// Prune the iavl state according to the specified strategy.
+		s.statePruner.Prune(s.blockHeight)
 	}
 
 	return err
@@ -725,7 +729,7 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(dataDir string) (*ApplicationState, error) {
+func newApplicationState(dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
 	db, err := dbm.NewGoLevelDB("abci-mux-state", dataDir)
 	if err != nil {
 		return nil, err
@@ -753,11 +757,18 @@ func newApplicationState(dataDir string) (*ApplicationState, error) {
 		return nil, fmt.Errorf("state: inconsistent trees")
 	}
 
+	statePruner, err := newStatePruner(pruneCfg, deliverTxTree, blockHeight)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	s := &ApplicationState{
-		logger:         logging.GetLogger("abci-mux/state"),
+		logger:          logging.GetLogger("abci-mux/state"),
 		db:              db,
 		deliverTxTree:   deliverTxTree,
 		checkTxTree:     checkTxTree,
+		statePruner:     statePruner,
 		blockHash:       blockHash,
 		blockHeight:     blockHeight,
 		metricsCloseCh:  make(chan struct{}),
