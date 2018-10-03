@@ -206,6 +206,7 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 		logger: logging.GetLogger("storage/leveldb"),
 		db:     db,
 	}
+	b.updateMetrics()
 
 	return b, nil
 }

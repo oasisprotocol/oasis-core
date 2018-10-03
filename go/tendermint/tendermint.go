@@ -42,6 +42,9 @@ const (
 	cfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
 	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval = "tendermint.consensus.empty_block_interval"
+
+	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
+	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 )
 
 var (
@@ -50,6 +53,9 @@ var (
 	flagConsensusTimeoutCommit      time.Duration
 	flagConsensusSkipTimeoutCommit  bool
 	flagConsensusEmptyBlockInterval time.Duration
+
+	flagABCIPruneStrategy string
+	flagABCIPruneNumKept  int64
 )
 
 type tendermintService struct {
@@ -248,7 +254,15 @@ func (t *tendermintService) lazyInit() error {
 	var err error
 
 	// Create Tendermint application mux.
-	t.mux, err = abci.NewApplicationServer(t.dataDir)
+	var pruneCfg abci.PruneConfig
+	pruneStrat, _ := t.cmd.Flags().GetString(cfgABCIPruneStrategy)
+	if err = pruneCfg.Strategy.FromString(pruneStrat); err != nil {
+		return err
+	}
+	pruneNumKept, _ := t.cmd.Flags().GetInt64(cfgABCIPruneNumKept)
+	pruneCfg.NumKept = pruneNumKept
+
+	t.mux, err = abci.NewApplicationServer(t.dataDir, &pruneCfg)
 	if err != nil {
 		return err
 	}
@@ -412,11 +426,15 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
 	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0, "tendermint empty block interval")
+	cmd.Flags().StringVar(&flagABCIPruneStrategy, cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
+	cmd.Flags().Int64Var(&flagABCIPruneNumKept, cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 
 	for _, v := range []string{
 		cfgConsensusTimeoutCommit,
 		cfgConsensusSkipTimeoutCommit,
 		cfgConsensusEmptyBlockInterval,
+		cfgABCIPruneStrategy,
+		cfgABCIPruneNumKept,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
