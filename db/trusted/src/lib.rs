@@ -30,7 +30,7 @@ pub mod ecalls;
 pub mod untrusted;
 
 pub mod handle;
-pub use handle::DatabaseHandle;
+pub use handle::{DBKeyManagerConfig, DatabaseHandle};
 
 pub mod patricia_trie;
 #[macro_use]

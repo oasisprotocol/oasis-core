@@ -61,7 +61,7 @@ use log::LevelFilter;
 
 use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
-use ekiden_core::identity::NodeIdentity;
+use ekiden_core::identity::local::load_node_certificate;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_untrusted::enclave::ias;
@@ -148,6 +148,13 @@ fn main() {
                 .long("key-manager-port")
                 .takes_value(true)
                 .default_value("9003")
+                .required_unless("disable-key-manager"),
+        )
+        .arg(
+            Arg::with_name("key-manager-cert")
+                .long("key-manager-cert")
+                .takes_value(true)
+                .default_value("/code/tests/keymanager/km.key")
                 .required_unless("disable-key-manager"),
         )
         .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
@@ -341,11 +348,11 @@ fn main() {
                         Some(KeyManagerConfiguration {
                             host: matches.value_of("key-manager-host").unwrap().to_owned(),
                             port: value_t!(matches, "key-manager-port", u16).unwrap_or(9003),
-                            cert: container
-                                .inject::<NodeIdentity>()
-                                .unwrap()
-                                .get_tls_certificate()
-                                .to_owned(),
+                            // TODO: This should be handled by the registry in the future.
+                            cert: load_node_certificate(&matches
+                                .value_of("key-manager-cert")
+                                .unwrap())
+                                .expect("unable to load key manager's certificate"),
                         })
                     } else {
                         None

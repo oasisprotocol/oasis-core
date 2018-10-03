@@ -55,11 +55,11 @@ enum Operation {
 /// db.with_encryption().  Pass the struct with db.configure_key_manager().
 pub struct DBKeyManagerConfig {
     /// Identity of key manager enclave.
-    mrenclave: MrEnclave,
+    pub mrenclave: MrEnclave,
     /// gRPC config parameters (only if not running in an enclave).
     #[cfg(not(target_env = "sgx"))]
     #[cfg(not(test))]
-    grpc_config: NetworkRpcClientBackendConfig,
+    pub grpc_config: NetworkRpcClientBackendConfig,
 }
 
 /// Database handle.
