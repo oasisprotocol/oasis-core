@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tendermint/libs/db"
@@ -31,6 +33,22 @@ const (
 	QueryKeyP2PFilterPubkey = "p2p/filter/pubkey/"
 
 	stateKeyGenesisDigest = "OasisGenesisDigest"
+
+	metricsUpdateInterval = 10 * time.Second
+)
+
+var (
+	abciSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "ekiden_abci_leveldb_size",
+			Help: "Total size of the ABCI leveldb table(s) (MiB)",
+		},
+	)
+	abciCollectors = []prometheus.Collector{
+		abciSize,
+	}
+
+	metricsOnce sync.Once
 )
 
 // Application is the interface implemented by multiplexed Oasis-specific
@@ -172,6 +190,10 @@ func (a *ApplicationServer) Register(app Application) error {
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
 func NewApplicationServer(dataDir string) (*ApplicationServer, error) {
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(abciCollectors...)
+	})
+
 	mux, err := newABCIMux(dataDir)
 	if err != nil {
 		return nil, err
@@ -587,12 +609,17 @@ func (a *LogAdapter) With(keyvals ...interface{}) tmlog.Logger {
 // ApplicationState is the overall past, present and future state
 // of all multiplexed applications.
 type ApplicationState struct {
+	logger *logging.Logger
+
 	db            dbm.DB
 	deliverTxTree *iavl.MutableTree
 	checkTxTree   *iavl.MutableTree
 
 	blockHash   []byte
 	blockHeight int64
+
+	metricsCloseCh  chan struct{}
+	metricsClosedCh chan struct{}
 }
 
 // BlockHeight returns the last committed block height.
@@ -639,8 +666,62 @@ func (s *ApplicationState) doCommit() error {
 
 func (s *ApplicationState) doCleanup() {
 	if s.db != nil {
+		// Don't close the DB out from under the metrics worker.
+		close(s.metricsCloseCh)
+		<-s.metricsClosedCh
+
 		s.db.Close()
 		s.db = nil
+	}
+}
+
+func (s *ApplicationState) updateMetrics() error {
+	m, ok := s.db.(*dbm.GoLevelDB)
+	if !ok {
+		return fmt.Errorf("state: unsupported DB for metrics")
+	}
+
+	db := m.DB()
+	var stats leveldb.DBStats
+	if err := db.Stats(&stats); err != nil {
+		s.logger.Error("Stats",
+			"err", err,
+		)
+		return err
+	}
+
+	var total int64
+	for _, v := range stats.LevelSizes {
+		total += v
+	}
+	abciSize.Set(float64(total) / 1024768.0)
+
+	return nil
+}
+
+func (s *ApplicationState) metricsWorker() {
+	defer close(s.metricsClosedCh)
+
+	// Update the metrics once on initialization.
+	if err := s.updateMetrics(); err != nil {
+		// If this fails, don't bother trying again, it's most likely
+		// an unsupported DB backend.
+		s.logger.Warn("metrics not available",
+			"err", err,
+		)
+		return
+	}
+
+	t := time.NewTicker(metricsUpdateInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-s.metricsCloseCh:
+			return
+		case <-t.C:
+			_ = s.updateMetrics()
+		}
 	}
 }
 
@@ -672,13 +753,19 @@ func newApplicationState(dataDir string) (*ApplicationState, error) {
 		return nil, fmt.Errorf("state: inconsistent trees")
 	}
 
-	return &ApplicationState{
-		db:            db,
-		deliverTxTree: deliverTxTree,
-		checkTxTree:   checkTxTree,
-		blockHash:     blockHash,
-		blockHeight:   blockHeight,
-	}, nil
+	s := &ApplicationState{
+		logger:         logging.GetLogger("abci-mux/state"),
+		db:              db,
+		deliverTxTree:   deliverTxTree,
+		checkTxTree:     checkTxTree,
+		blockHash:       blockHash,
+		blockHeight:     blockHeight,
+		metricsCloseCh:  make(chan struct{}),
+		metricsClosedCh: make(chan struct{}),
+	}
+	go s.metricsWorker()
+
+	return s, nil
 }
 
 func isP2PFilterQuery(s string) bool {
