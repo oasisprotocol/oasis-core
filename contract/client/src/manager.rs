@@ -247,7 +247,8 @@ impl ContractClientManager {
         let inner = self.inner.clone();
         retry_until_ok_or_max(
             move || Self::call_leader(inner.clone(), method, arguments.clone(), sh.clone()),
-            |error| error.message != ContractClient::SHUTDOWN_REASON_TRANSITION,
+            |error| true,
+            // |error| error.message != ContractClient::SHUTDOWN_REASON_TRANSITION,
             // If the network latency and time needed to process the call is short compared to the
             // epoch interval, it is improbable for two consecutive attempts both to be
             // interrupted, so one retry is sufficient. If not, then a retry is not likely to
