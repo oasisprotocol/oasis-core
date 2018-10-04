@@ -3,28 +3,32 @@ package bolt
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
 
+	"github.com/golang/snappy"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/node"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
-const dbVersion = 0
+const dbVersion = 1
 
 var (
 	baseLogger = logging.GetLogger("tendermint/db/bolt")
 
 	bktContents = []byte("contents")
 
-	_ dbm.DB       = (*boltDBImpl)(nil)
-	_ dbm.Iterator = (*boltDBIterator)(nil)
-	_ dbm.Batch    = (*boltDBBatch)(nil)
+	_ dbm.DB         = (*boltDBImpl)(nil)
+	_ api.SizeableDB = (*boltDBImpl)(nil)
+	_ dbm.Iterator   = (*boltDBIterator)(nil)
+	_ dbm.Batch      = (*boltDBBatch)(nil)
 
 	// BoltDBProvider is a DBProvider to be used when initializing
 	// a tendermint node.
@@ -78,11 +82,12 @@ func (d *boltDBImpl) Get(key []byte) []byte {
 	if err := d.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bktContents)
 
+		var decErr error
 		if value := bkt.Get(k); value != nil {
-			v = append([]byte{}, value...)
+			v, decErr = snappy.Decode(nil, value)
 		}
 
-		return nil
+		return decErr
 	}); err != nil {
 		d.logger.Error("Get() failed",
 			"err", err,
@@ -119,10 +124,12 @@ func (d *boltDBImpl) Has(key []byte) bool {
 func (d *boltDBImpl) Set(key, value []byte) {
 	k := toBoltDBKey(key)
 
+	valueCompressed := snappy.Encode(nil, value)
+
 	if err := d.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bktContents)
 
-		return bkt.Put(k, value)
+		return bkt.Put(k, valueCompressed)
 	}); err != nil {
 		d.logger.Error("Set() failed",
 			"err", err,
@@ -228,6 +235,15 @@ func (d *boltDBImpl) Stats() map[string]string {
 	return m
 }
 
+func (d *boltDBImpl) Size() (int64, error) {
+	fi, err := os.Stat(d.db.Path())
+	if err != nil {
+		return 0, err
+	}
+
+	return fi.Size(), nil
+}
+
 func (d *boltDBImpl) sync() {
 	// The BoltDB documentation says this is unneccesary, unless the
 	// `NoSync` option is used.  If it turns out to be needed for
@@ -317,7 +333,7 @@ func (d *boltDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator
 	if dbm.IsKeyInDomain(k, start, end, !isForward) {
 		// First key happens to be in the domain.
 		iter.current.key = k
-		iter.current.value = v
+		iter.current.valueCompressed = v
 		return iter
 	}
 
@@ -337,7 +353,7 @@ type boltDBIterator struct {
 	// tx is live).  The backing pages can/will be unmapped when tx
 	// is rolled back via Close().
 	current struct {
-		key, value []byte
+		key, valueCompressed, valueDecompressed []byte
 	}
 
 	isValid   bool
@@ -357,12 +373,14 @@ func (iter *boltDBIterator) Next() {
 		panic("Next() with invalid iterator")
 	}
 
+	iter.current.valueDecompressed = nil
+
 	// Traverse the BoltDB cursor to find the next applicable key.
 	for k, v := iter.nextFn(); k != nil; k, v = iter.nextFn() {
 		k = fromBoltDBKeyNoCopy(k)
 		if dbm.IsKeyInDomain(k, iter.start, iter.end, !iter.isForward) {
 			iter.current.key = k
-			iter.current.value = v
+			iter.current.valueCompressed = v
 			return
 		}
 	}
@@ -386,7 +404,20 @@ func (iter *boltDBIterator) Value() []byte {
 		panic("Value() with invalid iterator")
 	}
 
-	return append([]byte{}, iter.current.value...)
+	if iter.current.valueDecompressed == nil {
+		var err error
+		iter.current.valueDecompressed, err = snappy.Decode(nil, iter.current.valueCompressed)
+		if err != nil {
+			iter.db.logger.Error("iterator: Snappy Decode() failed",
+				"err", err,
+			)
+			panic(err)
+		}
+	}
+
+	// Copy, caller might call Value(), alter the slice, and call
+	// Value() again.
+	return append([]byte{}, iter.current.valueDecompressed...)
 }
 
 func (iter *boltDBIterator) Close() {
@@ -430,7 +461,7 @@ type boltDBBatch struct {
 func (b *boltDBBatch) Set(key, value []byte) {
 	b.cmds = append(b.cmds, &batchCmdSet{
 		key:   toBoltDBKey(key),
-		value: value,
+		value: snappy.Encode(nil, value),
 	})
 }
 
