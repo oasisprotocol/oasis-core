@@ -296,6 +296,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = int(math.Ceil(emptyBlockInterval.Seconds()))
 	tenderConfig.Consensus.BlockTimeIota = timeoutCommitMsec
 	tenderConfig.Instrumentation.Prometheus = true
+	tenderConfig.TxIndex.Indexer = "null"
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
 	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
