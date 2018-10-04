@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 )
 
 const (
@@ -40,8 +42,8 @@ const (
 var (
 	abciSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "ekiden_abci_leveldb_size",
-			Help: "Total size of the ABCI leveldb table(s) (MiB)",
+			Name: "ekiden_abci_db_size",
+			Help: "Total size of the ABCI database (MiB)",
 		},
 	)
 	abciCollectors = []prometheus.Collector{
@@ -680,25 +682,34 @@ func (s *ApplicationState) doCleanup() {
 }
 
 func (s *ApplicationState) updateMetrics() error {
-	m, ok := s.db.(*dbm.GoLevelDB)
-	if !ok {
+	var dbSize int64
+
+	switch m := s.db.(type) {
+	case *dbm.GoLevelDB:
+		var stats leveldb.DBStats
+		if err := m.DB().Stats(&stats); err != nil {
+			s.logger.Error("Stats",
+				"err", err,
+			)
+			return err
+		}
+
+		for _, v := range stats.LevelSizes {
+			dbSize += v
+		}
+	case api.SizeableDB:
+		var err error
+		if dbSize, err = m.Size(); err != nil {
+			s.logger.Error("Size",
+				"err", err,
+			)
+			return err
+		}
+	default:
 		return fmt.Errorf("state: unsupported DB for metrics")
 	}
 
-	db := m.DB()
-	var stats leveldb.DBStats
-	if err := db.Stats(&stats); err != nil {
-		s.logger.Error("Stats",
-			"err", err,
-		)
-		return err
-	}
-
-	var total int64
-	for _, v := range stats.LevelSizes {
-		total += v
-	}
-	abciSize.Set(float64(total) / 1024768.0)
+	abciSize.Set(float64(dbSize) / 1024768.0)
 
 	return nil
 }
@@ -730,7 +741,7 @@ func (s *ApplicationState) metricsWorker() {
 }
 
 func newApplicationState(dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
-	db, err := dbm.NewGoLevelDB("abci-mux-state", dataDir)
+	db, err := bolt.New(filepath.Join(dataDir, "abci-mux-state.bolt.db"))
 	if err != nil {
 		return nil, err
 	}

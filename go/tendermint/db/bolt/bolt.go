@@ -3,6 +3,7 @@ package bolt
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
 const dbVersion = 0
@@ -22,9 +24,10 @@ var (
 
 	bktContents = []byte("contents")
 
-	_ dbm.DB       = (*boltDBImpl)(nil)
-	_ dbm.Iterator = (*boltDBIterator)(nil)
-	_ dbm.Batch    = (*boltDBBatch)(nil)
+	_ dbm.DB         = (*boltDBImpl)(nil)
+	_ api.SizeableDB = (*boltDBImpl)(nil)
+	_ dbm.Iterator   = (*boltDBIterator)(nil)
+	_ dbm.Batch      = (*boltDBBatch)(nil)
 
 	// BoltDBProvider is a DBProvider to be used when initializing
 	// a tendermint node.
@@ -226,6 +229,15 @@ func (d *boltDBImpl) Stats() map[string]string {
 	m["database.tx.write.time"] = stats.TxStats.WriteTime.String()
 
 	return m
+}
+
+func (d *boltDBImpl) Size() (int64, error) {
+	fi, err := os.Stat(d.db.Path())
+	if err != nil {
+		return 0, err
+	}
+
+	return fi.Size(), nil
 }
 
 func (d *boltDBImpl) sync() {
