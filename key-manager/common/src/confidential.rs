@@ -48,7 +48,7 @@ pub fn decrypt(data: Option<Vec<u8>>) -> Result<Decryption> {
 
 /// The returned result of decrypting an encrypted payload, where
 /// nonce and peer_public_key were used to encrypt the plaintext.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Decryption {
     pub plaintext: Vec<u8>,
     pub nonce: Vec<u8>,
