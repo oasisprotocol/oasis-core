@@ -30,7 +30,7 @@ pub struct GrpcEnvironment {
     /// gRPC environment.
     grpc_environment: Arc<grpcio::Environment>,
     /// Tokio runtime.
-    tokio_runtime: Mutex<tokio::runtime::Runtime>,
+    pub tokio_runtime: Mutex<tokio::runtime::Runtime>,
 }
 
 impl GrpcEnvironment {
