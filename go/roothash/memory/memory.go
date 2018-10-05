@@ -310,6 +310,11 @@ type memoryRootHash struct {
 
 	contracts map[signature.MapKey]*contractState
 
+	// If a contract with one of these IDs would be initialized,
+	// start with the given block as the genesis block. For other
+	// contracts, generate an "empty" genesis block.
+	genesisBlocks map[signature.MapKey]*api.Block
+
 	allBlockNotifier *pubsub.Broker
 }
 
@@ -449,11 +454,17 @@ func (r *memoryRootHash) onContractRegistration(contract *contract.Contract) err
 		return errContractExists
 	}
 
+	// Create genesis block.
+	block := r.genesisBlocks[k]
+	if block == nil {
+		block = newGenesisBlock(contract.ID)
+	}
+
 	s := &contractState{
 		logger:        r.logger.With("contract_id", contract.ID),
 		storage:       r.storage,
 		contract:      contract,
-		blocks:        append([]*api.Block{}, newGenesisBlock(contract.ID)),
+		blocks:        append([]*api.Block{}, block),
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
@@ -493,12 +504,18 @@ func (r *memoryRootHash) worker(registry registry.Backend) {
 }
 
 // New constructs a new in-memory (centralized) root hash backend.
-func New(scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) api.Backend {
+func New(
+	scheduler scheduler.Backend,
+	storage storage.Backend,
+	registry registry.Backend,
+	genesisBlocks map[signature.MapKey]*api.Block,
+) api.Backend {
 	r := &memoryRootHash{
 		logger:           logging.GetLogger("roothash/memory"),
 		scheduler:        scheduler,
 		storage:          storage,
 		contracts:        make(map[signature.MapKey]*contractState),
+		genesisBlocks:    genesisBlocks,
 		allBlockNotifier: pubsub.NewBroker(false),
 	}
 	go r.worker(registry)
