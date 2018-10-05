@@ -315,6 +315,11 @@ type memoryRootHash struct {
 
 	runtimes map[signature.MapKey]*runtimeState
 
+	// If a runtime with one of these IDs would be initialized,
+	// start with the given block as the genesis block. For other
+	// runtimes, generate an "empty" genesis block.
+	genesisBlocks map[signature.MapKey]*block.Block
+
 	allBlockNotifier *pubsub.Broker
 
 	closeCh   chan struct{}
@@ -467,12 +472,18 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error 
 		return errRuntimeExists
 	}
 
-	now := time.Now().Unix()
+	// Create genesis block.
+	genesisBlock := r.genesisBlocks[k]
+	if genesisBlock == nil {
+		now := time.Now().Unix()
+		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
+	}
+
 	s := &runtimeState{
 		logger:        r.logger.With("runtime_id", runtime.ID),
 		storage:       r.storage,
 		runtime:       runtime,
-		blocks:        append([]*block.Block{}, block.NewGenesisBlock(runtime.ID, uint64(now))),
+		blocks:        append([]*block.Block{}, genesisBlock),
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
@@ -526,12 +537,18 @@ func (r *memoryRootHash) worker(registryBackend registry.Backend) {
 }
 
 // New constructs a new in-memory (centralized) root hash backend.
-func New(scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) api.Backend {
+func New(
+	scheduler scheduler.Backend,
+	storage storage.Backend,
+	registry registry.Backend,
+	genesisBlocks map[signature.MapKey]*block.Block,
+) api.Backend {
 	r := &memoryRootHash{
 		logger:           logging.GetLogger("roothash/memory"),
 		scheduler:        scheduler,
 		storage:          storage,
 		runtimes:         make(map[signature.MapKey]*runtimeState),
+		genesisBlocks:    genesisBlocks,
 		allBlockNotifier: pubsub.NewBroker(false),
 		closeCh:          make(chan struct{}),
 		closedCh:         make(chan struct{}),
