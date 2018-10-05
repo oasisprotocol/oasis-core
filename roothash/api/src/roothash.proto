@@ -37,6 +37,15 @@ message Header {
   bytes commitments_hash = 10;
 }
 
+message GenesisBlock {
+  bytes runtime_id = 1;
+  Block block = 2;
+}
+
+message GenesisBlocks {
+  repeated GenesisBlock genesis_blocks = 1;
+}
+
 message LatestBlockRequest {
   bytes runtime_id = 1;
 }

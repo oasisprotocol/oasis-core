@@ -418,7 +418,7 @@ func New(
 		return nil, errors.New("roothash/tendermint: need a block-based scheduler backend")
 	}
 
-	// Initialze and register the tendermint service component.
+	// Initialize and register the tendermint service component.
 	app := tmroothash.New(blockTimeSource, blockScheduler, storage)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
