@@ -17,5 +17,4 @@ serde_bytes = "~0.10"
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 ekiden-roothash-api = { path = "../api", version = "0.2.0-alpha" }
-ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
 protobuf = "~2.0"

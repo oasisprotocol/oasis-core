@@ -1,8 +1,5 @@
 syntax = "proto3";
 
-import "common/api/src/common.proto";
-import "scheduler/api/src/scheduler.proto";
-
 package roothash;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/roothash";
 
@@ -16,8 +13,6 @@ service RootHash {
 
 message Block {
   Header header = 1;
-  repeated scheduler.CommitteeNode computation_group = 2;
-  repeated Commitment commitments = 3;
 }
 
 message Nonce {

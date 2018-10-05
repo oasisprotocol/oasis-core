@@ -19,11 +19,15 @@ type Block struct {
 	Header Header `codec:"header"`
 
 	// ComputationGroup is the designated computation group.
-	ComputationGroup []*scheduler.CommitteeNode `codec:"computation_group"`
+	//
+	// Note: This field is omitted from the serialized block.
+	ComputationGroup []*scheduler.CommitteeNode `codec:"-"`
 
 	// Commitments is the vector of commitments from compute nodes,
 	// in the same order as in the computation group.
-	Commitments []*Commitment `codec:"commitments"`
+	//
+	// Note: This field is omitted from the serialized block.
+	Commitments []*Commitment `codec:"-"`
 }
 
 // Update updates the block header based on the current block content.
@@ -45,22 +49,7 @@ func (b *Block) FromProto(pb *pbRoothash.Block) error {
 	}
 
 	b.ComputationGroup = nil
-	for _, v := range pb.GetComputationGroup() {
-		node := new(scheduler.CommitteeNode)
-		if err := node.FromProto(v); err != nil {
-			return err
-		}
-		b.ComputationGroup = append(b.ComputationGroup, node)
-	}
-
 	b.Commitments = nil
-	for _, v := range pb.GetCommitments() {
-		commit := new(Commitment)
-		if err := commit.FromProto(v); err != nil {
-			return err
-		}
-		b.Commitments = append(b.Commitments, commit)
-	}
 
 	return nil
 }
@@ -69,12 +58,6 @@ func (b *Block) FromProto(pb *pbRoothash.Block) error {
 func (b *Block) ToProto() *pbRoothash.Block {
 	resp := new(pbRoothash.Block)
 	resp.Header = b.Header.ToProto()
-	for _, v := range b.ComputationGroup {
-		resp.ComputationGroup = append(resp.ComputationGroup, v.ToProto())
-	}
-	for _, v := range b.Commitments {
-		resp.Commitments = append(resp.Commitments, v.ToProto())
-	}
 
 	return resp
 }
