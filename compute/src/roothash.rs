@@ -996,12 +996,11 @@ impl RootHashFrontend {
 
         // Create block from result batches.
         let mut block = Block::new_parent_of(&computed_batch.block);
-        block.computation_group = role.committee.clone();
+        block.header.group_hash = role.committee.get_encoded_hash();
         block.header.input_hash =
             hash_storage_key(&serde_cbor::to_vec(&computed_batch.calls).unwrap());
         block.header.output_hash = hash_storage_key(&encoded_outputs);
         block.header.state_root = computed_batch.new_state_root;
-        block.update();
 
         info!(
             "Proposing new block with {} transaction(s)",

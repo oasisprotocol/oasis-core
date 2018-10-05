@@ -11,12 +11,9 @@ extern crate serde_cbor;
 extern crate serde_derive;
 extern crate serde_bytes;
 
-#[macro_use]
 extern crate ekiden_common;
 #[cfg(not(target_env = "sgx"))]
 extern crate ekiden_roothash_api;
-#[cfg(not(target_env = "sgx"))]
-extern crate ekiden_scheduler_base;
 #[cfg(not(target_env = "sgx"))]
 extern crate ekiden_storage_base;
 
