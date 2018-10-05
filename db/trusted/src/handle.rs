@@ -17,6 +17,7 @@ use ekiden_keymanager_client::KeyManager;
 use ekiden_keymanager_client::NetworkRpcClientBackendConfig;
 use ekiden_keymanager_common::ContractId;
 use ekiden_storage_base::mapper::BackendIdentityMapper;
+use ekiden_storage_base::StorageBackend;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_storage_dummy::DummyStorageBackend;
 use ekiden_storage_lru::LruCacheStorageBackend;
@@ -85,7 +86,14 @@ pub struct DatabaseHandle {
 
 lazy_static! {
     // Global database object.
-    static ref DB: Mutex<DatabaseHandle> = Mutex::new(DatabaseHandle::new());
+    static ref DB: Mutex<DatabaseHandle> = {
+        #[cfg(not(target_env = "sgx"))]
+        let storage = Arc::new(DummyStorageBackend::new());
+        #[cfg(target_env = "sgx")]
+        let storage = Arc::new(UntrustedStorageBackend::new());
+
+        Mutex::new(DatabaseHandle::new(storage))
+    };
 }
 
 impl DatabaseHandle {
@@ -93,13 +101,9 @@ impl DatabaseHandle {
     const STORAGE_CACHE_SIZE: usize = 1024;
 
     /// Construct new database interface.
-    fn new() -> Self {
-        #[cfg(not(target_env = "sgx"))]
-        let backend = Arc::new(DummyStorageBackend::new());
-        #[cfg(target_env = "sgx")]
-        let backend = Arc::new(UntrustedStorageBackend::new());
+    pub fn new(storage: Arc<StorageBackend>) -> Self {
         let cached_backend = Arc::new(LruCacheStorageBackend::new(
-            backend,
+            storage,
             Self::STORAGE_CACHE_SIZE,
         ));
         let mapper = Arc::new(BackendIdentityMapper::new(cached_backend));
@@ -374,17 +378,19 @@ impl Database for DatabaseHandle {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
     use ekiden_common::hash::empty_hash;
     use ekiden_enclave_common::quote::MrEnclave;
     use ekiden_keymanager_common::ContractId;
+    use ekiden_storage_dummy::DummyStorageBackend;
 
     use super::{DBKeyManagerConfig, Database, DatabaseHandle};
 
-    use std::str::FromStr;
-
     #[test]
     fn test_basic_operations() {
-        let mut db = DatabaseHandle::new();
+        let mut db = DatabaseHandle::new(Arc::new(DummyStorageBackend::new()));
 
         db.insert(b"foo", b"hello world");
         db.insert(b"bar", b"another data value");
@@ -408,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_get_root_hash_after_commit() {
-        let mut db = DatabaseHandle::new();
+        let mut db = DatabaseHandle::new(Arc::new(DummyStorageBackend::new()));
 
         db.insert(b"foo", b"hello world");
         assert_eq!(db.get(b"foo"), Some(b"hello world".to_vec()));
@@ -420,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_db_encryption() {
-        let mut db = DatabaseHandle::new();
+        let mut db = DatabaseHandle::new(Arc::new(DummyStorageBackend::new()));
 
         db.insert(b"unencrypted", b"hello world");
 
@@ -463,7 +469,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_db_encryption_nested() {
-        let mut db = DatabaseHandle::new();
+        let mut db = DatabaseHandle::new(Arc::new(DummyStorageBackend::new()));
 
         let id_0 = ContractId::from_str(&"0".repeat(64)).unwrap();
         let id_1 = ContractId::from_str(&"1".repeat(64)).unwrap();
