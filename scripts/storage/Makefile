@@ -1,5 +1,5 @@
-storage_pb2.py: ../api/src/storage.proto
-	python -m grpc_tools.protoc -I ../api/src --python_out=. --grpc_python_out=. $<
+storage_pb2.py: ../../storage/api/src/storage.proto
+	python -m grpc_tools.protoc -I ../../storage/api/src --python_out=. --grpc_python_out=. $<
 
 container-deps:
 	apt-get install -y python-pip python-tqdm
