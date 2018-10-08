@@ -3,7 +3,7 @@ package roothash
 
 import (
 	"encoding/hex"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -265,8 +265,7 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			id, _ := contract.ID.MarshalBinary()
 			ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 			ctx.EmitTag(api.TagRootHashID, id)
-			ctx.EmitTag(api.TagRootHashFinalized, block.MarshalCBOR())
-			ctx.EmitTag(api.TagRootHashFinalizedRound, []byte("0"))
+			ctx.EmitTag(api.TagRootHashFinalized, []byte("0"))
 		}
 	}
 
@@ -429,12 +428,11 @@ func (app *rootHashApplication) tryFinalize(
 		contractState.CurrentBlock = block
 
 		roundNr, _ := block.Header.Round.ToU64()
-		roundStr := fmt.Sprintf("%d", roundNr)
+		roundStr := strconv.FormatUint(roundNr, 10)
 
 		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 		ctx.EmitTag(api.TagRootHashID, id)
-		ctx.EmitTag(api.TagRootHashFinalized, block.MarshalCBOR())
-		ctx.EmitTag(api.TagRootHashFinalizedRound, []byte(roundStr))
+		ctx.EmitTag(api.TagRootHashFinalized, []byte(roundStr))
 		return
 	case errStillWaiting:
 		if forced {

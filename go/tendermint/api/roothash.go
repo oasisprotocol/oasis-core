@@ -21,10 +21,6 @@ var (
 	// TagRootHashUpdateValue is the only allowed value for TagRootHashUpdate.
 	TagRootHashUpdateValue = []byte("1")
 
-	// TagRootHashCommit is an ABCI transaction tag for new commit
-	// submissions (value is commit hash).
-	TagRootHashCommit = []byte("roothash.commit")
-
 	// TagRootHashDiscrepancyDetected is an ABCI transaction tag for
 	// discrepancy detected events (value is input batch hash).
 	TagRootHashDiscrepancyDetected = []byte("roothash.discrepancy")
@@ -34,11 +30,8 @@ var (
 	TagRootHashRoundFailed = []byte("roothash.round_failed")
 
 	// TagRootHashFinalized is an ABCI transaction tag for finalized
-	// blocks (value is serialized block header).
-	TagRootHashFinalized = []byte("roothash.finalized")
-	// TagRootHashFinalizedRound is an ABCI transaction tag for finalized
 	// blocks (value is round number as string).
-	TagRootHashFinalizedRound = []byte("roothash.finalized_round")
+	TagRootHashFinalized = []byte("roothash.finalized")
 
 	// TagRootHashID is an ABCI transaction tag for specifying the
 	// contract ID.
