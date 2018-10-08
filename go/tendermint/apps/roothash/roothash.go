@@ -55,6 +55,11 @@ type rootHashApplication struct {
 	timeSource epochtime.BlockBackend
 	scheduler  scheduler.BlockBackend
 	storage    storage.Backend
+
+	// If a contract with one of these IDs would be initialized,
+	// start with the given block as the genesis block. For other
+	// contracts, generate an "empty" genesis block.
+	genesisBlocks map[signature.MapKey]*roothash.Block
 }
 
 func (app *rootHashApplication) Name() string {
@@ -260,7 +265,10 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			}
 
 			// Create genesis block.
-			block := newGenesisBlock(ctx, contract.ID)
+			block := app.genesisBlocks[contract.ID.ToMapKey()]
+			if block == nil {
+				block = newGenesisBlock(ctx, contract.ID)
+			}
 
 			// Create new state containing the genesis block.
 			timerCtx := &timerContext{ID: contract.ID}
@@ -558,12 +566,14 @@ func New(
 	timeSource epochtime.BlockBackend,
 	scheduler scheduler.BlockBackend,
 	storage storage.Backend,
+	genesisBlocks map[signature.MapKey]*roothash.Block,
 ) abci.Application {
 	return &rootHashApplication{
-		logger:     logging.GetLogger("tendermint/roothash"),
-		timeSource: timeSource,
-		scheduler:  scheduler,
-		storage:    storage,
+		logger:        logging.GetLogger("tendermint/roothash"),
+		timeSource:    timeSource,
+		scheduler:     scheduler,
+		storage:       storage,
+		genesisBlocks: genesisBlocks,
 	}
 }
 
