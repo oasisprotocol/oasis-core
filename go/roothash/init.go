@@ -74,7 +74,7 @@ func New(
 	case memory.BackendName:
 		impl = memory.New(scheduler, storage, registry, genesisBlocks)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(timeSource, scheduler, storage, tmService)
+		impl, err = tendermint.New(timeSource, scheduler, storage, tmService, genesisBlocks)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}
