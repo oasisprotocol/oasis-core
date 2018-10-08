@@ -9,7 +9,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/net/context"
 
@@ -190,9 +189,7 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 		prometheus.MustRegister(leveldbCollectors...)
 	})
 
-	db, err := leveldb.OpenFile(fn, &opt.Options{
-		Compression: opt.NoCompression,
-	})
+	db, err := leveldb.OpenFile(fn, nil)
 	if err != nil {
 		return nil, err
 	}
