@@ -1,0 +1,7 @@
+*.pyc
+/common/api/src/common_pb2.py
+/common/api/src/common_pb2_grpc.py
+/contract_pb2.py
+/contract_pb2_grpc.py
+/roothash_pb2.py
+/roothash_pb2_grpc.py
