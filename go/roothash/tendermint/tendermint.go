@@ -3,6 +3,7 @@ package tendermint
 
 import (
 	"bytes"
+	"strconv"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -58,18 +59,22 @@ type tendermintBackend struct {
 }
 
 func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
+	return r.getLatestBlockAt(id, 0)
+}
+
+func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*api.Block, error) {
 	query := tmapi.QueryGetLatestBlock{
 		ID: id,
 	}
 
-	response, err := r.service.Query(tmapi.QueryRootHashGetLatestBlock, query, 0)
+	response, err := r.service.Query(tmapi.QueryRootHashGetLatestBlock, query, height)
 	if err != nil {
-		return nil, errors.Wrap(err, "roothash: get latest block query failed")
+		return nil, errors.Wrapf(err, "roothash: get block query failed (height: %d)", height)
 	}
 
 	var block api.Block
 	if err := cbor.Unmarshal(response, &block); err != nil {
-		return nil, errors.Wrap(err, "roothash: get latest block malformed response")
+		return nil, errors.Wrapf(err, "roothash: get block malformed response (height: %d)", height)
 	}
 
 	return &block, nil
@@ -147,7 +152,7 @@ func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint
 	cache := notifiers.roundHeightMapCache
 	blockHeight, ok := cache.Get(round)
 	if ok {
-		return r.getBlockFromTmBlock(blockHeight.(int64), round, cache)
+		return r.getBlockFromTmBlock(id, blockHeight.(int64), round, cache)
 	}
 
 	// Perform a linear scan to get the block height. This will also
@@ -157,7 +162,7 @@ func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint
 	r.Unlock()
 
 	for blockHeight := currentHeight; blockHeight >= 0; blockHeight-- {
-		if block := r.getBlockFromTmBlock(blockHeight, round, cache); block != nil {
+		if block := r.getBlockFromTmBlock(id, blockHeight, round, cache); block != nil {
 			return block
 		}
 	}
@@ -166,6 +171,7 @@ func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint
 }
 
 func (r *tendermintBackend) getBlockFromTmBlock(
+	id signature.PublicKey,
 	height int64,
 	round uint64,
 	cache *lru.Cache,
@@ -181,25 +187,55 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 	}
 
 	extractBlock := func(tags []tmcmn.KVPair) *api.Block {
-		for _, pair := range tags {
-			if bytes.Equal(pair.GetKey(), tmapi.TagRootHashFinalized) {
-				var block api.Block
-				if err := block.UnmarshalCBOR(pair.GetValue()); err != nil {
-					r.logger.Error("getBlockFromTmBlock: corrupted block tag",
-						"err", err,
-					)
-					return nil
-				}
-
-				blockRound, _ := block.Header.Round.ToU64()
-				cache.Add(blockRound, height)
-				if blockRound == round {
-					return &block
-				}
-				return nil
-			}
+		// Ensure that the contract we care about emitted a tag.
+		var blockID signature.PublicKey
+		rawID := tmapi.GetTag(tags, tmapi.TagRootHashID)
+		if rawID == nil {
+			return nil
+		}
+		if err := blockID.UnmarshalBinary(rawID); err != nil {
+			r.logger.Error("getBlockFromTmBlock: corrupted identifier tag",
+				"err", err,
+			)
+			return nil
+		}
+		if !blockID.Equal(id) {
+			return nil
 		}
 
+		// Ensure that the contract we care about finalized a round.
+		rawBlockRound := tmapi.GetTag(tags, tmapi.TagRootHashFinalized)
+		if rawBlockRound == nil {
+			return nil
+		}
+		tagBlockRound, err := strconv.ParseUint(string(rawBlockRound), 10, 64)
+		if err != nil {
+			r.logger.Error("getBlockFromTmBlock: corrupted block tag",
+				"err", err,
+			)
+			return nil
+		}
+
+		block, err := r.getLatestBlockAt(id, height)
+		if err != nil {
+			r.logger.Error("getBlockFromTmBlock: failed to fetch block",
+				"err", err,
+			)
+			return nil
+		}
+
+		if blockRound, _ := block.Header.Round.ToU64(); blockRound != tagBlockRound {
+			r.logger.Error("getBlockFromTmBlock: tag/query round mismatch",
+				"block_round", blockRound,
+				"tag_round", tagBlockRound,
+			)
+			return nil
+		}
+
+		cache.Add(tagBlockRound, height)
+		if tagBlockRound == round {
+			return block
+		}
 		return nil
 	}
 
@@ -330,9 +366,9 @@ ProcessLoop:
 		for _, pair := range tags {
 			if bytes.Equal(pair.GetKey(), tmapi.TagRootHashFinalized) {
 				// Block finalized.
-				var block api.Block
-				if err := block.UnmarshalCBOR(pair.GetValue()); err != nil {
-					r.logger.Error("worker: corrupted block tag",
+				block, err := r.getLatestBlockAt(id, r.lastBlockHeight)
+				if err != nil {
+					r.logger.Error("worker: failed to get latest block",
 						"contract", id,
 						"err", err,
 					)
@@ -342,13 +378,13 @@ ProcessLoop:
 				// Ensure latest block is set.
 				notifiers.Lock()
 				if notifiers.lastBlock == nil {
-					notifiers.lastBlock = &block
+					notifiers.lastBlock = block
 				}
 				notifiers.Unlock()
 
 				// Broadcast new block.
-				r.allBlockNotifier.Broadcast(&block)
-				notifiers.blockNotifier.Broadcast(&block)
+				r.allBlockNotifier.Broadcast(block)
+				notifiers.blockNotifier.Broadcast(block)
 			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashDiscrepancyDetected) {
 				// Discrepancy detected.
 				var event api.DiscrepancyDetectedEvent
