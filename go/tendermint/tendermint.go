@@ -45,6 +45,8 @@ const (
 
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
+
+	cfgLogDebug = "tendermint.log.debug"
 )
 
 var (
@@ -56,6 +58,8 @@ var (
 
 	flagABCIPruneStrategy string
 	flagABCIPruneNumKept  int64
+
+	flagLogDebug bool
 )
 
 type tendermintService struct {
@@ -340,6 +344,7 @@ func (t *tendermintService) lazyInit() error {
 		&abci.LogAdapter{
 			Logger:           logging.GetLogger("tendermint"),
 			IsTendermintCore: true,
+			SuppressDebug:    !flagLogDebug,
 		},
 	)
 	if err != nil {
@@ -429,6 +434,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0, "tendermint empty block interval")
 	cmd.Flags().StringVar(&flagABCIPruneStrategy, cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	cmd.Flags().Int64Var(&flagABCIPruneNumKept, cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	cmd.Flags().BoolVar(&flagLogDebug, cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 
 	for _, v := range []string{
 		cfgConsensusTimeoutCommit,
@@ -436,6 +442,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgConsensusEmptyBlockInterval,
 		cfgABCIPruneStrategy,
 		cfgABCIPruneNumKept,
+		cfgLogDebug,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
