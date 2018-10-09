@@ -71,6 +71,7 @@ run_compute_node() {
         --storage-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --disable-key-manager \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
@@ -98,6 +99,7 @@ run_compute_node_storage_multilayer_remote() {
         --storage-multilayer-bottom-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --disable-key-manager \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
