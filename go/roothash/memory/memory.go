@@ -380,7 +380,7 @@ func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round api.Roun
 	ch := make(chan *api.Block)
 	sub.Unwrap(ch)
 
-	return nil, sub, nil
+	return ch, sub, nil
 }
 
 func (r *memoryRootHash) WatchEvents(id signature.PublicKey) (<-chan *api.Event, *pubsub.Subscription, error) {
