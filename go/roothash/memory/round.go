@@ -192,6 +192,29 @@ func (r *round) tryFinalize() (*api.Block, error) {
 	return block, nil
 }
 
+func (r *round) forceBackupTransition() error {
+	if r.roundState.state != stateWaitingCommitments {
+		panic("roothash/memory: unexpected state for backup transition")
+	}
+
+	// Find the Leader's batch hash based on the existing commitments.
+	for id, node := range r.roundState.computationGroup {
+		if node.Role != scheduler.Leader {
+			continue
+		}
+
+		commit, ok := r.roundState.commitments[id]
+		if !ok {
+			break
+		}
+
+		r.roundState.state = stateDiscrepancyWaitingCommitments
+		return errDiscrepancyDetected(commit.header.InputHash)
+	}
+
+	return fmt.Errorf("roothash/memory: no input hash available for backup transition")
+}
+
 func (r *round) tryFinalizeFast() (*api.Header, error) {
 	var header *api.Header
 	var discrepancyDetected bool
@@ -216,8 +239,7 @@ func (r *round) tryFinalizeFast() (*api.Header, error) {
 
 	if discrepancyDetected {
 		// Activate the backup workers.
-		r.roundState.state = stateDiscrepancyWaitingCommitments
-		return nil, errDiscrepancyDetected(header.InputHash)
+		return nil, r.forceBackupTransition()
 	}
 
 	return header, nil

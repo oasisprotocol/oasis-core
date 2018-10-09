@@ -192,6 +192,29 @@ func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*ap
 	return block, nil
 }
 
+func (r *round) forceBackupTransition() error {
+	if r.RoundState.State != stateWaitingCommitments {
+		panic("tendermint/roothash: unexpected state for backup transition")
+	}
+
+	// Find the Leader's batch hash based on the existing commitments.
+	for id, node := range r.RoundState.ComputationGroup {
+		if node.Role != scheduler.Leader {
+			continue
+		}
+
+		commit, ok := r.RoundState.Commitments[id]
+		if !ok {
+			break
+		}
+
+		r.RoundState.State = stateDiscrepancyWaitingCommitments
+		return errDiscrepancyDetected(commit.Header.InputHash)
+	}
+
+	return fmt.Errorf("tendermint/roothash: no input hash available for backup transition")
+}
+
 func (r *round) tryFinalizeFast() (*api.Header, error) {
 	var header *api.Header
 	var discrepancyDetected bool
@@ -216,8 +239,7 @@ func (r *round) tryFinalizeFast() (*api.Header, error) {
 
 	if discrepancyDetected {
 		// Activate the backup workers.
-		r.RoundState.State = stateDiscrepancyWaitingCommitments
-		return nil, errDiscrepancyDetected(header.InputHash)
+		return nil, r.forceBackupTransition()
 	}
 
 	return header, nil

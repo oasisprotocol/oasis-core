@@ -439,15 +439,21 @@ func (app *rootHashApplication) tryFinalize(
 			if state == stateDiscrepancyWaitingCommitments {
 				// This was a forced finalization call due to timeout,
 				// and the round was in the discrepancy state.  Give up.
-				app.logger.Error("failed to finalize discrepancy comittee on timeout",
+				app.logger.Error("failed to finalize discrepancy committee on timeout",
 					"round", blockNr,
 				)
 				break
 			}
 
-			// XXX: This is the fast path and the round timer expired.
-			// This should probably transition to the backups, but the
-			// Rust code doesn't appear to do this either.
+			// This is the fast path and the round timer expired.
+			//
+			// Transition to the discrepancy state so the backup workers
+			// process the round, assuming that is is possible to do so.
+			app.logger.Error("failed to finalize committee on timeout",
+				"round", blockNr,
+			)
+			err = contractState.Round.forceBackupTransition()
+			break
 		}
 
 		app.logger.Debug("insufficient commitments for finality, waiting",

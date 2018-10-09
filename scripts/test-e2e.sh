@@ -32,6 +32,7 @@ run_dummy_node_go_tm() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --tendermint.consensus.timeout_commit 250ms \
         --datadir ${datadir} \
         &
 }
