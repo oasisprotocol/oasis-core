@@ -10,6 +10,7 @@ use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
+use ekiden_core::hash::empty_hash;
 use ekiden_core::uint::U256;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::{Database, DatabaseHandle};
@@ -42,6 +43,21 @@ impl Database for Snapshot {
 
     fn remove(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
         panic!("Can't remove from Snapshot")
+    }
+
+    fn set_root_hash(&mut self, _root_hash: H256) -> Result<()> {
+        panic!("Can't set root hash for snapshot");
+    }
+
+    fn get_root_hash(&self) -> H256 {
+        match self.root_hash {
+            Some(root_hash) => root_hash,
+            None => empty_hash(),
+        }
+    }
+
+    fn commit(&mut self) -> Result<H256> {
+        panic!("Can't commit Snapshot");
     }
 
     fn rollback(&mut self) {

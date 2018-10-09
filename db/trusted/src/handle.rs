@@ -128,49 +128,6 @@ impl DatabaseHandle {
         DB.lock().unwrap()
     }
 
-    /// Set the root hash of the database state.
-    pub fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
-        if root_hash == empty_hash() {
-            self.root_hash = None;
-        } else {
-            self.root_hash = Some(root_hash);
-        }
-
-        self.pending_ops.clear();
-
-        Ok(())
-    }
-
-    /// Return the root hash of the database state.
-    ///
-    /// Note that without calling `commit` this will exclude any uncommitted
-    /// modifications to the database state.
-    pub fn get_root_hash(&self) -> H256 {
-        match self.root_hash {
-            Some(root_hash) => root_hash,
-            None => empty_hash(),
-        }
-    }
-
-    /// Commit all database changes to the underlying store.
-    pub fn commit(&mut self) -> Result<H256> {
-        // Commit all pending writes to the trie.
-        let mut root_hash = self.root_hash.clone();
-        for (key, value) in self.pending_ops.drain() {
-            match value {
-                Operation::Insert(value) => {
-                    root_hash = Some(self.state.insert(root_hash, &key, &value));
-                }
-                Operation::Remove => {
-                    root_hash = self.state.remove(root_hash, &key);
-                }
-            }
-        }
-
-        self.root_hash = root_hash;
-        Ok(self.get_root_hash())
-    }
-
     /// Set up key manager configuration.
     pub fn configure_key_manager(&mut self, config: DBKeyManagerConfig) {
         self.key_manager_config.get_or_insert(config);
@@ -273,6 +230,43 @@ impl Database for DatabaseHandle {
         self.pending_ops.insert(key, Operation::Remove);
 
         previous_value
+    }
+
+    fn set_root_hash(&mut self, root_hash: H256) -> Result<()> {
+        if root_hash == empty_hash() {
+            self.root_hash = None;
+        } else {
+            self.root_hash = Some(root_hash);
+        }
+
+        self.pending_ops.clear();
+
+        Ok(())
+    }
+
+    fn get_root_hash(&self) -> H256 {
+        match self.root_hash {
+            Some(root_hash) => root_hash,
+            None => empty_hash(),
+        }
+    }
+
+    fn commit(&mut self) -> Result<H256> {
+        // Commit all pending writes to the trie.
+        let mut root_hash = self.root_hash.clone();
+        for (key, value) in self.pending_ops.drain() {
+            match value {
+                Operation::Insert(value) => {
+                    root_hash = Some(self.state.insert(root_hash, &key, &value));
+                }
+                Operation::Remove => {
+                    root_hash = self.state.remove(root_hash, &key);
+                }
+            }
+        }
+
+        self.root_hash = root_hash;
+        Ok(self.get_root_hash())
     }
 
     fn rollback(&mut self) {

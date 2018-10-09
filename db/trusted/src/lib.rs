@@ -36,6 +36,8 @@ pub mod patricia_trie;
 #[macro_use]
 pub mod schema;
 
+use ekiden_common::bytes::H256;
+use ekiden_common::error::Result;
 use ekiden_keymanager_common::ContractId;
 
 /// Database interface exposed to contracts.
@@ -59,6 +61,18 @@ pub trait Database {
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
+
+    /// Set the root hash of the database state.
+    fn set_root_hash(&mut self, root_hash: H256) -> Result<()>;
+
+    /// Return the root hash of the database state.
+    ///
+    /// Note that without calling `commit` this will exclude any uncommitted
+    /// modifications to the database state.
+    fn get_root_hash(&self) -> H256;
+
+    /// Commit all database changes to the underlying store.
+    fn commit(&mut self) -> Result<H256>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);
