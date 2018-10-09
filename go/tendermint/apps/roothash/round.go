@@ -93,7 +93,9 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 }
 
 func (s *roundState) reset() {
-	s.Commitments = make(map[signature.MapKey]*commitment)
+	if s.Commitments == nil || len(s.Commitments) > 0 {
+		s.Commitments = make(map[signature.MapKey]*commitment)
+	}
 	s.State = stateWaitingCommitments
 }
 
@@ -188,6 +190,7 @@ func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*ap
 		block.Commitments = append(block.Commitments, commit.toCommitment())
 	}
 	block.Update()
+	r.RoundState.Commitments = make(map[signature.MapKey]*commitment)
 
 	return block, nil
 }
