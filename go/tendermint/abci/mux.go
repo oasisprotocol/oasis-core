@@ -574,6 +574,7 @@ type LogAdapter struct {
 	*logging.Logger
 
 	IsTendermintCore bool
+	SuppressDebug    bool
 }
 
 // With implements the correspoding call in the tendermit Logger interface.
@@ -605,6 +606,14 @@ func (a *LogAdapter) With(keyvals ...interface{}) tmlog.Logger {
 	return &LogAdapter{
 		Logger:           a.Logger.With(keyvals...),
 		IsTendermintCore: a.IsTendermintCore,
+		SuppressDebug:    a.SuppressDebug,
+	}
+}
+
+// Debug logs the message and key value paris at the Debug log level.
+func (a *LogAdapter) Debug(msg string, keyvals ...interface{}) {
+	if !a.SuppressDebug {
+		a.Logger.Debug(msg, keyvals...)
 	}
 }
 
