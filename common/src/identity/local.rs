@@ -1,5 +1,8 @@
 //! Local node identity implementation.
+use std::error::Error as StdError;
 use std::fs::File;
+use std::io::Error as IoError;
+use std::io::ErrorKind as IoErrorKind;
 use std::net::SocketAddr;
 use std::result::Result as StdResult;
 use std::sync::Arc;
@@ -7,6 +10,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
+use serde_cbor::error::Error as SerdeError;
 
 use super::super::address::Address;
 use super::super::bytes::H160;
@@ -255,6 +259,19 @@ fn validate_addr_port(v: String) -> Result<(), String> {
     match v.parse::<SocketAddr>() {
         Ok(_) => return Ok(()),
         Err(err) => return Err(err.to_string()),
+    }
+}
+
+/// Helper function to load a node's TLS certificate from node key pair file.
+pub fn load_node_certificate(
+    node_key_pair_filename: &str,
+) -> StdResult<x509::Certificate, IoError> {
+    let file = File::open(node_key_pair_filename)?;
+    let node_key_pair: StdResult<NodeKeyPair, SerdeError> = serde_cbor::from_reader(file);
+
+    match node_key_pair {
+        Ok(key_pair) => Ok(key_pair.tls_certificate.clone()),
+        Err(err) => Err(IoError::new(IoErrorKind::InvalidData, err.description())),
     }
 }
 

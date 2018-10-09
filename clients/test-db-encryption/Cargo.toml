@@ -1,0 +1,18 @@
+[package]
+name = "test-db-encryption-client"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden DB encryption end-to-end test client"
+
+[features]
+default = []
+
+[dependencies]
+client-utils = { path = "../utils" }
+ekiden-core = { path = "../../core/common" }
+ekiden-contract-client = { path = "../../contract/client" }
+ekiden-rpc-client = { path = "../../rpc/client" }
+test-db-encryption-api = { path = "../../contracts/test-db-encryption/api" }
+clap = "2.29.1"
+rand = "0.4"
+futures = "0.1"

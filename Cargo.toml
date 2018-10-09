@@ -73,11 +73,13 @@ members = [
 
     # Core contracts.
     "contracts/token",
+    "contracts/test-db-encryption",
 
     # Clients.
     "clients/token",
     "clients/test-long-term",
     "clients/benchmark",
+    "clients/test-db-encryption",
 
     # Registry.
     "registry/api",

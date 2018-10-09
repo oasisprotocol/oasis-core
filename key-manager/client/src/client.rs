@@ -134,7 +134,12 @@ impl KeyManager {
             }
         };
 
+        #[cfg(target_env = "sgx")]
+        let client = key_manager::Client::new(Arc::new(backend), mr_enclave, Some(true));
+
+        #[cfg(not(target_env = "sgx"))]
         let client = key_manager::Client::new(Arc::new(backend), mr_enclave, Some(false));
+
         self.client.get_or_insert(client);
 
         Ok(())

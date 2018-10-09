@@ -70,9 +70,31 @@ run_compute_node() {
         --storage-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so &
+}
+
+run_compute_node_db() {
+    local id=$1
+    shift
+    local extra_args=$*
+
+    # Generate port number.
+    let "port=id + 10000"
+
+    RUST_BACKTRACE=1 ${WORKDIR}/target/debug/ekiden-compute \
+        --no-persist-identity \
+        --max-batch-size 1 \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --storage-backend remote \
+        --port ${port} \
+        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
+        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        ${extra_args} \
+        ${WORKDIR}/target/enclave/test-db-encryption.so &
 }
 
 run_compute_node_storage_multilayer_remote() {
@@ -95,6 +117,7 @@ run_compute_node_storage_multilayer_remote() {
         --storage-multilayer-bottom-backend remote \
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so &
@@ -119,6 +142,7 @@ run_test() {
     local pre_epochs=${7:-0}
     local start_client_first=${8:-0}
     local test_km=${9:-0}
+    local enclave=${10:-token}
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
 
@@ -160,7 +184,7 @@ run_test() {
     # committee to be elected and connects to the leader.
     ${WORKDIR}/target/debug/${client}-client \
         --storage-backend remote \
-        --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
+        --mr-enclave $(cat ${WORKDIR}/target/enclave/${enclave}.mrenclave) \
         --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
         &
     client_pid=$!
@@ -199,6 +223,14 @@ scenario_basic() {
     run_compute_node 2 --compute-replicas 2
     sleep 1
     run_compute_node 3 --compute-replicas 2
+}
+
+scenario_basic_db() {
+    run_compute_node_db 1 --compute-replicas 2
+    sleep 1
+    run_compute_node_db 2 --compute-replicas 2
+    sleep 1
+    run_compute_node_db 3 --compute-replicas 2
 }
 
 scenario_discrepancy_worker() {
@@ -251,7 +283,8 @@ scenario_fail_worker_after_commit() {
 }
 
 # Go node (tendermint backends).
-run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm 0 0 0 1
+run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
+run_test scenario_basic_db "e2e-basic-tm-db" test-db-encryption 1 run_dummy_node_go_tm_mock 0 0 0 1 test-db-encryption
 run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_multilayer_remote "e2e-multilayer-remote-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker-tm" token 1 run_dummy_node_go_tm_mock
