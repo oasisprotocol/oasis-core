@@ -36,6 +36,19 @@ var (
 	_ abci.Application = (*rootHashApplication)(nil)
 )
 
+type timerContext struct {
+	ID    signature.PublicKey `codec:"id"`
+	Round uint64              `codec:"round"`
+}
+
+func (ctx *timerContext) MarshalCBOR() []byte {
+	return cbor.Marshal(ctx)
+}
+
+func (ctx *timerContext) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, ctx)
+}
+
 type rootHashApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
@@ -251,10 +264,11 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			block := newGenesisBlock(ctx, contract.ID)
 
 			// Create new state containing the genesis block.
+			timerCtx := &timerContext{ID: contract.ID}
 			state.UpdateContractState(&ContractState{
 				ID:           contract.ID,
 				CurrentBlock: block,
-				Timer:        *abci.NewTimer(ctx, app, "round-"+contract.ID.String(), contract.ID),
+				Timer:        *abci.NewTimer(ctx, app, "round-"+contract.ID.String(), timerCtx.MarshalCBOR()),
 			})
 
 			app.logger.Debug("ForeignDeliverTx: created genesis state for contract",
@@ -277,14 +291,19 @@ func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) types.Re
 }
 
 func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
-	var contractID signature.PublicKey
-	if err := contractID.UnmarshalBinary(timer.Data()); err != nil {
+	var tCtx timerContext
+	if err := tCtx.UnmarshalCBOR(timer.Data()); err != nil {
 		panic(err)
 	}
 
+	app.logger.Error("HACKHACKHACKHACK",
+		"contract", tCtx.ID,
+		"armed_at", tCtx.Round,
+	)
+
 	tree := app.state.DeliverTxTree()
 	state := NewMutableState(tree)
-	cs, err := state.GetContractState(contractID)
+	cs, err := state.GetContractState(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
@@ -293,7 +312,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	}
 
 	regState := registry.NewMutableState(tree)
-	contract, err := regState.GetContract(contractID)
+	contract, err := regState.GetContract(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to fetch contract",
 			"err", err,
@@ -301,7 +320,26 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		panic(err)
 	}
 
-	app.logger.Warn("FireTimer: round timeout expired, forcing finalization")
+	latestBlock := cs.CurrentBlock
+	if blockNr, _ := latestBlock.Header.Round.ToU64(); blockNr != tCtx.Round {
+		app.logger.Error("FireTimer: spurious timeout detected",
+			"contract", tCtx.ID,
+			"timer_round", tCtx.Round,
+			"current_round", blockNr,
+		)
+
+		// XXX: This should just disarm the timer and attempt to continue
+		// in production, but tracking down #1047 is more important.
+		panic("BUG: spurious timeout, check logs")
+
+		// timer.Stop(ctx)
+		// return
+	}
+
+	app.logger.Warn("FireTimer: round timeout expired, forcing finalization",
+		"contract", tCtx.ID,
+		"timer_round", tCtx.Round,
+	)
 
 	defer state.UpdateContractState(cs)
 	cs.Round.DidTimeout = true
@@ -394,6 +432,9 @@ func (app *rootHashApplication) tryFinalize(
 	contractState *ContractState,
 	forced bool,
 ) { // nolint: gocyclo
+	latestBlock := contractState.CurrentBlock
+	blockNr, _ := latestBlock.Header.Round.ToU64()
+
 	var rearmTimer bool
 	defer func() {
 		// Note: Unlike the Rust code, this pushes back the timer
@@ -402,15 +443,18 @@ func (app *rootHashApplication) tryFinalize(
 		switch rearmTimer {
 		case true: // (Re-)arm timer.
 			app.logger.Debug("(re-)arming round timeout")
-			contractState.Timer.Reset(ctx, roundTimeout)
+
+			timerCtx := &timerContext{
+				ID:    contract.ID,
+				Round: blockNr,
+			}
+			contractState.Timer.Reset(ctx, roundTimeout, timerCtx.MarshalCBOR())
 		case false: // Disarm timer.
 			app.logger.Debug("disarming round timeout")
 			contractState.Timer.Stop(ctx)
 		}
 	}()
 
-	latestBlock := contractState.CurrentBlock
-	blockNr, _ := latestBlock.Header.Round.ToU64()
 	state := contractState.Round.RoundState.State
 	id, _ := contract.ID.MarshalBinary()
 
