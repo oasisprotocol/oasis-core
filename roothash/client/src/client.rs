@@ -59,7 +59,7 @@ impl RootHashBackend for RootHashClient {
     fn get_blocks_since(&self, contract_id: B256, round: U256) -> BoxStream<Block> {
         let mut req = api::BlockSinceRequest::new();
         req.set_contract_id(contract_id.to_vec());
-        req.set_round(round.to_vec());
+        req.set_round(round.to_vec_big_endian_stripped());
         match self.0.get_blocks_since(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => Ok(Block::try_from(r.get_block().to_owned())?),
