@@ -6,6 +6,25 @@ use ekiden_core::mrae::sivaessha2;
 use super::{PrivateKeyType, PublicKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY};
 use sodalite;
 
+static PREFIX_LEN: usize = 12;
+
+pub fn is_encrypted(data: &[u8]) -> bool {
+    if data.len() < PREFIX_LEN {
+        return false;
+    }
+    let prefix = &data[..PREFIX_LEN];
+    // u8 representation of "confidential"
+    let confidential_prefix = [99, 111, 110, 102, 105, 100, 101, 110, 116, 105, 97, 108];
+    return prefix == confidential_prefix;
+}
+
+pub fn remove_prefix(data: Vec<u8>) -> Vec<u8> {
+    if data.len() < PREFIX_LEN {
+        return data;
+    }
+    data[PREFIX_LEN..].to_vec()
+}
+
 pub fn encrypt(
     plaintext: Vec<u8>,
     nonce: Vec<u8>,
