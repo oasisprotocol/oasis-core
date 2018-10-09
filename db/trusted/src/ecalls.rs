@@ -2,7 +2,7 @@ use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use ekiden_common::bytes::H256;
 
-use super::handle::DatabaseHandle;
+use super::{Database, DatabaseHandle};
 
 #[no_mangle]
 pub extern "C" fn db_set_root_hash(root_hash: *const u8) {
