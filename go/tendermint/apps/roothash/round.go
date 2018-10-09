@@ -63,6 +63,7 @@ type state uint
 const (
 	stateWaitingCommitments state = iota
 	stateDiscrepancyWaitingCommitments
+	stateFinalized
 )
 
 type roundState struct {
@@ -84,6 +85,8 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 		ok = node.Role == scheduler.Worker || node.Role == scheduler.Leader
 	case stateDiscrepancyWaitingCommitments:
 		ok = node.Role == scheduler.BackupWorker
+	case stateFinalized:
+		return scheduler.Invalid, errors.New("tendermint/roothash: round is already finalized, can't commit")
 	}
 	if !ok {
 		return scheduler.Invalid, errors.New("tendermint/roothash: node has incorrect role for current state")
@@ -155,6 +158,11 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment) err
 func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*api.Block, error) {
 	var err error
 
+	// Caller is responsible for enforcing this.
+	if r.RoundState.State == stateFinalized {
+		panic("tendermint/roothash: tryFinalize when already finalized")
+	}
+
 	// Ensure that the required number of commitments are present.
 	if err = r.checkCommitments(contract); err != nil {
 		return nil, err
@@ -190,6 +198,8 @@ func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*ap
 		block.Commitments = append(block.Commitments, commit.toCommitment())
 	}
 	block.Update()
+
+	r.RoundState.State = stateFinalized
 	r.RoundState.Commitments = make(map[signature.MapKey]*commitment)
 
 	return block, nil

@@ -414,6 +414,13 @@ func (app *rootHashApplication) tryFinalize(
 	state := contractState.Round.RoundState.State
 	id, _ := contract.ID.MarshalBinary()
 
+	if state == stateFinalized {
+		app.logger.Error("attempted to finalize when block already finalized",
+			"round", blockNr,
+		)
+		return
+	}
+
 	block, err := contractState.Round.tryFinalize(ctx, contract)
 	switch err {
 	case nil:
