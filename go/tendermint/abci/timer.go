@@ -66,6 +66,9 @@ func NewTimer(ctx *Context, app Application, id string, data []byte) *Timer {
 
 // Data returns custom data associated with the timer.
 func (t *Timer) Data() []byte {
+	if t.pendingState != nil && t.pendingState.Data != nil {
+		return t.pendingState.Data
+	}
 	if t.currentState == nil {
 		return nil
 	}
@@ -73,10 +76,14 @@ func (t *Timer) Data() []byte {
 }
 
 // Reset resets the timer, rearming it.
-func (t *Timer) Reset(ctx *Context, duration time.Duration) {
+//
+// The timer's custom data will be set to the new value iff it is non-nil,
+// otherwise it will be left unaltered.
+func (t *Timer) Reset(ctx *Context, duration time.Duration, newData []byte) {
 	t.pendingState = &timerState{
 		Armed:    true,
 		Deadline: ctx.Now().Add(duration),
+		Data:     newData,
 	}
 	t.registerOnCommitHook(ctx)
 }
@@ -123,7 +130,9 @@ func (t *Timer) persist(state *ApplicationState) {
 
 	t.pendingState.ID = currentState.ID
 	t.pendingState.App = currentState.App
-	t.pendingState.Data = currentState.Data
+	if t.pendingState.Data == nil {
+		t.pendingState.Data = currentState.Data
+	}
 	tree.Set(t.getMapKey(), t.pendingState.MarshalCBOR())
 
 	// Update deadline state.
