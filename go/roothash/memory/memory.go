@@ -159,19 +159,28 @@ func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
 				//
 				// I'm 99% sure the Rust code can livelock since it
 				// doesn't handle this.
-				s.logger.Error("worker: failed to finalize discrepancy comittee on timeout",
+				s.logger.Error("worker: failed to finalize discrepancy committee on timeout",
 					"round", blockNr,
+					"num_commitments", len(s.round.roundState.commitments),
 				)
 				break
 			}
 
-			// XXX: This is the fast path and the round timer expired.
-			// This should probably transition to the backups, but the
-			// Rust code doesn't appear to do this either.
+			// This is the fast path and the round timer expired.
+			//
+			// Transition to the discrepancy state so the backup workers
+			// process the round, assuming that it is possible to do so.
+			s.logger.Error("worker: failed to finalize committee on timeout",
+				"round", blockNr,
+				"num_commitments", len(s.round.roundState.commitments),
+			)
+			err = s.round.forceBackupTransition()
+			break
 		}
 
 		s.logger.Debug("worker: insufficient commitments for finality, waiting",
 			"round", blockNr,
+			"num_commitments", len(s.round.roundState.commitments),
 		)
 
 		rearmTimer = true
