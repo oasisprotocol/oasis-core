@@ -9,6 +9,7 @@ run_dummy_node_go_dummy() {
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
         --grpc.port 42261 \
+        --grpc.log.verbose_debug \
         --epochtime.backend mock \
         --beacon.backend insecure \
         --storage.backend memory \
@@ -25,6 +26,7 @@ run_dummy_node_go_tm() {
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
         --grpc.port 42261 \
+        --grpc.log.verbose_debug \
         --epochtime.backend tendermint \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
@@ -33,6 +35,7 @@ run_dummy_node_go_tm() {
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.log.debug \
         --datadir ${datadir} \
         &
 }
@@ -44,6 +47,7 @@ run_dummy_node_go_tm_mock() {
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
         --grpc.port 42261 \
+        --grpc.log.verbose_debug \
         --epochtime.backend tendermint_mock \
         --beacon.backend insecure \
         --storage.backend memory \
@@ -51,6 +55,7 @@ run_dummy_node_go_tm_mock() {
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.log.debug \
         --datadir ${datadir} \
         &
 }
