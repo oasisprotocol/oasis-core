@@ -277,9 +277,6 @@ func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) types.Re
 }
 
 func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
-	// Ensure timer is stopped.
-	defer timer.Stop(ctx)
-
 	var contractID signature.PublicKey
 	if err := contractID.UnmarshalBinary(timer.Data()); err != nil {
 		panic(err)
@@ -292,7 +289,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
 		)
-		return
+		panic(err)
 	}
 
 	regState := registry.NewMutableState(tree)
@@ -301,7 +298,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		app.logger.Error("FireTimer: failed to fetch contract",
 			"err", err,
 		)
-		return
+		panic(err)
 	}
 
 	app.logger.Warn("FireTimer: round timeout expired, forcing finalization")
