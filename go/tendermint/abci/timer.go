@@ -133,6 +133,8 @@ func (t *Timer) persist(state *ApplicationState) {
 	if t.pendingState.Armed {
 		tree.Set(t.pendingState.getDeadlineMapKey(), []byte(t.ID))
 	}
+
+	t.pendingState = nil
 }
 
 func fireTimers(ctx *Context, state *ApplicationState, app Application) {
