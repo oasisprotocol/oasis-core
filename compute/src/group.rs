@@ -187,6 +187,7 @@ impl ComputationGroup {
 
         event_sources.push(
             streamfollow::follow_skip(
+                "ComputationGroup committees",
                 move || {
                     scheduler_init
                         .watch_committees()
@@ -434,6 +435,7 @@ impl ComputationGroup {
             active_epoch
                 .node_group
                 .call_filtered(
+                    "ComputationGroup submit_batch",
                     |_, node| node.role == Role::Worker,
                     move |client, _| client.submit_batch_async(&request),
                 )

@@ -75,6 +75,7 @@ impl ContractClient {
         let rpc_timeout = self.timeout.clone();
         let rpc = self.rpc.clone();
         let rpc_call = retry_until_ok(
+            "ContractClient submit_tx",
             move || {
                 // Set timeout if configured.
                 let mut options = grpcio::CallOption::default();

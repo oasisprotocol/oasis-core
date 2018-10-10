@@ -42,6 +42,7 @@ where
 /// determined by `error_is_permanent`. Propagates permanent errors.
 #[cfg(not(target_env = "sgx"))]
 pub fn retry_until_ok<R, F, FP>(
+    name: &'static str,
     mut f: F,
     error_is_permanent: FP,
 ) -> impl Future<Item = R::Item, Error = R::Error>
@@ -52,6 +53,7 @@ where
     FP: Fn(&R::Error) -> bool,
 {
     streamfollow::follow_skip(
+        name,
         move || f().into_stream(),
         // Bookmark item is irelevant as there is always just a single item.
         |_item: &R::Item| "<retry_until_ok>",
@@ -69,6 +71,7 @@ where
 /// Additionally it considers an error "permanent" if `max_retries` retries is exceeded.
 #[cfg(not(target_env = "sgx"))]
 pub fn retry_until_ok_or_max<R, F, FP>(
+    name: &'static str,
     f: F,
     error_is_permanent: FP,
     max_retries: usize,
@@ -81,7 +84,7 @@ where
 {
     let retry_counter = Arc::new(AtomicUsize::new(0));
 
-    retry_until_ok(f, move |error| {
+    retry_until_ok(name, f, move |error| {
         if error_is_permanent(error) || retry_counter.fetch_add(1, Ordering::SeqCst) > max_retries {
             return true;
         }
