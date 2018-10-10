@@ -538,6 +538,18 @@ impl RootHashFrontend {
         if role.is_none() || role.as_ref().unwrap().role != Role::Leader {
             inner.incoming_queue.lock().unwrap().take();
             maybe_batch = None;
+            measure_gauge!("incoming_queue_size", 0);
+        } else {
+            measure_gauge!(
+                "incoming_queue_size",
+                inner
+                    .incoming_queue
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .map(|queue| queue.calls.len())
+                    .unwrap_or(0)
+            );
         }
 
         Self::transition(
