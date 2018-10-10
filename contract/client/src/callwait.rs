@@ -70,6 +70,7 @@ impl Manager {
         let roothash_init = roothash.clone();
         let (watch_blocks, blocks_kill_handle) = ekiden_common::futures::killable(
             ekiden_common::futures::streamfollow::follow(
+                "callwait blocks",
                 move || roothash_init.get_blocks(contract_id),
                 move |round: &U256| roothash.get_blocks_since(contract_id, round.clone()),
                 |block: &Block| block.header.round,

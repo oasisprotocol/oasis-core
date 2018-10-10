@@ -107,6 +107,7 @@ impl ContractClientManager {
             let contract_id = self.inner.contract_id;
 
             streamfollow::follow_skip(
+                "ContractClientManager committees",
                 move || {
                     inner_init
                         .scheduler
@@ -246,6 +247,7 @@ impl ContractClientManager {
         let sh = span.handle();
         let inner = self.inner.clone();
         retry_until_ok_or_max(
+            "ContractClientManager call_leader",
             move || Self::call_leader(inner.clone(), method, arguments.clone(), sh.clone()),
             |error| error.message != ContractClient::SHUTDOWN_REASON_TRANSITION,
             // If the network latency and time needed to process the call is short compared to the
