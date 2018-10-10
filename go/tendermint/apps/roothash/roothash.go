@@ -296,11 +296,6 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		panic(err)
 	}
 
-	app.logger.Error("HACKHACKHACKHACK",
-		"contract", tCtx.ID,
-		"armed_at", tCtx.Round,
-	)
-
 	tree := app.state.DeliverTxTree()
 	state := NewMutableState(tree)
 	cs, err := state.GetContractState(tCtx.ID)
