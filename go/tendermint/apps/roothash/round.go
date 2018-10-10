@@ -188,16 +188,16 @@ func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*ap
 	block := new(api.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(ctx.Now().Unix())
-	block.ComputationGroup = r.RoundState.Committee.Members
+	var blockCommitments []*api.Commitment
 	for _, node := range r.RoundState.Committee.Members {
 		id := node.PublicKey.ToMapKey()
 		commit, ok := r.RoundState.Commitments[id]
 		if !ok {
 			continue
 		}
-		block.Commitments = append(block.Commitments, commit.toCommitment())
+		blockCommitments = append(blockCommitments, commit.toCommitment())
 	}
-	block.Update()
+	block.Update(r.RoundState.Committee.Members, blockCommitments)
 
 	r.RoundState.State = stateFinalized
 	r.RoundState.Commitments = make(map[signature.MapKey]*commitment)
