@@ -114,11 +114,11 @@ type DiscrepancyDetectedEvent struct {
 	// BatchHash is the CallBatch hash that is set when a discrepancy
 	// is detected to signal to the backup workers that a computation
 	// should be re-executed.
-	BatchHash *hash.Hash
+	BatchHash *hash.Hash `codec:"batch_hash"`
 
 	// BlockHeader is the block header of the block on which the backup
 	// computation should be based.
-	BlockHeader *Header
+	BlockHeader *Header `codec:"header"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
