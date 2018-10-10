@@ -81,7 +81,6 @@ where
 {
     /// Call init if we haven't seen anything yet or resume if we have a bookmark.
     fn connect(&mut self) -> S {
-        debug!("Connecting");
         match *self {
             BookmarkStateResume::Invalid => unreachable!(),
             BookmarkStateResume::Initializing(ref mut init, ref mut _resume) => init(),
@@ -137,7 +136,6 @@ where
 {
     /// Connect by calling the init fn.
     fn connect(&mut self) -> S {
-        debug!("Connecting");
         match *self {
             BookmarkStateSkip::Invalid => unreachable!(),
             BookmarkStateSkip::Initializing(ref mut init) => init(),
@@ -178,6 +176,7 @@ where
 /// A wrapper for streams that can encounter nonpermanent errors. It handles the retry logic.
 /// This is created by the `follow` function.
 pub struct Follow<S, BS, FB, FP> {
+    name: &'static str,
     connection_state: ConnectionState<S>,
     bookmark_state: BS,
     item_to_bookmark: FB,
@@ -203,15 +202,16 @@ where
                 ConnectionState::Connecting(backoff, mut stream) => {
                     match stream.poll() {
                         Ok(Async::Ready(None)) => {
-                            error!("Underlying stream did not send current item");
+                            error!("{} Underlying stream did not send current item", self.name);
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(first))) => {
                             let bookmark = (self.item_to_bookmark)(&first);
-                            debug!("Received sentinel item {:?}", bookmark);
+                            debug!("{} Received sentinel item {:?}", self.name, bookmark);
                             let forward_sentinel = self.bookmark_state.check_first(bookmark);
                             self.connection_state = ConnectionState::Forwarding(stream);
                             if forward_sentinel {
+                                trace!("{} Forwarding sentinel item", self.name);
                                 return Ok(Async::Ready(Some(first)));
                             }
                             // Otherwise, discard sentinel (already emitted from previous stream)
@@ -229,8 +229,8 @@ where
                             } else {
                                 let sample = backoff.sample();
                                 error!(
-                                    "Underlying stream error (early): {:?}; retrying in {:?}",
-                                    e, sample
+                                    "{} Underlying stream error (early): {:?}; retrying in {:?}",
+                                    self.name, e, sample
                                 );
                                 self.connection_state = ConnectionState::Backoff(
                                     backoff,
@@ -245,6 +245,7 @@ where
                     match delay.poll().expect("Unhandled timer error") {
                         Async::Ready(()) => {
                             backoff.advance();
+                            debug!("{} Connecting", self.name);
                             self.connection_state =
                                 ConnectionState::Connecting(backoff, self.bookmark_state.connect());
                             // Repeat poll on next state.
@@ -259,12 +260,12 @@ where
                 ConnectionState::Forwarding(mut stream) => {
                     match stream.poll() {
                         Ok(Async::Ready(None)) => {
-                            trace!("Underlying stream ended");
+                            trace!("{} Underlying stream ended", self.name);
                             return Ok(Async::Ready(None));
                         }
                         Ok(Async::Ready(Some(item))) => {
                             let bookmark = (self.item_to_bookmark)(&item);
-                            trace!("Forwarding item {:?}", bookmark);
+                            trace!("{} Forwarding item {:?}", self.name, bookmark);
                             // Stay in forwarding state.
                             self.connection_state = ConnectionState::Forwarding(stream);
                             self.bookmark_state.advance(bookmark);
@@ -279,7 +280,10 @@ where
                             if (self.error_is_permanent)(&e) {
                                 return Err(e);
                             } else {
-                                error!("Underlying stream error (late): {:?}; reconnecting", e);
+                                error!(
+                                    "{} Underlying stream error (late): {:?}; reconnecting",
+                                    self.name, e
+                                );
                                 self.connection_state = ConnectionState::Connecting(
                                     Backoff::init(),
                                     self.bookmark_state.connect(),
@@ -310,6 +314,7 @@ where
 /// Consecutive retries without receiving a sentinel item are delayed according to a hardcoded
 /// backoff policy.
 pub fn follow<S, B, FI, FR, FB, FP>(
+    name: &'static str,
     mut init: FI,
     resume: FR,
     item_to_bookmark: FB,
@@ -325,6 +330,7 @@ where
     let connection_state = ConnectionState::Connecting(Backoff::init(), init());
     let bookmark_state = BookmarkStateResume::Initializing(init, resume);
     Follow {
+        name,
         connection_state,
         bookmark_state,
         item_to_bookmark,
@@ -348,6 +354,7 @@ where
 /// Consecutive retries without receiving a sentinel item are delayed according to a hardcoded
 /// backoff policy.
 pub fn follow_skip<S, B, FI, FB, FP>(
+    name: &'static str,
     mut init: FI,
     item_to_bookmark: FB,
     error_is_permanent: FP,
@@ -361,6 +368,7 @@ where
     let connection_state = ConnectionState::Connecting(Backoff::init(), init());
     let bookmark_state = BookmarkStateSkip::Initializing(init);
     Follow {
+        name,
         connection_state,
         bookmark_state,
         item_to_bookmark,
@@ -377,6 +385,7 @@ mod tests {
     #[test]
     fn follow_ok() {
         let s = super::follow(
+            "follow_ok",
             || futures::stream::iter_result(vec![Ok(1), Ok(2), Ok(3)]),
             |&()| unreachable!(),
             |_| (),
@@ -396,6 +405,7 @@ mod tests {
         let mut inits = vec![vec![Err(())], vec![Ok(1), Ok(2), Err(())]].into_iter();
         let mut resumes = vec![vec![Err(())], vec![Ok(2), Err(())], vec![Ok(2), Ok(3)]].into_iter();
         let s = super::follow(
+            "follow_reconnect",
             move || futures::stream::iter_result(inits.next().unwrap()),
             move |&()| futures::stream::iter_result(resumes.next().unwrap()),
             |_| (),
@@ -421,6 +431,7 @@ mod tests {
             vec![Ok(5)],
         ].into_iter();
         let s = super::follow_skip(
+            "follow_skip",
             move || futures::stream::iter_result(inits.next().unwrap()),
             |v| *v,
             |&()| false,
