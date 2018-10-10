@@ -178,16 +178,16 @@ func (r *round) tryFinalize() (*api.Block, error) {
 	block := new(api.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(time.Now().Unix())
-	block.ComputationGroup = r.roundState.committee.Members
+	var blockCommitments []*api.Commitment
 	for _, node := range r.roundState.committee.Members {
 		id := node.PublicKey.ToMapKey()
 		commit, ok := r.roundState.commitments[id]
 		if !ok {
 			continue
 		}
-		block.Commitments = append(block.Commitments, commit.toCommitment())
+		blockCommitments = append(blockCommitments, commit.toCommitment())
 	}
-	block.Update()
+	block.Update(r.roundState.committee.Members, blockCommitments)
 
 	return block, nil
 }
