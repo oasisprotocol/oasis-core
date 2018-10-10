@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 )
@@ -22,20 +23,17 @@ var (
 	TagRootHashUpdateValue = []byte("1")
 
 	// TagRootHashDiscrepancyDetected is an ABCI transaction tag for
-	// discrepancy detected events (value is input batch hash).
+	// discrepancy detected events (value is a CBOR serialized
+	// ValueRootHashDiscrepancyDetected).
 	TagRootHashDiscrepancyDetected = []byte("roothash.discrepancy")
 
 	// TagRootHashRoundFailed is an ABCI transaction tag for round
-	// failure events (value is failure reason).
+	// failure events (value is a CBOR serialized ValueRootHashRoundFailed).
 	TagRootHashRoundFailed = []byte("roothash.round_failed")
 
 	// TagRootHashFinalized is an ABCI transaction tag for finalized
-	// blocks (value is round number as string).
+	// blocks (value is a CBOR serialized ValueRootHashFinalized).
 	TagRootHashFinalized = []byte("roothash.finalized")
-
-	// TagRootHashID is an ABCI transaction tag for specifying the
-	// contract ID.
-	TagRootHashID = []byte("roothash.id")
 )
 
 const (
@@ -70,4 +68,53 @@ type TxCommit struct {
 // QueryGetLatestBlock is a request for fetching the latest block.
 type QueryGetLatestBlock struct {
 	ID signature.PublicKey
+}
+
+// ValueRootHashFinalized is the value component of a TagRootHashFinalized.
+type ValueRootHashFinalized struct {
+	ID    signature.PublicKey `codec:"id"`
+	Round uint64              `codec:"round"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (v *ValueRootHashFinalized) MarshalCBOR() []byte {
+	return cbor.Marshal(v)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (v *ValueRootHashFinalized) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, v)
+}
+
+// ValueRootHashDiscrepancyDetected is the value component of a
+// TagRootHashDiscrepancyDetected.
+type ValueRootHashDiscrepancyDetected struct {
+	ID    signature.PublicKey               `codec:"id"`
+	Event roothash.DiscrepancyDetectedEvent `codec:"event"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (v *ValueRootHashDiscrepancyDetected) MarshalCBOR() []byte {
+	return cbor.Marshal(v)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (v *ValueRootHashDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, v)
+}
+
+// ValueRootHashRoundFailed is the value component of TagRootHashRoundFailed.
+type ValueRootHashRoundFailed struct {
+	ID     signature.PublicKey `codec:"id"`
+	Reason string              `codec:"reason"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (v *ValueRootHashRoundFailed) MarshalCBOR() []byte {
+	return cbor.Marshal(v)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (v *ValueRootHashRoundFailed) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, v)
 }

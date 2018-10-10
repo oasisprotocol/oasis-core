@@ -3,7 +3,6 @@ package roothash
 
 import (
 	"encoding/hex"
-	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -278,8 +277,11 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			// This transaction now also includes a new block for the given contract.
 			id, _ := contract.ID.MarshalBinary()
 			ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-			ctx.EmitTag(api.TagRootHashID, id)
-			ctx.EmitTag(api.TagRootHashFinalized, []byte("0"))
+			tagV := api.ValueRootHashFinalized{
+				ID:    id,
+				Round: 0,
+			}
+			ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
 		}
 	}
 
@@ -471,11 +473,13 @@ func (app *rootHashApplication) tryFinalize(
 		contractState.CurrentBlock = block
 
 		roundNr, _ := block.Header.Round.ToU64()
-		roundStr := strconv.FormatUint(roundNr, 10)
 
 		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-		ctx.EmitTag(api.TagRootHashID, id)
-		ctx.EmitTag(api.TagRootHashFinalized, []byte(roundStr))
+		tagV := api.ValueRootHashFinalized{
+			ID:    id,
+			Round: roundNr,
+		}
+		ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
 		return
 	case errStillWaiting:
 		if forced {
@@ -516,14 +520,15 @@ func (app *rootHashApplication) tryFinalize(
 			"input_hash", inputHash,
 		)
 
-		event := roothash.DiscrepancyDetectedEvent{
-			BatchHash:   &inputHash,
-			BlockHeader: &latestBlock.Header,
-		}
-
 		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-		ctx.EmitTag(api.TagRootHashID, id)
-		ctx.EmitTag(api.TagRootHashDiscrepancyDetected, event.MarshalCBOR())
+		tagV := api.ValueRootHashDiscrepancyDetected{
+			ID: id,
+			Event: roothash.DiscrepancyDetectedEvent{
+				BatchHash:   &inputHash,
+				BlockHeader: &latestBlock.Header,
+			},
+		}
+		ctx.EmitTag(api.TagRootHashDiscrepancyDetected, tagV.MarshalCBOR())
 
 		// Re-arm the timer.  The rust code waits till the first discrepancy
 		// commit to do this, but there is 0 guarantee that said commit will
@@ -541,8 +546,11 @@ func (app *rootHashApplication) tryFinalize(
 	contractState.Round.reset()
 
 	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-	ctx.EmitTag(api.TagRootHashID, id)
-	ctx.EmitTag(api.TagRootHashRoundFailed, []byte(err.Error()))
+	tagV := api.ValueRootHashRoundFailed{
+		ID:     id,
+		Reason: err.Error(),
+	}
+	ctx.EmitTag(api.TagRootHashRoundFailed, tagV.MarshalCBOR())
 }
 
 // New constructs a new roothash application instance.
