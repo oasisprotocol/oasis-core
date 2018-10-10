@@ -242,7 +242,13 @@ where
                     }
                 }
                 ConnectionState::Backoff(mut backoff, mut delay) => {
-                    match delay.poll().expect("Unhandled timer error") {
+                    match delay.poll().unwrap_or_else(|error| {
+                        warn!(
+                            "streamfollow: {} delay failed: {:?}. proceeding",
+                            self.name, error
+                        );
+                        Async::Ready(())
+                    }) {
                         Async::Ready(()) => {
                             backoff.advance();
                             debug!("{} Connecting", self.name);
