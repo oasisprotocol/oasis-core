@@ -21,11 +21,15 @@ import (
 	"github.com/oasislabs/ekiden/go/common/service"
 )
 
-const cfgGRPCPort = "grpc.port"
+const (
+	cfgGRPCPort         = "grpc.port"
+	cfgGRPCVerboseDebug = "grpc.log.verbose_debug"
+)
 
 var (
-	grpcPort        uint16
-	grpcMetricsOnce sync.Once
+	grpcPort         uint16
+	grpcVerboseDebug bool
+	grpcMetricsOnce  sync.Once
 
 	grpcCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -144,11 +148,13 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info 
 	grpcLatency.With(prometheus.Labels{"call": info.FullMethod}).Observe(time.Since(start).Seconds())
 	switch err {
 	case nil:
-		l.reqLogger.Debug("request succeeded",
-			"method", info.FullMethod,
-			"req_seq", seq,
-			"resp", resp,
-		)
+		if l.isDebug {
+			l.reqLogger.Debug("request succeeded",
+				"method", info.FullMethod,
+				"req_seq", seq,
+				"resp", resp,
+			)
+		}
 	default:
 		l.reqLogger.Error("request failed",
 			"method", info.FullMethod,
@@ -210,7 +216,7 @@ func newGrpcLogAdapter(baseLogger *logging.Logger) *grpcLogAdapter {
 		logger:    logging.GetLoggerEx("grpc", 2),
 		reqLogger: baseLogger,
 		verbosity: 2,
-		isDebug:   logging.GetLevel() == logging.LevelDebug,
+		isDebug:   logging.GetLevel() == logging.LevelDebug && grpcVerboseDebug,
 	}
 }
 
@@ -322,9 +328,11 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 func registerGrpcFlags(cmd *cobra.Command) {
 	// Flags specific to the root command.
 	cmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
+	cmd.Flags().BoolVar(&grpcVerboseDebug, cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
 
 	for _, v := range []string{
 		cfgGRPCPort,
+		cfgGRPCVerboseDebug,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

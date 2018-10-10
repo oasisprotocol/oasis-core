@@ -101,7 +101,7 @@ func (l *Logger) Debug(msg string, keyvals ...interface{}) {
 	_ = level.Debug(l.logger).Log(keyvals...)
 }
 
-// Info logs the message and key value pairs at the Debug log level.
+// Info logs the message and key value pairs at the Info log level.
 func (l *Logger) Info(msg string, keyvals ...interface{}) {
 	if backend.level > LevelInfo {
 		return
@@ -110,7 +110,7 @@ func (l *Logger) Info(msg string, keyvals ...interface{}) {
 	_ = level.Info(l.logger).Log(keyvals...)
 }
 
-// Warn logs the message and key value pairs at the Debug log level.
+// Warn logs the message and key value pairs at the Warn log level.
 func (l *Logger) Warn(msg string, keyvals ...interface{}) {
 	if backend.level > LevelWarn {
 		return
@@ -119,7 +119,7 @@ func (l *Logger) Warn(msg string, keyvals ...interface{}) {
 	_ = level.Warn(l.logger).Log(keyvals...)
 }
 
-// Error logs the message and key value pairs at the Debug log level.
+// Error logs the message and key value pairs at the Error log level.
 func (l *Logger) Error(msg string, keyvals ...interface{}) {
 	if backend.level > LevelError {
 		return
