@@ -519,9 +519,9 @@ impl RootHashFrontend {
             ) if role_a == role_b => {}
             (&State::ComputationGroupChanged(None, ..), &State::NotReady) => {}
 
-            transition => panic!(
-                "illegal root hash frontend state transition: {:?}",
-                transition
+            (from, to) => panic!(
+                "illegal root hash frontend state transition: {} -> {}",
+                from, to,
             ),
         }
 
@@ -919,6 +919,11 @@ impl RootHashFrontend {
     fn fail_batch(inner: Arc<Inner>, reason: String) -> BoxFuture<()> {
         let new_state = {
             let state = inner.state.lock().unwrap();
+
+            // If we already locally aborted, we shouldn't do anything.
+            if let State::LocallyAborted(..) = *state {
+                return future::ok(()).into_box();
+            }
 
             // Move failed calls back into the current batch.
             if let Some(batch) = state.get_batch() {
