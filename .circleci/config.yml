@@ -73,6 +73,12 @@ jobs:
           paths:
             - "/go/pkg"
       - run: ./scripts/test-e2e.sh
+      - run: |
+          make -C scripts/storage container-deps
+          make -C scripts/storage
+          make -C scripts/roothash container-deps
+          make -C scripts/roothash
+      - run: ./scripts/test-migration.sh
 
       # Store built files.
       - persist_to_workspace:
