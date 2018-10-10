@@ -107,6 +107,7 @@ impl RuntimeClientManager {
             let runtime_id = self.inner.runtime_id;
 
             streamfollow::follow_skip(
+                "RuntimeClientManager committees",
                 move || {
                     inner_init
                         .scheduler
@@ -246,6 +247,7 @@ impl RuntimeClientManager {
         let sh = span.handle();
         let inner = self.inner.clone();
         retry_until_ok_or_max(
+            "RuntimeClientManager call_leader",
             move || Self::call_leader(inner.clone(), method, arguments.clone(), sh.clone()),
             |error| error.message != RuntimeClient::SHUTDOWN_REASON_TRANSITION,
             // If the network latency and time needed to process the call is short compared to the
