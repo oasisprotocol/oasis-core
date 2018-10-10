@@ -382,6 +382,11 @@ ProcessLoop:
 				}
 				notifiers.Unlock()
 
+				// Insert the round -> block height mapping into the
+				// cache.
+				blockRound, _ := block.Header.Round.ToU64()
+				notifiers.roundHeightMapCache.Add(blockRound, r.lastBlockHeight)
+
 				// Broadcast new block.
 				r.allBlockNotifier.Broadcast(block)
 				notifiers.blockNotifier.Broadcast(block)
