@@ -9,9 +9,8 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 clap = "2.31.2"
 futures = "0.1"
-rusoto_core = "0.32.0"
-rusoto_dynamodb = "0.32.0"
-tokio-core = "0.1.17"
+rusoto_core = "0.34.0"
+rusoto_dynamodb = "0.34.0"
 
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
@@ -20,3 +19,4 @@ ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 [dev-dependencies]
 log = "0.4.1"
 pretty_env_logger = "0.2"
+tokio = "0.1.11"

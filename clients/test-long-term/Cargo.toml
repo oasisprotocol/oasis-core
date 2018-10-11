@@ -11,3 +11,4 @@ ekiden-rpc-client = { path = "../../rpc/client" }
 token-api = { path = "../../contracts/token/api" }
 clap = "2.29.1"
 rand = "0.4"
+tokio = "0.1.11"
