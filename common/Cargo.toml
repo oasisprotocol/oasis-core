@@ -48,6 +48,3 @@ tokio = "~0.1.7"
 [dev-dependencies]
 serde_json = { git = "https://github.com/oasislabs/json" }
 base64 = "0.9.0"
-
-[target.'cfg(not(target_env = "sgx"))'.dev-dependencies]
-tokio-core = "0.1.17"
