@@ -15,7 +15,6 @@ extern crate log;
 use log::debug;
 use log::trace;
 extern crate rusoto_core;
-extern crate tokio_core;
 
 extern crate ekiden_common;
 use ekiden_common::bytes::H256;
@@ -189,24 +188,7 @@ fn di_factory(
                 let aws_table_name = args.value_of("storage-multilayer-aws-table-name")
                     .unwrap()
                     .to_string();
-                let (init_tx, init_rx) = futures::sync::oneshot::channel();
-                std::thread::spawn(|| match tokio_core::reactor::Core::new() {
-                    Ok(mut core) => {
-                        init_tx.send(Ok(core.remote())).unwrap();
-                        loop {
-                            core.turn(None);
-                        }
-                    }
-                    Err(e) => {
-                        init_tx.send(Err(e)).unwrap();
-                    }
-                });
-                use ekiden_di::error::ResultExt;
-                let remote = init_rx
-                    .wait()
-                    .unwrap()
-                    .chain_err(|| "Couldn't create rector core")?;
-                Arc::new(DynamoDbBackend::new(remote, aws_region, aws_table_name))
+                Arc::new(DynamoDbBackend::new(aws_region, aws_table_name))
             }
             "remote" => {
                 let channel = ChannelBuilder::new(env.grpc())

@@ -7,13 +7,13 @@ extern crate futures;
 extern crate rusoto_core;
 extern crate rusoto_dynamodb;
 use rusoto_dynamodb::DynamoDb;
-extern crate tokio_core;
 
 extern crate ekiden_common;
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::futures::Future;
+use ekiden_common::futures::FutureExt;
 extern crate ekiden_di;
 use ekiden_di::create_component;
 extern crate ekiden_storage_base;
@@ -21,7 +21,6 @@ use ekiden_storage_base::{InsertOptions, StorageBackend};
 
 /// A storage backend that uses Amazon DynamoDB.
 pub struct DynamoDbBackend {
-    remote: tokio_core::reactor::Remote,
     client: Arc<rusoto_dynamodb::DynamoDbClient>,
     table_name: String,
 }
@@ -31,37 +30,11 @@ impl DynamoDbBackend {
     /// Rusoto methods of getting credentials (see
     /// https://github.com/rusoto/rusoto/blob/rusoto-v0.32.0/AWS-CREDENTIALS.md). You must provide
     /// a reactor core remote for spawning internal non-Send futures.
-    pub fn new(
-        remote: tokio_core::reactor::Remote,
-        region: rusoto_core::Region,
-        table_name: String,
-    ) -> Self {
+    pub fn new(region: rusoto_core::Region, table_name: String) -> Self {
         Self {
-            remote,
-            client: Arc::new(rusoto_dynamodb::DynamoDbClient::simple(region)),
+            client: Arc::new(rusoto_dynamodb::DynamoDbClient::new(region)),
             table_name,
         }
-    }
-
-    /// Like `futures::sync::oneshot::spawn_fn`, but `R` doesn't have to be `Send`.
-    // TODO: change to `-> impl Future`
-    fn spawn_fn<F, R>(&self, f: F) -> Box<futures::Future<Item = R::Item, Error = R::Error> + Send>
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: futures::IntoFuture,
-        R::Future: 'static,
-        R::Item: Send + 'static,
-        R::Error: Send + 'static,
-    {
-        let (result_tx, result_rx) = futures::sync::oneshot::channel();
-        self.remote.spawn(move |_| {
-            f().into_future().then(|result| {
-                // Don't mind if initiator hung up.
-                drop(result_tx.send(result));
-                Ok(())
-            })
-        });
-        Box::new(result_rx.then(|result| result.unwrap()))
     }
 }
 
@@ -72,8 +45,8 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
         let client = self.client.clone();
         let table_name = self.table_name.clone();
-        Box::new(self.spawn_fn(move || {
-            client.get_item(&rusoto_dynamodb::GetItemInput {
+        client
+            .get_item(rusoto_dynamodb::GetItemInput {
                 key: {
                     let mut hm = HashMap::with_capacity(1);
                     hm.insert(
@@ -89,8 +62,7 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
                 table_name,
                 ..Default::default()
             })
-        }).then(move |result| {
-            match result {
+            .then(move |result| match result {
                 Ok(output) => Ok(output
                     .item
                     .ok_or_else(move || {
@@ -101,8 +73,8 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
                     .b
                     .expect("DynamoDbBackend: get_item es_value must be bytes")),
                 Err(e) => Err(e.into()),
-            }
-        }))
+            })
+            .into_box()
     }
 
     fn get_batch(&self, _keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
@@ -113,8 +85,8 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
         let key = ekiden_storage_base::hash_storage_key(&value);
         let client = self.client.clone();
         let table_name = self.table_name.clone();
-        Box::new(self.spawn_fn(move || {
-            client.put_item(&rusoto_dynamodb::PutItemInput {
+        client
+            .put_item(rusoto_dynamodb::PutItemInput {
                 item: {
                     let mut item = HashMap::with_capacity(2);
                     item.insert(
@@ -140,10 +112,11 @@ impl ekiden_storage_base::StorageBackend for DynamoDbBackend {
                 table_name,
                 ..Default::default()
             })
-        }).then(|result| match result {
-            Ok(_output) => Ok(()),
-            Err(e) => Err(e.into()),
-        }))
+            .then(|result| match result {
+                Ok(_output) => Ok(()),
+                Err(e) => Err(e.into()),
+            })
+            .into_box()
     }
 
     fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
@@ -163,24 +136,7 @@ fn di_factory(
     let table_name = args.value_of("storage-dynamodb-table-name")
         .unwrap()
         .to_string();
-    let (init_tx, init_rx) = futures::sync::oneshot::channel();
-    std::thread::spawn(|| match tokio_core::reactor::Core::new() {
-        Ok(mut core) => {
-            init_tx.send(Ok(core.remote())).unwrap();
-            loop {
-                core.turn(None);
-            }
-        }
-        Err(e) => {
-            init_tx.send(Err(e)).unwrap();
-        }
-    });
-    use ekiden_di::error::ResultExt;
-    let remote = init_rx
-        .wait()
-        .unwrap()
-        .chain_err(|| "Couldn't create rector core")?;
-    let backend: Arc<StorageBackend> = Arc::new(DynamoDbBackend::new(remote, region, table_name));
+    let backend: Arc<StorageBackend> = Arc::new(DynamoDbBackend::new(region, table_name));
     Ok(Box::new(backend))
 }
 
@@ -217,19 +173,21 @@ mod tests {
     use ekiden_storage_base;
     use ekiden_storage_base::{InsertOptions, StorageBackend};
     extern crate log;
-    use self::log::log;
     use self::log::warn;
     use rusoto_core;
     use rusoto_core::ProvideAwsCredentials;
-    use tokio_core;
+    extern crate tokio;
 
     use DynamoDbBackend;
     #[test]
     fn play() {
-        let mut core = tokio_core::reactor::Core::new().unwrap();
+        let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
-        if let Err(e) = core.run(rusoto_core::reactor::CredentialsProvider::default().credentials())
-        {
+        if let Err(e) = runtime.block_on(
+            rusoto_core::DefaultCredentialsProvider::new()
+                .unwrap()
+                .credentials(),
+        ) {
             // Skip this if AWS credentials aren't available.
 
             ekiden_common::testing::try_init_logging();
@@ -237,16 +195,13 @@ mod tests {
             return;
         }
 
-        let storage = DynamoDbBackend::new(
-            core.remote(),
-            "us-west-2".parse().unwrap(),
-            "test".to_string(),
-        );
+        let storage = DynamoDbBackend::new("us-west-2".parse().unwrap(), "test".to_string());
         let reference_value = vec![1, 2, 3];
         let reference_key = ekiden_storage_base::hash_storage_key(&reference_value);
-        core.run(storage.insert(reference_value.clone(), 55, InsertOptions::default()))
+        runtime
+            .block_on(storage.insert(reference_value.clone(), 55, InsertOptions::default()))
             .unwrap();
-        let roundtrip_value = core.run(storage.get(reference_key)).unwrap();
+        let roundtrip_value = runtime.block_on(storage.get(reference_key)).unwrap();
         assert_eq!(roundtrip_value, reference_value);
     }
 }

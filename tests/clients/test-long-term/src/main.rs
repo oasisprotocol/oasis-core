@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate clap;
 extern crate rand;
+extern crate tokio;
 
 #[macro_use]
 extern crate client_utils;
@@ -14,7 +15,6 @@ use std::{thread, time};
 
 use clap::{App, Arg};
 
-use ekiden_core::futures::Future;
 use ekiden_runtime_client::create_runtime_client;
 use token_api::with_api;
 
@@ -24,6 +24,7 @@ with_api! {
 
 fn main() {
     let client = runtime_client!(token);
+    let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
     // Create new token contract.
     let mut request = token::CreateRequest::new();
@@ -32,16 +33,15 @@ fn main() {
     request.set_token_symbol("EKI".to_string());
     request.set_initial_supply(8);
 
-    client.create(request).wait().unwrap();
+    runtime.block_on(client.create(request)).unwrap();
 
     // Check balance.
-    let response = client
-        .get_balance({
+    let response = runtime
+        .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
             request
-        })
-        .wait()
+        }))
         .unwrap();
     assert_eq!(response.get_balance(), 8_000_000_000_000_000_000);
 
@@ -49,13 +49,12 @@ fn main() {
     thread::sleep(time::Duration::from_secs(10));
 
     // Check balance again.
-    let response = client
-        .get_balance({
+    let response = runtime
+        .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
             request
-        })
-        .wait()
+        }))
         .unwrap();
     assert_eq!(response.get_balance(), 8_000_000_000_000_000_000);
 }
