@@ -93,7 +93,13 @@ impl Into<api::Header> for Header {
         let mut h = api::Header::new();
         h.set_version(self.version as u32);
         h.set_namespace(self.namespace.to_vec());
-        h.set_round(self.round.to_vec_big_endian());
+        h.set_round(
+            self.round
+                .to_vec_big_endian()
+                .into_iter()
+                .skip_while(|x| x == &0x00)
+                .collect(),
+        );
         h.set_timestamp(self.timestamp);
         h.set_previous_hash(self.previous_hash.to_vec());
         h.set_group_hash(self.group_hash.to_vec());
