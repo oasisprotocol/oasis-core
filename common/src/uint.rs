@@ -41,6 +41,10 @@ macro_rules! wrap_uint_type {
                 vec
             }
 
+            pub fn to_vec_big_endian_compact(&self) -> Vec<u8> {
+                self.to_vec_big_endian().into_iter().skip_while(|x| x == &0x00).collect()
+            }
+
             pub fn from_little_endian(slice: &[u8]) -> Self {
                 $name(uint::$name::from_little_endian(slice))
             }
