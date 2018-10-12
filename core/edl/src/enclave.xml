@@ -3,7 +3,7 @@
   <ISVSVN>0</ISVSVN>
   <StackMaxSize>0x200000</StackMaxSize>
   <HeapMaxSize>0x20000000</HeapMaxSize>
-  <!-- Contracts should support only a single TCS due to security reasons. -->
+  <!-- Runtimes should support only a single TCS due to security reasons. -->
   <TCSNum>1</TCSNum>
   <TCSPolicy>0</TCSPolicy>
   <DisableDebug>0</DisableDebug>

@@ -32,9 +32,9 @@ impl RootHashClient {
 }
 
 impl RootHashBackend for RootHashClient {
-    fn get_latest_block(&self, contract_id: B256) -> BoxFuture<Block> {
+    fn get_latest_block(&self, runtime_id: B256) -> BoxFuture<Block> {
         let mut req = api::LatestBlockRequest::new();
-        req.set_contract_id(contract_id.to_vec());
+        req.set_runtime_id(runtime_id.to_vec());
         match self.0.get_latest_block_async(&req) {
             Ok(f) => Box::new(
                 f.map(|r| Block::try_from(r.get_block().to_owned()).unwrap())
@@ -44,9 +44,9 @@ impl RootHashBackend for RootHashClient {
         }
     }
 
-    fn get_blocks(&self, contract_id: B256) -> BoxStream<Block> {
+    fn get_blocks(&self, runtime_id: B256) -> BoxStream<Block> {
         let mut req = api::BlockRequest::new();
-        req.set_contract_id(contract_id.to_vec());
+        req.set_runtime_id(runtime_id.to_vec());
         match self.0.get_blocks(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => Ok(Block::try_from(r.get_block().to_owned())?),
@@ -56,9 +56,9 @@ impl RootHashBackend for RootHashClient {
         }
     }
 
-    fn get_blocks_since(&self, contract_id: B256, round: U256) -> BoxStream<Block> {
+    fn get_blocks_since(&self, runtime_id: B256, round: U256) -> BoxStream<Block> {
         let mut req = api::BlockSinceRequest::new();
-        req.set_contract_id(contract_id.to_vec());
+        req.set_runtime_id(runtime_id.to_vec());
         req.set_round(round.to_vec_big_endian_compact());
         match self.0.get_blocks_since(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
@@ -69,9 +69,9 @@ impl RootHashBackend for RootHashClient {
         }
     }
 
-    fn get_events(&self, contract_id: B256) -> BoxStream<Event> {
+    fn get_events(&self, runtime_id: B256) -> BoxStream<Event> {
         let mut req = api::EventRequest::new();
-        req.set_contract_id(contract_id.to_vec());
+        req.set_runtime_id(runtime_id.to_vec());
         match self.0.get_events(&req) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(r) => {
@@ -98,9 +98,9 @@ impl RootHashBackend for RootHashClient {
         }
     }
 
-    fn commit(&self, contract_id: B256, commitment: Commitment) -> BoxFuture<()> {
+    fn commit(&self, runtime_id: B256, commitment: Commitment) -> BoxFuture<()> {
         let mut req = api::CommitRequest::new();
-        req.set_contract_id(contract_id.to_vec());
+        req.set_runtime_id(runtime_id.to_vec());
         req.set_commitment(commitment.into());
         match self.0.commit_async(&req) {
             Ok(f) => Box::new(f.map(|_r| ()).map_err(|e| e.into())),

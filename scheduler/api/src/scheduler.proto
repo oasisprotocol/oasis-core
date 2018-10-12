@@ -28,12 +28,12 @@ message Committee {
   }
   Kind kind = 1;
   repeated CommitteeNode members = 2;
-  common.Contract contract = 3;
+  common.Runtime runtime = 3;
   uint64 valid_for = 4;
 }
 
 message CommitteeRequest {
-  bytes contract_id = 1;
+  bytes runtime_id = 1;
 }
 
 message CommitteeResponse {

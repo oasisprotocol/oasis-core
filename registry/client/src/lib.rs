@@ -10,8 +10,8 @@ extern crate ekiden_registry_base;
 
 extern crate grpcio;
 
-pub mod contract;
 pub mod entity;
+pub mod runtime;
 
-pub use contract::*;
 pub use entity::*;
+pub use runtime::*;

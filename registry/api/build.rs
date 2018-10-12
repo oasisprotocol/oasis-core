@@ -7,12 +7,12 @@ fn main() {
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
         &["common"],
-        &["contract", "contract_grpc", "entity", "entity_grpc"],
+        &["entity", "entity_grpc", "runtime", "runtime_grpc"],
     );
 
     // Root set to the core ekiden root so that common/api is in scope.
     protoc_grpcio::compile_grpc_protos(
-        &["entity.proto", "contract.proto"],
+        &["entity.proto", "runtime.proto"],
         &["src", "../../"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
@@ -21,6 +21,6 @@ fn main() {
         "cargo:rerun-if-changed={}",
         "../../common/api/src/common.proto"
     );
-    println!("cargo:rerun-if-changed={}", "src/contract.proto");
+    println!("cargo:rerun-if-changed={}", "src/runtime.proto");
     println!("cargo:rerun-if-changed={}", "src/entity.proto");
 }

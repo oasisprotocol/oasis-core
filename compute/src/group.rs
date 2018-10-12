@@ -122,8 +122,8 @@ struct EpochTransitionState {
 }
 
 struct Inner {
-    /// Contract identifier the computation group is for.
-    contract_id: B256,
+    /// Runtime identifier the computation group is for.
+    runtime_id: B256,
     /// Scheduler.
     scheduler: Arc<Scheduler>,
     /// Entity registry.
@@ -150,7 +150,7 @@ pub struct ComputationGroup {
 impl ComputationGroup {
     /// Create new computation group.
     pub fn new(
-        contract_id: B256,
+        runtime_id: B256,
         scheduler: Arc<Scheduler>,
         entity_registry: Arc<EntityRegistryBackend>,
         environment: Arc<Environment>,
@@ -159,7 +159,7 @@ impl ComputationGroup {
     ) -> Self {
         let instance = Self {
             inner: Arc::new(Inner {
-                contract_id,
+                runtime_id,
                 scheduler,
                 entity_registry,
                 public_key: identity.get_public_key(),
@@ -181,9 +181,9 @@ impl ComputationGroup {
 
         let mut event_sources = stream::SelectAll::new();
 
-        // Subscribe to computation group formations for given contract and update nodes.
+        // Subscribe to computation group formations for given runtime and update nodes.
         let scheduler_init = self.inner.scheduler.clone();
-        let contract_id = self.inner.contract_id.clone();
+        let runtime_id = self.inner.runtime_id.clone();
 
         event_sources.push(
             streamfollow::follow_skip(
@@ -191,7 +191,7 @@ impl ComputationGroup {
                     scheduler_init
                         .watch_committees()
                         .filter(|committee| committee.kind == CommitteeType::Compute)
-                        .filter(move |committee| committee.contract.id == contract_id)
+                        .filter(move |committee| committee.runtime.id == runtime_id)
                 },
                 |committee| committee.valid_for,
                 |_err| false,

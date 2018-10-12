@@ -28,9 +28,9 @@ macro_rules! default_app {
             .author(crate_authors!())
             .version(crate_version!())
             .arg(
-                Arg::with_name("test-contract-id")
-                    .long("test-contract-id")
-                    .help("TEST ONLY OPTION: override contract identifier")
+                Arg::with_name("test-runtime-id")
+                    .long("test-runtime-id")
+                    .help("TEST ONLY OPTION: override runtime identifier")
                     .takes_value(true)
                     .hidden(true),
             )
@@ -55,8 +55,8 @@ macro_rules! default_app {
 }
 
 #[macro_export]
-macro_rules! contract_client {
-    ($contract:ident, $args:ident, $container:ident) => {{
+macro_rules! runtime_client {
+    ($runtime:ident, $args:ident, $container:ident) => {{
         use $crate::macros::*;
 
         // Initialize metric collector (if not already initialized).
@@ -64,8 +64,8 @@ macro_rules! contract_client {
             $crate::macros::set_boxed_metric_collector(metrics).unwrap();
         }
 
-        $contract::Client::new(
-            $crate::args::get_contract_id(&$args),
+        $runtime::Client::new(
+            $crate::args::get_runtime_id(&$args),
             value_t_or_exit!($args, "mr-enclave", MrEnclave),
             if $args.is_present("rpc-timeout") {
                 Some(std::time::Duration::new(
@@ -82,7 +82,7 @@ macro_rules! contract_client {
             $container.inject().unwrap(),
         )
     }};
-    ($contract:ident) => {{
+    ($runtime:ident) => {{
         let known_components = $crate::components::create_known_components();
         let args = default_app!()
             .args(&known_components.get_arguments())
@@ -94,9 +94,9 @@ macro_rules! contract_client {
             .expect("failed to initialize component container");
 
         // Initialize tracing.
-        $crate::macros::report_forever("contract-client", &args);
+        $crate::macros::report_forever("runtime-client", &args);
 
-        contract_client!($contract, args, container)
+        runtime_client!($runtime, args, container)
     }};
 }
 
@@ -156,7 +156,7 @@ macro_rules! benchmark_app {
         let container = Arc::new(Mutex::new(container));
 
         // Initialize tracing.
-        $crate::macros::report_forever("contract-client", &args);
+        $crate::macros::report_forever("runtime-client", &args);
 
         (args, container)
     }};
@@ -165,7 +165,7 @@ macro_rules! benchmark_app {
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_client {
-    ($app:ident, $contract:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
+    ($app:ident, $runtime:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
         use $crate::benchmark::OutputFormat;
 
         let (args, container) = ($app.0.clone(), $app.1.clone());
@@ -190,7 +190,7 @@ macro_rules! benchmark_client {
                 let shared_container = container.clone();
                 let mut container = shared_container.lock().unwrap();
 
-                contract_client!($contract, args, container)
+                runtime_client!($runtime, args, container)
             },
         );
 
@@ -208,9 +208,9 @@ macro_rules! benchmark_client {
 #[cfg(feature = "benchmark")]
 #[macro_export]
 macro_rules! benchmark_multiple {
-    ($app:ident, $contract:ident, [$($scenario:expr),*]) => {
+    ($app:ident, $runtime:ident, [$($scenario:expr),*]) => {
         $(
-            benchmark_client!($app, $contract, None, $scenario, None);
+            benchmark_client!($app, $runtime, None, $scenario, None);
         )*
     }
 }

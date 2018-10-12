@@ -9,11 +9,11 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
@@ -48,8 +48,8 @@ func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRo
 	queryRouter.AddRoute(api.QueryRegistryGetEntities, nil, app.queryGetEntities)
 	queryRouter.AddRoute(api.QueryRegistryGetNode, &api.QueryGetByIDRequest{}, app.queryGetNode)
 	queryRouter.AddRoute(api.QueryRegistryGetNodes, nil, app.queryGetNodes)
-	queryRouter.AddRoute(api.QueryRegistryGetContract, &api.QueryGetByIDRequest{}, app.queryGetContract)
-	queryRouter.AddRoute(api.QueryRegistryGetContracts, nil, app.queryGetContracts)
+	queryRouter.AddRoute(api.QueryRegistryGetRuntime, &api.QueryGetByIDRequest{}, app.queryGetRuntime)
+	queryRouter.AddRoute(api.QueryRegistryGetRuntimes, nil, app.queryGetRuntimes)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -85,15 +85,15 @@ func (app *registryApplication) queryGetNodes(s interface{}, r interface{}) ([]b
 	return state.GetNodesRaw()
 }
 
-func (app *registryApplication) queryGetContract(s interface{}, r interface{}) ([]byte, error) {
+func (app *registryApplication) queryGetRuntime(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
 	state := s.(*ImmutableState)
-	return state.GetContractRaw(request.ID)
+	return state.GetRuntimeRaw(request.ID)
 }
 
-func (app *registryApplication) queryGetContracts(s interface{}, r interface{}) ([]byte, error) {
+func (app *registryApplication) queryGetRuntimes(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*ImmutableState)
-	return state.GetContractsRaw()
+	return state.GetRuntimesRaw()
 }
 
 func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
@@ -160,8 +160,8 @@ func (app *registryApplication) executeTx(
 		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.ID)
 	} else if tx.TxRegisterNode != nil {
 		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
-	} else if tx.TxRegisterContract != nil {
-		return app.registerContract(ctx, state, &tx.TxRegisterContract.Contract)
+	} else if tx.TxRegisterRuntime != nil {
+		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
 	} else {
 		return registry.ErrInvalidArgument
 	}
@@ -261,30 +261,30 @@ func (app *registryApplication) registerNode(
 	return nil
 }
 
-// Perform actual contract registration.
-func (app *registryApplication) registerContract(
+// Perform actual runtime registration.
+func (app *registryApplication) registerRuntime(
 	ctx *abci.Context,
 	state *MutableState,
-	sigCon *contract.SignedContract,
+	sigCon *runtime.SignedRuntime,
 ) error {
-	con, err := registry.VerifyRegisterContractArgs(app.logger, sigCon)
+	con, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigCon)
 	if err != nil {
 		return err
 	}
 
-	state.CreateContract(con)
+	state.CreateRuntime(con)
 
 	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterContract: registered",
-			"contract", con,
+		app.logger.Debug("RegisterRuntime: registered",
+			"runtime", con,
 		)
 
 		ctx.EmitData(&api.OutputRegistry{
-			OutputRegisterContract: &api.OutputRegisterContract{
-				Contract: *con,
+			OutputRegisterRuntime: &api.OutputRegisterRuntime{
+				Runtime: *con,
 			},
 		})
-		ctx.EmitTag(api.TagRegistryContractRegistered, con.ID)
+		ctx.EmitTag(api.TagRegistryRuntimeRegistered, con.ID)
 	}
 
 	return nil

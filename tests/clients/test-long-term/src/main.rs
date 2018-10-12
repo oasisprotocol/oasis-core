@@ -4,9 +4,9 @@ extern crate rand;
 
 #[macro_use]
 extern crate client_utils;
-extern crate ekiden_contract_client;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
+extern crate ekiden_runtime_client;
 
 extern crate token_api;
 
@@ -14,16 +14,16 @@ use std::{thread, time};
 
 use clap::{App, Arg};
 
-use ekiden_contract_client::create_contract_client;
 use ekiden_core::futures::Future;
+use ekiden_runtime_client::create_runtime_client;
 use token_api::with_api;
 
 with_api! {
-    create_contract_client!(token, token_api, api);
+    create_runtime_client!(token, token_api, api);
 }
 
 fn main() {
-    let client = contract_client!(token);
+    let client = runtime_client!(token);
 
     // Create new token contract.
     let mut request = token::CreateRequest::new();

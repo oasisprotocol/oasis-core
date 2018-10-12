@@ -1,0 +1,14 @@
+enclave {
+    trusted {
+        // Process batch of runtime calls.
+        public void runtime_call_batch(
+            [user_check] const uint8_t *call_batch_data,
+            size_t call_batch_length,
+            [user_check] const uint8_t *block_header_data,
+            size_t block_header_length,
+            [user_check] uint8_t *output_batch_data,
+            size_t output_batch_capacity,
+            [out] size_t *output_batch_length
+        );
+    };
+};

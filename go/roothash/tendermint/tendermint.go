@@ -34,7 +34,7 @@ const (
 
 var _ api.Backend = (*tendermintBackend)(nil)
 
-type contractBrokers struct {
+type runtimeBrokers struct {
 	sync.Mutex
 
 	blockNotifier *pubsub.Broker
@@ -53,8 +53,8 @@ type tendermintBackend struct {
 	service         service.TendermintService
 	lastBlockHeight int64
 
-	allBlockNotifier  *pubsub.Broker
-	contractNotifiers map[signature.MapKey]*contractBrokers
+	allBlockNotifier *pubsub.Broker
+	runtimeNotifiers map[signature.MapKey]*runtimeBrokers
 }
 
 func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
@@ -80,7 +80,7 @@ func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int6
 }
 
 func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.Block, *pubsub.Subscription, error) {
-	notifiers := r.getContractNotifiers(id)
+	notifiers := r.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
 		// Replay the latest block if it exists.  This isn't handled by
@@ -100,7 +100,7 @@ func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.Blo
 }
 
 func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.Round) (<-chan *api.Block, *pubsub.Subscription, error) {
-	notifiers := r.getContractNotifiers(id)
+	notifiers := r.getRuntimeNotifiers(id)
 
 	startRound, err := round.ToU64()
 	if err != nil {
@@ -109,7 +109,7 @@ func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.R
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
 		// NOTE: Due to taking the notifiers lock, block replay blocks any events for
-		// this contract (and others since they share a worker) from being processed.
+		// this runtime (and others since they share a worker) from being processed.
 		notifiers.Lock()
 		defer notifiers.Unlock()
 
@@ -137,7 +137,7 @@ func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.R
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *contractBrokers) *api.Block {
+func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *runtimeBrokers) *api.Block {
 	lastRound, _ := notifiers.lastBlock.Header.Round.ToU64()
 	if notifiers.lastBlock == nil || round > lastRound {
 		return nil
@@ -248,7 +248,7 @@ func (r *tendermintBackend) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscri
 }
 
 func (r *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Event, *pubsub.Subscription, error) {
-	notifiers := r.getContractNotifiers(id)
+	notifiers := r.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
 	ch := make(chan *api.Event)
 	sub.Unwrap(ch)
@@ -271,18 +271,18 @@ func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, 
 	return nil
 }
 
-func (r *tendermintBackend) getContractNotifiers(id signature.PublicKey) *contractBrokers {
+func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtimeBrokers {
 	k := id.ToMapKey()
 
 	r.Lock()
 	defer r.Unlock()
 
-	notifiers := r.contractNotifiers[k]
+	notifiers := r.runtimeNotifiers[k]
 	if notifiers == nil {
 		// Fetch the latest block.
 		block, _ := r.GetLatestBlock(context.Background(), id)
 
-		notifiers = &contractBrokers{
+		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),
 			eventNotifier: pubsub.NewBroker(false),
 			lastBlock:     block,
@@ -293,7 +293,7 @@ func (r *tendermintBackend) getContractNotifiers(id signature.PublicKey) *contra
 			panic(err)
 		}
 
-		r.contractNotifiers[k] = notifiers
+		r.runtimeNotifiers[k] = notifiers
 	}
 
 	return notifiers
@@ -346,7 +346,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 					continue
 				}
 
-				notifiers := r.getContractNotifiers(value.ID)
+				notifiers := r.getRuntimeNotifiers(value.ID)
 
 				// Ensure latest block is set.
 				notifiers.Lock()
@@ -371,7 +371,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 					continue
 				}
 
-				notifiers := r.getContractNotifiers(value.ID)
+				notifiers := r.getRuntimeNotifiers(value.ID)
 				notifiers.eventNotifier.Broadcast(&api.Event{DiscrepancyDetected: &value.Event})
 			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashRoundFailed) {
 				var value tmapi.ValueRootHashRoundFailed
@@ -382,7 +382,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 					continue
 				}
 
-				notifiers := r.getContractNotifiers(value.ID)
+				notifiers := r.getRuntimeNotifiers(value.ID)
 				notifiers.eventNotifier.Broadcast(&api.Event{RoundFailed: errors.New(value.Reason)})
 			}
 		}
@@ -415,10 +415,10 @@ func New(
 	}
 
 	r := &tendermintBackend{
-		logger:            logging.GetLogger("roothash/tendermint"),
-		service:           service,
-		allBlockNotifier:  pubsub.NewBroker(false),
-		contractNotifiers: make(map[signature.MapKey]*contractBrokers),
+		logger:           logging.GetLogger("roothash/tendermint"),
+		service:          service,
+		allBlockNotifier: pubsub.NewBroker(false),
+		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
 	}
 
 	go r.worker()

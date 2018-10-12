@@ -1,6 +1,6 @@
-use ekiden_core::contract::contract_api;
+use ekiden_core::runtime::runtime_api;
 
-contract_api! {
+runtime_api! {
     pub fn null(bool) -> ();
 
     pub fn null_storage_insert(u64) -> ();

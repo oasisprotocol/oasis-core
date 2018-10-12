@@ -7,10 +7,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 
 	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
@@ -127,7 +127,7 @@ func (k CommitteeKind) String() string {
 	}
 }
 
-// Committee is a per-contract (instance) committee.
+// Committee is a per-runtime (instance) committee.
 type Committee struct {
 	// Kind is the functionality a committee exists to provide.
 	Kind CommitteeKind `codec:"kind"`
@@ -135,8 +135,8 @@ type Committee struct {
 	// Members is the committee members.
 	Members []*CommitteeNode `codec:"members"`
 
-	// Contract is the contract (runtime) that this committee is for.
-	Contract *contract.Contract `codec:"-"`
+	// Runtime is the runtime that this committee is for.
+	Runtime *runtime.Runtime `codec:"-"`
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `codec:"valid_for"`
@@ -157,7 +157,7 @@ func (c *Committee) ToProto() *pbSched.Committee {
 	for _, v := range c.Members {
 		pb.Members = append(pb.Members, v.ToProto())
 	}
-	pb.Contract = c.Contract.ToProto()
+	pb.Runtime = c.Runtime.ToProto()
 	pb.ValidFor = uint64(c.ValidFor)
 
 	return pb
@@ -175,7 +175,7 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 // Backend is a scheduler implementation.
 type Backend interface {
 	// GetCommittees returns a vector of the committees for a given
-	// contract ID, for the current epoch.
+	// runtime ID, for the current epoch.
 	GetCommittees(context.Context, signature.PublicKey) ([]*Committee, error)
 
 	// WatchCommittees returns a channel that produces a stream of
@@ -191,6 +191,6 @@ type BlockBackend interface {
 	Backend
 
 	// GetBlockCommittees returns the vector of committees for a given
-	// contract ID, at the specified block height.
+	// runtime ID, at the specified block height.
 	GetBlockCommittees(context.Context, signature.PublicKey, int64) ([]*Committee, error)
 }

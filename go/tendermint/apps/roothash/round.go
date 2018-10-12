@@ -7,9 +7,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
@@ -155,7 +155,7 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment) err
 	return nil
 }
 
-func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*api.Block, error) {
+func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*api.Block, error) {
 	var err error
 
 	// Caller is responsible for enforcing this.
@@ -164,7 +164,7 @@ func (r *round) tryFinalize(ctx *abci.Context, contract *contract.Contract) (*ap
 	}
 
 	// Ensure that the required number of commitments are present.
-	if err = r.checkCommitments(contract); err != nil {
+	if err = r.checkCommitments(runtime); err != nil {
 		return nil, err
 	}
 
@@ -321,7 +321,7 @@ func (r *round) ensureHashesInStorage(store storage.Backend, header *api.Header)
 	return nil
 }
 
-func (r *round) checkCommitments(contract *contract.Contract) error {
+func (r *round) checkCommitments(runtime *runtime.Runtime) error {
 	wantPrimary := r.RoundState.State == stateWaitingCommitments
 
 	var commits, required int
@@ -348,7 +348,7 @@ func (r *round) checkCommitments(contract *contract.Contract) error {
 	// After the timeout has elapsed, a limited number of stragglers
 	// are allowed.
 	if r.DidTimeout {
-		required -= int(contract.ReplicaAllowedStragglers)
+		required -= int(runtime.ReplicaAllowedStragglers)
 	}
 
 	if commits < required {

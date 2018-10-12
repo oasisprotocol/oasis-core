@@ -5,9 +5,9 @@ extern crate rand;
 
 #[macro_use]
 extern crate client_utils;
-extern crate ekiden_contract_client;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
+extern crate ekiden_runtime_client;
 
 extern crate test_db_encryption_api;
 
@@ -17,23 +17,23 @@ use std::env::current_exe;
 use std::fs::File;
 use std::io::prelude::*;
 
-use ekiden_contract_client::create_contract_client;
+use ekiden_runtime_client::create_runtime_client;
 use test_db_encryption_api::with_api;
 
 with_api! {
-    create_contract_client!(test_db_encryption, test_db_encryption_api, api);
+    create_runtime_client!(test_db_encryption, test_db_encryption_api, api);
 }
 
 fn main() {
     println!("[test_db_encryption] Hello from DB encryption test client!");
 
-    let client = contract_client!(test_db_encryption);
+    let client = runtime_client!(test_db_encryption);
 
     println!("[test_db_encryption] Setting KM enclave...");
 
     // Get path to the key manager's mrenclave file.
     //
-    // TODO: Once the `contract_client!` macro supports custom app arguments
+    // TODO: Once the `runtime_client!` macro supports custom app arguments
     // (see issue #1052), the key manager's mrenclave should be given as a
     // command-line argument instead.
     let mut mrenclave_path = current_exe().unwrap();

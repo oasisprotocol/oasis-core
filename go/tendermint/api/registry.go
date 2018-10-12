@@ -1,10 +1,10 @@
 package api
 
 import (
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 )
 
 const (
@@ -28,9 +28,9 @@ var (
 	// registrations (value is node id).
 	TagRegistryNodeRegistered = []byte("registry.node.registered")
 
-	// TagRegistryContractRegistered is an ABCI transaction tag for new
-	// contract registrations (value is contract id).
-	TagRegistryContractRegistered = []byte("registry.contract.registered")
+	// TagRegistryRuntimeRegistered is an ABCI transaction tag for new
+	// runtime registrations (value is runtime id).
+	TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
 )
 
 const (
@@ -46,11 +46,11 @@ const (
 	// QueryRegistryGetNodes is a path for GetNodes query.
 	QueryRegistryGetNodes = "registry/nodes"
 
-	// QueryRegistryGetContract is a path for GetContract query.
-	QueryRegistryGetContract = "registry/contract"
+	// QueryRegistryGetRuntime is a path for GetRuntime query.
+	QueryRegistryGetRuntime = "registry/runtime"
 
-	// QueryRegistryGetContracts is a path for GetContracts query.
-	QueryRegistryGetContracts = "registry/contracts"
+	// QueryRegistryGetRuntimes is a path for GetRuntimes query.
+	QueryRegistryGetRuntimes = "registry/runtimes"
 )
 
 var (
@@ -67,7 +67,7 @@ type TxRegistry struct {
 	*TxDeregisterEntity `codec:"DeregisterEntity"`
 	*TxRegisterNode     `codec:"RegisterNode"`
 
-	*TxRegisterContract `codec:"RegisterContract"`
+	*TxRegisterRuntime `codec:"RegisterRuntime"`
 }
 
 // TxRegisterEntity is a transaction for registering a new entity.
@@ -85,9 +85,9 @@ type TxRegisterNode struct {
 	Node node.SignedNode
 }
 
-// TxRegisterContract is a transaction for registering a new contract.
-type TxRegisterContract struct {
-	Contract contract.SignedContract
+// TxRegisterRuntime is a transaction for registering a new runtime.
+type TxRegisterRuntime struct {
+	Runtime runtime.SignedRuntime
 }
 
 // OutputRegistry is an output of an registry app transaction.
@@ -98,7 +98,7 @@ type OutputRegistry struct {
 	*OutputDeregisterEntity `codec:"DeregisterEntity"`
 	*OutputRegisterNode     `codec:"RegisterNode"`
 
-	*OutputRegisterContract `codec:"RegisterContract"`
+	*OutputRegisterRuntime `codec:"RegisterRuntime"`
 }
 
 // OutputRegisterEntity is an output of registering a new entity.
@@ -122,10 +122,10 @@ type OutputRegisterNode struct {
 	Node node.Node
 }
 
-// OutputRegisterContract is an output of registering a new node.
-type OutputRegisterContract struct {
-	// Registered contract.
-	Contract contract.Contract
+// OutputRegisterRuntime is an output of registering a new node.
+type OutputRegisterRuntime struct {
+	// Registered runtime.
+	Runtime runtime.Runtime
 }
 
 // QueryGetByIDRequest is a request for fetching things by ids.

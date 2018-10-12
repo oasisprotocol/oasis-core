@@ -84,7 +84,7 @@ Starting directory is
 
 You need to run multiple Ekiden services, so it is recommended to run each of these in a
 separate container shell, attached to the same container. The following examples use the
-token contract, but the process is the same for any contract.
+token runtime, but the process is the same for any runtime.
 
 To start the key manager:
 ```
@@ -97,7 +97,7 @@ To start the shared dummy node:
 # ./go/ekiden/ekiden --datadir /tmp/ekiden-dummy-data --grpc.port 42261
 ```
 
-To start the compute node for the token contract (you need to start two):
+To start the compute node for the token runtime (you need to start two):
 ```
 # cargo run -p ekiden-compute -- \
     --time-source-notifier system \
@@ -112,11 +112,11 @@ After starting the nodes, to manually advance the epoch in the shared dummy node
 # ./go/ekiden/ekiden dummy set-epoch --epoch 1
 ```
 
-The contract's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.
+The runtime's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.
 
 Development notes:
 
-* If you are developing a contract and changing things, be sure to either use the `--no-persist-identity` flag or remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`). Otherwise the compute node will fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
+* If you are developing a runtime and changing things, be sure to either use the `--no-persist-identity` flag or remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`). Otherwise the compute node will fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
 
 ## Running tests and benchmarks
 
@@ -127,7 +127,7 @@ To run all tests (some should be skipped due to compile errors):
     --exclude ekiden-enclave-untrusted \
     --exclude ekiden-rpc-untrusted \
     --exclude ekiden-db-untrusted \
-    --exclude ekiden-contract-untrusted \
+    --exclude ekiden-runtime-untrusted \
     -- --test-threads 1
 ```
 

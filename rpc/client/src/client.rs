@@ -32,11 +32,11 @@ enum Command {
     CloseSecureChannel(oneshot::Sender<Result<()>>),
 }
 
-/// Contract client context used for async calls.
+/// Enclave client context used for async calls.
 struct RpcClientContext<Backend: RpcClientBackend + 'static> {
     /// Backend handling network communication.
     backend: Arc<Backend>,
-    /// Contract MRENCLAVE.
+    /// Enclave MRENCLAVE.
     mr_enclave: MrEnclave,
     /// Secure channel context.
     secure_channel: SecureChannelContext,
@@ -93,7 +93,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
         Box::new(result)
     }
 
-    /// Call a contract method.
+    /// Call a enclave method.
     fn call_raw(
         context: Arc<Mutex<Self>>,
         plain_request: api::PlainClientRequest,
@@ -177,7 +177,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
                         }
 
                         return Box::new(future::err(Error::new(
-                            "Contract returned plain response for encrypted request",
+                            "Enclave returned plain response for encrypted request",
                         )));
                     }
 
@@ -209,7 +209,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
         Box::new(result)
     }
 
-    /// Call a contract method.
+    /// Call a enclave method.
     fn call<Rq, Rs>(context: Arc<Mutex<Self>>, method: &str, request: Rq) -> BoxFuture<Rs>
     where
         Rq: Serialize,
@@ -230,7 +230,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
         Box::new(result)
     }
 
-    /// Initialize a secure channel with the contract.
+    /// Initialize a secure channel with the enclave.
     ///
     /// If the channel has already been initialized the future returned by this method
     /// will immediately resolve.
@@ -275,7 +275,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
                         let mut context = shared_context.lock().unwrap();
                         let client_authentication = context.client_authentication;
 
-                        // Verify contract identity and set up a secure channel.
+                        // Verify enclave identity and set up a secure channel.
                         let iai = match context.secure_channel.setup(
                             response.get_authenticated_short_term_public_key(),
                             client_authentication,
@@ -378,7 +378,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
     }
 }
 
-/// Contract client.
+/// Enclave client.
 pub struct RpcClient<Backend: RpcClientBackend + 'static> {
     /// Actual client context that can be shared between threads.
     context: Arc<Mutex<RpcClientContext<Backend>>>,
@@ -388,7 +388,7 @@ pub struct RpcClient<Backend: RpcClientBackend + 'static> {
 }
 
 impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
-    /// Constructs a new contract client.
+    /// Constructs a new enclave client.
     ///
     /// The client API macro calls this.
     pub fn new(backend: Arc<Backend>, mr_enclave: MrEnclave, client_authentication: bool) -> Self {
@@ -423,7 +423,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
         client
     }
 
-    /// Call a contract method.
+    /// Call a enclave method.
     #[cfg(target_env = "sgx")]
     pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> BoxFuture<Rs>
     where
@@ -433,7 +433,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
         RpcClientContext::call(self.context.clone(), &method, request)
     }
 
-    /// Call a contract method.
+    /// Call a enclave method.
     #[cfg(not(target_env = "sgx"))]
     pub fn call<Rq, Rs>(&self, method: &str, request: Rq) -> BoxFuture<Rs>
     where
@@ -467,7 +467,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
         Box::new(result)
     }
 
-    /// Initialize a secure channel with the contract.
+    /// Initialize a secure channel with the enclave.
     ///
     /// If this method is not called, secure channel is automatically initialized
     /// when making the first request.
@@ -476,7 +476,7 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
         RpcClientContext::init_secure_channel(self.context.clone())
     }
 
-    /// Initialize a secure channel with the contract.
+    /// Initialize a secure channel with the enclave.
     ///
     /// If this method is not called, secure channel is automatically initialized
     /// when making the first request.

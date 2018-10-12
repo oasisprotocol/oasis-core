@@ -142,7 +142,7 @@ pub struct Signature {
     pub public_key: B256,
     /// Ed25519 signature.
     pub signature: B512,
-    /// Optional attestation verification report in case the contract is being executed
+    /// Optional attestation verification report in case the runtime is being executed
     /// in a TEE, attesting to the fact that a trusted hardware platform running specific
     /// code generated the signature.
     pub attestation: Option<Vec<u8>>,

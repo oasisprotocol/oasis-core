@@ -8,10 +8,10 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
@@ -24,10 +24,10 @@ const (
 	// Node by entity map state key prefix.
 	stateNodeByEntityMap = "registry/node_by_entity/%s/%s"
 
-	// Contract map state key prefix.
-	stateContractMap = "registry/contract/%s"
+	// Runtime map state key prefix.
+	stateRuntimeMap = "registry/runtime/%s"
 
-	// Highest hex-encoded node/entity/contract identifier.
+	// Highest hex-encoded node/entity/runtime identifier.
 	// TODO: Should we move this to common?
 	lastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 )
@@ -142,47 +142,47 @@ func (s *ImmutableState) GetNodes() ([]*node.Node, error) {
 	return nodes, nil
 }
 
-// GetContractRaw looks up a contract by its identifier and returns its serialized form.
-func (s *ImmutableState) GetContractRaw(id signature.PublicKey) ([]byte, error) {
-	return s.getByID(stateContractMap, id.String())
+// GetRuntimeRaw looks up a runtime by its identifier and returns its serialized form.
+func (s *ImmutableState) GetRuntimeRaw(id signature.PublicKey) ([]byte, error) {
+	return s.getByID(stateRuntimeMap, id.String())
 }
 
-// GetContract looks up a contract by its identifier and returns it.
-func (s *ImmutableState) GetContract(id signature.PublicKey) (*contract.Contract, error) {
-	raw, err := s.GetContractRaw(id)
+// GetRuntime looks up a runtime by its identifier and returns it.
+func (s *ImmutableState) GetRuntime(id signature.PublicKey) (*runtime.Runtime, error) {
+	raw, err := s.GetRuntimeRaw(id)
 	if err != nil {
 		return nil, err
 	}
 
-	var con contract.Contract
+	var con runtime.Runtime
 	err = con.UnmarshalCBOR(raw)
 	return &con, err
 }
 
-// GetContractsRaw returns a marshalled list of all registered contracts.
-func (s *ImmutableState) GetContractsRaw() ([]byte, error) {
-	contracts, err := s.GetContracts()
+// GetRuntimesRaw returns a marshalled list of all registered runtimes.
+func (s *ImmutableState) GetRuntimesRaw() ([]byte, error) {
+	runtimes, err := s.GetRuntimes()
 	if err != nil {
 		return nil, err
 	}
 
-	return cbor.Marshal(contracts), nil
+	return cbor.Marshal(runtimes), nil
 }
 
-// GetContracts returns a list of all registered contracts.
-func (s *ImmutableState) GetContracts() ([]*contract.Contract, error) {
-	items, err := s.getAll(stateContractMap, &contract.Contract{})
+// GetRuntimes returns a list of all registered runtimes.
+func (s *ImmutableState) GetRuntimes() ([]*runtime.Runtime, error) {
+	items, err := s.getAll(stateRuntimeMap, &runtime.Runtime{})
 	if err != nil {
 		return nil, err
 	}
 
-	var contracts []*contract.Contract
+	var runtimes []*runtime.Runtime
 	for _, item := range items {
-		contract := item.(*contract.Contract)
-		contracts = append(contracts, contract)
+		runtime := item.(*runtime.Runtime)
+		runtimes = append(runtimes, runtime)
 	}
 
-	return contracts, nil
+	return runtimes, nil
 }
 
 func (s *ImmutableState) getAll(
@@ -288,10 +288,10 @@ func (s *MutableState) CreateNode(node *node.Node) error {
 	return nil
 }
 
-// CreateContract creates a new contract.
-func (s *MutableState) CreateContract(con *contract.Contract) {
+// CreateRuntime creates a new runtime.
+func (s *MutableState) CreateRuntime(con *runtime.Runtime) {
 	s.tree.Set(
-		[]byte(fmt.Sprintf(stateContractMap, con.ID.String())),
+		[]byte(fmt.Sprintf(stateRuntimeMap, con.ID.String())),
 		con.MarshalCBOR(),
 	)
 }

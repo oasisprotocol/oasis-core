@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+import "common/api/src/common.proto";
+
+package registry;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/registry";
+
+service RuntimeRegistry {
+    rpc RegisterRuntime (RegisterRuntimeRequest) returns (RegisterRuntimeResponse) {}
+    rpc GetRuntime (RuntimeRequest) returns (RuntimeResponse) {}
+    rpc GetRuntimes (RuntimesRequest) returns (stream RuntimesResponse) {}
+}
+
+message RegisterRuntimeRequest {
+    // Signed blob should be a CBOR-serialized runtime.
+    common.Signed runtime = 1;
+}
+
+message RegisterRuntimeResponse {
+}
+
+message RuntimeRequest {
+    bytes id = 1;
+}
+
+message RuntimeResponse {
+    common.Runtime runtime = 1;
+}
+
+message RuntimesRequest {
+}
+
+message RuntimesResponse {
+    common.Runtime runtime = 1;
+}

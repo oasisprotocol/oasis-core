@@ -11,7 +11,7 @@ head Cargo.toml
 # [patch.'https://github.com/oasislabs/ekiden']
 # ekiden-tools = { path = "/path/to/ekiden/ekiden/tools" }
 # ekiden-epochtime = { path = "/path/to/ekiden/ekiden/epochtime" }
-# ekiden-contract-untrusted = { path = "/path/to/ekiden/ekiden/contract/untrusted" }
+# ekiden-runtime-untrusted = { path = "/path/to/ekiden/ekiden/contract/untrusted" }
 # ...
 """
 

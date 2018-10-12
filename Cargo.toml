@@ -54,12 +54,12 @@ members = [
     "db/trusted",
     "db/edl",
 
-    # Contract invocation.
-    "contract/common",
-    "contract/client",
-    "contract/untrusted",
-    "contract/trusted",
-    "contract/edl",
+    # Runtime invocation.
+    "runtime/common",
+    "runtime/client",
+    "runtime/untrusted",
+    "runtime/trusted",
+    "runtime/edl",
 
     # Core.
     "core/common",

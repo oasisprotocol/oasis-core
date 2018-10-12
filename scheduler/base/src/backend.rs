@@ -7,9 +7,9 @@ use serde::ser::SerializeStruct;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 use ekiden_common::bytes::B256;
-use ekiden_common::contract::Contract;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream};
+use ekiden_common::runtime::Runtime;
 use ekiden_epochtime::interface::EpochTime;
 use ekiden_scheduler_api as api;
 
@@ -138,17 +138,17 @@ impl<'de> Deserialize<'de> for CommitteeType {
     }
 }
 
-/// A per-contract (per-contract instance) committee instance.
+/// A per-runtime (per-runtime instance) committee instance.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Committee {
     pub kind: CommitteeType,
     pub members: Vec<CommitteeNode>,
     // We only need to ser/des this struct in the Consensus dummy backend
     // when storing or restoring current round state.  Arc<> is problematic
-    // to ser/des, but we can recreate the contract from other data we have,
+    // to ser/des, but we can recreate the runtime from other data we have,
     // so we don't really need it there.
     #[serde(skip)]
-    pub contract: Arc<Contract>,
+    pub runtime: Arc<Runtime>,
     pub valid_for: EpochTime,
 }
 
@@ -166,7 +166,7 @@ impl TryFrom<api::Committee> for Committee {
                 api::Committee_Kind::STORAGE => CommitteeType::Storage,
             },
             members: members,
-            contract: Arc::new(Contract::try_from(a.get_contract().to_owned())?),
+            runtime: Arc::new(Runtime::try_from(a.get_runtime().to_owned())?),
             valid_for: a.get_valid_for(),
         })
     }
@@ -185,7 +185,7 @@ impl Into<api::Committee> for Committee {
             members.push(member.to_owned().into());
         }
         c.set_members(members.into());
-        c.set_contract(self.contract.deref().to_owned().into());
+        c.set_runtime(self.runtime.deref().to_owned().into());
         c.set_valid_for(self.valid_for);
         c
     }
@@ -193,9 +193,9 @@ impl Into<api::Committee> for Committee {
 
 /// Scheduler backend implementing the Ekiden scheduler interface.
 pub trait Scheduler: Send + Sync {
-    /// Return a vector of the committees for a given contract ID,
+    /// Return a vector of the committees for a given runtime ID,
     /// for the current epoch.
-    fn get_committees(&self, contract: B256) -> BoxFuture<Vec<Committee>>;
+    fn get_committees(&self, runtime: B256) -> BoxFuture<Vec<Committee>>;
 
     /// Subscribe to all committee generation updates.  Upon subscription
     /// all committees for the current epoch will be send immediately.

@@ -76,7 +76,7 @@ run_compute_node() {
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so &
 }
@@ -97,7 +97,7 @@ run_compute_node_db() {
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/test-db-encryption.so &
 }
@@ -123,7 +123,7 @@ run_compute_node_storage_multilayer_remote() {
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so &
 }
@@ -190,7 +190,7 @@ run_test() {
     ${WORKDIR}/target/debug/${client}-client \
         --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/${enclave}.mrenclave) \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         &
     client_pid=$!
 

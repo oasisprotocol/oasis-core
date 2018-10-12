@@ -32,9 +32,9 @@ impl SchedulerClient {
 }
 
 impl Scheduler for SchedulerClient {
-    fn get_committees(&self, contract_id: B256) -> BoxFuture<Vec<Committee>> {
+    fn get_committees(&self, runtime_id: B256) -> BoxFuture<Vec<Committee>> {
         let mut req = api::CommitteeRequest::new();
-        req.set_contract_id(contract_id.to_vec());
+        req.set_runtime_id(runtime_id.to_vec());
         match self.0.get_committees_async(&req) {
             Ok(f) => Box::new(f.map(|r| {
                 let mut committees = Vec::new();

@@ -21,16 +21,16 @@ use test_db_encryption_api::{with_api, FetchEncryptedRequest, FetchEncryptedResp
 use ekiden_core::bytes::H256;
 use ekiden_core::enclave::quote::MrEnclave;
 use ekiden_core::error::Result;
-use ekiden_trusted::contract::create_contract;
-use ekiden_trusted::contract::dispatcher::ContractCallContext;
 use ekiden_trusted::db::{DBKeyManagerConfig, Database, DatabaseHandle};
 use ekiden_trusted::enclave::enclave_init;
+use ekiden_trusted::runtime::create_runtime;
+use ekiden_trusted::runtime::dispatcher::RuntimeCallContext;
 
 enclave_init!();
 
 // Create enclave contract interface.
 with_api! {
-    create_contract!(api);
+    create_runtime!(api);
 }
 
 lazy_static! {
@@ -40,7 +40,7 @@ lazy_static! {
 
 pub fn set_km_enclave(
     request: &SetKMEnclaveRequest,
-    _ctx: &ContractCallContext,
+    _ctx: &RuntimeCallContext,
 ) -> Result<SetKMEnclaveResponse> {
     *KM_ENCLAVE.lock().unwrap() = MrEnclave::from_str(request.get_mrenclave())?;
 
@@ -50,7 +50,7 @@ pub fn set_km_enclave(
 #[cfg(target_env = "sgx")]
 pub fn store_encrypted(
     request: &StoreEncryptedRequest,
-    _ctx: &ContractCallContext,
+    _ctx: &RuntimeCallContext,
 ) -> Result<StoreEncryptedResponse> {
     let key = request.get_key().as_bytes();
     let value = request.get_value().as_bytes();
@@ -78,7 +78,7 @@ pub fn store_encrypted(
 #[cfg(not(target_env = "sgx"))]
 pub fn store_encrypted(
     request: &StoreEncryptedRequest,
-    _ctx: &ContractCallContext,
+    _ctx: &RuntimeCallContext,
 ) -> Result<StoreEncryptedResponse> {
     panic!("The DB encryption test enclave only works in SGX mode!");
 }
@@ -86,7 +86,7 @@ pub fn store_encrypted(
 #[cfg(target_env = "sgx")]
 pub fn fetch_encrypted(
     request: &FetchEncryptedRequest,
-    _ctx: &ContractCallContext,
+    _ctx: &RuntimeCallContext,
 ) -> Result<FetchEncryptedResponse> {
     let key = request.get_key().as_bytes();
 
@@ -120,7 +120,7 @@ pub fn fetch_encrypted(
 #[cfg(not(target_env = "sgx"))]
 pub fn fetch_encrypted(
     request: &FetchEncryptedRequest,
-    _ctx: &ContractCallContext,
+    _ctx: &RuntimeCallContext,
 ) -> Result<FetchEncryptedResponse> {
     panic!("The DB encryption test enclave only works in SGX mode!");
 }

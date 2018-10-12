@@ -1,4 +1,4 @@
-// Package registry implements the entity and contract registry backend.
+// Package registry implements the entity and runtime registry backend.
 package registry
 
 import (

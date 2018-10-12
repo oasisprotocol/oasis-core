@@ -10,7 +10,7 @@ benchmark = ["client-utils/benchmark"]
 [dependencies]
 client-utils = { path = "../utils" }
 ekiden-core = { path = "../../../core/common" }
-ekiden-contract-client = { path = "../../../contract/client" }
+ekiden-runtime-client = { path = "../../../runtime/client" }
 ekiden-instrumentation = { path = "../../../instrumentation" }
 ekiden-rpc-client = { path = "../../../rpc/client" }
 token-api = { path = "../../runtimes/token/api" }

@@ -11,10 +11,10 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -29,8 +29,8 @@ const (
 )
 
 var (
-	errNoSuchContract = errors.New("tendermint/roothash: no such contract")
-	errNoRound        = errors.New("tendermint/roothash: no round in progress")
+	errNoSuchRuntime = errors.New("tendermint/roothash: no such runtime")
+	errNoRound       = errors.New("tendermint/roothash: no round in progress")
 
 	_ abci.Application = (*rootHashApplication)(nil)
 )
@@ -91,15 +91,15 @@ func (app *rootHashApplication) queryGetLatestBlock(s interface{}, r interface{}
 	request := r.(*api.QueryGetLatestBlock)
 	state := s.(*ImmutableState)
 
-	contract, err := state.GetContractState(request.ID)
+	runtime, err := state.GetRuntimeState(request.ID)
 	if err != nil {
 		return nil, err
 	}
-	if contract == nil {
-		return nil, errNoSuchContract
+	if runtime == nil {
+		return nil, errNoSuchRuntime
 	}
 
-	block := contract.CurrentBlock.MarshalCBOR()
+	block := runtime.CurrentBlock.MarshalCBOR()
 
 	return block, nil
 }
@@ -162,12 +162,12 @@ func (app *rootHashApplication) checkCommittees(ctx *abci.Context) { // nolint: 
 
 	state := NewMutableState(app.state.DeliverTxTree())
 
-	for _, contract := range state.GetContracts() {
-		committees, err := app.scheduler.GetBlockCommittees(context.Background(), contract.ID, app.state.BlockHeight())
+	for _, runtime := range state.GetRuntimes() {
+		committees, err := app.scheduler.GetBlockCommittees(context.Background(), runtime.ID, app.state.BlockHeight())
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,
-				"contract", contract.ID,
+				"runtime", runtime.ID,
 			)
 			continue
 		}
@@ -181,40 +181,40 @@ func (app *rootHashApplication) checkCommittees(ctx *abci.Context) { // nolint: 
 		}
 		if committee == nil {
 			app.logger.Error("checkCommittees: scheduler did not give us a compute committee",
-				"contract", contract.ID,
+				"runtime", runtime.ID,
 			)
 			continue
 		}
 
-		app.logger.Debug("checkCommittees: updating committee for contract",
-			"contract", contract.ID,
+		app.logger.Debug("checkCommittees: updating committee for runtime",
+			"runtime", runtime.ID,
 		)
 
 		// If the committee is the "same", ignore this.
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
-		round := contract.Round
+		round := runtime.Round
 		if round != nil && round.RoundState.Committee.ValidFor == committee.ValidFor {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
-				"contract", contract.ID,
+				"runtime", runtime.ID,
 				"epoch", committee.ValidFor,
 			)
 			continue
 		}
 
 		// Transition the round.
-		block := contract.CurrentBlock
+		block := runtime.CurrentBlock
 		blockNr, _ := block.Header.Round.ToU64()
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
-			"contract", contract.ID,
+			"runtime", runtime.ID,
 			"epoch", committee.ValidFor,
 			"round", blockNr,
 		)
 
-		contract.Timer.Stop(ctx)
-		contract.Round = newRound(committee, block)
-		state.UpdateContractState(contract)
+		runtime.Timer.Stop(ctx)
+		runtime.Round = newRound(committee, block)
+		state.UpdateRuntimeState(runtime)
 	}
 }
 
@@ -233,49 +233,49 @@ func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	switch other.Name() {
 	case api.RegistryAppName:
-		if contract := ctx.GetTag(api.TagRegistryContractRegistered); contract != nil {
-			app.logger.Debug("ForeignDeliverTx: new contract",
-				"contract", hex.EncodeToString(contract),
+		if runtime := ctx.GetTag(api.TagRegistryRuntimeRegistered); runtime != nil {
+			app.logger.Debug("ForeignDeliverTx: new runtime",
+				"runtime", hex.EncodeToString(runtime),
 			)
 
 			tree := app.state.DeliverTxTree()
 
-			// New contract has been registered, create its roothash state.
+			// New runtime has been registered, create its roothash state.
 			regState := registry.NewMutableState(tree)
-			contract, err := regState.GetContract(contract)
+			runtime, err := regState.GetRuntime(runtime)
 			if err != nil {
-				return errors.Wrap(err, "roothash: failed to fetch new contract")
+				return errors.Wrap(err, "roothash: failed to fetch new runtime")
 			}
 
 			state := NewMutableState(tree)
 
-			// Check if state already exists for the given contract.
-			cs, _ := state.GetContractState(contract.ID)
+			// Check if state already exists for the given runtime.
+			cs, _ := state.GetRuntimeState(runtime.ID)
 			if cs != nil {
 				// Do not propagate the error as this would fail the transaction.
-				app.logger.Warn("ForeignDeliverTx: state for contract already exists",
-					"contract", contract,
+				app.logger.Warn("ForeignDeliverTx: state for runtime already exists",
+					"runtime", runtime,
 				)
 				return nil
 			}
 
 			// Create genesis block.
-			block := newGenesisBlock(ctx, contract.ID)
+			block := newGenesisBlock(ctx, runtime.ID)
 
 			// Create new state containing the genesis block.
-			timerCtx := &timerContext{ID: contract.ID}
-			state.UpdateContractState(&ContractState{
-				ID:           contract.ID,
+			timerCtx := &timerContext{ID: runtime.ID}
+			state.UpdateRuntimeState(&RuntimeState{
+				ID:           runtime.ID,
 				CurrentBlock: block,
-				Timer:        *abci.NewTimer(ctx, app, "round-"+contract.ID.String(), timerCtx.MarshalCBOR()),
+				Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
 			})
 
-			app.logger.Debug("ForeignDeliverTx: created genesis state for contract",
-				"contract", contract,
+			app.logger.Debug("ForeignDeliverTx: created genesis state for runtime",
+				"runtime", runtime,
 			)
 
-			// This transaction now also includes a new block for the given contract.
-			id, _ := contract.ID.MarshalBinary()
+			// This transaction now also includes a new block for the given runtime.
+			id, _ := runtime.ID.MarshalBinary()
 			ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 			tagV := api.ValueRootHashFinalized{
 				ID:    id,
@@ -300,7 +300,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 	tree := app.state.DeliverTxTree()
 	state := NewMutableState(tree)
-	cs, err := state.GetContractState(tCtx.ID)
+	cs, err := state.GetRuntimeState(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
@@ -309,9 +309,9 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	}
 
 	regState := registry.NewMutableState(tree)
-	contract, err := regState.GetContract(tCtx.ID)
+	runtime, err := regState.GetRuntime(tCtx.ID)
 	if err != nil {
-		app.logger.Error("FireTimer: failed to fetch contract",
+		app.logger.Error("FireTimer: failed to fetch runtime",
 			"err", err,
 		)
 		panic(err)
@@ -320,7 +320,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	latestBlock := cs.CurrentBlock
 	if blockNr, _ := latestBlock.Header.Round.ToU64(); blockNr != tCtx.Round {
 		app.logger.Error("FireTimer: spurious timeout detected",
-			"contract", tCtx.ID,
+			"runtime", tCtx.ID,
 			"timer_round", tCtx.Round,
 			"current_round", blockNr,
 		)
@@ -334,13 +334,13 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	}
 
 	app.logger.Warn("FireTimer: round timeout expired, forcing finalization",
-		"contract", tCtx.ID,
+		"runtime", tCtx.ID,
 		"timer_round", tCtx.Round,
 	)
 
-	defer state.UpdateContractState(cs)
+	defer state.UpdateRuntimeState(cs)
 	cs.Round.DidTimeout = true
-	app.tryFinalize(ctx, contract, cs, true)
+	app.tryFinalize(ctx, runtime, cs, true)
 }
 
 func (app *rootHashApplication) executeTx(
@@ -362,18 +362,18 @@ func (app *rootHashApplication) commit(
 	id signature.PublicKey,
 	commit *roothash.Commitment,
 ) error {
-	contractState, err := state.GetContractState(id)
+	runtimeState, err := state.GetRuntimeState(id)
 	if err != nil {
-		return errors.Wrap(err, "roothash: failed to fetch contract state")
+		return errors.Wrap(err, "roothash: failed to fetch runtime state")
 	}
-	if contractState == nil {
-		return errNoSuchContract
+	if runtimeState == nil {
+		return errNoSuchRuntime
 	}
 
 	regState := registry.NewMutableState(state.Tree())
-	contract, err := regState.GetContract(id)
+	runtime, err := regState.GetRuntime(id)
 	if err != nil {
-		return errors.Wrap(err, "roothash: failed to fetch contract")
+		return errors.Wrap(err, "roothash: failed to fetch runtime")
 	}
 
 	var c commitment
@@ -387,29 +387,29 @@ func (app *rootHashApplication) commit(
 		return nil
 	}
 
-	if contractState.Round == nil {
+	if runtimeState.Round == nil {
 		app.logger.Error("commit recevied when no round in progress",
 			"err", errNoRound,
 		)
 		return errNoRound
 	}
 
-	latestBlock := contractState.CurrentBlock
+	latestBlock := runtimeState.CurrentBlock
 	blockNr, _ := latestBlock.Header.Round.ToU64()
 
-	defer state.UpdateContractState(contractState)
+	defer state.UpdateRuntimeState(runtimeState)
 
 	// If the round was finalized, transition.
-	if contractState.Round.RoundState.CurrentBlock.Header.Round != latestBlock.Header.Round {
+	if runtimeState.Round.RoundState.CurrentBlock.Header.Round != latestBlock.Header.Round {
 		app.logger.Debug("round was finalized, transitioning round",
 			"round", blockNr,
 		)
 
-		contractState.Round = newRound(contractState.Round.RoundState.Committee, latestBlock)
+		runtimeState.Round = newRound(runtimeState.Round.RoundState.Committee, latestBlock)
 	}
 
 	// Add the commitment.
-	if err = contractState.Round.addCommitment(app.storage, &c); err != nil {
+	if err = runtimeState.Round.addCommitment(app.storage, &c); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,
@@ -418,18 +418,18 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Try to finalize round.
-	app.tryFinalize(ctx, contract, contractState, false)
+	app.tryFinalize(ctx, runtime, runtimeState, false)
 
 	return nil
 }
 
 func (app *rootHashApplication) tryFinalize(
 	ctx *abci.Context,
-	contract *contract.Contract,
-	contractState *ContractState,
+	runtime *runtime.Runtime,
+	runtimeState *RuntimeState,
 	forced bool,
 ) { // nolint: gocyclo
-	latestBlock := contractState.CurrentBlock
+	latestBlock := runtimeState.CurrentBlock
 	blockNr, _ := latestBlock.Header.Round.ToU64()
 
 	var rearmTimer bool
@@ -442,18 +442,18 @@ func (app *rootHashApplication) tryFinalize(
 			app.logger.Debug("(re-)arming round timeout")
 
 			timerCtx := &timerContext{
-				ID:    contract.ID,
+				ID:    runtime.ID,
 				Round: blockNr,
 			}
-			contractState.Timer.Reset(ctx, roundTimeout, timerCtx.MarshalCBOR())
+			runtimeState.Timer.Reset(ctx, roundTimeout, timerCtx.MarshalCBOR())
 		case false: // Disarm timer.
 			app.logger.Debug("disarming round timeout")
-			contractState.Timer.Stop(ctx)
+			runtimeState.Timer.Stop(ctx)
 		}
 	}()
 
-	state := contractState.Round.RoundState.State
-	id, _ := contract.ID.MarshalBinary()
+	state := runtimeState.Round.RoundState.State
+	id, _ := runtime.ID.MarshalBinary()
 
 	if state == stateFinalized {
 		app.logger.Error("attempted to finalize when block already finalized",
@@ -462,7 +462,7 @@ func (app *rootHashApplication) tryFinalize(
 		return
 	}
 
-	block, err := contractState.Round.tryFinalize(ctx, contract)
+	block, err := runtimeState.Round.tryFinalize(ctx, runtime)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -470,7 +470,7 @@ func (app *rootHashApplication) tryFinalize(
 			"round", blockNr,
 		)
 
-		contractState.CurrentBlock = block
+		runtimeState.CurrentBlock = block
 
 		roundNr, _ := block.Header.Round.ToU64()
 
@@ -499,7 +499,7 @@ func (app *rootHashApplication) tryFinalize(
 			app.logger.Error("failed to finalize committee on timeout",
 				"round", blockNr,
 			)
-			err = contractState.Round.forceBackupTransition()
+			err = runtimeState.Round.forceBackupTransition()
 			break
 		}
 
@@ -543,7 +543,7 @@ func (app *rootHashApplication) tryFinalize(
 		"err", err,
 	)
 
-	contractState.Round.reset()
+	runtimeState.Round.reset()
 
 	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 	tagV := api.ValueRootHashRoundFailed{

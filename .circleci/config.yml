@@ -17,7 +17,7 @@ jobs:
       - checkout
       - run:
           name: Checking if Rust code has changed
-          command: ./scripts/ci-changed.sh \.circleci beacon tests common compute contract core db di enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
+          command: ./scripts/ci-changed.sh \.circleci beacon tests runtime common compute core db di enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
@@ -55,7 +55,7 @@ jobs:
             --exclude ekiden-enclave-untrusted \
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-untrusted \
-            --exclude ekiden-contract-untrusted \
+            --exclude ekiden-runtime-untrusted \
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
             --exclude ekiden-keymanager-trusted \
@@ -120,7 +120,7 @@ jobs:
             --exclude ekiden-rpc-untrusted \
             --exclude ekiden-db-trusted \
             --exclude ekiden-db-untrusted \
-            --exclude ekiden-contract-untrusted \
+            --exclude ekiden-runtime-untrusted \
             --exclude ekiden-keymanager-untrusted \
             --exclude ekiden-keymanager-node \
             --exclude ekiden-keymanager-trusted \
@@ -193,10 +193,10 @@ jobs:
       - run: cargo build --release
       # Install ekiden-tools.
       - run: CARGO_TARGET_DIR=target cargo install --force --path tools
-      # Build token contract.
+      # Build token runtime.
       - run:
           command: cargo ekiden build-enclave --release --output-identity
-          working_directory: contracts/token
+          working_directory: tests/runtimes/token
 
       # Build Go parts.
       - restore_cache:

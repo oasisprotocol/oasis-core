@@ -64,7 +64,7 @@ impl Database for Snapshot {
         panic!("Can't rollback Snapshot")
     }
 
-    fn with_encryption<F>(&mut self, _contract_id: H256, _f: F)
+    fn with_encryption<F>(&mut self, _runtime_id: H256, _f: F)
     where
         F: FnOnce(&mut DatabaseHandle) -> (),
     {
@@ -90,7 +90,7 @@ pub struct Manager {
 impl Manager {
     pub fn new(
         env: Arc<Environment>,
-        contract_id: B256,
+        runtime_id: B256,
         roothash: Arc<RootHashBackend>,
         mapper: Arc<StorageMapper>,
     ) -> Self {
@@ -100,8 +100,8 @@ impl Manager {
         let root_hash_resume = roothash.clone();
         let (watch_blocks, blocks_kill_handle) = ekiden_core::futures::killable(
             streamfollow::follow(
-                move || root_hash_init.get_blocks(contract_id),
-                move |round: &U256| root_hash_resume.get_blocks_since(contract_id, round.clone()),
+                move || root_hash_init.get_blocks(runtime_id),
+                move |round: &U256| root_hash_resume.get_blocks_since(runtime_id, round.clone()),
                 |block: &Block| block.header.round,
                 |_err| false,
             ).for_each(move |block: Block| {
@@ -136,12 +136,12 @@ impl Manager {
 
     /// Make a `Manager` from an injected `RootHashBackend` and an identity map over an injected
     /// `StorageBackend`.
-    pub fn new_from_injected(contract_id: B256, container: &mut Container) -> Result<Self> {
+    pub fn new_from_injected(runtime_id: B256, container: &mut Container) -> Result<Self> {
         let env: Arc<Environment> = container.inject()?;
         let roothash: Arc<RootHashBackend> = container.inject()?;
         let storage: Arc<StorageBackend> = container.inject()?;
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
-        Ok(Self::new(env, contract_id, roothash, mapper))
+        Ok(Self::new(env, runtime_id, roothash, mapper))
     }
 
     pub fn get_snapshot(&self) -> Snapshot {
@@ -191,7 +191,7 @@ mod tests {
     }
 
     impl RootHashBackend for MockRootHashBackend {
-        fn get_blocks(&self, _contract_id: B256) -> BoxStream<Block> {
+        fn get_blocks(&self, _runtime_id: B256) -> BoxStream<Block> {
             Box::new(
                 self.blocks_rx
                     .lock()
@@ -202,15 +202,15 @@ mod tests {
             )
         }
 
-        fn get_blocks_since(&self, _contract_id: B256, _round: U256) -> BoxStream<Block> {
+        fn get_blocks_since(&self, _runtime_id: B256, _round: U256) -> BoxStream<Block> {
             unimplemented!()
         }
 
-        fn get_events(&self, _contract_id: B256) -> BoxStream<Event> {
+        fn get_events(&self, _runtime_id: B256) -> BoxStream<Event> {
             unimplemented!()
         }
 
-        fn commit(&self, _contract_id: B256, _commitment: Commitment) -> BoxFuture<()> {
+        fn commit(&self, _runtime_id: B256, _commitment: Commitment) -> BoxFuture<()> {
             unimplemented!()
         }
     }
@@ -219,7 +219,7 @@ mod tests {
     fn play() {
         let grpc_environment = grpcio::EnvBuilder::new().build();
         let environment = Arc::new(GrpcEnvironment::new(grpc_environment));
-        let contract_id = B256::from(*b"dummy contract------------------");
+        let runtime_id = B256::from(*b"dummy runtime-------------------");
         let storage = Arc::new(DummyStorageBackend::new());
         let (blocks_tx, blocks_rx) = ekiden_core::futures::sync::mpsc::unbounded();
         let roothash = Arc::new(MockRootHashBackend {
@@ -227,7 +227,7 @@ mod tests {
         });
         let mapper = Arc::new(BackendIdentityMapper::new(storage));
         let trie = PatriciaTrie::new(mapper.clone());
-        let manager = super::Manager::new(environment, contract_id, roothash, mapper);
+        let manager = super::Manager::new(environment, runtime_id, roothash, mapper);
 
         let root_hash_before = trie.insert(None, b"changeme", b"before");
         blocks_tx

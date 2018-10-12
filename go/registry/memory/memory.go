@@ -7,12 +7,12 @@ import (
 	"github.com/eapache/channels"
 	"golang.org/x/net/context"
 
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 )
@@ -30,7 +30,7 @@ type memoryBackend struct {
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
 	nodeListNotifier *pubsub.Broker
-	contractNotifier *pubsub.Broker
+	runtimeNotifier  *pubsub.Broker
 
 	lastEpoch epochtime.EpochTime
 }
@@ -38,9 +38,9 @@ type memoryBackend struct {
 type memoryBackendState struct {
 	sync.RWMutex
 
-	entities  map[signature.MapKey]*entity.Entity
-	nodes     map[signature.MapKey]*node.Node
-	contracts map[signature.MapKey]*contract.Contract
+	entities map[signature.MapKey]*entity.Entity
+	nodes    map[signature.MapKey]*node.Node
+	runtimes map[signature.MapKey]*runtime.Runtime
 }
 
 func (r *memoryBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
@@ -271,41 +271,41 @@ func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
 	})
 }
 
-func (r *memoryBackend) RegisterContract(ctx context.Context, sigCon *contract.SignedContract) error {
-	con, err := api.VerifyRegisterContractArgs(r.logger, sigCon)
+func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigCon *runtime.SignedRuntime) error {
+	con, err := api.VerifyRegisterRuntimeArgs(r.logger, sigCon)
 	if err != nil {
 		return err
 	}
 
 	r.state.Lock()
 	// XXX: Should this reject attempts to alter an existing registration?
-	r.state.contracts[con.ID.ToMapKey()] = con
+	r.state.runtimes[con.ID.ToMapKey()] = con
 	r.state.Unlock()
 
-	r.logger.Debug("RegisterContract: registered",
-		"contract", con,
+	r.logger.Debug("RegisterRuntime: registered",
+		"runtime", con,
 	)
 
-	r.contractNotifier.Broadcast(con)
+	r.runtimeNotifier.Broadcast(con)
 
 	return nil
 }
 
-func (r *memoryBackend) GetContract(ctx context.Context, id signature.PublicKey) (*contract.Contract, error) {
+func (r *memoryBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*runtime.Runtime, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
 
-	con := r.state.contracts[id.ToMapKey()]
+	con := r.state.runtimes[id.ToMapKey()]
 	if con == nil {
-		return nil, api.ErrNoSuchContract
+		return nil, api.ErrNoSuchRuntime
 	}
 
 	return con, nil
 }
 
-func (r *memoryBackend) WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription) {
-	typedCh := make(chan *contract.Contract)
-	sub := r.contractNotifier.Subscribe()
+func (r *memoryBackend) WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription) {
+	typedCh := make(chan *runtime.Runtime)
+	sub := r.runtimeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
@@ -316,21 +316,21 @@ func New(timeSource epochtime.Backend) api.Backend {
 	r := &memoryBackend{
 		logger: logging.GetLogger("registry/memory"),
 		state: memoryBackendState{
-			entities:  make(map[signature.MapKey]*entity.Entity),
-			nodes:     make(map[signature.MapKey]*node.Node),
-			contracts: make(map[signature.MapKey]*contract.Contract),
+			entities: make(map[signature.MapKey]*entity.Entity),
+			nodes:    make(map[signature.MapKey]*node.Node),
+			runtimes: make(map[signature.MapKey]*runtime.Runtime),
 		},
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 		lastEpoch:        epochtime.EpochInvalid,
 	}
-	r.contractNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
 
 		r.state.RLock()
 		defer r.state.RUnlock()
-		for _, v := range r.state.contracts {
+		for _, v := range r.state.runtimes {
 			wr <- v
 		}
 	})

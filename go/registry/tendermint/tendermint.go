@@ -11,12 +11,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
@@ -41,7 +41,7 @@ type tendermintBackend struct {
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
 	nodeListNotifier *pubsub.Broker
-	contractNotifier *pubsub.Broker
+	runtimeNotifier  *pubsub.Broker
 
 	cached struct {
 		sync.Mutex
@@ -185,41 +185,41 @@ func (r *tendermintBackend) WatchNodeList() (<-chan *api.NodeList, *pubsub.Subsc
 	return typedCh, sub
 }
 
-func (r *tendermintBackend) RegisterContract(ctx context.Context, sigCon *contract.SignedContract) error {
+func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *runtime.SignedRuntime) error {
 	tx := tmapi.TxRegistry{
-		TxRegisterContract: &tmapi.TxRegisterContract{
-			Contract: *sigCon,
+		TxRegisterRuntime: &tmapi.TxRegisterRuntime{
+			Runtime: *sigCon,
 		},
 	}
 
 	if err := r.service.BroadcastTx(tmapi.RegistryTransactionTag, tx); err != nil {
-		return errors.Wrap(err, "registry: register contract failed")
+		return errors.Wrap(err, "registry: register runtime failed")
 	}
 
 	return nil
 }
 
-func (r *tendermintBackend) GetContract(ctx context.Context, id signature.PublicKey) (*contract.Contract, error) {
+func (r *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*runtime.Runtime, error) {
 	query := tmapi.QueryGetByIDRequest{
 		ID: id,
 	}
 
-	response, err := r.service.Query(tmapi.QueryRegistryGetContract, query, 0)
+	response, err := r.service.Query(tmapi.QueryRegistryGetRuntime, query, 0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get contract query failed")
+		return nil, errors.Wrap(err, "registry: get runtime query failed")
 	}
 
-	var con contract.Contract
+	var con runtime.Runtime
 	if err := cbor.Unmarshal(response, &con); err != nil {
-		return nil, errors.Wrap(err, "registry: get contract malformed response")
+		return nil, errors.Wrap(err, "registry: get runtime malformed response")
 	}
 
 	return &con, nil
 }
 
-func (r *tendermintBackend) WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription) {
-	typedCh := make(chan *contract.Contract)
-	sub := r.contractNotifier.Subscribe()
+func (r *tendermintBackend) WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription) {
+	typedCh := make(chan *runtime.Runtime)
+	sub := r.runtimeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
@@ -234,18 +234,18 @@ func (r *tendermintBackend) GetBlockNodeList(ctx context.Context, height int64) 
 	return r.getNodeList(ctx, epoch)
 }
 
-func (r *tendermintBackend) getContracts(ctx context.Context) ([]*contract.Contract, error) {
-	response, err := r.service.Query(tmapi.QueryRegistryGetContracts, nil, 0)
+func (r *tendermintBackend) getRuntimes(ctx context.Context) ([]*runtime.Runtime, error) {
+	response, err := r.service.Query(tmapi.QueryRegistryGetRuntimes, nil, 0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get contracts query failed")
+		return nil, errors.Wrap(err, "registry: get runtimes query failed")
 	}
 
-	var contracts []*contract.Contract
-	if err := cbor.Unmarshal(response, &contracts); err != nil {
-		return nil, errors.Wrap(err, "registry: get contracts malformed response")
+	var runtimes []*runtime.Runtime
+	if err := cbor.Unmarshal(response, &runtimes); err != nil {
+		return nil, errors.Wrap(err, "registry: get runtimes malformed response")
 	}
 
-	return contracts, nil
+	return runtimes, nil
 }
 
 func (r *tendermintBackend) workerEvents() {
@@ -303,9 +303,9 @@ func (r *tendermintBackend) workerEvents() {
 				Node:           &rn.Node,
 				IsRegistration: true,
 			})
-		} else if rc := output.OutputRegisterContract; rc != nil {
-			// Contract registration.
-			r.contractNotifier.Broadcast(&rc.Contract)
+		} else if rc := output.OutputRegisterRuntime; rc != nil {
+			// Runtime registration.
+			r.runtimeNotifier.Broadcast(&rc.Runtime)
 		}
 	}
 }
@@ -428,17 +428,17 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 		lastEpoch:        epochtime.EpochInvalid,
 	}
 	r.cached.nodeLists = make(map[epochtime.EpochTime]*api.NodeList)
-	r.contractNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
-		contracts, err := r.getContracts(context.Background())
+		runtimes, err := r.getRuntimes(context.Background())
 		if err != nil {
-			r.logger.Error("contract notifier: unable to get a list of contracts",
+			r.logger.Error("runtime notifier: unable to get a list of runtimes",
 				"err", err,
 			)
 			return
 		}
 
-		for _, v := range contracts {
+		for _, v := range runtimes {
 			wr <- v
 		}
 	})

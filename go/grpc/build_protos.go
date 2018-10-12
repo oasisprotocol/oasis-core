@@ -26,7 +26,7 @@ var protoFiles = [][]string{
 	{"common/api/src/common.proto"},
 	{"go/grpc/dummydebug/dummy_debug.proto"},
 	{
-		"registry/api/src/contract.proto",
+		"registry/api/src/runtime.proto",
 		"registry/api/src/entity.proto",
 	},
 	{"roothash/api/src/roothash.proto"},

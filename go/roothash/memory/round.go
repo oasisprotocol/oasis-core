@@ -8,9 +8,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
@@ -64,7 +64,7 @@ const (
 )
 
 type roundState struct {
-	contract         *contract.Contract
+	runtime          *runtime.Runtime
 	committee        *scheduler.Committee
 	computationGroup map[signature.MapKey]*scheduler.CommitteeNode
 	commitments      map[signature.MapKey]*commitment
@@ -335,7 +335,7 @@ func (r *round) checkCommitments() error {
 	// After the timeout has elapsed, a limited number of stragglers
 	// are allowed.
 	if r.didTimeout {
-		required -= int(r.roundState.contract.ReplicaAllowedStragglers)
+		required -= int(r.roundState.runtime.ReplicaAllowedStragglers)
 	}
 
 	if commits < required {
@@ -345,7 +345,7 @@ func (r *round) checkCommitments() error {
 	return nil
 }
 
-func newRound(storage storage.Backend, contract *contract.Contract, committee *scheduler.Committee, block *api.Block) *round {
+func newRound(storage storage.Backend, runtime *runtime.Runtime, committee *scheduler.Committee, block *api.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
 	}
@@ -356,7 +356,7 @@ func newRound(storage storage.Backend, contract *contract.Contract, committee *s
 	}
 
 	state := &roundState{
-		contract:         contract,
+		runtime:          runtime,
 		committee:        committee,
 		computationGroup: computationGroup,
 		currentBlock:     block,

@@ -1,4 +1,4 @@
-//! Tool subcommand for entering contract environment.
+//! Tool subcommand for entering development environment.
 extern crate clap;
 
 use self::clap::ArgMatches;

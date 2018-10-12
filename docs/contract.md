@@ -29,13 +29,13 @@ Note that the contract API is very similar to the [RPC API](rpc.md). The main di
 
 ### Defining an API
 
-An API may be defined by using the `contract_api` macro provided by `ekiden_core`. It is usually defined in its own API crate as it needs to be available for import both for enclaves and clients.
+An API may be defined by using the `runtime_api` macro provided by `ekiden_core`. It is usually defined in its own API crate as it needs to be available for import both for enclaves and clients.
 
 A simple API definition looks as follows:
 ```rust
-use ekiden_core::contract::contract_api;
+use ekiden_core::runtime::runtime_api;
 
-contract_api! {
+runtime_api! {
     pub fn hello_world(u64) -> u64;
 }
 
@@ -48,18 +48,18 @@ A contract method definition looks similar to a Rust function definition and is 
 * Request type (e.g., `u64`) which defines the Rust type containing the request message. This can be any type implementing Serde's `Deserialize` trait.
 * Response type (e.g., `u64`) which defines the Rust type containing the response message. This can be any type implementing Serde's `Serialize` trait.
 
-This same API definition can be used to generate both enclaves and clients. This is achieved by making the `contract_api` generate in its place another macro called `with_api` which can be used from both enclaves and clients.
+This same API definition can be used to generate both enclaves and clients. This is achieved by making the `runtime_api` generate in its place another macro called `with_api` which can be used from both enclaves and clients.
 
 ## Creating an enclave contract implementation
 
 In order to create an enclave contract implementation using the API we just defined, we need to import the API and instruct the contract system to generate some glue code that will call our method implementations.
 This can be done as follows:
 ```rust
-use ekiden_trusted::contract::create_contract;
+use ekiden_trusted::runtime::create_runtime;
 use dummy_api::with_api;
 
 with_api! {
-    create_contract!(api);
+    create_runtime!(api);
 }
 ```
 
@@ -74,15 +74,15 @@ fn hello_world(request: &u64) -> Result<u64> {
 
 To create a contract client for our API, we need to again import the API definitions and generate the required glue code:
 ```rust
-use ekiden_contract_client::create_contract_client;
+use ekiden_runtime_client::create_runtime_client;
 use dummy_api::with_api;
 
 with_api! {
-    create_contract_client!(dummy, dummy_api, api);
+    create_runtime_client!(dummy, dummy_api, api);
 }
 ```
 
-This will create the client and necessary types inside a module named `dummy` (first argument to `create_contract_client` macro).
+This will create the client and necessary types inside a module named `dummy` (first argument to `create_runtime_client` macro).
 We can use this to create clients that talk to an Ekiden Compute node over gRPC:
 ```rust
 use std::sync::Arc;

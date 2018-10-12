@@ -4,20 +4,20 @@ extern crate rand;
 
 #[macro_use]
 extern crate client_utils;
-extern crate ekiden_contract_client;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
+extern crate ekiden_runtime_client;
 
 extern crate token_api;
 
 use clap::{App, Arg};
 
-use ekiden_contract_client::create_contract_client;
 use ekiden_core::futures::Future;
+use ekiden_runtime_client::create_runtime_client;
 use token_api::with_api;
 
 with_api! {
-    create_contract_client!(token, token_api, api);
+    create_runtime_client!(token, token_api, api);
 }
 
 fn scenario_null(client: &mut token::Client) {

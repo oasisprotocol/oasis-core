@@ -85,8 +85,8 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_scheduler_client::SchedulerClient::register(known_components);
     // Entity registry.
     ekiden_registry_client::EntityRegistryClient::register(known_components);
-    // Contract registry.
-    ekiden_registry_client::ContractRegistryClient::register(known_components);
+    // Runtime registry.
+    ekiden_registry_client::RuntimeRegistryClient::register(known_components);
     // Local identities.
     ekiden_core::identity::LocalEntityIdentity::register(known_components);
     ekiden_core::identity::LocalNodeIdentity::register(known_components);
@@ -104,10 +104,10 @@ fn main() {
         .author("Jernej Kos <jernej@kos.mx>")
         .about("Ekident compute node server")
         .arg(
-            Arg::with_name("contract")
+            Arg::with_name("runtime")
                 .index(1)
-                .value_name("CONTRACT")
-                .help("Signed contract filename")
+                .value_name("RUNTIME")
+                .help("Signed runtime filename")
                 .takes_value(true)
                 .required(true)
                 .display_order(1)
@@ -158,7 +158,7 @@ fn main() {
                 .required_unless("disable-key-manager"),
         )
         .arg(Arg::with_name("disable-key-manager").long("disable-key-manager"))
-        // TODO: Remove this once we have independent contract registration.
+        // TODO: Remove this once we have independent runtime registration.
         .arg(
             Arg::with_name("compute-replicas")
                 .long("compute-replicas")
@@ -166,7 +166,7 @@ fn main() {
                 .takes_value(true)
                 .default_value("1"),
         )
-        // TODO: Remove this once we have independent contract registration.
+        // TODO: Remove this once we have independent runtime registration.
         .arg(
             Arg::with_name("compute-backup-replicas")
                 .long("compute-backup-replicas")
@@ -174,7 +174,7 @@ fn main() {
                 .takes_value(true)
                 .default_value("1"),
         )
-        // TODO: Remove this once we have independent contract registration.
+        // TODO: Remove this once we have independent runtime registration.
         .arg(
             Arg::with_name("compute-allowed-stragglers")
                 .long("compute-allowed-stragglers")
@@ -213,7 +213,7 @@ fn main() {
         .arg(
             Arg::with_name("no-persist-identity")
                 .long("no-persist-identity")
-                .help("Do not persist enclave identity (useful for contract development)"),
+                .help("Do not persist enclave identity (useful for runtime development)"),
         )
         .arg(
             Arg::with_name("forwarded-rpc-timeout")
@@ -228,9 +228,9 @@ fn main() {
                 .hidden(true)
         )
         .arg(
-            Arg::with_name("test-contract-id")
-                .long("test-contract-id")
-                .help("TEST ONLY OPTION: override contract identifier")
+            Arg::with_name("test-runtime-id")
+                .long("test-runtime-id")
+                .help("TEST ONLY OPTION: override runtime identifier")
                 .takes_value(true)
                 .hidden(true)
         )
@@ -286,13 +286,13 @@ fn main() {
     let mut node = ComputeNode::new(
         ComputeNodeConfiguration {
             port: value_t!(matches, "port", u16).unwrap_or(9001),
-            // TODO: Remove this once we have independent contract registration.
+            // TODO: Remove this once we have independent runtime registration.
             compute_replicas: value_t!(matches, "compute-replicas", u64)
                 .unwrap_or_else(|e| e.exit()),
-            // TODO: Remove this once we have independent contract registration.
+            // TODO: Remove this once we have independent runtime registration.
             compute_backup_replicas: value_t!(matches, "compute-backup-replicas", u64)
                 .unwrap_or_else(|e| e.exit()),
-            // TODO: Remove this once we have independent contract registration.
+            // TODO: Remove this once we have independent runtime registration.
             compute_allowed_stragglers: value_t!(matches, "compute-allowed-stragglers", u64)
                 .unwrap_or_else(|e| e.exit()),
             // Root hash frontend configuration.
@@ -319,14 +319,14 @@ fn main() {
             },
             // Worker configuration.
             worker: {
-                // Check if passed contract exists.
-                let contract_filename = matches.value_of("contract").unwrap();
-                if !Path::new(contract_filename).exists() {
-                    panic!(format!("Could not find contract: {}", contract_filename))
+                // Check if passed runtime exists.
+                let runtime_filename = matches.value_of("runtime").unwrap();
+                if !Path::new(runtime_filename).exists() {
+                    panic!(format!("Could not find runtime: {}", runtime_filename))
                 }
 
                 WorkerConfiguration {
-                    contract_filename: contract_filename.to_owned(),
+                    runtime_filename: runtime_filename.to_owned(),
                     saved_identity_path: if matches.is_present("no-persist-identity") {
                         None
                     } else {
@@ -360,8 +360,8 @@ fn main() {
                 }
             },
             test_only: ComputeNodeTestOnlyConfiguration {
-                contract_id: if matches.is_present("test-contract-id") {
-                    Some(value_t_or_exit!(matches, "test-contract-id", B256))
+                runtime_id: if matches.is_present("test-runtime-id") {
+                    Some(value_t_or_exit!(matches, "test-runtime-id", B256))
                 } else {
                     None
                 },

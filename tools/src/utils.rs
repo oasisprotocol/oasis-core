@@ -256,7 +256,7 @@ pub fn protoc(args: ProtocArgs) {
     }
 }
 
-/// Build local contract API files.
+/// Build local enclave API files.
 pub fn build_api() {
     protoc(ProtocArgs {
         out_dir: "src/generated/",
@@ -309,42 +309,42 @@ pub fn generate_mod_with_imports(output_dir: &str, imports: &[&str], modules: &[
     writeln!(&mut file, "*").unwrap();
 }
 
-/// Extract contract identity from a compiled contract.
-pub fn get_contract_identity<P: AsRef<Path>>(contract: P) -> Result<Vec<u8>> {
+/// Extract enclave identity from a compiled enclave.
+pub fn get_enclave_identity<P: AsRef<Path>>(enclave: P) -> Result<Vec<u8>> {
     // Sigstruct headers in bundled enclave.
     let sigstruct_header_1 = Regex::new(
         r"(?-u)\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00",
     ).unwrap();
     let sigstruct_header_2 = b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
 
-    let contract_file = FileBuffer::open(contract)?;
-    let header_1_offset = match sigstruct_header_1.find(&contract_file) {
+    let enclave_file = FileBuffer::open(enclave)?;
+    let header_1_offset = match sigstruct_header_1.find(&enclave_file) {
         Some(re_match) => re_match.end(),
-        None => return Err("Failed to find SIGSTRUCT header 1 in contract".into()),
+        None => return Err("Failed to find SIGSTRUCT header 1 in enclave".into()),
     };
 
     // Skip 8 bytes and expect to find the second header there.
     let header_2_offset = header_1_offset + 8;
-    if &contract_file[header_2_offset..header_2_offset + sigstruct_header_2.len()]
+    if &enclave_file[header_2_offset..header_2_offset + sigstruct_header_2.len()]
         != sigstruct_header_2
     {
-        return Err("Failed to find SIGSTRUCT header 2 in contract".into());
+        return Err("Failed to find SIGSTRUCT header 2 in enclave".into());
     }
 
     // Read ENCLAVEHASH field at offset 920 from second header (32 bytes).
     let hash_offset = header_2_offset + sigstruct_header_2.len() + 920;
-    Ok(contract_file[hash_offset..hash_offset + 32].to_vec())
+    Ok(enclave_file[hash_offset..hash_offset + 32].to_vec())
 }
 
-/// Extract contract identity from a compiled contract and write it to an output file.
-pub fn generate_contract_identity(output: &str, contract: &str) {
-    let mr_enclave = get_contract_identity(contract).expect("Failed to get contract identity");
+/// Extract enclave identity from a compiled enclave and write it to an output file.
+pub fn generate_enclave_identity(output: &str, enclave: &str) {
+    let mr_enclave = get_enclave_identity(enclave).expect("Failed to get enclave identity");
 
     // Write ENCLAVEHASH to given output file.
     let mut output_file = fs::File::create(output).expect("Failed to create output file");
     output_file
         .write_all(&mr_enclave)
-        .expect("Failed to write contract ENCLAVEHASH");
+        .expect("Failed to write enclave ENCLAVEHASH");
 
-    println!("cargo:rerun-if-changed={}", contract);
+    println!("cargo:rerun-if-changed={}", enclave);
 }

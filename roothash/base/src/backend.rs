@@ -15,7 +15,7 @@ pub enum Event {
     /// where the argument is the hash of the [`CallBatch`]. The second argument is the
     /// block [`Header`] which the computation should be based upon.
     ///
-    /// [`CallBatch`]: ekiden_contract_common::batch::CallBatch
+    /// [`CallBatch`]: ekiden_runtime_common::batch::CallBatch
     DiscrepancyDetected(H256, Header),
     /// Round failed.
     RoundFailed(Error),
@@ -27,9 +27,9 @@ pub trait RootHashBackend: Sync + Send {
     ///
     /// The metadata contained in this block can be further used to get the latest
     /// state from the storage backend.
-    fn get_latest_block(&self, contract_id: B256) -> BoxFuture<Block> {
+    fn get_latest_block(&self, runtime_id: B256) -> BoxFuture<Block> {
         Box::new(
-            self.get_blocks(contract_id)
+            self.get_blocks(runtime_id)
                 .take(1)
                 .into_future()
                 .then(|result| match result {
@@ -44,19 +44,19 @@ pub trait RootHashBackend: Sync + Send {
     ///
     /// The latest block will get pushed into the stream. Then, subsequent blocks will get pushed
     /// into the stream as they are confirmed by the root hash backend.
-    fn get_blocks(&self, contract_id: B256) -> BoxStream<Block>;
+    fn get_blocks(&self, runtime_id: B256) -> BoxStream<Block>;
 
     /// Return a stream of blocks starting with the one from a specified round.
     ///
     /// The one at the specified round is included. Later blocks are pushed in order, and blocks
     /// will get pushed as they are confirmed.
-    fn get_blocks_since(&self, contract_id: B256, round: U256) -> BoxStream<Block>;
+    fn get_blocks_since(&self, runtime_id: B256, round: U256) -> BoxStream<Block>;
 
     /// Return a stream of events.
-    fn get_events(&self, contract_id: B256) -> BoxStream<Event>;
+    fn get_events(&self, runtime_id: B256) -> BoxStream<Event>;
 
-    /// Commit to results of processing a batch of contract invocations.
-    fn commit(&self, contract_id: B256, commitment: Commitment) -> BoxFuture<()>;
+    /// Commit to results of processing a batch of runtime invocations.
+    fn commit(&self, runtime_id: B256, commitment: Commitment) -> BoxFuture<()>;
 }
 
 /// Signer for given root hash backend.

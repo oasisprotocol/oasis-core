@@ -20,17 +20,17 @@ type SecretSeed = [u8; SECRET_SEED_LEN];
 /// Secure channel context.
 ///
 /// Contains state and methods needed for secure communication with the remote
-/// contract.
+/// enclave.
 #[derive(Default)]
 pub struct SecureChannelContext {
     /// Client short-term private key.
     client_private_key: sodalite::BoxSecretKey,
     /// Client short-term public key.
     client_public_key: sodalite::BoxPublicKey,
-    /// Contract contract long-term public key.
-    contract_long_term_public_key: sodalite::BoxPublicKey,
-    /// Contract contract short-term public key.
-    contract_short_term_public_key: sodalite::BoxPublicKey,
+    /// Enclave long-term public key.
+    enclave_long_term_public_key: sodalite::BoxPublicKey,
+    /// Enclave short-term public key.
+    enclave_short_term_public_key: sodalite::BoxPublicKey,
     /// Cached shared key.
     shared_key: Option<sodalite::SecretboxKey>,
     /// Session state.
@@ -45,7 +45,7 @@ impl SecureChannelContext {
     /// Reset secure channel context.
     ///
     /// Calling this function will generate new short-term keys for the client
-    /// and clear any contract public keys.
+    /// and clear any enclave public keys.
     pub fn reset(&mut self) -> Result<()> {
         // Generate new short-term key pair for the client.
         let mut seed: SecretSeed = [0u8; SECRET_SEED_LEN];
@@ -57,9 +57,9 @@ impl SecureChannelContext {
             &seed,
         );
 
-        // Clear contract keys.
-        self.contract_long_term_public_key = [0; sodalite::BOX_PUBLIC_KEY_LEN];
-        self.contract_short_term_public_key = [0; sodalite::BOX_PUBLIC_KEY_LEN];
+        // Clear enclave keys.
+        self.enclave_long_term_public_key = [0; sodalite::BOX_PUBLIC_KEY_LEN];
+        self.enclave_short_term_public_key = [0; sodalite::BOX_PUBLIC_KEY_LEN];
 
         // Clear session keys.
         self.shared_key = None;
@@ -75,26 +75,26 @@ impl SecureChannelContext {
     /// Setup secure channel.
     pub fn setup(
         &mut self,
-        contract_astpk: &api::AuthenticatedShortTermPublicKey,
+        enclave_astpk: &api::AuthenticatedShortTermPublicKey,
         client_authentication_required: bool,
     ) -> Result<ekiden_enclave_common::quote::IdentityAuthenticatedInfo> {
-        let iai = ekiden_enclave_common::quote::verify(contract_astpk.get_identity_proof())?;
+        let iai = ekiden_enclave_common::quote::verify(enclave_astpk.get_identity_proof())?;
 
-        self.contract_long_term_public_key = iai.identity.rpc_key_e_pub.clone();
+        self.enclave_long_term_public_key = iai.identity.rpc_key_e_pub.clone();
 
-        // Open boxed short term contract public key.
+        // Open boxed short term enclave public key.
         let mut shared_key: Option<sodalite::SecretboxKey> = None;
-        let contract_short_term_public_key = open_box(
-            contract_astpk.get_boxed_short_term_public_key(),
+        let enclave_short_term_public_key = open_box(
+            enclave_astpk.get_boxed_short_term_public_key(),
             &NONCE_CONTEXT_INIT,
             &mut self.long_term_nonce_generator,
-            &self.contract_long_term_public_key,
+            &self.enclave_long_term_public_key,
             &self.client_private_key,
             &mut shared_key,
         )?;
 
-        self.contract_short_term_public_key
-            .copy_from_slice(&contract_short_term_public_key);
+        self.enclave_short_term_public_key
+            .copy_from_slice(&enclave_short_term_public_key);
 
         if client_authentication_required {
             self.state
@@ -108,7 +108,7 @@ impl SecureChannelContext {
             .get_or_insert([0u8; sodalite::SECRETBOX_KEY_LEN]);
         sodalite::box_beforenm(
             &mut key,
-            &self.contract_short_term_public_key,
+            &self.enclave_short_term_public_key,
             &self.client_private_key,
         );
 
@@ -128,7 +128,7 @@ impl SecureChannelContext {
             &self.client_public_key,
             &NONCE_CONTEXT_AUTHIN,
             &mut self.long_term_nonce_generator,
-            &self.contract_long_term_public_key,
+            &self.enclave_long_term_public_key,
             client_ltsk,
             &mut None,
         )?;
@@ -140,7 +140,7 @@ impl SecureChannelContext {
             &astpk_bytes,
             &NONCE_CONTEXT_AUTHOUT,
             &mut self.short_term_nonce_generator,
-            &self.contract_short_term_public_key,
+            &self.enclave_short_term_public_key,
             &self.client_private_key,
             &mut self.shared_key,
         )?;
@@ -191,12 +191,12 @@ impl SecureChannelContext {
             &request.write_to_bytes()?,
             &NONCE_CONTEXT_REQUEST,
             &mut self.short_term_nonce_generator,
-            &self.contract_short_term_public_key,
+            &self.enclave_short_term_public_key,
             &self.client_private_key,
             &mut self.shared_key,
         )?;
 
-        // Set public key so the contract knows which client this is.
+        // Set public key so the enclave knows which client this is.
         crypto_box.set_public_key(self.client_public_key.to_vec());
 
         Ok(crypto_box)
@@ -211,7 +211,7 @@ impl SecureChannelContext {
             &response,
             &NONCE_CONTEXT_RESPONSE,
             &mut self.short_term_nonce_generator,
-            &self.contract_short_term_public_key,
+            &self.enclave_short_term_public_key,
             &self.client_private_key,
             &mut self.shared_key,
         )?;

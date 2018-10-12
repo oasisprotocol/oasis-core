@@ -206,7 +206,7 @@ impl NetworkRpcClientBackend {
         self.nodes.add_node(self.environment.clone(), &address)
     }
 
-    /// Perform a raw contract call via gRPC.
+    /// Perform a raw enclave call via gRPC.
     fn call_available_node<F, Rs>(&self, method: F) -> BoxFuture<Rs>
     where
         F: Fn(&EnclaveRpcClient) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
