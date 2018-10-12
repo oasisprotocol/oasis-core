@@ -33,3 +33,6 @@ RUN VERSION="35" && \
 RUN wget -O codecov https://codecov.io/bash && \
     chmod +x codecov && \
     mv codecov /usr/local/bin
+
+# Add .gotconfig file for the root user
+COPY gitconfig /root/.gitconfig

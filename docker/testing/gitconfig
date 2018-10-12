@@ -1,0 +1,7 @@
+# This is required for the CI/CD build agents
+# to run `cargo build`  because the Cargo.toml
+# files declare dependencies to private git
+# repos using https:// and the build agents
+# use SSH keys to access those repos on GitHub.
+[url "ssh://git@github.com"]
+  insteadOf = https://github.com
