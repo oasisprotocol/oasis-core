@@ -3,20 +3,27 @@ package cmd
 
 import (
 	"crypto/rand"
+	"errors"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/beacon"
+	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/dummydebug"
 	"github.com/oasislabs/ekiden/go/epochtime"
+	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry"
+	registryAPI "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash"
+	roothashAPI "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/scheduler"
+	schedulerAPI "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage"
+	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
@@ -54,18 +61,111 @@ func Execute() {
 	}
 }
 
-type nodeEnv struct {
+// RootCommand returns the root (top level) cobra.Command.
+func RootCommand() *cobra.Command {
+	return rootCmd
+}
+
+func nodeMain(cmd *cobra.Command, args []string) {
+	node, err := NewNode(cmd)
+	if err != nil {
+		return
+	}
+	defer node.Cleanup()
+
+	node.Wait()
+}
+
+// Node is the ekiden node service.
+//
+// WARNING: This is exposed for the benefit of tests and the interface
+// is not guaranteed to be stable.
+type Node struct {
+	cmd      *cobra.Command
 	svcMgr   *backgroundServiceManager
 	identity *signature.PrivateKey
 	grpcSrv  *grpcService
 	svcTmnt  service.TendermintService
+
+	Beacon    beaconAPI.Backend
+	Epochtime epochtimeAPI.Backend
+	Registry  registryAPI.Backend
+	RootHash  roothashAPI.Backend
+	Scheduler schedulerAPI.Backend
+	Storage   storageAPI.Backend
 }
 
-func nodeMain(cmd *cobra.Command, args []string) {
-	env := &nodeEnv{
+// Cleanup cleans up after the ndoe has terminated.
+func (n *Node) Cleanup() {
+	n.svcMgr.Cleanup()
+}
+
+// Stop gracefully terminates the node.
+func (n *Node) Stop() {
+	n.svcMgr.Stop()
+}
+
+// Wait waits for the node to gracefully terminate.  Callers MUST
+// call Cleanup() after wait returns.
+func (n *Node) Wait() {
+	n.svcMgr.Wait()
+}
+
+func (n *Node) initBackends() error {
+	var err error
+
+	// Initialize the various backends.
+	if n.Epochtime, err = epochtime.New(n.cmd, n.svcTmnt); err != nil {
+		return err
+	}
+	if n.Beacon, err = beacon.New(n.cmd, n.Epochtime, n.svcTmnt); err != nil {
+		return err
+	}
+	if n.Registry, err = registry.New(n.cmd, n.Epochtime, n.svcTmnt); err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.Registry)
+	if n.Scheduler, err = scheduler.New(n.cmd, n.Epochtime, n.Registry, n.Beacon); err != nil {
+		return err
+	}
+	if n.Storage, err = storage.New(n.cmd, n.Epochtime, dataDir); err != nil {
+		return err
+	}
+	if n.RootHash, err = roothash.New(n.cmd, n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.Storage)
+
+	// Initialize and register the gRPC services.
+	epochtime.NewGRPCServer(n.grpcSrv.s, n.Epochtime)
+	beacon.NewGRPCServer(n.grpcSrv.s, n.Beacon)
+	registry.NewGRPCServer(n.grpcSrv.s, n.Registry)
+	roothash.NewGRPCServer(n.grpcSrv.s, n.RootHash)
+	scheduler.NewGRPCServer(n.grpcSrv.s, n.Scheduler)
+	storage.NewGRPCServer(n.grpcSrv.s, n.Storage)
+	dummydebug.NewGRPCServer(n.grpcSrv.s, n.Epochtime, n.Registry)
+
+	rootLog.Debug("backends initialized")
+
+	return nil
+}
+
+// NewNode initializes and launches the ekiden node service.
+//
+// WARNING: This will misbehave iff cmd != RootCommand().  This is exposed
+// for the benefit of tests and the interface is not guaranteed to be stable.
+func NewNode(cmd *cobra.Command) (*Node, error) {
+	node := &Node{
+		cmd:    cmd,
 		svcMgr: newBackgroundServiceManager(),
 	}
-	defer func() { env.svcMgr.Cleanup() }()
+
+	var startOk bool
+	defer func() {
+		if !startOk {
+			node.Cleanup()
+		}
+	}()
 
 	initCommon()
 
@@ -73,79 +173,79 @@ func nodeMain(cmd *cobra.Command, args []string) {
 
 	if dataDir == "" {
 		rootLog.Error("data directory not configured")
-		return
+		return nil, errors.New("data directory not configured")
 	}
 
 	var err error
 
 	// Generate/Load the node identity.
-	env.identity, err = initIdentity(dataDir)
+	node.identity, err = initIdentity(dataDir)
 	if err != nil {
 		rootLog.Error("failed to load/generate identity",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
 
 	// Initialize the tracing client.
-	tracingCloser, err := initTracing(cmd, "ekiden-node")
+	tracingSvc, err := initTracing(node.cmd, "ekiden-node")
 	if err != nil {
 		rootLog.Error("failed to initialize tracing",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
-	defer tracingCloser.Close()
+	node.svcMgr.RegisterCleanupOnly(tracingSvc)
 
 	// Initialize the gRPC server.
 	// Depends on global tracer.
-	env.grpcSrv, err = newGrpcService(cmd)
+	node.grpcSrv, err = newGrpcService(node.cmd)
 	if err != nil {
 		rootLog.Error("failed to initialize gRPC server",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
-	env.svcMgr.Register(env.grpcSrv)
+	node.svcMgr.Register(node.grpcSrv)
 
 	// Initialize the metrics server.
-	metrics, err := newMetrics(cmd)
+	metrics, err := newMetrics(node.cmd)
 	if err != nil {
 		rootLog.Error("failed to initialize metrics server",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
-	env.svcMgr.Register(metrics)
+	node.svcMgr.Register(metrics)
 
 	// Initialize the profiling server.
-	profiling, err := newPprofService(cmd)
+	profiling, err := newPprofService(node.cmd)
 	if err != nil {
 		rootLog.Error("failed to initialize pprof server",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
-	env.svcMgr.Register(profiling)
+	node.svcMgr.Register(profiling)
 
 	// Start the profiling server.
 	if err = profiling.Start(); err != nil {
 		rootLog.Error("failed to start pprof server",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
 
 	// Initialize tendermint.
-	env.svcTmnt = tendermint.New(cmd, dataDir, env.identity)
-	env.svcMgr.Register(env.svcTmnt)
+	node.svcTmnt = tendermint.New(node.cmd, dataDir, node.identity)
+	node.svcMgr.Register(node.svcTmnt)
 
 	// Initialize the varous node backends.
-	if err = initNode(cmd, env); err != nil {
+	if err = node.initBackends(); err != nil {
 		rootLog.Error("failed to initialize backends",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
 
 	// Start metric server.
@@ -153,33 +253,32 @@ func nodeMain(cmd *cobra.Command, args []string) {
 		rootLog.Error("failed to start metric server",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
 
 	// Start the tendermint service.
 	//
 	// Note: This will only start the node if it is required by
 	// one of the backends.
-	if err = env.svcTmnt.Start(); err != nil {
+	if err = node.svcTmnt.Start(); err != nil {
 		rootLog.Error("failed to start tendermint service",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
 
 	// Start the gRPC server.
-	if err = env.grpcSrv.Start(); err != nil {
+	if err = node.grpcSrv.Start(); err != nil {
 		rootLog.Error("failed to start gRPC server",
 			"err", err,
 		)
-		return
+		return nil, err
 	}
 
 	rootLog.Info("initialization complete: ready to serve")
+	startOk = true
 
-	// Wait for the services to catch on fire or otherwise
-	// terminate.
-	env.svcMgr.Wait()
+	return node, nil
 }
 
 func initIdentity(dataDir string) (*signature.PrivateKey, error) {
@@ -196,52 +295,9 @@ func initIdentity(dataDir string) (*signature.PrivateKey, error) {
 	return &k, nil
 }
 
-func initNode(cmd *cobra.Command, env *nodeEnv) error {
-	// Initialize the various backends.
-	timeSource, err := epochtime.New(cmd, env.svcTmnt)
-	if err != nil {
-		return err
-	}
-	randomBeacon, err := beacon.New(cmd, timeSource, env.svcTmnt)
-	if err != nil {
-		return err
-	}
-	reg, err := registry.New(cmd, timeSource, env.svcTmnt)
-	if err != nil {
-		return err
-	}
-	env.svcMgr.RegisterCleanupOnly(reg)
-	sched, err := scheduler.New(cmd, timeSource, reg, randomBeacon)
-	if err != nil {
-		return err
-	}
-	store, err := storage.New(cmd, timeSource, dataDir)
-	if err != nil {
-		return err
-	}
-	rootHash, err := roothash.New(cmd, timeSource, sched, store, reg, env.svcTmnt)
-	if err != nil {
-		return err
-	}
-	env.svcMgr.RegisterCleanupOnly(store)
-
-	// Initialize and register the gRPC services.
-	epochtime.NewGRPCServer(env.grpcSrv.s, timeSource)
-	beacon.NewGRPCServer(env.grpcSrv.s, randomBeacon)
-	registry.NewGRPCServer(env.grpcSrv.s, reg)
-	roothash.NewGRPCServer(env.grpcSrv.s, rootHash)
-	scheduler.NewGRPCServer(env.grpcSrv.s, sched)
-	storage.NewGRPCServer(env.grpcSrv.s, store)
-	dummydebug.NewGRPCServer(env.grpcSrv.s, timeSource, reg)
-
-	rootLog.Debug("backends initialized")
-
-	return nil
-}
-
 // nolint: errcheck
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(InitConfig)
 
 	// Global flags common across all commands.
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file")

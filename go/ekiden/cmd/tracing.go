@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
+
+	"github.com/oasislabs/ekiden/go/common/service"
 )
 
 const (
@@ -24,7 +26,18 @@ var (
 	tracingSamplerParam               float64
 )
 
-func initTracing(cmd *cobra.Command, serviceName string) (io.Closer, error) {
+type tracingService struct {
+	closer io.Closer
+}
+
+func (svc *tracingService) Cleanup() {
+	if svc.closer != nil {
+		svc.closer.Close()
+		svc.closer = nil
+	}
+}
+
+func initTracing(cmd *cobra.Command, serviceName string) (service.CleanupAble, error) {
 	enabled, _ := cmd.Flags().GetBool(cfgTracingEnabled)
 	reporterFlushInterval, _ := cmd.Flags().GetDuration(cfgTracingReporterFlushInterval)
 	reporterLocalAgentHostPort, _ := cmd.Flags().GetString(cfgTracingReporterLocalAgentHostPort)
@@ -41,7 +54,12 @@ func initTracing(cmd *cobra.Command, serviceName string) (io.Closer, error) {
 		},
 	}
 
-	return cfg.InitGlobalTracer(serviceName, config.Logger(jaeger.StdLogger))
+	closer, err := cfg.InitGlobalTracer(serviceName, config.Logger(jaeger.StdLogger))
+	if err != nil {
+		return nil, err
+	}
+
+	return &tracingService{closer: closer}, nil
 }
 
 func registerTracingFlags(cmd *cobra.Command) {

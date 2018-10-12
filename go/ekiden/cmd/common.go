@@ -33,7 +33,11 @@ func initCommon() {
 	rootLog.Debug("common initialization complete")
 }
 
-func initConfig() {
+// InitConfig initializes the command configuration.
+//
+// WARNING: This is exposed for the benefit of tests and the interface
+// is not guaranteed to be stable.
+func InitConfig() {
 	if cfgFile != "" {
 		// Read the config file if one is provided, otherwise
 		// it is assumed that the combination of default values,
@@ -112,6 +116,8 @@ type backgroundServiceManager struct {
 	services []service.BackgroundService
 	termCh   chan service.BackgroundService
 	termSvc  service.BackgroundService
+
+	quitCh chan struct{}
 }
 
 func (m *backgroundServiceManager) Register(srv service.BackgroundService) {
@@ -134,6 +140,8 @@ func (m *backgroundServiceManager) Wait() {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	select {
+	case <-m.quitCh:
+		rootLog.Info("programatic termination requested")
 	case m.termSvc = <-m.termCh:
 		rootLog.Info("background task terminated, propagating")
 	case <-sigCh:
@@ -145,6 +153,10 @@ func (m *backgroundServiceManager) Wait() {
 			svc.Stop()
 		}
 	}
+}
+
+func (m *backgroundServiceManager) Stop() {
+	close(m.quitCh)
 }
 
 func (m *backgroundServiceManager) Cleanup() {
@@ -160,5 +172,6 @@ func (m *backgroundServiceManager) Cleanup() {
 func newBackgroundServiceManager() *backgroundServiceManager {
 	return &backgroundServiceManager{
 		termCh: make(chan service.BackgroundService),
+		quitCh: make(chan struct{}),
 	}
 }
