@@ -36,7 +36,7 @@ the development container:
 # make -C go
 ```
 
-## Building a test enclave
+## Building a test runtime and client
 
 Starting directory is
 ```
@@ -48,17 +48,17 @@ For building enclaves we have our own Cargo extension which should be installed:
 # cargo install --force --path tools
 ```
 
-To build the token enclave:
+To build the token runtime:
 ```
-# cd /code/contracts/token
+# cd /code/tests/runtimes/token
 # cargo ekiden build-enclave --output-identity
 ```
 
 The built enclave will be stored under `target/enclave/token.so`.
 
-To build the token client:
+To build the token runtime client:
 ```
-# cd /code/clients/token
+# cd /code/tests/clients/token
 # cargo build
 ```
 
@@ -144,7 +144,6 @@ See our [contributing guidelines](CONTRIBUTING.md).
 - `common`: Common functionality like error handling
 - `compute`: Ekiden compute node
 - `roothash`: Ekiden root hash interface
-- `contracts`: Example and mangaement code to run in the Ekiden runtime (`key-manager`, `token`)
 - `core`: Core external-facing libraries (aggregates `common`, `enclave`, `rpc`, `db`, etc.)
 - `db`: Database functionality for use in enclaves
 - `di`: Dependency Injection for runtime selection of components
@@ -160,4 +159,5 @@ See our [contributing guidelines](CONTRIBUTING.md).
 - `stake`: ERC20 integration and API - economics of participation
 - `storage`: Persistance and integration with DB and network file stores
 - `testnet`: Scripts of deployment and Ops of the system
+- `tests`: Runtimes, clients and resources used for E2E tests
 - `tools`: Build tools

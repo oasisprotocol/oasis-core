@@ -17,7 +17,7 @@ jobs:
       - checkout
       - run:
           name: Checking if Rust code has changed
-          command: ./scripts/ci-changed.sh \.circleci beacon clients common compute contract contracts core db di enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
+          command: ./scripts/ci-changed.sh \.circleci beacon tests common compute contract core db di enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
@@ -35,13 +35,13 @@ jobs:
       - run:
           name: Building database encryption test enclave
           command: cargo ekiden build-enclave --output-identity
-          working_directory: contracts/test-db-encryption
+          working_directory: tests/runtimes/test-db-encryption
       # Build token enclave.
       - run:
           name: Building token enclave
           command: cargo ekiden build-enclave --output-identity
-          working_directory: contracts/token
-      # Run token contract tests.
+          working_directory: tests/runtimes/token
+      # Run token runtime tests.
       - run: cargo test -p token
       # Ensure everything is built. Building an enclave needs to happen first
       - run: cargo build
@@ -91,7 +91,6 @@ jobs:
             - target/enclave/ekiden-keymanager-trusted.mrenclave
             - target/enclave/test-db-encryption.so
             - target/enclave/test-db-encryption.mrenclave
-            - tests
             - scripts
   cover-rust:
     <<: *defaults

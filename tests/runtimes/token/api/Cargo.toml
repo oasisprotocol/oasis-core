@@ -1,0 +1,14 @@
+[package]
+name = "token-api"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden runtime used in E2E tests"
+build = "build.rs"
+
+[dependencies]
+ekiden-core = { path = "../../../../core/common" }
+protobuf = "~2.0"
+serde = "1.0.71"
+
+[build-dependencies]
+ekiden-tools = { path = "../../../../tools" }

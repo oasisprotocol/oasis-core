@@ -5,9 +5,9 @@ authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 
 [dependencies]
 client-utils = { path = "../utils", features = ["benchmark"] }
-ekiden-core = { path = "../../core/common" }
-ekiden-contract-client = { path = "../../contract/client" }
-ekiden-rpc-client = { path = "../../rpc/client" }
-token-api = { path = "../../contracts/token/api" }
+ekiden-core = { path = "../../../core/common" }
+ekiden-contract-client = { path = "../../../contract/client" }
+ekiden-rpc-client = { path = "../../../rpc/client" }
+token-api = { path = "../../runtimes/token/api" }
 clap = "2.29.1"
 rand = "0.4"

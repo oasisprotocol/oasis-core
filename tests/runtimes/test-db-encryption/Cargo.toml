@@ -9,13 +9,13 @@ build = "build.rs"
 default = []
 
 [dependencies]
-ekiden-core = { path = "../../core/common" }
-ekiden-trusted = { path = "../../core/trusted" }
-ekiden-storage-base = { path = "../../storage/base" }
+ekiden-core = { path = "../../../core/common" }
+ekiden-trusted = { path = "../../../core/trusted" }
+ekiden-storage-base = { path = "../../../storage/base" }
 protobuf = "~2.0"
 test-db-encryption-api = { path = "./api" }
 lazy_static = { version = "1.1.0", features = ["spin_no_std"] }
 
 [build-dependencies]
-ekiden-tools = { path = "../../tools" }
-ekiden-edl = { path = "../../core/edl" }
+ekiden-tools = { path = "../../../tools" }
+ekiden-edl = { path = "../../../core/edl" }

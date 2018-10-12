@@ -5,10 +5,10 @@ authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 build = "build.rs"
 
 [dependencies]
-ekiden-core = { path = "../../../core/common" }
-ekiden-trusted = { path = "../../../core/trusted" }
+ekiden-core = { path = "../../../../core/common" }
+ekiden-trusted = { path = "../../../../core/trusted" }
 protobuf = "~2.0"
 serde = "1.0.71"
 
 [build-dependencies]
-ekiden-tools = { path = "../../../tools" }
+ekiden-tools = { path = "../../../../tools" }
