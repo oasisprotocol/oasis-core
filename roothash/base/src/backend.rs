@@ -1,10 +1,12 @@
 //! Root hash backend interface.
+use ekiden_common::block::Block;
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::{BoxFuture, BoxStream, Future, Stream};
+use ekiden_common::header::Header;
 use ekiden_common::uint::U256;
 
-use super::{Block, Commitment, Header};
+use super::Commitment;
 
 /// Notification of a protocol event.
 #[derive(Clone, Debug, PartialEq, Eq)]

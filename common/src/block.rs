@@ -1,14 +1,13 @@
 //! Block type.
 use std::convert::TryFrom;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Error;
-use ekiden_common::hash::{empty_hash, EncodedHash};
-use ekiden_common::uint::U256;
+use bytes::H256;
+use error::Error;
+use hash::{empty_hash, EncodedHash};
+use header::Header;
+use uint::U256;
 
-use ekiden_roothash_api as api;
-
-use super::header::Header;
+use ekiden_common_api as api;
 
 /// Block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

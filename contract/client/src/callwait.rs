@@ -5,6 +5,7 @@ use std::sync::Arc;
 use serde_cbor;
 
 use ekiden_common;
+use ekiden_common::block::Block;
 use ekiden_common::bytes::B256;
 use ekiden_common::bytes::H256;
 use ekiden_common::environment::Environment;
@@ -19,7 +20,6 @@ use ekiden_common::uint::U256;
 use ekiden_contract_common::batch::CallBatch;
 use ekiden_contract_common::batch::OutputBatch;
 use ekiden_roothash_base::backend::RootHashBackend;
-use ekiden_roothash_base::block::Block;
 use ekiden_storage_base::backend::StorageBackend;
 
 type SharedCommitInfo = Arc<HashMap<H256, Vec<u8>>>;

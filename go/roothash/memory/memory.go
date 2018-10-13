@@ -522,16 +522,3 @@ func New(
 
 	return r
 }
-
-func newGenesisBlock(id signature.PublicKey) *api.Block {
-	var blk api.Block
-
-	blk.Header.Version = 0
-	blk.Header.Timestamp = uint64(time.Now().Unix())
-	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
-	blk.Header.InputHash.Empty()
-	blk.Header.OutputHash.Empty()
-	blk.Header.StateRoot.Empty()
-
-	return &blk
-}

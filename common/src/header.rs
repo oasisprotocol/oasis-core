@@ -6,13 +6,13 @@ use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 
 #[cfg(not(target_env = "sgx"))]
-use ekiden_roothash_api as api;
+use ekiden_common_api as api;
 
-use ekiden_common::bytes::{B256, H256};
+use bytes::{B256, H256};
 #[cfg(not(target_env = "sgx"))]
-use ekiden_common::error::Error;
-use ekiden_common::hash::EncodedHash;
-use ekiden_common::uint::U256;
+use error::Error;
+use hash::EncodedHash;
+use uint::U256;
 
 /// Block header.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Deserialize)]

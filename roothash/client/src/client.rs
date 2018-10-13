@@ -4,15 +4,17 @@ use std::sync::Arc;
 
 use grpcio::{Channel, ChannelBuilder};
 
+use ekiden_common::block::Block;
 use ekiden_common::bytes::{B256, H256};
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
+use ekiden_common::header::Header;
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
-use ekiden_roothash_base::{Block, Commitment, Event, Header, RootHashBackend};
+use ekiden_roothash_base::{Commitment, Event, RootHashBackend};
 
 /// Root hash client implements the root hash interface.
 pub struct RootHashClient(api::RootHashClient);

@@ -146,3 +146,4 @@ test_migration() {
 
 set -x
 test_migration mock memory
+test_migration tendermint_mock tendermint

@@ -13,6 +13,7 @@ use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
 use thread_local::ThreadLocal;
 
+use ekiden_core::block::Block;
 use ekiden_core::bytes::H256;
 use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
@@ -24,7 +25,6 @@ use ekiden_core::futures::Future;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_core::x509::Certificate;
-use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_storage_batch::BatchStorageBackend;
 use ekiden_untrusted::rpc::router::RpcRouter;

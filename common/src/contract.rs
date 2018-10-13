@@ -1,6 +1,7 @@
 //! Contract Interface.
 use std::convert::TryFrom;
 
+use block::Block;
 use bytes::B256;
 use error::Error;
 
@@ -17,6 +18,9 @@ pub struct Contract {
 
     /// The contract code body.
     pub code: Vec<u8>,
+
+    /// The starting block.
+    pub genesis_block: Block,
 
     // XXX: "tokens" for advertisement (PR #2), in to be specified units.
     /// The minimum stake required by the contract.
@@ -57,6 +61,7 @@ impl TryFrom<api::Contract> for Contract {
             id: id,
             store_id: sid,
             code: a.get_code().to_vec(),
+            genesis_block: Block::try_from(a.get_genesis_block().to_owned())?,
             minimum_bond: a.minimum_bond,
             mode_nondeterministic: a.get_mode() == api::Contract_Mode::Nondeterministic,
             features_sgx: a.get_features()

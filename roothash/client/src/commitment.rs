@@ -5,8 +5,9 @@ use serde_cbor;
 
 use ekiden_common::bytes::{B256, B64};
 use ekiden_common::error::{Error, Result};
+use ekiden_common::header::Header;
 use ekiden_common::signature::{Signed, Signer};
-use ekiden_roothash_base::{Commitment as OpaqueCommitment, Header};
+use ekiden_roothash_base::Commitment as OpaqueCommitment;
 
 /// Signature context used for commitments.
 const COMMITMENT_SIGNATURE_CONTEXT: B64 = B64(*b"EkCommit");
@@ -55,11 +56,11 @@ impl Into<OpaqueCommitment> for Commitment {
 
 #[cfg(test)]
 mod tests {
+    use ekiden_common::block::Block;
     use ekiden_common::bytes::B256;
     use ekiden_common::ring::signature::Ed25519KeyPair;
     use ekiden_common::signature::InMemorySigner;
     use ekiden_common::untrusted;
-    use ekiden_roothash_base::Block;
 
     use super::*;
 

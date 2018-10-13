@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use ekiden_core;
+use ekiden_core::block::Block;
 use ekiden_core::bytes::B256;
 use ekiden_core::bytes::H256;
 use ekiden_core::environment::Environment;
@@ -15,7 +16,7 @@ use ekiden_core::uint::U256;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::{Database, DatabaseHandle};
 use ekiden_di::Container;
-use ekiden_roothash_base::{Block, RootHashBackend};
+use ekiden_roothash_base::RootHashBackend;
 use ekiden_storage_base::BackendIdentityMapper;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_base::StorageMapper;

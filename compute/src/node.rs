@@ -6,11 +6,14 @@ use std::sync::Arc;
 use grpcio;
 
 use ekiden_compute_api;
+use ekiden_core::block::Block;
 use ekiden_core::bytes::B256;
 use ekiden_core::contract::Contract;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
+use ekiden_core::hash;
+use ekiden_core::header::Header;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
@@ -53,6 +56,9 @@ pub struct ComputeNodeConfiguration {
     /// Number of allowed stragglers.
     // TODO: Remove this once we have independent contract registration.
     pub compute_allowed_stragglers: u64,
+    /// If present, use this as the genesis block when we register our contract.
+    // TODO: Remove this once we have independent contract registration.
+    pub compute_genesis_block: Option<Block>,
     /// Root hash configuration.
     pub roothash: RootHashConfiguration,
     /// IAS configuration.
@@ -119,6 +125,17 @@ impl ComputeNode {
             contract.replica_group_backup_size = config.compute_backup_replicas;
             contract.replica_allowed_stragglers = config.compute_allowed_stragglers;
             contract.storage_group_size = 1;
+            contract.genesis_block = config.compute_genesis_block.unwrap_or(Block {
+                header: Header {
+                    version: 0,
+                    namespace: contract_id,
+                    timestamp: now,
+                    input_hash: hash::empty_hash(),
+                    output_hash: hash::empty_hash(),
+                    state_root: hash::empty_hash(),
+                    ..Default::default()
+                },
+            });
 
             contract
         };

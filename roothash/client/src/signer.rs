@@ -2,8 +2,9 @@
 use std::sync::Arc;
 
 use ekiden_common::error::Result;
+use ekiden_common::header::Header;
 use ekiden_common::identity::NodeIdentity;
-use ekiden_roothash_base::{Commitment as OpaqueCommitment, Header, RootHashSigner};
+use ekiden_roothash_base::{Commitment as OpaqueCommitment, RootHashSigner};
 
 use super::commitment::Commitment;
 

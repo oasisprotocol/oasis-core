@@ -49,6 +49,7 @@ message Contract {
     bytes id = 1;
     bytes store_id = 2;
     bytes code = 3;
+    Block genesis_block = 12;
 
     uint64 minimum_bond = 4;
     enum Mode {
@@ -71,6 +72,23 @@ message Contract {
     uint64 replica_group_backup_size = 10;
 
     uint64 replica_allowed_stragglers = 11;
+}
+
+message Block {
+    Header header = 1;
+}
+
+message Header {
+    uint32 version = 1;
+    bytes namespace = 2;
+    bytes round = 3;
+    uint64 timestamp = 4;
+    bytes previous_hash = 5;
+    bytes group_hash = 6;
+    bytes input_hash = 7;
+    bytes output_hash = 8;
+    bytes state_root = 9;
+    bytes commitments_hash = 10;
 }
 
 service TimeSource {

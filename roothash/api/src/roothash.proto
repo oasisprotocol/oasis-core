@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "common/api/src/common.proto";
+
 package roothash;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/roothash";
 
@@ -11,10 +13,6 @@ service RootHash {
   rpc Commit (CommitRequest) returns (CommitResponse) {}
 }
 
-message Block {
-  Header header = 1;
-}
-
 message Nonce {
   bytes data = 1;
 }
@@ -23,34 +21,12 @@ message Commitment {
   bytes data = 1;
 }
 
-message Header {
-  uint32 version = 1;
-  bytes namespace = 2;
-  bytes round = 3;
-  uint64 timestamp = 4;
-  bytes previous_hash = 5;
-  bytes group_hash = 6;
-  bytes input_hash = 7;
-  bytes output_hash = 8;
-  bytes state_root = 9;
-  bytes commitments_hash = 10;
-}
-
-message GenesisBlock {
-  bytes contract_id = 1;
-  Block block = 2;
-}
-
-message GenesisBlocks {
-  repeated GenesisBlock genesis_blocks = 1;
-}
-
 message LatestBlockRequest {
   bytes contract_id = 1;
 }
 
 message LatestBlockResponse {
-  Block block = 1;
+  common.Block block = 1;
 }
 
 message BlockRequest {
@@ -58,7 +34,7 @@ message BlockRequest {
 }
 
 message BlockResponse {
-  Block block = 1;
+  common.Block block = 1;
 }
 
 message BlockSinceRequest {
@@ -76,7 +52,7 @@ message Event {
   }
   message DiscrepancyDetected {
     bytes batch_hash = 1;
-    Header block_header = 2;
+    common.Header block_header = 2;
   }
 
   oneof event {

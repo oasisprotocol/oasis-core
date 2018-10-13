@@ -9,8 +9,8 @@ use ekiden_compute_api::{ComputationGroup, SubmitBatchRequest, SubmitBatchRespon
 use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
+use ekiden_core::header::Header;
 use ekiden_core::x509::get_node_id;
-use ekiden_roothash_base::Header;
 
 use super::super::roothash::RootHashFrontend;
 

@@ -20,15 +20,9 @@ extern crate ekiden_storage_base;
 #[cfg(not(target_env = "sgx"))]
 pub mod backend;
 #[cfg(not(target_env = "sgx"))]
-pub mod block;
-#[cfg(not(target_env = "sgx"))]
 pub mod commitment;
-pub mod header;
 
 #[cfg(not(target_env = "sgx"))]
 pub use backend::*;
 #[cfg(not(target_env = "sgx"))]
-pub use block::*;
-#[cfg(not(target_env = "sgx"))]
 pub use commitment::*;
-pub use header::*;

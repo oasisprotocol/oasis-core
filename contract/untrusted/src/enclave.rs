@@ -3,9 +3,9 @@ use serde_cbor;
 use sgx_types::*;
 
 use ekiden_common::error::{Error, Result};
+use ekiden_common::header::Header;
 use ekiden_contract_common::batch::{CallBatch, OutputBatch};
 use ekiden_enclave_untrusted::Enclave;
-use ekiden_roothash_base::Header;
 
 use super::ecall_proxy;
 
