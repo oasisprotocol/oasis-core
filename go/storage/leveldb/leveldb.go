@@ -50,6 +50,8 @@ var (
 type leveldbBackend struct {
 	logger *logging.Logger
 	db     *leveldb.DB
+
+	closeOnce sync.Once
 }
 
 func (b *leveldbBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
@@ -140,6 +142,9 @@ func (b *leveldbBackend) PurgeExpired(epoch epochtime.EpochTime) {
 }
 
 func (b *leveldbBackend) Cleanup() {
+	b.closeOnce.Do(func() {
+		_ = b.db.Close()
+	})
 }
 
 func (b *leveldbBackend) Initialized() <-chan struct{} {
