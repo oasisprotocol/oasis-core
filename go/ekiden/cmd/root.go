@@ -128,6 +128,7 @@ func (n *Node) initBackends() error {
 	if n.Scheduler, err = scheduler.New(n.cmd, n.Epochtime, n.Registry, n.Beacon); err != nil {
 		return err
 	}
+	n.svcMgr.RegisterCleanupOnly(n.Scheduler)
 	if n.Storage, err = storage.New(n.cmd, n.Epochtime, dataDir); err != nil {
 		return err
 	}
