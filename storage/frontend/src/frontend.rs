@@ -14,8 +14,8 @@ use ekiden_storage_base::{InsertOptions, StorageBackend};
 use client::StorageClient;
 
 struct Inner {
-    /// Contract context for storage operations.
-    contract_id: B256,
+    /// Runtime context for storage operations.
+    runtime_id: B256,
     /// Notification of committee changes.
     scheduler: Arc<Scheduler>,
     /// Registry of nodes.
@@ -29,7 +29,7 @@ struct Inner {
 }
 
 /// StorageFrontend provides a storage interface routed to active storage backends for a given
-/// `Contract`, as directed by the Ekiden `Scheduler`.
+/// `Runtime`, as directed by the Ekiden `Scheduler`.
 pub struct StorageFrontend {
     /// Active connections to storage backends.
     clients: Arc<Mutex<Vec<Arc<StorageClient>>>>,
@@ -40,7 +40,7 @@ pub struct StorageFrontend {
 impl StorageFrontend {
     /// Create a new frontend that uses clients based on pointers from the scheduler.
     pub fn new(
-        contract_id: B256,
+        runtime_id: B256,
         scheduler: Arc<Scheduler>,
         registry: Arc<EntityRegistryBackend>,
         environment: Arc<Environment>,
@@ -50,7 +50,7 @@ impl StorageFrontend {
         Self {
             clients: Arc::new(Mutex::new(vec![])),
             inner: Arc::new(Inner {
-                contract_id,
+                runtime_id,
                 scheduler,
                 registry,
                 environment,
@@ -61,14 +61,14 @@ impl StorageFrontend {
     }
 
     /// Refreshes the list of active storage connections by polling the scheduler for the active
-    /// storage committee for a given contract.
+    /// storage committee for a given runtime.
     fn refresh(inner: Arc<Inner>) -> BoxFuture<Vec<Arc<StorageClient>>> {
         let shared_inner = inner.clone();
 
         Box::new(
             inner
                 .scheduler
-                .get_committees(inner.contract_id)
+                .get_committees(inner.runtime_id)
                 .and_then(move |committee: Vec<Committee>| -> BoxFuture<Node> {
                     let committee = committee
                         .iter()

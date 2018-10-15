@@ -36,8 +36,8 @@ impl EnclaveRpc for EnclaveRpcService {
         mut rpc_request: CallEnclaveRequest,
         sink: grpcio::UnarySink<CallEnclaveResponse>,
     ) {
-        measure_histogram_timer!("call_contract_time");
-        measure_counter_inc!("call_contract_calls");
+        measure_histogram_timer!("call_enclave_time");
+        measure_counter_inc!("call_enclave_calls");
 
         // TODO: Support routing to multiple enclaves based on enclave_id.
 

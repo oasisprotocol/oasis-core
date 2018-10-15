@@ -47,13 +47,13 @@ extern crate ekiden_di;
 
 pub mod address;
 pub mod bytes;
-pub mod contract;
 pub mod drbg;
 pub mod entity;
 pub mod error;
 pub mod futures;
 pub mod hash;
 pub mod node;
+pub mod runtime;
 #[cfg(not(target_env = "sgx"))]
 #[macro_use]
 pub mod macros;

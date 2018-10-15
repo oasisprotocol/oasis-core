@@ -37,7 +37,7 @@ message Header {
 }
 
 message LatestBlockRequest {
-  bytes contract_id = 1;
+  bytes runtime_id = 1;
 }
 
 message LatestBlockResponse {
@@ -45,7 +45,7 @@ message LatestBlockResponse {
 }
 
 message BlockRequest {
-  bytes contract_id = 1;
+  bytes runtime_id = 1;
 }
 
 message BlockResponse {
@@ -53,12 +53,12 @@ message BlockResponse {
 }
 
 message BlockSinceRequest {
-  bytes contract_id = 1;
+  bytes runtime_id = 1;
   bytes round = 2;
 }
 
 message EventRequest {
-  bytes contract_id = 1;
+  bytes runtime_id = 1;
 }
 
 message Event {
@@ -81,7 +81,7 @@ message EventResponse {
 }
 
 message CommitRequest {
-  bytes contract_id = 1;
+  bytes runtime_id = 1;
   Commitment commitment = 2;
 }
 

@@ -10,11 +10,11 @@ import (
 	"github.com/eapache/channels"
 	"golang.org/x/net/context"
 
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -30,10 +30,10 @@ const (
 )
 
 var (
-	errContractExists = errors.New("roothash/memory: contract already exists")
-	errNoSuchContract = errors.New("roothash/memory: no such contract")
-	errNoSuchBlocks   = errors.New("roothash/memory: no such block(s) exist for contract")
-	errNoRound        = errors.New("roothash/memory: no round in progress")
+	errRuntimeExists = errors.New("roothash/memory: runtime already exists")
+	errNoSuchRuntime = errors.New("roothash/memory: no such runtime")
+	errNoSuchBlocks  = errors.New("roothash/memory: no such block(s) exist for runtime")
+	errNoRound       = errors.New("roothash/memory: no round in progress")
 
 	_ api.Backend              = (*memoryRootHash)(nil)
 	_ (api.MetricsMonitorable) = (*memoryRootHash)(nil)
@@ -44,16 +44,16 @@ type commitCmd struct {
 	errCh      chan error
 }
 
-type contractState struct {
+type runtimeState struct {
 	sync.RWMutex
 
 	logger  *logging.Logger
 	storage storage.Backend
 
-	contract *contract.Contract
-	round    *round
-	timer    *time.Timer
-	blocks   []*api.Block
+	runtime *runtime.Runtime
+	round   *round
+	timer   *time.Timer
+	blocks  []*api.Block
 
 	cmdCh         chan *commitCmd
 	blockNotifier *pubsub.Broker
@@ -62,14 +62,14 @@ type contractState struct {
 	rootHash *memoryRootHash
 }
 
-func (s *contractState) getLatestBlock() (*api.Block, error) {
+func (s *runtimeState) getLatestBlock() (*api.Block, error) {
 	s.RLock()
 	defer s.RUnlock()
 
 	return s.getLatestBlockImpl()
 }
 
-func (s *contractState) getLatestBlockImpl() (*api.Block, error) {
+func (s *runtimeState) getLatestBlockImpl() (*api.Block, error) {
 	nBlocks := len(s.blocks)
 	if nBlocks == 0 {
 		return nil, errNoSuchBlocks
@@ -78,7 +78,7 @@ func (s *contractState) getLatestBlockImpl() (*api.Block, error) {
 	return s.blocks[nBlocks-1], nil
 }
 
-func (s *contractState) onNewCommittee(committee *scheduler.Committee) {
+func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
 	// If the committee is the "same", ignore this.
 	//
 	// TODO: Use a better check to allow for things like rescheduling.
@@ -107,10 +107,10 @@ func (s *contractState) onNewCommittee(committee *scheduler.Committee) {
 	}
 	s.timer.Reset(infiniteTimeout)
 
-	s.round = newRound(s.storage, s.contract, committee, block)
+	s.round = newRound(s.storage, s.runtime, committee, block)
 }
 
-func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
+func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 	var rearmTimer bool
 	defer func() {
 		// Note: Unlike the Rust code, this pushes back the timer
@@ -223,7 +223,7 @@ func (s *contractState) tryFinalize(forced bool) { // nolint: gocyclo
 	})
 }
 
-func (s *contractState) worker(sched scheduler.Backend) { // nolint: gocyclo
+func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
 	schedCh, sub := sched.WatchCommittees()
 	defer sub.Close()
 
@@ -244,7 +244,7 @@ func (s *contractState) worker(sched scheduler.Backend) { // nolint: gocyclo
 			}
 
 			// Ignore unrelated committees.
-			if !committee.Contract.ID.Equal(s.contract.ID) {
+			if !committee.Runtime.ID.Equal(s.runtime.ID) {
 				continue
 			}
 			if committee.Kind != scheduler.Compute {
@@ -276,7 +276,7 @@ func (s *contractState) worker(sched scheduler.Backend) { // nolint: gocyclo
 					"round", blockNr,
 				)
 
-				s.round = newRound(s.storage, s.contract, s.round.roundState.committee, latestBlock)
+				s.round = newRound(s.storage, s.runtime, s.round.roundState.committee, latestBlock)
 			}
 
 			// Add the commitment.
@@ -308,13 +308,13 @@ type memoryRootHash struct {
 	scheduler scheduler.Backend
 	storage   storage.Backend
 
-	contracts map[signature.MapKey]*contractState
+	runtimes map[signature.MapKey]*runtimeState
 
 	allBlockNotifier *pubsub.Broker
 }
 
 func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
-	s, err := r.getContractState(id)
+	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.Public
 }
 
 func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *api.Block, *pubsub.Subscription, error) {
-	s, err := r.getContractState(id)
+	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -343,7 +343,7 @@ func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *api.Block,
 }
 
 func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round api.Round) (<-chan *api.Block, *pubsub.Subscription, error) {
-	s, err := r.getContractState(id)
+	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -379,7 +379,7 @@ func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round api.Roun
 }
 
 func (r *memoryRootHash) WatchEvents(id signature.PublicKey) (<-chan *api.Event, *pubsub.Subscription, error) {
-	s, err := r.getContractState(id)
+	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -392,7 +392,7 @@ func (r *memoryRootHash) WatchEvents(id signature.PublicKey) (<-chan *api.Event,
 }
 
 func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, commit *api.Commitment) error {
-	s, err := r.getContractState(id)
+	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return err
 	}
@@ -425,35 +425,35 @@ func (r *memoryRootHash) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscripti
 	return ch, sub
 }
 
-func (r *memoryRootHash) getContractState(id signature.PublicKey) (*contractState, error) {
+func (r *memoryRootHash) getRuntimeState(id signature.PublicKey) (*runtimeState, error) {
 	k := id.ToMapKey()
 
 	r.Lock()
 	defer r.Unlock()
 
-	s, ok := r.contracts[k]
+	s, ok := r.runtimes[k]
 	if !ok {
-		return nil, errNoSuchContract
+		return nil, errNoSuchRuntime
 	}
 
 	return s, nil
 }
 
-func (r *memoryRootHash) onContractRegistration(contract *contract.Contract) error {
-	k := contract.ID.ToMapKey()
+func (r *memoryRootHash) onRuntimeRegistration(runtime *runtime.Runtime) error {
+	k := runtime.ID.ToMapKey()
 
 	r.Lock()
 	defer r.Unlock()
 
-	if _, ok := r.contracts[k]; ok {
-		return errContractExists
+	if _, ok := r.runtimes[k]; ok {
+		return errRuntimeExists
 	}
 
-	s := &contractState{
-		logger:        r.logger.With("contract_id", contract.ID),
+	s := &runtimeState{
+		logger:        r.logger.With("runtime_id", runtime.ID),
 		storage:       r.storage,
-		contract:      contract,
-		blocks:        append([]*api.Block{}, newGenesisBlock(contract.ID)),
+		runtime:       runtime,
+		blocks:        append([]*api.Block{}, newGenesisBlock(runtime.ID)),
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
@@ -462,32 +462,32 @@ func (r *memoryRootHash) onContractRegistration(contract *contract.Contract) err
 
 	go s.worker(r.scheduler)
 
-	r.contracts[k] = s
+	r.runtimes[k] = s
 
 	return nil
 }
 
 func (r *memoryRootHash) worker(registry registry.Backend) {
-	ch, sub := registry.WatchContracts()
+	ch, sub := registry.WatchRuntimes()
 	defer sub.Close()
 
 	for {
-		contract, ok := <-ch
+		runtime, ok := <-ch
 		if !ok {
 			break
 		}
 
-		err := r.onContractRegistration(contract)
+		err := r.onRuntimeRegistration(runtime)
 		if err != nil {
-			r.logger.Error("worker: contract registration failed",
+			r.logger.Error("worker: runtime registration failed",
 				"err", err,
-				"contract_id", contract.ID,
+				"runtime_id", runtime.ID,
 			)
 			continue
 		}
 
-		r.logger.Debug("worker: contract registered",
-			"contract_id", contract.ID,
+		r.logger.Debug("worker: runtime registered",
+			"runtime_id", runtime.ID,
 		)
 	}
 }
@@ -498,7 +498,7 @@ func New(scheduler scheduler.Backend, storage storage.Backend, registry registry
 		logger:           logging.GetLogger("roothash/memory"),
 		scheduler:        scheduler,
 		storage:          storage,
-		contracts:        make(map[signature.MapKey]*contractState),
+		runtimes:         make(map[signature.MapKey]*runtimeState),
 		allBlockNotifier: pubsub.NewBroker(false),
 	}
 	go r.worker(registry)

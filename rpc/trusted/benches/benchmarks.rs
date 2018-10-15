@@ -110,7 +110,7 @@ fn init_secure_channel(
 /// Dispatch secure channel request.
 fn make_secure_channel_request<S, Rq, Rs>(
     nonce_generator: &mut MonotonicNonceGenerator,
-    contract_public_key: &sodalite::BoxPublicKey,
+    enclave_public_key: &sodalite::BoxPublicKey,
     public_key: &sodalite::BoxPublicKey,
     private_key: &sodalite::BoxSecretKey,
     mut shared_key: &mut Option<sodalite::SecretboxKey>,
@@ -130,12 +130,12 @@ where
         &plain_client_request.write_to_bytes().unwrap(),
         &NONCE_CONTEXT_REQUEST,
         nonce_generator,
-        &contract_public_key,
+        &enclave_public_key,
         &private_key,
         &mut shared_key,
     ).unwrap();
 
-    // Set public key so the contract knows which client this is.
+    // Set public key so the enclave knows which client this is.
     crypto_box.set_public_key(public_key.to_vec());
 
     let mut client_request = api::ClientRequest::new();
@@ -174,7 +174,7 @@ where
         &client_response.get_encrypted_response(),
         &NONCE_CONTEXT_RESPONSE,
         nonce_generator,
-        &contract_public_key,
+        &enclave_public_key,
         &private_key,
         &mut shared_key,
     ).unwrap();
@@ -236,14 +236,14 @@ fn benchmark_secure_channel_empty_request(b: &mut Bencher) {
     register_empty_method();
     prepare_secure_channel_enclave();
     let (public_key, private_key) = prepare_secure_channel_client();
-    let contract_public_key = init_secure_channel(&public_key, &private_key);
+    let enclave_public_key = init_secure_channel(&public_key, &private_key);
     let mut nonce_generator = MonotonicNonceGenerator::new();
     let mut shared_key: Option<sodalite::SecretboxKey> = None;
 
     // First request to initialize shared key.
     let _response: Dummy = make_secure_channel_request(
         &mut nonce_generator,
-        &contract_public_key,
+        &enclave_public_key,
         &public_key,
         &private_key,
         &mut shared_key,
@@ -254,7 +254,7 @@ fn benchmark_secure_channel_empty_request(b: &mut Bencher) {
     b.iter(|| {
         let _response: Dummy = make_secure_channel_request(
             &mut nonce_generator,
-            &contract_public_key,
+            &enclave_public_key,
             &public_key,
             &private_key,
             &mut shared_key,
@@ -274,7 +274,7 @@ fn benchmark_secure_channel_empty_request_no_shared_key(b: &mut Bencher) {
     register_empty_method();
     prepare_secure_channel_enclave();
     let (public_key, private_key) = prepare_secure_channel_client();
-    let contract_public_key = init_secure_channel(&public_key, &private_key);
+    let enclave_public_key = init_secure_channel(&public_key, &private_key);
     let mut nonce_generator = MonotonicNonceGenerator::new();
 
     b.iter(|| {
@@ -282,7 +282,7 @@ fn benchmark_secure_channel_empty_request_no_shared_key(b: &mut Bencher) {
         let mut shared_key: Option<sodalite::SecretboxKey> = None;
         let _response: Dummy = make_secure_channel_request(
             &mut nonce_generator,
-            &contract_public_key,
+            &enclave_public_key,
             &public_key,
             &private_key,
             &mut shared_key,

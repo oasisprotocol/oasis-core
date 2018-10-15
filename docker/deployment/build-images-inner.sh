@@ -17,7 +17,6 @@ fi
 
 # Build all Ekiden Rust binaries and resources.
 cargo install --force --path tools
-(cd contracts/token && cargo ekiden build-enclave --release)
 (cd compute && cargo build --release)
 
 # Build all Ekiden Go binaries and resources.
@@ -30,7 +29,6 @@ ln -sfT `pwd` ${GO_SRC_BASE}/ekiden
 
 # Package all binaries and resources.
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
-ln target/enclave/token.so target/docker-deployment/context/lib
 ln target/release/ekiden-compute target/docker-deployment/context/bin
 ln go/ekiden/ekiden target/docker-deployment/context/bin/ekiden-node
 if [ -e docker/deployment/Dockerfile.generated ]

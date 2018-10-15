@@ -10,17 +10,17 @@ fn main() {
         &[
             "computation_group",
             "computation_group_grpc",
-            "contract",
-            "contract_grpc",
+            "runtime",
+            "runtime_grpc",
         ],
     );
 
     protoc_grpcio::compile_grpc_protos(
-        &["src/computation_group.proto", "src/contract.proto"],
+        &["src/computation_group.proto", "src/runtime.proto"],
         &["src", "../../"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/contract.proto");
+    println!("cargo:rerun-if-changed={}", "src/runtime.proto");
     println!("cargo:rerun-if-changed={}", "src/computation_group.proto");
 }

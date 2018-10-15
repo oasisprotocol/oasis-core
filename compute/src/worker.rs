@@ -14,7 +14,6 @@ use rustracing_jaeger::span::SpanHandle;
 use thread_local::ThreadLocal;
 
 use ekiden_core::bytes::H256;
-use ekiden_core::contract::batch::{CallBatch, OutputBatch};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
 use ekiden_core::environment::Environment;
@@ -23,12 +22,13 @@ use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::Future;
 use ekiden_core::rpc::api;
 use ekiden_core::rpc::client::ClientEndpoint;
+use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
 use ekiden_core::x509::Certificate;
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_storage_batch::BatchStorageBackend;
 use ekiden_untrusted::rpc::router::RpcRouter;
-use ekiden_untrusted::{Enclave, EnclaveContract, EnclaveDb, EnclaveIdentity, EnclaveRpc};
+use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime};
 
 use super::handlers;
 use super::ias::IAS;
@@ -43,9 +43,9 @@ pub type BytesSender = oneshot::Sender<BytesResult>;
 pub struct ComputedBatch {
     /// Block this batch was computed against.
     pub block: Block,
-    /// Batch of contract calls.
+    /// Batch of runtime calls.
     pub calls: CallBatch,
-    /// Batch of contract outputs.
+    /// Batch of runtime outputs.
     pub outputs: OutputBatch,
     /// New state root hash.
     pub new_state_root: H256,
@@ -55,8 +55,8 @@ pub struct ComputedBatch {
 enum Command {
     /// RPC call from a client.
     RpcCall(Vec<u8>, BytesSender),
-    /// Contract call batch process request.
-    ContractCallBatch(
+    /// Runtime call batch process request.
+    RuntimeCallBatch(
         CallBatch,
         Block,
         oneshot::Sender<Result<ComputedBatch>>,
@@ -66,8 +66,8 @@ enum Command {
 }
 
 struct WorkerInner {
-    /// Contract running in an enclave.
-    contract: Enclave,
+    /// Runtime running in an enclave.
+    runtime: Enclave,
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Enclave identity proof.
@@ -78,68 +78,68 @@ struct WorkerInner {
 impl WorkerInner {
     fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
         measure_configure!(
-            "contract_call_batch_size",
-            "Contract call batch sizes.",
+            "runtime_call_batch_size",
+            "Runtime call batch sizes.",
             MetricConfig::Histogram {
                 buckets: vec![0., 1., 5., 10., 20., 50., 100., 200., 500., 1000.],
             }
         );
         measure_configure!(
-            "contract_call_storage_inserts",
+            "runtime_call_storage_inserts",
             "Number of storage inserts from processing a batch.",
             MetricConfig::Histogram {
                 buckets: vec![0., 1., 5., 10., 50., 100., 200., 500., 1000., 5000., 10000.],
             }
         );
 
-        let (contract, identity_proof) =
-            Self::create_contract(&config.contract_filename, ias, config.saved_identity_path);
+        let (runtime, identity_proof) =
+            Self::create_runtime(&config.runtime_filename, ias, config.saved_identity_path);
 
         Self {
-            contract,
+            runtime,
             storage,
             identity_proof,
         }
     }
 
-    /// Create an instance of the contract.
-    fn create_contract(
-        contract_filename: &str,
+    /// Create an instance of the runtime.
+    fn create_runtime(
+        runtime_filename: &str,
         ias: Arc<IAS>,
         saved_identity_path: Option<PathBuf>,
     ) -> (Enclave, IdentityProof) {
-        // TODO: Handle contract initialization errors.
-        let contract = Enclave::new(contract_filename).unwrap();
+        // TODO: Handle runtime initialization errors.
+        let runtime = Enclave::new(runtime_filename).unwrap();
 
-        // Initialize contract.
-        let identity_proof = contract
+        // Initialize runtime.
+        let identity_proof = runtime
             .identity_init(
                 ias.deref(),
                 saved_identity_path.as_ref().map(|p| p.borrow()),
             )
             .expect("EnclaveIdentity::identity_init");
 
-        // Show contract MRENCLAVE in hex format.
+        // Show runtime MRENCLAVE in hex format.
         let iai = quote::verify(&identity_proof).expect("Enclave identity proof invalid");
         let mut mr_enclave = String::new();
         for &byte in &iai.mr_enclave[..] {
             write!(&mut mr_enclave, "{:02x}", byte).unwrap();
         }
 
-        info!("Loaded contract with MRENCLAVE: {}", mr_enclave);
+        info!("Loaded runtime with MRENCLAVE: {}", mr_enclave);
 
-        (contract, identity_proof)
+        (runtime, identity_proof)
     }
 
-    /// `handle_sh` is from when we handled the CallContractBatch command.
-    fn call_contract_batch_fallible(
+    /// `handle_sh` is from when we handled the CallRuntimeBatch command.
+    fn call_runtime_batch_fallible(
         &mut self,
         batch: &CallBatch,
         block: &Block,
         handle_sh: SpanHandle,
         commit_storage: bool,
     ) -> Result<(OutputBatch, H256)> {
-        measure_histogram!("contract_call_batch_size", batch.len());
+        measure_histogram!("runtime_call_batch_size", batch.len());
 
         // Prepare batch storage.
         let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone()));
@@ -148,20 +148,20 @@ impl WorkerInner {
         let enclave_sh;
 
         let (new_state_root, outputs) = {
-            measure_histogram_timer!("contract_call_batch_enclave_time");
-            let span = handle_sh.child("call_contract_batch_enclave", |opts| opts.start());
+            measure_histogram_timer!("runtime_call_batch_enclave_time");
+            let span = handle_sh.child("call_runtime_batch_enclave", |opts| opts.start());
             enclave_sh = span.handle();
 
             // Run in storage context.
-            self.contract
+            self.runtime
                 .with_storage(batch_storage.clone(), root_hash, || {
                     // Execute batch.
-                    self.contract.contract_call_batch(batch, &block.header)
+                    self.runtime.runtime_call_batch(batch, &block.header)
                 })?
         };
 
         measure_histogram!(
-            "contract_call_storage_inserts",
+            "runtime_call_storage_inserts",
             batch_storage.get_batch_size()
         );
 
@@ -171,8 +171,8 @@ impl WorkerInner {
                 local_only: !commit_storage,
             };
 
-            measure_histogram_timer!("contract_call_storage_commit_time");
-            let _span = enclave_sh.follower("contract_call_storage_commit", |opts| opts.start());
+            measure_histogram_timer!("runtime_call_storage_commit_time");
+            let _span = enclave_sh.follower("runtime_call_storage_commit", |opts| opts.start());
             batch_storage.commit(opts).wait()?;
         }
 
@@ -183,7 +183,7 @@ impl WorkerInner {
     fn handle_rpc_call(&self, request: Vec<u8>) -> BytesResult {
         // TODO: Notify enclave that it is stateless so it can clear storage cache.
 
-        // Call contract.
+        // Call runtime.
         let mut enclave_request = api::EnclaveRequest::new();
         {
             let client_requests = enclave_request.mut_client_request();
@@ -194,7 +194,7 @@ impl WorkerInner {
 
         let enclave_response = {
             measure_histogram_timer!("rpc_call_enclave_time");
-            self.contract.call(enclave_request)
+            self.runtime.call(enclave_request)
         }?;
 
         match enclave_response.get_client_response().first() {
@@ -203,9 +203,9 @@ impl WorkerInner {
         }
     }
 
-    /// Handle contract call batch.
-    /// `sh` is from when we submitted the CallContractBatch command.
-    fn handle_contract_batch(
+    /// Handle runtime call batch.
+    /// `sh` is from when we submitted the CallRuntimeBatch command.
+    fn handle_runtime_batch(
         &mut self,
         calls: CallBatch,
         block: Block,
@@ -213,11 +213,11 @@ impl WorkerInner {
         sh: SpanHandle,
         commit_storage: bool,
     ) {
-        let span = sh.follower("handle_contract_batch", |opts| {
+        let span = sh.follower("handle_runtime_batch", |opts| {
             opts.tag(tag::StdTag::span_kind("consumer")).start()
         });
         let result =
-            self.call_contract_batch_fallible(&calls, &block, span.handle(), commit_storage);
+            self.call_runtime_batch_fallible(&calls, &block, span.handle(), commit_storage);
 
         match result {
             Ok((outputs, new_state_root)) => {
@@ -251,12 +251,12 @@ impl WorkerInner {
 
                     measure_counter_inc!("rpc_call_processed");
                 }
-                Command::ContractCallBatch(calls, block, sender, sh, commit_storage) => {
-                    // Process batch of contract calls.
+                Command::RuntimeCallBatch(calls, block, sender, sh, commit_storage) => {
+                    // Process batch of runtime calls.
                     let call_count = calls.len();
-                    self.handle_contract_batch(calls, block, sender, sh, commit_storage);
+                    self.handle_runtime_batch(calls, block, sender, sh, commit_storage);
 
-                    measure_counter_inc!("contract_call_processed", call_count);
+                    measure_counter_inc!("runtime_call_processed", call_count);
                 }
             }
         }
@@ -277,8 +277,8 @@ pub struct KeyManagerConfiguration {
 /// Worker configuration.
 #[derive(Clone, Debug)]
 pub struct WorkerConfiguration {
-    /// Contract binary filename.
-    pub contract_filename: String,
+    /// Runtime binary filename.
+    pub runtime_filename: String,
     /// Optional saved identity path.
     pub saved_identity_path: Option<PathBuf>,
     /// Time limit for forwarded gRPC calls. If an RPC takes longer
@@ -288,7 +288,7 @@ pub struct WorkerConfiguration {
     pub key_manager: Option<KeyManagerConfiguration>,
 }
 
-/// Worker which executes contracts in secure enclaves.
+/// Worker which executes runtimes in secure enclaves.
 pub struct Worker {
     /// Channel for submitting commands to the worker.
     command_sender: Mutex<Sender<Command>>,
@@ -298,7 +298,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    /// Create new contract worker.
+    /// Create new runtime worker.
     pub fn new(
         config: WorkerConfiguration,
         ias: Arc<IAS>,
@@ -312,7 +312,7 @@ impl Worker {
 
             // Key manager endpoint.
             if let Some(ref key_manager) = config.key_manager {
-                router.add_handler(handlers::ContractForwarder::new(
+                router.add_handler(handlers::EnclaveForwarder::new(
                     ClientEndpoint::KeyManager,
                     environment.clone(),
                     config.forwarded_rpc_timeout,
@@ -357,21 +357,21 @@ impl Worker {
         response_receiver
     }
 
-    pub fn contract_call_batch(
+    pub fn runtime_call_batch(
         &self,
         calls: CallBatch,
         block: Block,
         sh: SpanHandle,
         commit_storage: bool,
     ) -> oneshot::Receiver<Result<ComputedBatch>> {
-        measure_counter_inc!("contract_call_request");
-        let span = sh.child("send_contract_call_batch", |opts| {
+        measure_counter_inc!("runtime_call_request");
+        let span = sh.child("send_runtime_call_batch", |opts| {
             opts.tag(tag::StdTag::span_kind("producer")).start()
         });
 
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
-            .send(Command::ContractCallBatch(
+            .send(Command::RuntimeCallBatch(
                 calls,
                 block,
                 response_sender,

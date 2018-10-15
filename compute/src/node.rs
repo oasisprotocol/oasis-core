@@ -7,35 +7,35 @@ use grpcio;
 
 use ekiden_compute_api;
 use ekiden_core::bytes::B256;
-use ekiden_core::contract::Contract;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
+use ekiden_core::runtime::Runtime;
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
-use ekiden_registry_base::{ContractRegistryBackend, EntityRegistryBackend,
-                           REGISTER_CONTRACT_SIGNATURE_CONTEXT, REGISTER_ENTITY_SIGNATURE_CONTEXT,
-                           REGISTER_NODE_SIGNATURE_CONTEXT};
+use ekiden_registry_base::{EntityRegistryBackend, RuntimeRegistryBackend,
+                           REGISTER_ENTITY_SIGNATURE_CONTEXT, REGISTER_NODE_SIGNATURE_CONTEXT,
+                           REGISTER_RUNTIME_SIGNATURE_CONTEXT};
 use ekiden_roothash_base::{RootHashBackend, RootHashSigner};
 use ekiden_rpc_api;
 use ekiden_scheduler_base::Scheduler;
 use ekiden_storage_api::create_storage;
 use ekiden_storage_base::{StorageBackend, StorageService};
-use ekiden_tools::get_contract_identity;
+use ekiden_tools::get_enclave_identity;
 
 use super::group::ComputationGroup;
 use super::ias::{IASConfiguration, IAS};
 use super::roothash::{RootHashConfiguration, RootHashFrontend};
 use super::services::computation_group::ComputationGroupService;
-use super::services::contract::ContractService;
 use super::services::enclaverpc::EnclaveRpcService;
+use super::services::runtime::RuntimeService;
 use super::worker::{Worker, WorkerConfiguration};
 
 /// Compute node test-only configuration.
 pub struct ComputeNodeTestOnlyConfiguration {
-    /// Override contract identifier.
-    pub contract_id: Option<B256>,
+    /// Override runtime identifier.
+    pub runtime_id: Option<B256>,
     /// Fail after registration.
     pub fail_after_registration: bool,
 }
@@ -45,13 +45,13 @@ pub struct ComputeNodeConfiguration {
     /// gRPC server port.
     pub port: u16,
     /// Number of compute replicas.
-    // TODO: Remove this once we have independent contract registration.
+    // TODO: Remove this once we have independent runtime registration.
     pub compute_replicas: u64,
     /// Number of compute backup replicas.
-    // TODO: Remove this once we have independent contract registration.
+    // TODO: Remove this once we have independent runtime registration.
     pub compute_backup_replicas: u64,
     /// Number of allowed stragglers.
-    // TODO: Remove this once we have independent contract registration.
+    // TODO: Remove this once we have independent runtime registration.
     pub compute_allowed_stragglers: u64,
     /// Root hash configuration.
     pub roothash: RootHashConfiguration,
@@ -75,7 +75,7 @@ impl ComputeNode {
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias)?);
 
-        let contract_registry = container.inject::<ContractRegistryBackend>()?;
+        let runtime_registry = container.inject::<RuntimeRegistryBackend>()?;
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
         let scheduler = container.inject::<Scheduler>()?;
         let storage_backend = container.inject::<StorageBackend>()?;
@@ -97,37 +97,37 @@ impl ComputeNode {
             .wait()?;
         info!("Entity registration done");
 
-        // Create contract.
+        // Create runtime.
         // TODO: Get this from somewhere.
         // TODO: This should probably be done independently?
-        // TODO: We currently use the entity key pair as the contract key pair.
-        let contract_id = match config.test_only.contract_id {
-            Some(contract_id) => {
-                warn!("Using manually overriden contract id");
-                contract_id
+        // TODO: We currently use the entity key pair as the runtime key pair.
+        let runtime_id = match config.test_only.runtime_id {
+            Some(runtime_id) => {
+                warn!("Using manually overriden runtime id");
+                runtime_id
             }
-            None => B256::from(
-                get_contract_identity(config.worker.contract_filename.clone())?.as_slice(),
-            ),
+            None => {
+                B256::from(get_enclave_identity(config.worker.runtime_filename.clone())?.as_slice())
+            }
         };
 
-        info!("Running compute node for contract {:?}", contract_id);
-        let contract = {
-            let mut contract = Contract::default();
-            contract.id = contract_id;
-            contract.replica_group_size = config.compute_replicas;
-            contract.replica_group_backup_size = config.compute_backup_replicas;
-            contract.replica_allowed_stragglers = config.compute_allowed_stragglers;
-            contract.storage_group_size = 1;
+        info!("Running compute node for runtime {:?}", runtime_id);
+        let runtime = {
+            let mut runtime = Runtime::default();
+            runtime.id = runtime_id;
+            runtime.replica_group_size = config.compute_replicas;
+            runtime.replica_group_backup_size = config.compute_backup_replicas;
+            runtime.replica_allowed_stragglers = config.compute_allowed_stragglers;
+            runtime.storage_group_size = 1;
 
-            contract
+            runtime
         };
-        let signed_contract = Signed::sign(
+        let signed_runtime = Signed::sign(
             &entity_identity.get_entity_signer(),
-            &REGISTER_CONTRACT_SIGNATURE_CONTEXT,
-            contract.clone(),
+            &REGISTER_RUNTIME_SIGNATURE_CONTEXT,
+            runtime.clone(),
         );
-        contract_registry.register_contract(signed_contract).wait()?;
+        runtime_registry.register_runtime(signed_runtime).wait()?;
 
         // Register node with the registry.
         let node_identity = container.inject::<NodeIdentity>()?;
@@ -163,7 +163,7 @@ impl ComputeNode {
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
-            contract_id,
+            runtime_id,
             scheduler.clone(),
             entity_registry.clone(),
             environment.clone(),
@@ -174,7 +174,7 @@ impl ComputeNode {
         // Create roothash frontend.
         let roothash_frontend = Arc::new(RootHashFrontend::new(
             config.roothash,
-            contract_id,
+            runtime_id,
             environment.clone(),
             worker.clone(),
             computation_group.clone(),
@@ -188,8 +188,8 @@ impl ComputeNode {
 
         let enclave_rpc_service =
             ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(worker));
-        let contract_service =
-            ekiden_compute_api::create_contract(ContractService::new(roothash_frontend.clone()));
+        let runtime_service =
+            ekiden_compute_api::create_runtime(RuntimeService::new(roothash_frontend.clone()));
         let inter_node_service = ekiden_compute_api::create_computation_group(
             ComputationGroupService::new(roothash_frontend.clone()),
         );
@@ -202,7 +202,7 @@ impl ComputeNode {
             )
             .register_service(enclave_rpc_service)
             .register_service(inter_node_service)
-            .register_service(contract_service)
+            .register_service(runtime_service)
             .register_service(storage_service)
             .bind_secure(
                 "0.0.0.0",

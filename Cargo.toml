@@ -54,12 +54,12 @@ members = [
     "db/trusted",
     "db/edl",
 
-    # Contract invocation.
-    "contract/common",
-    "contract/client",
-    "contract/untrusted",
-    "contract/trusted",
-    "contract/edl",
+    # Runtime invocation.
+    "runtime/common",
+    "runtime/client",
+    "runtime/untrusted",
+    "runtime/trusted",
+    "runtime/edl",
 
     # Core.
     "core/common",
@@ -71,15 +71,15 @@ members = [
     "compute/api",
     "compute",
 
-    # Core contracts.
-    "contracts/token",
-    "contracts/test-db-encryption",
+    # Test runtimes.
+    "tests/runtimes/token",
+    "tests/runtimes/test-db-encryption",
 
-    # Clients.
-    "clients/token",
-    "clients/test-long-term",
-    "clients/benchmark",
-    "clients/test-db-encryption",
+    # Test clients.
+    "tests/clients/token",
+    "tests/clients/test-long-term",
+    "tests/clients/benchmark",
+    "tests/clients/test-db-encryption",
 
     # Registry.
     "registry/api",

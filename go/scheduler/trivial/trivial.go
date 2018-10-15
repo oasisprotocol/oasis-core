@@ -12,13 +12,13 @@ import (
 	"golang.org/x/net/context"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
@@ -54,7 +54,7 @@ type trivialSchedulerState struct {
 
 	nodeLists  map[epochtime.EpochTime][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
-	contracts  map[signature.MapKey]*contract.Contract
+	runtimes   map[signature.MapKey]*runtime.Runtime
 	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
 
 	epoch     epochtime.EpochTime
@@ -65,7 +65,7 @@ func (s *trivialSchedulerState) canElect() bool {
 	return s.nodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil
 }
 
-func (s *trivialSchedulerState) elect(con *contract.Contract, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
+func (s *trivialSchedulerState) elect(con *runtime.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
 	var committees []*api.Committee
 
 	maybeBroadcast := func() {
@@ -124,7 +124,7 @@ func (s *trivialSchedulerState) elect(con *contract.Contract, epoch epochtime.Ep
 
 		committee := &api.Committee{
 			Kind:     kind,
-			Contract: con,
+			Runtime:  con,
 			ValidFor: epoch,
 		}
 
@@ -237,7 +237,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		}
 	}
 
-	// Do the election for the contract now.  Since rescheduling isn't
+	// Do the election for the runtime now.  Since rescheduling isn't
 	// allowed, this will give identical output to what the worker will
 	// do eventually.
 	//
@@ -261,7 +261,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		s.state.nodeLists[epoch] = nl.Nodes
 	}
 
-	con, err := reg.GetContract(ctx, id)
+	con, err := reg.GetRuntime(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -269,21 +269,21 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 	return s.state.elect(con, epoch, nil)
 }
 
-func (s *trivialScheduler) electSingle(con *contract.Contract, notifier *pubsub.Broker) {
+func (s *trivialScheduler) electSingle(con *runtime.Runtime, notifier *pubsub.Broker) {
 	s.state.Lock()
 	defer s.state.Unlock()
 
 	committees, err := s.state.elect(con, s.state.epoch, s.notifier)
 	if err != nil {
 		s.logger.Debug("worker: failed to elect (single)",
-			"contract", con,
+			"runtime", con,
 			"err", err,
 		)
 		return
 	}
 
 	s.logger.Debug("worker: election (single)",
-		"contract", con,
+		"runtime", con,
 		"committees", committees,
 	)
 }
@@ -292,18 +292,18 @@ func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
 	s.state.Lock()
 	defer s.state.Unlock()
 
-	for _, v := range s.state.contracts {
+	for _, v := range s.state.runtimes {
 		committees, err := s.state.elect(v, s.state.epoch, s.notifier)
 		if err != nil {
 			s.logger.Debug("worker: failed to elect",
-				"contract", v,
+				"runtime", v,
 				"err", err,
 			)
 			continue
 		}
 
 		s.logger.Debug("worker: election",
-			"contract", v,
+			"runtime", v,
 			"committees", committees,
 		)
 	}
@@ -315,7 +315,7 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 	timeCh, sub := s.timeSource.WatchEpochs()
 	defer sub.Close()
 
-	contractCh, sub := s.registry.WatchContracts()
+	runtimeCh, sub := s.registry.WatchRuntimes()
 	defer sub.Close()
 
 	nodeListCh, sub := s.registry.WatchNodeList()
@@ -362,20 +362,20 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 				"beacon", hex.EncodeToString(ev.Beacon),
 			)
 			s.state.beacons[ev.Epoch] = ev.Beacon
-		case contract := <-contractCh:
-			mk := contract.ID.ToMapKey()
-			if con := s.state.contracts[mk]; con != nil {
-				s.logger.Error("worker: contract registration ID conflict",
-					"contract", con,
-					"new_contract", contract,
+		case runtime := <-runtimeCh:
+			mk := runtime.ID.ToMapKey()
+			if con := s.state.runtimes[mk]; con != nil {
+				s.logger.Error("worker: runtime registration ID conflict",
+					"runtime", con,
+					"new_runtime", runtime,
 				)
 				continue
 			}
-			s.state.contracts[mk] = contract
+			s.state.runtimes[mk] = runtime
 			if s.state.epoch == s.state.lastElect && s.state.canElect() {
 				// Attempt to elect the committee if possible, since
 				// the election for the epoch happened already.
-				s.electSingle(contract, s.notifier)
+				s.electSingle(runtime, s.notifier)
 			}
 			continue
 		}
@@ -403,7 +403,7 @@ func New(timeSource epochtime.Backend, registry registry.Backend, beacon beacon.
 		state: &trivialSchedulerState{
 			nodeLists:  make(map[epochtime.EpochTime][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
-			contracts:  make(map[signature.MapKey]*contract.Contract),
+			runtimes:   make(map[signature.MapKey]*runtime.Runtime),
 			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,

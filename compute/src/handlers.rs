@@ -12,19 +12,19 @@ use ekiden_untrusted::rpc::router::Handler;
 
 use ekiden_rpc_client::backend::{NetworkRpcClientBackend, RpcClientBackend};
 
-/// Generic contract endpoint.
+/// Generic enclave endpoint.
 ///
 /// This endpoint can be used to forward requests to an arbitrary destination
-/// contract, defined by the `hostname` and `port` of the compute node that is
-/// running the contract.
-pub struct ContractForwarder {
+/// enclave, defined by the `hostname` and `port` of the node that is running
+/// the enclave.
+pub struct EnclaveForwarder {
     /// Client endpoint identifier.
     endpoint: ClientEndpoint,
     /// Client backend.
     client: NetworkRpcClientBackend,
 }
 
-impl ContractForwarder {
+impl EnclaveForwarder {
     pub fn new(
         endpoint: ClientEndpoint,
         environment: Arc<Environment>,
@@ -33,7 +33,7 @@ impl ContractForwarder {
         port: u16,
         certificate: Certificate,
     ) -> Self {
-        ContractForwarder {
+        EnclaveForwarder {
             endpoint: endpoint,
             client: NetworkRpcClientBackend::new(environment, timeout, &host, port, certificate)
                 .unwrap(),
@@ -41,7 +41,7 @@ impl ContractForwarder {
     }
 }
 
-impl Handler for ContractForwarder {
+impl Handler for EnclaveForwarder {
     /// Return a list of endpoints that the handler can handle.
     fn get_endpoints(&self) -> Vec<ClientEndpoint> {
         vec![self.endpoint.clone()]

@@ -13,7 +13,5 @@ extern crate ekiden_epochtime;
 extern crate ekiden_scheduler_api;
 
 pub mod backend;
-pub mod service;
 
 pub use backend::*;
-pub use service::*;

@@ -14,13 +14,13 @@ use rustracing_jaeger::Span;
 use serde_cbor;
 
 use ekiden_core::bytes::{B256, H256};
-use ekiden_core::contract::batch::CallBatch;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
 use ekiden_core::futures::sync::mpsc;
 use ekiden_core::hash::EncodedHash;
+use ekiden_core::runtime::batch::CallBatch;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
 use ekiden_roothash_base::{Block, Event, Header, RootHashBackend, RootHashSigner};
@@ -241,11 +241,11 @@ struct CallInfo {
     context: Option<SpanContext>,
 }
 
-/// Queue of incoming contract calls which are pending to be included in a batch.
+/// Queue of incoming runtime calls which are pending to be included in a batch.
 struct IncomingQueue {
     /// Instant when first item was queued.
     start: Instant,
-    /// Queued contract calls.
+    /// Queued runtime calls.
     calls: VecDeque<CallInfo>,
 }
 
@@ -261,8 +261,8 @@ impl Default for IncomingQueue {
 struct Inner {
     /// Current state of the root hash frontend.
     state: Mutex<State>,
-    /// Contract identifier this root hash frontend is for.
-    contract_id: B256,
+    /// Runtime identifier this root hash frontend is for.
+    runtime_id: B256,
     /// Environment.
     environment: Arc<Environment>,
     /// Consensus backend.
@@ -281,7 +281,7 @@ struct Inner {
     command_sender: mpsc::UnboundedSender<Command>,
     /// Command receiver (until initialized).
     command_receiver: Mutex<Option<mpsc::UnboundedReceiver<Command>>>,
-    /// Queue of incoming contract calls which are pending to be included in a batch.
+    /// Queue of incoming runtime calls which are pending to be included in a batch.
     incoming_queue: Mutex<Option<IncomingQueue>>,
     /// Maximum batch size.
     max_batch_size: usize,
@@ -326,7 +326,7 @@ impl RootHashFrontend {
     /// Create a new root hash frontend.
     pub fn new(
         config: RootHashConfiguration,
-        contract_id: B256,
+        runtime_id: B256,
         environment: Arc<Environment>,
         worker: Arc<Worker>,
         computation_group: Arc<ComputationGroup>,
@@ -336,7 +336,7 @@ impl RootHashFrontend {
     ) -> Self {
         measure_configure!(
             "batch_insert_size",
-            "Size of values inserted into storage for saving a batch of contract calls.",
+            "Size of values inserted into storage for saving a batch of runtime calls.",
             MetricConfig::Histogram {
                 buckets: vec![
                     1024., 4096., 16384., 65536., 262144., 1048576., 4194304., 16777216., 67108864.,
@@ -345,7 +345,7 @@ impl RootHashFrontend {
         );
         measure_configure!(
             "outputs_insert_size",
-            "Size of values inserted into storage for saving a batch of contract outputs.",
+            "Size of values inserted into storage for saving a batch of runtime outputs.",
             MetricConfig::Histogram {
                 buckets: vec![0., 1., 4., 16., 64., 256., 1024., 4096., 16384.],
             }
@@ -356,7 +356,7 @@ impl RootHashFrontend {
         let instance = Self {
             inner: Arc::new(Inner {
                 state: Mutex::new(State::NotReady),
-                contract_id,
+                runtime_id,
                 environment,
                 backend,
                 signer,
@@ -394,11 +394,11 @@ impl RootHashFrontend {
 
         // Subscribe to root hash events.
         let backend_init = self.inner.backend.clone();
-        let contract_id = self.inner.contract_id.clone();
+        let runtime_id = self.inner.runtime_id.clone();
 
         event_sources.push(
             streamfollow::follow_skip(
-                move || backend_init.get_events(contract_id),
+                move || backend_init.get_events(runtime_id),
                 |event: &Event| event.clone(),
                 |_err| false,
             ).map(|event| Command::ProcessEvent(event))
@@ -408,12 +408,12 @@ impl RootHashFrontend {
         // Subscribe to root hash blocks.
         let backend_init = self.inner.backend.clone();
         let backend_resume = self.inner.backend.clone();
-        let contract_id = self.inner.contract_id.clone();
+        let runtime_id = self.inner.runtime_id.clone();
 
         event_sources.push(
             streamfollow::follow(
-                move || backend_init.get_blocks(contract_id),
-                move |round: &U256| backend_resume.get_blocks_since(contract_id, round.clone()),
+                move || backend_init.get_blocks(runtime_id),
+                move |round: &U256| backend_resume.get_blocks_since(runtime_id, round.clone()),
                 |block: &Block| block.header.round,
                 |_err| false,
             ).map(|block: Block| Command::ProcessBlock(block))
@@ -907,7 +907,7 @@ impl RootHashFrontend {
         let process_batch =
             inner
                 .worker
-                .contract_call_batch((*batch).clone(), block, sh, commit_storage);
+                .runtime_call_batch((*batch).clone(), block, sh, commit_storage);
 
         // After the batch is processed, propose the batch.
         let shared_inner = inner.clone();
@@ -1060,7 +1060,7 @@ impl RootHashFrontend {
 
                 inner
                     .backend
-                    .commit(inner.contract_id, commitment)
+                    .commit(inner.runtime_id, commitment)
                     .and_then(move |result| {
                         // Test mode: crash after commit.
                         #[cfg(feature = "testing")]
@@ -1085,7 +1085,7 @@ impl RootHashFrontend {
             .into_box()
     }
 
-    /// Append a contract call to current batch for eventual processing.
+    /// Append a runtime call to current batch for eventual processing.
     pub fn append_batch(&self, data: Vec<u8>, context: Option<SpanContext>) -> Result<()> {
         // If we are not a leader, do not append to batch.
         {

@@ -12,7 +12,7 @@ use super::cargo;
 use super::enclave::{EnclaveBuilder, TARGET_ENCLAVE_DIR};
 use super::error::Result;
 
-use utils::{get_contract_identity, SgxMode};
+use utils::{get_enclave_identity, SgxMode};
 
 /// Build an Ekiden enclave.
 pub fn build_enclave(args: &ArgMatches) -> Result<()> {
@@ -108,12 +108,12 @@ pub fn build_enclave(args: &ArgMatches) -> Result<()> {
                 .unwrap_or_default(),
         );
 
-    // Build contract.
+    // Build enclave.
     builder.build()?;
 
     // Output enclave identity when required.
     if args.is_present("output-identity") {
-        let identity = get_contract_identity(
+        let identity = get_enclave_identity(
             builder
                 .get_output_path()
                 .join(format!("{}.so", builder.get_crate_name())),

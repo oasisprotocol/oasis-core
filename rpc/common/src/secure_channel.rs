@@ -11,11 +11,11 @@ use super::api;
 // Nonce context is used to prevent message reuse in a different context.
 pub const NONCE_CONTEXT_LEN: usize = 16;
 type NonceContext = [u8; NONCE_CONTEXT_LEN];
-/// Nonce for use in channel initialization context, contract -> client.
+/// Nonce for use in channel initialization context, enclave -> client.
 pub const NONCE_CONTEXT_INIT: NonceContext = *b"EkidenS-----Init";
-/// Nonce for use in channel authentication context, client -> contract.
+/// Nonce for use in channel authentication context, client -> enclave.
 pub const NONCE_CONTEXT_AUTHIN: NonceContext = *b"EkidenS---AuthIn";
-/// Nonce for use in channel authentication context, client -> contract.
+/// Nonce for use in channel authentication context, client -> enclave.
 pub const NONCE_CONTEXT_AUTHOUT: NonceContext = *b"EkidenS--AuthOut";
 /// Nonce for use in request context.
 pub const NONCE_CONTEXT_REQUEST: NonceContext = *b"EkidenS--Request";
@@ -171,8 +171,8 @@ pub enum SessionState {
     /// Client is authenticating (client only).
     ///
     /// From this state, the session will transition into `Established`.
-    /// The contract does not use this state. The contract is in the `Established` state while the
-    /// client is in this state. The contract tracks client authentication status in
+    /// The enclave does not use this state. The enclave is in the `Established` state while the
+    /// client is in this state. The enclave tracks client authentication status in
     /// `ekiden_rpc_trusted::secure_channel::ClientSession::client_mr_enclave`.
     ClientAuthenticating,
     /// Secure channel is established.

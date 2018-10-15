@@ -5,7 +5,7 @@ pub enum ClientEndpoint {
     IASProxyGetSpid,
     /// IAS proxy (verify quote).
     IASProxyVerifyQuote,
-    /// Key manager contract.
+    /// Key manager enclave.
     KeyManager,
 }
 

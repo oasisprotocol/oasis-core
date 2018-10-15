@@ -4,10 +4,10 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/registry/api"
 
 	commonPB "github.com/oasislabs/ekiden/go/grpc/common"
@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	_ pb.EntityRegistryServer   = (*grpcServer)(nil)
-	_ pb.ContractRegistryServer = (*grpcServer)(nil)
+	_ pb.EntityRegistryServer  = (*grpcServer)(nil)
+	_ pb.RuntimeRegistryServer = (*grpcServer)(nil)
 )
 
 type grpcServer struct {
@@ -240,44 +240,44 @@ func (s *grpcServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.Entit
 	return nil
 }
 
-func (s *grpcServer) RegisterContract(ctx context.Context, req *pb.RegisterContractRequest) (*pb.RegisterContractResponse, error) {
-	var con contract.SignedContract
-	if err := con.FromProto(req.GetContract()); err != nil {
+func (s *grpcServer) RegisterRuntime(ctx context.Context, req *pb.RegisterRuntimeRequest) (*pb.RegisterRuntimeResponse, error) {
+	var con runtime.SignedRuntime
+	if err := con.FromProto(req.GetRuntime()); err != nil {
 		return nil, err
 	}
 
-	if err := s.backend.RegisterContract(ctx, &con); err != nil {
+	if err := s.backend.RegisterRuntime(ctx, &con); err != nil {
 		return nil, err
 	}
 
-	return &pb.RegisterContractResponse{}, nil
+	return &pb.RegisterRuntimeResponse{}, nil
 }
 
-func (s *grpcServer) GetContract(ctx context.Context, req *pb.ContractRequest) (*pb.ContractResponse, error) {
+func (s *grpcServer) GetRuntime(ctx context.Context, req *pb.RuntimeRequest) (*pb.RuntimeResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetId()); err != nil {
 		return nil, err
 	}
 
-	con, err := s.backend.GetContract(ctx, id)
+	con, err := s.backend.GetRuntime(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	var resp pb.ContractResponse
+	var resp pb.RuntimeResponse
 	if con != nil {
-		resp.Contract = con.ToProto()
+		resp.Runtime = con.ToProto()
 	}
 
 	return &resp, err
 }
 
-func (s *grpcServer) GetContracts(req *pb.ContractsRequest, stream pb.ContractRegistry_GetContractsServer) error {
-	ch, sub := s.backend.WatchContracts()
+func (s *grpcServer) GetRuntimes(req *pb.RuntimesRequest, stream pb.RuntimeRegistry_GetRuntimesServer) error {
+	ch, sub := s.backend.WatchRuntimes()
 	defer sub.Close()
 
 	for {
-		var con *contract.Contract
+		var con *runtime.Runtime
 		var ok bool
 
 		select {
@@ -288,8 +288,8 @@ func (s *grpcServer) GetContracts(req *pb.ContractsRequest, stream pb.ContractRe
 			break
 		}
 
-		resp := &pb.ContractsResponse{
-			Contract: con.ToProto(),
+		resp := &pb.RuntimesResponse{
+			Runtime: con.ToProto(),
 		}
 		if err := stream.Send(resp); err != nil {
 			return err
@@ -305,5 +305,5 @@ func NewGRPCServer(srv *grpc.Server, backend api.Backend) {
 		backend: backend,
 	}
 	pb.RegisterEntityRegistryServer(srv, s)
-	pb.RegisterContractRegistryServer(srv, s)
+	pb.RegisterRuntimeRegistryServer(srv, s)
 }

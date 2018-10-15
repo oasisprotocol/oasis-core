@@ -17,7 +17,7 @@ type grpcServer struct {
 
 func (s *grpcServer) GetLatestBlock(ctx context.Context, req *pb.LatestBlockRequest) (*pb.LatestBlockResponse, error) {
 	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetContractId()); err != nil {
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return nil, err
 	}
 
@@ -31,7 +31,7 @@ func (s *grpcServer) GetLatestBlock(ctx context.Context, req *pb.LatestBlockRequ
 
 func (s *grpcServer) GetBlocks(req *pb.BlockRequest, stream pb.RootHash_GetBlocksServer) error {
 	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetContractId()); err != nil {
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return err
 	}
 
@@ -46,7 +46,7 @@ func (s *grpcServer) GetBlocks(req *pb.BlockRequest, stream pb.RootHash_GetBlock
 
 func (s *grpcServer) GetBlocksSince(req *pb.BlockSinceRequest, stream pb.RootHash_GetBlocksSinceServer) error {
 	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetContractId()); err != nil {
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return err
 	}
 
@@ -66,7 +66,7 @@ func (s *grpcServer) GetBlocksSince(req *pb.BlockSinceRequest, stream pb.RootHas
 
 func (s *grpcServer) GetEvents(req *pb.EventRequest, stream pb.RootHash_GetEventsServer) error {
 	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetContractId()); err != nil {
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return err
 	}
 
@@ -119,7 +119,7 @@ func (s *grpcServer) GetEvents(req *pb.EventRequest, stream pb.RootHash_GetEvent
 
 func (s *grpcServer) Commit(ctx context.Context, req *pb.CommitRequest) (*pb.CommitResponse, error) {
 	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetContractId()); err != nil {
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return nil, err
 	}
 

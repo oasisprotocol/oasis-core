@@ -8,9 +8,9 @@ use ekiden_rpc_common::client::ClientEndpoint;
 
 use super::untrusted;
 
-/// Contract client that can be used inside enclaves.
+/// Enclave client that can be used inside enclaves.
 ///
-/// It relays contract calls via an OCALL to the untrusted world which may then
+/// It relays enclave calls via an OCALL to the untrusted world which may then
 /// dispatch the calls to other compute nodes.
 pub struct OcallRpcClientBackend {
     /// Endpoint that the client is connecting to.
@@ -18,7 +18,7 @@ pub struct OcallRpcClientBackend {
 }
 
 impl OcallRpcClientBackend {
-    /// Construct new OCALL contract client backend.
+    /// Construct new OCALL enclave client backend.
     pub fn new(endpoint: ClientEndpoint) -> Result<Self> {
         Ok(OcallRpcClientBackend { endpoint: endpoint })
     }

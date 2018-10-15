@@ -1,0 +1,21 @@
+[package]
+name = "test-db-encryption"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden DB encryption end-to-end test"
+build = "build.rs"
+
+[features]
+default = []
+
+[dependencies]
+ekiden-core = { path = "../../../core/common" }
+ekiden-trusted = { path = "../../../core/trusted" }
+ekiden-storage-base = { path = "../../../storage/base" }
+protobuf = "~2.0"
+test-db-encryption-api = { path = "./api" }
+lazy_static = { version = "1.1.0", features = ["spin_no_std"] }
+
+[build-dependencies]
+ekiden-tools = { path = "../../../tools" }
+ekiden-edl = { path = "../../../core/edl" }

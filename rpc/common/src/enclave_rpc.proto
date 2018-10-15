@@ -93,7 +93,7 @@ message ChannelInitRequest {
 
 // (AE, Box[E'](E->C'))
 message ChannelInitResponse {
-    // Authenticated contract short-term public key.
+    // Authenticated enclave short-term public key.
     // E->C' NONCE_CONTEXT_INIT without optional public key.
     AuthenticatedShortTermPublicKey authenticated_short_term_public_key = 1;
 }

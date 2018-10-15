@@ -105,7 +105,7 @@ type Backend interface {
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
 
-	// Commit commits to a result of processing a batch of contract invocations.
+	// Commit commits to a result of processing a batch of runtime invocations.
 	Commit(context.Context, signature.PublicKey, *Commitment) error
 }
 
@@ -147,7 +147,7 @@ type Event struct {
 type MetricsMonitorable interface {
 	// WatchAllBlocks returns a channel that produces a stream of blocks.
 	//
-	// All blocks from all runtimes (contracts) will be pushed into the
-	// stream immediately as they are finalized.
+	// All blocks from all runtimes will be pushed into the stream
+	// immediately as they are finalized.
 	WatchAllBlocks() (<-chan *Block, *pubsub.Subscription)
 }

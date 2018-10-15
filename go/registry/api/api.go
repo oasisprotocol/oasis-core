@@ -8,12 +8,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/oasislabs/ekiden/go/common/contract"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
@@ -30,9 +30,9 @@ var (
 	// registration.
 	RegisterNodeSignatureContext = []byte("EkNodReg")
 
-	// RegisterContractSignatureContext is the context used for contract
+	// RegisterRuntimeSignatureContext is the context used for runtime
 	// registration.
-	RegisterContractSignatureContext = []byte("EkConReg")
+	RegisterRuntimeSignatureContext = []byte("EkRunReg")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
@@ -50,8 +50,8 @@ var (
 	// ErrNoSuchNode is the error returned when an node does not exist.
 	ErrNoSuchNode = errors.New("registry: no such node")
 
-	// ErrNoSuchContract is the error returned when an contract does not exist.
-	ErrNoSuchContract = errors.New("registry: no such contract")
+	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
+	ErrNoSuchRuntime = errors.New("registry: no such runtime")
 )
 
 // Backend is a registry implementation.
@@ -102,15 +102,15 @@ type Backend interface {
 	// order.
 	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
 
-	// RegisterContract registers a contract.
-	RegisterContract(context.Context, *contract.SignedContract) error
+	// RegisterRuntime registers a runtime.
+	RegisterRuntime(context.Context, *runtime.SignedRuntime) error
 
-	// GetContract gets a contract by ID.
-	GetContract(context.Context, signature.PublicKey) (*contract.Contract, error)
+	// GetRuntime gets a runtime by ID.
+	GetRuntime(context.Context, signature.PublicKey) (*runtime.Runtime, error)
 
-	// WatchContracts returns a stream of Contract.  Upon subscription,
-	// all contracts will be sent immediately.
-	WatchContracts() (<-chan *contract.Contract, *pubsub.Subscription)
+	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
+	// all runtimes will be sent immediately.
+	WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -212,21 +212,21 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode) (*
 	return &node, nil
 }
 
-// VerifyRegisterContractArgs verifies arguments for RegisterContract.
-func VerifyRegisterContractArgs(logger *logging.Logger, sigCon *contract.SignedContract) (*contract.Contract, error) {
+// VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
+func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigCon *runtime.SignedRuntime) (*runtime.Runtime, error) {
 	// XXX: Ensure contact is well-formed.
-	var con contract.Contract
+	var con runtime.Runtime
 	if sigCon == nil {
 		return nil, ErrInvalidArgument
 	}
-	if err := sigCon.Open(RegisterContractSignatureContext, &con); err != nil {
-		logger.Error("RegisterContract: invalid signature",
-			"signed_contract", sigCon,
+	if err := sigCon.Open(RegisterRuntimeSignatureContext, &con); err != nil {
+		logger.Error("RegisterRuntime: invalid signature",
+			"signed_runtime", sigCon,
 		)
 		return nil, ErrInvalidSignature
 	}
 
-	// TODO: Who should sign the contract? Current compute node assumes an entity (deployer).
+	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
 
 	return &con, nil
 }

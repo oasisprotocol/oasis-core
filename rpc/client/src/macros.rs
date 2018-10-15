@@ -72,7 +72,7 @@ macro_rules! create_client_rpc {
                     }
                 }
 
-                /// Initialize a secure channel with the contract.
+                /// Initialize a secure channel with the enclave.
                 ///
                 /// If this method is not called, secure channel is automatically initialized
                 /// when making the first request.

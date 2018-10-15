@@ -17,7 +17,7 @@ type grpcServer struct {
 
 func (s *grpcServer) GetCommittees(ctx context.Context, req *pb.CommitteeRequest) (*pb.CommitteeResponse, error) {
 	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetContractId()); err != nil {
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return nil, err
 	}
 

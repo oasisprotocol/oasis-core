@@ -12,21 +12,21 @@ import (
 )
 
 const (
-	// Per-contract state.
-	stateContractMap = "roothash/%s"
+	// Per-runtime state.
+	stateRuntimeMap = "roothash/%s"
 
-	// Highest hex-encoded node/entity/contract identifier.
+	// Highest hex-encoded node/entity/runtime identifier.
 	// TODO: Should we move this to common?
 	lastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 )
 
 var (
-	_ cbor.Marshaler   = (*ContractState)(nil)
-	_ cbor.Unmarshaler = (*ContractState)(nil)
+	_ cbor.Marshaler   = (*RuntimeState)(nil)
+	_ cbor.Unmarshaler = (*RuntimeState)(nil)
 )
 
-// ContractState is the per-contract roothash state.
-type ContractState struct {
+// RuntimeState is the per-runtime roothash state.
+type RuntimeState struct {
 	ID           signature.PublicKey `codec:"id"`
 	CurrentBlock *api.Block          `codec:"current_block"`
 	Round        *round              `codec:"round"`
@@ -34,12 +34,12 @@ type ContractState struct {
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *ContractState) MarshalCBOR() []byte {
+func (s *RuntimeState) MarshalCBOR() []byte {
 	return cbor.Marshal(s)
 }
 
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (s *ContractState) UnmarshalCBOR(data []byte) error {
+func (s *RuntimeState) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, s)
 }
 
@@ -62,35 +62,35 @@ func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableS
 	return &ImmutableState{snapshot: snapshot}, nil
 }
 
-// GetContractState returns contract state for given contract.
-func (s *ImmutableState) GetContractState(id signature.PublicKey) (*ContractState, error) {
-	_, raw := s.snapshot.Get([]byte(fmt.Sprintf(stateContractMap, id.String())))
+// GetRuntimeState returns runtime state for given runtime.
+func (s *ImmutableState) GetRuntimeState(id signature.PublicKey) (*RuntimeState, error) {
+	_, raw := s.snapshot.Get([]byte(fmt.Sprintf(stateRuntimeMap, id.String())))
 	if raw == nil {
 		return nil, nil
 	}
 
-	var state ContractState
+	var state RuntimeState
 	err := state.UnmarshalCBOR(raw)
 	return &state, err
 }
 
-// GetContracts returns a list of all registered contract states.
-func (s *ImmutableState) GetContracts() []*ContractState {
-	var contracts []*ContractState
+// GetRuntimes returns a list of all registered runtime states.
+func (s *ImmutableState) GetRuntimes() []*RuntimeState {
+	var runtimes []*RuntimeState
 	s.snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateContractMap, "")),
-		[]byte(fmt.Sprintf(stateContractMap, lastID)),
+		[]byte(fmt.Sprintf(stateRuntimeMap, "")),
+		[]byte(fmt.Sprintf(stateRuntimeMap, lastID)),
 		true,
 		func(key, value []byte, version int64) bool {
-			var state ContractState
+			var state RuntimeState
 			cbor.MustUnmarshal(value, &state)
 
-			contracts = append(contracts, &state)
+			runtimes = append(runtimes, &state)
 			return false
 		},
 	)
 
-	return contracts
+	return runtimes
 }
 
 // MutableState is a mutable roothash state wrapper.
@@ -113,10 +113,10 @@ func (s *MutableState) Tree() *iavl.MutableTree {
 	return s.tree
 }
 
-// UpdateContractState updates roothash state for given contract.
-func (s *MutableState) UpdateContractState(state *ContractState) {
+// UpdateRuntimeState updates roothash state for given runtime.
+func (s *MutableState) UpdateRuntimeState(state *RuntimeState) {
 	s.tree.Set(
-		[]byte(fmt.Sprintf(stateContractMap, state.ID.String())),
+		[]byte(fmt.Sprintf(stateRuntimeMap, state.ID.String())),
 		state.MarshalCBOR(),
 	)
 }

@@ -45,7 +45,7 @@ message Signed {
     Signature signature = 2;
 }
 
-message Contract {
+message Runtime {
     bytes id = 1;
     bytes store_id = 2;
     bytes code = 3;

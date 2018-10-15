@@ -23,15 +23,15 @@ use ekiden_rpc_common::secure_channel::{self, MonotonicNonceGenerator, RandomNon
 
 use super::request::Request;
 
-/// Single secure channel session between client and contract.
+/// Single secure channel session between client and enclave.
 #[derive(Default)]
 pub struct ClientSession {
     /// Client short-term public key.
     client_public_key: sodalite::BoxPublicKey,
-    /// Contract short-term public key.
-    contract_public_key: sodalite::BoxPublicKey,
-    /// Contract short-term private key.
-    contract_private_key: sodalite::BoxSecretKey,
+    /// Enclave short-term public key.
+    enclave_public_key: sodalite::BoxPublicKey,
+    /// Enclave short-term private key.
+    enclave_private_key: sodalite::BoxSecretKey,
     /// Cached shared key.
     shared_key: Option<sodalite::SecretboxKey>,
     /// Short-term nonce generator.
@@ -46,7 +46,7 @@ pub struct ClientSession {
 
 /// Secure channel context.
 pub struct SecureChannelContext {
-    /// Contract short-term keypairs, keyed with client short-term keys.
+    /// Enclave short-term keypairs, keyed with client short-term keys.
     sessions: HashMap<sodalite::BoxPublicKey, ClientSession>,
     /// Long-term nonce generator.
     nonce_generator: RandomNonceGenerator,
@@ -84,7 +84,7 @@ impl SecureChannelContext {
     /// Create a new client session.
     ///
     /// Returns a cryptographic box, encrypted to the client short-term key and
-    /// authenticated by the contract long-term key.
+    /// authenticated by the enclave long-term key.
     pub fn create_session(
         &mut self,
         public_key: &[u8],
@@ -99,7 +99,7 @@ impl SecureChannelContext {
         session.transition_to(SessionState::Established)?;
 
         let box_inner = secure_channel::create_box(
-            session.get_contract_public_key(),
+            session.get_enclave_public_key(),
             &secure_channel::NONCE_CONTEXT_INIT,
             &mut self.nonce_generator,
             session.get_client_public_key(),
@@ -141,7 +141,7 @@ impl SecureChannelContext {
             &secure_channel::NONCE_CONTEXT_AUTHOUT,
             &mut session.nonce_generator,
             &session.client_public_key,
-            &session.contract_private_key,
+            &session.enclave_private_key,
             &mut session.shared_key,
         )?;
         let astpk: api::AuthenticatedShortTermPublicKey = protobuf::parse_from_bytes(&astpk_bytes)?;
@@ -193,8 +193,8 @@ impl ClientSession {
         }
 
         sodalite::box_keypair_seed(
-            &mut session.contract_public_key,
-            &mut session.contract_private_key,
+            &mut session.enclave_public_key,
+            &mut session.enclave_private_key,
             &seed,
         );
 
@@ -206,7 +206,7 @@ impl ClientSession {
             sodalite::box_beforenm(
                 &mut key,
                 &session.client_public_key,
-                &session.contract_private_key,
+                &session.enclave_private_key,
             );
         }
 
@@ -218,9 +218,9 @@ impl ClientSession {
         &self.client_public_key
     }
 
-    /// Get contract short-term public key.
-    pub fn get_contract_public_key(&self) -> &sodalite::BoxPublicKey {
-        &self.contract_public_key
+    /// Get enclave short-term public key.
+    pub fn get_enclave_public_key(&self) -> &sodalite::BoxPublicKey {
+        &self.enclave_public_key
     }
 
     /// Open cryptographic box with RPC request.
@@ -230,7 +230,7 @@ impl ClientSession {
             &secure_channel::NONCE_CONTEXT_REQUEST,
             &mut self.nonce_generator,
             &self.client_public_key,
-            &self.contract_private_key,
+            &self.enclave_private_key,
             &mut self.shared_key,
         )?;
 
@@ -263,7 +263,7 @@ impl ClientSession {
             &secure_channel::NONCE_CONTEXT_RESPONSE,
             &mut self.nonce_generator,
             &self.client_public_key,
-            &self.contract_private_key,
+            &self.enclave_private_key,
             &mut self.shared_key,
         )?)
     }
