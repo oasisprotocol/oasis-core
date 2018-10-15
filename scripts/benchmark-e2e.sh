@@ -72,7 +72,7 @@ run_compute_node() {
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --disable-key-manager \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
 }
@@ -100,7 +100,7 @@ run_compute_node_storage_multilayer_remote() {
         --port ${port} \
         --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
         --disable-key-manager \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
         ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
 }
@@ -142,7 +142,7 @@ run_benchmark() {
     ${WORKDIR}/target/release/${client}-client \
         --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
-        --test-contract-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \
         --benchmark-runs ${rq_per_thread} \
         --output-format ${OUTPUT_FORMAT} \
