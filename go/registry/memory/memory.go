@@ -23,6 +23,8 @@ const BackendName = "memory"
 var _ api.Backend = (*memoryBackend)(nil)
 
 type memoryBackend struct {
+	sync.Once
+
 	logger *logging.Logger
 
 	state memoryBackendState
@@ -33,6 +35,9 @@ type memoryBackend struct {
 	runtimeNotifier  *pubsub.Broker
 
 	lastEpoch epochtime.EpochTime
+
+	closeCh  chan struct{}
+	closedCh chan struct{}
 }
 
 type memoryBackendState struct {
@@ -228,12 +233,21 @@ func (r *memoryBackend) getNodesForEntryLocked(id signature.PublicKey) []*node.N
 }
 
 func (r *memoryBackend) worker(timeSource epochtime.Backend) {
+	defer close(r.closedCh)
+
 	epochEvents, sub := timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
-		newEpoch, ok := <-epochEvents
-		if !ok {
-			r.logger.Debug("worker: terminating")
+		var newEpoch epochtime.EpochTime
+		var ok bool
+
+		select {
+		case newEpoch, ok = <-epochEvents:
+			if !ok {
+				r.logger.Debug("worker: terminating")
+				return
+			}
+		case <-r.closeCh:
 			return
 		}
 
@@ -311,6 +325,13 @@ func (r *memoryBackend) WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscr
 	return typedCh, sub
 }
 
+func (r *memoryBackend) Cleanup() {
+	r.Once.Do(func() {
+		close(r.closeCh)
+		<-r.closedCh
+	})
+}
+
 // New constructs a new memory backed registry Backend instance.
 func New(timeSource epochtime.Backend) api.Backend {
 	r := &memoryBackend{
@@ -324,6 +345,8 @@ func New(timeSource epochtime.Backend) api.Backend {
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 		lastEpoch:        epochtime.EpochInvalid,
+		closeCh:          make(chan struct{}),
+		closedCh:         make(chan struct{}),
 	}
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()

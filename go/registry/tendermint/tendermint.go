@@ -48,6 +48,10 @@ type tendermintBackend struct {
 		nodeLists map[epochtime.EpochTime]*api.NodeList
 	}
 	lastEpoch epochtime.EpochTime
+
+	closeCh   chan struct{}
+	closeOnce sync.Once
+	closedWg  sync.WaitGroup
 }
 
 func (r *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
@@ -234,6 +238,13 @@ func (r *tendermintBackend) GetBlockNodeList(ctx context.Context, height int64) 
 	return r.getNodeList(ctx, epoch)
 }
 
+func (r *tendermintBackend) Cleanup() {
+	r.closeOnce.Do(func() {
+		close(r.closeCh)
+		r.closedWg.Wait()
+	})
+}
+
 func (r *tendermintBackend) getRuntimes(ctx context.Context) ([]*runtime.Runtime, error) {
 	response, err := r.service.Query(tmapi.QueryRegistryGetRuntimes, nil, 0)
 	if err != nil {
@@ -249,6 +260,8 @@ func (r *tendermintBackend) getRuntimes(ctx context.Context) ([]*runtime.Runtime
 }
 
 func (r *tendermintBackend) workerEvents() {
+	defer r.closedWg.Done()
+
 	// Subscribe to transactions which modify state.
 	ctx := context.Background()
 	txChannel := make(chan interface{})
@@ -260,9 +273,16 @@ func (r *tendermintBackend) workerEvents() {
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
-		rawTx, ok := <-txChannel
-		if !ok {
-			r.logger.Debug("worker: terminating")
+		var rawTx interface{}
+		var ok bool
+
+		select {
+		case rawTx, ok = <-txChannel:
+			if !ok {
+				r.logger.Debug("worker: terminating")
+				return
+			}
+		case <-r.closeCh:
 			return
 		}
 
@@ -311,12 +331,21 @@ func (r *tendermintBackend) workerEvents() {
 }
 
 func (r *tendermintBackend) workerPerEpochList() {
+	defer r.closedWg.Done()
+
 	epochEvents, sub := r.timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
-		newEpoch, ok := <-epochEvents
-		if !ok {
-			r.logger.Debug("worker: terminating")
+		var newEpoch epochtime.EpochTime
+		var ok bool
+
+		select {
+		case newEpoch, ok = <-epochEvents:
+			if !ok {
+				r.logger.Debug("worker: terminating")
+				return
+			}
+		case <-r.closeCh:
 			return
 		}
 
@@ -426,6 +455,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 		lastEpoch:        epochtime.EpochInvalid,
+		closeCh:          make(chan struct{}),
 	}
 	r.cached.nodeLists = make(map[epochtime.EpochTime]*api.NodeList)
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
@@ -443,6 +473,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 		}
 	})
 
+	r.closedWg.Add(2)
 	go r.workerEvents()
 	go r.workerPerEpochList()
 
