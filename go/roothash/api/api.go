@@ -107,6 +107,9 @@ type Backend interface {
 
 	// Commit commits to a result of processing a batch of runtime invocations.
 	Commit(context.Context, signature.PublicKey, *Commitment) error
+
+	// Cleanup cleans up the roothash backend.
+	Cleanup()
 }
 
 // DiscrepancyDetectedEvent is a discrepancy detected event.

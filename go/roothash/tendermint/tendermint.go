@@ -55,6 +55,10 @@ type tendermintBackend struct {
 
 	allBlockNotifier *pubsub.Broker
 	runtimeNotifiers map[signature.MapKey]*runtimeBrokers
+
+	closeOnce sync.Once
+	closeCh   chan struct{}
+	closedCh  chan struct{}
 }
 
 func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
@@ -271,6 +275,13 @@ func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, 
 	return nil
 }
 
+func (r *tendermintBackend) Cleanup() {
+	r.closeOnce.Do(func() {
+		close(r.closeCh)
+		<-r.closedCh
+	})
+}
+
 func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtimeBrokers {
 	k := id.ToMapKey()
 
@@ -300,6 +311,8 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 }
 
 func (r *tendermintBackend) worker() { // nolint: gocyclo
+	defer close(r.closedCh)
+
 	// Subscribe to transactions which modify state.
 	ctx := context.Background()
 	txChannel := make(chan interface{})
@@ -311,9 +324,16 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
-		event, ok := <-txChannel
-		if !ok {
-			r.logger.Debug("worker: terminating")
+		var event interface{}
+		var ok bool
+
+		select {
+		case event, ok = <-txChannel:
+			if !ok {
+				r.logger.Debug("worker: terminating")
+				return
+			}
+		case <-r.closeCh:
 			return
 		}
 
@@ -419,6 +439,8 @@ func New(
 		service:          service,
 		allBlockNotifier: pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
+		closeCh:          make(chan struct{}),
+		closedCh:         make(chan struct{}),
 	}
 
 	go r.worker()

@@ -132,10 +132,11 @@ func (n *Node) initBackends() error {
 	if n.Storage, err = storage.New(n.cmd, n.Epochtime, dataDir); err != nil {
 		return err
 	}
+	n.svcMgr.RegisterCleanupOnly(n.Storage)
 	if n.RootHash, err = roothash.New(n.cmd, n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.Storage)
+	n.svcMgr.RegisterCleanupOnly(n.RootHash)
 
 	// Initialize and register the gRPC services.
 	epochtime.NewGRPCServer(n.grpcSrv.s, n.Epochtime)
