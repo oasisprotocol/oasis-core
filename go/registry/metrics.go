@@ -2,6 +2,7 @@ package registry
 
 import (
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
@@ -13,6 +14,8 @@ import (
 	"github.com/oasislabs/ekiden/go/registry/api"
 )
 
+const metricsUpdateInterval = 10 * time.Second
+
 var (
 	registryFailures = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -21,8 +24,8 @@ var (
 		},
 		[]string{"call"},
 	)
-	registryNodes = prometheus.NewCounter(
-		prometheus.CounterOpts{
+	registryNodes = prometheus.NewGauge(
+		prometheus.GaugeOpts{
 			Name: "ekiden_registry_nodes",
 			Help: "Number of registry nodes.",
 		},
@@ -53,6 +56,10 @@ var (
 
 type metricsWrapper struct {
 	api.Backend
+
+	closeOnce sync.Once
+	closeCh   chan struct{}
+	closedCh  chan struct{}
 }
 
 func (w *metricsWrapper) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
@@ -81,7 +88,6 @@ func (w *metricsWrapper) RegisterNode(ctx context.Context, sigNode *node.SignedN
 		return err
 	}
 
-	registryNodes.Inc()
 	return nil
 }
 
@@ -95,8 +101,41 @@ func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *runtime.Si
 	return nil
 }
 
+func (w *metricsWrapper) Cleanup() {
+	w.closeOnce.Do(func() {
+		close(w.closeCh)
+		<-w.closedCh
+	})
+
+	w.Backend.Cleanup()
+}
+
+func (w *metricsWrapper) worker() {
+	defer close(w.closedCh)
+
+	t := time.NewTicker(metricsUpdateInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-w.closeCh:
+			return
+		case <-t.C:
+		}
+
+		w.updatePeriodicMetrics()
+	}
+}
+
+func (w *metricsWrapper) updatePeriodicMetrics() {
+	nodes, err := w.Backend.GetNodes(context.Background())
+	if err == nil {
+		registryNodes.Set(float64(len(nodes)))
+	}
+}
+
 type blockMetricsWrapper struct {
-	metricsWrapper
+	*metricsWrapper
 	blockBackend api.BlockBackend
 }
 
@@ -112,7 +151,14 @@ func newMetricsWrapper(base api.Backend) api.Backend {
 	// XXX: When the registry backends support node deregistration,
 	// handle this on the metrics side.
 
-	wrapper := metricsWrapper{Backend: base}
+	wrapper := &metricsWrapper{
+		Backend:  base,
+		closeCh:  make(chan struct{}),
+		closedCh: make(chan struct{}),
+	}
+
+	wrapper.updatePeriodicMetrics()
+	go wrapper.worker()
 
 	blockBackend, ok := base.(api.BlockBackend)
 	if ok {
@@ -122,5 +168,5 @@ func newMetricsWrapper(base api.Backend) api.Backend {
 		}
 	}
 
-	return &wrapper
+	return wrapper
 }
