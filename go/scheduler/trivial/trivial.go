@@ -18,7 +18,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
@@ -59,7 +58,7 @@ type trivialSchedulerState struct {
 
 	nodeLists  map[epochtime.EpochTime][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
-	runtimes   map[signature.MapKey]*runtime.Runtime
+	runtimes   map[signature.MapKey]*registry.Runtime
 	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
 
 	epoch     epochtime.EpochTime
@@ -70,7 +69,7 @@ func (s *trivialSchedulerState) canElect() bool {
 	return s.nodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil
 }
 
-func (s *trivialSchedulerState) elect(con *runtime.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
+func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
 	var committees []*api.Committee
 
 	maybeBroadcast := func() {
@@ -281,7 +280,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 	return s.state.elect(con, epoch, nil)
 }
 
-func (s *trivialScheduler) electSingle(con *runtime.Runtime, notifier *pubsub.Broker) {
+func (s *trivialScheduler) electSingle(con *registry.Runtime, notifier *pubsub.Broker) {
 	s.state.Lock()
 	defer s.state.Unlock()
 
@@ -410,16 +409,16 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 }
 
 // New constracts a new trivial scheduler Backend instance.
-func New(timeSource epochtime.Backend, registry registry.Backend, beacon beacon.Backend) api.Backend {
+func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon beacon.Backend) api.Backend {
 	s := &trivialScheduler{
 		logger:     logging.GetLogger("scheduler/trivial"),
 		timeSource: timeSource,
-		registry:   registry,
+		registry:   registryBackend,
 		beacon:     beacon,
 		state: &trivialSchedulerState{
 			nodeLists:  make(map[epochtime.EpochTime][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
-			runtimes:   make(map[signature.MapKey]*runtime.Runtime),
+			runtimes:   make(map[signature.MapKey]*registry.Runtime),
 			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,

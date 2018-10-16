@@ -12,7 +12,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 )
@@ -45,7 +44,7 @@ type memoryBackendState struct {
 
 	entities map[signature.MapKey]*entity.Entity
 	nodes    map[signature.MapKey]*node.Node
-	runtimes map[signature.MapKey]*runtime.Runtime
+	runtimes map[signature.MapKey]*api.Runtime
 }
 
 func (r *memoryBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
@@ -285,7 +284,7 @@ func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
 	})
 }
 
-func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigCon *runtime.SignedRuntime) error {
+func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
 	con, err := api.VerifyRegisterRuntimeArgs(r.logger, sigCon)
 	if err != nil {
 		return err
@@ -305,7 +304,7 @@ func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigCon *runtime.Sig
 	return nil
 }
 
-func (r *memoryBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*runtime.Runtime, error) {
+func (r *memoryBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*api.Runtime, error) {
 	r.state.RLock()
 	defer r.state.RUnlock()
 
@@ -317,8 +316,8 @@ func (r *memoryBackend) GetRuntime(ctx context.Context, id signature.PublicKey) 
 	return con, nil
 }
 
-func (r *memoryBackend) WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription) {
-	typedCh := make(chan *runtime.Runtime)
+func (r *memoryBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscription) {
+	typedCh := make(chan *api.Runtime)
 	sub := r.runtimeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
@@ -339,7 +338,7 @@ func New(timeSource epochtime.Backend) api.Backend {
 		state: memoryBackendState{
 			entities: make(map[signature.MapKey]*entity.Entity),
 			nodes:    make(map[signature.MapKey]*node.Node),
-			runtimes: make(map[signature.MapKey]*runtime.Runtime),
+			runtimes: make(map[signature.MapKey]*api.Runtime),
 		},
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),

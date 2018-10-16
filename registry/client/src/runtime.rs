@@ -11,9 +11,9 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
-use ekiden_common::runtime::Runtime;
 use ekiden_common::signature::Signed;
 use ekiden_registry_api as api;
+use ekiden_registry_base::runtime::Runtime;
 use ekiden_registry_base::RuntimeRegistryBackend;
 
 /// Scheduler client implements the Scheduler interface.

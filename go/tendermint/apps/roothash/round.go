@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -156,7 +156,7 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment) err
 	return nil
 }
 
-func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*block.Block, error) {
+func (r *round) tryFinalize(ctx *abci.Context, runtime *registry.Runtime) (*block.Block, error) {
 	var err error
 
 	// Caller is responsible for enforcing this.
@@ -323,7 +323,7 @@ func (r *round) ensureHashesInStorage(store storage.Backend, header *block.Heade
 	return nil
 }
 
-func (r *round) checkCommitments(runtime *runtime.Runtime) error {
+func (r *round) checkCommitments(runtime *registry.Runtime) error {
 	wantPrimary := r.RoundState.State == stateWaitingCommitments
 
 	var commits, required int

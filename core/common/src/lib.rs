@@ -14,6 +14,5 @@ pub mod rpc {
 }
 
 pub mod runtime {
-    pub use ekiden_common::runtime::*;
     pub use ekiden_runtime_common::*;
 }

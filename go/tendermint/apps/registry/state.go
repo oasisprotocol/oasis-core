@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
@@ -148,13 +148,13 @@ func (s *ImmutableState) GetRuntimeRaw(id signature.PublicKey) ([]byte, error) {
 }
 
 // GetRuntime looks up a runtime by its identifier and returns it.
-func (s *ImmutableState) GetRuntime(id signature.PublicKey) (*runtime.Runtime, error) {
+func (s *ImmutableState) GetRuntime(id signature.PublicKey) (*registry.Runtime, error) {
 	raw, err := s.GetRuntimeRaw(id)
 	if err != nil {
 		return nil, err
 	}
 
-	var con runtime.Runtime
+	var con registry.Runtime
 	err = con.UnmarshalCBOR(raw)
 	return &con, err
 }
@@ -170,15 +170,15 @@ func (s *ImmutableState) GetRuntimesRaw() ([]byte, error) {
 }
 
 // GetRuntimes returns a list of all registered runtimes.
-func (s *ImmutableState) GetRuntimes() ([]*runtime.Runtime, error) {
-	items, err := s.getAll(stateRuntimeMap, &runtime.Runtime{})
+func (s *ImmutableState) GetRuntimes() ([]*registry.Runtime, error) {
+	items, err := s.getAll(stateRuntimeMap, &registry.Runtime{})
 	if err != nil {
 		return nil, err
 	}
 
-	var runtimes []*runtime.Runtime
+	var runtimes []*registry.Runtime
 	for _, item := range items {
-		runtime := item.(*runtime.Runtime)
+		runtime := item.(*registry.Runtime)
 		runtimes = append(runtimes, runtime)
 	}
 
@@ -289,7 +289,7 @@ func (s *MutableState) CreateNode(node *node.Node) error {
 }
 
 // CreateRuntime creates a new runtime.
-func (s *MutableState) CreateRuntime(con *runtime.Runtime) {
+func (s *MutableState) CreateRuntime(con *registry.Runtime) {
 	s.tree.Set(
 		[]byte(fmt.Sprintf(stateRuntimeMap, con.ID.String())),
 		con.MarshalCBOR(),

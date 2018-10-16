@@ -1,8 +1,9 @@
 //! Registry backend interface.
 use ekiden_common::bytes::{B256, B64};
 use ekiden_common::futures::{BoxFuture, BoxStream};
-use ekiden_common::runtime::Runtime;
 use ekiden_common::signature::Signed;
+
+use runtime::Runtime;
 
 /// Signature context used for runtime registration.
 pub const REGISTER_RUNTIME_SIGNATURE_CONTEXT: B64 = B64(*b"EkRunReg");
