@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "common/api/src/common.proto";
+import "roothash/api/src/roothash.proto";
 
 package registry;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/registry";
@@ -9,6 +10,7 @@ message Runtime {
     bytes id = 1;
     bytes store_id = 2;
     bytes code = 3;
+    roothash.Block genesis_block = 12;
 
     uint64 minimum_bond = 4;
     enum Mode {

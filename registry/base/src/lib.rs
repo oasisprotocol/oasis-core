@@ -6,6 +6,7 @@ extern crate byteorder;
 extern crate ekiden_common;
 extern crate ekiden_epochtime;
 extern crate ekiden_registry_api;
+extern crate ekiden_roothash_base;
 extern crate grpcio;
 extern crate protobuf;
 extern crate serde;

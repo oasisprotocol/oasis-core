@@ -6,7 +6,7 @@ fn main() {
     // Must be done first to create src/generated directory
     ekiden_tools::generate_mod_with_imports(
         "src/generated",
-        &["common"],
+        &["common", "roothash"],
         &["entity", "entity_grpc", "runtime", "runtime_grpc"],
     );
 
@@ -20,6 +20,10 @@ fn main() {
     println!(
         "cargo:rerun-if-changed={}",
         "../../common/api/src/common.proto"
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../roothash/api/src/roothash.proto"
     );
     println!("cargo:rerun-if-changed={}", "src/runtime.proto");
     println!("cargo:rerun-if-changed={}", "src/entity.proto");

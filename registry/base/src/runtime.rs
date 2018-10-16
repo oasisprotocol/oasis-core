@@ -1,9 +1,11 @@
 //! Runtime Interface.
 use std::convert::TryFrom;
+use std::convert::TryInto;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_registry_api as api;
+use ekiden_roothash_base::Block;
 
 /// The unserialized representation of a runtime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,6 +18,9 @@ pub struct Runtime {
 
     /// The runtime code body.
     pub code: Vec<u8>,
+
+    /// The genesis block for roothash initialization.
+    pub genesis_block: Block,
 
     // XXX: "tokens" for advertisement (PR #2), in to be specified units.
     /// The minimum stake required by the runtime.
@@ -56,6 +61,7 @@ impl TryFrom<api::Runtime> for Runtime {
             id: id,
             store_id: sid,
             code: a.get_code().to_vec(),
+            genesis_block: a.get_genesis_block().to_owned().try_into()?,
             minimum_bond: a.minimum_bond,
             mode_nondeterministic: a.get_mode() == api::Runtime_Mode::Nondeterministic,
             features_sgx: a.get_features()
@@ -77,6 +83,7 @@ impl Into<api::Runtime> for Runtime {
         c.set_id(self.id.to_vec());
         c.set_store_id(self.store_id.to_vec());
         c.set_code(self.code);
+        c.set_genesis_block(self.genesis_block.into());
         c.set_minimum_bond(self.minimum_bond);
         if self.mode_nondeterministic {
             c.set_mode(api::Runtime_Mode::Nondeterministic);

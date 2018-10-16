@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
+	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 )
 
 var (
@@ -59,6 +60,9 @@ type Runtime struct {
 
 	// Code is the runtime code body.
 	Code []byte `codec:"code"`
+
+	// GenesisBlock is the genesis block for roothash initialization.
+	GenesisBlock *roothash.Block `codec:"genesis_block"`
 
 	// MinimumBond is the mimimum stake required by the runtime.
 	MinimumBond uint64 `codec:"minimum_bond"`
@@ -118,6 +122,11 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	}
 
 	c.Code = append([]byte{}, pb.GetCode()...)
+
+	if err := c.GenesisBlock.FromProto(pb.GetGenesisBlock()); err != nil {
+		return err
+	}
+
 	c.MinimumBond = pb.GetMinimumBond()
 	c.AdvertisementRate = pb.GetAdvertisementRate()
 	c.ReplicaGroupSize = pb.GetReplicaGroupSize()
@@ -149,6 +158,7 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 		return nil
 	}
 	pb.Code = append([]byte{}, c.Code...)
+	pb.GenesisBlock = c.GenesisBlock.ToProto()
 	pb.MinimumBond = c.MinimumBond
 	pb.AdvertisementRate = c.AdvertisementRate
 	pb.ReplicaGroupSize = c.ReplicaGroupSize
