@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
-	"github.com/oasislabs/ekiden/go/storage/internal/tester"
+	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 func TestStorageMemory(t *testing.T) {
@@ -12,5 +12,5 @@ func TestStorageMemory(t *testing.T) {
 	backend := New(timeSource)
 	defer backend.Cleanup()
 
-	tester.StorageImplementationTest(t, backend, timeSource, true)
+	tests.StorageImplementationTests(t, backend, timeSource, true)
 }

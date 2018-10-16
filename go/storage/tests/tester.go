@@ -1,5 +1,5 @@
-// Package tester is a collection of storage implementation test cases.
-package tester
+// Package tests is a collection of storage implementation test cases.
+package tests
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/context"
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
 var testValues = [][]byte{
@@ -26,14 +26,14 @@ var testValuesBatch = [][]byte{
 	[]byte("Even as they show thus gallantly; My instrument art thou!"),
 }
 
-// StorageImplementationTest exercises the basic functionality of
+// StorageImplementationTests exercises the basic functionality of
 // a storage backend.
-func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource epochtime.SetableBackend, expiry bool) {
+func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, expiry bool) {
 	<-backend.Initialized()
 
-	var hashes []storage.Key
+	var hashes []api.Key
 	for _, v := range testValues {
-		hashes = append(hashes, storage.HashStorageKey(v))
+		hashes = append(hashes, api.HashStorageKey(v))
 	}
 
 	epoch, _, _ := timeSource.GetEpoch(context.Background())
@@ -49,11 +49,11 @@ func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource
 		require.EqualValues(t, testValues[i], v, "Get(%d)", i)
 	}
 
-	var batchHashes []storage.Key
-	var batchValues []storage.Value
+	var batchHashes []api.Key
+	var batchValues []api.Value
 	for _, v := range testValuesBatch {
-		batchHashes = append(batchHashes, storage.HashStorageKey(v))
-		batchValues = append(batchValues, storage.Value{Data: v, Expiration: 1})
+		batchHashes = append(batchHashes, api.HashStorageKey(v))
+		batchValues = append(batchValues, api.Value{Data: v, Expiration: 1})
 	}
 
 	err := backend.InsertBatch(context.Background(), batchValues)
@@ -67,12 +67,12 @@ func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource
 	require.NoError(t, err, "GetBatch(batchHashes)")
 	require.EqualValues(t, testValuesBatch, v, "GetBatch(batchHashes)")
 
-	var missingKey storage.Key
+	var missingKey api.Key
 	copy(missingKey[:], []byte("00000000000000000000000000000000"))
 
 	v, err = backend.GetBatch(
 		context.Background(),
-		[]storage.Key{
+		[]api.Key{
 			hashes[0],
 			missingKey,
 			hashes[1],
@@ -89,7 +89,7 @@ func StorageImplementationTest(t *testing.T, backend storage.Backend, timeSource
 		return
 	}
 
-	seenKeys := make(map[storage.Key]bool)
+	seenKeys := make(map[api.Key]bool)
 	keyInfos, err := backend.GetKeys(context.Background())
 	require.NoError(t, err, "GetKeys()")
 	for i, ki := range keyInfos {
