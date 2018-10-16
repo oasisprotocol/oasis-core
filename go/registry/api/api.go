@@ -111,6 +111,9 @@ type Backend interface {
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
 	WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription)
+
+	// Cleanup cleans up the regsitry backend.
+	Cleanup()
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify

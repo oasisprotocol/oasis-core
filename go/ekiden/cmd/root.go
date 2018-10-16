@@ -210,6 +210,7 @@ func initNode(cmd *cobra.Command, env *nodeEnv) error {
 	if err != nil {
 		return err
 	}
+	env.svcMgr.RegisterCleanupOnly(reg)
 	sched, err := scheduler.New(cmd, timeSource, reg, randomBeacon)
 	if err != nil {
 		return err
