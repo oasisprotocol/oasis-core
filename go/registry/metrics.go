@@ -97,7 +97,6 @@ func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *runtime.Si
 		return err
 	}
 
-	registryRuntimes.Inc()
 	return nil
 }
 
@@ -116,10 +115,16 @@ func (w *metricsWrapper) worker() {
 	t := time.NewTicker(metricsUpdateInterval)
 	defer t.Stop()
 
+	runtimeCh, sub := w.Backend.WatchRuntimes()
+	defer sub.Close()
+
 	for {
 		select {
 		case <-w.closeCh:
 			return
+		case <-runtimeCh:
+			registryRuntimes.Inc()
+			continue
 		case <-t.C:
 		}
 
