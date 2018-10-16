@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 )
 
 const recvTimeout = 1 * time.Second
@@ -46,9 +47,7 @@ recvLoop:
 		}
 	}
 
-	epoch++
-	err = epochtime.SetEpoch(context.Background(), epoch, 0)
-	require.NoError(err, "SetEpoch")
+	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
 	select {
 	case ev := <-ch:

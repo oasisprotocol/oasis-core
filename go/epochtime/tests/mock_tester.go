@@ -53,3 +53,18 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	require.NoError(err, "GetEpoch after set")
 	require.Equal(epoch, e, "GetEpoch after set, epoch")
 }
+
+// MustAdvanceEpoch advances the epoch by the specified increment, and returns
+// the new epoch.
+func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend, increment uint64) api.EpochTime {
+	require := require.New(t)
+
+	epoch, _, err := backend.GetEpoch(context.Background())
+	require.NoError(err, "GetEpoch")
+
+	epoch = epoch + api.EpochTime(increment)
+	err = backend.SetEpoch(context.Background(), epoch, 0)
+	require.NoError(err, "SetEpoch")
+
+	return epoch
+}

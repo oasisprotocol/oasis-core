@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	commitmentSignatureContext = []byte("EkCommit")
+	// SignatureContext is the signature context used to sign commitments.
+	SignatureContext = []byte("EkCommit")
 
 	_ cbor.Marshaler   = (*Commitment)(nil)
 	_ cbor.Unmarshaler = (*Commitment)(nil)
@@ -37,7 +38,7 @@ func (c *Commitment) ToOpaqueCommitment() *api.OpaqueCommitment {
 // Open validates the commitment signature, and de-serializes the header.
 func (c *Commitment) Open() error {
 	var header block.Header
-	if err := c.Signed.Open(commitmentSignatureContext, &header); err != nil {
+	if err := c.Signed.Open(SignatureContext, &header); err != nil {
 		return errors.New("roothash/commitment: commitment has invalid signature")
 	}
 	c.Header = &header

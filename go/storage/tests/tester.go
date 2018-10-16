@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -35,8 +36,6 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	for _, v := range testValues {
 		hashes = append(hashes, api.HashStorageKey(v))
 	}
-
-	epoch, _, _ := timeSource.GetEpoch(context.Background())
 
 	for i, v := range testValues {
 		err := backend.Insert(context.Background(), v, 1)
@@ -100,7 +99,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 		require.True(t, seenKeys[h], "KeyInfo[%d]: Key", i)
 	}
 
-	_ = timeSource.SetEpoch(context.Background(), epoch+2, 0)
+	epochtimeTests.MustAdvanceEpoch(t, timeSource, 2)
 	time.Sleep(1 * time.Second) // Wait for the sweeper to purge keys.
 
 	keyInfos, err = backend.GetKeys(context.Background())
