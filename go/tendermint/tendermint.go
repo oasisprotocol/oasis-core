@@ -116,6 +116,7 @@ func (t *tendermintService) Stop() {
 	}
 
 	t.mux.Stop()
+	t.node.Wait()
 }
 
 func (t *tendermintService) Started() <-chan struct{} {
