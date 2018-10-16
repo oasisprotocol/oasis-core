@@ -224,6 +224,8 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 }
 
 func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
+	defer s.rootHash.closedWg.Done()
+
 	schedCh, sub := sched.WatchCommittees()
 	defer sub.Close()
 
@@ -251,7 +253,10 @@ func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
 				continue
 			}
 			s.onNewCommittee(committee)
-		case cmd := <-s.cmdCh:
+		case cmd, ok := <-s.cmdCh:
+			if !ok {
+				return
+			}
 			if s.round == nil {
 				s.logger.Error("worker: commit recevied when no round in progress",
 					"err", errNoRound,
@@ -311,6 +316,11 @@ type memoryRootHash struct {
 	runtimes map[signature.MapKey]*runtimeState
 
 	allBlockNotifier *pubsub.Broker
+
+	closeCh   chan struct{}
+	closedCh  chan struct{}
+	closedWg  sync.WaitGroup
+	closeOnce sync.Once
 }
 
 func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
@@ -425,6 +435,14 @@ func (r *memoryRootHash) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscripti
 	return ch, sub
 }
 
+func (r *memoryRootHash) Cleanup() {
+	r.closeOnce.Do(func() {
+		close(r.closeCh)
+		<-r.closedCh // Need to ensure no Add() in progress for the Wait().
+		r.closedWg.Wait()
+	})
+}
+
 func (r *memoryRootHash) getRuntimeState(id signature.PublicKey) (*runtimeState, error) {
 	k := id.ToMapKey()
 
@@ -460,6 +478,7 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *runtime.Runtime) error {
 		rootHash:      r,
 	}
 
+	r.closedWg.Add(1)
 	go s.worker(r.scheduler)
 
 	r.runtimes[k] = s
@@ -468,13 +487,26 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *runtime.Runtime) error {
 }
 
 func (r *memoryRootHash) worker(registry registry.Backend) {
+	defer func() {
+		close(r.closedCh)
+		for _, v := range r.runtimes {
+			close(v.cmdCh)
+		}
+	}()
+
 	ch, sub := registry.WatchRuntimes()
 	defer sub.Close()
 
 	for {
-		runtime, ok := <-ch
-		if !ok {
-			break
+		var runtime *runtime.Runtime
+		var ok bool
+		select {
+		case runtime, ok = <-ch:
+			if !ok {
+				return
+			}
+		case <-r.closeCh:
+			return
 		}
 
 		err := r.onRuntimeRegistration(runtime)
@@ -500,6 +532,8 @@ func New(scheduler scheduler.Backend, storage storage.Backend, registry registry
 		storage:          storage,
 		runtimes:         make(map[signature.MapKey]*runtimeState),
 		allBlockNotifier: pubsub.NewBroker(false),
+		closeCh:          make(chan struct{}),
+		closedCh:         make(chan struct{}),
 	}
 	go r.worker(registry)
 

@@ -184,6 +184,9 @@ type Backend interface {
 	// Upon subscription, all committees for the current epoch will
 	// be sent immediately.
 	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
+
+	// Cleanup cleans up the scheduler backend.
+	Cleanup()
 }
 
 // BlockBackend is a Backend that is backed by a blockchain.

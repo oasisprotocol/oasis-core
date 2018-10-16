@@ -38,6 +38,8 @@ var (
 )
 
 type trivialScheduler struct {
+	sync.Once
+
 	logger *logging.Logger
 
 	timeSource epochtime.Backend
@@ -47,6 +49,9 @@ type trivialScheduler struct {
 	state *trivialSchedulerState
 
 	notifier *pubsub.Broker
+
+	closeCh  chan struct{}
+	closedCh chan struct{}
 }
 
 type trivialSchedulerState struct {
@@ -187,6 +192,13 @@ func (s *trivialSchedulerState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
+func (s *trivialScheduler) Cleanup() {
+	s.Do(func() {
+		close(s.closeCh)
+		<-s.closedCh
+	})
+}
+
 func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
 	s.state.RLock()
 	defer s.state.RUnlock()
@@ -312,6 +324,8 @@ func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
 }
 
 func (s *trivialScheduler) worker() { //nolint:gocyclo
+	defer close(s.closedCh)
+
 	timeCh, sub := s.timeSource.WatchEpochs()
 	defer sub.Close()
 
@@ -326,6 +340,8 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 
 	for {
 		select {
+		case <-s.closeCh:
+			return
 		case epoch := <-timeCh:
 			if epoch == s.state.epoch {
 				continue
@@ -408,6 +424,8 @@ func New(timeSource epochtime.Backend, registry registry.Backend, beacon beacon.
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,
 		},
+		closeCh:  make(chan struct{}),
+		closedCh: make(chan struct{}),
 	}
 	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		s.state.RLock()

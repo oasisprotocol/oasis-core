@@ -259,27 +259,32 @@ type grpcService struct {
 
 	ln net.Listener
 	s  *grpc.Server
+
+	errCh chan error
 }
 
 func (s *grpcService) Start() error {
 	go func() {
-		var ln net.Listener
-		ln, s.ln = s.ln, nil
-		err := s.s.Serve(ln)
-		if err != nil {
-			s.Logger.Error("gRPC Server terminated uncleanly",
-				"err", err,
-			)
+		if err := s.s.Serve(s.ln); err != nil {
+			s.BaseBackgroundService.Stop()
+			s.errCh <- err
 		}
-		s.s = nil
-		s.BaseBackgroundService.Stop()
 	}()
 	return nil
 }
 
 func (s *grpcService) Stop() {
 	if s.s != nil {
-		s.s.GracefulStop()
+		select {
+		case err := <-s.errCh:
+			if err != nil {
+				s.Logger.Error("gRPC Server terminated uncleanly",
+					"err", err,
+				)
+			}
+		default:
+			s.s.GracefulStop()
+		}
 		s.s = nil
 	}
 }
@@ -322,6 +327,7 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 		BaseBackgroundService: svc,
 		ln:                    ln,
 		s:                     grpc.NewServer(sOpts...),
+		errCh:                 make(chan error),
 	}, nil
 }
 

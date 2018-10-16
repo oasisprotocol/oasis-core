@@ -42,27 +42,32 @@ type metricsPullService struct {
 
 	ln net.Listener
 	s  *http.Server
+
+	errCh chan error
 }
 
 func (s *metricsPullService) Start() error {
 	go func() {
-		var ln net.Listener
-		ln, s.ln = s.ln, nil
-		err := s.s.Serve(ln)
-		if err != nil {
-			s.Logger.Error("metrics terminated uncleanly",
-				"err", err,
-			)
+		if err := s.s.Serve(s.ln); err != nil {
+			s.BaseBackgroundService.Stop()
+			s.errCh <- err
 		}
-		s.s = nil
-		s.BaseBackgroundService.Stop()
 	}()
 	return nil
 }
 
 func (s *metricsPullService) Stop() {
 	if s.s != nil {
-		_ = s.s.Shutdown(context.Background())
+		select {
+		case err := <-s.errCh:
+			if err != nil {
+				s.Logger.Error("metrics terminated uncleanly",
+					"err", err,
+				)
+			}
+		default:
+			_ = s.s.Shutdown(context.Background())
+		}
 		s.s = nil
 	}
 }
@@ -93,6 +98,7 @@ func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error
 		BaseBackgroundService: svc,
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler()},
+		errCh:                 make(chan error),
 	}, nil
 }
 

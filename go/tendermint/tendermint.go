@@ -116,6 +116,7 @@ func (t *tendermintService) Stop() {
 	}
 
 	t.mux.Stop()
+	t.node.Wait()
 }
 
 func (t *tendermintService) Started() <-chan struct{} {
@@ -301,6 +302,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.BlockTimeIota = timeoutCommitMsec
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
+	tenderConfig.RPC.ListenAddress = ""
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
 	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
