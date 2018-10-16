@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -63,6 +64,8 @@ var (
 )
 
 type tendermintService struct {
+	sync.Mutex
+
 	cmservice.BaseBackgroundService
 
 	mux           *abci.ApplicationServer
@@ -78,8 +81,15 @@ type tendermintService struct {
 	startedCh                chan struct{}
 }
 
+func (t *tendermintService) initialized() bool {
+	t.Lock()
+	defer t.Unlock()
+
+	return t.isInitialized
+}
+
 func (t *tendermintService) Start() error {
-	if !t.isInitialized {
+	if !t.initialized() {
 		return nil
 	}
 
@@ -99,7 +109,7 @@ func (t *tendermintService) Start() error {
 }
 
 func (t *tendermintService) Quit() <-chan struct{} {
-	if !t.isInitialized {
+	if !t.initialized() {
 		return make(chan struct{})
 	}
 
@@ -107,7 +117,7 @@ func (t *tendermintService) Quit() <-chan struct{} {
 }
 
 func (t *tendermintService) Stop() {
-	if !t.isInitialized {
+	if !t.initialized() {
 		return
 	}
 
@@ -124,10 +134,6 @@ func (t *tendermintService) Started() <-chan struct{} {
 }
 
 func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
-	if !t.isInitialized {
-		panic("tendermint: BroadcastTx() called, when no tendermint backends enabled")
-	}
-
 	message := cbor.Marshal(tx)
 	data := append([]byte{tag}, message...)
 
@@ -147,10 +153,6 @@ func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
 }
 
 func (t *tendermintService) Query(path string, query interface{}, height int64) ([]byte, error) {
-	if !t.isInitialized {
-		panic("tendermint: Query() called, when no tendermint backends enabled")
-	}
-
 	var data []byte
 	if query != nil {
 		data = cbor.Marshal(query)
@@ -190,11 +192,8 @@ func (t *tendermintService) Genesis() (*tmrpctypes.ResultGenesis, error) {
 }
 
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
-	if !t.isInitialized {
-		t.Logger.Debug("Initializing tendermint local node/mux.")
-		if err := t.lazyInit(); err != nil {
-			return err
-		}
+	if err := t.ForceInitialize(); err != nil {
+		return err
 	}
 	if t.isStarted {
 		return errors.New("tendermint: service already started")
@@ -204,9 +203,12 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 }
 
 func (t *tendermintService) ForceInitialize() error {
+	t.Lock()
+	defer t.Unlock()
+
 	var err error
 	if !t.isInitialized {
-		t.Logger.Debug("Force-initializing tendermint local node.")
+		t.Logger.Debug("Initializing tendermint local node.")
 		err = t.lazyInit()
 	}
 
