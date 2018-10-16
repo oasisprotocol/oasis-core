@@ -68,7 +68,6 @@ func (w *metricsWrapper) RegisterEntity(ctx context.Context, sigEnt *entity.Sign
 		return err
 	}
 
-	registryEntities.Inc()
 	return nil
 }
 
@@ -78,7 +77,6 @@ func (w *metricsWrapper) DeregisterEntity(ctx context.Context, sigID *signature.
 		return err
 	}
 
-	registryEntities.Dec()
 	return nil
 }
 
@@ -136,6 +134,11 @@ func (w *metricsWrapper) updatePeriodicMetrics() {
 	nodes, err := w.Backend.GetNodes(context.Background())
 	if err == nil {
 		registryNodes.Set(float64(len(nodes)))
+	}
+
+	entities, err := w.Backend.GetEntities(context.Background())
+	if err == nil {
+		registryEntities.Set(float64(len(entities)))
 	}
 }
 
