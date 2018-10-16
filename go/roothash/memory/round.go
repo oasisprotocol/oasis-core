@@ -10,7 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
@@ -64,7 +64,7 @@ const (
 )
 
 type roundState struct {
-	runtime          *runtime.Runtime
+	runtime          *registry.Runtime
 	committee        *scheduler.Committee
 	computationGroup map[signature.MapKey]*scheduler.CommitteeNode
 	commitments      map[signature.MapKey]*commitment
@@ -345,7 +345,7 @@ func (r *round) checkCommitments() error {
 	return nil
 }
 
-func newRound(storage storage.Backend, runtime *runtime.Runtime, committee *scheduler.Committee, block *api.Block) *round {
+func newRound(storage storage.Backend, runtime *registry.Runtime, committee *scheduler.Committee, block *api.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
 	}

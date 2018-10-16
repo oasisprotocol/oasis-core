@@ -13,7 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
@@ -103,14 +102,14 @@ type Backend interface {
 	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
 
 	// RegisterRuntime registers a runtime.
-	RegisterRuntime(context.Context, *runtime.SignedRuntime) error
+	RegisterRuntime(context.Context, *SignedRuntime) error
 
 	// GetRuntime gets a runtime by ID.
-	GetRuntime(context.Context, signature.PublicKey) (*runtime.Runtime, error)
+	GetRuntime(context.Context, signature.PublicKey) (*Runtime, error)
 
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
-	WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription)
+	WatchRuntimes() (<-chan *Runtime, *pubsub.Subscription)
 
 	// Cleanup cleans up the regsitry backend.
 	Cleanup()
@@ -216,9 +215,9 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode) (*
 }
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
-func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigCon *runtime.SignedRuntime) (*runtime.Runtime, error) {
+func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigCon *SignedRuntime) (*Runtime, error) {
 	// XXX: Ensure contact is well-formed.
-	var con runtime.Runtime
+	var con Runtime
 	if sigCon == nil {
 		return nil, ErrInvalidArgument
 	}

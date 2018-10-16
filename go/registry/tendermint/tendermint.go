@@ -16,7 +16,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
@@ -189,7 +188,7 @@ func (r *tendermintBackend) WatchNodeList() (<-chan *api.NodeList, *pubsub.Subsc
 	return typedCh, sub
 }
 
-func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *runtime.SignedRuntime) error {
+func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
 	tx := tmapi.TxRegistry{
 		TxRegisterRuntime: &tmapi.TxRegisterRuntime{
 			Runtime: *sigCon,
@@ -203,7 +202,7 @@ func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *runtime
 	return nil
 }
 
-func (r *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*runtime.Runtime, error) {
+func (r *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*api.Runtime, error) {
 	query := tmapi.QueryGetByIDRequest{
 		ID: id,
 	}
@@ -213,7 +212,7 @@ func (r *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicK
 		return nil, errors.Wrap(err, "registry: get runtime query failed")
 	}
 
-	var con runtime.Runtime
+	var con api.Runtime
 	if err := cbor.Unmarshal(response, &con); err != nil {
 		return nil, errors.Wrap(err, "registry: get runtime malformed response")
 	}
@@ -221,8 +220,8 @@ func (r *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicK
 	return &con, nil
 }
 
-func (r *tendermintBackend) WatchRuntimes() (<-chan *runtime.Runtime, *pubsub.Subscription) {
-	typedCh := make(chan *runtime.Runtime)
+func (r *tendermintBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscription) {
+	typedCh := make(chan *api.Runtime)
 	sub := r.runtimeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
@@ -245,13 +244,13 @@ func (r *tendermintBackend) Cleanup() {
 	})
 }
 
-func (r *tendermintBackend) getRuntimes(ctx context.Context) ([]*runtime.Runtime, error) {
+func (r *tendermintBackend) getRuntimes(ctx context.Context) ([]*api.Runtime, error) {
 	response, err := r.service.Query(tmapi.QueryRegistryGetRuntimes, nil, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get runtimes query failed")
 	}
 
-	var runtimes []*runtime.Runtime
+	var runtimes []*api.Runtime
 	if err := cbor.Unmarshal(response, &runtimes); err != nil {
 		return nil, errors.Wrap(err, "registry: get runtimes malformed response")
 	}

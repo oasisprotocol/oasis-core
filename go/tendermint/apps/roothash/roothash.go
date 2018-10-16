@@ -14,14 +14,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
 
 const (
@@ -241,7 +241,7 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			tree := app.state.DeliverTxTree()
 
 			// New runtime has been registered, create its roothash state.
-			regState := registry.NewMutableState(tree)
+			regState := registryapp.NewMutableState(tree)
 			runtime, err := regState.GetRuntime(runtime)
 			if err != nil {
 				return errors.Wrap(err, "roothash: failed to fetch new runtime")
@@ -308,7 +308,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		panic(err)
 	}
 
-	regState := registry.NewMutableState(tree)
+	regState := registryapp.NewMutableState(tree)
 	runtime, err := regState.GetRuntime(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to fetch runtime",
@@ -370,7 +370,7 @@ func (app *rootHashApplication) commit(
 		return errNoSuchRuntime
 	}
 
-	regState := registry.NewMutableState(state.Tree())
+	regState := registryapp.NewMutableState(state.Tree())
 	runtime, err := regState.GetRuntime(id)
 	if err != nil {
 		return errors.Wrap(err, "roothash: failed to fetch runtime")
@@ -425,7 +425,7 @@ func (app *rootHashApplication) commit(
 
 func (app *rootHashApplication) tryFinalize(
 	ctx *abci.Context,
-	runtime *runtime.Runtime,
+	runtime *registry.Runtime,
 	runtimeState *RuntimeState,
 	forced bool,
 ) { // nolint: gocyclo

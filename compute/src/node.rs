@@ -11,10 +11,9 @@ use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
-use ekiden_core::runtime::Runtime;
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
-use ekiden_registry_base::{EntityRegistryBackend, RuntimeRegistryBackend,
+use ekiden_registry_base::{EntityRegistryBackend, Runtime, RuntimeRegistryBackend,
                            REGISTER_ENTITY_SIGNATURE_CONTEXT, REGISTER_NODE_SIGNATURE_CONTEXT,
                            REGISTER_RUNTIME_SIGNATURE_CONTEXT};
 use ekiden_roothash_base::{RootHashBackend, RootHashSigner};

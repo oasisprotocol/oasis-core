@@ -10,7 +10,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/registry/api"
 )
 
@@ -89,7 +88,7 @@ func (w *metricsWrapper) RegisterNode(ctx context.Context, sigNode *node.SignedN
 	return nil
 }
 
-func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *runtime.SignedRuntime) error {
+func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
 	if err := w.Backend.RegisterRuntime(ctx, sigCon); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "registerRuntime"}).Inc()
 		return err

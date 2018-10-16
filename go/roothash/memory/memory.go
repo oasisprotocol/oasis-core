@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -50,7 +49,7 @@ type runtimeState struct {
 	logger  *logging.Logger
 	storage storage.Backend
 
-	runtime *runtime.Runtime
+	runtime *registry.Runtime
 	round   *round
 	timer   *time.Timer
 	blocks  []*api.Block
@@ -457,7 +456,7 @@ func (r *memoryRootHash) getRuntimeState(id signature.PublicKey) (*runtimeState,
 	return s, nil
 }
 
-func (r *memoryRootHash) onRuntimeRegistration(runtime *runtime.Runtime) error {
+func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error {
 	k := runtime.ID.ToMapKey()
 
 	r.Lock()
@@ -486,7 +485,7 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *runtime.Runtime) error {
 	return nil
 }
 
-func (r *memoryRootHash) worker(registry registry.Backend) {
+func (r *memoryRootHash) worker(registryBackend registry.Backend) {
 	defer func() {
 		close(r.closedCh)
 		for _, v := range r.runtimes {
@@ -494,11 +493,11 @@ func (r *memoryRootHash) worker(registry registry.Backend) {
 		}
 	}()
 
-	ch, sub := registry.WatchRuntimes()
+	ch, sub := registryBackend.WatchRuntimes()
 	defer sub.Close()
 
 	for {
-		var runtime *runtime.Runtime
+		var runtime *registry.Runtime
 		var ok bool
 		select {
 		case runtime, ok = <-ch:

@@ -1,10 +1,9 @@
 //! Runtime Interface.
 use std::convert::TryFrom;
 
-use bytes::B256;
-use error::Error;
-
-use ekiden_common_api as api;
+use ekiden_common::bytes::B256;
+use ekiden_common::error::Error;
+use ekiden_registry_api as api;
 
 /// The unserialized representation of a runtime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,7 +44,7 @@ pub struct Runtime {
 
 impl TryFrom<api::Runtime> for Runtime {
     /// try_from Converts a protobuf `common::api::Runtime` into a runtime.
-    type Error = super::error::Error;
+    type Error = Error;
     fn try_from(a: api::Runtime) -> Result<Self, Error> {
         let id = a.get_id();
         let id = B256::from_slice(&id);

@@ -5,6 +5,34 @@ import "common/api/src/common.proto";
 package registry;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/registry";
 
+message Runtime {
+    bytes id = 1;
+    bytes store_id = 2;
+    bytes code = 3;
+
+    uint64 minimum_bond = 4;
+    enum Mode {
+        Deterministic = 0;
+        Nondeterministic = 1;
+    }
+    Mode mode = 5;
+
+    enum Features {
+        SGX = 0;
+    }
+    repeated Features features = 6;
+
+    uint64 advertisement_rate = 7;
+
+    uint64 replica_group_size = 8;
+
+    uint64 storage_group_size = 9;
+
+    uint64 replica_group_backup_size = 10;
+
+    uint64 replica_allowed_stragglers = 11;
+}
+
 service RuntimeRegistry {
     rpc RegisterRuntime (RegisterRuntimeRequest) returns (RegisterRuntimeResponse) {}
     rpc GetRuntime (RuntimeRequest) returns (RuntimeResponse) {}
@@ -24,12 +52,12 @@ message RuntimeRequest {
 }
 
 message RuntimeResponse {
-    common.Runtime runtime = 1;
+    Runtime runtime = 1;
 }
 
 message RuntimesRequest {
 }
 
 message RuntimesResponse {
-    common.Runtime runtime = 1;
+    Runtime runtime = 1;
 }
