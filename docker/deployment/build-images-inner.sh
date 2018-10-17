@@ -18,6 +18,8 @@ fi
 # Build all Ekiden Rust binaries and resources.
 cargo install --force --path tools
 (cd compute && cargo build --release)
+(cd key-manager/node && cargo build --release)
+(cd key-manager/dummy/enclave && cargo ekiden build-enclave --output-identity --release)
 
 # Build all Ekiden Go binaries and resources.
 GO_SRC_BASE=${GOPATH}/src/github.com/oasislabs
@@ -31,6 +33,9 @@ ln -sfT `pwd` ${GO_SRC_BASE}/ekiden
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
 ln target/release/ekiden-compute target/docker-deployment/context/bin
 ln go/ekiden/ekiden target/docker-deployment/context/bin/ekiden-node
+ln target/release/ekiden-keymanager-node target/docker-deployment/context/bin
+ln target/enclave/ekiden-keymanager-trusted.so target/docker-deployment/context/lib
+ln target/enclave/ekiden-keymanager-trusted.mrenclave target/docker-deployment/context/res
 if [ -e docker/deployment/Dockerfile.generated ]
 then
     ln docker/deployment/Dockerfile.generated target/docker-deployment/context/Dockerfile
