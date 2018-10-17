@@ -106,3 +106,6 @@ members = [
     "key-manager/node",
 ]
 exclude = [ "thirdparty" ]
+
+[profile.release]
+panic = "abort"
