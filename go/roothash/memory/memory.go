@@ -470,7 +470,7 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error 
 		logger:        r.logger.With("runtime_id", runtime.ID),
 		storage:       r.storage,
 		runtime:       runtime,
-		blocks:        append([]*api.Block{}, newGenesisBlock(runtime.ID)),
+		blocks:        append([]*api.Block{}, runtime.GenesisBlock),
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
@@ -537,17 +537,4 @@ func New(scheduler scheduler.Backend, storage storage.Backend, registry registry
 	go r.worker(registry)
 
 	return r
-}
-
-func newGenesisBlock(id signature.PublicKey) *api.Block {
-	var blk api.Block
-
-	blk.Header.Version = 0
-	blk.Header.Timestamp = uint64(time.Now().Unix())
-	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
-	blk.Header.InputHash.Empty()
-	blk.Header.OutputHash.Empty()
-	blk.Header.StateRoot.Empty()
-
-	return &blk
 }
