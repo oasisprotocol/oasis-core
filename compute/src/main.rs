@@ -17,6 +17,7 @@ extern crate thread_local;
 extern crate ekiden_compute_api;
 extern crate ekiden_core;
 extern crate ekiden_registry_base;
+extern crate ekiden_roothash_api;
 extern crate ekiden_roothash_base;
 extern crate ekiden_rpc_api;
 extern crate ekiden_rpc_client;
@@ -54,6 +55,7 @@ extern crate ekiden_roothash_client;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_frontend;
 
+use std::convert::TryInto;
 use std::path::Path;
 
 use clap::{App, Arg};
@@ -182,6 +184,13 @@ fn main() {
                 .takes_value(true)
                 .default_value("0"),
         )
+        // TODO: Remove this once we have independent runtime registration.
+        .arg(
+            Arg::with_name("compute-genesis-block")
+                .long("compute-genesis-block")
+                .help("A file containing the serialized first block. Will generate an empty first block if not specified")
+                .takes_value(true)
+        )
         .arg(
             Arg::with_name("max-batch-size")
                 .long("max-batch-size")
@@ -295,6 +304,16 @@ fn main() {
             // TODO: Remove this once we have independent runtime registration.
             compute_allowed_stragglers: value_t!(matches, "compute-allowed-stragglers", u64)
                 .unwrap_or_else(|e| e.exit()),
+            // TODO: Remove this once we have independent runtime registration.
+            compute_genesis_block: matches.value_of("compute-genesis-block").map(|filename| {
+                protobuf::parse_from_reader::<ekiden_roothash_api::Block>(&mut std::fs::File::open(
+                    filename,
+                ).expect(
+                    "Couldn't open genesis block",
+                )).expect("Couldn't deserialize genesis block")
+                    .try_into()
+                    .expect("Couldn't convert genesis block")
+            }),
             // Root hash frontend configuration.
             roothash: RootHashConfiguration {
                 max_batch_size: value_t!(matches, "max-batch-size", usize).unwrap_or(1000),

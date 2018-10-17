@@ -2,6 +2,7 @@
 #[cfg(feature = "testing")]
 use std::process::abort;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use grpcio;
 
@@ -10,13 +11,14 @@ use ekiden_core::bytes::B256;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::Result;
 use ekiden_core::futures::Future;
+use ekiden_core::hash;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
 use ekiden_di::Container;
 use ekiden_registry_base::{EntityRegistryBackend, Runtime, RuntimeRegistryBackend,
                            REGISTER_ENTITY_SIGNATURE_CONTEXT, REGISTER_NODE_SIGNATURE_CONTEXT,
                            REGISTER_RUNTIME_SIGNATURE_CONTEXT};
-use ekiden_roothash_base::{RootHashBackend, RootHashSigner};
+use ekiden_roothash_base::{Block, RootHashBackend, RootHashSigner};
 use ekiden_rpc_api;
 use ekiden_scheduler_base::Scheduler;
 use ekiden_storage_api::create_storage;
@@ -52,6 +54,9 @@ pub struct ComputeNodeConfiguration {
     /// Number of allowed stragglers.
     // TODO: Remove this once we have independent runtime registration.
     pub compute_allowed_stragglers: u64,
+    /// If present, use this as the genesis block when we register our runtime.
+    // TODO: Remove this once we have independent runtime registration.
+    pub compute_genesis_block: Option<Block>,
     /// Root hash configuration.
     pub roothash: RootHashConfiguration,
     /// IAS configuration.
@@ -114,6 +119,19 @@ impl ComputeNode {
         let runtime = {
             let mut runtime = Runtime::default();
             runtime.id = runtime_id;
+            if let Some(genesis_block) = config.compute_genesis_block {
+                runtime.genesis_block = genesis_block;
+            } else {
+                runtime.genesis_block.header.version = 0;
+                runtime.genesis_block.header.namespace = runtime_id;
+                runtime.genesis_block.header.timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                runtime.genesis_block.header.input_hash = hash::empty_hash();
+                runtime.genesis_block.header.output_hash = hash::empty_hash();
+                runtime.genesis_block.header.state_root = hash::empty_hash();
+            }
             runtime.replica_group_size = config.compute_replicas;
             runtime.replica_group_backup_size = config.compute_backup_replicas;
             runtime.replica_allowed_stragglers = config.compute_allowed_stragglers;

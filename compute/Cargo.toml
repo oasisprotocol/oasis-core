@@ -23,6 +23,7 @@ ekiden-rpc-api = { path = "../rpc/api", version = "0.2.0-alpha" }
 ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
 ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-storage-api = { path = "../storage/api", version = "0.2.0-alpha" }
+ekiden-roothash-api = { path = "../roothash/api", version = "0.2.0-alpha" }
 ekiden-roothash-base = { path = "../roothash/base", version = "0.2.0-alpha" }
 ekiden-roothash-client = { path = "../roothash/client", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
