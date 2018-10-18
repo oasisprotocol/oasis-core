@@ -38,7 +38,12 @@ where
     }
 
     /// Call all nodes in the group that match the filter predicate.
-    pub fn call_filtered<F, G, Rs>(&self, filter: F, method: G) -> BoxFuture<Vec<Result<Rs>>>
+    pub fn call_filtered<F, G, Rs>(
+        &self,
+        name: &'static str,
+        filter: F,
+        method: G,
+    ) -> BoxFuture<Vec<Result<Rs>>>
     where
         F: Fn(&T, &U) -> bool,
         G: Fn(&T, &U) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
@@ -59,6 +64,7 @@ where
                 let meta = meta.clone();
 
                 retry_until_ok_or_max(
+                    name,
                     move || match method.clone()(&node, &meta) {
                         Ok(call) => call.into_box(),
                         Err(error) => future::err(error.into()).into_box(),
@@ -85,7 +91,7 @@ where
     }
 
     /// Call all nodes in the group.
-    pub fn call_all<G, Rs>(&self, method: G) -> BoxFuture<Vec<Result<Rs>>>
+    pub fn call_all<G, Rs>(&self, name: &'static str, method: G) -> BoxFuture<Vec<Result<Rs>>>
     where
         G: Fn(&T, &U) -> grpcio::Result<grpcio::ClientUnaryReceiver<Rs>>
             + Clone
@@ -94,6 +100,6 @@ where
             + 'static,
         Rs: Send + Sync + 'static,
     {
-        self.call_filtered(|_, _| true, method)
+        self.call_filtered(name, |_, _| true, method)
     }
 }

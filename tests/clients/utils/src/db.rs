@@ -100,6 +100,7 @@ impl Manager {
         let root_hash_resume = roothash.clone();
         let (watch_blocks, blocks_kill_handle) = ekiden_core::futures::killable(
             streamfollow::follow(
+                "db blocks",
                 move || root_hash_init.get_blocks(runtime_id),
                 move |round: &U256| root_hash_resume.get_blocks_since(runtime_id, round.clone()),
                 |block: &Block| block.header.round,
