@@ -398,6 +398,7 @@ impl RootHashFrontend {
 
         event_sources.push(
             streamfollow::follow_skip(
+                "RootHashFrontend events",
                 move || backend_init.get_events(runtime_id),
                 |event: &Event| event.clone(),
                 |_err| false,
@@ -412,6 +413,7 @@ impl RootHashFrontend {
 
         event_sources.push(
             streamfollow::follow(
+                "RootHashFrontend blocks",
                 move || backend_init.get_blocks(runtime_id),
                 move |round: &U256| backend_resume.get_blocks_since(runtime_id, round.clone()),
                 |block: &Block| block.header.round,
