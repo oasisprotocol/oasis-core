@@ -380,7 +380,7 @@ where
 mod tests {
     use futures;
     use futures::Stream;
-    extern crate tokio_core;
+    use tokio;
 
     #[test]
     fn follow_ok() {
@@ -392,9 +392,9 @@ mod tests {
             |&()| unreachable!(),
         );
         assert_eq!(
-            tokio_core::reactor::Core::new()
+            tokio::runtime::current_thread::Runtime::new()
                 .unwrap()
-                .run(s.collect())
+                .block_on(s.collect())
                 .unwrap(),
             vec![1, 2, 3]
         );
@@ -412,9 +412,9 @@ mod tests {
             |&()| false,
         );
         assert_eq!(
-            tokio_core::reactor::Core::new()
+            tokio::runtime::current_thread::Runtime::new()
                 .unwrap()
-                .run(s.collect())
+                .block_on(s.collect())
                 .unwrap(),
             vec![1, 2, 3]
         );
@@ -437,9 +437,9 @@ mod tests {
             |&()| false,
         );
         assert_eq!(
-            tokio_core::reactor::Core::new()
+            tokio::runtime::current_thread::Runtime::new()
                 .unwrap()
-                .run(s.collect())
+                .block_on(s.collect())
                 .unwrap(),
             vec![1, 2, 3, 5]
         );
