@@ -1,4 +1,3 @@
-// Package runtime implements common runtime routines.
 package api
 
 import (
