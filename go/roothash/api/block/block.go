@@ -1,7 +1,11 @@
-package api
+// Package block implements the roothash block and header.
+package block
 
 import (
+	"errors"
+
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 
 	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
@@ -9,6 +13,8 @@ import (
 var (
 	_ cbor.Marshaler   = (*Block)(nil)
 	_ cbor.Unmarshaler = (*Block)(nil)
+
+	errNilProtobuf = errors.New("block: protobuf is nil")
 )
 
 // Block is an Oasis block.
@@ -22,7 +28,7 @@ type Block struct {
 // WARNING: The block is not guaranteed to be internally consistent.
 func (b *Block) FromProto(pb *pbRoothash.Block) error {
 	if pb == nil {
-		return ErrNilProtobuf
+		return errNilProtobuf
 	}
 
 	if err := b.Header.FromProto(pb.GetHeader()); err != nil {
@@ -48,4 +54,19 @@ func (b *Block) MarshalCBOR() []byte {
 // UnmarshalCBOR decodes a CBOR marshaled block.
 func (b *Block) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, b)
+}
+
+// NewGenesisBlock creates a new empty genesis block given a runtime
+// id and POSIX timestamp.
+func NewGenesisBlock(id signature.PublicKey, timestamp uint64) *Block {
+	var blk Block
+
+	blk.Header.Version = 0
+	blk.Header.Timestamp = timestamp
+	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
+	blk.Header.InputHash.Empty()
+	blk.Header.OutputHash.Empty()
+	blk.Header.StateRoot.Empty()
+
+	return &blk
 }

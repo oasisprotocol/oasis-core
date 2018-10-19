@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
@@ -28,7 +28,7 @@ var (
 // RuntimeState is the per-runtime roothash state.
 type RuntimeState struct {
 	ID           signature.PublicKey `codec:"id"`
-	CurrentBlock *api.Block          `codec:"current_block"`
+	CurrentBlock *block.Block        `codec:"current_block"`
 	Round        *round              `codec:"round"`
 	Timer        abci.Timer          `codec:"timer"`
 }

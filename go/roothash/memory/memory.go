@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -53,7 +54,7 @@ type runtimeState struct {
 	runtime *runtime.Runtime
 	round   *round
 	timer   *time.Timer
-	blocks  []*api.Block
+	blocks  []*block.Block
 
 	cmdCh         chan *commitCmd
 	blockNotifier *pubsub.Broker
@@ -62,14 +63,14 @@ type runtimeState struct {
 	rootHash *memoryRootHash
 }
 
-func (s *runtimeState) getLatestBlock() (*api.Block, error) {
+func (s *runtimeState) getLatestBlock() (*block.Block, error) {
 	s.RLock()
 	defer s.RUnlock()
 
 	return s.getLatestBlockImpl()
 }
 
-func (s *runtimeState) getLatestBlockImpl() (*api.Block, error) {
+func (s *runtimeState) getLatestBlockImpl() (*block.Block, error) {
 	nBlocks := len(s.blocks)
 	if nBlocks == 0 {
 		return nil, errNoSuchBlocks
@@ -323,7 +324,7 @@ type memoryRootHash struct {
 	closeOnce sync.Once
 }
 
-func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
+func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, err
@@ -332,7 +333,7 @@ func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.Public
 	return s.getLatestBlock()
 }
 
-func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *api.Block, *pubsub.Subscription, error) {
+func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, nil, err
@@ -346,13 +347,13 @@ func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *api.Block,
 			ch.In() <- block
 		}
 	})
-	ch := make(chan *api.Block)
+	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
 }
 
-func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round api.Round) (<-chan *api.Block, *pubsub.Subscription, error) {
+func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round block.Round) (<-chan *block.Block, *pubsub.Subscription, error) {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, nil, err
@@ -382,7 +383,7 @@ func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round api.Roun
 		return nil, nil, errNoSuchBlocks
 	}
 
-	ch := make(chan *api.Block)
+	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
@@ -427,9 +428,9 @@ func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, com
 	return err
 }
 
-func (r *memoryRootHash) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscription) {
+func (r *memoryRootHash) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription) {
 	sub := r.allBlockNotifier.Subscribe()
-	ch := make(chan *api.Block)
+	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub
@@ -467,11 +468,12 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *runtime.Runtime) error {
 		return errRuntimeExists
 	}
 
+	now := time.Now().Unix()
 	s := &runtimeState{
 		logger:        r.logger.With("runtime_id", runtime.ID),
 		storage:       r.storage,
 		runtime:       runtime,
-		blocks:        append([]*api.Block{}, newGenesisBlock(runtime.ID)),
+		blocks:        append([]*block.Block{}, block.NewGenesisBlock(runtime.ID, uint64(now))),
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
@@ -538,17 +540,4 @@ func New(scheduler scheduler.Backend, storage storage.Backend, registry registry
 	go r.worker(registry)
 
 	return r
-}
-
-func newGenesisBlock(id signature.PublicKey) *api.Block {
-	var blk api.Block
-
-	blk.Header.Version = 0
-	blk.Header.Timestamp = uint64(time.Now().Unix())
-	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
-	blk.Header.InputHash.Empty()
-	blk.Header.OutputHash.Empty()
-	blk.Header.StateRoot.Empty()
-
-	return &blk
 }
