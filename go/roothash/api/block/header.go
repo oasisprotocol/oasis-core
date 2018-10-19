@@ -1,4 +1,4 @@
-package api
+package block
 
 import (
 	"bytes"
@@ -192,7 +192,7 @@ func (h *Header) Equal(cmp *Header) bool {
 // FromProto deserializes a protobuf into a header.
 func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if pb == nil {
-		return ErrNilProtobuf
+		return errNilProtobuf
 	}
 
 	// Version (range check)

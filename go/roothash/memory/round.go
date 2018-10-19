@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -35,7 +36,7 @@ func (e errDiscrepancyDetected) Error() string {
 type commitment struct {
 	signature.Signed
 
-	header *api.Header
+	header *block.Header
 }
 
 func (c *commitment) fromCommitment(commit *api.Commitment) error {
@@ -47,7 +48,7 @@ func (c *commitment) toCommitment() *api.Commitment {
 }
 
 func (c *commitment) open() error {
-	var header api.Header
+	var header block.Header
 	if err := c.Signed.Open(commitmentSignatureContext, &header); err != nil {
 		return errors.New("roothash/memory: commitment has invalid signature")
 	}
@@ -68,7 +69,7 @@ type roundState struct {
 	committee        *scheduler.Committee
 	computationGroup map[signature.MapKey]*scheduler.CommitteeNode
 	commitments      map[signature.MapKey]*commitment
-	currentBlock     *api.Block
+	currentBlock     *block.Block
 	state            state
 }
 
@@ -150,7 +151,7 @@ func (r *round) addCommitment(commitment *commitment) error {
 	return nil
 }
 
-func (r *round) tryFinalize() (*api.Block, error) {
+func (r *round) tryFinalize() (*block.Block, error) {
 	var err error
 
 	// Ensure that the required number of commitments are present.
@@ -161,7 +162,7 @@ func (r *round) tryFinalize() (*api.Block, error) {
 	r.didTimeout = false
 
 	// Attempt to finalize, based on the state.
-	var finalizeFn func() (*api.Header, error)
+	var finalizeFn func() (*block.Header, error)
 	switch r.roundState.state {
 	case stateWaitingCommitments:
 		finalizeFn = r.tryFinalizeFast
@@ -175,7 +176,7 @@ func (r *round) tryFinalize() (*api.Block, error) {
 	}
 
 	// Generate the final block.
-	block := new(api.Block)
+	block := new(block.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(time.Now().Unix())
 	block.Header.GroupHash.From(r.roundState.committee.Members)
@@ -216,8 +217,8 @@ func (r *round) forceBackupTransition() error {
 	return fmt.Errorf("roothash/memory: no input hash available for backup transition")
 }
 
-func (r *round) tryFinalizeFast() (*api.Header, error) {
-	var header *api.Header
+func (r *round) tryFinalizeFast() (*block.Header, error) {
+	var header *block.Header
 	var discrepancyDetected bool
 
 	for id, node := range r.roundState.computationGroup {
@@ -246,9 +247,9 @@ func (r *round) tryFinalizeFast() (*api.Header, error) {
 	return header, nil
 }
 
-func (r *round) tryFinalizeDiscrepancy() (*api.Header, error) {
+func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 	type voteEnt struct {
-		header *api.Header
+		header *block.Header
 		tally  int
 	}
 
@@ -286,7 +287,7 @@ func (r *round) tryFinalizeDiscrepancy() (*api.Header, error) {
 	return nil, errInsufficientVotes
 }
 
-func (r *round) ensureHashesInStorage(header *api.Header) error {
+func (r *round) ensureHashesInStorage(header *block.Header) error {
 	for _, h := range []struct {
 		hash  hash.Hash
 		descr string
@@ -346,7 +347,7 @@ func (r *round) checkCommitments() error {
 	return nil
 }
 
-func newRound(storage storage.Backend, runtime *runtime.Runtime, committee *scheduler.Committee, block *api.Block) *round {
+func newRound(storage storage.Backend, runtime *runtime.Runtime, committee *scheduler.Committee, block *block.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
 	}

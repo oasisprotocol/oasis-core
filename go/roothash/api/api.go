@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 
 	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
@@ -22,14 +23,13 @@ const (
 )
 
 var (
-	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("roothash: protobuf is nil")
-
 	// ErrMalformedHash is the error returned when a hash is malformed.
 	ErrMalformedHash = errors.New("roothash: malformed hash")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("roothash: invalid argument")
+
+	errNilProtobuf = errors.New("roothash: protobuf is nil")
 
 	_ encoding.BinaryMarshaler   = (*Commitment)(nil)
 	_ encoding.BinaryUnmarshaler = (*Commitment)(nil)
@@ -59,7 +59,7 @@ func (c *Commitment) UnmarshalBinary(data []byte) error {
 // FromProto deserializes a protobuf into a commitment.
 func (c *Commitment) FromProto(pb *pbRoothash.Commitment) error {
 	if pb == nil {
-		return ErrNilProtobuf
+		return errNilProtobuf
 	}
 
 	return c.UnmarshalBinary(pb.GetData())
@@ -85,14 +85,14 @@ type Backend interface {
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
-	GetLatestBlock(context.Context, signature.PublicKey) (*Block, error)
+	GetLatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
 
 	// WatchBlocks returns a channel that produces a stream of blocks.
 	//
 	// The latest block if any will get pushed to the stream immediately.
 	// Subsequent blocks will be pushed into the stream as they are
 	// confirmed.
-	WatchBlocks(signature.PublicKey) (<-chan *Block, *pubsub.Subscription, error)
+	WatchBlocks(signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error)
 
 	// WatchBlocksSince returns a channel that produces a stream of blocks
 	// starting at the specified round.
@@ -100,7 +100,7 @@ type Backend interface {
 	// The block at the specified round is included as the first
 	// entry in the stream.  Following blocks are pushed in order as
 	// they are confirmed.
-	WatchBlocksSince(signature.PublicKey, Round) (<-chan *Block, *pubsub.Subscription, error)
+	WatchBlocksSince(signature.PublicKey, block.Round) (<-chan *block.Block, *pubsub.Subscription, error)
 
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
@@ -121,7 +121,7 @@ type DiscrepancyDetectedEvent struct {
 
 	// BlockHeader is the block header of the block on which the backup
 	// computation should be based.
-	BlockHeader *Header `codec:"header"`
+	BlockHeader *block.Header `codec:"header"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -152,5 +152,5 @@ type MetricsMonitorable interface {
 	//
 	// All blocks from all runtimes will be pushed into the stream
 	// immediately as they are finalized.
-	WatchAllBlocks() (<-chan *Block, *pubsub.Subscription)
+	WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription)
 }

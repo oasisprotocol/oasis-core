@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
@@ -40,7 +41,7 @@ type runtimeBrokers struct {
 	blockNotifier *pubsub.Broker
 	eventNotifier *pubsub.Broker
 
-	lastBlock *api.Block
+	lastBlock *block.Block
 
 	roundHeightMapCache *lru.Cache
 }
@@ -61,11 +62,11 @@ type tendermintBackend struct {
 	closedCh  chan struct{}
 }
 
-func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*api.Block, error) {
+func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
 	return r.getLatestBlockAt(id, 0)
 }
 
-func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*api.Block, error) {
+func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*block.Block, error) {
 	query := tmapi.QueryGetLatestBlock{
 		ID: id,
 	}
@@ -75,7 +76,7 @@ func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int6
 		return nil, errors.Wrapf(err, "roothash: get block query failed (height: %d)", height)
 	}
 
-	var block api.Block
+	var block block.Block
 	if err := cbor.Unmarshal(response, &block); err != nil {
 		return nil, errors.Wrapf(err, "roothash: get block malformed response (height: %d)", height)
 	}
@@ -83,7 +84,7 @@ func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int6
 	return &block, nil
 }
 
-func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.Block, *pubsub.Subscription, error) {
+func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
 	notifiers := r.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
@@ -97,13 +98,13 @@ func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.Blo
 			ch.In() <- notifiers.lastBlock
 		}
 	})
-	ch := make(chan *api.Block)
+	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.Round) (<-chan *api.Block, *pubsub.Subscription, error) {
+func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round block.Round) (<-chan *block.Block, *pubsub.Subscription, error) {
 	notifiers := r.getRuntimeNotifiers(id)
 
 	startRound, err := round.ToU64()
@@ -135,13 +136,13 @@ func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round api.R
 			ch.In() <- notifiers.lastBlock
 		}
 	})
-	ch := make(chan *api.Block)
+	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *runtimeBrokers) *api.Block {
+func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *runtimeBrokers) *block.Block {
 	lastRound, _ := notifiers.lastBlock.Header.Round.ToU64()
 	if notifiers.lastBlock == nil || round > lastRound {
 		return nil
@@ -178,7 +179,7 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 	height int64,
 	round uint64,
 	cache *lru.Cache,
-) *api.Block {
+) *block.Block {
 	// Fetch results for given block to get the tags.
 	results, err := r.service.GetBlockResults(height)
 	if err != nil {
@@ -189,7 +190,7 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 		return nil
 	}
 
-	extractBlock := func(tags []tmcmn.KVPair) *api.Block {
+	extractBlock := func(tags []tmcmn.KVPair) *block.Block {
 		for _, pair := range tags {
 			if bytes.Equal(pair.GetKey(), tmapi.TagRootHashFinalized) {
 				block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
@@ -225,7 +226,7 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 	return extractBlock(results.Results.EndBlock.GetTags())
 }
 
-func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*api.Block, *tmapi.ValueRootHashFinalized, error) {
+func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *tmapi.ValueRootHashFinalized, error) {
 	var value tmapi.ValueRootHashFinalized
 	if err := value.UnmarshalCBOR(rawValue); err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: corrupt finalized tag")
@@ -243,9 +244,9 @@ func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int
 	return block, &value, nil
 }
 
-func (r *tendermintBackend) WatchAllBlocks() (<-chan *api.Block, *pubsub.Subscription) {
+func (r *tendermintBackend) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription) {
 	sub := r.allBlockNotifier.Subscribe()
-	ch := make(chan *api.Block)
+	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub

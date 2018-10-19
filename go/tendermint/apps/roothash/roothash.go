@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
@@ -260,7 +261,8 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			}
 
 			// Create genesis block.
-			block := newGenesisBlock(ctx, runtime.ID)
+			now := ctx.Now().Unix()
+			block := block.NewGenesisBlock(runtime.ID, uint64(now))
 
 			// Create new state containing the genesis block.
 			timerCtx := &timerContext{ID: runtime.ID}
@@ -567,6 +569,7 @@ func New(
 	}
 }
 
+/*
 func newGenesisBlock(ctx *abci.Context, id signature.PublicKey) *roothash.Block {
 	var blk roothash.Block
 
@@ -579,3 +582,4 @@ func newGenesisBlock(ctx *abci.Context, id signature.PublicKey) *roothash.Block 
 
 	return &blk
 }
+*/

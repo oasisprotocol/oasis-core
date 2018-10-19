@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pb "github.com/oasislabs/ekiden/go/grpc/roothash"
 	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
 var _ pb.RootHashServer = (*grpcServer)(nil)
@@ -50,7 +51,7 @@ func (s *grpcServer) GetBlocksSince(req *pb.BlockSinceRequest, stream pb.RootHas
 		return err
 	}
 
-	var round api.Round
+	var round block.Round
 	if err := round.UnmarshalBinary(req.GetRound()); err != nil {
 		return err
 	}
@@ -149,9 +150,9 @@ type blockSender interface {
 	Send(*pb.BlockResponse) error
 }
 
-func grpcSendBlocks(ch <-chan *api.Block, stream blockSender) error {
+func grpcSendBlocks(ch <-chan *block.Block, stream blockSender) error {
 	for {
-		var blk *api.Block
+		var blk *block.Block
 		var ok bool
 
 		select {

@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
@@ -37,7 +38,7 @@ func (e errDiscrepancyDetected) Error() string {
 type commitment struct {
 	signature.Signed
 
-	Header *api.Header `codec:"header"`
+	Header *block.Header `codec:"header"`
 }
 
 func (c *commitment) fromCommitment(commit *api.Commitment) error {
@@ -49,7 +50,7 @@ func (c *commitment) toCommitment() *api.Commitment {
 }
 
 func (c *commitment) open() error {
-	var header api.Header
+	var header block.Header
 	if err := c.Signed.Open(commitmentSignatureContext, &header); err != nil {
 		return errors.New("tendermint/roothash: commitment has invalid signature")
 	}
@@ -70,7 +71,7 @@ type roundState struct {
 	Committee        *scheduler.Committee                          `codec:"committee"`
 	ComputationGroup map[signature.MapKey]*scheduler.CommitteeNode `codec:"computation_group"`
 	Commitments      map[signature.MapKey]*commitment              `codec:"commitments"`
-	CurrentBlock     *api.Block                                    `codec:"current_block"`
+	CurrentBlock     *block.Block                                  `codec:"current_block"`
 	State            state                                         `codec:"state"`
 }
 
@@ -155,7 +156,7 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment) err
 	return nil
 }
 
-func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*api.Block, error) {
+func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*block.Block, error) {
 	var err error
 
 	// Caller is responsible for enforcing this.
@@ -171,7 +172,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*api.B
 	r.DidTimeout = false
 
 	// Attempt to finalize, based on the state.
-	var finalizeFn func() (*api.Header, error)
+	var finalizeFn func() (*block.Header, error)
 	switch r.RoundState.State {
 	case stateWaitingCommitments:
 		finalizeFn = r.tryFinalizeFast
@@ -185,7 +186,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*api.B
 	}
 
 	// Generate the final block.
-	block := new(api.Block)
+	block := new(block.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(ctx.Now().Unix())
 	block.Header.GroupHash.From(r.RoundState.Committee.Members)
@@ -229,8 +230,8 @@ func (r *round) forceBackupTransition() error {
 	return fmt.Errorf("tendermint/roothash: no input hash available for backup transition")
 }
 
-func (r *round) tryFinalizeFast() (*api.Header, error) {
-	var header *api.Header
+func (r *round) tryFinalizeFast() (*block.Header, error) {
+	var header *block.Header
 	var discrepancyDetected bool
 
 	for id, node := range r.RoundState.ComputationGroup {
@@ -259,9 +260,9 @@ func (r *round) tryFinalizeFast() (*api.Header, error) {
 	return header, nil
 }
 
-func (r *round) tryFinalizeDiscrepancy() (*api.Header, error) {
+func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 	type voteEnt struct {
-		header *api.Header
+		header *block.Header
 		tally  int
 	}
 
@@ -299,7 +300,7 @@ func (r *round) tryFinalizeDiscrepancy() (*api.Header, error) {
 	return nil, errInsufficientVotes
 }
 
-func (r *round) ensureHashesInStorage(store storage.Backend, header *api.Header) error {
+func (r *round) ensureHashesInStorage(store storage.Backend, header *block.Header) error {
 	for _, h := range []struct {
 		hash  hash.Hash
 		descr string
@@ -369,7 +370,7 @@ func (r *round) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, r)
 }
 
-func newRound(committee *scheduler.Committee, block *api.Block) *round {
+func newRound(committee *scheduler.Committee, block *block.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("tendermint/roothash: non-compute committee passed to round ctor")
 	}
