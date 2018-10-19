@@ -188,6 +188,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*api.B
 	block := new(api.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(ctx.Now().Unix())
+	block.Header.GroupHash.From(r.RoundState.Committee.Members)
 	var blockCommitments []*api.Commitment
 	for _, node := range r.RoundState.Committee.Members {
 		id := node.PublicKey.ToMapKey()
@@ -197,7 +198,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *runtime.Runtime) (*api.B
 		}
 		blockCommitments = append(blockCommitments, commit.toCommitment())
 	}
-	block.Update(r.RoundState.Committee.Members, blockCommitments)
+	block.Header.CommitmentsHash.From(blockCommitments)
 
 	r.RoundState.State = stateFinalized
 	r.RoundState.Commitments = make(map[signature.MapKey]*commitment)

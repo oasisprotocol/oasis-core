@@ -178,6 +178,7 @@ func (r *round) tryFinalize() (*api.Block, error) {
 	block := new(api.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(time.Now().Unix())
+	block.Header.GroupHash.From(r.roundState.committee.Members)
 	var blockCommitments []*api.Commitment
 	for _, node := range r.roundState.committee.Members {
 		id := node.PublicKey.ToMapKey()
@@ -187,7 +188,7 @@ func (r *round) tryFinalize() (*api.Block, error) {
 		}
 		blockCommitments = append(blockCommitments, commit.toCommitment())
 	}
-	block.Update(r.roundState.committee.Members, blockCommitments)
+	block.Header.CommitmentsHash.From(blockCommitments)
 
 	return block, nil
 }
