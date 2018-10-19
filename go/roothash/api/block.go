@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 
 	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
@@ -16,13 +15,6 @@ var (
 type Block struct {
 	// Header is the block header.
 	Header Header `codec:"header"`
-}
-
-// Update updates the block header based on the provided computation
-// group and commitments list.
-func (b *Block) Update(computationGroup []*scheduler.CommitteeNode, commitments []*Commitment) {
-	b.Header.GroupHash.From(computationGroup)
-	b.Header.CommitmentsHash.From(commitments)
 }
 
 // FromProto deserializes a protobuf into a block.
