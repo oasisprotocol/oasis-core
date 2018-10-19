@@ -2,7 +2,8 @@ FROM ekiden/development:0.2.0
 
 RUN apt-get install -y \
     unzip jq \
-    binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
+    binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev \
+    libudev-dev
 
 # Install Docker client for building testnet images.
 RUN VER="18.03.0-ce" && \
