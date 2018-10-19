@@ -312,8 +312,9 @@ func (r *tendermintBackend) workerEvents() {
 
 			// Node deregistrations.
 			for _, node := range output.Nodes {
+				nodeCopy := node
 				r.nodeNotifier.Broadcast(&api.NodeEvent{
-					Node:           &node,
+					Node:           &nodeCopy,
 					IsRegistration: false,
 				})
 			}
