@@ -4,7 +4,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 )
 
 const (
@@ -74,7 +74,7 @@ type TxRegisterNode struct {
 
 // TxRegisterRuntime is a transaction for registering a new runtime.
 type TxRegisterRuntime struct {
-	Runtime runtime.SignedRuntime
+	Runtime registry.SignedRuntime
 }
 
 // OutputRegistry is an output of an registry app transaction.
@@ -112,7 +112,7 @@ type OutputRegisterNode struct {
 // OutputRegisterRuntime is an output of registering a new node.
 type OutputRegisterRuntime struct {
 	// Registered runtime.
-	Runtime runtime.Runtime
+	Runtime registry.Runtime
 }
 
 // QueryGetByIDRequest is a request for fetching things by ids.

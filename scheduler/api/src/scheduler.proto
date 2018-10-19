@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "common/api/src/common.proto";
+import "registry/api/src/runtime.proto";
 
 package scheduler;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/scheduler";
@@ -28,7 +28,7 @@ message Committee {
   }
   Kind kind = 1;
   repeated CommitteeNode members = 2;
-  common.Runtime runtime = 3;
+  registry.Runtime runtime = 3;
   uint64 valid_for = 4;
 }
 

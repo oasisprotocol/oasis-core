@@ -1,5 +1,4 @@
-// Package runtime implements common runtime routines.
-package runtime
+package api
 
 import (
 	"encoding/hex"
@@ -8,7 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
+	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 )
 
 var (
@@ -101,7 +100,7 @@ func (c *Runtime) Clone() common.Cloneable {
 }
 
 // FromProto deserializes a protobuf into a Runtime.
-func (c *Runtime) FromProto(pb *pbCommon.Runtime) error {
+func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	if pb == nil {
 		return ErrNilProtobuf
 	}
@@ -127,7 +126,7 @@ func (c *Runtime) FromProto(pb *pbCommon.Runtime) error {
 	c.StorageGroupSize = pb.GetStorageGroupSize()
 
 	switch pb.GetMode() {
-	case pbCommon.Runtime_Nondeterministic:
+	case pbRegistry.Runtime_Nondeterministic:
 		c.ModeNonDeterministic = true
 	default:
 		c.ModeNonDeterministic = false
@@ -139,8 +138,8 @@ func (c *Runtime) FromProto(pb *pbCommon.Runtime) error {
 }
 
 // ToProto serializes a Runtime into a protobuf.
-func (c *Runtime) ToProto() *pbCommon.Runtime {
-	pb := new(pbCommon.Runtime)
+func (c *Runtime) ToProto() *pbRegistry.Runtime {
+	pb := new(pbRegistry.Runtime)
 	var err error
 
 	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
@@ -159,13 +158,13 @@ func (c *Runtime) ToProto() *pbCommon.Runtime {
 
 	switch c.ModeNonDeterministic {
 	case true:
-		pb.Mode = pbCommon.Runtime_Nondeterministic
+		pb.Mode = pbRegistry.Runtime_Nondeterministic
 	case false:
-		pb.Mode = pbCommon.Runtime_Deterministic
+		pb.Mode = pbRegistry.Runtime_Deterministic
 	}
 
 	if c.FeaturesSGX {
-		pb.Features = append([]pbCommon.Runtime_Features{}, pbCommon.Runtime_SGX)
+		pb.Features = append([]pbRegistry.Runtime_Features{}, pbRegistry.Runtime_SGX)
 	}
 
 	return pb
@@ -186,9 +185,9 @@ func (c *Runtime) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, c)
 }
 
-func pbWantsSGX(pb *pbCommon.Runtime) bool {
+func pbWantsSGX(pb *pbRegistry.Runtime) bool {
 	for _, f := range pb.GetFeatures() {
-		if f == pbCommon.Runtime_SGX {
+		if f == pbRegistry.Runtime_SGX {
 			return true
 		}
 	}

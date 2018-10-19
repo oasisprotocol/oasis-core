@@ -9,8 +9,8 @@ use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream};
-use ekiden_common::runtime::Runtime;
 use ekiden_epochtime::interface::EpochTime;
+use ekiden_registry_base::Runtime;
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.

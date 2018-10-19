@@ -10,8 +10,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 
 	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
 )
@@ -136,7 +136,7 @@ type Committee struct {
 	Members []*CommitteeNode `codec:"members"`
 
 	// Runtime is the runtime that this committee is for.
-	Runtime *runtime.Runtime `codec:"-"`
+	Runtime *registry.Runtime `codec:"-"`
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `codec:"valid_for"`
