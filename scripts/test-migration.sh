@@ -6,7 +6,9 @@ RUNTIME_ID=0000000000000000000000000000000000000000000000000000000000000000
 
 test_migration() {
     local epochtime_backend=$1
-    local roothash_backend=$2
+    local beacon_backend=$2
+    local registry_backend=$3
+    local roothash_backend=$4
 
     # Ensure cleanup on exit.
     trap 'kill -- -0' EXIT
@@ -19,10 +21,10 @@ test_migration() {
         --log.level debug \
         --grpc.port 42261 \
         --epochtime.backend "$epochtime_backend" \
-        --beacon.backend insecure \
+        --beacon.backend "$beacon_backend" \
         --storage.backend memory \
         --scheduler.backend trivial \
-        --registry.backend memory \
+        --registry.backend "$registry_backend" \
         --roothash.backend "$roothash_backend" \
         --datadir "$datadir" \
         &
@@ -52,11 +54,11 @@ test_migration() {
         &
     local first_compute2_pid=$(jobs -p +)
 
-    sleep 1
+    sleep 3
 
     "$WORKDIR/go/ekiden/ekiden" dummy set-epoch --epoch 1
 
-    sleep 1
+    sleep 2
 
     # Start long term client, which has a 10-second wait.
     "$WORKDIR/target/debug/test-long-term-client" \
@@ -90,10 +92,10 @@ test_migration() {
         --log.level debug \
         --grpc.port 42261 \
         --epochtime.backend "$epochtime_backend" \
-        --beacon.backend insecure \
+        --beacon.backend "$beacon_backend" \
         --storage.backend memory \
         --scheduler.backend trivial \
-        --registry.backend memory \
+        --registry.backend "$registry_backend" \
         --roothash.backend "$roothash_backend" \
         --roothash.genesis-blocks /tmp/ekiden-test-roothash.dat \
         --datadir "$datadir" \
@@ -128,9 +130,9 @@ test_migration() {
         "$WORKDIR/target/enclave/token.so" \
         &
     local second_compute2_pid=$(jobs -p +)
-    
-    sleep 1
-    # 5 sec
+
+    sleep 3
+    # 7 sec
 
     "$WORKDIR/go/ekiden/ekiden" dummy set-epoch --epoch 2
 
@@ -145,4 +147,5 @@ test_migration() {
 }
 
 set -x
-test_migration mock memory
+test_migration mock insecure memory memory
+test_migration tendermint_mock tendermint tendermint tendermint
