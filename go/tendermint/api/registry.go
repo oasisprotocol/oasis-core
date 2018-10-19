@@ -16,22 +16,9 @@ const (
 	RegistryAppName string = "registry"
 )
 
-var (
-	// TagRegistryEntityRegistered is an ABCI transaction tag for new entity
-	// registrations (value is entity id).
-	TagRegistryEntityRegistered = []byte("registry.entity.registered")
-	// TagRegistryEntityDeregistered is an ABCI transaction tag for new
-	// entity registrations (value is entity id).
-	TagRegistryEntityDeregistered = []byte("registry.entity.deregistered")
-
-	// TagRegistryNodeRegistered is an ABCI transaction tag for new node
-	// registrations (value is node id).
-	TagRegistryNodeRegistered = []byte("registry.node.registered")
-
-	// TagRegistryRuntimeRegistered is an ABCI transaction tag for new
-	// runtime registrations (value is runtime id).
-	TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
-)
+// TagRegistryRuntimeRegistered is an ABCI transaction tag for new
+// runtime registrations (value is runtime id).
+var TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
 
 const (
 	// QueryRegistryGetEntity is a path for GetEntity query.

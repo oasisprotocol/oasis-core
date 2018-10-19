@@ -190,7 +190,6 @@ func (app *registryApplication) registerEntity(
 				Entity: *ent,
 			},
 		})
-		ctx.EmitTag(api.TagRegistryEntityRegistered, ent.ID)
 	}
 
 	return nil
@@ -220,7 +219,6 @@ func (app *registryApplication) deregisterEntity(
 				Nodes:  removedNodes,
 			},
 		})
-		ctx.EmitTag(api.TagRegistryEntityDeregistered, id)
 	}
 
 	return nil
@@ -255,7 +253,6 @@ func (app *registryApplication) registerNode(
 				Node: *node,
 			},
 		})
-		ctx.EmitTag(api.TagRegistryNodeRegistered, node.ID)
 	}
 
 	return nil
