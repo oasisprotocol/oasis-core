@@ -161,10 +161,11 @@ impl StorageBackend for StorageFrontend {
         )
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
         Box::new(
             self.get_storage(self.inner.retries)
-                .and_then(move |s| s.get_keys()),
+                .and_then(move |s| s.get_keys()
+                .flatten_stream()),
         )
     }
 }

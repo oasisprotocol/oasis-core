@@ -8,7 +8,7 @@ use sgx_types::*;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture};
+use ekiden_common::futures::{future, BoxFuture, BoxStream};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 /// OCALLs defined by the Ekiden enclave specification.
@@ -103,7 +103,7 @@ impl StorageBackend for UntrustedStorageBackend {
         unimplemented!();
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
         unimplemented!();
     }
 }

@@ -8,7 +8,7 @@ service Storage {
     rpc GetBatch(GetBatchRequest) returns (GetBatchResponse) {}
     rpc Insert(InsertRequest) returns (InsertResponse) {}
     rpc InsertBatch(InsertBatchRequest) returns (InsertBatchResponse) {}
-    rpc GetKeys(GetKeysRequest) returns (GetKeysResponse) {}
+    rpc GetKeys(GetKeysRequest) returns (stream GetKeysResponse) {}
 }
 
 message GetRequest {
@@ -46,6 +46,6 @@ message GetKeysRequest {
 }
 
 message GetKeysResponse {
-    repeated bytes keys = 1;
-    repeated uint64 expiry = 2;
+    bytes key = 1;
+    uint64 expiry = 2;
 }

@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use ekiden_common::futures::{BoxFuture, Future};
+use ekiden_common::futures::{BoxFuture, Future, Stream};
 use ekiden_storage_api as api;
 use grpcio::RpcStatusCode::{Internal, InvalidArgument};
-use grpcio::{RpcContext, UnarySink};
+use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 
 use super::backend::{InsertOptions, StorageBackend};
 use ekiden_common::bytes::H256;
@@ -93,29 +93,20 @@ impl api::Storage for StorageService {
         &self,
         ctx: RpcContext,
         _req: api::GetKeysRequest,
-        sink: UnarySink<api::GetKeysResponse>,
+        sink: ServerStreamingSink<api::GetKeysResponse>,
     ) {
-        let f = self.inner.get_keys().then(|res| match res {
-            Ok(items) => {
-                let mut resp = api::GetKeysResponse::new();
-                let mut keys = Vec::new();
-                let mut expiry = Vec::new();
-                for item in items.iter() {
-                    keys.push(item.0.to_vec());
-                    expiry.push(item.1);
-                }
-                resp.set_keys(keys.into());
-                resp.set_expiry(expiry);
-                Ok(resp)
-            }
-            Err(e) => Err(e),
-        });
-        ctx.spawn(f.then(move |r| match r {
-            Ok(ret) => sink.success(ret),
-            Err(error) => {
-                error!("Failed to insert data to storage backend: {:?}", error);
-                invalid_rpc!(sink, Internal, error)
-            }
-        }).map_err(|_e| ()));
+        ctx.spawn(self.inner.get_keys().map(|(key, expiry)| {
+            let mut resp = api::GetKeysResponse::new();
+            resp.set_key(key.to_vec());
+            resp.set_expiry(expiry);
+            (resp, WriteFlags::default().buffer_hint(true))
+        }).forward(sink).then(|result| Ok(())));
+//        ctx.spawn(f.then(move |r| match r {
+//            Ok(ret) => sink.success(ret),
+//            Err(error) => {
+//                error!("Failed to insert data to storage backend: {:?}", error);
+//                invalid_rpc!(sink, Internal, error)
+//            }
+//        }).map_err(|_e| ()));
     }
 }

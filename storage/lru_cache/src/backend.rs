@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use lru_cache::LruCache;
 
 use ekiden_common::bytes::H256;
-use ekiden_common::futures::{future, BoxFuture, Future, FutureExt};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, FutureExt};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct Inner {
@@ -84,7 +84,7 @@ impl StorageBackend for LruCacheStorageBackend {
         unimplemented!();
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
         self.inner.backend.get_keys()
     }
 }
