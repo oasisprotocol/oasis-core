@@ -37,13 +37,13 @@ pub fn transition_keys(
 ) -> Box<Future<Item = (), Error = ()> + Send> {
     let cached_to = to.clone();
     let f = from.get_keys()
+        .collect()
         .map_err(|e| {
             error!("key_transition_fetch_error: {:?}", e);
             measure_counter_inc!("key_transition_fetch_error", 1);
             ()
         })
-        .and_then(move |keys| {
-            let key_list = keys.clone();
+        .and_then(move |key_list| {
             let cached_to = cached_to.clone();
             let cached_from = from.clone();
             let mut local_keys = vec![];

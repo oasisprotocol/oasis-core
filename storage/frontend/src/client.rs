@@ -7,7 +7,7 @@ use rustracing::tag;
 use ekiden_common::bytes::H256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, Future};
+use ekiden_common::futures::{future, BoxFuture, BoxStream, Future, IntoFuture, Stream, StreamExt};
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
 use ekiden_storage_api as api;
@@ -111,18 +111,15 @@ impl StorageBackend for StorageClient {
         }
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
         let req = api::GetKeysRequest::new();
-        match self.0.get_keys_async(&req) {
-            Ok(f) => Box::new(f.map(|resp| -> Arc<Vec<(H256, u64)>> {
-                let mut items = Vec::new();
-                for item in (*resp.get_keys()).iter().zip(resp.get_expiry()) {
-                    items.push((H256::from(item.0.as_slice()), *item.1));
-                }
-                Arc::new(items)
-            }).map_err(|error| Error::new(format!("{:?}", error)))),
-            Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
-        }
+        self.0
+            .get_keys(&req)
+            .map(|rx| rx.map(|message| (message.get_key().into(), message.get_expiry())))
+            .into_future()
+            .flatten_stream()
+            .map_err(|error| error.into())
+            .into_box()
     }
 }
 
