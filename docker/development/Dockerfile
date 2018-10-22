@@ -84,3 +84,6 @@ RUN wget https://dl.google.com/go/go1.11.1.linux-amd64.tar.gz && \
     go get -u github.com/golang/protobuf/protoc-gen-go && \
     go get -u github.com/alecthomas/gometalinter && \
     gometalinter --install
+
+# Add .gitconfig file for the root user
+COPY gitconfig /root/.gitconfig
