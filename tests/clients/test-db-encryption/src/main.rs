@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate clap;
-extern crate futures;
 extern crate rand;
 
 #[macro_use]
@@ -12,11 +11,11 @@ extern crate ekiden_runtime_client;
 extern crate test_db_encryption_api;
 
 use clap::{App, Arg};
-use futures::Future;
 use std::env::current_exe;
 use std::fs::File;
 use std::io::prelude::*;
 
+use ekiden_core::tokio;
 use ekiden_runtime_client::create_runtime_client;
 use test_db_encryption_api::with_api;
 
@@ -28,6 +27,7 @@ fn main() {
     println!("[test_db_encryption] Hello from DB encryption test client!");
 
     let client = runtime_client!(test_db_encryption);
+    let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
     println!("[test_db_encryption] Setting KM enclave...");
 
@@ -55,7 +55,7 @@ fn main() {
     let mut r_km = test_db_encryption::SetKMEnclaveRequest::new();
     r_km.set_mrenclave(km_mrenclave);
 
-    client.set_km_enclave(r_km).wait().unwrap();
+    runtime.block_on(client.set_km_enclave(r_km)).unwrap();
 
     println!("[test_db_encryption] Storing with encryption...");
 
@@ -64,7 +64,7 @@ fn main() {
     r_se.set_key(String::from("top secret"));
     r_se.set_value(String::from("hello world!"));
 
-    let response_se = client.store_encrypted(r_se).wait().unwrap();
+    let response_se = runtime.block_on(client.store_encrypted(r_se)).unwrap();
 
     if response_se.get_ok() != true {
         panic!("Failed to store a key-value pair with encryption!");
@@ -76,7 +76,7 @@ fn main() {
     let mut r_fe = test_db_encryption::FetchEncryptedRequest::new();
     r_fe.set_key(String::from("top secret"));
 
-    let response_fe = client.fetch_encrypted(r_fe).wait().unwrap();
+    let response_fe = runtime.block_on(client.fetch_encrypted(r_fe)).unwrap();
 
     if response_fe.get_ok() != true {
         panic!("Failed to fetch a key-value pair with encryption!");

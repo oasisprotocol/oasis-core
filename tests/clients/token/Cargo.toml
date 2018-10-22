@@ -16,4 +16,3 @@ ekiden-rpc-client = { path = "../../../rpc/client" }
 token-api = { path = "../../runtimes/token/api" }
 clap = "2.29.1"
 rand = "0.4"
-futures = "0.1"

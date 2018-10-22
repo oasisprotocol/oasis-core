@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate clap;
 extern crate rand;
-extern crate tokio;
 
 #[macro_use]
 extern crate client_utils;
@@ -15,6 +14,7 @@ use std::{thread, time};
 
 use clap::{App, Arg};
 
+use ekiden_core::tokio;
 use ekiden_runtime_client::create_runtime_client;
 use token_api::with_api;
 

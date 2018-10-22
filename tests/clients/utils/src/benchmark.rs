@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
@@ -5,6 +6,8 @@ use histogram::Histogram;
 use serde_json;
 use threadpool::ThreadPool;
 use time;
+
+use ekiden_core::tokio::runtime::current_thread::Runtime;
 
 /// Client factory.
 pub trait ClientFactory: Send + Sync + 'static {
@@ -266,9 +269,9 @@ where
     /// and the number of threads as the last two arguments.
     pub fn run(
         &self,
-        init: Option<fn(&mut Factory::Client, usize, usize)>,
-        scenario: fn(&mut Factory::Client),
-        finalize: Option<fn(&mut Factory::Client, usize, usize)>,
+        init: Option<fn(&mut Factory::Client, usize, usize, &mut Runtime)>,
+        scenario: fn(&mut Factory::Client, &mut Runtime),
+        finalize: Option<fn(&mut Factory::Client, usize, usize, &mut Runtime)>,
         verbose: bool,
     ) -> BenchmarkResults {
         // Initialize.
@@ -276,9 +279,10 @@ where
             println!("Initializing benchmark...");
         }
 
+        let mut runtime = Runtime::new().unwrap();
         let mut client = self.client_factory.create();
         if let Some(init) = init {
-            init(&mut client, self.runs, self.pool.max_count());
+            init(&mut client, self.runs, self.pool.max_count(), &mut runtime);
         }
 
         if verbose {
@@ -296,6 +300,10 @@ where
             let runs = self.runs;
 
             self.pool.execute(move || {
+                thread_local!{
+                    static RUNTIME: RefCell<Runtime> = RefCell::new(Runtime::new().unwrap());
+                }
+
                 let mut result = BenchmarkResult::default();
 
                 // Create the client.
@@ -303,13 +311,15 @@ where
                     time_block!(result, client_initialization, { client_factory.create() });
 
                 // Run the scenario multiple times.
-                for _ in 0..runs {
-                    let start = time::precise_time_ns();
-                    scenario(&mut client);
-                    let end = time::precise_time_ns();
+                RUNTIME.with(|runtime| {
+                    for _ in 0..runs {
+                        let start = time::precise_time_ns();
+                        scenario(&mut client, &mut runtime.borrow_mut());
+                        let end = time::precise_time_ns();
 
-                    result.scenario.push((start, end));
-                }
+                        result.scenario.push((start, end));
+                    }
+                });
 
                 time_block!(result, client_drop, { drop(client) });
 
@@ -326,7 +336,7 @@ where
         }
         let mut client = self.client_factory.create();
         if let Some(finalize) = finalize {
-            finalize(&mut client, self.runs, self.pool.max_count());
+            finalize(&mut client, self.runs, self.pool.max_count(), &mut runtime);
         }
 
         // Collect benchmark results.
