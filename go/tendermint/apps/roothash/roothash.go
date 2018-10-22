@@ -564,18 +564,3 @@ func New(
 		storage:    storage,
 	}
 }
-
-/*
-func newGenesisBlock(ctx *abci.Context, id signature.PublicKey) *roothash.Block {
-	var blk roothash.Block
-
-	blk.Header.Version = 0
-	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
-	blk.Header.Timestamp = uint64(ctx.Now().Unix())
-	blk.Header.InputHash.Empty()
-	blk.Header.OutputHash.Empty()
-	blk.Header.StateRoot.Empty()
-
-	return &blk
-}
-*/
