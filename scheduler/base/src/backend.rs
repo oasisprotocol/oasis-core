@@ -1,7 +1,5 @@
 //! Scheduler interface.
 use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Arc;
 
 use serde::ser::SerializeStruct;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
@@ -10,7 +8,6 @@ use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
 use ekiden_common::futures::{BoxFuture, BoxStream};
 use ekiden_epochtime::interface::EpochTime;
-use ekiden_registry_base::Runtime;
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.
@@ -143,12 +140,10 @@ impl<'de> Deserialize<'de> for CommitteeType {
 pub struct Committee {
     pub kind: CommitteeType,
     pub members: Vec<CommitteeNode>,
-    // We only need to ser/des this struct in the Consensus dummy backend
-    // when storing or restoring current round state.  Arc<> is problematic
-    // to ser/des, but we can recreate the runtime from other data we have,
-    // so we don't really need it there.
+    // We can recreate the runtime from other data we have, so the runtime
+    // ID is not really needed here.
     #[serde(skip)]
-    pub runtime: Arc<Runtime>,
+    pub runtime_id: B256,
     pub valid_for: EpochTime,
 }
 
@@ -160,13 +155,15 @@ impl TryFrom<api::Committee> for Committee {
         for member in a.get_members().iter() {
             members.push(CommitteeNode::try_from(member.to_owned())?);
         }
+        let rid = a.get_runtime_id();
+        let rid = B256::from_slice(&rid);
         Ok(Committee {
             kind: match a.get_kind() {
                 api::Committee_Kind::COMPUTE => CommitteeType::Compute,
                 api::Committee_Kind::STORAGE => CommitteeType::Storage,
             },
             members: members,
-            runtime: Arc::new(Runtime::try_from(a.get_runtime().to_owned())?),
+            runtime_id: rid,
             valid_for: a.get_valid_for(),
         })
     }
@@ -185,7 +182,7 @@ impl Into<api::Committee> for Committee {
             members.push(member.to_owned().into());
         }
         c.set_members(members.into());
-        c.set_runtime(self.runtime.deref().to_owned().into());
+        c.set_runtime_id(self.runtime_id.to_vec());
         c.set_valid_for(self.valid_for);
         c
     }

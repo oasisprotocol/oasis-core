@@ -246,7 +246,7 @@ func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
 			}
 
 			// Ignore unrelated committees.
-			if !committee.Runtime.ID.Equal(s.runtime.ID) {
+			if !committee.RuntimeID.Equal(s.runtime.ID) {
 				continue
 			}
 			if committee.Kind != scheduler.Compute {
