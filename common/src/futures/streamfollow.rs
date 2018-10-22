@@ -196,6 +196,14 @@ where
     type Error = <S as Stream>::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        // Ensure that we are executing inside a Tokio runtime context which has a timer
+        // context running. Otherwise this could fail later when attempting to retry, but
+        // we want to catch failures early. This check is only performed in debug mode.
+        #[cfg(debug_assertions)]
+        tokio::timer::Delay::new(Instant::now())
+            .poll()
+            .expect("streamfollow task must be spawned in tokio runtime");
+
         loop {
             match std::mem::replace(&mut self.connection_state, ConnectionState::Invalid) {
                 ConnectionState::Invalid => unreachable!(),
