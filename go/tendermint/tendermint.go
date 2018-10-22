@@ -303,6 +303,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.RPC.ListenAddress = ""
+	tenderConfig.Mempool.CacheSize = 0
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
 	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
