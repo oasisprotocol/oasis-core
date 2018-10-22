@@ -327,12 +327,8 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 			"current_round", blockNr,
 		)
 
-		// XXX: This should just disarm the timer and attempt to continue
-		// in production, but tracking down #1047 is more important.
-		panic("BUG: spurious timeout, check logs")
-
-		// timer.Stop(ctx)
-		// return
+		timer.Stop(ctx)
+		return
 	}
 
 	app.logger.Warn("FireTimer: round timeout expired, forcing finalization",
