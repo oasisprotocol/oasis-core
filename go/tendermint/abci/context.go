@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"sort"
 	"time"
 
 	tmcmn "github.com/tendermint/tendermint/libs/common"
@@ -88,7 +89,13 @@ func (c *Context) RegisterOnCommitHook(id string, hook OnCommitHook) {
 }
 
 func (c *Context) fireOnCommitHooks(state *ApplicationState) {
-	for _, hook := range c.onCommitHooks {
-		hook(state)
+	hookOrder := make([]string, 0, len(c.onCommitHooks))
+	for id := range c.onCommitHooks {
+		hookOrder = append(hookOrder, id)
+	}
+	sort.Strings(hookOrder)
+
+	for _, id := range hookOrder {
+		c.onCommitHooks[id](state)
 	}
 }
