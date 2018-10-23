@@ -321,6 +321,8 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 	latestBlock := cs.CurrentBlock
 	if blockNr, _ := latestBlock.Header.Round.ToU64(); blockNr != tCtx.Round {
+		// Note: This should NEVER happen, but it does and causes massive
+		// problems (#1047).
 		app.logger.Error("FireTimer: spurious timeout detected",
 			"runtime", tCtx.ID,
 			"timer_round", tCtx.Round,
@@ -328,6 +330,27 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		)
 
 		timer.Stop(ctx)
+
+		// WARNING: `timer` != cs.Timer, while the ID shouldn't change
+		// and the difference in structs should be harmless, be extra
+		// defensive till we root cause and fix the timer problems.
+
+		var csCtx timerContext
+		if err := csCtx.UnmarshalCBOR(cs.Timer.Data()); err != nil {
+			app.logger.Error("FireTimer: Failed to unmarshal runtime state timer",
+				"err", err,
+			)
+			return
+		}
+
+		app.logger.Error("FireTimer: runtime state timer",
+			"runtime", csCtx.ID,
+			"timer_round", csCtx.Round,
+		)
+
+		cs.Timer.Stop(ctx)
+		state.UpdateRuntimeState(cs)
+
 		return
 	}
 

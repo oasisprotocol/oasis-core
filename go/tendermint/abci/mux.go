@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -216,7 +217,7 @@ type abciMux struct {
 
 	appsByName     map[string]Application
 	appsByTxTag    map[byte]Application
-	appsByRegOrder []Application
+	appsByLexOrder []Application
 	appBlessed     Application
 
 	lastBeginBlock int64
@@ -316,7 +317,7 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 
 	// Run ForeignCheckTx on all other applications so they can
 	// run their post-tx hooks.
-	for _, foreignApp := range mux.appsByRegOrder {
+	for _, foreignApp := range mux.appsByLexOrder {
 		if foreignApp == app {
 			continue
 		}
@@ -352,7 +353,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisDigest), genesisDigest[:])
 
 	resp := mux.BaseApplication.InitChain(req)
-	for _, app := range mux.appsByRegOrder {
+	for _, app := range mux.appsByLexOrder {
 		newResp := app.InitChain(req)
 		if app.Blessed() {
 			resp = newResp
@@ -379,12 +380,12 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	ctx := NewContext(ContextBeginBlock, mux.currentTime)
 
 	// Fire all application timers first.
-	for _, app := range mux.appsByRegOrder {
+	for _, app := range mux.appsByLexOrder {
 		fireTimers(ctx, mux.state, app)
 	}
 
 	// Dispatch BeginBlock to all applications.
-	for _, app := range mux.appsByRegOrder {
+	for _, app := range mux.appsByLexOrder {
 		app.BeginBlock(ctx, req)
 	}
 
@@ -428,7 +429,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 
 	// Run ForeignDeliverTx on all other applications so they can
 	// run their post-tx hooks.
-	for _, foreignApp := range mux.appsByRegOrder {
+	for _, foreignApp := range mux.appsByLexOrder {
 		if foreignApp == app {
 			continue
 		}
@@ -457,7 +458,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	)
 
 	resp := mux.BaseApplication.EndBlock(req)
-	for _, app := range mux.appsByRegOrder {
+	for _, app := range mux.appsByLexOrder {
 		newResp := app.EndBlock(req)
 		if app.Blessed() {
 			resp = newResp
@@ -488,7 +489,8 @@ func (mux *abciMux) Commit() types.ResponseCommit {
 
 func (mux *abciMux) doCleanup() {
 	mux.state.doCleanup()
-	for _, v := range mux.appsByRegOrder {
+
+	for _, v := range mux.appsByLexOrder {
 		v.OnCleanup()
 	}
 }
@@ -507,8 +509,8 @@ func (mux *abciMux) doRegister(app Application) error {
 	}
 
 	mux.appsByName[name] = app
-	mux.appsByRegOrder = append(mux.appsByRegOrder, app)
 	mux.appsByTxTag[app.TransactionTag()] = app
+	mux.rebuildAppLexOrdering() // Inefficient but not a lot of apps.
 
 	app.OnRegister(mux.state, mux.queryRouter.WithApp(app))
 	mux.logger.Debug("Registered new application",
@@ -516,6 +518,20 @@ func (mux *abciMux) doRegister(app Application) error {
 	)
 
 	return nil
+}
+
+func (mux *abciMux) rebuildAppLexOrdering() {
+	numApps := len(mux.appsByName)
+	appOrder := make([]string, 0, numApps)
+	for name := range mux.appsByName {
+		appOrder = append(appOrder, name)
+	}
+	sort.Strings(appOrder)
+
+	mux.appsByLexOrder = make([]Application, 0, numApps)
+	for _, name := range appOrder {
+		mux.appsByLexOrder = append(mux.appsByLexOrder, mux.appsByName[name])
+	}
 }
 
 func (mux *abciMux) extractAppFromKeyPath(s string) (Application, error) {
