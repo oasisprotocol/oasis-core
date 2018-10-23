@@ -36,12 +36,12 @@ func (s *grpcServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest
 }
 
 func (s *grpcServer) DeregisterEntity(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	var id signature.SignedPublicKey
-	if err := id.FromProto(req.GetId()); err != nil {
+	var timestamp signature.Signed
+	if err := timestamp.FromProto(req.GetTimestamp()); err != nil {
 		return nil, err
 	}
 
-	if err := s.backend.DeregisterEntity(ctx, &id); err != nil {
+	if err := s.backend.DeregisterEntity(ctx, &timestamp); err != nil {
 		return nil, err
 	}
 

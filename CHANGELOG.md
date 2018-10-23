@@ -29,6 +29,7 @@
   (previously they were part of `ekiden-ethereum`).
 * **BACKWARD INCOMPATIBLE:** Make raw contract calls unsigned as signatures and encryption
   should be handled by the runtime.
+* **BACKWARD INCOMPATIBLE:** Add timestamps to registration structures to prevent replaying
 * Add discrepancy resolution by using backup workers majority vote.
 * Add passing extra arguments to Docker in shell (`--docker-extra-args`).
 * Add `common::futures::retry` which implements retrying futures on failure.

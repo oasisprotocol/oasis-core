@@ -47,9 +47,9 @@ impl EntityRegistryBackend for EntityRegistryClient {
         }
     }
 
-    fn deregister_entity(&self, id: Signed<B256>) -> BoxFuture<()> {
+    fn deregister_entity(&self, timestamp: Signed<u64>) -> BoxFuture<()> {
         let mut request = api::DeregisterRequest::new();
-        request.set_id(id.into());
+        request.set_timestamp(timestamp.into());
         match self.0.deregister_entity_async(&request) {
             Ok(f) => Box::new(
                 f.map(|_response| ())

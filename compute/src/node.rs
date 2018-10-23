@@ -2,6 +2,7 @@
 #[cfg(feature = "testing")]
 use std::process::abort;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use grpcio;
 
@@ -71,6 +72,12 @@ pub struct ComputeNode {
 impl ComputeNode {
     /// Create new compute node.
     pub fn new(config: ComputeNodeConfiguration, mut container: Container) -> Result<Self> {
+        // Creation time.
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u64;
+
         // Create IAS.
         let ias = Arc::new(IAS::new(config.ias)?);
 
@@ -118,6 +125,7 @@ impl ComputeNode {
             runtime.replica_group_backup_size = config.compute_backup_replicas;
             runtime.replica_allowed_stragglers = config.compute_allowed_stragglers;
             runtime.storage_group_size = 1;
+            runtime.registration_time = now;
 
             runtime
         };

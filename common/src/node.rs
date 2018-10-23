@@ -36,6 +36,8 @@ pub struct Node {
     pub certificate: Certificate,
     //TODO: define the reference to a stake.
     pub stake: Vec<u8>,
+    /// Time of registration.
+    pub registration_time: u64,
 }
 
 impl TryFrom<api::Node> for Node {
@@ -62,6 +64,7 @@ impl TryFrom<api::Node> for Node {
             addresses: addresses,
             certificate: Certificate::try_from(node.get_certificate().clone())?,
             stake: node.get_stake().to_vec(),
+            registration_time: node.registration_time,
         })
     }
 }
@@ -85,6 +88,7 @@ impl Into<api::Node> for Node {
         );
         node.set_certificate(self.certificate.into());
         node.set_stake(self.stake.clone());
+        node.set_registration_time(self.registration_time);
         node
     }
 }
@@ -149,6 +153,7 @@ mod test {
         original.addresses = Address::for_local_port(42).unwrap();
         original.certificate = Certificate::generate(&NullSignerVerifier).unwrap().0;
         original.stake = vec![42; 10];
+        original.registration_time = 42;
 
         let intermediate: api::Node = original.clone().into();
         let converted = Node::try_from(intermediate).unwrap();

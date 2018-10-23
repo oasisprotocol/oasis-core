@@ -8,12 +8,20 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+)
+
+const (
+	// TimestampValidFor is the number of seconds that a timestamp in a
+	// register or deregister call is considered valid.
+	// Default is 15 minutes.
+	TimestampValidFor = uint64(15 * 60)
 )
 
 var (
@@ -51,6 +59,9 @@ var (
 
 	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
 	ErrNoSuchRuntime = errors.New("registry: no such runtime")
+
+	// ErrInvalidTimestamp is the error returned when a timestamp is invalid.
+	ErrInvalidTimestamp = errors.New("registry: invalid timestamp")
 )
 
 // Backend is a registry implementation.
@@ -63,7 +74,7 @@ type Backend interface {
 	// DeregisterEntity deregisters an entity.
 	//
 	// The signature should be made using DeregisterEntitySignatureContext.
-	DeregisterEntity(context.Context, *signature.SignedPublicKey) error
+	DeregisterEntity(context.Context, *signature.Signed) error
 
 	// GetEntity gets an entity by ID.
 	GetEntity(context.Context, signature.PublicKey) (*entity.Entity, error)
@@ -146,6 +157,18 @@ type BlockBackend interface {
 	GetBlockNodeList(context.Context, int64) (*NodeList, error)
 }
 
+type Timestamp uint64
+
+// MarshalCBOR serializes the Timestamp type into a CBOR byte vector.
+func (t *Timestamp) MarshalCBOR() []byte {
+	return cbor.Marshal(t)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into a Timestamp.
+func (t *Timestamp) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, t)
+}
+
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity) (*entity.Entity, error) {
 	// XXX: Ensure ent is well-formed.
@@ -171,26 +194,21 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 }
 
 // VerifyDeregisterEntityArgs verifies arguments for DeregisterEntity.
-func VerifyDeregisterEntityArgs(logger *logging.Logger, sigID *signature.SignedPublicKey) (signature.PublicKey, error) {
+func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.Signed) (signature.PublicKey, uint64, error) {
 	var id signature.PublicKey
-	if sigID == nil {
-		return nil, ErrInvalidArgument
+	var timestamp Timestamp
+	if sigTimestamp == nil {
+		return nil, 0, ErrInvalidArgument
 	}
-	if err := sigID.Open(DeregisterEntitySignatureContext, &id); err != nil {
+	if err := sigTimestamp.Open(DeregisterEntitySignatureContext, &timestamp); err != nil {
 		logger.Error("DeregisterEntity: invalid signature",
-			"signed_id", sigID,
+			"signed_timestamp", sigTimestamp,
 		)
-		return nil, ErrInvalidSignature
+		return nil, 0, ErrInvalidSignature
 	}
-	if sigID.Signed.Signature.SanityCheck(id) != nil {
-		logger.Error("DeregisterEntity: invalid argument(s)",
-			"entity_id", id,
-			"signed_id", sigID,
-		)
-		return nil, ErrInvalidArgument
-	}
+	id = sigTimestamp.Signature.PublicKey
 
-	return id, nil
+	return id, uint64(timestamp), nil
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
@@ -241,4 +259,17 @@ func SortNodeList(nodes []*node.Node) {
 	sort.Slice(nodes, func(i, j int) bool {
 		return bytes.Compare(nodes[i].ID, nodes[j].ID) == -1
 	})
+}
+
+// VerifyTimestamp verifies that the given timestamp is valid.
+func VerifyTimestamp(timestamp uint64, now uint64) error {
+	// For now, we check that it's new enough and not too far in the future.
+	// We allow the timestamp to be up to 1 minute in the future to account
+	// for network latency, leap seconds, and real-time clock inaccuracies
+	// and drift.
+	if timestamp < now-TimestampValidFor || timestamp > now+60 {
+		return ErrInvalidTimestamp
+	}
+
+	return nil
 }

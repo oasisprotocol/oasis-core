@@ -34,6 +34,9 @@ pub struct Runtime {
 
     /// The size of the storage group this runtime will use.
     pub storage_group_size: u64,
+
+    /// Time of registration.
+    pub registration_time: u64,
     // XXX: "budget" (PR #2), in to be specified units.
 
     // XXX: Other critera
@@ -59,6 +62,7 @@ impl TryFrom<api::Runtime> for Runtime {
             replica_group_backup_size: a.replica_group_backup_size,
             replica_allowed_stragglers: a.replica_allowed_stragglers,
             storage_group_size: a.storage_group_size,
+            registration_time: a.registration_time,
         })
     }
 }
@@ -81,6 +85,7 @@ impl Into<api::Runtime> for Runtime {
         c.set_replica_group_backup_size(self.replica_group_backup_size);
         c.set_replica_allowed_stragglers(self.replica_allowed_stragglers);
         c.set_storage_group_size(self.storage_group_size);
+        c.set_registration_time(self.registration_time);
         c
     }
 }

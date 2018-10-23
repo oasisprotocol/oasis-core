@@ -22,6 +22,7 @@ message Certificate {
 message Entity {
     bytes id = 1;
     bytes eth_address = 2;
+    uint64 registration_time = 3;
 }
 
 message Node {
@@ -33,6 +34,7 @@ message Node {
     Certificate certificate = 6;
     // TODO: stake should be formalized in common or roothash.
     bytes stake = 7;
+    uint64 registration_time = 8;
 }
 
 message Signature {
