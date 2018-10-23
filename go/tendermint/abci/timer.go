@@ -55,7 +55,7 @@ func NewTimer(ctx *Context, app Application, id string, data []byte) *Timer {
 	}
 
 	t := &Timer{
-		ID:           id,
+		ID:           state.ID,
 		currentState: state,
 		pendingState: state,
 	}
@@ -137,7 +137,9 @@ func (t *Timer) persist(state *ApplicationState) {
 
 	// Update deadline state.
 	if currentState.Armed {
-		tree.Remove(currentState.getDeadlineMapKey())
+		if _, removed := tree.Remove(currentState.getDeadlineMapKey()); !removed {
+			panic("timer: armed timer not removed from deadline map")
+		}
 	}
 	if t.pendingState.Armed {
 		tree.Set(t.pendingState.getDeadlineMapKey(), []byte(t.ID))
@@ -164,6 +166,10 @@ func fireTimers(ctx *Context, state *ApplicationState, app Application) {
 			var ts timerState
 			if err := ts.UnmarshalCBOR(data); err != nil {
 				panic("timer: state corruption")
+			}
+
+			if !ts.Armed {
+				panic("timer: attempted to fire an unarmed timer")
 			}
 
 			if ts.App != app.Name() {
