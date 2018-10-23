@@ -55,7 +55,7 @@ func NewTimer(ctx *Context, app Application, id string, data []byte) *Timer {
 	}
 
 	t := &Timer{
-		ID:           id,
+		ID:           state.ID,
 		currentState: state,
 		pendingState: state,
 	}
