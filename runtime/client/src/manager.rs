@@ -112,7 +112,7 @@ impl RuntimeClientManager {
                     inner_init
                         .scheduler
                         .watch_committees()
-                        .filter(move |committee| committee.runtime.id == runtime_id)
+                        .filter(move |committee| committee.runtime_id == runtime_id)
                         .filter(|committee| committee.kind == CommitteeType::Compute)
                 },
                 |committee| committee.valid_for,

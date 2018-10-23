@@ -192,7 +192,7 @@ impl ComputationGroup {
                     scheduler_init
                         .watch_committees()
                         .filter(|committee| committee.kind == CommitteeType::Compute)
-                        .filter(move |committee| committee.runtime.id == runtime_id)
+                        .filter(move |committee| committee.runtime_id == runtime_id)
                 },
                 |committee| committee.valid_for,
                 |_err| false,

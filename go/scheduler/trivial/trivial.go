@@ -127,9 +127,9 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 		idxs := rng.Perm(nrNodes)
 
 		committee := &api.Committee{
-			Kind:     kind,
-			Runtime:  con,
-			ValidFor: epoch,
+			Kind:      kind,
+			RuntimeID: con.ID,
+			ValidFor:  epoch,
 		}
 
 		for i := 0; i < sz; i++ {

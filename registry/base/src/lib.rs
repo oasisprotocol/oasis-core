@@ -2,7 +2,6 @@
 #![feature(try_from)]
 
 extern crate byteorder;
-#[macro_use]
 extern crate ekiden_common;
 extern crate ekiden_epochtime;
 extern crate ekiden_registry_api;

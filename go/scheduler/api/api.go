@@ -11,7 +11,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
 
 	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
 )
@@ -135,8 +134,8 @@ type Committee struct {
 	// Members is the committee members.
 	Members []*CommitteeNode `codec:"members"`
 
-	// Runtime is the runtime that this committee is for.
-	Runtime *registry.Runtime `codec:"-"`
+	// RuntimeID is the runtime ID that this committee is for.
+	RuntimeID signature.PublicKey `codec:"-"`
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `codec:"valid_for"`
@@ -157,7 +156,7 @@ func (c *Committee) ToProto() *pbSched.Committee {
 	for _, v := range c.Members {
 		pb.Members = append(pb.Members, v.ToProto())
 	}
-	pb.Runtime = c.Runtime.ToProto()
+	pb.RuntimeId, _ = c.RuntimeID.MarshalBinary()
 	pb.ValidFor = uint64(c.ValidFor)
 
 	return pb
