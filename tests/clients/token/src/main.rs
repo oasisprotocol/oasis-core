@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate clap;
-extern crate futures;
 extern crate rand;
 
 #[macro_use]
@@ -14,9 +13,9 @@ extern crate ekiden_rpc_client;
 extern crate token_api;
 
 use clap::{App, Arg};
-use futures::future::Future;
 use rand::{thread_rng, Rng};
 
+use ekiden_core::tokio::runtime::current_thread::Runtime;
 use ekiden_runtime_client::create_runtime_client;
 use token_api::with_api;
 
@@ -25,7 +24,7 @@ with_api! {
 }
 
 /// Initializes the token scenario.
-fn init(client: &mut token::Client, _runs: usize, _threads: usize) {
+fn init(client: &mut token::Client, _runs: usize, _threads: usize, runtime: &mut Runtime) {
     // Create new token contract.
     let mut request = token::CreateRequest::new();
     request.set_sender("bank".to_string());
@@ -33,16 +32,15 @@ fn init(client: &mut token::Client, _runs: usize, _threads: usize) {
     request.set_token_symbol("EKI".to_string());
     request.set_initial_supply(8);
 
-    client.create(request).wait().unwrap();
+    runtime.block_on(client.create(request)).unwrap();
 
     // Check balances.
-    let response = client
-        .get_balance({
+    let response = runtime
+        .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
             request
-        })
-        .wait()
+        }))
         .unwrap();
     assert_eq!(response.get_balance(), 8_000_000_000_000_000_000);
 }
@@ -53,56 +51,52 @@ fn create_address() -> String {
 }
 
 /// Runs the token scenario.
-fn scenario(client: &mut token::Client) {
+fn scenario(client: &mut token::Client, runtime: &mut Runtime) {
     // Generate random addresses.
     let destination = create_address();
     let poor = create_address();
 
     // Transfer some funds.
-    client
-        .transfer({
+    runtime
+        .block_on(client.transfer({
             let mut request = token::TransferRequest::new();
             request.set_sender("bank".to_string());
             request.set_destination(destination.clone());
             request.set_value(3);
             request
-        })
-        .wait()
+        }))
         .unwrap();
     measure_counter_inc!("value_transferred", 3);
 
     // Check balances.
-    let response = client
-        .get_balance({
+    let response = runtime
+        .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account(destination.clone());
             request
-        })
-        .wait()
+        }))
         .unwrap();
     assert_eq!(response.get_balance(), 3);
 
-    let response = client
-        .get_balance({
+    let response = runtime
+        .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account(poor.clone());
             request
-        })
-        .wait()
+        }))
         .unwrap();
     assert_eq!(response.get_balance(), 0);
 }
 
 /// Finalize the token scenario.
-fn finalize(client: &mut token::Client, runs: usize, threads: usize) {
+fn finalize(client: &mut token::Client, runs: usize, threads: usize, runtime: &mut Runtime) {
     // Check final balance.
-    let response = client
-        .get_balance({
+    let response = runtime
+        .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
             request
-        })
-        .wait()
+        }))
         .unwrap();
     assert_eq!(
         response.get_balance(),
@@ -118,8 +112,9 @@ fn main() {
 
 #[cfg(not(feature = "benchmark"))]
 fn main() {
+    let mut runtime = Runtime::new().unwrap();
     let mut client = runtime_client!(token);
-    init(&mut client, 1, 1);
-    scenario(&mut client);
-    finalize(&mut client, 1, 1);
+    init(&mut client, 1, 1, &mut runtime);
+    scenario(&mut client, &mut runtime);
+    finalize(&mut client, 1, 1, &mut runtime);
 }
