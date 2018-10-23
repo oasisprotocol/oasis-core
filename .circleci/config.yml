@@ -297,25 +297,10 @@ workflows:
   version: 2
   build:
     jobs:
-      - build-go
-      - build-rust
-      - lint-git
-      - set-docker-tag:
-          # FIXME: The master filter for this and the deploy steps is a
-          # temporary measure. We want to be able to deploy feature tags to any
-          # given testnet eventually. However it currently disrupts some
-          # builds.
-          filters:
-            branches:
-              only: master
+      - set-docker-tag
       - deploy:
-          filters:
-            branches:
-              only: master
           requires:
             - set-docker-tag
-            - build-rust
-            - build-go
       - hold-for-production:
           type: approval
           filters:
