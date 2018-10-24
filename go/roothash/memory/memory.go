@@ -135,7 +135,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 
 	state := s.round.roundState.state
 
-	block, err := s.round.tryFinalize()
+	blk, err := s.round.tryFinalize()
 	switch err {
 	case nil:
 		// Add the new block to the block chain.
@@ -143,13 +143,13 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 			"round", blockNr,
 		)
 
-		s.rootHash.allBlockNotifier.Broadcast(block)
+		s.rootHash.allBlockNotifier.Broadcast(blk)
 
 		s.Lock()
 		defer s.Unlock()
 
-		s.blockNotifier.Broadcast(block)
-		s.blocks = append(s.blocks, block)
+		s.blockNotifier.Broadcast(blk)
+		s.blocks = append(s.blocks, blk)
 		return
 	case errStillWaiting:
 		if forced {
@@ -210,17 +210,21 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 		return
 	}
 
-	// Something else went wrong.
+	// Something else went wrong, emit empty error block.
 	s.logger.Error("worker: round failed",
 		"round", blockNr,
 		"err", err,
 	)
 
-	s.round.reset()
+	blk = block.NewEmptyBlock(latestBlock, uint64(time.Now().Unix()), block.RoundFailed)
+	s.round.populateFinalizedBlock(blk)
+	s.rootHash.allBlockNotifier.Broadcast(blk)
 
-	s.eventNotifier.Broadcast(&api.Event{
-		RoundFailed: err,
-	})
+	s.Lock()
+	defer s.Unlock()
+
+	s.blockNotifier.Broadcast(blk)
+	s.blocks = append(s.blocks, blk)
 }
 
 func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo

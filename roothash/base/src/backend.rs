@@ -17,8 +17,6 @@ pub enum Event {
     ///
     /// [`CallBatch`]: ekiden_runtime_common::batch::CallBatch
     DiscrepancyDetected(H256, Header),
-    /// Round failed.
-    RoundFailed(Error),
 }
 
 /// Root hash backend interface.

@@ -142,8 +142,21 @@ func (r *Round) String() string {
 	return strconv.FormatUint(v, 10)
 }
 
+// HeaderType is the type of header.
+type HeaderType uint8
+
+const (
+	// Normal is a normal header.
+	Normal HeaderType = 0
+
+	// RoundFailed is a header resulting from a failed round. Such a
+	// header contains no transactions but advanced the round as normal
+	// to prevent replays of old commitments.
+	RoundFailed HeaderType = 1
+)
+
 // Header is a block header.
-type Header struct {
+type Header struct { // nolint: maligned
 	// Version is the protocol version number.
 	Version uint16 `codec:"version"`
 
@@ -155,6 +168,9 @@ type Header struct {
 
 	// Timestamp is the block timestamp (POSIX time).
 	Timestamp uint64 `codec:"timestamp"`
+
+	// HeaderType is the header type.
+	HeaderType HeaderType `codec:"header_type"`
 
 	// PreviousHash is the previous block hash.
 	PreviousHash hash.Hash `codec:"previous_hash"`
@@ -209,6 +225,7 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 		return err
 	}
 	h.Timestamp = pb.GetTimestamp()
+	h.HeaderType = HeaderType(pb.GetHeaderType())
 	if err := h.PreviousHash.UnmarshalBinary(pb.GetPreviousHash()); err != nil {
 		return err
 	}
@@ -239,6 +256,7 @@ func (h *Header) ToProto() *pbRoothash.Header {
 	pb.Namespace, _ = h.Namespace.MarshalBinary()
 	pb.Round, _ = h.Round.MarshalBinary()
 	pb.Timestamp = h.Timestamp
+	pb.HeaderType = uint32(h.HeaderType)
 	pb.PreviousHash, _ = h.PreviousHash.MarshalBinary()
 	pb.GroupHash, _ = h.GroupHash.MarshalBinary()
 	pb.InputHash, _ = h.InputHash.MarshalBinary()

@@ -394,17 +394,6 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 
 				notifiers := r.getRuntimeNotifiers(value.ID)
 				notifiers.eventNotifier.Broadcast(&api.Event{DiscrepancyDetected: &value.Event})
-			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashRoundFailed) {
-				var value tmapi.ValueRootHashRoundFailed
-				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
-					r.logger.Error("worker: failed to get failure from tag",
-						"err", err,
-					)
-					continue
-				}
-
-				notifiers := r.getRuntimeNotifiers(value.ID)
-				notifiers.eventNotifier.Broadcast(&api.Event{RoundFailed: errors.New(value.Reason)})
 			}
 		}
 	}

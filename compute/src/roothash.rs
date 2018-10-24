@@ -23,7 +23,7 @@ use ekiden_core::hash::EncodedHash;
 use ekiden_core::runtime::batch::CallBatch;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
-use ekiden_roothash_base::{Block, Event, Header, RootHashBackend, RootHashSigner};
+use ekiden_roothash_base::{Block, Event, Header, HeaderType, RootHashBackend, RootHashSigner};
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 use ekiden_tracing;
@@ -302,6 +302,8 @@ pub struct RootHashTestOnlyConfiguration {
     pub inject_discrepancy: bool,
     /// Fail after commit.
     pub fail_after_commit: bool,
+    /// Skip sending a commit until a given round.
+    pub skip_commit_until_round: u64,
 }
 
 /// Root hash frontend configuration.
@@ -458,9 +460,6 @@ impl RootHashFrontend {
                         Self::check_and_process_incoming_queue(inner.clone())
                     }
                     Command::ProcessBlock(block) => Self::handle_block(inner.clone(), block),
-                    Command::ProcessEvent(Event::RoundFailed(error)) => {
-                        Self::handle_round_failed(inner.clone(), error)
-                    }
                     Command::ProcessEvent(Event::DiscrepancyDetected(batch_hash, header)) => {
                         Self::handle_discrepancy_detected(inner.clone(), batch_hash, header)
                     }
@@ -663,28 +662,6 @@ impl RootHashFrontend {
         Self::handle_remote_batch(inner, batch_hash, block_header, committee)
     }
 
-    /// Handle round failed event.
-    fn handle_round_failed(inner: Arc<Inner>, error: Error) -> BoxFuture<()> {
-        // We are only interested in round failed events if we are currently participating
-        // in the round, either by processing a batch for a round, having proposed a block
-        // in a round or having already locally aborted the round.
-        let role = require_state_ignore!(
-            inner,
-            State::ProcessingBatch(role, ..) |
-            State::WaitingForBlock(role, ..) |
-            State::WaitingForFinalize(role, ..) |
-            State::LocallyAborted(role, ..) => role
-        );
-
-        // Local abort.
-        Self::fail_batch(inner.clone(), format!("round failed: {}", error.message));
-
-        // Ready for next round.
-        Self::transition(inner.clone(), State::WaitingForBatch(role));
-
-        future::ok(()).into_box()
-    }
-
     /// Handle new block from root hash backend.
     fn handle_block(inner: Arc<Inner>, block: Block) -> BoxFuture<()> {
         info!(
@@ -736,10 +713,18 @@ impl RootHashFrontend {
                 future::ok(()).into_box()
             }
             State::LocallyAborted(role) | State::WaitingForFinalize(role, ..) => {
-                // Round has been finalized.
-                info!("Considering the round finalized");
+                match block.header.header_type {
+                    HeaderType::Normal => {
+                        // Round has been finalized.
+                        info!("Considering the round finalized");
 
-                // TODO: We should actually check if the proposed block was included.
+                        // TODO: We should actually check if the proposed block was included.
+                    }
+                    HeaderType::RoundFailed => {
+                        // Round has failed.
+                        Self::fail_batch(inner.clone(), "round has failed".into());
+                    }
+                }
 
                 Self::transition(inner.clone(), State::WaitingForBatch(role));
 
@@ -1055,6 +1040,17 @@ impl RootHashFrontend {
             })
             .and_then(move |_| {
                 require_state!(inner, State::WaitingForFinalize(..), "proposing batch");
+
+                // Test mode: skip commit.
+                #[cfg(feature = "testing")]
+                {
+                    if inner.test_only_config.skip_commit_until_round
+                        > computed_batch.block.header.round.as_u64()
+                    {
+                        warn!("TEST MODE: skipping commit");
+                        return future::ok(()).into_box();
+                    }
+                }
 
                 measure_counter_inc!("proposed_batch_count");
 

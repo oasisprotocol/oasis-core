@@ -70,3 +70,22 @@ func NewGenesisBlock(id signature.PublicKey, timestamp uint64) *Block {
 
 	return &blk
 }
+
+// NewEmptyBlock creates a new empty block with a specific type.
+func NewEmptyBlock(child *Block, timestamp uint64, htype HeaderType) *Block {
+	var blk Block
+
+	blk.Header.Version = child.Header.Version
+	blk.Header.Namespace = child.Header.Namespace
+	blk.Header.Round = child.Header.Round.Increment()
+	blk.Header.Timestamp = timestamp
+	blk.Header.HeaderType = htype
+	blk.Header.PreviousHash = child.Header.EncodedHash()
+	blk.Header.InputHash.Empty()
+	blk.Header.OutputHash.Empty()
+	// State root is unchanged.
+	blk.Header.StateRoot = child.Header.StateRoot
+	blk.Header.CommitmentsHash.Empty()
+
+	return &blk
+}

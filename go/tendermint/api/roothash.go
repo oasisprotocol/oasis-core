@@ -27,10 +27,6 @@ var (
 	// ValueRootHashDiscrepancyDetected).
 	TagRootHashDiscrepancyDetected = []byte("roothash.discrepancy")
 
-	// TagRootHashRoundFailed is an ABCI transaction tag for round
-	// failure events (value is a CBOR serialized ValueRootHashRoundFailed).
-	TagRootHashRoundFailed = []byte("roothash.round_failed")
-
 	// TagRootHashFinalized is an ABCI transaction tag for finalized
 	// blocks (value is a CBOR serialized ValueRootHashFinalized).
 	TagRootHashFinalized = []byte("roothash.finalized")
@@ -100,21 +96,5 @@ func (v *ValueRootHashDiscrepancyDetected) MarshalCBOR() []byte {
 
 // UnmarshalCBOR deserializes a CBOR byte vector into the given type.
 func (v *ValueRootHashDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, v)
-}
-
-// ValueRootHashRoundFailed is the value component of TagRootHashRoundFailed.
-type ValueRootHashRoundFailed struct {
-	ID     signature.PublicKey `codec:"id"`
-	Reason string              `codec:"reason"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (v *ValueRootHashRoundFailed) MarshalCBOR() []byte {
-	return cbor.Marshal(v)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (v *ValueRootHashRoundFailed) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, v)
 }

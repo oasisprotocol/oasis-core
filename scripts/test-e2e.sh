@@ -287,7 +287,19 @@ scenario_fail_worker_after_commit() {
     run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 1
 }
 
-# Go node (tendermint backends).
+scenario_leader_skip_commit() {
+    local leader_pid
+
+    run_compute_node 1 --compute-replicas 2 --compute-allowed-stragglers 0
+    sleep 1
+    run_compute_node 2 --compute-replicas 2 --compute-allowed-stragglers 0
+    sleep 1
+    # Make the leader node skip sending commits for 3 rounds. This test should pass if the
+    # roothash backend emits empty blocks for failed rounds, otherwise it may run forever.
+    run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 0 --test-skip-commit-until-round 3
+}
+
+# Tendermint backends.
 run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
 run_test scenario_basic_db "e2e-basic-tm-db" test-db-encryption 1 run_dummy_node_go_tm_mock 0 0 0 1 test-db-encryption
 run_test scenario_basic "e2e-basic-tm" token 1 run_dummy_node_go_tm_mock
@@ -298,13 +310,14 @@ run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registra
 run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit-tm" token 1 run_dummy_node_go_tm_mock
 run_test scenario_basic "e2e-long-tm" test-long-term 2 run_dummy_node_go_tm_mock
 run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 2 run_dummy_node_go_tm_mock
+run_test scenario_leader_skip_commit "e2e-leader-skip-commit-tm" token 1 run_dummy_node_go_tm_mock
 
 # Alternate starting order (client before dummy node).
 run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_dummy 0 0 1
 run_test scenario_basic "e2e-basic-client-starts-first-tm-full" token 1 run_dummy_node_go_tm 0 0 1
 run_test scenario_basic "e2e-basic-client-starts-first-tm" token 1 run_dummy_node_go_tm_mock 0 0 1
 
-# Go node (dummy backends).
+# Dummy backends.
 run_test scenario_basic "e2e-basic" token 1 run_dummy_node_go_dummy
 run_test scenario_basic "e2e-basic-pre-epochs" token 1 run_dummy_node_go_dummy 0 3
 run_test scenario_discrepancy_worker "e2e-discrepancy-worker" token 1 run_dummy_node_go_dummy
@@ -313,3 +326,4 @@ run_test scenario_fail_worker_after_registration "e2e-fail-worker-after-registra
 run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 1 run_dummy_node_go_dummy
 run_test scenario_basic "e2e-long" test-long-term 2 run_dummy_node_go_dummy
 run_test scenario_one_idle "e2e-long-one-idle" test-long-term 2 run_dummy_node_go_dummy
+run_test scenario_leader_skip_commit "e2e-leader-skip-commit" token 1 run_dummy_node_go_dummy
