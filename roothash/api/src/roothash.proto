@@ -37,11 +37,13 @@ message Header {
   bytes commitments_hash = 10;
 }
 
+// This is used for exporting a runtime's latest block to a file.
 message GenesisBlock {
   bytes runtime_id = 1;
   Block block = 2;
 }
 
+// This is used for exporting runtimes' latest blocks to a file.
 message GenesisBlocks {
   repeated GenesisBlock genesis_blocks = 1;
 }
