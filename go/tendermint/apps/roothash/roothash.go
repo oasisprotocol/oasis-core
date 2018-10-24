@@ -56,6 +56,11 @@ type rootHashApplication struct {
 	timeSource epochtime.BlockBackend
 	scheduler  scheduler.BlockBackend
 	storage    storage.Backend
+
+	// If a runtime with one of these IDs would be initialized,
+	// start with the given block as the genesis block. For other
+	// runtime, generate an "empty" genesis block.
+	genesisBlocks map[signature.MapKey]*block.Block
 }
 
 func (app *rootHashApplication) Name() string {
@@ -261,14 +266,17 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			}
 
 			// Create genesis block.
-			now := ctx.Now().Unix()
-			block := block.NewGenesisBlock(runtime.ID, uint64(now))
+			genesisBlock := app.genesisBlocks[runtime.ID.ToMapKey()]
+			if genesisBlock == nil {
+				now := ctx.Now().Unix()
+				genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
+			}
 
 			// Create new state containing the genesis block.
 			timerCtx := &timerContext{ID: runtime.ID}
 			state.UpdateRuntimeState(&RuntimeState{
 				ID:           runtime.ID,
-				CurrentBlock: block,
+				CurrentBlock: genesisBlock,
 				Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
 			})
 
@@ -584,11 +592,13 @@ func New(
 	timeSource epochtime.BlockBackend,
 	scheduler scheduler.BlockBackend,
 	storage storage.Backend,
+	genesisBlocks map[signature.MapKey]*block.Block,
 ) abci.Application {
 	return &rootHashApplication{
-		logger:     logging.GetLogger("tendermint/roothash"),
-		timeSource: timeSource,
-		scheduler:  scheduler,
-		storage:    storage,
+		logger:        logging.GetLogger("tendermint/roothash"),
+		timeSource:    timeSource,
+		scheduler:     scheduler,
+		storage:       storage,
+		genesisBlocks: genesisBlocks,
 	}
 }
