@@ -293,6 +293,24 @@ jobs:
           name: Push the new production tag of ekiden to dockerhub
           command: docker push oasislabs/testnet:$PRODUCTION_TAG
 
+  build-and-push-migration:
+    docker:
+      - image: circleci/python:2.7
+    steps:
+      - checkout
+      - run: pip install --user -r scripts/storage/requirements.txt -r scripts/roothash/requirements.txt
+      - run: make -C docker migration/context.tar
+      - setup_remote_docker
+      - attach_workspace:
+          at: /tmp/workspace
+
+      - run:
+          name: Load current docker tag
+          command: echo 'BUILD_IMAGE_TAG=`cat /tmp/workspace/build_image_tag`' >> $BASH_ENV
+
+      - run: make -C docker IMG_ORG=oasislabs IMG_TAG=$BUILD_IMAGE_TAG migration
+      - run: docker push oasislabs/migration:$BUILD_IMAGE_TAG
+
 workflows:
   version: 2
   build:
@@ -300,14 +318,15 @@ workflows:
       - build-go
       - build-rust
       - lint-git
-      - set-docker-tag:
+      - set-docker-tag # :
           # FIXME: The master filter for this and the deploy steps is a
           # temporary measure. We want to be able to deploy feature tags to any
           # given testnet eventually. However it currently disrupts some
           # builds.
-          filters:
-            branches:
-              only: master
+          # (no merge: uncomment this)
+          # filters:
+          #   branches:
+          #     only: master
       - deploy:
           filters:
             branches:
@@ -326,6 +345,13 @@ workflows:
       - promote-to-production:
           requires:
             - hold-for-production
+      - build-and-push-migration:
+          # (no merge: uncomment this)
+          # filters:
+          #   branches:
+          #     only: master
+          requires:
+            - set-docker-tag
 
 
   benchmark:
