@@ -12,19 +12,16 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
 var (
-	commitmentSignatureContext = []byte("EkCommit")
-
 	errStillWaiting      = errors.New("tendermint/roothash: still waiting for commits")
 	errInsufficientVotes = errors.New("tendermint/roothash: insufficient votes to finalize discrepancy resolution round")
 
-	_ cbor.Marshaler   = (*commitment)(nil)
-	_ cbor.Unmarshaler = (*commitment)(nil)
 	_ cbor.Marshaler   = (*round)(nil)
 	_ cbor.Unmarshaler = (*round)(nil)
 )
@@ -33,30 +30,6 @@ type errDiscrepancyDetected hash.Hash
 
 func (e errDiscrepancyDetected) Error() string {
 	return fmt.Sprintf("tendermint/roothash: discrepancy detected: %v", hash.Hash(e))
-}
-
-type commitment struct {
-	signature.Signed
-
-	Header *block.Header `codec:"header"`
-}
-
-func (c *commitment) fromCommitment(commit *api.Commitment) error {
-	return c.UnmarshalCBOR(commit.Data)
-}
-
-func (c *commitment) toCommitment() *api.Commitment {
-	return &api.Commitment{Data: c.MarshalCBOR()}
-}
-
-func (c *commitment) open() error {
-	var header block.Header
-	if err := c.Signed.Open(commitmentSignatureContext, &header); err != nil {
-		return errors.New("tendermint/roothash: commitment has invalid signature")
-	}
-	c.Header = &header
-
-	return nil
 }
 
 type state uint
@@ -70,7 +43,7 @@ const (
 type roundState struct {
 	Committee        *scheduler.Committee                          `codec:"committee"`
 	ComputationGroup map[signature.MapKey]*scheduler.CommitteeNode `codec:"computation_group"`
-	Commitments      map[signature.MapKey]*commitment              `codec:"commitments"`
+	Commitments      map[signature.MapKey]*commitment.Commitment   `codec:"commitments"`
 	CurrentBlock     *block.Block                                  `codec:"current_block"`
 	State            state                                         `codec:"state"`
 }
@@ -98,7 +71,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 
 func (s *roundState) reset() {
 	if s.Commitments == nil || len(s.Commitments) > 0 {
-		s.Commitments = make(map[signature.MapKey]*commitment)
+		s.Commitments = make(map[signature.MapKey]*commitment.Commitment)
 	}
 	s.State = stateWaitingCommitments
 }
@@ -108,7 +81,7 @@ type round struct {
 	DidTimeout bool        `codec:"did_timeout"`
 }
 
-func (r *round) addCommitment(store storage.Backend, commitment *commitment) error {
+func (r *round) addCommitment(store storage.Backend, commitment *commitment.Commitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -118,7 +91,7 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment) err
 	}
 
 	// Check the commitment signature and de-serialize into header.
-	if err := commitment.open(); err != nil {
+	if err := commitment.Open(); err != nil {
 		return err
 	}
 	header := commitment.Header
@@ -153,14 +126,14 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment) err
 
 func (r *round) populateFinalizedBlock(block *block.Block) {
 	block.Header.GroupHash.From(r.RoundState.Committee.Members)
-	var blockCommitments []*api.Commitment
+	var blockCommitments []*api.OpaqueCommitment
 	for _, node := range r.RoundState.Committee.Members {
 		id := node.PublicKey.ToMapKey()
 		commit, ok := r.RoundState.Commitments[id]
 		if !ok {
 			continue
 		}
-		blockCommitments = append(blockCommitments, commit.toCommitment())
+		blockCommitments = append(blockCommitments, commit.ToOpaqueCommitment())
 	}
 	block.Header.CommitmentsHash.From(blockCommitments)
 }
@@ -201,7 +174,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *registry.Runtime) (*bloc
 	r.populateFinalizedBlock(block)
 
 	r.RoundState.State = stateFinalized
-	r.RoundState.Commitments = make(map[signature.MapKey]*commitment)
+	r.RoundState.Commitments = make(map[signature.MapKey]*commitment.Commitment)
 
 	return block, nil
 }
