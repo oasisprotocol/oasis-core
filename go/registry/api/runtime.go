@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/hex"
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -22,40 +21,10 @@ var (
 	_ cbor.Unmarshaler = (*Runtime)(nil)
 )
 
-// StoreID is a storage service ID.
-// TODO: Move this to the storage package when it exists.
-type StoreID [32]byte
-
-// MarshalBinary encodes a StoreID into binary form.
-func (id *StoreID) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, id[:]...)
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled StoreID.
-func (id *StoreID) UnmarshalBinary(data []byte) error {
-	const idSize = 32
-
-	if len(data) != idSize {
-		return ErrMalformedStoreID
-	}
-
-	copy(id[:], data)
-	return nil
-}
-
-// String returns a string representation of a StoreID.
-func (id *StoreID) String() string {
-	return hex.EncodeToString(id[:])
-}
-
 // Runtime represents a runtime.
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
 	ID signature.PublicKey `codec:"id"`
-
-	// StoreID is the storage service ID associated with the runtime.
-	StoreID StoreID `codec:"store_id"`
 
 	// Code is the runtime code body.
 	Code []byte `codec:"code"`
@@ -113,10 +82,6 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return err
 	}
 
-	if err := c.StoreID.UnmarshalBinary(pb.GetStoreId()); err != nil {
-		return err
-	}
-
 	c.Code = append([]byte{}, pb.GetCode()...)
 	c.MinimumBond = pb.GetMinimumBond()
 	c.AdvertisementRate = pb.GetAdvertisementRate()
@@ -143,9 +108,6 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	var err error
 
 	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
-		return nil
-	}
-	if pb.StoreId, err = c.StoreID.MarshalBinary(); err != nil {
 		return nil
 	}
 	pb.Code = append([]byte{}, c.Code...)

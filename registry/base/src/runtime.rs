@@ -11,9 +11,6 @@ pub struct Runtime {
     /// Globally unique long term identifier of the Runtime.
     pub id: B256,
 
-    /// Storage service ID associated with the Runtime.
-    pub store_id: B256,
-
     /// The runtime code body.
     pub code: Vec<u8>,
 
@@ -49,12 +46,8 @@ impl TryFrom<api::Runtime> for Runtime {
         let id = a.get_id();
         let id = B256::from_slice(&id);
 
-        let sid = a.get_store_id();
-        let sid = B256::from_slice(&sid);
-
         Ok(Runtime {
             id: id,
-            store_id: sid,
             code: a.get_code().to_vec(),
             minimum_bond: a.minimum_bond,
             mode_nondeterministic: a.get_mode() == api::Runtime_Mode::Nondeterministic,
@@ -75,7 +68,6 @@ impl Into<api::Runtime> for Runtime {
     fn into(self) -> api::Runtime {
         let mut c = api::Runtime::new();
         c.set_id(self.id.to_vec());
-        c.set_store_id(self.store_id.to_vec());
         c.set_code(self.code);
         c.set_minimum_bond(self.minimum_bond);
         if self.mode_nondeterministic {
