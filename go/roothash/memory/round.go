@@ -103,11 +103,6 @@ type round struct {
 	didTimeout bool
 }
 
-func (r *round) reset() {
-	r.roundState.reset()
-	r.didTimeout = false
-}
-
 func (r *round) addCommitment(commitment *commitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
@@ -151,6 +146,20 @@ func (r *round) addCommitment(commitment *commitment) error {
 	return nil
 }
 
+func (r *round) populateFinalizedBlock(block *block.Block) {
+	block.Header.GroupHash.From(r.roundState.committee.Members)
+	var blockCommitments []*api.Commitment
+	for _, node := range r.roundState.committee.Members {
+		id := node.PublicKey.ToMapKey()
+		commit, ok := r.roundState.commitments[id]
+		if !ok {
+			continue
+		}
+		blockCommitments = append(blockCommitments, commit.toCommitment())
+	}
+	block.Header.CommitmentsHash.From(blockCommitments)
+}
+
 func (r *round) tryFinalize() (*block.Block, error) {
 	var err error
 
@@ -179,17 +188,7 @@ func (r *round) tryFinalize() (*block.Block, error) {
 	block := new(block.Block)
 	block.Header = *header
 	block.Header.Timestamp = uint64(time.Now().Unix())
-	block.Header.GroupHash.From(r.roundState.committee.Members)
-	var blockCommitments []*api.Commitment
-	for _, node := range r.roundState.committee.Members {
-		id := node.PublicKey.ToMapKey()
-		commit, ok := r.roundState.commitments[id]
-		if !ok {
-			continue
-		}
-		blockCommitments = append(blockCommitments, commit.toCommitment())
-	}
-	block.Header.CommitmentsHash.From(blockCommitments)
+	r.populateFinalizedBlock(block)
 
 	return block, nil
 }

@@ -8,7 +8,7 @@ use ekiden_common::uint::U256;
 
 use ekiden_roothash_api as api;
 
-use super::header::Header;
+use super::header::{Header, HeaderType};
 
 /// Block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +26,7 @@ impl Block {
                 namespace: child.header.namespace,
                 round: child.header.round + U256::from(1),
                 timestamp: 0,
+                header_type: HeaderType::Normal,
                 previous_hash: child.header.get_encoded_hash(),
                 group_hash: H256::zero(),
                 input_hash: H256::zero(),

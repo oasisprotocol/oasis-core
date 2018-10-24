@@ -97,12 +97,6 @@ func (s *grpcServer) GetEvents(req *pb.EventRequest, stream pb.RootHash_GetEvent
 					BlockHeader: ev.DiscrepancyDetected.BlockHeader.ToProto(),
 				},
 			}
-		} else if ev.RoundFailed != nil {
-			pev.Event = &pb.Event_RoundFailed_{
-				RoundFailed: &pb.Event_RoundFailed{
-					Error: ev.RoundFailed.Error(),
-				},
-			}
 		} else {
 			panic("BUG: invalid/malformed event")
 		}

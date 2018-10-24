@@ -28,6 +28,7 @@ message Header {
   bytes namespace = 2;
   bytes round = 3;
   uint64 timestamp = 4;
+  uint32 header_type = 11;
   bytes previous_hash = 5;
   bytes group_hash = 6;
   bytes input_hash = 7;
@@ -62,16 +63,12 @@ message EventRequest {
 }
 
 message Event {
-  message RoundFailed {
-    string error = 1;
-  }
   message DiscrepancyDetected {
     bytes batch_hash = 1;
     Header block_header = 2;
   }
 
   oneof event {
-    RoundFailed round_failed = 1;
     DiscrepancyDetected discrepancy_detected = 2;
   }
 }

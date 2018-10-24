@@ -140,9 +140,6 @@ type Event struct {
 	// discrepancy is detected to signal to the backup workers that a
 	// computation should be re-executed.
 	DiscrepancyDetected *DiscrepancyDetectedEvent
-
-	// RoundFailed is the error that is set when a round fails.
-	RoundFailed error
 }
 
 // MetricsMonitorable is the interface exposed by backends capable of

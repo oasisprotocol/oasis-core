@@ -483,7 +483,7 @@ func (app *rootHashApplication) tryFinalize(
 		return
 	}
 
-	block, err := runtimeState.Round.tryFinalize(ctx, runtime)
+	blk, err := runtimeState.Round.tryFinalize(ctx, runtime)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -491,9 +491,9 @@ func (app *rootHashApplication) tryFinalize(
 			"round", blockNr,
 		)
 
-		runtimeState.CurrentBlock = block
+		runtimeState.CurrentBlock = blk
 
-		roundNr, _ := block.Header.Round.ToU64()
+		roundNr, _ := blk.Header.Round.ToU64()
 
 		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 		tagV := api.ValueRootHashFinalized{
@@ -558,20 +558,25 @@ func (app *rootHashApplication) tryFinalize(
 		return
 	}
 
-	// Something else went wrong.
+	// Something else went wrong, emit empty error block.
 	app.logger.Error("worker: round failed",
 		"round", blockNr,
 		"err", err,
 	)
 
-	runtimeState.Round.reset()
+	blk = block.NewEmptyBlock(latestBlock, uint64(ctx.Now().Unix()), block.RoundFailed)
+	runtimeState.Round.populateFinalizedBlock(blk)
+
+	runtimeState.CurrentBlock = blk
+
+	roundNr, _ := blk.Header.Round.ToU64()
 
 	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-	tagV := api.ValueRootHashRoundFailed{
-		ID:     id,
-		Reason: err.Error(),
+	tagV := api.ValueRootHashFinalized{
+		ID:    id,
+		Round: roundNr,
 	}
-	ctx.EmitTag(api.TagRootHashRoundFailed, tagV.MarshalCBOR())
+	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
 }
 
 // New constructs a new roothash application instance.

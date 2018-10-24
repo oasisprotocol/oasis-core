@@ -77,11 +77,7 @@ impl RootHashBackend for RootHashClient {
                 Ok(r) => {
                     let event = r.get_event();
 
-                    if event.has_round_failed() {
-                        Ok(Event::RoundFailed(Error::new(
-                            event.get_round_failed().get_error().to_owned(),
-                        )))
-                    } else if event.has_discrepancy_detected() {
+                    if event.has_discrepancy_detected() {
                         Ok(Event::DiscrepancyDetected(
                             H256::from(event.get_discrepancy_detected().get_batch_hash()),
                             Header::try_from(
