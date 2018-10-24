@@ -116,25 +116,28 @@ func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) er
 	return wrErr
 }
 
-func (b *leveldbBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
-	var kiVec []*api.KeyInfo
+func (b *leveldbBackend) GetKeys() (<-chan api.KeyInfo, error) {
+	kiChan := make(chan api.KeyInfo)
 
-	iter := b.db.NewIterator(util.BytesPrefix(prefixValues), nil)
-	defer iter.Release()
+	go func() {
+		iter := b.db.NewIterator(util.BytesPrefix(prefixValues), nil)
+		defer iter.Release()
+		defer close(kiChan)
 
-	for iter.Next() {
-		// TODO: Fetch actual expiration.
-		ki := &api.KeyInfo{
-			Expiration: epochtime.EpochInvalid,
+		for iter.Next() {
+			// TODO: Fetch actual expiration.
+			ki := api.KeyInfo{
+				Expiration: epochtime.EpochInvalid,
+			}
+			copy(ki.Key[:], iter.Key()[len(prefixValues):])
+			kiChan <-ki
 		}
-		copy(ki.Key[:], iter.Key()[len(prefixValues):])
-		kiVec = append(kiVec, ki)
-	}
-	if err := iter.Error(); err != nil {
-		return nil, err
-	}
+		if err := iter.Error(); err != nil {
+			b.logger.Error("leveldbBackend GetKeys iter.Error", "err", err)
+		}
+	}()
 
-	return kiVec, nil
+	return kiChan, nil
 }
 
 func (b *leveldbBackend) PurgeExpired(epoch epochtime.EpochTime) {

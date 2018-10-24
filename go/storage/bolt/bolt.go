@@ -186,37 +186,40 @@ func (b *boltBackend) InsertBatch(ctx context.Context, values []api.Value) error
 	return err
 }
 
-func (b *boltBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
-	var kiVec []*api.KeyInfo
-
+func (b *boltBackend) GetKeys() (<-chan api.KeyInfo, error) {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return nil, api.ErrIncoherentTime
 	}
 
-	if err := b.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bktExpirations)
-		bkt = bkt.Bucket(bktByKey)
-		return bkt.ForEach(func(k, v []byte) error {
-			// Omit expired keys.
-			exp := epochTimeFromRaw(v)
-			if exp < epoch {
+	kiChan := make(chan api.KeyInfo)
+
+	go func() {
+		defer close(kiChan)
+		if err := b.db.View(func(tx *bolt.Tx) error {
+			bkt := tx.Bucket(bktExpirations)
+			bkt = bkt.Bucket(bktByKey)
+			return bkt.ForEach(func(k, v []byte) error {
+				// Omit expired keys.
+				exp := epochTimeFromRaw(v)
+				if exp < epoch {
+					return nil
+				}
+
+				ki := api.KeyInfo{
+					Expiration: exp,
+				}
+				copy(ki.Key[:], k)
+				kiChan <-ki
+
 				return nil
-			}
+			})
+		}); err != nil {
+			b.logger.Error("boltBackend GetKeys View", "err", err)
+		}
+	}()
 
-			ki := &api.KeyInfo{
-				Expiration: exp,
-			}
-			copy(ki.Key[:], k)
-			kiVec = append(kiVec, ki)
-
-			return nil
-		})
-	}); err != nil {
-		return nil, err
-	}
-
-	return kiVec, nil
+	return kiChan, nil
 }
 
 func (b *boltBackend) PurgeExpired(epoch epochtime.EpochTime) {

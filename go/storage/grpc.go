@@ -77,19 +77,34 @@ func (s *grpcServer) InsertBatch(ctx context.Context, req *pb.InsertBatchRequest
 	return &pb.InsertBatchResponse{}, nil
 }
 
-func (s *grpcServer) GetKeys(ctx context.Context, req *pb.GetKeysRequest) (*pb.GetKeysResponse, error) {
-	kiVec, err := s.backend.GetKeys(ctx)
+func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysServer) error {
+	ch, err := s.backend.GetKeys()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var resp pb.GetKeysResponse
-	for _, v := range kiVec {
-		resp.Keys = append(resp.Keys, v.Key[:])
-		resp.Expiry = append(resp.Expiry, uint64(v.Expiration))
+	for {
+		var ki api.KeyInfo
+		var ok bool
+
+		select {
+		case ki, ok = <-ch:
+		case <-stream.Context().Done():
+		}
+		if !ok {
+			break
+		}
+
+		resp := &pb.GetKeysResponse{
+			Key:    ki.Key[:],
+			Expiry: uint64(ki.Expiration),
+		}
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
 	}
 
-	return &resp, nil
+	return nil
 }
 
 // NewGRPCServer intializes and registers a grpc storage server backed

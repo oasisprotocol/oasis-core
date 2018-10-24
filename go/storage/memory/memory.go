@@ -117,20 +117,24 @@ func (b *memoryBackend) InsertBatch(ctx context.Context, values []api.Value) err
 	return nil
 }
 
-func (b *memoryBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
-	b.RLock()
-	defer b.RUnlock()
+func (b *memoryBackend) GetKeys() (<-chan api.KeyInfo, error) {
+	kiChan := make(chan api.KeyInfo)
 
-	kiVec := make([]*api.KeyInfo, 0, len(b.store))
-	for k, ent := range b.store {
-		ki := &api.KeyInfo{
-			Key:        k,
-			Expiration: ent.expiration,
+	go func() {
+		b.RLock()
+		defer b.RUnlock()
+		defer close(kiChan)
+
+		for k, ent := range b.store {
+			ki := api.KeyInfo{
+				Key:        k,
+				Expiration: ent.expiration,
+			}
+			kiChan <-ki
 		}
-		kiVec = append(kiVec, ki)
-	}
+	}()
 
-	return kiVec, nil
+	return kiChan, nil
 }
 
 func (b *memoryBackend) PurgeExpired(epoch epochtime.EpochTime) {

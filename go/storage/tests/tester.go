@@ -91,9 +91,11 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	seenKeys := make(map[api.Key]bool)
 	keyInfos, err := backend.GetKeys(context.Background())
 	require.NoError(t, err, "GetKeys()")
-	for i, ki := range keyInfos {
+	i := 0
+	for ki := range keyInfos {
 		seenKeys[ki.Key] = true
 		require.Equal(t, epochtime.EpochTime(1), ki.Expiration, "KeyInfo[%d]: Expiration", i)
+		i++
 	}
 	for i, h := range hashes {
 		require.True(t, seenKeys[h], "KeyInfo[%d]: Key", i)
