@@ -302,6 +302,8 @@ pub struct RootHashTestOnlyConfiguration {
     pub inject_discrepancy: bool,
     /// Fail after commit.
     pub fail_after_commit: bool,
+    /// Skip sending a commit until a given round.
+    pub skip_commit_until_round: u64,
 }
 
 /// Root hash frontend configuration.
@@ -1038,6 +1040,17 @@ impl RootHashFrontend {
             })
             .and_then(move |_| {
                 require_state!(inner, State::WaitingForFinalize(..), "proposing batch");
+
+                // Test mode: skip commit.
+                #[cfg(feature = "testing")]
+                {
+                    if inner.test_only_config.skip_commit_until_round
+                        > computed_batch.block.header.round.as_u64()
+                    {
+                        warn!("TEST MODE: skipping commit");
+                        return future::ok(()).into_box();
+                    }
+                }
 
                 measure_counter_inc!("proposed_batch_count");
 

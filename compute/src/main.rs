@@ -246,6 +246,13 @@ fn main() {
                 .help("TEST ONLY OPTION: fail after commit")
                 .hidden(true)
         )
+        .arg(
+            Arg::with_name("test-skip-commit-until-round")
+                .long("test-skip-commit-until-round")
+                .help("TEST ONLY OPTION: skip commit until given round")
+                .takes_value(true)
+                .hidden(true)
+        )
         .args(&known_components.get_arguments())
         .args(&ekiden_tracing::get_arguments())
         .get_matches();
@@ -304,6 +311,8 @@ fn main() {
                 test_only: RootHashTestOnlyConfiguration {
                     inject_discrepancy: matches.is_present("test-inject-discrepancy"),
                     fail_after_commit: matches.is_present("test-fail-after-commit"),
+                    skip_commit_until_round: value_t!(matches, "test-skip-commit-until-round", u64)
+                        .unwrap_or(0),
                 },
             },
             // IAS configuration.
