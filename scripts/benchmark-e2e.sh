@@ -17,7 +17,7 @@ run_dummy_node_storage_dummy() {
         --scheduler.backend trivial \
         --registry.backend memory \
         --datadir ${datadir} \
-        2>${LOGDIR}/dummy.log &
+        >${LOGDIR}/dummy.log &
 }
 
 run_dummy_node_storage_persistent() {
@@ -33,7 +33,7 @@ run_dummy_node_storage_persistent() {
         --scheduler.backend trivial \
         --registry.backend memory \
         --datadir ${datadir} \
-        2>${LOGDIR}/dummy.log &
+        >${LOGDIR}/dummy.log &
 }
 
 run_dummy_node_tendermint() {
@@ -51,7 +51,7 @@ run_dummy_node_tendermint() {
         --roothash.backend tendermint \
         --tendermint.consensus.timeout_commit 250ms \
         --datadir ${datadir} \
-        2>${LOGDIR}/dummy.log &
+        >${LOGDIR}/dummy.log &
 }
 
 run_compute_node() {
@@ -139,7 +139,7 @@ run_benchmark() {
     done
 
     # Run the client.
-    ${WORKDIR}/target/release/${client}-client \
+    RUST_LOG=info ${WORKDIR}/target/release/${client}-client \
         --storage-backend remote \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
         --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
