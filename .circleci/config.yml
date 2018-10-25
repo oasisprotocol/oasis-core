@@ -126,6 +126,7 @@ jobs:
             --exclude ekiden-untrusted \
             --exclude ekiden-enclave-untrusted \
             --exclude ekiden-rpc-untrusted \
+            --exclude test-db-encryption \
             --exclude ekiden-db-trusted \
             --exclude ekiden-db-untrusted \
             --exclude ekiden-runtime-untrusted \
