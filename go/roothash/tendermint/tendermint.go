@@ -261,7 +261,7 @@ func (r *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Eve
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, commit *api.Commitment) error {
+func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, commit *api.OpaqueCommitment) error {
 	tx := tmapi.TxRootHash{
 		TxCommit: &tmapi.TxCommit{
 			ID:         id,

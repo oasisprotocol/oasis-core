@@ -168,7 +168,8 @@ jobs:
       - run: cd go && go generate ./...
       - run: cd go && /tmp/bin/golangci-lint run
       - run: cd go && go build -v -o ./ekiden/ekiden ./ekiden
-      - run: cd go && go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
+      - run: cd go && go test -race -coverprofile=coverage.txt -covermode=atomic -v `go list ./... | grep -v github.com/oasislabs/ekiden/go/ekiden`
+      - run: cd go/ekiden && go test -race -coverpkg ../... -coverprofile=coverage.txt -covermode=atomic -v
       - run: bash <(curl -s https://codecov.io/bash) -Z
       - save_cache:
           key: go-cache

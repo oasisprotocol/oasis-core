@@ -118,7 +118,7 @@ func (s *grpcServer) Commit(ctx context.Context, req *pb.CommitRequest) (*pb.Com
 		return nil, err
 	}
 
-	var commit api.Commitment
+	var commit api.OpaqueCommitment
 	if err := commit.FromProto(req.Commitment); err != nil {
 		return nil, err
 	}

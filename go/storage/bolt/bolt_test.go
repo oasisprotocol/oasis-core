@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
-	"github.com/oasislabs/ekiden/go/storage/internal/tester"
+	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 func TestStorageBolt(t *testing.T) {
@@ -22,5 +22,5 @@ func TestStorageBolt(t *testing.T) {
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 
-	tester.StorageImplementationTest(t, backend, timeSource, true)
+	tests.StorageImplementationTests(t, backend, timeSource, true)
 }

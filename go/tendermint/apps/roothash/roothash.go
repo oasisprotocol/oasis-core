@@ -18,6 +18,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
@@ -389,7 +390,7 @@ func (app *rootHashApplication) commit(
 	ctx *abci.Context,
 	state *MutableState,
 	id signature.PublicKey,
-	commit *roothash.Commitment,
+	commit *roothash.OpaqueCommitment,
 ) error {
 	runtimeState, err := state.GetRuntimeState(id)
 	if err != nil {
@@ -405,8 +406,8 @@ func (app *rootHashApplication) commit(
 		return errors.Wrap(err, "roothash: failed to fetch runtime")
 	}
 
-	var c commitment
-	if err = c.fromCommitment(commit); err != nil {
+	var c commitment.Commitment
+	if err = c.FromOpaqueCommitment(commit); err != nil {
 		return errors.Wrap(err, "roothash: failed to unmarshal commitment")
 	}
 

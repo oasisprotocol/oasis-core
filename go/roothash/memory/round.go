@@ -7,54 +7,25 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
 var (
-	commitmentSignatureContext = []byte("EkCommit")
-
 	errStillWaiting      = errors.New("roothash/memory: still waiting for commits")
 	errInsufficientVotes = errors.New("roothash/memory: insufficient votes to finalize discrepancy resolution round")
-
-	_ cbor.Marshaler   = (*commitment)(nil)
-	_ cbor.Unmarshaler = (*commitment)(nil)
 )
 
 type errDiscrepancyDetected hash.Hash
 
 func (e errDiscrepancyDetected) Error() string {
 	return fmt.Sprintf("roothash/memory: discrepancy detected: %v", hash.Hash(e))
-}
-
-type commitment struct {
-	signature.Signed
-
-	header *block.Header
-}
-
-func (c *commitment) fromCommitment(commit *api.Commitment) error {
-	return c.UnmarshalCBOR(commit.Data)
-}
-
-func (c *commitment) toCommitment() *api.Commitment {
-	return &api.Commitment{Data: c.MarshalCBOR()}
-}
-
-func (c *commitment) open() error {
-	var header block.Header
-	if err := c.Signed.Open(commitmentSignatureContext, &header); err != nil {
-		return errors.New("roothash/memory: commitment has invalid signature")
-	}
-	c.header = &header
-
-	return nil
 }
 
 type state uint
@@ -68,7 +39,7 @@ type roundState struct {
 	runtime          *registry.Runtime
 	committee        *scheduler.Committee
 	computationGroup map[signature.MapKey]*scheduler.CommitteeNode
-	commitments      map[signature.MapKey]*commitment
+	commitments      map[signature.MapKey]*commitment.Commitment
 	currentBlock     *block.Block
 	state            state
 }
@@ -93,7 +64,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 }
 
 func (s *roundState) reset() {
-	s.commitments = make(map[signature.MapKey]*commitment)
+	s.commitments = make(map[signature.MapKey]*commitment.Commitment)
 	s.state = stateWaitingCommitments
 }
 
@@ -103,7 +74,7 @@ type round struct {
 	didTimeout bool
 }
 
-func (r *round) addCommitment(commitment *commitment) error {
+func (r *round) addCommitment(commitment *commitment.Commitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -113,10 +84,10 @@ func (r *round) addCommitment(commitment *commitment) error {
 	}
 
 	// Check the commitment signature and de-serialize into header.
-	if err := commitment.open(); err != nil {
+	if err := commitment.Open(); err != nil {
 		return err
 	}
-	header := commitment.header
+	header := commitment.Header
 
 	// Ensure the node did not already submit a commitment.
 	if _, ok := r.roundState.commitments[id]; ok {
@@ -148,14 +119,14 @@ func (r *round) addCommitment(commitment *commitment) error {
 
 func (r *round) populateFinalizedBlock(block *block.Block) {
 	block.Header.GroupHash.From(r.roundState.committee.Members)
-	var blockCommitments []*api.Commitment
+	var blockCommitments []*api.OpaqueCommitment
 	for _, node := range r.roundState.committee.Members {
 		id := node.PublicKey.ToMapKey()
 		commit, ok := r.roundState.commitments[id]
 		if !ok {
 			continue
 		}
-		blockCommitments = append(blockCommitments, commit.toCommitment())
+		blockCommitments = append(blockCommitments, commit.ToOpaqueCommitment())
 	}
 	block.Header.CommitmentsHash.From(blockCommitments)
 }
@@ -210,7 +181,7 @@ func (r *round) forceBackupTransition() error {
 		}
 
 		r.roundState.state = stateDiscrepancyWaitingCommitments
-		return errDiscrepancyDetected(commit.header.InputHash)
+		return errDiscrepancyDetected(commit.Header.InputHash)
 	}
 
 	return fmt.Errorf("roothash/memory: no input hash available for backup transition")
@@ -231,9 +202,9 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		}
 
 		if header == nil {
-			header = commit.header
+			header = commit.Header
 		}
-		if !header.Equal(commit.header) {
+		if !header.Equal(commit.Header) {
 			discrepancyDetected = true
 		}
 	}
@@ -265,10 +236,10 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		k := commit.header.EncodedHash()
+		k := commit.Header.EncodedHash()
 		if ent, ok := votes[k]; !ok {
 			votes[k] = &voteEnt{
-				header: commit.header,
+				header: commit.Header,
 				tally:  1,
 			}
 		} else {

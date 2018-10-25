@@ -79,6 +79,11 @@ var (
 // MapKey is a PublicKey as a fixed sized byte array for use as a map key.
 type MapKey [PublicKeySize]byte
 
+// String returns a string representation of the MapKey.
+func (k MapKey) String() string {
+	return hex.EncodeToString(k[:])
+}
+
 // PublicKey is a public key used for signing.
 type PublicKey ed25519.PublicKey
 

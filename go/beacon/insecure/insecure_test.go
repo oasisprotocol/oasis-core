@@ -3,20 +3,16 @@ package insecure
 import (
 	"encoding/hex"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/beacon/tests"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 )
 
 func TestBeaconInsecure(t *testing.T) {
-	const (
-		farFuture   = 0xcafebabedeadbeef
-		recvTimeout = 1 * time.Second
-	)
+	const farFuture = 0xcafebabedeadbeef
 
 	timeSource := mock.New()
 	r := New(timeSource)
@@ -33,16 +29,6 @@ func TestBeaconInsecure(t *testing.T) {
 		"GetBeacon(0)",
 	)
 
-	ch, sub := r.WatchBeacons()
-	defer sub.Close()
-	select {
-	case ev := <-ch:
-		require.Equal(t, epochtime.EpochTime(0), ev.Epoch, "Event[0]: Epoch")
-		require.EqualValues(t, b, ev.Beacon, "Event[0]: Beacon")
-	case <-time.After(recvTimeout):
-		t.Fatalf("Failed to receive current beacon on WatchBeacons()")
-	}
-
 	b, err = r.GetBeacon(context.Background(), farFuture)
 	require.NoError(t, err, "GetBeacon(0)")
 	require.Equal(
@@ -53,14 +39,5 @@ func TestBeaconInsecure(t *testing.T) {
 		uint64(farFuture),
 	)
 
-	err = timeSource.SetEpoch(context.Background(), farFuture, 0)
-	require.NoError(t, err, "SetEpoch(farFuture)")
-
-	select {
-	case ev := <-ch:
-		require.Equal(t, epochtime.EpochTime(farFuture), ev.Epoch, "Event[farFuture]: Epoch")
-		require.EqualValues(t, b, ev.Beacon, "Event[farFuture]: Beacon")
-	case <-time.After(recvTimeout):
-		t.Fatalf("Failed to receive beacon notification after transition")
-	}
+	tests.BeaconImplementationTests(t, r, timeSource)
 }

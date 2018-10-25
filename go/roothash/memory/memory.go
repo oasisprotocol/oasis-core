@@ -17,6 +17,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -40,7 +41,7 @@ var (
 )
 
 type commitCmd struct {
-	commitment *commitment
+	commitment *commitment.Commitment
 	errCh      chan error
 }
 
@@ -410,14 +411,14 @@ func (r *memoryRootHash) WatchEvents(id signature.PublicKey) (<-chan *api.Event,
 	return ch, sub, nil
 }
 
-func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, commit *api.Commitment) error {
+func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, commit *api.OpaqueCommitment) error {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return err
 	}
 
-	var c commitment
-	if err = c.fromCommitment(commit); err != nil {
+	var c commitment.Commitment
+	if err = c.FromOpaqueCommitment(commit); err != nil {
 		return err
 	}
 

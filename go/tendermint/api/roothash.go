@@ -58,7 +58,7 @@ type TxRootHash struct {
 // TxCommit is a transaction for submitting a roothash commitment.
 type TxCommit struct {
 	ID         signature.PublicKey
-	Commitment roothash.Commitment
+	Commitment roothash.OpaqueCommitment
 }
 
 // QueryGetLatestBlock is a request for fetching the latest block.

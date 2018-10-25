@@ -31,33 +31,33 @@ var (
 
 	errNilProtobuf = errors.New("roothash: protobuf is nil")
 
-	_ encoding.BinaryMarshaler   = (*Commitment)(nil)
-	_ encoding.BinaryUnmarshaler = (*Commitment)(nil)
+	_ encoding.BinaryMarshaler   = (*OpaqueCommitment)(nil)
+	_ encoding.BinaryUnmarshaler = (*OpaqueCommitment)(nil)
 	_ cbor.Marshaler             = (*DiscrepancyDetectedEvent)(nil)
 	_ cbor.Unmarshaler           = (*DiscrepancyDetectedEvent)(nil)
 )
 
-// Commitment is a backend specific commitment from a compute node.
-type Commitment struct {
+// OpaqueCommitment is an opaque commitment from a compute node.
+type OpaqueCommitment struct {
 	// Data is the opaque commitment.
 	Data []byte
 }
 
-// MarshalBinary encodes a commitment into binary form.
-func (c *Commitment) MarshalBinary() (data []byte, err error) {
+// MarshalBinary encodes an opaque commitment into binary form.
+func (c *OpaqueCommitment) MarshalBinary() (data []byte, err error) {
 	data = append([]byte{}, c.Data...)
 	return
 }
 
-// UnmarshalBinary decodes a binary marshaled commitment.
-func (c *Commitment) UnmarshalBinary(data []byte) error {
+// UnmarshalBinary decodes a binary marshaled opaque commitment.
+func (c *OpaqueCommitment) UnmarshalBinary(data []byte) error {
 	c.Data = append([]byte{}, data...)
 
 	return nil
 }
 
-// FromProto deserializes a protobuf into a commitment.
-func (c *Commitment) FromProto(pb *pbRoothash.Commitment) error {
+// FromProto deserializes a protobuf into an opaque commitment.
+func (c *OpaqueCommitment) FromProto(pb *pbRoothash.Commitment) error {
 	if pb == nil {
 		return errNilProtobuf
 	}
@@ -65,8 +65,8 @@ func (c *Commitment) FromProto(pb *pbRoothash.Commitment) error {
 	return c.UnmarshalBinary(pb.GetData())
 }
 
-// ToProto serializes a commitment into a protobuf.
-func (c *Commitment) ToProto() *pbRoothash.Commitment {
+// ToProto serializes an opaque commitment into a protobuf.
+func (c *OpaqueCommitment) ToProto() *pbRoothash.Commitment {
 	pb := new(pbRoothash.Commitment)
 
 	pb.Data, _ = c.MarshalBinary()
@@ -74,8 +74,8 @@ func (c *Commitment) ToProto() *pbRoothash.Commitment {
 	return pb
 }
 
-// String returns a string representation of the commitment.
-func (c *Commitment) String() string {
+// String returns a string representation of the opaque commitment.
+func (c *OpaqueCommitment) String() string {
 	return hex.EncodeToString(c.Data)
 }
 
@@ -106,7 +106,7 @@ type Backend interface {
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
 
 	// Commit commits to a result of processing a batch of runtime invocations.
-	Commit(context.Context, signature.PublicKey, *Commitment) error
+	Commit(context.Context, signature.PublicKey, *OpaqueCommitment) error
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()

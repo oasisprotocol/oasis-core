@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
-	"github.com/oasislabs/ekiden/go/storage/tests"
+	"github.com/oasislabs/ekiden/go/registry/tests"
 )
 
-func TestStorageMemory(t *testing.T) {
+func TestRegistryMemory(t *testing.T) {
 	timeSource := mock.New()
 	backend := New(timeSource)
 	defer backend.Cleanup()
 
-	tests.StorageImplementationTests(t, backend, timeSource, true)
+	tests.RegistryImplementationTests(t, backend, timeSource)
 }

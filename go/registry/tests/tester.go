@@ -1,0 +1,535 @@
+// Package tests is a collection of registry implementation test cases.
+package tests
+
+import (
+	"crypto"
+	"errors"
+	"io"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
+
+	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
+	"github.com/oasislabs/ekiden/go/common/ethereum"
+	"github.com/oasislabs/ekiden/go/common/node"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
+	"github.com/oasislabs/ekiden/go/registry/api"
+)
+
+const recvTimeout = 1 * time.Second
+
+// RegistryImplementationTests exercises the basic functionality of a
+// registry backend.
+//
+// WARNING: This assumes that the registry is empty, and will leave
+// a Runtime registered.
+func RegistryImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend) {
+	EnsureRegistryEmpty(t, backend)
+
+	testRegistryEntityNodes(t, backend, epochtime)
+
+	// Runtime registry tests are after the entity/node tests to avoid
+	// interacting with the scheduler as much as possible.
+	t.Run("Runtime", func(t *testing.T) {
+		testRegistryRuntime(t, backend)
+	})
+}
+
+func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+	// Generate the entities used for the test cases.
+	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
+	require.NoError(t, err, "NewTestEntities")
+
+	epoch, _, err := timeSource.GetEpoch(context.Background())
+	require.NoError(t, err, "GetEpoch")
+
+	// All of these tests are combined because the Entity and Node structures
+	// are linked togehter.
+
+	entityCh, entitySub := backend.WatchEntities()
+	defer entitySub.Close()
+
+	t.Run("EntityRegistration", func(t *testing.T) {
+		require := require.New(t)
+
+		for _, v := range entities {
+			err := backend.RegisterEntity(context.Background(), v.SignedRegistration)
+			require.NoError(err, "RegisterEntity")
+
+			select {
+			case ev := <-entityCh:
+				require.EqualValues(v.Entity, ev.Entity, "registered entity")
+				require.True(ev.IsRegistration, "event is registration")
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to receive entity registration event")
+			}
+		}
+
+		for _, v := range entities {
+			ent, err := backend.GetEntity(context.Background(), v.Entity.ID)
+			require.NoError(err, "GetEntity")
+			require.EqualValues(v.Entity, ent, "retrieved entity")
+		}
+
+		registeredEntities, err := backend.GetEntities(context.Background())
+		require.NoError(err, "GetEntities")
+		require.Len(registeredEntities, len(entities), "entities after registration")
+
+		seen := make(map[signature.MapKey]bool)
+		for _, ent := range registeredEntities {
+			var isValid bool
+			for _, v := range entities {
+				if v.Entity.ID.Equal(ent.ID) {
+					require.EqualValues(v.Entity, ent, "bulk retrieved entity")
+					seen[ent.ID.ToMapKey()] = true
+					isValid = true
+					break
+				}
+			}
+			require.True(isValid, "bulk retrived entity was one registered")
+		}
+		require.Len(seen, len(entities), "unique bulk retrived entities")
+	})
+
+	// Node tests, because there needs to be entities.
+	var numNodes int
+	nodes := make([][]*TestNode, 0, len(entities))
+	for i, v := range entities {
+		entityNodes, err := v.NewTestNodes(i+1, epoch+epochtime.EpochTime(i)+1)
+		require.NoError(t, err, "NewTestNodes")
+
+		nodes = append(nodes, entityNodes)
+		numNodes += len(entityNodes)
+	}
+
+	nodeCh, nodeSub := backend.WatchNodes()
+	defer nodeSub.Close()
+
+	t.Run("NodeRegistration", func(t *testing.T) {
+		require := require.New(t)
+
+		for _, vec := range nodes {
+			for _, v := range vec {
+				err := backend.RegisterNode(context.Background(), v.SignedRegistration)
+				require.NoError(err, "RegisterNode")
+
+				select {
+				case ev := <-nodeCh:
+					require.EqualValues(v.Node, ev.Node, "registered node")
+					require.True(ev.IsRegistration, "event is registration")
+				case <-time.After(recvTimeout):
+					t.Fatalf("failed to receive node registration event")
+				}
+
+				nod, err := backend.GetNode(context.Background(), v.Node.ID)
+				require.NoError(err, "GetNode")
+				require.EqualValues(v.Node, nod, "retrieved node")
+			}
+		}
+	})
+
+	t.Run("NodeList", func(t *testing.T) {
+		require := require.New(t)
+
+		// Derive the expected node list.
+		expectedNodeList := make([]*node.Node, 0, numNodes)
+		for _, vec := range nodes {
+			for _, v := range vec {
+				expectedNodeList = append(expectedNodeList, v.Node)
+			}
+		}
+		api.SortNodeList(expectedNodeList)
+
+		ch, sub := backend.WatchNodeList()
+		defer sub.Close()
+
+		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+	recvLoop:
+		for {
+			select {
+			case ev := <-ch:
+				// Skip the old node list.
+				if ev.Epoch < epoch {
+					continue
+				}
+
+				require.Equal(epoch, ev.Epoch, "node list epoch")
+				require.EqualValues(expectedNodeList, ev.Nodes, "node list")
+				break recvLoop
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to recevive node list event")
+			}
+		}
+	})
+
+	// TODO: Node expiration once that is supported.
+
+	t.Run("EntityDeregistration", func(t *testing.T) {
+		require := require.New(t)
+
+		for _, v := range entities {
+			err := backend.DeregisterEntity(context.Background(), v.SignedDeregistration)
+			require.NoError(err, "DeregisterEntity")
+
+			select {
+			case ev := <-entityCh:
+				require.EqualValues(v.Entity, ev.Entity, "deregistered entity")
+				require.False(ev.IsRegistration, "event is deregistration")
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to receive entity deregistration event")
+			}
+		}
+
+		for _, v := range entities {
+			_, err := backend.GetEntity(context.Background(), v.Entity.ID)
+			// require.Equal(registry.ErrNoSuchEntity, err, "GetEntity")
+			require.Error(err, "GetEntity") // XXX: tendermint backend doesn't use api errors.
+		}
+	})
+
+	t.Run("NodeDeregistrationViaEntity", func(t *testing.T) {
+		require := require.New(t)
+
+		deregisteredNodes := make(map[signature.MapKey]*node.Node)
+
+		// Until node expiration is supported, we should get node deregistration
+		// events for every single node, after all the entities are de-registered.
+		for i := 0; i < numNodes; i++ {
+			select {
+			case ev := <-nodeCh:
+				require.False(ev.IsRegistration, "event is deregistration")
+				deregisteredNodes[ev.Node.ID.ToMapKey()] = ev.Node
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to receive node deregistration event")
+			}
+		}
+		require.Len(deregisteredNodes, numNodes, "deregistration events")
+
+		for _, vec := range nodes {
+			for _, v := range vec {
+				n, ok := deregisteredNodes[v.Node.ID.ToMapKey()]
+				require.True(ok, "got deregister event for node")
+				require.EqualValues(v.Node, n, "deregistered node")
+			}
+		}
+	})
+
+	// TODO: Test the various failures. (ErrNoSuchEntity is already covered)
+
+	EnsureRegistryEmpty(t, backend)
+}
+
+func testRegistryRuntime(t *testing.T, backend api.Backend) {
+	require := require.New(t)
+
+	rt, err := NewTestRuntime([]byte("testRegistryRuntime"))
+	require.NoError(err, "NewTestRuntime")
+
+	rt.MustRegister(t, backend)
+
+	// TODO: Test the various failures.
+
+	// No way to de-register the runtime, so it will be left there,
+	// stash it in a global so it can be reused by other tests.
+}
+
+// EnsureRegistryEmpty enforces that the registry has no entities or nodes
+// registered.
+//
+// Note: Runtimes are allowed, as there is no way to deregister them
+// (or iterate over them easily for that matter).
+func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
+	registeredEntities, err := backend.GetEntities(context.Background())
+	require.NoError(t, err, "GetEntities")
+	require.Len(t, registeredEntities, 0, "registered entities")
+
+	registeredNodes, err := backend.GetNodes(context.Background())
+	require.NoError(t, err, "GetNodes")
+	require.Len(t, registeredNodes, 0, "registered nodes")
+}
+
+// TestEntity is a testing Entity and some common pre-generated/signed
+// blobs useful for testing.
+type TestEntity struct {
+	Entity     *entity.Entity
+	PrivateKey signature.PrivateKey
+
+	SignedRegistration   *entity.SignedEntity
+	SignedDeregistration *signature.SignedPublicKey
+}
+
+// TestNode is a testing Node and some common pre-generated/signed blobs
+// useful for testing.
+type TestNode struct {
+	Node       *node.Node
+	PrivateKey signature.PrivateKey
+
+	SignedRegistration *node.SignedNode
+}
+
+// NewTestNodes returns the specified number of TestNodes, generated
+// deterministically using the entity's public key as the seed.
+func (ent *TestEntity) NewTestNodes(n int, expiration epochtime.EpochTime) ([]*TestNode, error) {
+	if n <= 0 || n > 254 {
+		return nil, errors.New("registry/tests: test node count out of bounds")
+	}
+
+	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID), nil, []byte("TestNodes"))
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]*TestNode, 0, n)
+	for i := 0; i < n; i++ {
+		var nod TestNode
+		if nod.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
+			return nil, err
+		}
+		nod.Node = &node.Node{
+			ID:         nod.PrivateKey.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Stake:      []byte("You use a wooden stake, silver or sunlight to kill them."),
+		}
+		if nod.Node.EthAddress, err = newEthAddress(rng); err != nil {
+			return nil, err
+		}
+		addr, err := node.NewAddress(node.AddressFamilyIPv4, []byte{192, 0, 2, byte(i + 1)}, 451)
+		if err != nil {
+			return nil, err
+		}
+		nod.Node.Addresses = append(nod.Node.Addresses, *addr)
+
+		signed, err := signature.SignSigned(ent.PrivateKey, api.RegisterNodeSignatureContext, nod.Node)
+		if err != nil {
+			return nil, err
+		}
+		nod.SignedRegistration = &node.SignedNode{Signed: *signed}
+
+		nodes = append(nodes, &nod)
+	}
+
+	return nodes, nil
+}
+
+// NewTestEntities returns the specified number of TestEntities, generated
+// deterministically from the seed.
+func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
+	rng, err := drbg.New(crypto.SHA512, hashForDrbg(seed), nil, []byte("TestEntity"))
+	if err != nil {
+		return nil, err
+	}
+
+	entities := make([]*TestEntity, 0, n)
+	for i := 0; i < n; i++ {
+		var ent TestEntity
+		if ent.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
+			return nil, err
+		}
+		ent.Entity = &entity.Entity{
+			ID: ent.PrivateKey.Public(),
+		}
+		if ent.Entity.EthAddress, err = newEthAddress(rng); err != nil {
+			return nil, err
+		}
+
+		signed, err := signature.SignSigned(ent.PrivateKey, api.RegisterEntitySignatureContext, ent.Entity)
+		if err != nil {
+			return nil, err
+		}
+		ent.SignedRegistration = &entity.SignedEntity{Signed: *signed}
+
+		signed, err = signature.SignSigned(ent.PrivateKey, api.DeregisterEntitySignatureContext, ent.Entity.ID)
+		if err != nil {
+			return nil, err
+		}
+		ent.SignedDeregistration = &signature.SignedPublicKey{Signed: *signed}
+
+		entities = append(entities, &ent)
+	}
+
+	return entities, nil
+}
+
+// TestRuntime is a testing Runtime and some common pre-generated/signed
+// blobs useful for testing.
+type TestRuntime struct {
+	Runtime    *api.Runtime
+	PrivateKey signature.PrivateKey
+
+	SignedRegistration *api.SignedRuntime
+
+	entity *TestEntity
+	nodes  []*TestNode
+}
+
+// MustRegister registers the TestRuntime with the provided registry.
+func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend) {
+	require := require.New(t)
+
+	ch, sub := backend.WatchRuntimes()
+	defer sub.Close()
+
+	err := backend.RegisterRuntime(context.Background(), rt.SignedRegistration)
+	require.NoError(err, "RegisterRuntime")
+
+	for {
+		select {
+		case v := <-ch:
+			if !rt.Runtime.ID.Equal(v.ID) {
+				continue
+			}
+			require.EqualValues(rt.Runtime, v, "registered runtime")
+			return
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive runtime registration event")
+		}
+	}
+}
+
+// Populate populates the registry for a given TestRuntime.
+func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, runtime *TestRuntime, seed []byte) []*node.Node {
+	require := require.New(t)
+
+	require.Nil(rt.entity, "runtime has no associated entity")
+	require.Nil(rt.nodes, "runtime has no associated nodes")
+
+	EnsureRegistryEmpty(t, backend)
+
+	entityCh, entitySub := backend.WatchEntities()
+	defer entitySub.Close()
+
+	entities, err := NewTestEntities(seed, 1)
+	require.NoError(err, "NewTestEntities")
+	entity := entities[0]
+	err = backend.RegisterEntity(context.Background(), entity.SignedRegistration)
+	require.NoError(err, "RegisterEntity")
+	select {
+	case ev := <-entityCh:
+		require.EqualValues(entity.Entity, ev.Entity, "registered entity")
+		require.True(ev.IsRegistration, "event is registration")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive entity registration event")
+	}
+
+	nodeCh, nodeSub := backend.WatchNodes()
+	defer nodeSub.Close()
+
+	numNodes := rt.Runtime.ReplicaGroupSize + rt.Runtime.ReplicaGroupBackupSize
+	nodes, err := entity.NewTestNodes(int(numNodes), epochtime.EpochInvalid)
+	require.NoError(err, "NewTestNodes")
+	ret := make([]*node.Node, 0, int(numNodes))
+	for _, node := range nodes {
+		err = backend.RegisterNode(context.Background(), node.SignedRegistration)
+		require.NoError(err, "RegisterNode")
+		select {
+		case ev := <-nodeCh:
+			require.EqualValues(node.Node, ev.Node, "registered node")
+			require.True(ev.IsRegistration, "event is registration")
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive node registration event")
+		}
+		ret = append(ret, node.Node)
+	}
+
+	rt.entity = entity
+	rt.nodes = nodes
+
+	return ret
+}
+
+// TestNodes returns the test runtime's TestNodes.
+func (rt *TestRuntime) TestNodes() []*TestNode {
+	return rt.nodes
+}
+
+// Cleanup deregisteres the entity and nodes for a given TestRuntime.
+func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend) {
+	require := require.New(t)
+
+	require.NotNil(rt.entity, "runtime has an associated entity")
+	require.NotNil(rt.nodes, "runtime has associated nodes")
+
+	entityCh, entitySub := backend.WatchEntities()
+	defer entitySub.Close()
+
+	nodeCh, nodeSub := backend.WatchNodes()
+	defer nodeSub.Close()
+
+	err := backend.DeregisterEntity(context.Background(), rt.entity.SignedDeregistration)
+	require.NoError(err, "DeregisterEntity")
+
+	select {
+	case ev := <-entityCh:
+		require.EqualValues(rt.entity.Entity, ev.Entity, "deregistered entity")
+		require.False(ev.IsRegistration, "event is deregistration")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive entity deregistration event")
+	}
+
+	var numDereg int
+	for numDereg < len(rt.nodes) {
+		select {
+		case ev := <-nodeCh:
+			require.False(ev.IsRegistration, "event is deregistration")
+			numDereg++
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive node deregistration event")
+		}
+	}
+
+	EnsureRegistryEmpty(t, backend)
+	rt.entity = nil
+	rt.nodes = nil
+}
+
+// NewTestRuntime returns a pre-generated TestRuntime for use with various
+// tests, generated deterministically from the seed.
+func NewTestRuntime(seed []byte) (*TestRuntime, error) {
+	rng, err := drbg.New(crypto.SHA512, hashForDrbg(seed), nil, []byte("TestRuntime"))
+	if err != nil {
+		return nil, err
+	}
+
+	var rt TestRuntime
+	if rt.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
+		return nil, err
+	}
+	rt.Runtime = &api.Runtime{
+		ID:                       rt.PrivateKey.Public(),
+		Code:                     []byte("tu ne cede malis, sed contra audentior ito"),
+		MinimumBond:              10,
+		ReplicaGroupSize:         3,
+		ReplicaGroupBackupSize:   5,
+		ReplicaAllowedStragglers: 1,
+		StorageGroupSize:         1,
+	}
+
+	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	if err != nil {
+		return nil, err
+	}
+	rt.SignedRegistration = &api.SignedRuntime{Signed: *signed}
+
+	return &rt, nil
+}
+
+func newEthAddress(rng io.Reader) (*ethereum.Address, error) {
+	var addr ethereum.Address
+	if _, err := rng.Read(addr[:]); err != nil {
+		return nil, err
+	}
+	return &addr, nil
+}
+
+func hashForDrbg(seed []byte) []byte {
+	h := crypto.SHA512.New()
+	_, _ = h.Write(seed)
+	return h.Sum(nil)
+}
