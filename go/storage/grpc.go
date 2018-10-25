@@ -78,7 +78,7 @@ func (s *grpcServer) InsertBatch(ctx context.Context, req *pb.InsertBatchRequest
 }
 
 func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysServer) error {
-	ch, err := s.backend.GetKeys()
+	ch, err := s.backend.GetKeys(stream.Context())
 	if err != nil {
 		return err
 	}

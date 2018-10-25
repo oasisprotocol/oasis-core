@@ -39,7 +39,8 @@ var (
 	bktByKey        = []byte("byKey")
 	bktByExpiration = []byte("byExpiration")
 
-	errIdempotent = errors.New("storage/bolt: write has no effect")
+	errIdempotent  = errors.New("storage/bolt: write has no effect")
+	errContextDone = errors.New("storage/bolt: context done, breaking")
 )
 
 type boltBackend struct {
@@ -186,7 +187,7 @@ func (b *boltBackend) InsertBatch(ctx context.Context, values []api.Value) error
 	return err
 }
 
-func (b *boltBackend) GetKeys() (<-chan api.KeyInfo, error) {
+func (b *boltBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return nil, api.ErrIncoherentTime
@@ -210,12 +211,18 @@ func (b *boltBackend) GetKeys() (<-chan api.KeyInfo, error) {
 					Expiration: exp,
 				}
 				copy(ki.Key[:], k)
-				kiChan <-ki
+				select {
+				case kiChan <- ki:
+				case <-ctx.Done():
+					return errContextDone
+				}
 
 				return nil
 			})
 		}); err != nil {
-			b.logger.Error("boltBackend GetKeys View", "err", err)
+			if err != errContextDone {
+				b.logger.Error("boltBackend GetKeys View", "err", err)
+			}
 		}
 	}()
 

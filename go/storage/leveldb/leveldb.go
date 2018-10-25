@@ -116,7 +116,7 @@ func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) er
 	return wrErr
 }
 
-func (b *leveldbBackend) GetKeys() (<-chan api.KeyInfo, error) {
+func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
 	kiChan := make(chan api.KeyInfo)
 
 	go func() {
@@ -130,7 +130,11 @@ func (b *leveldbBackend) GetKeys() (<-chan api.KeyInfo, error) {
 				Expiration: epochtime.EpochInvalid,
 			}
 			copy(ki.Key[:], iter.Key()[len(prefixValues):])
-			kiChan <-ki
+			select {
+			case kiChan <- ki:
+			case <-ctx.Done():
+				break
+			}
 		}
 		if err := iter.Error(); err != nil {
 			b.logger.Error("leveldbBackend GetKeys iter.Error", "err", err)
