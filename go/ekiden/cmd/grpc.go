@@ -24,6 +24,8 @@ import (
 const (
 	cfgGRPCPort         = "grpc.port"
 	cfgGRPCVerboseDebug = "grpc.log.verbose_debug"
+
+	defaultNodeAddress = "127.0.0.1:42261"
 )
 
 var (
@@ -342,4 +344,14 @@ func registerGrpcFlags(cmd *cobra.Command) {
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+}
+
+func newGrpcClient(address string) (*grpc.ClientConn, error) {
+	// Establish gRPC connection to the specified address.
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }

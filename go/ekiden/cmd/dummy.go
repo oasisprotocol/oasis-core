@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	address string
-	epoch   uint64
-	nodes   uint64
+	dummyAddress string
+	epoch        uint64
+	nodes        uint64
 
 	dummyCmd = &cobra.Command{
 		Use:   "dummy",
@@ -33,14 +33,13 @@ var (
 		Run:   dummyWaitNodes,
 	}
 
-	dummyLog = logging.GetLogger("dummy")
+	dummyLog = logging.GetLogger("cmd/dummy")
 )
 
-func connect() (*grpc.ClientConn, dummydebug.DummyDebugClient) {
+func dummyConnect() (*grpc.ClientConn, dummydebug.DummyDebugClient) {
 	initCommon()
 
-	// Establish gRPC connection to node.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := newGrpcClient(dummyAddress)
 	if err != nil {
 		dummyLog.Error("failed to establish connection with node",
 			"err", err,
@@ -54,7 +53,7 @@ func connect() (*grpc.ClientConn, dummydebug.DummyDebugClient) {
 }
 
 func dummySetEpoch(cmd *cobra.Command, args []string) {
-	conn, client := connect()
+	conn, client := dummyConnect()
 	defer conn.Close()
 
 	dummyLog.Info("setting epoch",
@@ -71,7 +70,7 @@ func dummySetEpoch(cmd *cobra.Command, args []string) {
 }
 
 func dummyWaitNodes(cmd *cobra.Command, args []string) {
-	conn, client := connect()
+	conn, client := dummyConnect()
 	defer conn.Close()
 
 	dummyLog.Info("waiting for nodes",
@@ -91,7 +90,7 @@ func dummyWaitNodes(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	dummyCmd.PersistentFlags().StringVarP(&address, "address", "a", "127.0.0.1:42261", "node gRPC address")
+	dummyCmd.PersistentFlags().StringVarP(&dummyAddress, "address", "a", defaultNodeAddress, "node gRPC address")
 	dummySetEpochCmd.Flags().Uint64VarP(&epoch, "epoch", "e", 0, "set epoch to given value")
 	dummyWaitNodesCmd.Flags().Uint64VarP(&nodes, "nodes", "n", 1, "number of nodes to wait for")
 
