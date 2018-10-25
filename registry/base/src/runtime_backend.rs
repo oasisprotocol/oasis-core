@@ -19,5 +19,5 @@ pub trait RuntimeRegistryBackend: Send + Sync {
 
     // Subscribe to updates of newly registered runtimes in the registry.
     // Upon subscription, all runtimes will be sent immediately.
-    fn get_runtimes(&self) -> BoxStream<Runtime>;
+    fn watch_runtimes(&self) -> BoxStream<Runtime>;
 }

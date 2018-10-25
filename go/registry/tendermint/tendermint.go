@@ -244,7 +244,7 @@ func (r *tendermintBackend) Cleanup() {
 	})
 }
 
-func (r *tendermintBackend) getRuntimes(ctx context.Context) ([]*api.Runtime, error) {
+func (r *tendermintBackend) GetRuntimes(ctx context.Context) ([]*api.Runtime, error) {
 	response, err := r.service.Query(tmapi.QueryRegistryGetRuntimes, nil, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get runtimes query failed")
@@ -460,7 +460,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	r.cached.nodeLists = make(map[epochtime.EpochTime]*api.NodeList)
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
-		runtimes, err := r.getRuntimes(context.Background())
+		runtimes, err := r.GetRuntimes(context.Background())
 		if err != nil {
 			r.logger.Error("runtime notifier: unable to get a list of runtimes",
 				"err", err,

@@ -58,9 +58,9 @@ impl RuntimeRegistryBackend for RuntimeRegistryClient {
         }
     }
 
-    fn get_runtimes(&self) -> BoxStream<Runtime> {
-        let request = api::RuntimesRequest::new();
-        match self.0.get_runtimes(&request) {
+    fn watch_runtimes(&self) -> BoxStream<Runtime> {
+        let request = api::WatchRuntimesRequest::new();
+        match self.0.watch_runtimes(&request) {
             Ok(s) => Box::new(s.then(|result| match result {
                 Ok(response) => Ok(Runtime::try_from(response.get_runtime().to_owned())?),
                 Err(error) => Err(Error::new(error.description())),

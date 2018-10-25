@@ -233,17 +233,20 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 
 	rt.MustRegister(t, backend)
 
+	registeredRuntimes, err := backend.GetRuntimes(context.Background())
+	require.NoError(err, "GetRuntimes")
+	require.Len(registeredRuntimes, 1, "registry has one runtime")
+	require.EqualValues(rt.Runtime, registeredRuntimes[0], "expected runtime is registered")
+
 	// TODO: Test the various failures.
 
-	// No way to de-register the runtime, so it will be left there,
-	// stash it in a global so it can be reused by other tests.
+	// No way to de-register the runtime, so it will be left there.
 }
 
 // EnsureRegistryEmpty enforces that the registry has no entities or nodes
 // registered.
 //
-// Note: Runtimes are allowed, as there is no way to deregister them
-// (or iterate over them easily for that matter).
+// Note: Runtimes are allowed, as there is no way to deregister them.
 func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
 	registeredEntities, err := backend.GetEntities(context.Background())
 	require.NoError(t, err, "GetEntities")
