@@ -32,9 +32,7 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     # for rocksdb
     libsnappy-dev librocksdb-dev \
     # for benchmarks
-    python3-prometheus-client \
-    # convenience
-    golang && \
+    python3-prometheus-client && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*
 
 # Required because librocksdb5.8 doesn't provide it
@@ -44,7 +42,7 @@ RUN cp /usr/lib/x86_64-linux-gnu/pkgconfig/snappy.pc /usr/lib/x86_64-linux-gnu/p
 
 ENV HOME="/root"
 ENV GOPATH="/go"
-ENV PATH="${HOME}/.cargo/bin:/go/bin:${PATH}"
+ENV PATH="${HOME}/.cargo/bin:/go/bin:/usr/local/go/bin:${PATH}"
 
 # install protobuf (apt system v3.0 fails to compile our protos)
 RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
@@ -77,8 +75,11 @@ RUN . $NVM_DIR/nvm.sh && \
     nvm alias default node && \
     npm install -g truffle@4.1
 
-# install golang
-RUN mkdir -p /go/bin && \
+# Install golang 1.11 and utilities.
+RUN wget https://dl.google.com/go/go1.11.1.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.11.1.linux-amd64.tar.gz && \
+    rm go1.11.1.linux-amd64.tar.gz && \
+    mkdir -p /go/bin && \
     curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && \
     go get -u github.com/golang/protobuf/protoc-gen-go && \
     go get -u github.com/alecthomas/gometalinter && \
