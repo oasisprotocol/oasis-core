@@ -30,6 +30,8 @@ message Runtime {
     uint64 replica_group_backup_size = 9;
 
     uint64 replica_allowed_stragglers = 10;
+
+    uint64 registration_time = 11;
 }
 
 service RuntimeRegistry {

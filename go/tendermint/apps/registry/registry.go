@@ -156,7 +156,7 @@ func (app *registryApplication) executeTx(
 	if tx.TxRegisterEntity != nil {
 		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
 	} else if tx.TxDeregisterEntity != nil {
-		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.ID)
+		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
 	} else if tx.TxRegisterNode != nil {
 		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
 	} else if tx.TxRegisterRuntime != nil {
@@ -175,6 +175,17 @@ func (app *registryApplication) registerEntity(
 	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt)
 	if err != nil {
 		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		err = registry.VerifyTimestamp(ent.RegistrationTime, uint64(ctx.Now().Unix()))
+		if err != nil {
+			app.logger.Error("RegisterEntity: INVALID TIMESTAMP",
+				"entity_timestamp", ent.RegistrationTime,
+				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
 	}
 
 	state.CreateEntity(ent)
@@ -198,11 +209,22 @@ func (app *registryApplication) registerEntity(
 func (app *registryApplication) deregisterEntity(
 	ctx *abci.Context,
 	state *MutableState,
-	sigID *signature.SignedPublicKey,
+	sigTimestamp *signature.Signed,
 ) error {
-	id, err := registry.VerifyDeregisterEntityArgs(app.logger, sigID)
+	id, timestamp, err := registry.VerifyDeregisterEntityArgs(app.logger, sigTimestamp)
 	if err != nil {
 		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		err = registry.VerifyTimestamp(timestamp, uint64(ctx.Now().Unix()))
+		if err != nil {
+			app.logger.Error("DeregisterEntity: INVALID TIMESTAMP",
+				"timestamp", timestamp,
+				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
 	}
 
 	removedEntity, removedNodes := state.RemoveEntity(id)
@@ -232,6 +254,17 @@ func (app *registryApplication) registerNode(
 	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode)
 	if err != nil {
 		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		err = registry.VerifyTimestamp(node.RegistrationTime, uint64(ctx.Now().Unix()))
+		if err != nil {
+			app.logger.Error("RegisterNode: INVALID TIMESTAMP",
+				"node_timestamp", node.RegistrationTime,
+				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
 	}
 
 	err = state.CreateNode(node)
@@ -266,6 +299,17 @@ func (app *registryApplication) registerRuntime(
 	con, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigCon)
 	if err != nil {
 		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		err = registry.VerifyTimestamp(con.RegistrationTime, uint64(ctx.Now().Unix()))
+		if err != nil {
+			app.logger.Error("RegisterRuntime: INVALID TIMESTAMP",
+				"runtime_timestamp", con.RegistrationTime,
+				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
 	}
 
 	state.CreateRuntime(con)

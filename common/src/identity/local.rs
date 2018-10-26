@@ -6,6 +6,7 @@ use std::io::ErrorKind as IoErrorKind;
 use std::net::SocketAddr;
 use std::result::Result as StdResult;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -137,6 +138,11 @@ create_component!(
     LocalEntityIdentity,
     EntityIdentity,
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u64;
+
         let has_address = {
             let args = container.get_arguments().unwrap();
             args.is_present("entity-ethereum-address")
@@ -162,6 +168,7 @@ create_component!(
             Entity {
                 id: signer.get_public_key(),
                 eth_address,
+                registration_time: now,
             },
             signer,
         ));
@@ -284,6 +291,8 @@ create_component!(
     LocalNodeIdentity,
     NodeIdentity,
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u64;
+
         // Setup key pair.
         let key_pair: NodeKeyPair = {
             let args = container.get_arguments().unwrap();
@@ -319,6 +328,7 @@ create_component!(
             },
             certificate: key_pair.tls_certificate.clone(),
             stake: vec![],
+            registration_time: now,
         };
 
         info!("Registering node addresses: {:?}", node.addresses);

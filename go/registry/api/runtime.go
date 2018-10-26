@@ -55,6 +55,9 @@ type Runtime struct {
 
 	// StorageGroupSize is the size of the storage group.
 	StorageGroupSize uint64 `codec:"storage_group_size"`
+
+	// StorageGroupSize is the time of registration of the runtime.
+	RegistrationTime uint64 `codec:"registration_time"`
 }
 
 // String returns a string representation of itself.
@@ -89,6 +92,7 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	c.ReplicaGroupBackupSize = pb.GetReplicaGroupBackupSize()
 	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
 	c.StorageGroupSize = pb.GetStorageGroupSize()
+	c.RegistrationTime = pb.GetRegistrationTime()
 
 	switch pb.GetMode() {
 	case pbRegistry.Runtime_Nondeterministic:
@@ -117,6 +121,7 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	pb.ReplicaGroupBackupSize = c.ReplicaGroupBackupSize
 	pb.ReplicaAllowedStragglers = c.ReplicaAllowedStragglers
 	pb.StorageGroupSize = c.StorageGroupSize
+	pb.RegistrationTime = c.RegistrationTime
 
 	switch c.ModeNonDeterministic {
 	case true:

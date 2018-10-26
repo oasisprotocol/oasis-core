@@ -67,10 +67,10 @@ func (r *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.S
 	return nil
 }
 
-func (r *tendermintBackend) DeregisterEntity(ctx context.Context, sigID *signature.SignedPublicKey) error {
+func (r *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp *signature.Signed) error {
 	tx := tmapi.TxRegistry{
 		TxDeregisterEntity: &tmapi.TxDeregisterEntity{
-			ID: *sigID,
+			Timestamp: *sigTimestamp,
 		},
 	}
 

@@ -64,7 +64,7 @@ type TxRegisterEntity struct {
 
 // TxDeregisterEntity is a transaction for deregistering an entity.
 type TxDeregisterEntity struct {
-	ID signature.SignedPublicKey
+	Timestamp signature.Signed
 }
 
 // TxRegisterNode is a transaction for registering a new node.

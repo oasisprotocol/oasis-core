@@ -70,8 +70,8 @@ func (w *metricsWrapper) RegisterEntity(ctx context.Context, sigEnt *entity.Sign
 	return nil
 }
 
-func (w *metricsWrapper) DeregisterEntity(ctx context.Context, sigID *signature.SignedPublicKey) error {
-	if err := w.Backend.DeregisterEntity(ctx, sigID); err != nil {
+func (w *metricsWrapper) DeregisterEntity(ctx context.Context, sigTimestamp *signature.Signed) error {
+	if err := w.Backend.DeregisterEntity(ctx, sigTimestamp); err != nil {
 		registryFailures.With(prometheus.Labels{"call": "deregisterEntity"}).Inc()
 		return err
 	}

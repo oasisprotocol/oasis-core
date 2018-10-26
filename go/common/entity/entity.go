@@ -27,6 +27,9 @@ type Entity struct {
 
 	// EthAddress is the Ethereum address of this Entity.
 	EthAddress *ethereum.Address `codec:"eth_address"`
+
+	// Time of registration.
+	RegistrationTime uint64 `codec:"registration_time"`
 }
 
 // String returns a string representation of itself.
@@ -57,6 +60,8 @@ func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 		}
 	}
 
+	e.RegistrationTime = pb.GetRegistrationTime()
+
 	return nil
 }
 
@@ -68,6 +73,7 @@ func (e *Entity) ToProto() *pbCommon.Entity {
 	if e.EthAddress != nil {
 		pb.EthAddress, _ = e.EthAddress.MarshalBinary()
 	}
+	pb.RegistrationTime = e.RegistrationTime
 
 	return pb
 }

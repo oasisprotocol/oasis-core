@@ -50,6 +50,9 @@ type Node struct {
 
 	// Stake is the node's stake. (TODO: Not defined yet.)
 	Stake []byte `codec:"stake"`
+
+	// Time of registration.
+	RegistrationTime uint64 `codec:"registration_time"`
 }
 
 // Address families.
@@ -161,6 +164,8 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		n.Stake = append([]byte{}, b...) // Copy
 	}
 
+	n.RegistrationTime = pb.GetRegistrationTime()
+
 	return nil
 }
 
@@ -185,6 +190,7 @@ func (n *Node) ToProto() *pbCommon.Node {
 	if n.Stake != nil {
 		pb.Stake = append([]byte{}, n.Stake...)
 	}
+	pb.RegistrationTime = n.RegistrationTime
 
 	return pb
 }

@@ -1,5 +1,6 @@
 //! Utilities for testing registry backends.
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
@@ -27,6 +28,11 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
     );
     registry.register_entity(signed_entity).wait().unwrap();
 
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u64;
+
     // Fake nodes.
     for public_key in public_keys {
         let node = Node {
@@ -37,6 +43,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
             addresses: vec![],
             certificate: Certificate::default(),
             stake: vec![],
+            registration_time: now,
         };
 
         let signed_node = Signed::sign(&entity_signer, &REGISTER_NODE_SIGNATURE_CONTEXT, node);

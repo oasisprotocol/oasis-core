@@ -32,7 +32,7 @@ pub trait EntityRegistryBackend: Send + Sync {
     /// Deregister an entity.
     ///
     /// The signature should be made using `DEREGISTER_ENTITY_SIGNATURE_CONTEXT`
-    fn deregister_entity(&self, id: Signed<B256>) -> BoxFuture<()>;
+    fn deregister_entity(&self, timestamp: Signed<u64>) -> BoxFuture<()>;
 
     /// Get an entity by id.
     fn get_entity(&self, id: B256) -> BoxFuture<Entity>;

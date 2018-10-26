@@ -1,5 +1,6 @@
 //! Entity Interface.
 use std::convert::TryFrom;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::{B256, H160};
 use error::Error;
@@ -13,6 +14,8 @@ pub struct Entity {
     pub id: B256,
     /// The ethereum address of this Entity.
     pub eth_address: Option<H160>,
+    /// Time of registration of this Entity.
+    pub registration_time: u64,
 }
 
 impl Entity {
@@ -20,6 +23,10 @@ impl Entity {
         Entity {
             id: id,
             eth_address: None,
+            registration_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u64,
         }
     }
 }
@@ -33,10 +40,12 @@ impl TryFrom<api::Entity> for Entity {
             Ok(addr) => Some(addr),
             Err(_) => None,
         };
+        let registration_time = a.registration_time;
 
         Ok(Entity {
             id: id,
             eth_address: eth_address,
+            registration_time: registration_time,
         })
     }
 }
@@ -49,6 +58,7 @@ impl Into<api::Entity> for Entity {
         if self.eth_address.is_some() {
             e.set_eth_address(self.eth_address.unwrap().to_vec());
         }
+        e.set_registration_time(self.registration_time);
         e
     }
 }

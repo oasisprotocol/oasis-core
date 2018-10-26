@@ -264,7 +264,7 @@ type TestEntity struct {
 	PrivateKey signature.PrivateKey
 
 	SignedRegistration   *entity.SignedEntity
-	SignedDeregistration *signature.SignedPublicKey
+	SignedDeregistration *signature.Signed
 }
 
 // TestNode is a testing Node and some common pre-generated/signed blobs
@@ -295,10 +295,11 @@ func (ent *TestEntity) NewTestNodes(n int, expiration epochtime.EpochTime) ([]*T
 			return nil, err
 		}
 		nod.Node = &node.Node{
-			ID:         nod.PrivateKey.Public(),
-			EntityID:   ent.Entity.ID,
-			Expiration: uint64(expiration),
-			Stake:      []byte("You use a wooden stake, silver or sunlight to kill them."),
+			ID:               nod.PrivateKey.Public(),
+			EntityID:         ent.Entity.ID,
+			Expiration:       uint64(expiration),
+			Stake:            []byte("You use a wooden stake, silver or sunlight to kill them."),
+			RegistrationTime: uint64(time.Now().Unix()),
 		}
 		if nod.Node.EthAddress, err = newEthAddress(rng); err != nil {
 			return nil, err
@@ -336,7 +337,8 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			return nil, err
 		}
 		ent.Entity = &entity.Entity{
-			ID: ent.PrivateKey.Public(),
+			ID:               ent.PrivateKey.Public(),
+			RegistrationTime: uint64(time.Now().Unix()),
 		}
 		if ent.Entity.EthAddress, err = newEthAddress(rng); err != nil {
 			return nil, err
@@ -348,11 +350,12 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 		}
 		ent.SignedRegistration = &entity.SignedEntity{Signed: *signed}
 
-		signed, err = signature.SignSigned(ent.PrivateKey, api.DeregisterEntitySignatureContext, ent.Entity.ID)
+		ts := api.Timestamp(uint64(time.Now().Unix()))
+		signed, err = signature.SignSigned(ent.PrivateKey, api.DeregisterEntitySignatureContext, &ts)
 		if err != nil {
 			return nil, err
 		}
-		ent.SignedDeregistration = &signature.SignedPublicKey{Signed: *signed}
+		ent.SignedDeregistration = signed
 
 		entities = append(entities, &ent)
 	}
@@ -512,6 +515,7 @@ func NewTestRuntime(seed []byte) (*TestRuntime, error) {
 		ReplicaGroupBackupSize:   5,
 		ReplicaAllowedStragglers: 1,
 		StorageGroupSize:         1,
+		RegistrationTime:         uint64(time.Now().Unix()),
 	}
 
 	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)

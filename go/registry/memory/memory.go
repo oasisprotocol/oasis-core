@@ -69,8 +69,8 @@ func (r *memoryBackend) RegisterEntity(ctx context.Context, sigEnt *entity.Signe
 	return nil
 }
 
-func (r *memoryBackend) DeregisterEntity(ctx context.Context, sigID *signature.SignedPublicKey) error {
-	id, err := api.VerifyDeregisterEntityArgs(r.logger, sigID)
+func (r *memoryBackend) DeregisterEntity(ctx context.Context, sigTimestamp *signature.Signed) error {
+	id, _, err := api.VerifyDeregisterEntityArgs(r.logger, sigTimestamp)
 	if err != nil {
 		return err
 	}

@@ -28,8 +28,8 @@ message RegisterResponse {
 }
 
 message DeregisterRequest {
-    // Signed blob should be a the entity id.
-    common.Signed id = 1;
+    // Signed blob should be the time when the deregister request was made.
+    common.Signed timestamp = 1;
 }
 
 message DeregisterResponse {
