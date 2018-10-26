@@ -316,6 +316,18 @@ func (r *memoryBackend) GetRuntime(ctx context.Context, id signature.PublicKey) 
 	return con, nil
 }
 
+func (r *memoryBackend) GetRuntimes(ctx context.Context) ([]*api.Runtime, error) {
+	r.state.Lock()
+	defer r.state.Unlock()
+
+	ret := make([]*api.Runtime, 0, len(r.state.runtimes))
+	for _, v := range r.state.runtimes {
+		ret = append(ret, v)
+	}
+
+	return ret, nil
+}
+
 func (r *memoryBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscription) {
 	typedCh := make(chan *api.Runtime)
 	sub := r.runtimeNotifier.Subscribe()

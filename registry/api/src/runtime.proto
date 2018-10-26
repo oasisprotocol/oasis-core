@@ -35,7 +35,8 @@ message Runtime {
 service RuntimeRegistry {
     rpc RegisterRuntime (RegisterRuntimeRequest) returns (RegisterRuntimeResponse) {}
     rpc GetRuntime (RuntimeRequest) returns (RuntimeResponse) {}
-    rpc GetRuntimes (RuntimesRequest) returns (stream RuntimesResponse) {}
+    rpc GetRuntimes (RuntimesRequest) returns (RuntimesResponse) {}
+    rpc WatchRuntimes (WatchRuntimesRequest) returns (stream WatchRuntimesResponse) {}
 }
 
 message RegisterRuntimeRequest {
@@ -58,5 +59,12 @@ message RuntimesRequest {
 }
 
 message RuntimesResponse {
+    repeated Runtime runtime = 1;
+}
+
+message WatchRuntimesRequest {
+}
+
+message WatchRuntimesResponse {
     Runtime runtime = 1;
 }

@@ -26,6 +26,7 @@ test_migration() {
         --scheduler.backend trivial \
         --registry.backend "$registry_backend" \
         --roothash.backend "$roothash_backend" \
+        --tendermint.consensus.timeout_commit 250ms \
         --datadir "$datadir" \
         &
     local first_dummy_pid=$(jobs -p +)
@@ -77,7 +78,7 @@ test_migration() {
 
     # Export.
     "$WORKDIR/scripts/storage/export.py" >/tmp/ekiden-test-storage.dat
-    "$WORKDIR/scripts/roothash/export.py" "$RUNTIME_ID" >/tmp/ekiden-test-roothash.dat
+    "$WORKDIR/go/ekiden/ekiden" roothash export "$RUNTIME_ID" >/tmp/ekiden-test-roothash.dat
 
     # Finish tearing down the network.
     kill -KILL "$first_dummy_pid"
@@ -98,6 +99,7 @@ test_migration() {
         --registry.backend "$registry_backend" \
         --roothash.backend "$roothash_backend" \
         --roothash.genesis-blocks /tmp/ekiden-test-roothash.dat \
+        --tendermint.consensus.timeout_commit 250ms \
         --datadir "$datadir" \
         &
     local second_dummy_pid=$(jobs -p +)

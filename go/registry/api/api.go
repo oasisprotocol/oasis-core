@@ -107,6 +107,9 @@ type Backend interface {
 	// GetRuntime gets a runtime by ID.
 	GetRuntime(context.Context, signature.PublicKey) (*Runtime, error)
 
+	// GetRuntimes gets a list of all registered runtimes.
+	GetRuntimes(context.Context) ([]*Runtime, error)
+
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
 	WatchRuntimes() (<-chan *Runtime, *pubsub.Subscription)

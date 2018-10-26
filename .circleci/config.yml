@@ -78,8 +78,6 @@ jobs:
       - run: |
           make -C scripts/storage container-deps
           make -C scripts/storage
-          make -C scripts/roothash container-deps
-          make -C scripts/roothash
       - run: ./scripts/test-migration.sh
 
       # Store built files.

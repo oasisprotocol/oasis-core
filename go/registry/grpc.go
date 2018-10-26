@@ -271,7 +271,21 @@ func (s *grpcServer) GetRuntime(ctx context.Context, req *pb.RuntimeRequest) (*p
 	return &resp, err
 }
 
-func (s *grpcServer) GetRuntimes(req *pb.RuntimesRequest, stream pb.RuntimeRegistry_GetRuntimesServer) error {
+func (s *grpcServer) GetRuntimes(ctx context.Context, req *pb.RuntimesRequest) (*pb.RuntimesResponse, error) {
+	runtimes, err := s.backend.GetRuntimes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pbRuntimes := make([]*pb.Runtime, 0, len(runtimes))
+	for _, v := range runtimes {
+		pbRuntimes = append(pbRuntimes, v.ToProto())
+	}
+
+	return &pb.RuntimesResponse{Runtime: pbRuntimes}, nil
+}
+
+func (s *grpcServer) WatchRuntimes(req *pb.WatchRuntimesRequest, stream pb.RuntimeRegistry_WatchRuntimesServer) error {
 	ch, sub := s.backend.WatchRuntimes()
 	defer sub.Close()
 
@@ -287,7 +301,7 @@ func (s *grpcServer) GetRuntimes(req *pb.RuntimesRequest, stream pb.RuntimeRegis
 			break
 		}
 
-		resp := &pb.RuntimesResponse{
+		resp := &pb.WatchRuntimesResponse{
 			Runtime: con.ToProto(),
 		}
 		if err := stream.Send(resp); err != nil {
