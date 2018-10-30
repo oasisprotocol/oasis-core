@@ -107,15 +107,14 @@ jobs:
       - run: echo 'export INTEL_SGX_SDK=/opt/sgxsdk' >> $BASH_ENV
       - run: echo 'export EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1' >> $BASH_ENV
       # enforce some circle vars for helping coveralls guess at what's running
-      - run: echo 'export CIRCLE_BRANCH=master' >> $BASH_ENV
+      - run: echo 'export CIRCLE_BRANCH=$(git rev-parse --abbrev-ref HEAD)' >> $BASH_ENV
       - checkout
       - run: echo "export CIRCLE_SHA1=$(git rev-parse HEAD)" >> $BASH_ENV
       - run: cargo build
       # install & tarpaulin test.
       - run:
           name: Installing Tarpaulin
-          command: git clone https://github.com/xd009642/tarpaulin && cd tarpaulin && git checkout tags/0.6.5 && rm Cargo.lock && sed -i 's/proc-macro2 = "/proc-macro2 = "=/' Cargo.toml && cargo install
-          working_directory: /root/
+          command: RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install --git https://github.com/oasislabs/tarpaulin --branch ekiden cargo-tarpaulin
       - run: |
           cargo tarpaulin --all \
             --ignore-tests \
