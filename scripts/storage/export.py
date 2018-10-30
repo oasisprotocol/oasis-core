@@ -43,8 +43,9 @@ with grpc.insecure_channel(args.remote_addr) as channel:
     # Phase 2: download values
     with open(KEYS_TEMP, 'rb') as f:
         items = tqdm.tqdm(common.read_messages(f, storage_pb2.GetKeysResponse), total=total)
+        items_iter = iter(items)
         while True:
-            batch = list(itertools.islice(items, BATCH_SIZE))
+            batch = list(itertools.islice(items_iter, BATCH_SIZE))
             if not batch:
                 break
             keys = [item.key for item in batch]
@@ -53,6 +54,7 @@ with grpc.insecure_channel(args.remote_addr) as channel:
                 insert_request_raw = storage_pb2.InsertRequest(data=value, expiry=item.expiry).SerializeToString()
                 print len(insert_request_raw)
                 sys.stdout.write(insert_request_raw)
+        items.close()
 
 # Clean up
 print >>sys.stderr, 'cleaning up'

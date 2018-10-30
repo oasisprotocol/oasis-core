@@ -28,9 +28,10 @@ print >>sys.stderr, 'connecting'
 with grpc.insecure_channel(args.remote_addr) as channel:
     stub = storage_pb2_grpc.StorageStub(channel)
     items = common.read_messages(sys.stdin, storage_pb2.InsertRequest)
+    items_iter = iter(items)
     print >>sys.stderr, 'importing items'
     while True:
-        batch = list(itertools.islice(items, BATCH_SIZE))
+        batch = list(itertools.islice(items_iter, BATCH_SIZE))
         if not batch:
             break
         for item in batch:
