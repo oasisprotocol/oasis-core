@@ -173,7 +173,7 @@ impl WorkerInner {
 
             measure_histogram_timer!("runtime_call_storage_commit_time");
             let _span = enclave_sh.follower("runtime_call_storage_commit", |opts| opts.start());
-            batch_storage.commit(opts).wait()?;
+            batch_storage.commit(0, opts).wait()?;
         }
 
         Ok((outputs?, new_state_root))
