@@ -84,7 +84,7 @@ func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysSe
 	}
 
 	for {
-		var ki api.KeyInfo
+		var ki *api.KeyInfo
 		var ok bool
 
 		select {

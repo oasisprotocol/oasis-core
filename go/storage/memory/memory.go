@@ -117,8 +117,8 @@ func (b *memoryBackend) InsertBatch(ctx context.Context, values []api.Value) err
 	return nil
 }
 
-func (b *memoryBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
-	kiChan := make(chan api.KeyInfo)
+func (b *memoryBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
+	kiChan := make(chan *api.KeyInfo)
 
 	go func() {
 		b.RLock()
@@ -131,7 +131,7 @@ func (b *memoryBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error)
 				Expiration: ent.expiration,
 			}
 			select {
-			case kiChan <- ki:
+			case kiChan <- &ki:
 			case <-ctx.Done():
 				break
 			}

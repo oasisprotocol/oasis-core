@@ -116,8 +116,8 @@ func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) er
 	return wrErr
 }
 
-func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
-	kiChan := make(chan api.KeyInfo)
+func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
+	kiChan := make(chan *api.KeyInfo)
 
 	go func() {
 		iter := b.db.NewIterator(util.BytesPrefix(prefixValues), nil)
@@ -131,7 +131,7 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error
 			}
 			copy(ki.Key[:], iter.Key()[len(prefixValues):])
 			select {
-			case kiChan <- ki:
+			case kiChan <- &ki:
 			case <-ctx.Done():
 				break
 			}

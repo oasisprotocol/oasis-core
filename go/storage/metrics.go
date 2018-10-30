@@ -130,7 +130,7 @@ func (w *metricsWrapper) InsertBatch(ctx context.Context, values []api.Value) er
 	return err
 }
 
-func (w *metricsWrapper) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
+func (w *metricsWrapper) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
 	kiChan, err := w.Backend.GetKeys(ctx)
 	if err != nil {
 		storageFailures.With(labelGetKeys).Inc()

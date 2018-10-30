@@ -186,13 +186,13 @@ func (b *boltBackend) InsertBatch(ctx context.Context, values []api.Value) error
 	return err
 }
 
-func (b *boltBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
+func (b *boltBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return nil, api.ErrIncoherentTime
 	}
 
-	kiChan := make(chan api.KeyInfo)
+	kiChan := make(chan *api.KeyInfo)
 
 	go func() {
 		defer close(kiChan)
@@ -211,7 +211,7 @@ func (b *boltBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
 				}
 				copy(ki.Key[:], k)
 				select {
-				case kiChan <- ki:
+				case kiChan <- &ki:
 				case <-ctx.Done():
 					return context.Canceled
 				}
