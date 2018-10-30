@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/net/context"
 
@@ -129,7 +130,10 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 		}
 		defer snap.Release()
 
-		iter := snap.NewIterator(util.BytesPrefix(prefixValues), nil)
+		ro := opt.ReadOptions{
+			DontFillCache: true,
+		}
+		iter := snap.NewIterator(util.BytesPrefix(prefixValues), &ro)
 		defer iter.Release()
 
 		for iter.Next() {
