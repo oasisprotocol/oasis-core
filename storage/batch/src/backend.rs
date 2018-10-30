@@ -47,7 +47,10 @@ impl BatchStorageBackend {
     }
 
     /// Commit batch to delegate backend.
-    pub fn commit(&self, opts: InsertOptions) -> BoxFuture<()> {
+    ///
+    /// Batches will contain a maximum of `max_chunk_size` elements. If set to zero,
+    /// all elements will be inserted in one batch.
+    pub fn commit(&self, max_chunk_size: usize, opts: InsertOptions) -> BoxFuture<()> {
         let inner = self.inner
             .write()
             .unwrap()
@@ -56,10 +59,20 @@ impl BatchStorageBackend {
         let mut writeback_guard = inner.writeback.lock().unwrap();
         let values = std::mem::replace(writeback_guard.deref_mut(), HashMap::new())
             .into_iter()
-            .map(|(_key, value)| value)
-            .collect();
+            .map(|(_key, value)| value);
 
-        inner.delegate.insert_batch(values, opts)
+        if max_chunk_size == 0 {
+            // Insert the whole batch at once.
+            inner.delegate.insert_batch(values.collect(), opts)
+        } else {
+            // Insert batch in chunks.
+            let delegate = inner.delegate;
+
+            stream::iter_ok(values)
+                .chunks(max_chunk_size)
+                .for_each(move |chunk| delegate.insert_batch(chunk, opts.clone()))
+                .into_box()
+        }
     }
 }
 
@@ -133,7 +146,7 @@ mod test {
             assert_eq!(storage.get(key).wait(), Ok(b"value".to_vec()));
 
             // Commit.
-            batch.commit(InsertOptions::default()).wait().unwrap();
+            batch.commit(0, InsertOptions::default()).wait().unwrap();
 
             // Test that key is available in delegate after committing.
             assert_eq!(delegate.get(key).wait(), Ok(b"value".to_vec()));
@@ -149,6 +162,40 @@ mod test {
                 .wait()
                 .unwrap();
             assert_eq!(batch.get(key).wait(), Ok(b"another".to_vec()));
+        }
+    }
+
+    #[test]
+    fn test_chunks() {
+        ekiden_common::testing::try_init_logging();
+
+        let delegate = Arc::new(DummyStorageBackend::new());
+        let batch = Arc::new(BatchStorageBackend::new(delegate.clone()));
+        let storage: Arc<StorageBackend> = batch.clone();
+
+        let values = vec![
+            b"No longer be! Arise! obtain renown! destroy thy foes!".to_vec(),
+            b"Fight for the kingdom waiting thee when thou hast vanquished those.".to_vec(),
+            b"By Me they fall- not thee! the stroke of death is dealt them now,".to_vec(),
+            b"Even as they show thus gallantly; My instrument art thou!".to_vec(),
+        ];
+
+        for value in &values {
+            storage
+                .insert(value.clone(), 10, InsertOptions::default())
+                .wait()
+                .unwrap();
+            let key = hash_storage_key(value);
+            assert_eq!(storage.get(key).wait(), Ok(value.clone()));
+        }
+
+        // Commit.
+        batch.commit(2, InsertOptions::default()).wait().unwrap();
+
+        // Test that keys are available in delegate after committing.
+        for value in &values {
+            let key = hash_storage_key(value);
+            assert_eq!(delegate.get(key).wait(), Ok(value.clone()));
         }
     }
 }
