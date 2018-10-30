@@ -39,8 +39,7 @@ var (
 	bktByKey        = []byte("byKey")
 	bktByExpiration = []byte("byExpiration")
 
-	errIdempotent  = errors.New("storage/bolt: write has no effect")
-	errContextDone = errors.New("storage/bolt: context done, breaking")
+	errIdempotent = errors.New("storage/bolt: write has no effect")
 )
 
 type boltBackend struct {
@@ -214,13 +213,13 @@ func (b *boltBackend) GetKeys(ctx context.Context) (<-chan api.KeyInfo, error) {
 				select {
 				case kiChan <- ki:
 				case <-ctx.Done():
-					return errContextDone
+					return context.Canceled
 				}
 
 				return nil
 			})
 		}); err != nil {
-			if err != errContextDone {
+			if err != context.Canceled {
 				b.logger.Error("boltBackend GetKeys View", "err", err)
 			}
 		}
