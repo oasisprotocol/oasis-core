@@ -120,9 +120,17 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 	kiChan := make(chan *api.KeyInfo)
 
 	go func() {
-		iter := b.db.NewIterator(util.BytesPrefix(prefixValues), nil)
-		defer iter.Release()
 		defer close(kiChan)
+
+		snap, err := b.db.GetSnapshot()
+		if err != nil {
+			b.logger.Error("leveldbBackend GetKeys b.db.GetSnapshot", "err", err)
+			return
+		}
+		defer snap.Release()
+
+		iter := snap.NewIterator(util.BytesPrefix(prefixValues), nil)
+		defer iter.Release()
 
 		for iter.Next() {
 			// TODO: Fetch actual expiration.
@@ -138,6 +146,7 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 		}
 		if err := iter.Error(); err != nil {
 			b.logger.Error("leveldbBackend GetKeys iter.Error", "err", err)
+			return
 		}
 	}()
 
