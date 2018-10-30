@@ -25,7 +25,7 @@ impl Entity {
             eth_address: None,
             registration_time: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("unable to get time since UNIX epoch")
                 .as_secs() as u64,
         }
     }

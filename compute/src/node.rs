@@ -75,7 +75,7 @@ impl ComputeNode {
         // Creation time.
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("unable to get time since UNIX epoch")
             .as_secs() as u64;
 
         // Create IAS.
