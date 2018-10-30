@@ -30,7 +30,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("unable to get time since UNIX epoch")
         .as_secs() as u64;
 
     // Fake nodes.

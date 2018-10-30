@@ -50,7 +50,8 @@ where
     let mut key_pair = if let Some(filename) = filename {
         // Load key pair from existing file.
         if let Ok(mut file) = File::open(filename) {
-            let key_pair: S = serde_cbor::from_reader(file).unwrap();
+            let key_pair: S = serde_cbor::from_reader(file)
+                .expect("unable to load key pair file (file is empty or corrupt)");
             info!("Loaded {} key pair from {}", kind, filename);
 
             Some(key_pair)
@@ -69,8 +70,10 @@ where
 
         if let Some(filename) = filename {
             // Persist key pair to file.
-            let mut file = File::create(filename).expect("unable to create key pair file");
-            serde_cbor::to_writer(&mut file, &new_key_pair).unwrap();
+            let mut file = File::create(filename)
+                .expect("unable to create key pair file (make sure the filesystem is writable)");
+            serde_cbor::to_writer(&mut file, &new_key_pair)
+                .expect("unable to write key pair contents to file");
         }
 
         key_pair = Some(new_key_pair);
@@ -140,7 +143,7 @@ create_component!(
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("unable to get time since UNIX epoch")
             .as_secs() as u64;
 
         let has_address = {
@@ -291,7 +294,10 @@ create_component!(
     LocalNodeIdentity,
     NodeIdentity,
     (|container: &mut Container| -> StdResult<Box<Any>, DiError> {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("unable to get time since UNIX epoch")
+            .as_secs() as u64;
 
         // Setup key pair.
         let key_pair: NodeKeyPair = {
