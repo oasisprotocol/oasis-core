@@ -643,6 +643,7 @@ type ApplicationState struct {
 	checkTxTree   *iavl.MutableTree
 	statePruner   StatePruner
 
+	blockLock   sync.RWMutex
 	blockHash   []byte
 	blockHeight int64
 
@@ -652,11 +653,17 @@ type ApplicationState struct {
 
 // BlockHeight returns the last committed block height.
 func (s *ApplicationState) BlockHeight() int64 {
+	s.blockLock.RLock()
+	defer s.blockLock.RUnlock()
+
 	return s.blockHeight
 }
 
 // BlockHash returns the last commited block hash.
 func (s *ApplicationState) BlockHash() []byte {
+	s.blockLock.RLock()
+	defer s.blockLock.RUnlock()
+
 	return append([]byte{}, s.blockHash...)
 }
 
@@ -678,8 +685,10 @@ func (s *ApplicationState) doCommit() error {
 	// Save the new version of the persistent tree.
 	blockHash, blockHeight, err := s.deliverTxTree.SaveVersion()
 	if err == nil {
+		s.blockLock.Lock()
 		s.blockHash = blockHash
 		s.blockHeight = blockHeight
+		s.blockLock.Unlock()
 
 		// Reset CheckTx state to latest version. This is safe because Tendermint
 		// holds a lock on the mempool for commit.
