@@ -11,7 +11,7 @@ import (
 
 func TestQuote(t *testing.T) {
 	raw, sig, certs := loadAVRv2(t)
-	avr, err := DecodeAVR(raw, sig, certs, time.Now())
+	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
 	require.NoError(t, err, "DecodeAVR")
 
 	rawQuote := avr.ISVEnclaveQuoteBody

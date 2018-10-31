@@ -14,6 +14,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const nonceMaxLen = 32
+
 // TimestampFormat is the format of the AVR timestamp, suitable for use with
 // time.Parse.
 //
@@ -162,7 +164,6 @@ type AttestationVerificationReport struct {
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 	const (
 		pseManifestHashLen = 32
-		nonceMaxLen        = 32
 		epidPseudonymLen   = 64 + 64
 	)
 
@@ -251,8 +252,8 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 }
 
 // DecodeAVR decodes and validates an Attestation Verification Report.
-func DecodeAVR(data, encodedSignature, encodedCertChain []byte, ts time.Time) (*AttestationVerificationReport, error) {
-	if err := validateAVRSignature(data, encodedSignature, encodedCertChain, ts); err != nil {
+func DecodeAVR(data, encodedSignature, encodedCertChain []byte, trustRoots *x509.CertPool, ts time.Time) (*AttestationVerificationReport, error) {
+	if err := validateAVRSignature(data, encodedSignature, encodedCertChain, trustRoots, ts); err != nil {
 		return nil, err
 	}
 
@@ -273,7 +274,7 @@ func DecodeAVR(data, encodedSignature, encodedCertChain []byte, ts time.Time) (*
 	return a, nil
 }
 
-func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, ts time.Time) error {
+func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trustRoots *x509.CertPool, ts time.Time) error {
 	decoded, err := url.QueryUnescape(string(encodedCertChain))
 	if err != nil {
 		return errors.Wrap(err, "ias/avr: failed to decode certificate chain")
@@ -297,14 +298,15 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, ts ti
 	}
 
 	signingCert, rootCert := certs[0], certs[1]
-	if !rootCert.Equal(iasRootCert) {
-		return fmt.Errorf("ias/avr: unexpected root in certificate chain")
-	}
-	if _, err = signingCert.Verify(x509.VerifyOptions{
-		Roots:       iasTrustRoots,
+	certChains, err := signingCert.Verify(x509.VerifyOptions{
+		Roots:       trustRoots,
 		CurrentTime: ts,
-	}); err != nil {
+	})
+	if err != nil {
 		return errors.Wrap(err, "ias/avr: failed to verify certificate chain")
+	}
+	if !certRootsAChain(rootCert, certChains) {
+		return fmt.Errorf("ias/avr: unexpected root in certificate chain")
 	}
 
 	signature, err := base64.StdEncoding.DecodeString(string(encodedSignature))
