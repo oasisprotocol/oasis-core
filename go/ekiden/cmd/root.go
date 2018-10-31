@@ -6,6 +6,7 @@ import (
 
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/ias"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/storage"
@@ -42,6 +43,7 @@ func init() {
 	// Register all of the sub-commands.
 	for _, v := range []func(*cobra.Command){
 		debug.Register,
+		ias.Register,
 		registry.Register,
 		storage.Register,
 	} {
