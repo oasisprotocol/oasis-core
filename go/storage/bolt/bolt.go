@@ -220,7 +220,7 @@ func (b *boltBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) 
 			})
 		}); err != nil {
 			if err != context.Canceled {
-				b.logger.Error("boltBackend GetKeys View", "err", err)
+				b.logger.Error("GetKeys View", "err", err)
 			}
 		}
 	}()

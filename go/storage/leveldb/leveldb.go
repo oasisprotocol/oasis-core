@@ -125,7 +125,7 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 
 		snap, err := b.db.GetSnapshot()
 		if err != nil {
-			b.logger.Error("leveldbBackend GetKeys b.db.GetSnapshot", "err", err)
+			b.logger.Error("GetKeys b.db.GetSnapshot", "err", err)
 			return
 		}
 		defer snap.Release()
@@ -149,7 +149,7 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 			}
 		}
 		if err := iter.Error(); err != nil {
-			b.logger.Error("leveldbBackend GetKeys iter.Error", "err", err)
+			b.logger.Error("GetKeys iter.Error", "err", err)
 			return
 		}
 	}()
