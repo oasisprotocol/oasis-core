@@ -82,7 +82,7 @@ type Backend interface {
 
 	// GetKeys returns all of the keys in the storage database, along
 	// with their associated metadata.
-	GetKeys(context.Context) ([]*KeyInfo, error)
+	GetKeys(context.Context) (<-chan *KeyInfo, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()

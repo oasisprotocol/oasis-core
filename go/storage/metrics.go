@@ -130,17 +130,15 @@ func (w *metricsWrapper) InsertBatch(ctx context.Context, values []api.Value) er
 	return err
 }
 
-func (w *metricsWrapper) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
-	start := time.Now()
-	kiVec, err := w.Backend.GetKeys(ctx)
-	storageLatency.With(labelGetKeys).Observe(time.Since(start).Seconds())
+func (w *metricsWrapper) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
+	kiChan, err := w.Backend.GetKeys(ctx)
 	if err != nil {
 		storageFailures.With(labelGetKeys).Inc()
 		return nil, err
 	}
 
 	storageCalls.With(labelGetKeys).Inc()
-	return kiVec, err
+	return kiChan, err
 }
 
 func newMetricsWrapper(base api.Backend) api.Backend {

@@ -108,7 +108,7 @@ impl StorageBackend for BatchStorageBackend {
         unimplemented!();
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
         unimplemented!()
     }
 }

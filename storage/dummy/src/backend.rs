@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture};
+use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, StreamExt};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct DummyStorageBackendInner {
@@ -84,16 +84,8 @@ impl StorageBackend for DummyStorageBackend {
         }))
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
-        let inner = self.inner.clone();
-        Box::new(future::lazy(move || {
-            let inner = inner.lock().unwrap();
-            let mut keys = Vec::new();
-            for key in inner.storage.keys() {
-                keys.push((key.clone(), 0))
-            }
-            Ok(Arc::new(keys))
-        }))
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
+        stream::once(Err(Error::new("Not implemented"))).into_box()
     }
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/net/context"
 
@@ -116,25 +117,44 @@ func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) er
 	return wrErr
 }
 
-func (b *leveldbBackend) GetKeys(ctx context.Context) ([]*api.KeyInfo, error) {
-	var kiVec []*api.KeyInfo
+func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
+	kiChan := make(chan *api.KeyInfo)
 
-	iter := b.db.NewIterator(util.BytesPrefix(prefixValues), nil)
-	defer iter.Release()
+	go func() {
+		defer close(kiChan)
 
-	for iter.Next() {
-		// TODO: Fetch actual expiration.
-		ki := &api.KeyInfo{
-			Expiration: epochtime.EpochInvalid,
+		snap, err := b.db.GetSnapshot()
+		if err != nil {
+			b.logger.Error("GetKeys b.db.GetSnapshot", "err", err)
+			return
 		}
-		copy(ki.Key[:], iter.Key()[len(prefixValues):])
-		kiVec = append(kiVec, ki)
-	}
-	if err := iter.Error(); err != nil {
-		return nil, err
-	}
+		defer snap.Release()
 
-	return kiVec, nil
+		ro := opt.ReadOptions{
+			DontFillCache: true,
+		}
+		iter := snap.NewIterator(util.BytesPrefix(prefixValues), &ro)
+		defer iter.Release()
+
+		for iter.Next() {
+			// TODO: Fetch actual expiration.
+			ki := api.KeyInfo{
+				Expiration: epochtime.EpochInvalid,
+			}
+			copy(ki.Key[:], iter.Key()[len(prefixValues):])
+			select {
+			case kiChan <- &ki:
+			case <-ctx.Done():
+				break
+			}
+		}
+		if err := iter.Error(); err != nil {
+			b.logger.Error("GetKeys iter.Error", "err", err)
+			return
+		}
+	}()
+
+	return kiChan, nil
 }
 
 func (b *leveldbBackend) PurgeExpired(epoch epochtime.EpochTime) {

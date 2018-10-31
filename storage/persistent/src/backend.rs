@@ -1,13 +1,17 @@
 //! Ekiden storage interface.
 use std::path::Path;
 use std::sync::Arc;
+use std::thread;
 
 use exonum_rocksdb::{IteratorMode, WriteBatch, DB};
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::{Error, Result};
+use ekiden_common::futures;
 use ekiden_common::futures::prelude::*;
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
+
+const KEYS_CHANNEL_LIMIT: usize = 1000;
 
 struct Inner {
     /// RocksDB database.
@@ -84,20 +88,22 @@ impl StorageBackend for PersistentStorageBackend {
         }).into_box()
     }
 
-    fn get_keys(&self) -> BoxFuture<Arc<Vec<(H256, u64)>>> {
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
         let inner = self.inner.clone();
-
-        future::lazy(move || {
-            let keys = inner
-                .db
-                .iterator(IteratorMode::Start)
-                .map(|entry| {
+        let (tx, rx) = futures::sync::mpsc::channel(KEYS_CHANNEL_LIMIT);
+        thread::spawn(move || {
+            drop(
+                stream::iter_ok::<_, futures::sync::mpsc::SendError<_>>(
+                    inner.db.iterator(IteratorMode::Start),
+                ).map(|entry| {
                     let key = H256::from(&*entry.0);
                     (key, 0)
                 })
-                .collect();
-            Ok(Arc::new(keys))
-        }).into_box()
+                    .forward(tx)
+                    .wait(),
+            );
+        });
+        rx.map_err(|()| unreachable!()).into_box()
     }
 }
 
