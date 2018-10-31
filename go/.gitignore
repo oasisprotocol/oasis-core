@@ -1,17 +1,15 @@
 *.swp
 *~
 
-Gopkg.lock
 common/crypto/mrae/gen_vectors/gen_vectors
 ekiden/ekiden
-vendor/
 
 # Ignore output from protoc created via `go generate`.
-grpc/beacon/
-grpc/common/
-grpc/dummydebug/
-grpc/ias/
-grpc/registry/
-grpc/roothash/
-grpc/scheduler/
-grpc/storage/
+grpc/beacon/*.pb.go
+grpc/common/*.pb.go
+grpc/dummydebug/*.pb.go
+grpc/ias/*.pb.go
+grpc/registry/*.pb.go
+grpc/roothash/*.pb.go
+grpc/scheduler/*.pb.go
+grpc/storage/*.pb.go
