@@ -22,12 +22,7 @@ cargo install --force --path tools
 (cd key-manager/dummy/enclave && cargo ekiden build-enclave --output-identity --release)
 
 # Build all Ekiden Go binaries and resources.
-GO_SRC_BASE=${GOPATH}/src/github.com/oasislabs
-mkdir -p ${GO_SRC_BASE}
-ln -sfT `pwd` ${GO_SRC_BASE}/ekiden
-(cd ${GO_SRC_BASE}/ekiden/go && dep ensure -v)
-(cd ${GO_SRC_BASE}/ekiden/go && go generate ./...)
-(cd ${GO_SRC_BASE}/ekiden/go && go build -o ./ekiden/ekiden ./ekiden)
+(cd go && env -u GOPATH make)
 
 # Package all binaries and resources.
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
