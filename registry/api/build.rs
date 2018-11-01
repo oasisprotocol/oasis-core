@@ -12,15 +12,24 @@ fn main() {
 
     // Root set to the core ekiden root so that common/api is in scope.
     protoc_grpcio::compile_grpc_protos(
-        &["entity.proto", "runtime.proto"],
-        &["src", "../../"],
+        &[
+            "../../go/grpc/registry/entity.proto",
+            "../../go/grpc/registry/runtime.proto",
+        ],
+        &["../../go/grpc/"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
 
     println!(
         "cargo:rerun-if-changed={}",
-        "../../common/api/src/common.proto"
+        "../../go/grpc/registry/common/common.proto"
     );
-    println!("cargo:rerun-if-changed={}", "src/runtime.proto");
-    println!("cargo:rerun-if-changed={}", "src/entity.proto");
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../go/grpc/registry/runtime.proto"
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../go/grpc/registry/entity.proto"
+    );
 }

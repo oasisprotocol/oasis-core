@@ -17,7 +17,7 @@ fn main() {
 
     protoc_grpcio::compile_grpc_protos(
         &["src/computation_group.proto", "src/runtime.proto"],
-        &["src", "../../"],
+        &["src", "../../go/grpc"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
 

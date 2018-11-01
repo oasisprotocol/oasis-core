@@ -5,8 +5,14 @@ fn main() {
     // Must be done first to create src/generated directory
     ekiden_tools::generate_mod("src/generated", &["storage", "storage_grpc"]);
 
-    protoc_grpcio::compile_grpc_protos(&["src/storage.proto"], &["src"], "src/generated")
-        .expect("failed to compile gRPC definitions");
+    protoc_grpcio::compile_grpc_protos(
+        &["../../go/grpc/storage/storage.proto"],
+        &["../../go/grpc"],
+        "src/generated",
+    ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/storage.proto");
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../go/grpc/storage/storage.proto"
+    );
 }

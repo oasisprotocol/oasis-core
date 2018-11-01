@@ -19,8 +19,14 @@ fn main() {
     writeln!(&mut file, "#[cfg(not(target_env = \"sgx\"))]").unwrap();
     writeln!(&mut file, "pub mod common_grpc;").unwrap();
 
-    protoc_grpcio::compile_grpc_protos(&["common.proto"], &["src"], "src/generated")
-        .expect("failed to compile gRPC definitions");
+    protoc_grpcio::compile_grpc_protos(
+        &["../../go/grpc/common/common.proto"],
+        &["../../go/grpc"],
+        "src/generated",
+    ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/common.proto");
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../go/grpc/common/common.proto"
+    );
 }

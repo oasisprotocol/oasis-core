@@ -2,14 +2,13 @@
 
 ## Installation
 
-Code is compiled against Go 1.10.x.
+Code is compiled against Go 1.11.x.
 
 In addition, we expect the following tools, which are present in the
 development docker environment:
-* [dep](https://github.com/golang/dep)
 * [golangci-lint](https://github.com/golangci/golangci-lint)
 * [protoc](https://github.com/google/protobuf)
-* [protobuf](https://github.com/golang/protobuf) Version 1.0.0
+* [protobuf](https://github.com/golang/protobuf) Version 1.1.0
 
 You can build everything by running:
 ```
@@ -18,7 +17,6 @@ make
 
 If you want to run individual steps, the following steps are used for compilation:
 ```
-make dep
 make generate
 make build
 ```

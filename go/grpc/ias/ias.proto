@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "common/api/src/common.proto";
+import "common/common.proto";
 
 package ias;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/ias";
