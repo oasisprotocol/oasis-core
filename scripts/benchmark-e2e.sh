@@ -29,7 +29,7 @@ run_dummy_node_storage_persistent() {
         --grpc.port 42261 \
         --epochtime.backend mock \
         --beacon.backend insecure \
-        --storage.backend bolt \
+        --storage.backend leveldb \
         --scheduler.backend trivial \
         --registry.backend memory \
         --datadir ${datadir} \
