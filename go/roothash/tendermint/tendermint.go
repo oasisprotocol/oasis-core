@@ -4,6 +4,7 @@ package tendermint
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/eapache/channels"
 	"github.com/hashicorp/golang-lru"
@@ -406,6 +407,7 @@ func New(
 	storage storage.Backend,
 	service service.TendermintService,
 	genesisBlocks map[signature.MapKey]*block.Block,
+	roundTimeout time.Duration,
 ) (api.Backend, error) {
 	// We can only work with a block-based epochtime.
 	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
@@ -420,7 +422,7 @@ func New(
 	}
 
 	// Initialize and register the tendermint service component.
-	app := tmroothash.New(blockTimeSource, blockScheduler, storage, genesisBlocks)
+	app := tmroothash.New(blockTimeSource, blockScheduler, storage, genesisBlocks, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

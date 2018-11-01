@@ -2,6 +2,7 @@ package memory
 
 import (
 	"testing"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/beacon/insecure"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
@@ -20,7 +21,7 @@ func TestRootHashMemory(t *testing.T) {
 	storage := storage.New(timeSource)
 	defer storage.Cleanup()
 
-	backend := New(scheduler, storage, registry, nil)
+	backend := New(scheduler, storage, registry, nil, 10*time.Second)
 
 	tests.RootHashImplementationTests(t, backend, timeSource, scheduler, storage, registry)
 }

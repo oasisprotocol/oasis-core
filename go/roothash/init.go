@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/cobra"
@@ -26,11 +27,13 @@ import (
 const (
 	cfgBackend       = "roothash.backend"
 	cfgGenesisBlocks = "roothash.genesis-blocks"
+	cfgRoundTimeout  = "roothash.round_timeout"
 )
 
 var (
 	flagBackend       string
 	flagGenesisBlocks string
+	flagRoundTimeout  time.Duration
 )
 
 // New constructs a new Backend based on the configuration flags.
@@ -68,14 +71,16 @@ func New(
 		}
 	}
 
+	roundTimeout, _ := cmd.Flags().GetDuration(cfgRoundTimeout)
+
 	var impl api.Backend
 	var err error
 
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(scheduler, storage, registry, genesisBlocks)
+		impl = memory.New(scheduler, storage, registry, genesisBlocks, roundTimeout)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(timeSource, scheduler, storage, tmService, genesisBlocks)
+		impl, err = tendermint.New(timeSource, scheduler, storage, tmService, genesisBlocks, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}
@@ -91,10 +96,12 @@ func New(
 func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&flagBackend, cfgBackend, memory.BackendName, "Root hash backend")
 	cmd.Flags().StringVar(&flagGenesisBlocks, cfgGenesisBlocks, "", "File with serialized genesis blocks")
+	cmd.Flags().DurationVar(&flagRoundTimeout, cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
 
 	for _, v := range []string{
 		cfgBackend,
 		cfgGenesisBlocks,
+		cfgRoundTimeout,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
