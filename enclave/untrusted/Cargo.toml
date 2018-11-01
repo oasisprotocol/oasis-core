@@ -16,8 +16,14 @@ protobuf = "~2.0"
 sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
 sgx_urts = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2", features = ["global_init"] }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../common", version = "0.2.0-alpha" }
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+futures = "0.1"
+serde = "1.0.71"
+serde_derive = "1.0"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
+protoc-grpcio = "0.2.0"
