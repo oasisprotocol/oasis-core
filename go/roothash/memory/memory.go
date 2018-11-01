@@ -26,7 +26,6 @@ const (
 	// BackendName is the name of this implementation.
 	BackendName = "memory"
 
-	roundTimeout    = 10 * time.Second
 	infiniteTimeout = time.Duration(math.MaxInt64)
 )
 
@@ -124,7 +123,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 		switch rearmTimer {
 		case true: // (Re-)arm timer.
 			s.logger.Debug("worker: (re-)arming round timeout")
-			s.timer.Reset(roundTimeout)
+			s.timer.Reset(s.rootHash.roundTimeout)
 		case false: // Disarm timer.
 			s.logger.Debug("worker: disarming round timeout")
 			s.timer.Reset(infiniteTimeout)
@@ -331,6 +330,8 @@ type memoryRootHash struct {
 	closedCh  chan struct{}
 	closedWg  sync.WaitGroup
 	closeOnce sync.Once
+
+	roundTimeout time.Duration
 }
 
 func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
@@ -547,6 +548,7 @@ func New(
 	storage storage.Backend,
 	registry registry.Backend,
 	genesisBlocks map[signature.MapKey]*block.Block,
+	roundTimeout time.Duration,
 ) api.Backend {
 	r := &memoryRootHash{
 		logger:           logging.GetLogger("roothash/memory"),
@@ -557,6 +559,7 @@ func New(
 		allBlockNotifier: pubsub.NewBroker(false),
 		closeCh:          make(chan struct{}),
 		closedCh:         make(chan struct{}),
+		roundTimeout:     roundTimeout,
 	}
 	go r.worker(registry)
 

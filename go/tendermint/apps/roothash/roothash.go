@@ -26,10 +26,6 @@ import (
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
 
-const (
-	roundTimeout = 10 * time.Second
-)
-
 var (
 	errNoSuchRuntime = errors.New("tendermint/roothash: no such runtime")
 	errNoRound       = errors.New("tendermint/roothash: no round in progress")
@@ -62,6 +58,8 @@ type rootHashApplication struct {
 	// start with the given block as the genesis block. For other
 	// runtime, generate an "empty" genesis block.
 	genesisBlocks map[signature.MapKey]*block.Block
+
+	roundTimeout time.Duration
 }
 
 func (app *rootHashApplication) Name() string {
@@ -475,7 +473,7 @@ func (app *rootHashApplication) tryFinalize(
 				ID:    runtime.ID,
 				Round: blockNr,
 			}
-			runtimeState.Timer.Reset(ctx, roundTimeout, timerCtx.MarshalCBOR())
+			runtimeState.Timer.Reset(ctx, app.roundTimeout, timerCtx.MarshalCBOR())
 		case false: // Disarm timer.
 			app.logger.Debug("disarming round timeout")
 			runtimeState.Timer.Stop(ctx)
@@ -594,6 +592,7 @@ func New(
 	scheduler scheduler.BlockBackend,
 	storage storage.Backend,
 	genesisBlocks map[signature.MapKey]*block.Block,
+	roundTimeout time.Duration,
 ) abci.Application {
 	return &rootHashApplication{
 		logger:        logging.GetLogger("tendermint/roothash"),
@@ -601,5 +600,6 @@ func New(
 		scheduler:     scheduler,
 		storage:       storage,
 		genesisBlocks: genesisBlocks,
+		roundTimeout:  roundTimeout,
 	}
 }
