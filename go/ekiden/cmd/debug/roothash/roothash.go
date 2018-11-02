@@ -1,4 +1,5 @@
-package cmd
+// Package roothash implements the roothash debug sub-commands.
+package roothash
 
 import (
 	"encoding/hex"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
+	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	"github.com/oasislabs/ekiden/go/grpc/roothash"
 )
 
@@ -40,10 +43,10 @@ var (
 
 			return nil
 		},
-		Run: roothashExport,
+		Run: doExport,
 	}
 
-	roothashLog = logging.GetLogger("cmd/roothash")
+	logger = logging.GetLogger("cmd/roothash")
 
 	cfgRoothashExportFile = "output_file"
 )
@@ -62,12 +65,10 @@ func validateRuntimeIDStr(idStr string) error {
 	return nil
 }
 
-func roothashConnect() (*grpc.ClientConn, roothash.RootHashClient) {
-	initCommon()
-
-	conn, err := newGrpcClient(dummyAddress)
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, roothash.RootHashClient) {
+	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
-		roothashLog.Error("failed to establish connection with node",
+		logger.Error("failed to establish connection with node",
 			"err", err,
 		)
 		os.Exit(1)
@@ -78,21 +79,25 @@ func roothashConnect() (*grpc.ClientConn, roothash.RootHashClient) {
 	return conn, client
 }
 
-func roothashExport(cmd *cobra.Command, args []string) {
-	conn, client := roothashConnect()
+func doExport(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	conn, client := doConnect(cmd)
 	defer conn.Close()
 
 	var genesisBlocks []*roothash.GenesisBlock
 	for _, idHex := range args {
 		id, err := hex.DecodeString(idHex)
 		if err != nil {
-			roothashLog.Error("failed to decode runtime id",
+			logger.Error("failed to decode runtime id",
 				"err", err,
 			)
 			continue
 		}
 
-		roothashLog.Debug("exporting",
+		logger.Debug("exporting",
 			"runtime_id", idHex,
 		)
 
@@ -101,7 +106,7 @@ func roothashExport(cmd *cobra.Command, args []string) {
 		}
 		blk, err := client.GetLatestBlock(context.Background(), req)
 		if err != nil {
-			roothashLog.Error("failed to get latest block",
+			logger.Error("failed to get latest block",
 				"err", err,
 				"runtime_id", idHex,
 			)
@@ -119,15 +124,15 @@ func roothashExport(cmd *cobra.Command, args []string) {
 		GenesisBlocks: genesisBlocks,
 	})
 	if err != nil {
-		roothashLog.Error("failed to serialize genesis blocks",
+		logger.Error("failed to serialize genesis blocks",
 			"err", err,
 		)
 		os.Exit(1)
 	}
 
-	w, shouldClose, err := roothashGetOutput(cmd, cfgRoothashExportFile)
+	w, shouldClose, err := getOutput(cmd, cfgRoothashExportFile)
 	if err != nil {
-		roothashLog.Error("failed to get writer",
+		logger.Error("failed to get writer",
 			"err", err,
 		)
 		os.Exit(1)
@@ -137,14 +142,14 @@ func roothashExport(cmd *cobra.Command, args []string) {
 	}
 
 	if _, err = w.Write(raw); err != nil {
-		roothashLog.Error("failed to write genesis blocks",
+		logger.Error("failed to write genesis blocks",
 			"err", err,
 		)
 		os.Exit(1)
 	}
 }
 
-func roothashGetOutput(cmd *cobra.Command, cfg string) (io.WriteCloser, bool, error) {
+func getOutput(cmd *cobra.Command, cfg string) (io.WriteCloser, bool, error) {
 	f, _ := cmd.Flags().GetString(cfg)
 	if f == "" {
 		return os.Stdout, false, nil
@@ -154,10 +159,11 @@ func roothashGetOutput(cmd *cobra.Command, cfg string) (io.WriteCloser, bool, er
 	return w, true, err
 }
 
-func init() {
-	roothashCmd.PersistentFlags().StringVarP(&dummyAddress, "address", "a", defaultNodeAddress, "node gRPC address")
+// Register regisers the roothash sub-command and all of it's children.
+func Register(parentCmd *cobra.Command) {
+	cmdGrpc.RegisterClientFlags(roothashCmd, true)
 	roothashExportCmd.Flags().StringVarP(&roothashExportFile, cfgRoothashExportFile, "o", "", "root hash block output file")
 
-	rootCmd.AddCommand(roothashCmd)
 	roothashCmd.AddCommand(roothashExportCmd)
+	parentCmd.AddCommand(roothashCmd)
 }

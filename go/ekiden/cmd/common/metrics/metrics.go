@@ -1,4 +1,5 @@
-package cmd
+// Package metrics implements a prometheus metrics service.
+package metrics
 
 import (
 	"context"
@@ -20,8 +21,8 @@ import (
 const (
 	cfgMetricsMode              = "metrics.mode"
 	cfgMetricsAddr              = "metrics.address"
-	cfgMetricsPushJobName       = "metrics.push.job-name"
-	cfgMetricsPushInstanceLabel = "metrics.push.instance-label"
+	cfgMetricsPushJobName       = "metrics.push.job_name"
+	cfgMetricsPushInstanceLabel = "metrics.push.instance_label"
 	cfgMetricsPushInterval      = "metrics.push.interval"
 
 	metricsModePull = "pull"
@@ -37,7 +38,7 @@ var (
 	metricsPushInterval      time.Duration
 )
 
-type metricsPullService struct {
+type pullService struct {
 	service.BaseBackgroundService
 
 	ln net.Listener
@@ -46,7 +47,7 @@ type metricsPullService struct {
 	errCh chan error
 }
 
-func (s *metricsPullService) Start() error {
+func (s *pullService) Start() error {
 	go func() {
 		if err := s.s.Serve(s.ln); err != nil {
 			s.BaseBackgroundService.Stop()
@@ -56,7 +57,7 @@ func (s *metricsPullService) Start() error {
 	return nil
 }
 
-func (s *metricsPullService) Stop() {
+func (s *pullService) Stop() {
 	if s.s != nil {
 		select {
 		case err := <-s.errCh:
@@ -72,14 +73,14 @@ func (s *metricsPullService) Stop() {
 	}
 }
 
-func (s *metricsPullService) Cleanup() {
+func (s *pullService) Cleanup() {
 	if s.ln != nil {
 		_ = s.ln.Close()
 		s.ln = nil
 	}
 }
 
-func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error) {
+func newPullService(cmd *cobra.Command) (service.BackgroundService, error) {
 	addr, _ := cmd.Flags().GetString(cfgMetricsAddr)
 
 	svc := *service.NewBaseBackgroundService("metrics")
@@ -94,7 +95,7 @@ func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error
 		return nil, err
 	}
 
-	return &metricsPullService{
+	return &pullService{
 		BaseBackgroundService: svc,
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler()},
@@ -102,21 +103,21 @@ func newMetricsPullService(cmd *cobra.Command) (service.BackgroundService, error
 	}, nil
 }
 
-type metricsPushService struct {
+type pushService struct {
 	service.BaseBackgroundService
 
 	pusher   *push.Pusher
 	interval time.Duration
 }
 
-func (s *metricsPushService) Start() error {
+func (s *pushService) Start() error {
 	s.pusher = s.pusher.Gatherer(prometheus.DefaultGatherer)
 
 	go s.worker()
 	return nil
 }
 
-func (s *metricsPushService) worker() {
+func (s *pushService) worker() {
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 
@@ -135,17 +136,17 @@ func (s *metricsPushService) worker() {
 	}
 }
 
-func newMetricsPushService(cmd *cobra.Command) (service.BackgroundService, error) {
+func newPushService(cmd *cobra.Command) (service.BackgroundService, error) {
 	addr, _ := cmd.Flags().GetString(cfgMetricsAddr)
 	jobName, _ := cmd.Flags().GetString(cfgMetricsPushJobName)
 	instanceLabel, _ := cmd.Flags().GetString(cfgMetricsPushInstanceLabel)
 	interval, _ := cmd.Flags().GetDuration(cfgMetricsPushInterval)
 
 	if jobName == "" {
-		return nil, fmt.Errorf("metrics: metrics.push.job-name required for push mode")
+		return nil, fmt.Errorf("metrics: metrics.push.job_name required for push mode")
 	}
 	if instanceLabel == "" {
-		return nil, fmt.Errorf("metrics: metrics.push.instance-label required for push mode")
+		return nil, fmt.Errorf("metrics: metrics.push.instance_label required for push mode")
 	}
 
 	svc := *service.NewBaseBackgroundService("metrics")
@@ -158,26 +159,28 @@ func newMetricsPushService(cmd *cobra.Command) (service.BackgroundService, error
 		"push_interval", interval,
 	)
 
-	return &metricsPushService{
+	return &pushService{
 		BaseBackgroundService: svc,
 		pusher:                push.New(addr, jobName).Grouping("instance", instanceLabel),
 		interval:              interval,
 	}, nil
 }
 
-func newMetrics(cmd *cobra.Command) (service.BackgroundService, error) {
+// New constructs a new metrics service.
+func New(cmd *cobra.Command) (service.BackgroundService, error) {
 	mode, _ := cmd.Flags().GetString(cfgMetricsMode)
 	switch strings.ToLower(mode) {
 	case metricsModePull:
-		return newMetricsPullService(cmd)
+		return newPullService(cmd)
 	case metricsModePush:
-		return newMetricsPushService(cmd)
+		return newPushService(cmd)
 	default:
 		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
 	}
 }
 
-func registerMetricsFlags(cmd *cobra.Command) {
+// RegisterFlags registers the flags used by the metrics service.
+func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&metricsMode, cfgMetricsMode, metricsModePull, "metrics (prometheus) mode")
 	cmd.Flags().StringVar(&metricsAddr, cfgMetricsAddr, "0.0.0.0:3000", "metrics pull/push address")
 	cmd.Flags().StringVar(&metricsPushJobName, cfgMetricsPushJobName, "", "metrics push job name")

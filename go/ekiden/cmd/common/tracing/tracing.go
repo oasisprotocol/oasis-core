@@ -1,4 +1,5 @@
-package cmd
+// Package tracing implements a tracing service.
+package tracing
 
 import (
 	"io"
@@ -14,8 +15,8 @@ import (
 
 const (
 	cfgTracingEnabled                    = "tracing.enabled"
-	cfgTracingReporterFlushInterval      = "tracing.reporter.flush-interval"
-	cfgTracingReporterLocalAgentHostPort = "tracing.reporter.agent-addr"
+	cfgTracingReporterFlushInterval      = "tracing.reporter.flush_interval"
+	cfgTracingReporterLocalAgentHostPort = "tracing.reporter.agent_addr"
 	cfgTracingSamplerParam               = "tracing.sampler.param"
 )
 
@@ -37,7 +38,8 @@ func (svc *tracingService) Cleanup() {
 	}
 }
 
-func initTracing(cmd *cobra.Command, serviceName string) (service.CleanupAble, error) {
+// New constructs a new tracing service.
+func New(cmd *cobra.Command, serviceName string) (service.CleanupAble, error) {
 	enabled, _ := cmd.Flags().GetBool(cfgTracingEnabled)
 	reporterFlushInterval, _ := cmd.Flags().GetDuration(cfgTracingReporterFlushInterval)
 	reporterLocalAgentHostPort, _ := cmd.Flags().GetString(cfgTracingReporterLocalAgentHostPort)
@@ -62,7 +64,8 @@ func initTracing(cmd *cobra.Command, serviceName string) (service.CleanupAble, e
 	return &tracingService{closer: closer}, nil
 }
 
-func registerTracingFlags(cmd *cobra.Command) {
+// RegisterFlags registers the flags used by the tracing service.
+func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&tracingEnabled, cfgTracingEnabled, true, "Enable tracing")
 	cmd.Flags().DurationVar(&tracingReporterFlushInterval, cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
 	cmd.Flags().StringVar(&tracingReporterLocalAgentHostPort, cfgTracingReporterLocalAgentHostPort, "localhost:6831", "Send spans to jaeger-agent at this address")

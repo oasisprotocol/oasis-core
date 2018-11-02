@@ -1,4 +1,5 @@
-package cmd
+// Package tendermint implements the tendermint debug sub-commands.
+package tendermint
 
 import (
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/tendermint/inspector"
 )
 
@@ -23,18 +25,20 @@ var (
 	tmDumpMuxStateCmd = &cobra.Command{
 		Use:   "dump-abci-mux-state",
 		Short: "dump ABCI mux state as JSON",
-		Run:   tmDumpMuxState,
+		Run:   doDumpMuxState,
 	}
 
-	tmLog = logging.GetLogger("tendermint-cli")
+	logger = logging.GetLogger("cmd/tendermint")
 )
 
-func tmDumpMuxState(cmd *cobra.Command, args []string) {
-	initCommon()
+func doDumpMuxState(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
 
 	state, err := inspector.OpenMuxState(stateFilename)
 	if err != nil {
-		tmLog.Error("failed to open ABCI mux state",
+		logger.Error("failed to open ABCI mux state",
 			"err", err,
 		)
 		return
@@ -64,9 +68,10 @@ func tmDumpMuxState(cmd *cobra.Command, args []string) {
 	fmt.Printf("%s\n", b)
 }
 
-func init() {
-	tmDumpMuxStateCmd.PersistentFlags().StringVarP(&stateFilename, "state", "s", "abci-mux-state.bolt.db", "ABCI mux state file to dump")
+// Register registers the tendermint sub-command and all of it's children.
+func Register(parentCmd *cobra.Command) {
+	tmDumpMuxStateCmd.Flags().StringVarP(&stateFilename, "state", "s", "abci-mux-state.bolt.db", "ABCI mux state file to dump")
 
-	rootCmd.AddCommand(tmCmd)
 	tmCmd.AddCommand(tmDumpMuxStateCmd)
+	parentCmd.AddCommand(tmCmd)
 }

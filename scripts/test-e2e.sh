@@ -176,7 +176,7 @@ run_test() {
     if [[ "${pre_epochs}" > 0 ]]; then
         for epoch in $(seq $pre_epochs); do
             sleep 1
-            ${WORKDIR}/go/ekiden/ekiden dummy set-epoch --epoch $epoch
+            ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch --epoch $epoch
         done
     fi
 
@@ -203,14 +203,14 @@ run_test() {
 
     # Start compute nodes and wait for them to register.
     $scenario
-    ${WORKDIR}/go/ekiden/ekiden dummy wait-nodes --nodes 3
+    ${WORKDIR}/go/ekiden/ekiden debug dummy wait-nodes --nodes 3
 
     # Advance epoch to elect a new committee.
     let epochs_offset=pre_epochs+1
     let epochs+=pre_epochs
     for epoch in $(seq $epochs_offset $epochs); do
         sleep 3
-        ${WORKDIR}/go/ekiden/ekiden dummy set-epoch --epoch $epoch
+        ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch --epoch $epoch
     done
 
     # Wait on the client and check its exit status.

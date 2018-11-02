@@ -1,4 +1,5 @@
-package cmd
+// Package registry implements the registry sub-commands.
+package registry
 
 import (
 	"encoding/hex"
@@ -10,6 +11,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
+	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
+	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	"github.com/oasislabs/ekiden/go/grpc/registry"
 )
 
@@ -22,18 +25,16 @@ var (
 	registryListRuntimesCmd = &cobra.Command{
 		Use:   "list-runtimes",
 		Short: "list registered runtimes",
-		Run:   registryListRuntimes,
+		Run:   doListRuntimes,
 	}
 
-	registryLog = logging.GetLogger("cmd/registry")
+	logger = logging.GetLogger("cmd/registry")
 )
 
-func registryRuntimeConnect() (*grpc.ClientConn, registry.RuntimeRegistryClient) {
-	initCommon()
-
-	conn, err := newGrpcClient(dummyAddress)
+func doRuntimeConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.RuntimeRegistryClient) {
+	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
-		registryLog.Error("failed to establish connection with node",
+		logger.Error("failed to establish connection with node",
 			"err", err,
 		)
 		os.Exit(1)
@@ -44,13 +45,17 @@ func registryRuntimeConnect() (*grpc.ClientConn, registry.RuntimeRegistryClient)
 	return conn, client
 }
 
-func registryListRuntimes(cmd *cobra.Command, args []string) {
-	conn, client := registryRuntimeConnect()
+func doListRuntimes(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	conn, client := doRuntimeConnect(cmd)
 	defer conn.Close()
 
 	runtimes, err := client.GetRuntimes(context.Background(), &registry.RuntimesRequest{})
 	if err != nil {
-		registryLog.Error("failed to query runtimes",
+		logger.Error("failed to query runtimes",
 			"err", err,
 		)
 		os.Exit(1)
@@ -63,9 +68,10 @@ func registryListRuntimes(cmd *cobra.Command, args []string) {
 	}
 }
 
-func init() {
-	registryCmd.PersistentFlags().StringVarP(&dummyAddress, "address", "a", defaultNodeAddress, "node gRPC address")
+// Register registers the registry sub-command and all of it's children.
+func Register(parentCmd *cobra.Command) {
+	cmdGrpc.RegisterClientFlags(registryListRuntimesCmd, false)
 
-	rootCmd.AddCommand(registryCmd)
 	registryCmd.AddCommand(registryListRuntimesCmd)
+	parentCmd.AddCommand(registryCmd)
 }
