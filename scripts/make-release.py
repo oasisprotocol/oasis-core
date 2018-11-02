@@ -6,14 +6,18 @@ import re
 import sys
 import subprocess
 
+# Development and testing Docker images.
+DOCKER_DEVELOPMENT_IMAGE = 'oasislabs/development'
+DOCKER_TESTING_IMAGE = 'oasislabs/testing'
+
 SECTION = re.compile(r'^\[(.+)\]')
 VERSION = re.compile(r'(version\s*=\s*")(.+)(")')
 DEPENDENCIES = re.compile(r'^(?:dependencies|build-dependencies|dev-dependencies|target\..+?\.dependencies|dependencies\.(\w+))$')
 INTERNAL_CRATES = re.compile(r'ekiden-.*')
 DOCKER_FROM = re.compile(r'FROM (.+?)(:.+)?$')
 CI_IMAGE = re.compile(r'(\s*-\s*image:\s*)(.+?)$')
-DOCKER_IMAGE = re.compile(r'(ekiden/development:).+(})')
-DEV_IMAGE = re.compile(r'(ekiden/development:).+(")')
+DOCKER_IMAGE = re.compile(r'(%s:).+(})' % DOCKER_DEVELOPMENT_IMAGE)
+DEV_IMAGE = re.compile(r'(%s:).+(")' % DOCKER_DEVELOPMENT_IMAGE)
 
 # Message used for version bump commits.
 VERSION_BUMP_MESSAGE = "Bump version to {version}"
@@ -241,16 +245,16 @@ if __name__ == '__main__':
     if args.bump_docker_images:
         print('=== Building and tagging Docker images...')
         bump_docker_version(root_dir, args.version, 'docker/testing')
-        ci_update_image(root_dir, 'ekiden/testing', args.version)
+        ci_update_image(root_dir, DOCKER_TESTING_IMAGE, args.version)
         script_update_version(root_dir, '../tools/bin/main.rs', DEV_IMAGE, args.version)
         script_update_version(root_dir, '../docker/deployment/build-images.sh', DOCKER_IMAGE, args.version)
 
         if args.build_docker_images:
-            docker_build(root_dir, args.version, 'docker/development', 'ekiden/development')
-            docker_build(root_dir, args.version, 'docker/testing', 'ekiden/testing')
+            docker_build(root_dir, args.version, 'docker/development', DOCKER_DEVELOPMENT_IMAGE)
+            docker_build(root_dir, args.version, 'docker/testing', DOCKER_TESTING_IMAGE)
 
-        docker_push('ekiden/development', args.version)
-        docker_push('ekiden/testing', args.version)
+        docker_push(DOCKER_DEVELOPMENT_IMAGE, args.version)
+        docker_push(DOCKER_TESTING_IMAGE, args.version)
 
     # Add modified files and commit version bump.
     print("=== Committing version bump...")

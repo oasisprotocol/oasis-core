@@ -1,6 +1,9 @@
 defaults: &defaults
   docker:
-    - image: ekiden/testing:0.2.0
+    - image: oasislabs/testing:0.2.0
+      auth:
+        username: $DOCKERHUB_USERNAME
+        password: $DOCKERHUB_PASSWORD
       environment:
         RUST_BACKTRACE: "1"
 
