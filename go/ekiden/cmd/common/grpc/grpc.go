@@ -1,4 +1,5 @@
-package cmd
+// Package grpc implements common gRPC related services and utilities.
+package grpc
 
 import (
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -25,13 +27,16 @@ const (
 	cfgGRPCPort         = "grpc.port"
 	cfgGRPCVerboseDebug = "grpc.log.verbose_debug"
 
-	defaultNodeAddress = "127.0.0.1:42261"
+	cfgAddress     = "address"
+	defaultAddress = "127.0.0.1:42261"
 )
 
 var (
 	grpcPort         uint16
 	grpcVerboseDebug bool
 	grpcMetricsOnce  sync.Once
+
+	remoteAddress string
 
 	grpcCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -61,7 +66,8 @@ var (
 		grpcStreamWrites,
 	}
 
-	_ grpclog.LoggerV2 = (*grpcLogAdapter)(nil)
+	_ grpclog.LoggerV2          = (*grpcLogAdapter)(nil)
+	_ service.BackgroundService = (*Server)(nil)
 )
 
 type grpcLogAdapter struct {
@@ -256,7 +262,8 @@ func (s *grpcStreamLogger) SendMsg(m interface{}) error {
 	return err
 }
 
-type grpcService struct {
+// Server is a gRPC server service.
+type Server struct {
 	service.BaseBackgroundService
 
 	ln net.Listener
@@ -265,7 +272,8 @@ type grpcService struct {
 	errCh chan error
 }
 
-func (s *grpcService) Start() error {
+// Start starts the Server.
+func (s *Server) Start() error {
 	go func() {
 		if err := s.s.Serve(s.ln); err != nil {
 			s.BaseBackgroundService.Stop()
@@ -275,7 +283,8 @@ func (s *grpcService) Start() error {
 	return nil
 }
 
-func (s *grpcService) Stop() {
+// Stop stops the Server.
+func (s *Server) Stop() {
 	if s.s != nil {
 		select {
 		case err := <-s.errCh:
@@ -291,16 +300,24 @@ func (s *grpcService) Stop() {
 	}
 }
 
-func (s *grpcService) Cleanup() {
+// Cleanup cleans up after the Server.
+func (s *Server) Cleanup() {
 	if s.ln != nil {
 		_ = s.ln.Close()
 		s.ln = nil
 	}
 }
 
+// Server returns the underlying gRPC server instance.
+func (s *Server) Server() *grpc.Server {
+	return s.s
+}
+
+// NewServer constructs a new gRPC server service.
+//
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
+func NewServer(cmd *cobra.Command) (*Server, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
 	})
@@ -325,7 +342,7 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(104857600)) // 100 MiB
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(104857600)) // 100 MiB
 
-	return &grpcService{
+	return &Server{
 		BaseBackgroundService: svc,
 		ln:                    ln,
 		s:                     grpc.NewServer(sOpts...),
@@ -333,8 +350,8 @@ func newGrpcService(cmd *cobra.Command) (*grpcService, error) {
 	}, nil
 }
 
-func registerGrpcFlags(cmd *cobra.Command) {
-	// Flags specific to the root command.
+// RegisterServerFlags registers the flags used by the gRPC server.
+func RegisterServerFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
 	cmd.Flags().BoolVar(&grpcVerboseDebug, cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
 
@@ -346,9 +363,28 @@ func registerGrpcFlags(cmd *cobra.Command) {
 	}
 }
 
-func newGrpcClient(address string) (*grpc.ClientConn, error) {
-	// Establish gRPC connection to the specified address.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+// RegisterClientFlags registers the flags for a gRPC client.
+func RegisterClientFlags(cmd *cobra.Command, persistent bool) {
+	var flagSet *pflag.FlagSet
+	switch persistent {
+	case true:
+		flagSet = cmd.PersistentFlags()
+	case false:
+		flagSet = cmd.Flags()
+	}
+
+	flagSet.StringVarP(&remoteAddress, cfgAddress, "a", defaultAddress, "remote gRPC address")
+
+	if persistent {
+		_ = viper.BindPFlag(cfgAddress, flagSet.Lookup(cfgAddress))
+	}
+}
+
+// NewClient connects to a remote gRPC server.
+func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
+	addr, _ := cmd.Flags().GetString(cfgAddress)
+
+	conn, err := grpc.Dial(addr, grpc.WithInsecure()) // TODO: TLS?
 	if err != nil {
 		return nil, err
 	}

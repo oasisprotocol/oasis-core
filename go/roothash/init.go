@@ -26,7 +26,7 @@ import (
 
 const (
 	cfgBackend       = "roothash.backend"
-	cfgGenesisBlocks = "roothash.genesis-blocks"
+	cfgGenesisBlocks = "roothash.genesis_blocks"
 	cfgRoundTimeout  = "roothash.round_timeout"
 )
 

@@ -12,6 +12,8 @@ import (
 
 	beaconTests "github.com/oasislabs/ekiden/go/beacon/tests"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd"
+	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
@@ -37,7 +39,7 @@ var (
 )
 
 type testNode struct {
-	*cmd.Node
+	*node.Node
 
 	dataDir string
 	start   time.Time
@@ -60,7 +62,7 @@ func (n *testNode) Stop() {
 
 func newTestNode(t *testing.T) *testNode {
 	initConfigOnce.Do(func() {
-		cmd.InitConfig()
+		cmdCommon.InitConfig()
 	})
 	rootCmd := cmd.RootCommand()
 
@@ -81,7 +83,7 @@ func newTestNode(t *testing.T) *testNode {
 		start:   time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
-	n.Node, err = cmd.NewNode(rootCmd)
+	n.Node, err = node.NewNode(rootCmd)
 	require.NoError(err, "start node")
 
 	return n

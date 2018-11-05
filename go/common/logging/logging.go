@@ -13,12 +13,18 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/spf13/pflag"
 )
 
-var backend = logBackend{
-	baseLogger: log.NewNopLogger(),
-	level:      LevelError,
-}
+var (
+	backend = logBackend{
+		baseLogger: log.NewNopLogger(),
+		level:      LevelError,
+	}
+
+	_ pflag.Value = (*Level)(nil)
+	_ pflag.Value = (*Format)(nil)
+)
 
 // Format is a logging format.
 type Format uint
@@ -30,16 +36,35 @@ const (
 	FmtJSON
 )
 
-// LogFormat returns the Format corresponding to the provided string.
-func LogFormat(s string) (Format, error) {
+// String returns the string representation of a Format.
+func (f *Format) String() string {
+	switch *f {
+	case FmtLogfmt:
+		return "logfmt"
+	case FmtJSON:
+		return "JSON"
+	default:
+		panic("logging: unsupported format")
+	}
+}
+
+// Set sets the Format to the value specifed by the provided string.
+func (f *Format) Set(s string) error {
 	switch strings.ToUpper(s) {
 	case "LOGFMT":
-		return FmtLogfmt, nil
+		*f = FmtLogfmt
 	case "JSON":
-		return FmtJSON, nil
+		*f = FmtJSON
 	default:
+		return fmt.Errorf("logging: invalid log format: '%v'" + s)
 	}
-	return FmtLogfmt, fmt.Errorf("logging: invalid log format: '%s'", s)
+
+	return nil
+}
+
+// Type returns the list of supported Formats.
+func (f *Format) Type() string {
+	return "[logfmt,JSON]"
 }
 
 // Level is a log level.
@@ -71,20 +96,43 @@ func (l Level) toOption() level.Option {
 	}
 }
 
-// LogLevel returns the Level corrsponding to the provided string.
-func LogLevel(s string) (Level, error) {
+// String returns the string representation of a Level.
+func (l *Level) String() string {
+	switch *l {
+	case LevelDebug:
+		return "DEBUG"
+	case LevelInfo:
+		return "INFO"
+	case LevelWarn:
+		return "WARN"
+	case LevelError:
+		return "ERROR"
+	default:
+		panic("logging: unsupported log level")
+	}
+}
+
+// Set sets the Level to the value specified by the provided string.
+func (l *Level) Set(s string) error {
 	switch strings.ToUpper(s) {
 	case "DEBUG":
-		return LevelDebug, nil
+		*l = LevelDebug
 	case "INFO":
-		return LevelInfo, nil
+		*l = LevelInfo
 	case "WARN":
-		return LevelWarn, nil
+		*l = LevelWarn
 	case "ERROR":
-		return LevelError, nil
+		*l = LevelError
 	default:
+		return fmt.Errorf("logging: invalid log level: '%s'", s)
 	}
-	return LevelError, fmt.Errorf("logging: invalid log level: '%s'", s)
+
+	return nil
+}
+
+// Type returns the list of supported Levels.
+func (l *Level) Type() string {
+	return "[DEBUG,INFO,WARN,ERROR]"
 }
 
 // Logger is a logger instance.

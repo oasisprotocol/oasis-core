@@ -57,7 +57,7 @@ test_migration() {
 
     sleep 3
 
-    "$WORKDIR/go/ekiden/ekiden" dummy set-epoch --epoch 1
+    "$WORKDIR/go/ekiden/ekiden" debug dummy set-epoch --epoch 1
 
     sleep 2
 
@@ -78,7 +78,7 @@ test_migration() {
 
     # Export.
     "$WORKDIR/scripts/storage/export.py" >/tmp/ekiden-test-storage.dat
-    "$WORKDIR/go/ekiden/ekiden" roothash export "$RUNTIME_ID" >/tmp/ekiden-test-roothash.dat
+    "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" >/tmp/ekiden-test-roothash.dat
 
     # Finish tearing down the network.
     kill -KILL "$first_dummy_pid"
@@ -98,7 +98,7 @@ test_migration() {
         --scheduler.backend trivial \
         --registry.backend "$registry_backend" \
         --roothash.backend "$roothash_backend" \
-        --roothash.genesis-blocks /tmp/ekiden-test-roothash.dat \
+        --roothash.genesis_blocks /tmp/ekiden-test-roothash.dat \
         --tendermint.consensus.timeout_commit 250ms \
         --datadir "$datadir" \
         &
@@ -136,7 +136,7 @@ test_migration() {
     sleep 3
     # 7 sec
 
-    "$WORKDIR/go/ekiden/ekiden" dummy set-epoch --epoch 2
+    "$WORKDIR/go/ekiden/ekiden" debug dummy set-epoch --epoch 2
 
 
     # Wait on the client and check its exit status.

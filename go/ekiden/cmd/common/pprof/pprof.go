@@ -1,4 +1,5 @@
-package cmd
+// Package pprof implements a pprof profiling service.
+package pprof
 
 import (
 	"context"
@@ -23,6 +24,8 @@ type pprofService struct {
 
 	listener net.Listener
 	server   *http.Server
+
+	errCh chan error
 }
 
 func (p *pprofService) Start() error {
@@ -52,14 +55,10 @@ func (p *pprofService) Start() error {
 	p.server = &http.Server{Handler: mux}
 
 	go func() {
-		err := p.server.Serve(p.listener)
-		if err != nil {
-			p.Logger.Error("pprof server terminated uncleanly",
-				"err", err,
-			)
+		if err := p.server.Serve(p.listener); err != nil {
+			p.BaseBackgroundService.Stop()
+			p.errCh <- err
 		}
-		p.server = nil
-		p.BaseBackgroundService.Stop()
 	}()
 
 	return nil
@@ -67,7 +66,16 @@ func (p *pprofService) Start() error {
 
 func (p *pprofService) Stop() {
 	if p.server != nil {
-		_ = p.server.Shutdown(context.Background())
+		select {
+		case err := <-p.errCh:
+			if err != nil {
+				p.Logger.Error("pprof server terminated uncleanly",
+					"err", err,
+				)
+			}
+		default:
+			_ = p.server.Shutdown(context.Background())
+		}
 		p.server = nil
 	}
 }
@@ -79,17 +87,19 @@ func (p *pprofService) Cleanup() {
 	}
 }
 
-func newPprofService(cmd *cobra.Command) (*pprofService, error) {
+// New constructs a new pprof service.
+func New(cmd *cobra.Command) (service.BackgroundService, error) {
 	address, _ := cmd.Flags().GetString(cfgPprofBind)
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),
 		address:               address,
+		errCh:                 make(chan error),
 	}, nil
 }
 
-func registerPprofFlags(cmd *cobra.Command) {
-	// Flags specific to the root command.
+// RegisterFlags registers the flags used by the pprof service.
+func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&pprofBind, cfgPprofBind, "", "enable profiling endpoint at given address")
 
 	for _, v := range []string{

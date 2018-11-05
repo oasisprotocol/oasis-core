@@ -1,4 +1,5 @@
-package cmd
+// Package benchmark implements the storage benchmark sub-command.
+package benchmark
 
 import (
 	"crypto/rand"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
+	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
@@ -18,21 +20,24 @@ import (
 
 var (
 	benchmarkStorageCmd = &cobra.Command{
-		Use:   "benchmark-storage",
+		Use:   "benchmark",
 		Short: "benchmark storage backend",
-		Run:   benchmarkStorage,
+		Run:   doBenchmark,
 	}
 )
 
-func benchmarkStorage(cmd *cobra.Command, args []string) {
-	initCommon()
+func doBenchmark(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
 
-	logger := logging.GetLogger("benchmark-storage")
+	logger := logging.GetLogger("cmd/storage/benchmark")
 
 	// Initialize the data directory.
+	dataDir := cmdCommon.DataDir(cmd)
 	if dataDir == "" {
 		var err error
-		dataDir, err = ioutil.TempDir("", "benchmark-storage")
+		dataDir, err = ioutil.TempDir("", "storage-benchmark")
 		if err != nil {
 			logger.Error("failed to initialize data directory",
 				"err", err,
@@ -121,9 +126,8 @@ func benchmarkStorage(cmd *cobra.Command, args []string) {
 	)
 }
 
-func init() {
-	// XXX: Flags
-
+// Register registers the storage benchmark sub-command.
+func Register(parentCmd *cobra.Command) {
 	for _, v := range []func(*cobra.Command){
 		epochtime.RegisterFlags,
 		storage.RegisterFlags,
@@ -131,5 +135,5 @@ func init() {
 		v(benchmarkStorageCmd)
 	}
 
-	rootCmd.AddCommand(benchmarkStorageCmd)
+	parentCmd.AddCommand(benchmarkStorageCmd)
 }
