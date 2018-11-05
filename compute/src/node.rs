@@ -5,11 +5,12 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use grpcio;
+use sgx_types;
 
 use ekiden_compute_api;
-use ekiden_core::bytes::B256;
+use ekiden_core::bytes::{B256, H128};
 use ekiden_core::environment::Environment;
-use ekiden_core::error::Result;
+use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::Future;
 use ekiden_core::identity::{EntityIdentity, NodeIdentity};
 use ekiden_core::signature::Signed;
@@ -23,14 +24,20 @@ use ekiden_scheduler_base::Scheduler;
 use ekiden_storage_api::create_storage;
 use ekiden_storage_base::{StorageBackend, StorageService};
 use ekiden_tools::get_enclave_identity;
+use ekiden_untrusted::enclave::ias_proxy::ProxyIAS;
 
 use super::group::ComputationGroup;
-use super::ias::{IASConfiguration, IAS};
 use super::roothash::{RootHashConfiguration, RootHashFrontend};
 use super::services::computation_group::ComputationGroupService;
 use super::services::enclaverpc::EnclaveRpcService;
 use super::services::runtime::RuntimeService;
 use super::worker::{Worker, WorkerConfiguration};
+
+pub struct ProxyIASConfiguration {
+    pub spid: H128,
+    pub quote_type: String,
+    pub addr: String,
+}
 
 /// Compute node test-only configuration.
 pub struct ComputeNodeTestOnlyConfiguration {
@@ -56,7 +63,7 @@ pub struct ComputeNodeConfiguration {
     /// Root hash configuration.
     pub roothash: RootHashConfiguration,
     /// IAS configuration.
-    pub ias: Option<IASConfiguration>,
+    pub ias: Option<ProxyIASConfiguration>,
     /// Worker configuration.
     pub worker: WorkerConfiguration,
     /// Test-only configuration.
@@ -77,9 +84,6 @@ impl ComputeNode {
             .duration_since(UNIX_EPOCH)
             .expect("unable to get time since UNIX epoch")
             .as_secs() as u64;
-
-        // Create IAS.
-        let ias = Arc::new(IAS::new(config.ias)?);
 
         let runtime_registry = container.inject::<RuntimeRegistryBackend>()?;
         let entity_registry = container.inject::<EntityRegistryBackend>()?;
@@ -159,6 +163,23 @@ impl ComputeNode {
         // Environment.
         let environment = container.inject::<Environment>()?;
         let grpc_environment = environment.grpc();
+
+        // Create IAS.
+        let ias_config = config.ias.expect("wip: ias config required");
+        let spid = sgx_types::sgx_spid_t {
+            id: ias_config.spid.clone().0,
+        };
+        let quote_type = match ias_config.quote_type.as_str() {
+            "unlinkable" => Ok(sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE),
+            "linkable" => Ok(sgx_types::sgx_quote_sign_type_t::SGX_LINKABLE_SIGNATURE),
+            other => Err(Error::new(format!(
+                "Unrecognized quote sign type {}",
+                other
+            ))),
+        }?;
+        let channel =
+            grpcio::ChannelBuilder::new(grpc_environment.clone()).connect(&ias_config.addr);
+        let ias = Arc::new(ProxyIAS::new(entity_identity, spid, quote_type, channel));
 
         // Create worker.
         let worker = Arc::new(Worker::new(

@@ -48,6 +48,7 @@ pub struct IAS {
 impl IAS {
     /// Construct new IAS interface.
     pub fn new(config: Option<IASConfiguration>) -> Result<IAS> {
+        eprintln!("warning: constructed direct IAS. should use proxy");
         match config {
             Some(config) => {
                 Ok(IAS {

@@ -59,15 +59,14 @@ use std::path::Path;
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_core::bytes::B256;
+use ekiden_core::bytes::{B256, H128};
 use ekiden_core::environment::Environment;
 use ekiden_core::identity::local::load_node_certificate;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
-use ekiden_untrusted::enclave::ias;
 
-use self::ias::{IASConfiguration, SPID};
-use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
+use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration,
+                 ProxyIASConfiguration};
 use self::roothash::{RootHashConfiguration, RootHashTestOnlyConfiguration};
 use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
 
@@ -126,16 +125,26 @@ fn main() {
                 .long("ias-spid")
                 .value_name("SPID")
                 .help("IAS SPID in hex format")
-                .takes_value(true)
-                .requires("ias-pkcs12"),
+                .takes_value(true),
         )
         .arg(
-            Arg::with_name("ias-pkcs12")
-                .long("ias-pkcs12")
-                .help("Path to IAS client certificate and private key PKCS#12 archive")
+            Arg::with_name("ias-quote-sign-type")
+                .long("ias-quote-sign-type")
+                .value_name("QUOTE_SIGN_TYPE")
+                .help("the quote signature type associated with the SPID")
                 .takes_value(true)
-                .requires("ias-spid"),
+                .possible_values(&["unlinkable", "linkable"])
+                .default_value("linkable"),
         )
+        .arg(
+            Arg::with_name("ias-proxy-addr")
+                .long("ias-proxy-addr")
+                .value_name("PROXY_ADDR")
+                .help("IAS proxy address (host:port)")
+                .takes_value(true)
+                .default_value("127.0.0.1:42261"),
+        )
+        // TODO: IAS proxy info
         .arg(
             Arg::with_name("key-manager-host")
                 .long("key-manager-host")
@@ -317,9 +326,10 @@ fn main() {
             },
             // IAS configuration.
             ias: if matches.is_present("ias-spid") {
-                Some(IASConfiguration {
-                    spid: value_t!(matches, "ias-spid", SPID).unwrap_or_else(|e| e.exit()),
-                    pkcs12_archive: matches.value_of("ias-pkcs12").unwrap().to_string(),
+                Some(ProxyIASConfiguration {
+                    spid: value_t!(matches, "ias-spid", H128).unwrap_or_else(|e| e.exit()),
+                    quote_type: matches.value_of("ias-quote-sign-type").unwrap().to_string(),
+                    addr: matches.value_of("ias-proxy-addr").unwrap().to_string(),
                 })
             } else {
                 warn!("IAS is not configured, validation will always return an error.");

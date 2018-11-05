@@ -27,11 +27,11 @@ use ekiden_core::x509::Certificate;
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_storage_batch::BatchStorageBackend;
+use ekiden_untrusted::enclave::identity::IAS;
 use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime};
 
 use super::handlers;
-use super::ias::IAS;
 
 /// Result bytes.
 pub type BytesResult = Result<Vec<u8>>;
@@ -301,7 +301,7 @@ impl Worker {
     /// Create new runtime worker.
     pub fn new(
         config: WorkerConfiguration,
-        ias: Arc<IAS>,
+        ias: Arc<IAS + Send + Sync>,
         environment: Arc<Environment>,
         storage: Arc<StorageBackend>,
     ) -> Self {
