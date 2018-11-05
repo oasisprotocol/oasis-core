@@ -17,7 +17,8 @@ fi
 
 # Build all Ekiden Rust binaries and resources.
 cargo install --force --path tools
-(cd compute && cargo build --release)
+cargo build -p ekiden-worker --release
+cargo build -p ekiden-compute --release
 (cd key-manager/node && cargo build --release)
 (cd key-manager/dummy/enclave && cargo ekiden build-enclave --output-identity --release)
 
@@ -27,6 +28,7 @@ cargo install --force --path tools
 # Package all binaries and resources.
 mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
 ln target/release/ekiden-compute target/docker-deployment/context/bin
+ln target/release/ekiden-worker target/docker-deployment/context/bin
 ln go/ekiden/ekiden target/docker-deployment/context/bin/ekiden-node
 ln target/release/ekiden-keymanager-node target/docker-deployment/context/bin
 ln target/enclave/ekiden-keymanager-trusted.so target/docker-deployment/context/lib

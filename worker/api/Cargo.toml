@@ -1,0 +1,27 @@
+[package]
+name = "ekiden-worker-api"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden worker process API"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
+ekiden-untrusted = { path = "../../core/untrusted", version = "0.2.0-alpha" }
+ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
+ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
+sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+serde = "1.0.71"
+serde_derive = "1.0"
+serde_cbor = "0.8.2"
+serde_bytes = "~0.10"
+tokio-io = "0.1.10"
+tokio-codec = "0.1.1"
+bytes = "0.4.10"
+byteorder = "1.2.7"
+log = "0.4"
+
+[dev-dependencies]
+ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+tokio-uds = "0.2.3"

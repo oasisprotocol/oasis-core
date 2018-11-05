@@ -150,8 +150,8 @@ impl IAS {
 }
 
 impl identity::IAS for IAS {
-    fn get_spid(&self) -> &sgx_types::sgx_spid_t {
-        &self.spid
+    fn get_spid(&self) -> sgx_types::sgx_spid_t {
+        self.spid.clone()
     }
 
     fn get_quote_type(&self) -> sgx_types::sgx_quote_sign_type_t {

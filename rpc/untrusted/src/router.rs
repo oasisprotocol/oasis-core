@@ -17,6 +17,16 @@ pub trait Handler: Send + Sync + 'static {
     fn handle(&self, endpoint: &ClientEndpoint, request: Vec<u8>) -> Result<Vec<u8>>;
 }
 
+impl<T: ?Sized + Handler> Handler for Arc<T> {
+    fn get_endpoints(&self) -> Vec<ClientEndpoint> {
+        Handler::get_endpoints(&**self)
+    }
+
+    fn handle(&self, endpoint: &ClientEndpoint, request: Vec<u8>) -> Result<Vec<u8>> {
+        Handler::handle(&**self, endpoint, request)
+    }
+}
+
 lazy_static! {
     /// Global RpcRouter for all the enclaves.
     ///

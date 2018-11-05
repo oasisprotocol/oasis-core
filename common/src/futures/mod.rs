@@ -141,8 +141,8 @@ pub mod stream {
 /// use ekiden_common::futures::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::{future, stream, BoxFuture, BoxStream, Future, FutureExt, KillHandle, Stream,
-                    StreamExt};
+    pub use super::{future, stream, BoxFuture, BoxStream, Future, FutureExt, KillHandle, Sink,
+                    Stream, StreamExt};
 
     #[cfg(not(target_env = "sgx"))]
     pub use super::{spawn, spawn_killable};

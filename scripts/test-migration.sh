@@ -34,6 +34,8 @@ test_migration() {
     sleep 1
 
     "$WORKDIR/target/debug/ekiden-compute" \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir $(mktemp -d) \
         --no-persist-identity \
         --max-batch-size 1 \
         --storage-backend remote \
@@ -45,6 +47,8 @@ test_migration() {
     local first_compute1_pid=$(jobs -p +)
 
     "$WORKDIR/target/debug/ekiden-compute" \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir $(mktemp -d) \
         --no-persist-identity \
         --max-batch-size 1 \
         --storage-backend remote \
@@ -112,6 +116,8 @@ test_migration() {
 
     # Finish starting the second network.
     "$WORKDIR/target/debug/ekiden-compute" \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir $(mktemp -d) \
         --no-persist-identity \
         --max-batch-size 1 \
         --storage-backend remote \
@@ -123,6 +129,8 @@ test_migration() {
     local second_compute1_pid=$(jobs -p +)
 
     "$WORKDIR/target/debug/ekiden-compute" \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir $(mktemp -d) \
         --no-persist-identity \
         --max-batch-size 1 \
         --storage-backend remote \

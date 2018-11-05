@@ -71,6 +71,9 @@ members = [
     "compute/api",
     "compute",
 
+    # Compute worker.
+    "worker",
+
     # Test runtimes.
     "tests/runtimes/token",
     "tests/runtimes/test-db-encryption",

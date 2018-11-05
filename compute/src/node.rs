@@ -30,7 +30,7 @@ use super::roothash::{RootHashConfiguration, RootHashFrontend};
 use super::services::computation_group::ComputationGroupService;
 use super::services::enclaverpc::EnclaveRpcService;
 use super::services::runtime::RuntimeService;
-use super::worker::{Worker, WorkerConfiguration};
+use super::worker::{WorkerConfiguration, WorkerHost};
 
 /// Compute node test-only configuration.
 pub struct ComputeNodeTestOnlyConfiguration {
@@ -160,13 +160,13 @@ impl ComputeNode {
         let environment = container.inject::<Environment>()?;
         let grpc_environment = environment.grpc();
 
-        // Create worker.
-        let worker = Arc::new(Worker::new(
+        // Create worker host.
+        let worker_host = Arc::new(WorkerHost::new(
+            environment.clone(),
             config.worker,
             ias,
-            environment.clone(),
             storage_backend.clone(),
-        ));
+        )?);
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
@@ -183,7 +183,7 @@ impl ComputeNode {
             config.roothash,
             runtime_id,
             environment.clone(),
-            worker.clone(),
+            worker_host.clone(),
             computation_group.clone(),
             roothash_backend.clone(),
             roothash_signer.clone(),
@@ -194,7 +194,7 @@ impl ComputeNode {
         use grpcio::ClientCertificateRequestType::RequestClientCertificateButDontVerify;
 
         let enclave_rpc_service =
-            ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(worker));
+            ekiden_rpc_api::create_enclave_rpc(EnclaveRpcService::new(worker_host.clone()));
         let runtime_service =
             ekiden_compute_api::create_runtime(RuntimeService::new(roothash_frontend.clone()));
         let inter_node_service = ekiden_compute_api::create_computation_group(
