@@ -53,20 +53,8 @@ jobs:
       # Check style. This needs to be after everything is built.
       - run: cargo fmt -- --write-mode=check
 
-      # Cargo tests, with the exception of some enclave-specific ones.
-      - run: |
-          cargo test --all \
-            --exclude ekiden-untrusted \
-            --exclude ekiden-enclave-untrusted \
-            --exclude ekiden-rpc-untrusted \
-            --exclude ekiden-db-untrusted \
-            --exclude ekiden-runtime-untrusted \
-            --exclude ekiden-keymanager-untrusted \
-            --exclude ekiden-keymanager-node \
-            --exclude ekiden-keymanager-trusted \
-            --exclude token \
-            -- \
-            --test-threads 1
+      # Cargo tests.
+      - run: cargo test -- --test-threads 1
 
       # Integration tests.
       - restore_cache:
