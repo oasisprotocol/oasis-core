@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/leveldb"
 	"github.com/oasislabs/ekiden/go/storage/memory"
+	"github.com/oasislabs/ekiden/go/storage/pgx"
 )
 
 const cfgBackend = "storage.backend"
@@ -31,6 +32,8 @@ func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (api.
 	case leveldb.BackendName:
 		fn := filepath.Join(dataDir, leveldb.DBFile)
 		impl, err = leveldb.New(fn, timeSource)
+	case pgx.BackendName:
+		impl, err = pgx.New(timeSource)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
@@ -51,4 +54,6 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
 	}
+
+	pgx.RegisterFlags(cmd)
 }
