@@ -8,23 +8,23 @@ all: generate build
 # compiler plugin supports modules.
 generate:
 	@echo "Running go generate"
-	go generate -v ./...
+	@env -u GOPATH go generate -v ./...
 
 # Build the Ekiden node.
 build: generate
 	@echo "Building Ekiden node"
-	@go build -v -o ./ekiden/ekiden ./ekiden
+	@env -u GOPATH go build -v -o ./ekiden/ekiden ./ekiden
 
 # Run go fmt.
 fmt:
-	go fmt ./...
+	@env -u GOPATH go fmt ./...
 
 # Lint.
 lint:
-	golangci-lint run
+	@env -u GOPATH golangci-lint run
 
 # Test.
 test:
-	go test -race -v ./...
+	@env -u GOPATH go test -race -v ./...
 
 .PHONY: all generate build lint test
