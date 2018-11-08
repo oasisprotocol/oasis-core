@@ -166,10 +166,11 @@ jobs:
           cd protoc-gen-go && \
           go install
       - run: |
-          curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.11.2
-      - run: cd go && env -u GOPATH make generate
-      - run: cd go && env -u GOPATH /tmp/bin/golangci-lint
-      - run: cd go && env -u GOPATH make
+          curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.11.2 && \
+          cp /tmp/bin/golangci-lint /go/bin
+      - run: cd go && make generate
+      - run: cd go && make lint
+      - run: cd go && make
       - run: cd go && env -u GOPATH go test -race -coverprofile=coverage.txt -covermode=atomic -v `go list ./... | grep -v github.com/oasislabs/ekiden/go/ekiden`
       - run: cd go/ekiden && env -u GOPATH go test -race -coverpkg ../... -coverprofile=coverage.txt -covermode=atomic -v
       - run: bash <(curl -s https://codecov.io/bash) -Z
