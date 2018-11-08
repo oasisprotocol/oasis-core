@@ -3,6 +3,7 @@ use std::path::Path;
 
 use sgx_types;
 
+use base64;
 use protobuf;
 use protobuf::Message;
 
@@ -25,6 +26,35 @@ pub trait IAS {
 
     /// Verify submitted attestation evidence and create a new Attestation Verification Report.
     fn report(&self, quote: &[u8]) -> api::AvReport;
+}
+
+/// Generate mock AV reports when IAS is not configured.
+pub struct MockIAS;
+
+impl IAS for MockIAS {
+    fn get_spid(&self) -> &sgx_types::sgx_spid_t {
+        &sgx_types::sgx_spid_t { id: [0; 16] }
+    }
+
+    fn get_quote_type(&self) -> sgx_types::sgx_quote_sign_type_t {
+        sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE
+    }
+
+    fn sigrl(&self, _gid: &[u8; 4]) -> Vec<u8> {
+        unimplemented!()
+    }
+
+    fn report(&self, quote: &[u8]) -> api::AvReport {
+        let mut av_report = api::AvReport::new();
+        av_report.set_body(
+            // TODO: Generate other mock fields.
+            format!(
+                "{{\"isvEnclaveQuoteStatus\": \"OK\", \"isvEnclaveQuoteBody\": \"{}\"}}",
+                base64::encode(&quote)
+            ).into_bytes(),
+        );
+        av_report
+    }
 }
 
 /// Enclave identity interface.

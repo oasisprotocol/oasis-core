@@ -25,6 +25,7 @@ use ekiden_storage_api::create_storage;
 use ekiden_storage_base::{StorageBackend, StorageService};
 use ekiden_tools::get_enclave_identity;
 use ekiden_untrusted::enclave::ias_proxy::ProxyIAS;
+use ekiden_untrusted::enclave::identity;
 
 use super::group::ComputationGroup;
 use super::roothash::{RootHashConfiguration, RootHashFrontend};
@@ -165,21 +166,25 @@ impl ComputeNode {
         let grpc_environment = environment.grpc();
 
         // Create IAS.
-        let ias_config = config.ias.expect("wip: ias config required");
-        let spid = sgx_types::sgx_spid_t {
-            id: ias_config.spid.clone().0,
+        let ias: Arc<identity::IAS + Send + Sync> = match config.ias {
+            Some(ias_config) => {
+                let spid = sgx_types::sgx_spid_t {
+                    id: ias_config.spid.clone().0,
+                };
+                let quote_type = match ias_config.quote_type.as_str() {
+                    "unlinkable" => Ok(sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE),
+                    "linkable" => Ok(sgx_types::sgx_quote_sign_type_t::SGX_LINKABLE_SIGNATURE),
+                    other => Err(Error::new(format!(
+                        "Unrecognized quote sign type {}",
+                        other
+                    ))),
+                }?;
+                let channel =
+                    grpcio::ChannelBuilder::new(grpc_environment.clone()).connect(&ias_config.addr);
+                Arc::new(ProxyIAS::new(entity_identity, spid, quote_type, channel))
+            }
+            None => Arc::new(identity::MockIAS),
         };
-        let quote_type = match ias_config.quote_type.as_str() {
-            "unlinkable" => Ok(sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE),
-            "linkable" => Ok(sgx_types::sgx_quote_sign_type_t::SGX_LINKABLE_SIGNATURE),
-            other => Err(Error::new(format!(
-                "Unrecognized quote sign type {}",
-                other
-            ))),
-        }?;
-        let channel =
-            grpcio::ChannelBuilder::new(grpc_environment.clone()).connect(&ias_config.addr);
-        let ias = Arc::new(ProxyIAS::new(entity_identity, spid, quote_type, channel));
 
         // Create worker.
         let worker = Arc::new(Worker::new(
