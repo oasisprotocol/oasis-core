@@ -113,3 +113,23 @@ macro_rules! measure_histogram_timer {
         });
     };
 }
+
+/// Times future execution time and stores the elapsed time (in seconds) into an
+/// instrumentation histogram.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// {
+///     measure_future_histogram_timer!("my_timer", future);
+/// }
+/// ```
+#[macro_export]
+macro_rules! measure_future_histogram_timer {
+    ($name:expr, $future:expr) => {{
+        let before = ::std::time::Instant::now();
+        $future.inspect(move |_| {
+            measure_histogram!($name, before.elapsed().as_secs());
+        })
+    }};
+}
