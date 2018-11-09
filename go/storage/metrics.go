@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -141,10 +142,25 @@ func (w *metricsWrapper) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 	return kiChan, err
 }
 
+type sweepableMetricsWrapper struct {
+	metricsWrapper
+}
+
+func (w *sweepableMetricsWrapper) PurgeExpired(epoch epochtime.EpochTime) {
+	sweepable := w.Backend.(api.SweepableBackend)
+	sweepable.PurgeExpired(epoch)
+}
+
 func newMetricsWrapper(base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(storageCollectors...)
 	})
 
-	return &metricsWrapper{Backend: base}
+	w := &metricsWrapper{Backend: base}
+
+	if _, ok := base.(api.SweepableBackend); ok {
+		return &sweepableMetricsWrapper{metricsWrapper: *w}
+	}
+
+	return w
 }

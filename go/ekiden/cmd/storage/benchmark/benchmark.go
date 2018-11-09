@@ -2,7 +2,9 @@
 package benchmark
 
 import (
+	"bytes"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -13,7 +15,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/epochtime"
+	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -53,13 +55,7 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize the various backends.
-	timeSource, err := epochtime.New(cmd, nil)
-	if err != nil {
-		logger.Error("failed to initialize time source",
-			"err", err,
-		)
-		return
-	}
+	timeSource := mock.New()
 	storage, err := storage.New(cmd, timeSource, dataDir)
 	if err != nil {
 		logger.Error("failed to initialize storage",
@@ -78,6 +74,7 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 		buf := make([]byte, sz)
 
 		// Insert.
+		var err error
 		res := testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			for i := 0; i < b.N; i++ {
@@ -85,35 +82,53 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 				_, _ = io.ReadFull(rand.Reader, buf)
 				b.StartTimer()
 
-				if err := storage.Insert(context.Background(), buf, 9001); err != nil {
+				if err = storage.Insert(context.Background(), buf, 9001); err != nil {
 					b.Fatalf("failed to Insert(): %v", err)
 				}
 			}
 		})
-		logger.Info("Insert",
-			"sz", sz,
-			"ns_per_op", res.NsPerOp(),
-		)
+		if err != nil {
+			logger.Error("failed to Insert()", "err", err)
+		} else {
+			logger.Info("Insert",
+				"sz", sz,
+				"ns_per_op", res.NsPerOp(),
+			)
+		}
 
 		// Get.
 		key := storageAPI.HashStorageKey(buf)
 		res = testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			for i := 0; i < b.N; i++ {
-				if _, err := storage.Get(context.Background(), key); err != nil {
+				var tmp []byte
+				tmp, err = storage.Get(context.Background(), key)
+				if err != nil {
 					b.Fatalf("failed to Get(): %v", err)
 				}
+
+				b.StopTimer()
+				if !bytes.Equal(tmp, buf) {
+					err = fmt.Errorf("bytes mismatch")
+					b.Fatalf("bytes mismatch")
+				}
+				b.StartTimer()
 			}
 		})
-		logger.Info("Get",
-			"sz", sz,
-			"ns_per_op", res.NsPerOp(),
-		)
+		if err != nil {
+			logger.Error("failed to Get()", "err", err)
+		} else {
+			logger.Info("Get",
+				"sz", sz,
+				"ns_per_op", res.NsPerOp(),
+			)
+		}
 	}
 
 	// PurgeExpired.
 	sweeper, ok := storage.(storageAPI.SweepableBackend)
 	if !ok {
+		logger.Error("not Sweepable")
 		return
 	}
 	res := testing.Benchmark(func(b *testing.B) {
@@ -124,12 +139,12 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 	logger.Info("PurgeExpired (none purged)",
 		"ns_per_op", res.NsPerOp(),
 	)
+	sweeper.PurgeExpired(9002)
 }
 
 // Register registers the storage benchmark sub-command.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []func(*cobra.Command){
-		epochtime.RegisterFlags,
 		storage.RegisterFlags,
 	} {
 		v(benchmarkStorageCmd)

@@ -27,8 +27,7 @@ const (
 )
 
 var (
-	_ api.Backend          = (*leveldbBackend)(nil)
-	_ api.SweepableBackend = (*leveldbBackend)(nil)
+	_ api.Backend = (*leveldbBackend)(nil)
 
 	keyVersion = []byte("version")
 	dbVersion  = []byte{0x00}
@@ -155,10 +154,6 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 	}()
 
 	return kiChan, nil
-}
-
-func (b *leveldbBackend) PurgeExpired(epoch epochtime.EpochTime) {
-	// TODO: Purge expired items from database.
 }
 
 func (b *leveldbBackend) Cleanup() {
