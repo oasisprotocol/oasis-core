@@ -1,4 +1,4 @@
-FROM oasislabs/development:0.2.0
+FROM oasislabs/development:staged
 
 RUN apt-get install -y \
     unzip jq \

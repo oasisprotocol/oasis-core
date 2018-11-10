@@ -58,7 +58,7 @@ RUN echo "source /opt/sgxsdk/environment" >> /root/.bashrc
 
 # install rust version supported by rust-sgx-sdk
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
-    sh rustup.sh -y --default-toolchain nightly-2018-08-25 && \
+    sh rustup.sh -y --default-toolchain nightly-2018-10-01 && \
     rustup component add rust-src && \
     # rustfmt-nightly is crazily unstable, with no versions appearing to exist that
     # work with the 3-16 nightly.
