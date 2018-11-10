@@ -22,7 +22,7 @@ jobs:
       - checkout
       - run:
           name: Checking if Rust code has changed
-          command: ./scripts/ci-changed.sh \.circleci beacon tests runtime common compute core db di enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
+          command: ./scripts/ci-changed.sh \.circleci beacon tests runtime common compute core db di docker enclave epochtime instrumentation keys node registry rpc roothash scheduler scripts/test-e2e.sh stake storage tools xargo
 
       # Check if all core crates have the same version (issue #175)
       - run:
