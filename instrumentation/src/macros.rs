@@ -129,7 +129,11 @@ macro_rules! measure_future_histogram_timer {
     ($name:expr, $future:expr) => {{
         let before = ::std::time::Instant::now();
         $future.inspect(move |_| {
-            measure_histogram!($name, before.elapsed().as_secs());
+            let elapsed = before.elapsed();
+            measure_histogram!(
+                $name,
+                elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 * 1e-9
+            );
         })
     }};
 }
