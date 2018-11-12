@@ -25,17 +25,38 @@ cargo install --force --path tools
 (cd go && env -u GOPATH make)
 
 # Package all binaries and resources.
-mkdir -p target/docker-deployment/context/bin target/docker-deployment/context/lib target/docker-deployment/context/res
-ln target/release/ekiden-compute target/docker-deployment/context/bin
-ln go/ekiden/ekiden target/docker-deployment/context/bin/ekiden-node
-ln target/release/ekiden-keymanager-node target/docker-deployment/context/bin
-ln target/enclave/ekiden-keymanager-trusted.so target/docker-deployment/context/lib
-ln target/enclave/ekiden-keymanager-trusted.mrenclave target/docker-deployment/context/res
-if [ -e docker/deployment/Dockerfile.generated ]
-then
-    ln docker/deployment/Dockerfile.generated target/docker-deployment/context/Dockerfile
+mkdir -p \
+  target/docker-deployment/context/bin \
+  target/docker-deployment/context/lib \
+  target/docker-deployment/context/res
+ln \
+  target/release/ekiden-compute \
+  target/docker-deployment/context/bin
+ln \
+  go/ekiden/ekiden \
+  target/docker-deployment/context/bin/ekiden-node
+ln \
+  target/release/ekiden-keymanager-node \
+  target/docker-deployment/context/bin
+ln \
+  target/enclave/ekiden-keymanager-trusted.so \
+  target/docker-deployment/context/lib
+ln \
+  target/enclave/ekiden-keymanager-trusted.mrenclave \
+  target/docker-deployment/context/res
+
+if [ -e docker/deployment/Dockerfile.generated ]; then
+    ln \
+      docker/deployment/Dockerfile.generated \
+      target/docker-deployment/context/Dockerfile
 else
-    ln docker/deployment/Dockerfile.runtime target/docker-deployment/context/Dockerfile
+    ln \
+      docker/deployment/Dockerfile.runtime \
+      target/docker-deployment/context/Dockerfile
 fi
-tar cvzhf target/docker-deployment/context.tar.gz -C target/docker-deployment/context .
+
+tar \
+  cvzhf target/docker-deployment/context.tar.gz \
+  -C target/docker-deployment/context \
+  .
 rm -rf target/docker-deployment/context
