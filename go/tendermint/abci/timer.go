@@ -81,8 +81,10 @@ func (t *Timer) Data() []byte {
 // otherwise it will be left unaltered.
 func (t *Timer) Reset(ctx *Context, duration time.Duration, newData []byte) {
 	t.pendingState = &timerState{
-		Armed:    true,
-		Deadline: ctx.Now().Add(duration),
+		Armed: true,
+		// Round deadline to the nearest second to ensure that serialization only
+		// uses integers and not floats.
+		Deadline: ctx.Now().Add(duration).Round(time.Second),
 		Data:     newData,
 	}
 	t.registerOnCommitHook(ctx)
