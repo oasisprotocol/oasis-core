@@ -68,15 +68,13 @@ func (b *leveldbBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 }
 
 func (b *leveldbBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte, error) {
-	snapshot, err := b.db.GetSnapshot()
-	if err != nil {
-		return nil, err
-	}
-	defer snapshot.Release()
+	// While expiration isn't enforced at all, there won't be meaningful
+	// concurrent writes to the underlying database, so there is no need
+	// to work off a snapshot.
 
 	var values [][]byte
 	for _, key := range keys {
-		value, err := snapshot.Get(append(prefixValues, key[:]...), nil)
+		value, err := b.db.Get(append(prefixValues, key[:]...), nil)
 		switch err {
 		case nil:
 		case leveldb.ErrNotFound:
