@@ -136,6 +136,19 @@ pub fn detect_sgx_features() {
     }
 }
 
+/// Find untrusted libraries to link with and emit their paths to Cargo.
+pub fn find_untrusted_libs() {
+    let config = get_build_configuration();
+
+    println!(
+        "cargo:rustc-link-search=native={}",
+        Path::new(&config.intel_sdk_dir)
+            .join(SGX_SDK_LIBRARY_PATH)
+            .to_str()
+            .unwrap()
+    );
+}
+
 /// Build the untrusted part of an Ekiden enclave.
 pub fn build_untrusted(edl: Vec<EDL>) {
     let config = get_build_configuration();
@@ -160,13 +173,7 @@ pub fn build_untrusted(edl: Vec<EDL>) {
         .compile("enclave_u");
 
     println!("cargo:rustc-link-lib=static=enclave_u");
-    println!(
-        "cargo:rustc-link-search=native={}",
-        Path::new(&config.intel_sdk_dir)
-            .join(SGX_SDK_LIBRARY_PATH)
-            .to_str()
-            .unwrap()
-    );
+    find_untrusted_libs();
 }
 
 /// Build the trusted Ekiden SGX enclave.

@@ -53,20 +53,8 @@ jobs:
       # Check style. This needs to be after everything is built.
       - run: cargo fmt -- --write-mode=check
 
-      # Cargo tests, with the exception of some enclave-specific ones.
-      - run: |
-          cargo test --all \
-            --exclude ekiden-untrusted \
-            --exclude ekiden-enclave-untrusted \
-            --exclude ekiden-rpc-untrusted \
-            --exclude ekiden-db-untrusted \
-            --exclude ekiden-runtime-untrusted \
-            --exclude ekiden-keymanager-untrusted \
-            --exclude ekiden-keymanager-node \
-            --exclude ekiden-keymanager-trusted \
-            --exclude token \
-            -- \
-            --test-threads 1
+      # Cargo tests.
+      - run: cargo test -- --test-threads 1
 
       # Integration tests.
       - restore_cache:
@@ -119,21 +107,29 @@ jobs:
           name: Installing Tarpaulin
           command: RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install --git https://github.com/oasislabs/tarpaulin --branch ekiden cargo-tarpaulin
       - run: |
-          cargo tarpaulin --all \
+          cargo tarpaulin \
             --ignore-tests \
             --out Xml \
+            --packages ekiden-common \
+            --packages ekiden-db-trusted \
+            --packages ekiden-di \
+            --packages ekiden-enclave-common \
+            --packages ekiden-enclave-logger \
+            --packages ekiden-enclave-trusted \
+            --packages ekiden-rpc-client \
+            --packages ekiden-rpc-common \
+            --packages ekiden-rpc-trusted \
+            --packages ekiden-runtime-client \
+            --packages ekiden-runtime-common \
+            --packages ekiden-runtime-trusted \
+            --packages ekiden-storage-base \
+            --packages ekiden-storage-batch \
+            --packages ekiden-storage-frontend \
+            --packages ekiden-storage-lru \
+            --packages ekiden-storage-multilayer \
+            --packages ekiden-storage-persistent \
+            --packages ekiden-tools \
             --exclude-files *generated* \
-            --exclude ekiden-untrusted \
-            --exclude ekiden-enclave-untrusted \
-            --exclude ekiden-rpc-untrusted \
-            --exclude test-db-encryption \
-            --exclude ekiden-db-trusted \
-            --exclude ekiden-db-untrusted \
-            --exclude ekiden-runtime-untrusted \
-            --exclude ekiden-keymanager-untrusted \
-            --exclude ekiden-keymanager-node \
-            --exclude ekiden-keymanager-trusted \
-            --exclude token \
             --coveralls $COVERALLS_REPO_TOKEN \
             -v
       # Store coverage report.
