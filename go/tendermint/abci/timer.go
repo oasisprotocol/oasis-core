@@ -35,6 +35,12 @@ func (s *timerState) UnmarshalCBOR(data []byte) error {
 }
 
 func (s *timerState) getDeadlineMapKey() []byte {
+	// Ensure that deadline is rounded to the nearest second to prevent
+	// serialization round trip issues as the map key MUST be stable.
+	if s.Deadline != s.Deadline.Round(time.Second) {
+		panic("getDeadlineMapKey: deadline must be rounded to the nearest second")
+	}
+
 	return []byte(fmt.Sprintf(stateTimerDeadlineMap, s.Deadline.Unix(), s.ID))
 }
 
