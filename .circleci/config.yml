@@ -339,16 +339,12 @@ workflows:
           filters:
             branches:
               only: master
-  nightly:
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
+  coverage:
+    jobs:
+      - cover-rust:
           filters:
             branches:
-              only:
-                - master
-    jobs:
-      - cover-rust
+              only: master
 experimental:
   notify:
     branches:
