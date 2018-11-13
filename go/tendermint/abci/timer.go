@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -34,6 +35,12 @@ func (s *timerState) UnmarshalCBOR(data []byte) error {
 }
 
 func (s *timerState) getDeadlineMapKey() []byte {
+	// Ensure that deadline is rounded to the nearest second to prevent
+	// serialization round trip issues as the map key MUST be stable.
+	if s.Deadline != s.Deadline.Round(time.Second) {
+		panic("getDeadlineMapKey: deadline must be rounded to the nearest second")
+	}
+
 	return []byte(fmt.Sprintf(stateTimerDeadlineMap, s.Deadline.Unix(), s.ID))
 }
 
@@ -104,11 +111,11 @@ func (t *Timer) getMapKey() []byte {
 
 func (t *Timer) registerOnCommitHook(ctx *Context) {
 	ctx.RegisterOnCommitHook(t.ID, func(state *ApplicationState) {
-		t.persist(state)
+		t.persist(ctx, state)
 	})
 }
 
-func (t *Timer) persist(state *ApplicationState) {
+func (t *Timer) persist(ctx *Context, state *ApplicationState) {
 	if t.pendingState == nil {
 		return
 	}
@@ -126,6 +133,9 @@ func (t *Timer) persist(state *ApplicationState) {
 		currentState = *t.currentState
 	} else {
 		if err := currentState.UnmarshalCBOR(data); err != nil {
+			ctx.timerLogger.Error("state corruption",
+				"data", hex.EncodeToString(data),
+			)
 			panic("timer: state corruption")
 		}
 	}
@@ -135,15 +145,27 @@ func (t *Timer) persist(state *ApplicationState) {
 	if t.pendingState.Data == nil {
 		t.pendingState.Data = currentState.Data
 	}
+
+	ctx.timerLogger.Debug("updating timer state",
+		"current_state", fmt.Sprintf("%+v", currentState),
+		"pending_state", fmt.Sprintf("%+v", t.pendingState),
+	)
+
 	tree.Set(t.getMapKey(), t.pendingState.MarshalCBOR())
 
 	// Update deadline state.
 	if currentState.Armed {
 		if _, removed := tree.Remove(currentState.getDeadlineMapKey()); !removed {
+			ctx.timerLogger.Error("armed timer not removed from deadline map",
+				"key", currentState.getDeadlineMapKey(),
+			)
 			panic("timer: armed timer not removed from deadline map")
 		}
 	}
 	if t.pendingState.Armed {
+		ctx.timerLogger.Debug("adding armed timer to deadline map",
+			"key", t.pendingState.getDeadlineMapKey(),
+		)
 		tree.Set(t.pendingState.getDeadlineMapKey(), []byte(t.ID))
 	}
 
@@ -162,11 +184,14 @@ func fireTimers(ctx *Context, state *ApplicationState, app Application) {
 		func(key, value []byte) bool {
 			_, data := tree.Get([]byte(fmt.Sprintf(stateTimerMap, value)))
 			if data == nil {
-				panic("timer: state corruption")
+				panic("timer: state corruption (missing timer state)")
 			}
 
 			var ts timerState
 			if err := ts.UnmarshalCBOR(data); err != nil {
+				ctx.timerLogger.Error("state corruption",
+					"data", hex.EncodeToString(data),
+				)
 				panic("timer: state corruption")
 			}
 
@@ -177,6 +202,11 @@ func fireTimers(ctx *Context, state *ApplicationState, app Application) {
 			if ts.App != app.Name() {
 				return false
 			}
+
+			ctx.timerLogger.Debug("firing timer",
+				"id", ts.ID,
+				"current_state", fmt.Sprintf("%+v", ts),
+			)
 
 			app.FireTimer(ctx, &Timer{
 				ID:           ts.ID,

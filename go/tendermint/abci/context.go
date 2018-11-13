@@ -6,6 +6,7 @@ import (
 
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 
+	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
@@ -32,6 +33,8 @@ type Context struct {
 	currentTime time.Time
 
 	onCommitHooks map[string]OnCommitHook
+
+	timerLogger *logging.Logger
 }
 
 // NewContext creates a new Context of the given type.
@@ -40,6 +43,7 @@ func NewContext(outputType ContextType, now time.Time) *Context {
 		outputType:    outputType,
 		currentTime:   now,
 		onCommitHooks: make(map[string]OnCommitHook),
+		timerLogger:   logging.GetLogger("tendermint/context/timer"),
 	}
 }
 
