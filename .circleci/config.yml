@@ -130,6 +130,11 @@ jobs:
             --packages ekiden-storage-persistent \
             --packages ekiden-tools \
             --exclude-files *generated* \
+            --exclude-files compute/* \
+            --exclude-files key-manager/* \
+            --exclude-files registry/* \
+            --exclude-files scheduler/* \
+            --exclude-files stake/* \
             --coveralls $COVERALLS_REPO_TOKEN \
             -v
       # Store coverage report.
