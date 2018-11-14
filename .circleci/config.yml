@@ -101,7 +101,6 @@ jobs:
       - run: echo 'export CIRCLE_BRANCH=$(git rev-parse --abbrev-ref HEAD)' >> $BASH_ENV
       - checkout
       - run: echo "export CIRCLE_SHA1=$(git rev-parse HEAD)" >> $BASH_ENV
-      - run: cargo build
       # install & tarpaulin test.
       - run:
           name: Installing Tarpaulin
@@ -130,6 +129,11 @@ jobs:
             --packages ekiden-storage-persistent \
             --packages ekiden-tools \
             --exclude-files *generated* \
+            --exclude-files compute/* \
+            --exclude-files key-manager/* \
+            --exclude-files registry/* \
+            --exclude-files scheduler/* \
+            --exclude-files stake/* \
             --coveralls $COVERALLS_REPO_TOKEN \
             -v
       # Store coverage report.
@@ -334,16 +338,12 @@ workflows:
           filters:
             branches:
               only: master
-  nightly:
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
+  coverage:
+    jobs:
+      - cover-rust:
           filters:
             branches:
-              only:
-                - master
-    jobs:
-      - cover-rust
+              only: master
 experimental:
   notify:
     branches:
