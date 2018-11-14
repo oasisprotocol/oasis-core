@@ -1,5 +1,5 @@
 //! Root hash frontend.
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
 #[cfg(feature = "testing")]
 use std::process::abort;
@@ -19,7 +19,7 @@ use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::prelude::*;
 use ekiden_core::futures::streamfollow;
 use ekiden_core::futures::sync::mpsc;
-use ekiden_core::hash::EncodedHash;
+use ekiden_core::hash::{self, EncodedHash};
 use ekiden_core::runtime::batch::CallBatch;
 use ekiden_core::tokio::timer::Interval;
 use ekiden_core::uint::U256;
@@ -794,6 +794,11 @@ impl RootHashFrontend {
             let mut batch_info = VecDeque::new();
             let mut current_batch_size = 0;
             let mut new_incoming_queue = IncomingQueue::default();
+            // TODO: We could maintain this per-incoming queue but this would make it slightly
+            //       more error-prone to ensure consistency between the deque and set. This
+            //       would avoid potentially computing the same hashes multiple times and storing
+            //       duplicates in the queue.
+            let mut included_calls = HashSet::new();
 
             for item in incoming_queue.take().unwrap().calls {
                 if batch_info.len() + 1 > inner.max_batch_size {
@@ -807,6 +812,15 @@ impl RootHashFrontend {
                     new_incoming_queue.calls.push_back(item);
                     continue;
                 }
+
+                let call_hash = hash::from_bytes(&item.data);
+                if included_calls.contains(&call_hash) {
+                    // Call already exists in batch, do not include it again and do not put
+                    // it back as there is no sense in having duplicate items in the queue.
+                    warn!("Duplicate runtime call {} discarded from batch", call_hash);
+                    continue;
+                }
+                included_calls.insert(call_hash);
 
                 current_batch_size += item.data.len();
                 batch_info.push_back(item);
