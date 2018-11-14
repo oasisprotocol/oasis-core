@@ -238,7 +238,6 @@ impl Dispatcher {
 mod tests {
     use serde_cbor;
 
-    use ekiden_common::bytes::B256;
     use ekiden_roothash_base::header::Header;
 
     use super::*;
@@ -277,7 +276,6 @@ mod tests {
 
         // Prepare a dummy call.
         let call = RuntimeCall {
-            id: B256::random(),
             method: "dummy".to_owned(),
             arguments: Complex {
                 text: "hello".to_owned(),

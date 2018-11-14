@@ -8,7 +8,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
-use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
@@ -149,9 +148,7 @@ impl RuntimeClient {
         C: Serialize,
         O: DeserializeOwned + Send + 'static,
     {
-        // TODO: Handle encrypted calls.
         let call = RuntimeCall {
-            id: B256::random(),
             method: method.to_owned(),
             arguments,
         };
