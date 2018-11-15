@@ -18,6 +18,7 @@ use ekiden_common::subscribers::StreamSubscribers;
 use ekiden_common::uint::U256;
 use ekiden_roothash_base::backend::RootHashBackend;
 use ekiden_roothash_base::block::Block;
+use ekiden_roothash_base::header::HeaderType;
 use ekiden_runtime_common::batch::CallBatch;
 use ekiden_runtime_common::batch::OutputBatch;
 use ekiden_storage_base::backend::StorageBackend;
@@ -54,6 +55,8 @@ pub struct Manager {
     _env: Arc<Environment>,
     /// We distribute commitment information here.
     commit_sub: Arc<StreamSubscribers<SharedCommitInfo>>,
+    /// For distributing epoch transition notifications.
+    epoch_transition_sub: Arc<StreamSubscribers<Block>>,
     /// For killing our root hash follower task.
     blocks_kill_handle: ekiden_common::futures::KillHandle,
 }
@@ -67,6 +70,8 @@ impl Manager {
     ) -> Self {
         let commit_sub = Arc::new(StreamSubscribers::new());
         let commit_sub_blocks = commit_sub.clone();
+        let epoch_transition_sub = Arc::new(StreamSubscribers::new());
+        let epoch_transition_sub_blocks = epoch_transition_sub.clone();
         let roothash_init = roothash.clone();
         let (watch_blocks, blocks_kill_handle) = ekiden_common::futures::killable(
             ekiden_common::futures::streamfollow::follow(
@@ -77,6 +82,11 @@ impl Manager {
                 // TODO: detect permanent errors?
                 |_e| false,
             ).for_each(move |block: Block| {
+                // Check if this is an epoch transition notification.
+                if block.header.header_type == HeaderType::EpochTransition {
+                    epoch_transition_sub_blocks.notify(&block);
+                }
+
                 if block.header.input_hash == ekiden_common::hash::empty_hash() {
                     return Ok(());
                 }
@@ -141,6 +151,7 @@ impl Manager {
         Self {
             _env: env,
             commit_sub,
+            epoch_transition_sub,
             blocks_kill_handle,
         }
     }
@@ -152,6 +163,10 @@ impl Manager {
         // hold on to a `Wait`, and the notifier doesn't have to block.
         let (_init, stockpile) = self.commit_sub.subscribe();
         Wait { stockpile }
+    }
+
+    pub fn watch_epoch_transitions(&self) -> BoxStream<Block> {
+        self.epoch_transition_sub.subscribe().1
     }
 }
 
