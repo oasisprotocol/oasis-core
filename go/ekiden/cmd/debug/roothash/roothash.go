@@ -4,7 +4,6 @@ package roothash
 import (
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/golang/protobuf/proto"
@@ -155,7 +154,7 @@ func doExport(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	w, shouldClose, err := getOutput(cmd, cfgRoothashExportFile)
+	w, shouldClose, err := cmdCommon.GetOutputWriter(cmd, cfgRoothashExportFile)
 	if err != nil {
 		logger.Error("failed to get writer",
 			"err", err,
@@ -172,16 +171,6 @@ func doExport(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-}
-
-func getOutput(cmd *cobra.Command, cfg string) (io.WriteCloser, bool, error) {
-	f, _ := cmd.Flags().GetString(cfg)
-	if f == "" {
-		return os.Stdout, false, nil
-	}
-
-	w, err := os.Create(f)
-	return w, true, err
 }
 
 // Register regisers the roothash sub-command and all of it's children.

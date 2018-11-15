@@ -66,9 +66,6 @@ jobs:
           paths:
             - "/go/pkg"
       - run: ./scripts/test-e2e.sh
-      - run: |
-          make -C scripts/storage container-deps
-          make -C scripts/storage
       - run: ./scripts/test-migration.sh
 
       # Store built files.

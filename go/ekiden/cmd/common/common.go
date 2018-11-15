@@ -3,6 +3,7 @@ package common
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -129,4 +130,28 @@ func normalizePath(f string) string {
 		return filepath.Clean(f)
 	}
 	return f
+}
+
+// GetOutputWriter will create a file if the config string is set,
+// and otherwise return os.Stdout.
+func GetOutputWriter(cmd *cobra.Command, cfg string) (io.WriteCloser, bool, error) {
+	f, _ := cmd.Flags().GetString(cfg)
+	if f == "" {
+		return os.Stdout, false, nil
+	}
+
+	w, err := os.Create(f)
+	return w, true, err
+}
+
+// GetInputReader will open a file if the config string is set,
+// and otherwise return os.Stdin.
+func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error) {
+	f, _ := cmd.Flags().GetString(cfg)
+	if f == "" {
+		return os.Stdin, false, nil
+	}
+
+	r, err := os.Open(f)
+	return r, true, err
 }
