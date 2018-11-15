@@ -166,7 +166,7 @@ func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint
 	currentHeight := r.lastBlockHeight
 	r.Unlock()
 
-	for blockHeight := currentHeight; blockHeight >= 0; blockHeight-- {
+	for blockHeight := currentHeight; blockHeight > 0; blockHeight-- {
 		if block := r.getBlockFromTmBlock(id, blockHeight, round, cache); block != nil {
 			return block
 		}
