@@ -36,18 +36,13 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 	rt.MustRegister(t, registry)
 	rt.Populate(t, registry, rt, seed)
 
-	nodes := make(map[signature.MapKey]*registryTests.TestNode)
-	for _, node := range rt.TestNodes() {
-		nodes[node.Node.ID.ToMapKey()] = node
-	}
-
-	// Advance the epoch, get the committee.
-	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
-	committee := mustGetCommittee(t, rt, epoch, scheduler, nodes)
-
 	// Run the various tests. (Ordering matters)
 	t.Run("GenesisBlock", func(t *testing.T) {
 		testGenesisBlock(t, backend, rt)
+	})
+	var committee *testCommittee
+	t.Run("EpochTransitionBlock", func(t *testing.T) {
+		committee = testEpochTransitionBlock(t, backend, epochtime, scheduler, rt)
 	})
 	t.Run("SucessfulRound", func(t *testing.T) {
 		testSucessfulRound(t, backend, storage, rt, committee)
@@ -89,6 +84,54 @@ func testGenesisBlock(t *testing.T, backend api.Backend, rt *registryTests.TestR
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 }
 
+func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, rt *registryTests.TestRuntime) *testCommittee {
+	require := require.New(t)
+
+	nodes := make(map[signature.MapKey]*registryTests.TestNode)
+	for _, node := range rt.TestNodes() {
+		nodes[node.Node.ID.ToMapKey()] = node
+	}
+
+	// Before an epoch transition there should just be a genesis block.
+	genesisBlock, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
+	require.NoError(err, "GetLatestBlock")
+	var round uint64
+	round, err = genesisBlock.Header.Round.ToU64()
+	require.NoError(err, "header.Round.ToU64")
+	require.EqualValues(0, round, "genesis block round")
+
+	// Start watching blocks before epoch transition.
+	ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	// Advance the epoch, get the committee.
+	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	committee := mustGetCommittee(t, rt, epoch, scheduler, nodes)
+
+	// Wait to receive an epoch transition block.
+	for {
+		select {
+		case blk := <-ch:
+			header := blk.Header
+
+			if header.HeaderType != block.EpochTransition {
+				continue
+			}
+
+			require.True(header.IsParentOf(&genesisBlock.Header), "parent is parent of genesis block")
+			require.True(header.InputHash.IsEmpty(), "block input hash empty")
+			require.True(header.OutputHash.IsEmpty(), "block output hash empty")
+			require.EqualValues(genesisBlock.Header.StateRoot, header.StateRoot, "state root preserved")
+
+			// Nothing more to do after the epoch transition block was received.
+			return committee
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive block")
+		}
+	}
+}
+
 func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backend, rt *registryTests.TestRuntime, committee *testCommittee) {
 	require := require.New(t)
 
@@ -125,7 +168,7 @@ func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backe
 		commit := &commitment.Commitment{
 			Header: &parent.Header,
 		}
-		signed, err := signature.SignSigned(node.PrivateKey, commitment.SignatureContext, commit.Header)
+		signed, err := signature.SignSigned(node.PrivateKey, commitment.SignatureContext, commit.Header) // nolint: govet
 		require.NoError(err, "SignSigned")
 		commit.Signed = *signed
 		opaque := commit.ToOpaqueCommitment()
@@ -137,13 +180,24 @@ func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backe
 
 	parent.Header.CommitmentsHash.From(commitments) // For comparison.
 
+	var childRound uint64
+	childRound, err = child.Header.Round.ToU64()
+	require.NoError(err, "child.Header.Round.ToU64")
+
 	// Ensure that the round was finalized.
 	for {
 		select {
 		case blk := <-ch:
 			header := blk.Header
 
-			if header.Round == child.Header.Round {
+			var round uint64
+			round, err = header.Round.ToU64()
+			require.NoError(err, "header.Round.ToU64")
+
+			// Ensure that WatchBlocks uses the correct latest block.
+			require.True(round >= childRound, "WatchBlocks must start at child block")
+
+			if round == childRound {
 				require.EqualValues(child.Header, header, "old block is equal")
 				continue
 			}

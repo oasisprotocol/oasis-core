@@ -17,6 +17,7 @@ import (
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	"github.com/oasislabs/ekiden/go/grpc/roothash"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
 var (
@@ -113,9 +114,33 @@ func doExport(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		// Update block header so the block will be suitable as the genesis block.
+		var latestBlock block.Block
+		err = latestBlock.FromProto(blk.Block)
+		if err != nil {
+			logger.Error("failed to parse block",
+				"err", err,
+				"runtime_id", idHex,
+			)
+			continue
+		}
+
+		var ns signature.PublicKey
+		if err = ns.UnmarshalBinary(id); err != nil {
+			logger.Error("failed to parse runtime id",
+				"err", err,
+				"runtime_id", idHex,
+			)
+			continue
+		}
+
+		genesisBlk := block.NewGenesisBlock(ns, latestBlock.Header.Timestamp)
+		genesisBlk.Header.Round = latestBlock.Header.Round
+		genesisBlk.Header.StateRoot = latestBlock.Header.StateRoot
+
 		genBlk := &roothash.GenesisBlock{
 			RuntimeId: id,
-			Block:     blk.Block,
+			Block:     genesisBlk.ToProto(),
 		}
 		genesisBlocks = append(genesisBlocks, genBlk)
 	}

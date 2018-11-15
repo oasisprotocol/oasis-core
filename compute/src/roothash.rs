@@ -718,11 +718,16 @@ impl RootHashFrontend {
                         // Round has been finalized.
                         info!("Considering the round finalized");
 
-                        // TODO: We should actually check if the proposed block was included.
+                        // TODO: We should actually check if the proposed block was included and
+                        //       in case it wasn't, abort the batch.
                     }
                     HeaderType::RoundFailed => {
                         // Round has failed.
                         Self::fail_batch(inner.clone(), "round has failed".into());
+                    }
+                    HeaderType::EpochTransition => {
+                        // Epoch transition occurred.
+                        Self::fail_batch(inner.clone(), "epoch transition".into());
                     }
                 }
 

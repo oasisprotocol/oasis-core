@@ -1,5 +1,4 @@
 //! Manager for runtime clients.
-use std;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
@@ -10,10 +9,8 @@ use serde::Serialize;
 
 use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
-use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::retry_until_ok_or_max;
-use ekiden_common::futures::streamfollow;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
 use ekiden_compute_api;
@@ -102,104 +99,95 @@ impl RuntimeClientManager {
     /// Start runtime client manager.
     fn start(&self) {
         self.inner.environment.spawn({
-            let inner_init = self.inner.clone();
             let inner = self.inner.clone();
             let runtime_id = self.inner.runtime_id;
 
-            streamfollow::follow_skip(
-                "RuntimeClientManager committees",
-                move || {
-                    inner_init
+            inner
+                .call_wait_manager
+                .watch_epoch_transitions()
+                .for_each(move |_block| {
+                    // An epoch transition has occurred. Get the current committee.
+                    // TODO: This should actually get the committees at the same block height
+                    //       as the block was generated at, but currently this is not exposed.
+                    let committee = inner
                         .scheduler
-                        .watch_committees()
-                        .filter(move |committee| committee.runtime_id == runtime_id)
-                        .filter(|committee| committee.kind == CommitteeType::Compute)
-                },
-                |committee| committee.valid_for,
-                |_| false,
-            ).for_each(move |committee| {
-                // Committee has been updated, check if we need to update the leader.
-                let new_leader = match committee
-                    .members
-                    .iter()
-                    .filter(|member| member.role == Role::Leader)
-                    .map(|member| member.public_key)
-                    .next()
-                {
-                    Some(leader) => leader,
-                    None => return future::err(Error::new("missing committee leader")).into_box(),
-                };
-                let previous_leader = inner.leader.read().unwrap();
+                        .get_committees(runtime_id)
+                        .map(|committees| {
+                            committees
+                                .into_iter()
+                                .filter(|committee| committee.kind == CommitteeType::Compute)
+                                .next()
+                                .expect("compute committee must exist")
+                        });
 
-                if let Some(ref previous_leader) = *previous_leader {
-                    if previous_leader.node.id == new_leader {
-                        return future::ok(()).into_box();
-                    }
-                }
+                    let inner = inner.clone();
+                    committee.and_then(move |committee| {
+                        // Committee has been updated, check if we need to update the leader.
+                        let new_leader = committee
+                            .members
+                            .iter()
+                            .filter(|member| member.role == Role::Leader)
+                            .map(|member| member.public_key)
+                            .next()
+                            .expect("committee must have a leader");
+                        let previous_leader = inner.leader.read().unwrap();
 
-                info!(
-                    "Compute committee has changed, new leader is: {:?}",
-                    new_leader
-                );
+                        if let Some(ref previous_leader) = *previous_leader {
+                            if previous_leader.node.id == new_leader {
+                                return future::ok(()).into_box();
+                            }
+                        }
 
-                // Need to change the leader.
-                let inner = inner.clone();
-
-                inner
-                    .entity_registry
-                    .get_node(new_leader)
-                    .and_then(move |node| {
-                        // Create new client to the leader node.
-                        let rpc = ekiden_compute_api::RuntimeClient::new(
-                            node.connect_without_identity(inner.environment.clone()),
-                        );
-                        let client = RuntimeClient::new(
-                            inner.environment.clone(),
-                            rpc,
-                            inner.call_wait_manager.clone(),
-                            inner.timeout.clone(),
+                        info!(
+                            "Compute committee has changed, new leader is: {:?}",
+                            new_leader
                         );
 
-                        // Change the leader.
-                        let mut previous_leader = inner.leader.write().unwrap();
-                        let new_leader = Arc::new(Leader { node, client });
-                        if previous_leader.is_none() {
-                            // Notify tasks waiting for the leader. Unwrap is safe as this is only
-                            // needed the first time when there is no leader yet.
-                            let mut leader_notify = inner.leader_notify.lock().unwrap();
-                            let leader_notify = leader_notify.take().unwrap();
-                            drop(leader_notify.send(new_leader.clone()));
-                        }
-                        if let Some(previous_leader) = previous_leader.take() {
-                            previous_leader
-                                .client
-                                .shutdown(RuntimeClient::SHUTDOWN_REASON_TRANSITION);
-                        }
-                        *previous_leader = Some(new_leader);
+                        // Need to change the leader.
+                        let inner = inner.clone();
 
-                        Ok(())
+                        inner
+                            .entity_registry
+                            .get_node(new_leader)
+                            .and_then(move |node| {
+                                // Create new client to the leader node.
+                                let rpc = ekiden_compute_api::RuntimeClient::new(
+                                    node.connect_without_identity(inner.environment.clone()),
+                                );
+                                let client = RuntimeClient::new(
+                                    inner.environment.clone(),
+                                    rpc,
+                                    inner.call_wait_manager.clone(),
+                                    inner.timeout.clone(),
+                                );
+
+                                // Change the leader.
+                                let mut previous_leader = inner.leader.write().unwrap();
+                                let new_leader = Arc::new(Leader { node, client });
+                                if previous_leader.is_none() {
+                                    // Notify tasks waiting for the leader. Unwrap is safe as this is only
+                                    // needed the first time when there is no leader yet.
+                                    let mut leader_notify = inner.leader_notify.lock().unwrap();
+                                    let leader_notify = leader_notify.take().unwrap();
+                                    drop(leader_notify.send(new_leader.clone()));
+                                }
+                                if let Some(previous_leader) = previous_leader.take() {
+                                    previous_leader
+                                        .client
+                                        .shutdown(RuntimeClient::SHUTDOWN_REASON_TRANSITION);
+                                }
+                                *previous_leader = Some(new_leader);
+
+                                Ok(())
+                            })
+                            .into_box()
                     })
-                    .into_box()
-            })
-                .then(|result| -> Result<(), ()> {
-                    match result {
-                        // Committee stream ended.
-                        Ok(()) => {
-                            // The scheduler has ended the blockchain.
-                            // For now, exit, because no more progress can be made.
-                            error!("Unexpected end of stream while watching scheduler committees");
-                            std::process::exit(1);
-                        }
-                        // Committee stream errored.
-                        Err(error) => {
-                            // Propagate error to service manager (high-velocity implementation).
-                            error!(
-                                "Unexpected error while watching scheduler committees: {:?}",
-                                error
-                            );
-                            std::process::exit(1);
-                        }
-                    };
+                })
+                .map_err(|error| {
+                    panic!(
+                        "Unexpected error while watching for epoch transitions: {:?}",
+                        error
+                    );
                 })
                 .into_box()
         });
