@@ -150,9 +150,14 @@ const (
 	Normal HeaderType = 0
 
 	// RoundFailed is a header resulting from a failed round. Such a
-	// header contains no transactions but advanced the round as normal
+	// header contains no transactions but advances the round as normal
 	// to prevent replays of old commitments.
 	RoundFailed HeaderType = 1
+
+	// EpochTransition is a header resulting from an epoch transition.
+	// Such a header contains no transactions but advances the round as
+	// normal.
+	EpochTransition HeaderType = 2
 )
 
 // Header is a block header.

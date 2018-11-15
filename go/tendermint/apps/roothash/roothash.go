@@ -208,8 +208,8 @@ func (app *rootHashApplication) checkCommittees(ctx *abci.Context) { // nolint: 
 		}
 
 		// Transition the round.
-		block := runtime.CurrentBlock
-		blockNr, _ := block.Header.Round.ToU64()
+		blk := runtime.CurrentBlock
+		blockNr, _ := blk.Header.Round.ToU64()
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
 			"runtime", runtime.ID,
@@ -218,9 +218,30 @@ func (app *rootHashApplication) checkCommittees(ctx *abci.Context) { // nolint: 
 		)
 
 		runtime.Timer.Stop(ctx)
-		runtime.Round = newRound(committee, block)
+		runtime.Round = newRound(committee, blk)
+
+		// Emit an empty epoch transition block in the new round. This is required so that
+		// the clients can be sure what state is final when an epoch transition occurs.
+		app.emitEmptyBlock(ctx, runtime, block.EpochTransition)
+
 		state.UpdateRuntimeState(runtime)
 	}
+}
+
+func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *RuntimeState, hdrType block.HeaderType) {
+	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
+	runtime.Round.populateFinalizedBlock(blk)
+
+	runtime.CurrentBlock = blk
+
+	roundNr, _ := blk.Header.Round.ToU64()
+
+	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
+	tagV := api.ValueRootHashFinalized{
+		ID:    runtime.ID,
+		Round: roundNr,
+	}
+	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
 }
 
 func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -571,19 +592,7 @@ func (app *rootHashApplication) tryFinalize(
 		"err", err,
 	)
 
-	blk = block.NewEmptyBlock(latestBlock, uint64(ctx.Now().Unix()), block.RoundFailed)
-	runtimeState.Round.populateFinalizedBlock(blk)
-
-	runtimeState.CurrentBlock = blk
-
-	roundNr, _ := blk.Header.Round.ToU64()
-
-	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-	tagV := api.ValueRootHashFinalized{
-		ID:    id,
-		Round: roundNr,
-	}
-	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
+	app.emitEmptyBlock(ctx, runtimeState, block.RoundFailed)
 }
 
 // New constructs a new roothash application instance.

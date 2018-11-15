@@ -90,12 +90,12 @@ func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
 	}
 
 	// Transition the round.
-	block, err := s.getLatestBlockImpl()
+	blk, err := s.getLatestBlockImpl()
 	if err != nil {
 		panic(err) // Will never happen, but just in case.
 	}
 
-	blockNr, _ := block.Header.Round.ToU64()
+	blockNr, _ := blk.Header.Round.ToU64()
 
 	s.logger.Debug("worker: new committee, transitioning round",
 		"epoch", committee.ValidFor,
@@ -107,7 +107,23 @@ func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
 	}
 	s.timer.Reset(infiniteTimeout)
 
-	s.round = newRound(s.storage, s.runtime, committee, block)
+	s.round = newRound(s.storage, s.runtime, committee, blk)
+
+	// Emit an empty epoch transition block in the new round. This is required so that
+	// the clients can be sure what state is final when an epoch transition occurs.
+	s.emitEmptyBlock(blk, block.EpochTransition)
+}
+
+func (s *runtimeState) emitEmptyBlock(blk *block.Block, hdrType block.HeaderType) {
+	blk = block.NewEmptyBlock(blk, uint64(time.Now().Unix()), hdrType)
+	s.round.populateFinalizedBlock(blk)
+	s.rootHash.allBlockNotifier.Broadcast(blk)
+
+	s.Lock()
+	defer s.Unlock()
+
+	s.blockNotifier.Broadcast(blk)
+	s.blocks = append(s.blocks, blk)
 }
 
 func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
@@ -216,15 +232,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 		"err", err,
 	)
 
-	blk = block.NewEmptyBlock(latestBlock, uint64(time.Now().Unix()), block.RoundFailed)
-	s.round.populateFinalizedBlock(blk)
-	s.rootHash.allBlockNotifier.Broadcast(blk)
-
-	s.Lock()
-	defer s.Unlock()
-
-	s.blockNotifier.Broadcast(blk)
-	s.blocks = append(s.blocks, blk)
+	s.emitEmptyBlock(latestBlock, block.RoundFailed)
 }
 
 func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo

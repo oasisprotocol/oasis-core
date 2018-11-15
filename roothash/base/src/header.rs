@@ -21,9 +21,13 @@ pub enum HeaderType {
     /// Normal header.
     Normal = 0,
     /// RoundFailed is a header resulting from a failed round. Such a
-    /// header contains no transactions but advanced the round as normal
+    /// header contains no transactions but advances the round as normal
     /// to prevent replays of old commitments.
     RoundFailed = 1,
+    /// EpochTransition is a header resulting from an epoch transition.
+    /// Such a header contains no transactions but advances the round as
+    /// normal.
+    EpochTransition = 2,
 }
 
 impl Default for HeaderType {
@@ -49,6 +53,7 @@ impl<'de> Deserialize<'de> for HeaderType {
         let value = match u8::deserialize(deserializer)? {
             0 => HeaderType::Normal,
             1 => HeaderType::RoundFailed,
+            2 => HeaderType::EpochTransition,
             _ => return Err(serde::de::Error::custom("invalid header type")),
         };
 
@@ -125,6 +130,7 @@ impl TryFrom<api::Header> for Header {
             header_type: match a.get_header_type() {
                 0 => HeaderType::Normal,
                 1 => HeaderType::RoundFailed,
+                2 => HeaderType::EpochTransition,
                 _ => return Err(Error::new("invalid header type")),
             },
             previous_hash: H256::try_from(a.get_previous_hash())?,
