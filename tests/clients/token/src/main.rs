@@ -32,14 +32,14 @@ fn init(client: &mut token::Client, _runs: usize, _threads: usize, runtime: &mut
     request.set_token_symbol("EKI".to_string());
     request.set_initial_supply(8);
 
-    runtime.block_on(client.create(request)).unwrap();
+    runtime.block_on(client.create(request.into())).unwrap();
 
     // Check balances.
     let response = runtime
         .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
-            request
+            request.into()
         }))
         .unwrap();
     assert_eq!(response.get_balance(), 8_000_000_000_000_000_000);
@@ -63,7 +63,7 @@ fn scenario(client: &mut token::Client, runtime: &mut Runtime) {
             request.set_sender("bank".to_string());
             request.set_destination(destination.clone());
             request.set_value(3);
-            request
+            request.into()
         }))
         .unwrap();
     measure_counter_inc!("value_transferred", 3);
@@ -73,7 +73,7 @@ fn scenario(client: &mut token::Client, runtime: &mut Runtime) {
         .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account(destination.clone());
-            request
+            request.into()
         }))
         .unwrap();
     assert_eq!(response.get_balance(), 3);
@@ -82,7 +82,7 @@ fn scenario(client: &mut token::Client, runtime: &mut Runtime) {
         .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account(poor.clone());
-            request
+            request.into()
         }))
         .unwrap();
     assert_eq!(response.get_balance(), 0);
@@ -95,7 +95,7 @@ fn finalize(client: &mut token::Client, runs: usize, threads: usize, runtime: &m
         .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
-            request
+            request.into()
         }))
         .unwrap();
     assert_eq!(
