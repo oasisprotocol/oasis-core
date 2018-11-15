@@ -194,9 +194,9 @@ func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backe
 			round, err = header.Round.ToU64()
 			require.NoError(err, "header.Round.ToU64")
 
-			if round < childRound {
-				continue
-			}
+			// Ensure that WatchBlocks uses the correct latest block.
+			require.True(round >= childRound, "WatchBlocks must start at child block")
+
 			if round == childRound {
 				require.EqualValues(child.Header, header, "old block is equal")
 				continue

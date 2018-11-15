@@ -372,9 +372,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 
 				// Ensure latest block is set.
 				notifiers.Lock()
-				if notifiers.lastBlock == nil {
-					notifiers.lastBlock = block
-				}
+				notifiers.lastBlock = block
 				notifiers.Unlock()
 
 				// Insert the round -> block height mapping into the
