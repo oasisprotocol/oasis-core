@@ -292,6 +292,8 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 				genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
 			}
 
+			roundNr, _ := genesisBlock.Header.Round.ToU64()
+
 			// Create new state containing the genesis block.
 			timerCtx := &timerContext{ID: runtime.ID}
 			state.UpdateRuntimeState(&RuntimeState{
@@ -309,7 +311,7 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 			ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 			tagV := api.ValueRootHashFinalized{
 				ID:    id,
-				Round: 0,
+				Round: roundNr,
 			}
 			ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
 		}
