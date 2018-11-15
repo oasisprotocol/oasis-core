@@ -33,14 +33,14 @@ fn main() {
     request.set_token_symbol("EKI".to_string());
     request.set_initial_supply(8);
 
-    runtime.block_on(client.create(request)).unwrap();
+    runtime.block_on(client.create(request.into())).unwrap();
 
     // Check balance.
     let response = runtime
         .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
-            request
+            request.into()
         }))
         .unwrap();
     assert_eq!(response.get_balance(), 8_000_000_000_000_000_000);
@@ -53,7 +53,7 @@ fn main() {
         .block_on(client.get_balance({
             let mut request = token::GetBalanceRequest::new();
             request.set_account("bank".to_string());
-            request
+            request.into()
         }))
         .unwrap();
     assert_eq!(response.get_balance(), 8_000_000_000_000_000_000);

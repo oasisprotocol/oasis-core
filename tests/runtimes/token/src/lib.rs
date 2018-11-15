@@ -9,7 +9,7 @@ extern crate token_api;
 mod token_contract;
 
 use token_api::{with_api, CreateRequest, CreateResponse, GetBalanceRequest, GetBalanceResponse,
-                TransferRequest, TransferResponse};
+                TransferRequest, TransferResponse, Unique};
 use token_contract::TokenContract;
 
 use ekiden_core::error::Result;
@@ -47,15 +47,15 @@ impl BatchHandler for TokenBatchHandler {
 
 configure_runtime_dispatch_batch_handler!(TokenBatchHandler);
 
-pub fn null(_request: &bool, _ctx: &RuntimeCallContext) -> Result<()> {
+pub fn null(_request: &Unique<bool>, _ctx: &RuntimeCallContext) -> Result<()> {
     Ok(())
 }
 
 #[cfg(target_env = "sgx")]
-pub fn null_storage_insert(request: &u64, _ctx: &RuntimeCallContext) -> Result<()> {
+pub fn null_storage_insert(request: &Unique<u64>, _ctx: &RuntimeCallContext) -> Result<()> {
     let backend = UntrustedStorageBackend::new();
 
-    for _ in 0..*request {
+    for _ in 0..request.0 {
         backend
             .insert(b"foo".to_vec(), 10, InsertOptions::default())
             .wait()
@@ -66,15 +66,18 @@ pub fn null_storage_insert(request: &u64, _ctx: &RuntimeCallContext) -> Result<(
 }
 
 #[cfg(not(target_env = "sgx"))]
-pub fn null_storage_insert(_request: &u64, _ctx: &RuntimeCallContext) -> Result<()> {
+pub fn null_storage_insert(_request: &Unique<u64>, _ctx: &RuntimeCallContext) -> Result<()> {
     panic!("only supported on sgx");
 }
 
 #[cfg(target_env = "sgx")]
-pub fn list_storage_insert(request: &Vec<Vec<u8>>, _ctx: &RuntimeCallContext) -> Result<()> {
+pub fn list_storage_insert(
+    request: &Unique<Vec<Vec<u8>>>,
+    _ctx: &RuntimeCallContext,
+) -> Result<()> {
     let backend = UntrustedStorageBackend::new();
 
-    for item in request.iter() {
+    for item in request.0.iter() {
         backend
             .insert(item.clone(), 10, InsertOptions::default())
             .wait()
@@ -85,49 +88,56 @@ pub fn list_storage_insert(request: &Vec<Vec<u8>>, _ctx: &RuntimeCallContext) ->
 }
 
 #[cfg(not(target_env = "sgx"))]
-pub fn list_storage_insert(_request: &Vec<String>, _ctx: &RuntimeCallContext) -> Result<()> {
+pub fn list_storage_insert(
+    _request: &Unique<Vec<String>>,
+    _ctx: &RuntimeCallContext,
+) -> Result<()> {
     panic!("only supported on sgx");
 }
 
-pub fn create(request: &CreateRequest, _ctx: &RuntimeCallContext) -> Result<CreateResponse> {
+pub fn create(
+    request: &Unique<CreateRequest>,
+    _ctx: &RuntimeCallContext,
+) -> Result<CreateResponse> {
     let token = TokenContract::new();
 
     // TODO: Get sender from authenticated request.
     token.create(
-        request.get_sender().to_owned(),
-        request.get_token_name().to_owned(),
-        request.get_token_symbol().to_owned(),
-        request.get_initial_supply(),
+        request.0.get_sender().to_owned(),
+        request.0.get_token_name().to_owned(),
+        request.0.get_token_symbol().to_owned(),
+        request.0.get_initial_supply(),
     )?;
 
     Ok(CreateResponse::new())
 }
 
-pub fn transfer(request: &TransferRequest, ctx: &RuntimeCallContext) -> Result<TransferResponse> {
+pub fn transfer(
+    request: &Unique<TransferRequest>,
+    ctx: &RuntimeCallContext,
+) -> Result<TransferResponse> {
     // Check that custom runtime context works.
     let my_ctx = ctx.runtime.downcast_ref::<MyCustomContext>().unwrap();
     assert_eq!(my_ctx.bar, 42);
 
     let token = TokenContract::new();
 
-    // TODO: Get sender from authenticated request.
     token.transfer(
-        request.get_sender().to_owned(),
-        request.get_destination().to_owned(),
-        request.get_value(),
+        request.0.get_sender().to_owned(),
+        request.0.get_destination().to_owned(),
+        request.0.get_value(),
     )?;
 
     Ok(TransferResponse::new())
 }
 
 pub fn get_balance(
-    request: &GetBalanceRequest,
+    request: &Unique<GetBalanceRequest>,
     _ctx: &RuntimeCallContext,
 ) -> Result<GetBalanceResponse> {
     let token = TokenContract::new();
 
-    // TODO: Get sender from authenticated request.
-    let balance = token.get_balance(&request.get_account().to_owned())?;
+    let balance = token.get_balance(&request.0.get_account().to_owned())?;
 
     let mut response = GetBalanceResponse::new();
     response.set_balance(balance);
