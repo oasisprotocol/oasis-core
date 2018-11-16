@@ -1,3 +1,0 @@
-*.pyc
-/storage_pb2.py
-/storage_pb2_grpc.py

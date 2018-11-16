@@ -81,8 +81,8 @@ test_migration() {
     wait "$first_compute1_pid" "$first_compute2_pid" || true
 
     # Export.
-    "$WORKDIR/scripts/storage/export.py" >/tmp/ekiden-test-storage.dat
-    "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" >/tmp/ekiden-test-roothash.dat
+    "$WORKDIR/go/ekiden/ekiden" storage export --output_file /tmp/ekiden-test-storage.dat
+    "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" --output_file /tmp/ekiden-test-roothash.dat
 
     # Finish tearing down the network.
     kill -KILL "$first_dummy_pid"
@@ -112,7 +112,7 @@ test_migration() {
     # 4 sec
 
     # Import.
-    "$WORKDIR/scripts/storage/import.py" --current-epoch 1 </tmp/ekiden-test-storage.dat
+    "$WORKDIR/go/ekiden/ekiden" storage import --input_file /tmp/ekiden-test-storage.dat --current_epoch 1
 
     # Finish starting the second network.
     "$WORKDIR/target/debug/ekiden-compute" \
@@ -145,7 +145,6 @@ test_migration() {
     # 7 sec
 
     "$WORKDIR/go/ekiden/ekiden" debug dummy set-epoch --epoch 2
-
 
     # Wait on the client and check its exit status.
     wait "$client_pid"
