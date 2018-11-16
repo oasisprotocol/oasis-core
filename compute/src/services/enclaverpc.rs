@@ -1,5 +1,4 @@
 //! Client-facing service.
-use std::error::Error;
 use std::sync::Arc;
 
 use grpcio;
@@ -8,11 +7,11 @@ use grpcio::{RpcStatus, RpcStatusCode};
 use ekiden_core::futures::Future;
 use ekiden_rpc_api::{CallEnclaveRequest, CallEnclaveResponse, EnclaveRpc};
 
-use super::super::worker::Worker;
+use super::super::worker::WorkerHost;
 
 struct EnclaveRpcServiceInner {
     /// Worker.
-    worker: Arc<Worker>,
+    worker: Arc<WorkerHost>,
 }
 
 #[derive(Clone)]
@@ -22,7 +21,7 @@ pub struct EnclaveRpcService {
 
 impl EnclaveRpcService {
     /// Create new compute server instance.
-    pub fn new(worker: Arc<Worker>) -> Self {
+    pub fn new(worker: Arc<WorkerHost>) -> Self {
         EnclaveRpcService {
             inner: Arc::new(EnclaveRpcServiceInner { worker }),
         }
@@ -46,16 +45,12 @@ impl EnclaveRpc for EnclaveRpcService {
 
         // Prepare response future.
         let f = response_receiver.then(|result| match result {
-            Ok(Ok(response)) => {
+            Ok(response) => {
                 let mut rpc_response = CallEnclaveResponse::new();
                 rpc_response.set_payload(response);
 
                 sink.success(rpc_response)
             }
-            Ok(Err(error)) => sink.fail(RpcStatus::new(
-                RpcStatusCode::Internal,
-                Some(error.description().to_owned()),
-            )),
             Err(error) => sink.fail(RpcStatus::new(
                 RpcStatusCode::Internal,
                 Some(error.description().to_owned()),

@@ -1,4 +1,6 @@
 //! Storage backend interface.
+use std::sync::Arc;
+
 use ekiden_common::bytes::H256;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::futures::BoxStream;
@@ -44,6 +46,28 @@ pub trait StorageBackend: Sync + Send {
 
     // Get keys in the storage database, along with expirations.
     fn get_keys(&self) -> BoxStream<(H256, u64)>;
+}
+
+impl<T: ?Sized + StorageBackend> StorageBackend for Arc<T> {
+    fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
+        StorageBackend::get(&**self, key)
+    }
+
+    fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        StorageBackend::get_batch(&**self, keys)
+    }
+
+    fn insert(&self, value: Vec<u8>, expiry: u64, opts: InsertOptions) -> BoxFuture<()> {
+        StorageBackend::insert(&**self, value, expiry, opts)
+    }
+
+    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, opts: InsertOptions) -> BoxFuture<()> {
+        StorageBackend::insert_batch(&**self, values, opts)
+    }
+
+    fn get_keys(&self) -> BoxStream<(H256, u64)> {
+        StorageBackend::get_keys(&**self)
+    }
 }
 
 /// The hash algorithm used to generate a key from a value.

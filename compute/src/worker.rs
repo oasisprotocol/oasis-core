@@ -1,267 +1,36 @@
-use std::borrow::Borrow;
-use std::fmt::Write;
-use std::ops::Deref;
+//! Worker process host.
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::process::Command;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
-use protobuf;
-use protobuf::Message;
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
-use thread_local::ThreadLocal;
+use sgx_types;
+use tempfile::{Builder, TempDir};
+use tokio_process::{Child, CommandExt};
+use tokio_uds;
 
 use ekiden_core::bytes::H256;
-use ekiden_core::enclave::api::IdentityProof;
-use ekiden_core::enclave::quote;
+use ekiden_core::enclave::api as identity_api;
 use ekiden_core::environment::Environment;
 use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::sync::oneshot;
-use ekiden_core::futures::Future;
-use ekiden_core::rpc::api;
+use ekiden_core::futures::block_on;
+use ekiden_core::futures::prelude::*;
 use ekiden_core::rpc::client::ClientEndpoint;
-use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
+use ekiden_core::runtime::batch::CallBatch;
+use ekiden_core::tokio::timer::Delay;
 use ekiden_core::x509::Certificate;
 use ekiden_roothash_base::Block;
+use ekiden_rpc_client::backend::{NetworkRpcClientBackend, RpcClientBackend};
 use ekiden_storage_base::{InsertOptions, StorageBackend};
-use ekiden_storage_batch::BatchStorageBackend;
-use ekiden_untrusted::rpc::router::RpcRouter;
-use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime};
+use ekiden_untrusted::enclave::identity::IAS;
+use ekiden_worker_api::protocol::ShutdownNotify;
+use ekiden_worker_api::types::ComputedBatch;
+use ekiden_worker_api::{Host, HostHandler, Protocol, Worker};
 
-use super::handlers;
-use super::ias::IAS;
-
-/// Result bytes.
-pub type BytesResult = Result<Vec<u8>>;
-/// Result bytes sender part of the channel.
-pub type BytesSender = oneshot::Sender<BytesResult>;
-
-/// Computed batch.
-#[derive(Debug)]
-pub struct ComputedBatch {
-    /// Block this batch was computed against.
-    pub block: Block,
-    /// Batch of runtime calls.
-    pub calls: CallBatch,
-    /// Batch of runtime outputs.
-    pub outputs: OutputBatch,
-    /// New state root hash.
-    pub new_state_root: H256,
-}
-
-/// Command sent to the worker thread.
-enum Command {
-    /// RPC call from a client.
-    RpcCall(Vec<u8>, BytesSender),
-    /// Runtime call batch process request.
-    RuntimeCallBatch(
-        CallBatch,
-        Block,
-        oneshot::Sender<Result<ComputedBatch>>,
-        SpanHandle,
-        bool,
-    ),
-}
-
-struct WorkerInner {
-    /// Runtime running in an enclave.
-    runtime: Enclave,
-    /// Storage backend.
-    storage: Arc<StorageBackend>,
-    /// Enclave identity proof.
-    #[allow(dead_code)]
-    identity_proof: IdentityProof,
-}
-
-impl WorkerInner {
-    fn new(config: WorkerConfiguration, ias: Arc<IAS>, storage: Arc<StorageBackend>) -> Self {
-        measure_configure!(
-            "runtime_call_batch_size",
-            "Runtime call batch sizes.",
-            MetricConfig::Histogram {
-                buckets: vec![0., 1., 5., 10., 20., 50., 100., 200., 500., 1000.],
-            }
-        );
-        measure_configure!(
-            "runtime_call_storage_inserts",
-            "Number of storage inserts from processing a batch.",
-            MetricConfig::Histogram {
-                buckets: vec![0., 1., 5., 10., 50., 100., 200., 500., 1000., 5000., 10000.],
-            }
-        );
-
-        let (runtime, identity_proof) =
-            Self::create_runtime(&config.runtime_filename, ias, config.saved_identity_path);
-
-        Self {
-            runtime,
-            storage,
-            identity_proof,
-        }
-    }
-
-    /// Create an instance of the runtime.
-    fn create_runtime(
-        runtime_filename: &str,
-        ias: Arc<IAS>,
-        saved_identity_path: Option<PathBuf>,
-    ) -> (Enclave, IdentityProof) {
-        // TODO: Handle runtime initialization errors.
-        let runtime = Enclave::new(runtime_filename).unwrap();
-
-        // Initialize runtime.
-        let identity_proof = runtime
-            .identity_init(
-                ias.deref(),
-                saved_identity_path.as_ref().map(|p| p.borrow()),
-            )
-            .expect("EnclaveIdentity::identity_init");
-
-        // Show runtime MRENCLAVE in hex format.
-        let iai = quote::verify(&identity_proof).expect("Enclave identity proof invalid");
-        let mut mr_enclave = String::new();
-        for &byte in &iai.mr_enclave[..] {
-            write!(&mut mr_enclave, "{:02x}", byte).unwrap();
-        }
-
-        info!("Loaded runtime with MRENCLAVE: {}", mr_enclave);
-
-        (runtime, identity_proof)
-    }
-
-    /// `handle_sh` is from when we handled the CallRuntimeBatch command.
-    fn call_runtime_batch_fallible(
-        &mut self,
-        batch: &CallBatch,
-        block: &Block,
-        handle_sh: SpanHandle,
-        commit_storage: bool,
-    ) -> Result<(OutputBatch, H256)> {
-        measure_histogram!("runtime_call_batch_size", batch.len());
-
-        // Prepare batch storage.
-        let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone()));
-
-        let root_hash = &block.header.state_root;
-        let enclave_sh;
-
-        let (new_state_root, outputs) = {
-            measure_histogram_timer!("runtime_call_batch_enclave_time");
-            let span = handle_sh.child("call_runtime_batch_enclave", |opts| opts.start());
-            enclave_sh = span.handle();
-
-            // Run in storage context.
-            self.runtime
-                .with_storage(batch_storage.clone(), root_hash, || {
-                    // Execute batch.
-                    self.runtime.runtime_call_batch(batch, &block.header)
-                })?
-        };
-
-        measure_histogram!(
-            "runtime_call_storage_inserts",
-            batch_storage.get_batch_size()
-        );
-
-        // Commit batch storage.
-        {
-            let opts = InsertOptions {
-                local_only: !commit_storage,
-            };
-
-            measure_histogram_timer!("runtime_call_storage_commit_time");
-            let _span = enclave_sh.follower("runtime_call_storage_commit", |opts| opts.start());
-            batch_storage.commit(0, opts).wait()?;
-        }
-
-        Ok((outputs?, new_state_root))
-    }
-
-    /// Handle RPC call.
-    fn handle_rpc_call(&self, request: Vec<u8>) -> BytesResult {
-        // TODO: Notify enclave that it is stateless so it can clear storage cache.
-
-        // Call runtime.
-        let mut enclave_request = api::EnclaveRequest::new();
-        {
-            let client_requests = enclave_request.mut_client_request();
-            // TODO: Why doesn't enclave request contain bytes directly?
-            let client_request = protobuf::parse_from_bytes(&request)?;
-            client_requests.push(client_request);
-        }
-
-        let enclave_response = {
-            measure_histogram_timer!("rpc_call_enclave_time");
-            self.runtime.call(enclave_request)
-        }?;
-
-        match enclave_response.get_client_response().first() {
-            Some(enclave_response) => Ok(enclave_response.write_to_bytes()?),
-            None => Err(Error::new("no response to rpc call")),
-        }
-    }
-
-    /// Handle runtime call batch.
-    /// `sh` is from when we submitted the CallRuntimeBatch command.
-    fn handle_runtime_batch(
-        &mut self,
-        calls: CallBatch,
-        block: Block,
-        sender: oneshot::Sender<Result<ComputedBatch>>,
-        sh: SpanHandle,
-        commit_storage: bool,
-    ) {
-        let span = sh.follower("handle_runtime_batch", |opts| {
-            opts.tag(tag::StdTag::span_kind("consumer")).start()
-        });
-        let result =
-            self.call_runtime_batch_fallible(&calls, &block, span.handle(), commit_storage);
-
-        match result {
-            Ok((outputs, new_state_root)) => {
-                // No errors, hand over the batch to root hash frontend.
-                sender
-                    .send(Ok(ComputedBatch {
-                        block,
-                        calls,
-                        outputs,
-                        new_state_root,
-                    }))
-                    .unwrap();
-            }
-            Err(error) => {
-                // Batch-wide error has occurred.
-                error!("Batch-wide error: {:?}", error);
-                sender.send(Err(error)).unwrap();
-            }
-        }
-    }
-
-    /// Process requests from a receiver until the channel closes.
-    fn work(&mut self, command_receiver: Receiver<Command>) {
-        // Block for the next call.
-        while let Ok(command) = command_receiver.recv() {
-            match command {
-                Command::RpcCall(request, sender) => {
-                    // Process (stateless) RPC call.
-                    let result = self.handle_rpc_call(request);
-                    sender.send(result).unwrap();
-
-                    measure_counter_inc!("rpc_call_processed");
-                }
-                Command::RuntimeCallBatch(calls, block, sender, sh, commit_storage) => {
-                    // Process batch of runtime calls.
-                    let call_count = calls.len();
-                    self.handle_runtime_batch(calls, block, sender, sh, commit_storage);
-
-                    measure_counter_inc!("runtime_call_processed", call_count);
-                }
-            }
-        }
-    }
-}
+/// Worker respawn delay (in seconds).
+const WORKER_RESPAWN_DELAY: u64 = 1;
 
 /// Key manager configuration.
 #[derive(Clone, Debug)]
@@ -274,9 +43,29 @@ pub struct KeyManagerConfiguration {
     pub cert: Certificate,
 }
 
+/// Worker prometheus configuration.
+#[derive(Clone, Debug)]
+pub struct PrometheusConfiguration {
+    pub prometheus_metrics_addr: String,
+    pub prometheus_push_interval: String,
+    pub prometheus_push_job_name: String,
+    pub prometheus_push_instance_label: String,
+}
+
+/// Worker tracing configuration.
+#[derive(Clone, Debug)]
+pub struct TracingConfiguration {
+    pub sample_probability: String,
+    pub agent_addr: String,
+}
+
 /// Worker configuration.
 #[derive(Clone, Debug)]
 pub struct WorkerConfiguration {
+    /// Path to worker binary.
+    pub worker_binary: String,
+    /// Path to worker cache directory.
+    pub cache_dir: String,
     /// Runtime binary filename.
     pub runtime_filename: String,
     /// Optional saved identity path.
@@ -286,100 +75,366 @@ pub struct WorkerConfiguration {
     pub forwarded_rpc_timeout: Option<Duration>,
     /// Key manager configuration.
     pub key_manager: Option<KeyManagerConfiguration>,
+    /// Prometheus configuration.
+    pub prometheus: Option<PrometheusConfiguration>,
+    /// Tracing configuration.
+    pub tracing: Option<TracingConfiguration>,
 }
 
-/// Worker which executes runtimes in secure enclaves.
-pub struct Worker {
-    /// Channel for submitting commands to the worker.
-    command_sender: Mutex<Sender<Command>>,
-    /// Thread-local clone of the command sender which is required to avoid locking the
-    /// mutex each time we need to send a command.
-    tl_command_sender: ThreadLocal<Sender<Command>>,
+struct WorkerProcess {
+    /// Temporary worker directory.
+    _worker_dir: TempDir,
+    /// Worker process identifier.
+    id: u32,
+    /// Protocol instance.
+    protocol: Protocol,
 }
 
-impl Worker {
-    /// Create new runtime worker.
-    pub fn new(
+impl WorkerProcess {
+    pub fn spawn(
+        environment: Arc<Environment>,
         config: WorkerConfiguration,
         ias: Arc<IAS>,
-        environment: Arc<Environment>,
-        storage: Arc<StorageBackend>,
-    ) -> Self {
-        // Setup enclave RPC routing.
-        // TODO: This sets up the routing globally, we should set it up the same as storage.
-        {
-            let mut router = RpcRouter::get_mut();
+        storage_backend: Arc<StorageBackend>,
+    ) -> BoxFuture<(Self, Child, ShutdownNotify)> {
+        // Bind listener and spawn worker process.
+        let config_clone = config.clone();
+        let bind_listener = future::lazy(move || {
+            // Prepare host UNIX socket.
+            let worker_dir = Builder::new().prefix("ekiden-worker").tempdir()?;
+            let sock_path = worker_dir.path().join("host.sock");
+            let listener = tokio_uds::UnixListener::bind(&sock_path)?;
 
-            // Key manager endpoint.
-            if let Some(ref key_manager) = config.key_manager {
-                router.add_handler(handlers::EnclaveForwarder::new(
-                    ClientEndpoint::KeyManager,
-                    environment.clone(),
-                    config.forwarded_rpc_timeout,
-                    key_manager.host.clone(),
-                    key_manager.port,
-                    key_manager.cert.clone(),
-                ));
-            }
-        }
+            // Spawn worker process.
+            info!("Spawning worker process \"{}\"", config_clone.worker_binary);
+            // TODO: Sandboxing.
+            let child = Command::new(&config_clone.worker_binary)
+                .arg("--host-socket")
+                .arg(&sock_path)
+                .arg("--cache-dir")
+                .arg(&config_clone.cache_dir)
+                .args(if let Some(ref cfg) = config_clone.prometheus {
+                    vec![
+                        "--prometheus-mode".to_owned(),
+                        "push".to_owned(),
+                        "--prometheus-metrics-addr".to_owned(),
+                        cfg.prometheus_metrics_addr.clone(),
+                        "--prometheus-push-interval".to_owned(),
+                        cfg.prometheus_push_interval.clone(),
+                        "--prometheus-push-job-name".to_owned(),
+                        cfg.prometheus_push_job_name.clone(),
+                        "--prometheus-push-instance-label".to_owned(),
+                        cfg.prometheus_push_instance_label.clone(),
+                    ]
+                } else {
+                    vec![]
+                })
+                .args(if let Some(ref cfg) = config_clone.tracing {
+                    vec![
+                        "--tracing-enable".to_owned(),
+                        "--tracing-sample-probability".to_owned(),
+                        cfg.sample_probability.clone(),
+                        "--tracing-agent-addr".to_owned(),
+                        cfg.agent_addr.clone(),
+                    ]
+                } else {
+                    vec![]
+                })
+                .arg(&config_clone.runtime_filename)
+                .spawn_async()?;
 
-        // Spawn inner worker in a separate thread.
-        let (command_sender, command_receiver) = channel();
-        thread::spawn(move || {
-            WorkerInner::new(config, ias, storage).work(command_receiver);
+            // Wait for the worker to connect.
+            info!("Waiting for worker to connect");
+
+            Ok((worker_dir, child, listener))
         });
 
-        Self {
-            command_sender: Mutex::new(command_sender),
-            tl_command_sender: ThreadLocal::new(),
-        }
+        // Wait for the worker to connect.
+        let socket = bind_listener.and_then(|(worker_dir, child, listener)| {
+            listener
+                .incoming()
+                .into_future()
+                .map_err(|(error, _)| error.into())
+                .and_then(move |(socket, _)| match socket {
+                    Some(socket) => Ok((worker_dir, child, socket)),
+                    None => Err(Error::new("worker failed to connect")),
+                })
+        });
+
+        // Setup the protocol handler.
+        socket
+            .and_then(move |(worker_dir, child, socket)| {
+                // TODO: Ensure that our worker process connected and not someone else.
+                info!("Worker connected");
+
+                // Setup worker protocol.
+                let protocol_handler = Arc::new(HostHandler(ProtocolHandler {
+                    ias,
+                    key_manager_client: config.key_manager.clone().map(|config_km| {
+                        NetworkRpcClientBackend::new(
+                            environment.clone(),
+                            config.forwarded_rpc_timeout,
+                            &config_km.host,
+                            config_km.port,
+                            config_km.cert,
+                        ).expect("key manager rpc client creation must not fail")
+                    }),
+                    storage_backend,
+                }));
+                let (protocol, shutdown_signal) =
+                    Protocol::new(environment.clone(), socket, protocol_handler);
+                info!("Protocol handler started");
+
+                Ok((
+                    Self {
+                        _worker_dir: worker_dir,
+                        id: child.id(),
+                        protocol,
+                    },
+                    child,
+                    shutdown_signal,
+                ))
+            })
+            .into_box()
     }
 
-    /// Get new clone of command sender for communicating with the worker.
-    fn get_command_sender(&self) -> &Sender<Command> {
-        self.tl_command_sender.get_or(|| {
-            let command_sender = self.command_sender.lock().unwrap();
-            Box::new(command_sender.clone())
+    fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
+        measure_counter_inc!("rpc_call_request");
+        Worker::rpc_call(&self.protocol, request)
+    }
+
+    fn runtime_call_batch(
+        &self,
+        calls: CallBatch,
+        block: Block,
+        sh: SpanHandle,
+        commit_storage: bool,
+    ) -> BoxFuture<ComputedBatch> {
+        measure_counter_inc!("runtime_call_request");
+        let span = sh.child("send_runtime_call_batch", |opts| {
+            opts.tag(tag::StdTag::span_kind("producer")).start()
+        });
+
+        // TODO: Transmit span handle identifier to worker to correlate requests.
+        self.protocol
+            .runtime_call_batch(calls, block, commit_storage)
+            .then(move |result| {
+                // Record end time and send to agent.
+                drop(span);
+                result
+            })
+            .into_box()
+    }
+}
+
+struct Inner {
+    /// Environment instance.
+    environment: Arc<Environment>,
+    /// Worker configuration.
+    config: WorkerConfiguration,
+    /// IAS instance.
+    ias: Arc<IAS>,
+    /// Storage backend instance.
+    storage_backend: Arc<StorageBackend>,
+    /// Currently active worker.
+    worker: RwLock<Option<WorkerProcess>>,
+}
+
+/// Worker host.
+pub struct WorkerHost {
+    inner: Arc<Inner>,
+}
+
+struct ProtocolHandler {
+    /// IAS instance.
+    ias: Arc<IAS>,
+    /// Current key manager client.
+    key_manager_client: Option<NetworkRpcClientBackend>,
+    /// Storage backend.
+    storage_backend: Arc<StorageBackend>,
+}
+
+enum SuccessfulSpawn {
+    /// Spawn succeeded in this iteration.
+    Immediate(WorkerProcess, Child, ShutdownNotify),
+    /// Spawn succeeded through a retry.
+    Retried,
+}
+
+impl WorkerHost {
+    /// Create a new worker host and spawn a child worker.
+    pub fn new(
+        environment: Arc<Environment>,
+        config: WorkerConfiguration,
+        ias: Arc<IAS>,
+        storage_backend: Arc<StorageBackend>,
+    ) -> Result<Self> {
+        let instance = Self {
+            inner: Arc::new(Inner {
+                environment: environment.clone(),
+                config,
+                ias,
+                storage_backend,
+                worker: RwLock::new(None),
+            }),
+        };
+
+        // Create the initial worker process (in a blocking manner).
+        block_on(
+            environment,
+            WorkerHost::spawn_worker(instance.inner.clone()),
+        )?;
+
+        Ok(instance)
+    }
+
+    fn spawn_worker(inner: Arc<Inner>) -> BoxFuture<()> {
+        // Spawn worker process.
+        let shared_inner = inner.clone();
+        let spawn_worker = WorkerProcess::spawn(
+            inner.environment.clone(),
+            inner.config.clone(),
+            inner.ias.clone(),
+            inner.storage_backend.clone(),
+        ).map(|(worker, child, shutdown_signal)| {
+            SuccessfulSpawn::Immediate(worker, child, shutdown_signal)
         })
+            .or_else(move |error| {
+                error!("Unable to spawn new worker process: {:?}", error);
+
+                // Try respawning after a delay.
+                Delay::new(Instant::now() + Duration::from_secs(WORKER_RESPAWN_DELAY))
+                    .map_err(|error| error.into())
+                    .and_then(move |_| {
+                        info!("Respawning worker after {}s delay", WORKER_RESPAWN_DELAY);
+                        Self::spawn_worker(shared_inner).map(|_| SuccessfulSpawn::Retried)
+                    })
+            });
+
+        // Then prepare the shutdown signal handler.
+        spawn_worker
+            .and_then(move |spawn_result| {
+                match spawn_result {
+                    SuccessfulSpawn::Immediate(worker, mut child, shutdown_signal) => {
+                        // Worker was spawned without any retries, setup shutdown signal handler.
+                        let shared_inner = inner.clone();
+                        spawn(
+                            shutdown_signal
+                                .then(move |_| {
+                                    error!(
+                                        "Worker connection terminated, ensuring process is dead"
+                                    );
+
+                                    // Take active worker, preventing any further calls to it. Kill the
+                                    // process and wait for it to terminate.
+                                    let worker = shared_inner
+                                        .worker
+                                        .write()
+                                        .unwrap()
+                                        .take()
+                                        .expect("only we can take the worker");
+                                    assert_eq!(worker.id, child.id());
+                                    drop(child.kill());
+
+                                    // Worker terminated, spawn a new one. This will also make the
+                                    // newly spawned worker active.
+                                    info!("Spawning new worker after termination");
+                                    Self::spawn_worker(shared_inner.clone())
+                                })
+                                .discard(),
+                        );
+
+                        // Make the new worker active.
+                        let mut active_worker = inner.worker.write().unwrap();
+                        *active_worker = Some(worker);
+                    }
+                    SuccessfulSpawn::Retried => {
+                        // Worker was spawned in a retry. We don't need to do anything as
+                        // the retry handler already set everything up.
+                    }
+                }
+
+                Ok(())
+            })
+            .into_box()
     }
 
     /// Queue an RPC call with the worker.
     ///
     /// Returns a receiver that will be used to deliver the response.
-    pub fn rpc_call(&self, request: Vec<u8>) -> oneshot::Receiver<BytesResult> {
-        measure_counter_inc!("rpc_call_request");
-
-        let (response_sender, response_receiver) = oneshot::channel();
-        self.get_command_sender()
-            .send(Command::RpcCall(request, response_sender))
-            .unwrap();
-
-        response_receiver
+    pub fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
+        let worker_guard = self.inner.worker.read().unwrap();
+        match worker_guard.as_ref() {
+            Some(worker) => worker.rpc_call(request),
+            None => future::err(Error::new("worker not ready")).into_box(),
+        }
     }
 
+    /// Request the worker to process a runtime call batch.
     pub fn runtime_call_batch(
         &self,
         calls: CallBatch,
         block: Block,
         sh: SpanHandle,
         commit_storage: bool,
-    ) -> oneshot::Receiver<Result<ComputedBatch>> {
-        measure_counter_inc!("runtime_call_request");
-        let span = sh.child("send_runtime_call_batch", |opts| {
-            opts.tag(tag::StdTag::span_kind("producer")).start()
-        });
+    ) -> BoxFuture<ComputedBatch> {
+        let worker_guard = self.inner.worker.read().unwrap();
+        match worker_guard.as_ref() {
+            Some(worker) => worker.runtime_call_batch(calls, block, sh, commit_storage),
+            None => future::err(Error::new("worker not ready")).into_box(),
+        }
+    }
+}
 
-        let (response_sender, response_receiver) = oneshot::channel();
-        self.get_command_sender()
-            .send(Command::RuntimeCallBatch(
-                calls,
-                block,
-                response_sender,
-                span.handle(),
-                commit_storage,
-            ))
-            .unwrap();
+impl Host for ProtocolHandler {
+    fn rpc_call(&self, endpoint: ClientEndpoint, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
+        match endpoint {
+            ClientEndpoint::KeyManager => {
+                // RPC call to key manager endpoint.
+                match self.key_manager_client {
+                    Some(ref client) => client.call_raw(request),
+                    None => {
+                        future::err(Error::new("key manager endpoint not supported")).into_box()
+                    }
+                }
+            }
+            endpoint => unimplemented!("RPC endpoint {:?} not implemented", endpoint),
+        }
+    }
 
-        response_receiver
+    fn ias_get_spid(&self) -> BoxFuture<sgx_types::sgx_spid_t> {
+        future::ok(self.ias.get_spid()).into_box()
+    }
+
+    fn ias_get_quote_type(&self) -> BoxFuture<sgx_types::sgx_quote_sign_type_t> {
+        future::ok(self.ias.get_quote_type()).into_box()
+    }
+
+    fn ias_sigrl(&self, gid: &sgx_types::sgx_epid_group_id_t) -> BoxFuture<Vec<u8>> {
+        // TODO: This should not be blocking as it can take some time.
+        future::ok(self.ias.sigrl(gid)).into_box()
+    }
+
+    fn ias_report(&self, quote: Vec<u8>) -> BoxFuture<identity_api::AvReport> {
+        // TODO: This should not be blocking as it can take some time.
+        future::ok(self.ias.report(&quote)).into_box()
+    }
+
+    fn storage_get(&self, key: H256) -> BoxFuture<Vec<u8>> {
+        self.storage_backend.get(key)
+    }
+
+    fn storage_get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
+        self.storage_backend.get_batch(keys)
+    }
+
+    fn storage_insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
+        self.storage_backend
+            .insert(value, expiry, InsertOptions::default())
+    }
+
+    fn storage_insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
+        self.storage_backend
+            .insert_batch(values, InsertOptions::default())
     }
 }

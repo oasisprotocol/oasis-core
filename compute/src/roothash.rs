@@ -27,9 +27,10 @@ use ekiden_roothash_base::{Block, Event, Header, HeaderType, RootHashBackend, Ro
 use ekiden_scheduler_base::{CommitteeNode, Role};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 use ekiden_tracing;
+use ekiden_worker_api::types::ComputedBatch;
 
 use super::group::{ComputationGroup, GroupRole};
-use super::worker::{ComputedBatch, Worker};
+use super::worker::WorkerHost;
 
 /// Error message for trying to append when not computation group leader.
 pub const ERROR_APPEND_NOT_LEADER: &'static str = "not computation group leader";
@@ -272,7 +273,7 @@ struct Inner {
     /// Storage backend.
     storage: Arc<StorageBackend>,
     /// Worker that can process batches.
-    worker: Arc<Worker>,
+    worker: Arc<WorkerHost>,
     /// Computation group that can process batches.
     computation_group: Arc<ComputationGroup>,
     /// The most recent block as reported by the root hash backend.
@@ -330,7 +331,7 @@ impl RootHashFrontend {
         config: RootHashConfiguration,
         runtime_id: B256,
         environment: Arc<Environment>,
-        worker: Arc<Worker>,
+        worker: Arc<WorkerHost>,
         computation_group: Arc<ComputationGroup>,
         backend: Arc<RootHashBackend>,
         signer: Arc<RootHashSigner>,
@@ -916,17 +917,8 @@ impl RootHashFrontend {
                 .runtime_call_batch((*batch).clone(), block, sh, commit_storage);
 
         // After the batch is processed, propose the batch.
-        let shared_inner = inner.clone();
         process_batch
-            .map_err(|_| Error::new("channel closed"))
-            .and_then(|result| Self::propose_batch(inner, result))
-            .or_else(|error| {
-                // Failed to process batch, abort current batch.
-                Self::fail_batch(
-                    shared_inner,
-                    format!("failed to process batch: {}", error.message),
-                )
-            })
+            .then(|result| Self::propose_batch(inner, result))
             .into_box()
     }
 

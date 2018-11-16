@@ -1,8 +1,8 @@
 [package]
-name = "ekiden-compute"
+name = "ekiden-worker"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
-description = "Ekiden compute node"
+description = "Ekiden worker process"
 keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 build = "build.rs"
@@ -12,40 +12,34 @@ default = ["testing"]
 testing = []
 
 [dependencies]
-ekiden-worker-api = { path = "../worker/api", version = "0.2.0-alpha" }
+ekiden-worker-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-core = { path = "../core/common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../di", version = "0.2.0-alpha" }
-ekiden-epochtime = { path = "../epochtime", version = "0.2.0-alpha" }
 ekiden-instrumentation = { path = "../instrumentation", version = "0.2.0-alpha" }
 ekiden-instrumentation-prometheus = { path = "../instrumentation/prometheus", version = "0.2.0-alpha" }
 ekiden-tracing = { path = "../tracing", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../core/untrusted", version = "0.2.0-alpha" }
-ekiden-rpc-api = { path = "../rpc/api", version = "0.2.0-alpha" }
-ekiden-rpc-client = { path = "../rpc/client", version = "0.2.0-alpha" }
-ekiden-compute-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-storage-api = { path = "../storage/api", version = "0.2.0-alpha" }
 ekiden-roothash-base = { path = "../roothash/base", version = "0.2.0-alpha" }
-ekiden-roothash-client = { path = "../roothash/client", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
-ekiden-storage-frontend = { path = "../storage/frontend", version = "0.2.0-alpha" }
+ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 ekiden-storage-multilayer = { path = "../storage/multilayer", version = "0.2.0-alpha" }
-ekiden-scheduler-base = { path = "../scheduler/base", version = "0.2.0-alpha" }
-ekiden-scheduler-client = { path = "../scheduler/client", version = "0.2.0-alpha" }
-ekiden-registry-base = { path = "../registry/base", version = "0.2.0-alpha" }
-ekiden-registry-client = { path = "../registry/client", version = "0.2.0-alpha" }
-ekiden-tools = { path = "../tools", version = "0.2.0-alpha" }
+ekiden-storage-persistent = { path = "../storage/persistent", version = "0.2.0-alpha" }
+protobuf = "~2.0"
 rustracing = "0.1.7"
 rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.1.7-ekiden1" }
 sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+thread_local = "0.3.5"
 clap = "2.29.1"
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
 log = "0.4"
 pretty_env_logger = "0.2"
 serde_cbor = "0.8.2"
-tempfile = "3.0.4"
 tokio-uds = "0.2.3"
-tokio-process = "0.2.3"
 
 [build-dependencies]
 ekiden-tools = { path = "../tools", version = "0.2.0-alpha" }
 ekiden-edl = { path = "../core/edl", version = "0.2.0-alpha" }
+
+[[bin]]
+name = "ekiden-worker"
+path ="bin/main.rs"

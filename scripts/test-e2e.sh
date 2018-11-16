@@ -65,10 +65,15 @@ run_compute_node() {
     shift
     local extra_args=$*
 
+    local cache_dir=/tmp/ekiden-test-worker-cache-$id
+    rm -rf ${cache_dir}
+
     # Generate port number.
     let "port=id + 10000"
 
     ${WORKDIR}/target/debug/ekiden-compute \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir ${cache_dir} \
         --no-persist-identity \
         --max-batch-size 1 \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
@@ -86,10 +91,15 @@ run_compute_node_db() {
     shift
     local extra_args=$*
 
+    local cache_dir=/tmp/ekiden-test-worker-cache-$id
+    rm -rf ${cache_dir}
+
     # Generate port number.
     let "port=id + 10000"
 
     RUST_BACKTRACE=1 ${WORKDIR}/target/debug/ekiden-compute \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir ${cache_dir} \
         --no-persist-identity \
         --max-batch-size 1 \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
@@ -110,10 +120,15 @@ run_compute_node_storage_multilayer_remote() {
     local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
     rm -rf ${db_dir}
 
+    local cache_dir=/tmp/ekiden-test-worker-cache-$id
+    rm -rf ${cache_dir}
+
     # Generate port number.
     let "port=id + 10000"
 
     ${WORKDIR}/target/debug/ekiden-compute \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir ${cache_dir} \
         --no-persist-identity \
         --max-batch-size 1 \
         --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
@@ -150,9 +165,6 @@ run_test() {
     local enclave=${10:-token}
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
-
-    # Ensure cleanup on exit.
-    trap 'kill -- -0' EXIT
 
     # Start the key manager before starting anything else.
     run_keymanager_node
@@ -217,8 +229,17 @@ run_test() {
     wait ${client_pid}
 
     # Cleanup.
-    echo "Cleaning up."
-    pkill -P $$
+    cleanup
+}
+
+cleanup() {
+    echo "Cleaning up child processes."
+    # Send all child processes a kill signal.
+    pkill -P $$ || true
+
+    # Wait for all child processes to exit.
+    # Helpful context:
+    # https://stackoverflow.com/questions/17894720/kill-a-process-and-wait-for-the-process-to-exit
     wait || true
 }
 
@@ -299,6 +320,21 @@ scenario_leader_skip_commit() {
     run_compute_node 3 --compute-replicas 2 --compute-allowed-stragglers 0 --test-skip-commit-until-round 3
 }
 
+scenario_kill_worker() {
+    run_compute_node 1 --compute-replicas 2
+    sleep 1
+    run_compute_node 2 --compute-replicas 2
+    sleep 1
+    run_compute_node 3 --compute-replicas 2
+
+    # Kill newest worker after 1 second. The compute node should restart it.
+    sleep 1
+    pkill -9 --newest ekiden-worker
+}
+
+# Ensure cleanup on exit.
+trap 'cleanup' EXIT
+
 # Tendermint backends.
 run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
 run_test scenario_basic_db "e2e-basic-tm-db" test-db-encryption 1 run_dummy_node_go_tm_mock 0 0 0 1 test-db-encryption
@@ -327,3 +363,4 @@ run_test scenario_fail_worker_after_commit "e2e-fail-worker-after-commit" token 
 run_test scenario_basic "e2e-long" test-long-term 2 run_dummy_node_go_dummy
 run_test scenario_one_idle "e2e-long-one-idle" test-long-term 2 run_dummy_node_go_dummy
 run_test scenario_leader_skip_commit "e2e-leader-skip-commit" token 1 run_dummy_node_go_dummy
+run_test scenario_kill_worker "e2e-kill-worker" token 1 run_dummy_node_go_dummy

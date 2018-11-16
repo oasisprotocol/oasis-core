@@ -2,17 +2,15 @@
 
 extern crate sgx_types;
 
-extern crate base64;
 extern crate grpcio;
 #[macro_use]
 extern crate log;
-extern crate lru_cache;
-extern crate protobuf;
-extern crate reqwest;
 extern crate rustracing;
 extern crate rustracing_jaeger;
 extern crate serde_cbor;
-extern crate thread_local;
+extern crate tempfile;
+extern crate tokio_process;
+extern crate tokio_uds;
 
 extern crate ekiden_compute_api;
 extern crate ekiden_core;
@@ -23,17 +21,15 @@ extern crate ekiden_rpc_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
-extern crate ekiden_storage_batch;
-extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_multilayer;
 extern crate ekiden_tools;
 extern crate ekiden_tracing;
 extern crate ekiden_untrusted;
 #[macro_use]
 extern crate ekiden_instrumentation;
+extern crate ekiden_worker_api;
 
 mod group;
-mod handlers;
 mod node;
 mod roothash;
 mod services;
@@ -69,7 +65,8 @@ use ekiden_untrusted::enclave::ias;
 use self::ias::{IASConfiguration, SPID};
 use self::node::{ComputeNode, ComputeNodeConfiguration, ComputeNodeTestOnlyConfiguration};
 use self::roothash::{RootHashConfiguration, RootHashTestOnlyConfiguration};
-use self::worker::{KeyManagerConfiguration, WorkerConfiguration};
+use self::worker::{KeyManagerConfiguration, PrometheusConfiguration, TracingConfiguration,
+                   WorkerConfiguration};
 
 /// Register known components for dependency injection.
 fn register_components(known_components: &mut KnownComponents) {
@@ -120,6 +117,20 @@ fn main() {
                 .takes_value(true)
                 .default_value("9001")
                 .display_order(2),
+        )
+        .arg(
+            Arg::with_name("worker-path")
+                .long("worker-path")
+                .help("Path to ekiden worker binary")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("worker-cache-dir")
+                .long("worker-cache-dir")
+                .help("Cache directory used by the worker")
+                .takes_value(true)
+                .required(true),
         )
         .arg(
             Arg::with_name("ias-spid")
@@ -268,6 +279,7 @@ fn main() {
         .filter(Some("tokio_core"), LevelFilter::Warn)
         .filter(Some("web3"), LevelFilter::Info)
         .filter(Some("hyper"), LevelFilter::Warn)
+        .filter(Some("mime"), LevelFilter::Warn)
         .filter(Some("rusoto_core::request"), LevelFilter::Info)
         .filter(Some("pagecache::io"), LevelFilter::Debug)
         .filter(Some("want"), LevelFilter::Debug)
@@ -335,6 +347,50 @@ fn main() {
                 }
 
                 WorkerConfiguration {
+                    worker_binary: matches.value_of("worker-path").unwrap().to_owned(),
+                    // Worker only supports push mode as it shouldn't create its own sockets. We rely on
+                    // the ekiden-instrumentation-prometheus DI args to validate the dependencies between
+                    // arguments.
+                    prometheus: if let Some("push") = matches.value_of("prometheus-mode") {
+                        Some(PrometheusConfiguration {
+                            prometheus_metrics_addr: value_t!(
+                                matches,
+                                "prometheus-metrics-addr",
+                                String
+                            ).unwrap(),
+                            prometheus_push_interval: value_t!(
+                                matches,
+                                "prometheus-push-interval",
+                                String
+                            ).unwrap_or("5".to_owned()),
+                            prometheus_push_job_name: value_t!(
+                                matches,
+                                "prometheus-push-job-name",
+                                String
+                            ).unwrap()
+                                + "-worker",
+                            prometheus_push_instance_label: value_t!(
+                                matches,
+                                "prometheus-push-instance-label",
+                                String
+                            ).unwrap(),
+                        })
+                    } else {
+                        None
+                    },
+                    tracing: if matches.is_present("tracing-enable") {
+                        Some(TracingConfiguration {
+                            sample_probability: value_t!(
+                                matches,
+                                "tracing-sample-probability",
+                                String
+                            ).unwrap(),
+                            agent_addr: value_t!(matches, "tracing-agent-addr", String).unwrap(),
+                        })
+                    } else {
+                        None
+                    },
+                    cache_dir: matches.value_of("worker-cache-dir").unwrap().to_owned(),
                     runtime_filename: runtime_filename.to_owned(),
                     saved_identity_path: if matches.is_present("no-persist-identity") {
                         None

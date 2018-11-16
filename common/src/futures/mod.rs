@@ -5,6 +5,8 @@ pub use self::extern_futures::*;
 
 use super::error::Error;
 
+#[cfg(not(target_env = "sgx"))]
+mod block_on;
 mod killable;
 mod retry;
 mod select_all;
@@ -116,6 +118,8 @@ pub trait StreamExt: Stream {
 
 impl<S: Stream> StreamExt for S {}
 
+#[cfg(not(target_env = "sgx"))]
+pub use self::block_on::block_on;
 pub use self::killable::{killable, KillHandle};
 pub use self::retry::retry;
 #[cfg(not(target_env = "sgx"))]
@@ -137,8 +141,8 @@ pub mod stream {
 /// use ekiden_common::futures::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::{future, stream, BoxFuture, BoxStream, Future, FutureExt, KillHandle, Stream,
-                    StreamExt};
+    pub use super::{future, stream, BoxFuture, BoxStream, Future, FutureExt, KillHandle, Sink,
+                    Stream, StreamExt};
 
     #[cfg(not(target_env = "sgx"))]
     pub use super::{spawn, spawn_killable};

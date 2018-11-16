@@ -77,6 +77,7 @@ jobs:
           paths:
             - go/ekiden/ekiden
             - target/debug/ekiden-compute
+            - target/debug/ekiden-worker
             - target/debug/token-client
             - target/debug/test-long-term-client
             - target/debug/test-db-encryption-client
@@ -128,6 +129,8 @@ jobs:
             --packages ekiden-storage-multilayer \
             --packages ekiden-storage-persistent \
             --packages ekiden-tools \
+            --packages ekiden-worker-api \
+            --packages ekiden-worker \
             --exclude-files *generated* \
             --exclude-files compute/* \
             --exclude-files key-manager/* \

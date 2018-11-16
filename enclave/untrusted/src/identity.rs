@@ -1,5 +1,6 @@
 use std;
 use std::path::Path;
+use std::sync::Arc;
 
 use sgx_types;
 
@@ -12,9 +13,9 @@ use ekiden_enclave_common::api;
 use super::enclave::Enclave;
 
 /// The IAS functionality that the enclave identity component needs.
-pub trait IAS {
+pub trait IAS: Send + Sync {
     /// Get the SPID. This is needed to generate an appropriate quote.
-    fn get_spid(&self) -> &sgx_types::sgx_spid_t;
+    fn get_spid(&self) -> sgx_types::sgx_spid_t;
 
     /// Get the kind of quotes that this service expects. When you register for an SPID, you sign
     /// up to use a specific kind of quote signature, either linkable or non-linkable.
@@ -25,6 +26,24 @@ pub trait IAS {
 
     /// Verify submitted attestation evidence and create a new Attestation Verification Report.
     fn report(&self, quote: &[u8]) -> api::AvReport;
+}
+
+impl<T: ?Sized + IAS> IAS for Arc<T> {
+    fn get_spid(&self) -> sgx_types::sgx_spid_t {
+        IAS::get_spid(&**self)
+    }
+
+    fn get_quote_type(&self) -> sgx_types::sgx_quote_sign_type_t {
+        IAS::get_quote_type(&**self)
+    }
+
+    fn sigrl(&self, gid: &sgx_types::sgx_epid_group_id_t) -> Vec<u8> {
+        IAS::sigrl(&**self, gid)
+    }
+
+    fn report(&self, quote: &[u8]) -> api::AvReport {
+        IAS::report(&**self, quote)
+    }
 }
 
 /// Enclave identity interface.
@@ -207,7 +226,7 @@ impl EnclaveIdentity for Enclave {
                 sgx_types::sgx_get_quote(
                     &report,
                     ias.get_quote_type(),
-                    ias.get_spid(),
+                    &ias.get_spid(),
                     nonce,
                     // TODO: implement and enable sigrl
                     std::ptr::null(),
