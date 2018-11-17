@@ -56,7 +56,7 @@ func osInterruptContext(logger *logging.Logger) context.Context {
 	return ctx
 }
 
-// Register registes the storage migration sub-commands.
+// Register registers the storage migration sub-commands.
 func Register(parentCmd *cobra.Command) {
 	registerExportCmd(parentCmd)
 	registerImportCmd(parentCmd)
