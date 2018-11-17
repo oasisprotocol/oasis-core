@@ -1,4 +1,5 @@
 //! Worker process host.
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
@@ -19,7 +20,7 @@ use ekiden_core::futures::block_on;
 use ekiden_core::futures::prelude::*;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_core::runtime::batch::CallBatch;
-use ekiden_core::tokio::timer::Delay;
+use ekiden_core::tokio::timer::{Delay, Timeout};
 use ekiden_core::x509::Certificate;
 use ekiden_roothash_base::Block;
 use ekiden_rpc_client::backend::{NetworkRpcClientBackend, RpcClientBackend};
@@ -29,6 +30,8 @@ use ekiden_worker_api::protocol::ShutdownNotify;
 use ekiden_worker_api::types::ComputedBatch;
 use ekiden_worker_api::{Host, HostHandler, Protocol, Worker};
 
+/// Worker connect timeout (in seconds).
+const WORKER_CONNECT_TIMEOUT: u64 = 5;
 /// Worker respawn delay (in seconds).
 const WORKER_RESPAWN_DELAY: u64 = 1;
 
@@ -105,14 +108,74 @@ impl WorkerProcess {
             let sock_path = worker_dir.path().join("host.sock");
             let listener = tokio_uds::UnixListener::bind(&sock_path)?;
 
-            // Spawn worker process.
-            info!("Spawning worker process \"{}\"", config_clone.worker_binary);
-            // TODO: Sandboxing.
-            let child = Command::new(&config_clone.worker_binary)
-                .arg("--host-socket")
-                .arg(&sock_path)
-                .arg("--cache-dir")
+            // Ensure cache directory exists.
+            fs::create_dir_all(&config_clone.cache_dir)?;
+
+            // Spawn worker process in a bubblewrap sandbox.
+            // TODO: Generate and pass SECCOMP policy via a file descriptor.
+            info!(
+                "Spawning worker process \"{}\" in bubblewrap sandbox",
+                config_clone.worker_binary
+            );
+            let child = Command::new("/usr/bin/bwrap")
+                .arg("--unshare-all")
+                // TODO: Proxy prometheus and tracing over an AF_LOCAL socket to avoid this.
+                .arg("--share-net")
+                // Drop all capabilities.
+                .arg("--cap-drop")
+                .arg("ALL")
+                // Ensure all workers have the same hostname.
+                .arg("--hostname")
+                .arg("ekiden-worker")
+                // Forward /lib, /lib64, /opt and /usr/lib as read-only.
+                .arg("--ro-bind")
+                .arg("/lib")
+                .arg("/lib")
+                .arg("--ro-bind")
+                .arg("/lib64")
+                .arg("/lib64")
+                .arg("--ro-bind")
+                .arg("/opt") // Required for SGX libraries.
+                .arg("/opt")
+                .arg("--ro-bind")
+                .arg("/usr/lib")
+                .arg("/usr/lib")
+                // Temporary directory.
+                .arg("--tmpfs")
+                .arg("/tmp")
+                // A cut down /dev.
+                .arg("--dev")
+                .arg("/dev")
+                // Worker directory is bound as /host (read-only).
+                .arg("--ro-bind")
+                .arg(&worker_dir.path())
+                .arg("/host")
+                // Cache directory is bound as /cache (writable).
+                .arg("--bind")
                 .arg(&config_clone.cache_dir)
+                .arg("/cache")
+                // Worker binary is bound as /worker (read-only).
+                .arg("--ro-bind")
+                .arg(&config_clone.worker_binary)
+                .arg("/worker")
+                // Runtime binary is bound as /runtime.so (read-only).
+                .arg("--ro-bind")
+                .arg(&config_clone.runtime_filename)
+                .arg("/runtime.so")
+                // Kill worker when node exits.
+                .arg("--die-with-parent")
+                // Start new terminal session.
+                .arg("--new-session")
+                // Change working directory to /.
+                .arg("--chdir")
+                .arg("/")
+                .arg("--")
+                // Arguments to worker process follow.
+                .arg("/worker")
+                .arg("--host-socket")
+                .arg("/host/host.sock")
+                .arg("--cache-dir")
+                .arg("/cache")
                 .args(if let Some(ref cfg) = config_clone.prometheus {
                     vec![
                         "--prometheus-mode".to_owned(),
@@ -140,7 +203,7 @@ impl WorkerProcess {
                 } else {
                     vec![]
                 })
-                .arg(&config_clone.runtime_filename)
+                .arg("/runtime.so")
                 .spawn_async()?;
 
             // Wait for the worker to connect.
@@ -151,14 +214,30 @@ impl WorkerProcess {
 
         // Wait for the worker to connect.
         let socket = bind_listener.and_then(|(worker_dir, child, listener)| {
-            listener
+            let wait_for_connect = listener
                 .incoming()
                 .into_future()
                 .map_err(|(error, _)| error.into())
                 .and_then(move |(socket, _)| match socket {
                     Some(socket) => Ok((worker_dir, child, socket)),
                     None => Err(Error::new("worker failed to connect")),
-                })
+                });
+
+            // Timeout.
+            Timeout::new(
+                wait_for_connect,
+                Duration::from_secs(WORKER_CONNECT_TIMEOUT),
+            ).map_err(|error| {
+                if error.is_elapsed() {
+                    Error::new("worker connect timeout")
+                } else if error.is_timer() {
+                    error.into_timer().expect("error is timer error").into()
+                } else {
+                    error
+                        .into_inner()
+                        .expect("error is neither elapsed nor timer error")
+                }
+            })
         });
 
         // Setup the protocol handler.
