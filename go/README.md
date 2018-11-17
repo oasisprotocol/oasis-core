@@ -117,8 +117,8 @@ are NOT guaranteed to be compatible across different versions of the
 `ekiden` command.**
 
 ```
-ekiden storage export                 # Export to stdout (Unsafe, redirect logs)
-ekiden storage export -o storage.bin  # Export to storage.bin
+ekiden storage export -log.file=/tmp/export.log  # Export to stdout (MUST log to file.)
+ekiden storage export -o storage.bin             # Export to storage.bin
 ```
 
 #### `storage import`
