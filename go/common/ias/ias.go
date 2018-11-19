@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,18 +19,65 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 )
 
+var (
+	// ErrMalformedSPID is the error returned when an SPID is malformed.
+	ErrMalformedSPID = errors.New("ias: malformed SPID")
+
+	_ encoding.BinaryMarshaler   = (*SPID)(nil)
+	_ encoding.BinaryUnmarshaler = (*SPID)(nil)
+)
+
+// SPIDSize is the size of SPID.
+const SPIDSize = 16
+
+// SPID is an SPID.
+type SPID [SPIDSize]byte
+
+// String returns a string representation of the SPID.
+func (s SPID) String() string {
+	return hex.EncodeToString(s[:])
+}
+
+// MarshalBinary encodes an SPID into binary form.
+func (s SPID) MarshalBinary() (data []byte, err error) {
+	data = append([]byte{}, s[:]...)
+	return
+}
+
+// UnmarshalBinary decodes a binary marshaled SPID.
+func (s *SPID) UnmarshalBinary(data []byte) error {
+	if len(data) != SPIDSize {
+		return ErrMalformedSPID
+	}
+
+	copy((*s)[:], data)
+
+	return nil
+}
+
+// SPIDInfo contains information about the SPID associated with the client certificate.
+type SPIDInfo struct {
+	SPID               SPID
+	QuoteSignatureType SignatureType
+}
+
 // Endpoint is an attestation validation endpoint, likely remote.
 type Endpoint interface {
 	// VerifyEvidence takes the provided quote, (optional) PSE manifest, and
 	// (optional) nonce, and returns the corresponding AVR, signature, and
 	// ceritficate chain respectively.
 	VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) ([]byte, []byte, []byte, error)
+
+	// GetSPID returns the SPID and associated info used by the endpoint.
+	GetSPIDInfo(ctx context.Context) (*SPIDInfo, error)
 }
 
 type httpEndpoint struct {
 	baseURL    *url.URL
 	httpClient *http.Client
 	trustRoots *x509.CertPool
+
+	spidInfo SPIDInfo
 }
 
 func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) ([]byte, []byte, []byte, error) {
@@ -81,6 +130,10 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []
 	return avr, sig, certChain, nil
 }
 
+func (e *httpEndpoint) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
+	return &e.spidInfo, nil
+}
+
 type iasEvidencePayload struct {
 	ISVEnclaveQuote []byte `json:"isvEnclaveQuote"`
 	PSEManifest     []byte `json:"pseManifest,omitempty"`
@@ -89,7 +142,14 @@ type iasEvidencePayload struct {
 
 // NewIASEndpoint returns a new Endpoint backed by an IAS server operated
 // by Intel.
-func NewIASEndpoint(authCertFile, authKeyFile string, authCertCA *x509.Certificate, isProduction bool) (Endpoint, error) {
+func NewIASEndpoint(
+	authCertFile string,
+	authKeyFile string,
+	authCertCA *x509.Certificate,
+	spid string,
+	quoteSignatureType SignatureType,
+	isProduction bool,
+) (Endpoint, error) {
 	tlsRoots, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, errors.Wrap(err, "ias: failed to load system cert pool")
@@ -135,6 +195,21 @@ func NewIASEndpoint(authCertFile, authKeyFile string, authCertCA *x509.Certifica
 		}
 	}
 
+	switch quoteSignatureType {
+	case SignatureUnlinkable, SignatureLinkable:
+	default:
+		return nil, fmt.Errorf("ias: invalid signature type: %04x", quoteSignatureType)
+	}
+
+	spidFromHex, err := hex.DecodeString(spid)
+	if err != nil {
+		return nil, ErrMalformedSPID
+	}
+	var spidBin SPID
+	if err := spidBin.UnmarshalBinary(spidFromHex); err != nil {
+		return nil, err
+	}
+
 	e := &httpEndpoint{
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -142,6 +217,10 @@ func NewIASEndpoint(authCertFile, authKeyFile string, authCertCA *x509.Certifica
 			},
 		},
 		trustRoots: IntelTrustRoots,
+		spidInfo: SPIDInfo{
+			SPID:               spidBin,
+			QuoteSignatureType: quoteSignatureType,
+		},
 	}
 	if isProduction {
 		e.baseURL, _ = url.Parse("https://as.sgx.trustedservices.intel.com/")

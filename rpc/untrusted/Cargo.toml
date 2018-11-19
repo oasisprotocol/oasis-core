@@ -18,7 +18,7 @@ ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.2.0-alpha" }
 ekiden-rpc-common = { path = "../common", version = "0.2.0-alpha" }
 serde = "1.0.71"
-serde_cbor = "0.8.2"
+serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }

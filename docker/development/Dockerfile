@@ -39,6 +39,8 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     libsnappy-dev librocksdb-dev \
     # for benchmarks
     python3-prometheus-client \
+    # for seccomp Go bindings support
+    libseccomp-dev \
     # for bubblewrap
     libcap2 && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \

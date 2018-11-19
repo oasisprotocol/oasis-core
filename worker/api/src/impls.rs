@@ -19,18 +19,18 @@ use super::{Host, Protocol, Worker};
 
 impl Worker for Protocol {
     fn worker_shutdown(&self) -> BoxFuture<()> {
-        self.make_request(Body::WorkerShutdownRequest)
+        self.make_request(Body::WorkerShutdownRequest {})
             .and_then(|body| match body {
-                Body::Empty => Ok(()),
+                Body::Empty {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
     }
 
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        self.make_request(Body::WorkerRpcCallRequest { request })
+        self.make_request(Body::WorkerRPCCallRequest { request })
             .and_then(|body| match body {
-                Body::WorkerRpcCallResponse { response } => Ok(response),
+                Body::WorkerRPCCallResponse { response } => Ok(response),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -56,25 +56,34 @@ impl Worker for Protocol {
 
 impl Host for Protocol {
     fn rpc_call(&self, endpoint: ClientEndpoint, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        self.make_request(Body::HostRpcCallRequest { endpoint, request })
+        self.make_request(Body::HostRPCCallRequest { endpoint, request })
             .and_then(|body| match body {
-                Body::HostRpcCallResponse { response } => Ok(response),
+                Body::HostRPCCallResponse { response } => Ok(response),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
     }
 
     fn ias_get_spid(&self) -> BoxFuture<sgx_types::sgx_spid_t> {
-        self.make_request(Body::HostIasGetSpidRequest)
+        self.make_request(Body::HostIasGetSpidRequest {})
             .and_then(|body| match body {
-                Body::HostIasGetSpidResponse { spid } => Ok(sgx_types::sgx_spid_t { id: spid }),
+                Body::HostIasGetSpidResponse { spid } => {
+                    if spid.len() != 16 {
+                        return Err(Error::new("malformed response"));
+                    }
+
+                    let mut sgx_spid: sgx_types::sgx_spid_t = Default::default();
+                    sgx_spid.id.copy_from_slice(&spid[..16]);
+
+                    Ok(sgx_spid)
+                }
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
     }
 
     fn ias_get_quote_type(&self) -> BoxFuture<sgx_types::sgx_quote_sign_type_t> {
-        self.make_request(Body::HostIasGetQuoteTypeRequest)
+        self.make_request(Body::HostIasGetQuoteTypeRequest {})
             .and_then(|body| match body {
                 Body::HostIasGetQuoteTypeResponse { quote_type: 0 } => {
                     Ok(sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE)
@@ -99,7 +108,17 @@ impl Host for Protocol {
     fn ias_report(&self, quote: Vec<u8>) -> BoxFuture<identity_api::AvReport> {
         self.make_request(Body::HostIasReportRequest { quote })
             .and_then(|body| match body {
-                Body::HostIasReportResponse { report } => Ok(report),
+                Body::HostIasReportResponse {
+                    avr,
+                    signature,
+                    certificates,
+                } => {
+                    let mut report = identity_api::AvReport::new();
+                    report.set_body(avr);
+                    report.set_signature(signature);
+                    report.set_certificates(certificates);
+                    Ok(report)
+                }
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -129,7 +148,7 @@ impl Host for Protocol {
     fn storage_insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         self.make_request(Body::HostStorageInsertRequest { value, expiry })
             .and_then(|body| match body {
-                Body::Empty => Ok(()),
+                Body::Empty {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -140,7 +159,7 @@ impl Host for Protocol {
 
         self.make_request(Body::HostStorageInsertBatchRequest { values })
             .and_then(|body| match body {
-                Body::Empty => Ok(()),
+                Body::Empty {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -208,10 +227,12 @@ pub struct HostHandler<T: Host>(pub T);
 impl<T: Worker> Handler for WorkerHandler<T> {
     fn handle(&self, body: Body) -> BoxFuture<Body> {
         match body {
-            Body::WorkerShutdownRequest => self.0.worker_shutdown().map(|_| Body::Empty).into_box(),
-            Body::WorkerRpcCallRequest { request } => self.0
+            Body::WorkerShutdownRequest {} => {
+                self.0.worker_shutdown().map(|_| Body::Empty {}).into_box()
+            }
+            Body::WorkerRPCCallRequest { request } => self.0
                 .rpc_call(request)
-                .map(|response| Body::WorkerRpcCallResponse { response })
+                .map(|response| Body::WorkerRPCCallResponse { response })
                 .into_box(),
             Body::WorkerRuntimeCallBatchRequest {
                 calls,
@@ -229,15 +250,17 @@ impl<T: Worker> Handler for WorkerHandler<T> {
 impl<T: Host> Handler for HostHandler<T> {
     fn handle(&self, body: Body) -> BoxFuture<Body> {
         match body {
-            Body::HostRpcCallRequest { endpoint, request } => self.0
+            Body::HostRPCCallRequest { endpoint, request } => self.0
                 .rpc_call(endpoint, request)
-                .map(|response| Body::HostRpcCallResponse { response })
+                .map(|response| Body::HostRPCCallResponse { response })
                 .into_box(),
-            Body::HostIasGetSpidRequest => self.0
+            Body::HostIasGetSpidRequest {} => self.0
                 .ias_get_spid()
-                .map(|spid| Body::HostIasGetSpidResponse { spid: spid.id })
+                .map(|spid| Body::HostIasGetSpidResponse {
+                    spid: spid.id.to_vec(),
+                })
                 .into_box(),
-            Body::HostIasGetQuoteTypeRequest => self.0
+            Body::HostIasGetQuoteTypeRequest {} => self.0
                 .ias_get_quote_type()
                 .map(|quote_type| Body::HostIasGetQuoteTypeResponse {
                     quote_type: quote_type as u32,
@@ -249,7 +272,11 @@ impl<T: Host> Handler for HostHandler<T> {
                 .into_box(),
             Body::HostIasReportRequest { quote } => self.0
                 .ias_report(quote)
-                .map(|report| Body::HostIasReportResponse { report })
+                .map(|mut report| Body::HostIasReportResponse {
+                    avr: report.take_body(),
+                    signature: report.take_signature(),
+                    certificates: report.take_certificates(),
+                })
                 .into_box(),
             Body::HostStorageGetRequest { key } => self.0
                 .storage_get(key)
@@ -266,11 +293,11 @@ impl<T: Host> Handler for HostHandler<T> {
                 .into_box(),
             Body::HostStorageInsertRequest { value, expiry } => self.0
                 .storage_insert(value, expiry)
-                .map(|()| Body::Empty)
+                .map(|()| Body::Empty {})
                 .into_box(),
             Body::HostStorageInsertBatchRequest { values } => self.0
                 .storage_insert_batch(values.into_iter().map(|(v, e)| (v.into(), e)).collect())
-                .map(|()| Body::Empty)
+                .map(|()| Body::Empty {})
                 .into_box(),
             _ => future::err(Error::new("unsupported method")).into_box(),
         }

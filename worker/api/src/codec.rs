@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{BufMut, BytesMut};
-use serde_cbor;
+use serde_cbor::{self, SerializerOptions};
 use tokio_codec::{Decoder, Encoder};
 
 use ekiden_core::error::{Error, Result};
@@ -61,7 +61,13 @@ impl Encoder for Codec {
 
     fn encode(&mut self, message: Message, buffer: &mut BytesMut) -> Result<()> {
         // Encode output and size prefix.
-        let output = serde_cbor::to_vec(&message)?;
+        let output = serde_cbor::to_vec_with_options(
+            &message,
+            &SerializerOptions {
+                packed: false,
+                enum_as_map: true,
+            },
+        )?;
         if output.len() > MAX_MESSAGE_SIZE {
             return Err(Error::new("message too large"));
         }

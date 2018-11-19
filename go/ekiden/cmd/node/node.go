@@ -30,6 +30,7 @@ import (
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/ekiden/go/worker"
 )
 
 // Run runs the ekiden node.
@@ -53,6 +54,7 @@ type Node struct {
 	identity *signature.PrivateKey
 	grpcSrv  *grpc.Server
 	svcTmnt  service.TendermintService
+	wrkHost  *worker.Host
 
 	Beacon    beaconAPI.Backend
 	Epochtime epochtimeAPI.Backend
@@ -229,6 +231,16 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 		return nil, err
 	}
 
+	// Initialize the worker host.
+	node.wrkHost, err = worker.New(node.cmd, node.identity, node.Storage)
+	if err != nil {
+		logger.Error("failed to initialize worker host",
+			"err", err,
+		)
+		return nil, err
+	}
+	node.svcMgr.Register(node.wrkHost)
+
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
 		logger.Error("failed to start metric server",
@@ -251,6 +263,14 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	// Start the gRPC server.
 	if err = node.grpcSrv.Start(); err != nil {
 		logger.Error("failed to start gRPC server",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Start the worker host.
+	if err = node.wrkHost.Start(); err != nil {
+		logger.Error("failed to start worker host",
 			"err", err,
 		)
 		return nil, err
@@ -287,6 +307,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermint.RegisterFlags,
+		worker.RegisterFlags,
 	} {
 		v(cmd)
 	}

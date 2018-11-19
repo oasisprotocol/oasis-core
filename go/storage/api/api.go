@@ -47,6 +47,8 @@ type KeyInfo struct {
 
 // Value is a data blob and it's associated metadata in storage.
 type Value struct {
+	_struct struct{} `codec:",toarray"` // nolint
+
 	// Data is the data blob.
 	Data []byte
 

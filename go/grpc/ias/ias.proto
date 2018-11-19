@@ -6,8 +6,18 @@ package ias;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/ias";
 
 service IAS {
+    // Get SPID-related information.
+    rpc GetSPIDInfo (GetSPIDInfoRequest) returns (GetSPIDInfoResponse) {}
 	// Verify attestation evidence.
 	rpc VerifyEvidence (VerifyEvidenceRequest) returns (VerifyEvidenceResponse) {}
+}
+
+message GetSPIDInfoRequest {
+}
+
+message GetSPIDInfoResponse {
+    bytes spid = 1;
+    uint32 quote_signature_type = 2;
 }
 
 message VerifyEvidenceRequest {
