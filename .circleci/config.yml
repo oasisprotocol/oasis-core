@@ -241,7 +241,7 @@ jobs:
           paths:
             - build_image_tag
 
-  deploy:
+  build-and-publish-image:
     <<: *defaults
     resource_class: large
     steps:
@@ -312,7 +312,7 @@ workflows:
           filters:
             branches:
               only: master
-      - deploy:
+      - build-and-publish-image:
           filters:
             branches:
               only: master
@@ -326,7 +326,7 @@ workflows:
             branches:
               only: master
           requires:
-            - deploy
+            - build-and-publish-image
       - update-latest-tag:
           requires:
             - approve-update-latest-tag
