@@ -106,7 +106,7 @@ func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) er
 		batch.Put(key, value.Data)
 	}
 
-	wrErr := b.db.Write(batch, nil)
+	wrErr := b.db.Write(batch, &opt.WriteOptions{Sync: true})
 	if wrErr == nil {
 		b.updateMetrics()
 	}
