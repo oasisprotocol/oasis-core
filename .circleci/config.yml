@@ -267,12 +267,12 @@ jobs:
           echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
           docker push oasislabs/testnet:$BUILD_IMAGE_TAG
 
-  promote-to-production:
+  update-latest-tag:
     <<: *defaults
     resource_class: large
     steps:
       - checkout
-      - run: echo 'export PRODUCTION_TAG=latest' >> $BASH_ENV
+      - run: echo 'export LATEST_TAG=latest' >> $BASH_ENV
       - setup_remote_docker
       - attach_workspace:
           at: /workspace
@@ -291,11 +291,11 @@ jobs:
 
       - run:
           name: Tag the ekiden build on this workflow for production
-          command: docker tag oasislabs/testnet:$BUILD_IMAGE_TAG oasislabs/testnet:$PRODUCTION_TAG
+          command: docker tag oasislabs/testnet:$BUILD_IMAGE_TAG oasislabs/testnet:$LATEST_TAG
 
       - run:
           name: Push the new production tag of ekiden to dockerhub
-          command: docker push oasislabs/testnet:$PRODUCTION_TAG
+          command: docker push oasislabs/testnet:$LATEST_TAG
 
 workflows:
   version: 2
@@ -320,17 +320,16 @@ workflows:
             - set-docker-tag
             - build-rust
             - build-go
-      - hold-for-production:
+      - approve-update-latest-tag:
           type: approval
           filters:
             branches:
               only: master
           requires:
             - deploy
-      - promote-to-production:
+      - update-latest-tag:
           requires:
-            - hold-for-production
-
+            - approve-update-latest-tag
 
   benchmark:
     jobs:
