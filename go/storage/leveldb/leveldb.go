@@ -142,7 +142,7 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 			select {
 			case kiChan <- &ki:
 			case <-ctx.Done():
-				break
+				return
 			}
 		}
 		if err := iter.Error(); err != nil {
