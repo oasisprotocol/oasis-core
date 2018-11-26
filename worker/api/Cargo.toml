@@ -11,7 +11,7 @@ ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../../core/untrusted", version = "0.2.0-alpha" }
 ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
-sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden3" }
 serde = "1.0.71"
 serde_derive = "1.0"
 serde_cbor = "0.8.2"

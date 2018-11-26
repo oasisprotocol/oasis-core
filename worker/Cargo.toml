@@ -28,7 +28,7 @@ ekiden-storage-persistent = { path = "../storage/persistent", version = "0.2.0-a
 protobuf = "~2.0"
 rustracing = "0.1.7"
 rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.1.7-ekiden1" }
-sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden3" }
 thread_local = "0.3.5"
 clap = "2.29.1"
 log = "0.4"

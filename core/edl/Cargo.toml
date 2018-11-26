@@ -12,4 +12,4 @@ ekiden-enclave-edl = { path = "../../enclave/edl", version = "0.2.0-alpha" }
 ekiden-rpc-edl = { path = "../../rpc/edl", version = "0.2.0-alpha" }
 ekiden-db-edl = { path = "../../db/edl", version = "0.2.0-alpha" }
 ekiden-runtime-edl = { path = "../../runtime/edl", version = "0.2.0-alpha" }
-sgx_edl = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+sgx_edl = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden3" }

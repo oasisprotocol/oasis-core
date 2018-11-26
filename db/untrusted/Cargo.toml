@@ -10,7 +10,7 @@ repository = "https://github.com/oasislabs/ekiden"
 sgx-simulation = []
 
 [dependencies]
-sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden3" }
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.2.0-alpha" }
 ekiden-instrumentation = { path = "../../instrumentation", version = "0.2.0-alpha" }
