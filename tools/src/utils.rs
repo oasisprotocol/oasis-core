@@ -261,6 +261,9 @@ pub fn protoc(args: ProtocArgs) {
             }
         }
     }
+
+    // Ensure build script gets re-run in case the output directory is removed.
+    println!("cargo:rerun-if-changed={}", args.out_dir);
 }
 
 /// Build local enclave API files.
@@ -274,28 +277,16 @@ pub fn build_api() {
 
 /// Generates a module file with specified exported submodules.
 pub fn generate_mod(output_dir: &str, modules: &[&str]) {
-    // Create directory if not exist
-    fs::create_dir_all(output_dir).unwrap();
-
-    // Create mod.rs
-    let output_mod_file = Path::new(&output_dir).join("mod.rs");
-    let mut file = fs::File::create(output_mod_file).expect("Failed to create module file");
-
-    for module in modules {
-        writeln!(&mut file, "pub mod {};", module).unwrap();
-    }
-
-    // Create .gitignore
-    let output_gitignore_file = Path::new(&output_dir).join(".gitignore");
-    let mut file =
-        fs::File::create(output_gitignore_file).expect("Failed to create .gitignore file");
-    writeln!(&mut file, "*").unwrap();
+    generate_mod_with_imports(output_dir, &[], modules)
 }
 
 /// Generates a module file with specified imported modules and exported submodules.
 pub fn generate_mod_with_imports(output_dir: &str, imports: &[&str], modules: &[&str]) {
-    // Create directory if not exist
+    // Create directory if it doesn't exist.
     fs::create_dir_all(output_dir).unwrap();
+
+    // Ensure build script gets re-run in case the output directory is removed.
+    println!("cargo:rerun-if-changed={}", output_dir);
 
     // Create mod.rs
     let output_mod_file = Path::new(&output_dir).join("mod.rs");
