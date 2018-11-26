@@ -16,7 +16,7 @@ proc-macro2 = "=0.4.17"
 protoc = "~2.0"
 protoc-rust = "~2.0"
 protobuf = "~2.0"
-sgx_edl = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden2" }
+sgx_edl = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ekiden3" }
 clap = "2.29.1"
 ansi_term = "0.11"
 toml = "0.4"
