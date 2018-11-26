@@ -1,5 +1,7 @@
 FROM ubuntu:18.04 as intermediate
 
+ARG DEBIAN_FRONTEND=noninteractive
+
 # build linux-sgx-sdk but don't include build files in final image
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     # for SGX SDK
@@ -22,18 +24,24 @@ RUN chmod 600 /root/.ssh/id_rsa && \
 
 FROM ubuntu:18.04
 
+ARG DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     build-essential git gdb cmake \
     curl wget unzip \
     pkg-config software-properties-common \
     python python-pyelftools \
+    # for gitlint
+    python-pip \
     # for rust openssl
     libssl-dev libcurl4-openssl-dev \
     # for rocksdb
     libsnappy-dev librocksdb-dev \
     # for benchmarks
     python3-prometheus-client && \
-    apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*
+    apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \
+    # for linting Git commits
+    pip install gitlint
 
 # Required because librocksdb5.8 doesn't provide it
 COPY librocksdb.pc /usr/lib/x86_64-linux-gnu/pkgconfig/librocksdb.pc
@@ -80,7 +88,6 @@ RUN wget https://dl.google.com/go/go1.11.1.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go1.11.1.linux-amd64.tar.gz && \
     rm go1.11.1.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
-    curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && \
     go get -u github.com/golang/protobuf/protoc-gen-go && \
-    go get -u github.com/alecthomas/gometalinter && \
-    gometalinter --install
+    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.11.2 && \
+    cp /tmp/bin/golangci-lint /go/bin

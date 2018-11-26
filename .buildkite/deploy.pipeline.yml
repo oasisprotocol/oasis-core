@@ -1,0 +1,28 @@
+##################################
+# Docker image deployment pipeline
+##################################
+steps:
+  - label: Get docker tag and save it as metadata for use later
+    command: .buildkite/scripts/set_docker_tag_meta_data.sh
+
+  - wait
+
+  - label: Build docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/build_tag_push_deployment_image.sh
+
+  - block: Human approval required to deploy docker image
+    branches: "*"
+    prompt: |
+      Clicking "OK" below will unblock this step and
+      permit the docker image to be tagged as latest
+      which means that the image will be used as a
+      base image for all runtime builds.
+
+      NOTE: This will NOT deploy the image to any testnet.
+
+  - label: Deploy docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/promote_deployment_image_to.sh latest

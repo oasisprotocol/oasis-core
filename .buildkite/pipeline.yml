@@ -1,0 +1,187 @@
+################
+# Build pipeline
+################
+docker_plugin: &docker_plugin_configuration
+  oasislabs/docker#v2.1.0-oasis1:
+    image: "oasislabs/testing:0.2.0"
+    always_pull: true
+    workdir: /workdir
+    volumes:
+      - .:/workdir
+      - /var/lib/buildkite-agent/.ssh:/root/.ssh
+      - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
+      # Shared Rust target artifacts cache.
+      - /tmp/cargo_target:/cargo_target
+      # Shared Rust package checkouts directory.
+      - /tmp/cargo_pkg/git:/root/.cargo/git
+      - /tmp/cargo_pkg/registry:/root/.cargo/registry
+      # Shared Rust SGX standard library artifacts cache.
+      - /tmp/xargo_cache:/root/.xargo
+      # Shared Go package checkouts directory.
+      - /tmp/go_pkg:/root/go/pkg
+    environment:
+      - "LC_ALL=C.UTF-8"
+      - "LANG=C.UTF-8"
+      - "CARGO_TARGET_DIR=/cargo_target"
+      - "CARGO_INSTALL_ROOT=/root/.cargo"
+    propagate-environment: true
+    unconfined: true
+
+steps:
+  ###########
+  # Lint jobs
+  ###########
+  - label: Lint Git commits
+    command: .buildkite/scripts/lint_git.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Lint Go node
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/go/lint_ekiden.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Lint Rust crate versions
+    command: .buildkite/rust/lint_crate_versions.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  ############
+  # Build jobs
+  ############
+  - label: Build Go node
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/go/build_ekiden.sh
+
+      # Upload the built artifacts.
+      - cd /workdir/go/ekiden
+      - buildkite-agent artifact upload ekiden
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Build Rust worker, compute node and key manager node
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/build_generic.sh /workdir -Z unstable-options --out-dir /tmp/artifacts
+
+      # Upload the built artifacts.
+      - cd /tmp/artifacts
+      - buildkite-agent artifact upload ekiden-worker
+      - buildkite-agent artifact upload ekiden-compute
+      - buildkite-agent artifact upload ekiden-keymanager-node
+      # Clients for E2E tests.
+      - buildkite-agent artifact upload ekiden-keymanager-test-client
+      - buildkite-agent artifact upload test-db-encryption-client
+      - buildkite-agent artifact upload test-long-term-client
+      - buildkite-agent artifact upload token-client
+    plugins:
+      <<: *docker_plugin_configuration
+
+  ####################
+  # Enclave build jobs
+  ####################
+  - label: Build test runtime
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/build_enclave.sh tests/runtimes/token --out-dir /tmp/artifacts
+
+      # Upload the built artifacts.
+      - cd /tmp/artifacts
+      - buildkite-agent artifact upload token.so
+      - buildkite-agent artifact upload token.mrenclave
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Build key manager enclave
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/build_enclave.sh key-manager/dummy/enclave --out-dir /tmp/artifacts
+
+      # Upload the built artifacts.
+      - cd /tmp/artifacts
+      - buildkite-agent artifact upload ekiden-keymanager-trusted.so
+      - buildkite-agent artifact upload ekiden-keymanager-trusted.mrenclave
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Build test db encryption runtime
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/build_enclave.sh tests/runtimes/test-db-encryption --out-dir /tmp/artifacts
+
+      # Upload the built artifacts.
+      - cd /tmp/artifacts
+      - buildkite-agent artifact upload test-db-encryption.so
+      - buildkite-agent artifact upload test-db-encryption.mrenclave
+    plugins:
+      <<: *docker_plugin_configuration
+
+  ###########
+  # Test jobs
+  ###########
+  - label: Test Go node
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/go/test_and_coverage_ekiden.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Test Rust crates
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/test_generic.sh .
+    plugins:
+      <<: *docker_plugin_configuration
+
+  # Wait for all jobs defined before this point
+  # to finish running in parallel before continuing.
+  - wait
+
+  ###############
+  # E2E test jobs
+  ###############
+  - label: E2E tests (%n)
+    parallelism: 4
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/scripts/test_e2e.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: E2E migration tests
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/scripts/test_migration.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  ####################################
+  # Rust coverage job (only on master)
+  ####################################
+
+  - label: Coverage Rust crates
+    branches: master
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/coverage.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
+  ##############################
+  # Deploy jobs (only on master)
+  ##############################
+
+  # Wait for all jobs defined before this point
+  # to finish running in parallel before continuing.
+  - wait
+
+  - label: ":rocket: Deploy image"
+    trigger: ekiden-deploy-image
+    branches: master
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
