@@ -1,6 +1,6 @@
 # Ekiden
 
-[![CircleCI](https://circleci.com/gh/oasislabs/ekiden/tree/master.svg?style=svg&circle-token=97f633035afbb45f26ed1b2f3f78a1e8e8a5e756)](https://circleci.com/gh/oasislabs/ekiden/tree/master)
+[![Build status](https://badge.buildkite.com/c9c541df92d421106cdf041e36fafe45677c5be63d330509d1.svg?branch=master)](https://buildkite.com/oasislabs/ekiden)
 [![Coverage Status](https://coveralls.io/repos/github/oasislabs/ekiden/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/ekiden) Rust
 [![codecov](https://codecov.io/gh/oasislabs/ekiden/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/ekiden) Go
 
@@ -120,20 +120,14 @@ Development notes:
 
 ## Running tests and benchmarks
 
-To run all tests (some should be skipped due to compile errors):
+To run all tests:
 ```
-# cargo test --all \
-    --exclude ekiden-untrusted \
-    --exclude ekiden-enclave-untrusted \
-    --exclude ekiden-rpc-untrusted \
-    --exclude ekiden-db-untrusted \
-    --exclude ekiden-runtime-untrusted \
-    -- --test-threads 1
+# cargo test
 ```
 
 To run end-to-end tests:
 ```
-# ./scripts/test-e2e.sh
+# .buildkite/scripts/test_e2e.sh
 ```
 
 ## Contributing
