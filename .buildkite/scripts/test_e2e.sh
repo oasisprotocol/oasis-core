@@ -203,7 +203,7 @@ scenario_kill_worker() {
 
     # Kill newest worker after 1 second. The compute node should restart it.
     sleep 1
-    pkill -9 --newest ekiden-worker
+    pkill -9 --newest worker
 }
 
 # Tendermint backends.

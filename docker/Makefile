@@ -1,4 +1,4 @@
-IMG_ORG ?= ekiden
+IMG_ORG ?= oasislabs
 IMG_VER ?= latest
 
 IMAGES = development testing
