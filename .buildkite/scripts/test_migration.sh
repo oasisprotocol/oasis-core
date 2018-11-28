@@ -1,7 +1,24 @@
-#!/bin/bash -e
+#!/bin/bash
 
+############################################################
+# This script tests the Ekiden rust project.
+#
+# Usage:
+# test_migration.sh
+############################################################
+
+# Helpful tips on writing build scripts:
+# https://buildkite.com/docs/pipelines/writing-build-scripts
+set -euxo pipefail
+
+source .buildkite/scripts/common.sh
+source .buildkite/scripts/common_e2e.sh
+source .buildkite/rust/common.sh
+
+# Working directory.
 WORKDIR=${1:-$(pwd)}
 
+# Runtime identifier.
 RUNTIME_ID=0000000000000000000000000000000000000000000000000000000000000000
 
 test_migration() {
@@ -9,9 +26,6 @@ test_migration() {
     local beacon_backend=$2
     local registry_backend=$3
     local roothash_backend=$4
-
-    # Ensure cleanup on exit.
-    trap 'kill -- -0' EXIT
 
     local datadir=/tmp/ekiden-dummy-data
 
@@ -150,11 +164,8 @@ test_migration() {
     wait "$client_pid"
 
     # Cleanup.
-    echo "Cleaning up."
-    pkill -P $$
-    wait || true
+    cleanup
 }
 
-set -x
 test_migration mock insecure memory memory
 test_migration tendermint_mock tendermint tendermint tendermint

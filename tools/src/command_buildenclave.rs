@@ -24,7 +24,7 @@ pub fn build_enclave(args: &ArgMatches) -> Result<()> {
             // Crate name.
             crate_name.to_owned(),
             // Output directory.
-            match args.value_of("output") {
+            match args.value_of("out-dir") {
                 Some(ref output) => Path::new(output).to_path_buf(),
                 None => env::current_dir()?,
             },
@@ -68,15 +68,13 @@ pub fn build_enclave(args: &ArgMatches) -> Result<()> {
                 ).into())
                 }
             };
-            if args.is_present("output") {
-                return Err("The --output option is not used when implicitly \
-                            building the current project directory."
-                    .into());
-            }
 
             EnclaveBuilder::new(
                 package.name.clone(),
-                project.get_target_path().join(TARGET_ENCLAVE_DIR),
+                match args.value_of("out-dir") {
+                    Some(ref output) => Path::new(output).to_path_buf(),
+                    None => project.get_target_path().join(TARGET_ENCLAVE_DIR),
+                },
                 match args.value_of("target-dir") {
                     Some(dir) => Some(Path::new(dir).canonicalize()?),
                     None => Some(project.get_target_path()),

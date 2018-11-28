@@ -9,11 +9,18 @@ pub mod macros;
 mod tests {
     extern crate test;
 
+    use std::sync::Mutex;
+
     use self::test::Bencher;
 
     use ekiden_common::bytes::{B160, B256};
 
     use super::super::{Database, DatabaseHandle};
+
+    lazy_static! {
+        // This mutex is required as the database schema uses a global database instance.
+        static ref TESTS: Mutex<()> = Mutex::new(());
+    }
 
     database_schema! {
         pub struct TestSchema {
@@ -35,6 +42,8 @@ mod tests {
 
     #[test]
     fn test_operations() {
+        let _guard = TESTS.lock().unwrap();
+
         {
             let mut db = DatabaseHandle::instance();
             db.rollback();
@@ -72,6 +81,8 @@ mod tests {
 
     #[test]
     fn test_namespaces() {
+        let _guard = TESTS.lock().unwrap();
+
         {
             let mut db = DatabaseHandle::instance();
             db.rollback();
@@ -98,6 +109,8 @@ mod tests {
 
     #[bench]
     fn bench_map_insert_random(b: &mut Bencher) {
+        let _guard = TESTS.lock().unwrap();
+
         {
             let mut db = DatabaseHandle::instance();
             db.rollback();

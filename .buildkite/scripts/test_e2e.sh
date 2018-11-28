@@ -1,157 +1,29 @@
-#!/bin/bash -e
+#!/bin/bash
 
+############################################################
+# This script tests the Ekiden rust project.
+#
+# Usage:
+# test_e2e.sh
+############################################################
+
+# Helpful tips on writing build scripts:
+# https://buildkite.com/docs/pipelines/writing-build-scripts
+set -euxo pipefail
+
+source .buildkite/scripts/common.sh
+source .buildkite/scripts/common_e2e.sh
+source .buildkite/rust/common.sh
+
+# Working directory.
 WORKDIR=${1:-$(pwd)}
 
-run_dummy_node_go_dummy() {
-    local datadir=/tmp/ekiden-dummy-data
-    rm -rf ${datadir}
+# Global test counter used for parallelizing jobs.
+E2E_TEST_COUNTER=0
 
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
-        --grpc.port 42261 \
-        --grpc.log.verbose_debug \
-        --epochtime.backend mock \
-        --beacon.backend insecure \
-        --storage.backend memory \
-        --scheduler.backend trivial \
-        --registry.backend memory \
-        --datadir ${datadir} \
-        &
-}
-
-run_dummy_node_go_tm() {
-    local datadir=/tmp/ekiden-dummy-data
-    rm -rf ${datadir}
-
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
-        --grpc.port 42261 \
-        --grpc.log.verbose_debug \
-        --epochtime.backend tendermint \
-        --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
-        --storage.backend memory \
-        --scheduler.backend trivial \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.log.debug \
-        --datadir ${datadir} \
-        &
-}
-
-run_dummy_node_go_tm_mock() {
-    local datadir=/tmp/ekiden-dummy-data
-    rm -rf ${datadir}
-
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
-        --grpc.port 42261 \
-        --grpc.log.verbose_debug \
-        --epochtime.backend tendermint_mock \
-        --beacon.backend insecure \
-        --storage.backend memory \
-        --scheduler.backend trivial \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.log.debug \
-        --datadir ${datadir} \
-        &
-}
-
-run_compute_node() {
-    local id=$1
-    shift
-    local extra_args=$*
-
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
-    # Generate port number.
-    let "port=id + 10000"
-
-    ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so &
-}
-
-run_compute_node_db() {
-    local id=$1
-    shift
-    local extra_args=$*
-
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
-    # Generate port number.
-    let "port=id + 10000"
-
-    RUST_BACKTRACE=1 ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/test-db-encryption.so &
-}
-
-run_compute_node_storage_multilayer_remote() {
-    local id=$1
-    shift
-    local extra_args=$*
-
-    local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
-    rm -rf ${db_dir}
-
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
-    # Generate port number.
-    let "port=id + 10000"
-
-    ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend multilayer \
-        --storage-multilayer-local-storage-base "$db_dir" \
-        --storage-multilayer-bottom-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so &
-}
-
-run_keymanager_node() {
-    local extra_args=$*
-
-    ${WORKDIR}/target/debug/ekiden-keymanager-node \
-        --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
-        --node-key-pair ${WORKDIR}/tests/keymanager/km.key \
-        ${extra_args} &
-}
-
+##############################
+# Run a specific test scenario
+##############################
 run_test() {
     local scenario=$1
     local description=$2
@@ -163,6 +35,19 @@ run_test() {
     local start_client_first=${8:-0}
     local test_km=${9:-0}
     local enclave=${10:-token}
+
+    # Check if we should run this test.
+    local test_index=$E2E_TEST_COUNTER
+    let E2E_TEST_COUNTER+=1 1
+
+    if [[ -n ${BUILDKITE_PARALLEL_JOB+x} ]]; then
+        let test_index%=BUILDKITE_PARALLEL_JOB_COUNT 1
+
+        if [[ $BUILDKITE_PARALLEL_JOB != $test_index ]]; then
+            echo "Skipping test '${description}' (assigned to different parallel build)."
+            return
+        fi
+    fi
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${description}\e[0m\n"
 
@@ -230,17 +115,6 @@ run_test() {
 
     # Cleanup.
     cleanup
-}
-
-cleanup() {
-    echo "Cleaning up child processes."
-    # Send all child processes a kill signal.
-    pkill -P $$ || true
-
-    # Wait for all child processes to exit.
-    # Helpful context:
-    # https://stackoverflow.com/questions/17894720/kill-a-process-and-wait-for-the-process-to-exit
-    wait || true
 }
 
 scenario_basic() {
@@ -331,9 +205,6 @@ scenario_kill_worker() {
     sleep 1
     pkill -9 --newest ekiden-worker
 }
-
-# Ensure cleanup on exit.
-trap 'cleanup' EXIT
 
 # Tendermint backends.
 run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm

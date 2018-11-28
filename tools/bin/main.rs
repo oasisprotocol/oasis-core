@@ -114,9 +114,9 @@ fn main() {
                                 .takes_value(true),
                         )
                         .arg(
-                            Arg::with_name("output")
+                            Arg::with_name("out-dir")
                                 .help("Enclave output directory")
-                                .long("output")
+                                .long("out-dir")
                                 .takes_value(true),
                         )
                         .arg(
