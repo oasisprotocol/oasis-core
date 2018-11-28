@@ -180,6 +180,7 @@ steps:
 
   - label: ":rocket: Deploy image"
     trigger: ekiden-deploy-image
+    async: true
     branches: master
     build:
       message: "${BUILDKITE_MESSAGE}"
