@@ -88,6 +88,12 @@ RUN wget https://dl.google.com/go/go1.11.1.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go1.11.1.linux-amd64.tar.gz && \
     rm go1.11.1.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
-    go get -u github.com/golang/protobuf/protoc-gen-go && \
+    # Install a specific version of protoc-gen-go (1.2.0).
+    go get -d github.com/golang/protobuf/protoc-gen-go && \
+    cd /go/src/github.com/golang/protobuf && \
+    git checkout v1.2.0 && \
+    cd protoc-gen-go && \
+    go install && \
+    # Install golangci-lint.
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.11.2 && \
-    cp /tmp/bin/golangci-lint /go/bin
+    mv /tmp/bin/golangci-lint /go/bin
