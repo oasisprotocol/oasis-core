@@ -38,7 +38,7 @@ func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState, qu
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryEpochTimeMockGetEpoch, &api.QueryGetEpoch{}, app.queryGetEpoch)
+	queryRouter.AddRoute(api.QueryEpochTimeMockGetEpoch, api.QueryGetEpoch{}, app.queryGetEpoch)
 }
 
 func (app *epochTimeMockApplication) OnCleanup() {
