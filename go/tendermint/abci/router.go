@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/tendermint/tendermint/abci/types"
@@ -18,6 +19,9 @@ type QueryRouter interface {
 	WithApp(Application) QueryRouter
 
 	// AddRoute adds a route handler.
+	//
+	// As reflection is used, requestType should be an instance of the
+	// actual type used for the request (as opposed to a pointer).
 	AddRoute(path string, requestType interface{}, handler QueryHandler)
 
 	// Route performs routing of a given request.
@@ -27,13 +31,18 @@ type QueryRouter interface {
 type route struct {
 	app         Application
 	path        string
-	requestType interface{}
+	requestType *reflect.Type
 	handler     QueryHandler
 }
 
 func (r *route) handle(request types.RequestQuery) types.ResponseQuery {
-	rq := r.requestType
-	if rq != nil {
+	var rq interface{}
+
+	if r.requestType != nil {
+		// Using `reflect` is somewhat frowned upon but whatever
+		// overhead there may be (< 1 usec), is dwarfed by the
+		// memory allocation(s) and CBOR parsing.
+		rq = reflect.New(*r.requestType).Interface()
 		if err := cbor.Unmarshal(request.GetData(), rq); err != nil {
 			return types.ResponseQuery{
 				Code: api.CodeInvalidFormat.ToInt(),
@@ -129,12 +138,16 @@ func (r *applicationQueryRouter) AddRoute(path string, requestType interface{}, 
 		panic("router: route must start with application name")
 	}
 
-	r.routes = append(r.routes, route{
-		app:         r.app,
-		path:        path,
-		requestType: requestType,
-		handler:     handler,
-	})
+	rt := route{
+		app:     r.app,
+		path:    path,
+		handler: handler,
+	}
+	if requestType != nil {
+		tmp := reflect.TypeOf(requestType)
+		rt.requestType = &tmp
+	}
+	r.routes = append(r.routes, rt)
 }
 
 // NewQueryRouter constructs a new query router.

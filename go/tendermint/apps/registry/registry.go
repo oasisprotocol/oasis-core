@@ -43,11 +43,11 @@ func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRo
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryRegistryGetEntity, &api.QueryGetByIDRequest{}, app.queryGetEntity)
+	queryRouter.AddRoute(api.QueryRegistryGetEntity, api.QueryGetByIDRequest{}, app.queryGetEntity)
 	queryRouter.AddRoute(api.QueryRegistryGetEntities, nil, app.queryGetEntities)
-	queryRouter.AddRoute(api.QueryRegistryGetNode, &api.QueryGetByIDRequest{}, app.queryGetNode)
+	queryRouter.AddRoute(api.QueryRegistryGetNode, api.QueryGetByIDRequest{}, app.queryGetNode)
 	queryRouter.AddRoute(api.QueryRegistryGetNodes, nil, app.queryGetNodes)
-	queryRouter.AddRoute(api.QueryRegistryGetRuntime, &api.QueryGetByIDRequest{}, app.queryGetRuntime)
+	queryRouter.AddRoute(api.QueryRegistryGetRuntime, api.QueryGetByIDRequest{}, app.queryGetRuntime)
 	queryRouter.AddRoute(api.QueryRegistryGetRuntimes, nil, app.queryGetRuntimes)
 }
 

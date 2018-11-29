@@ -406,8 +406,18 @@ func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, runtime *Test
 	require.Nil(rt.entity, "runtime has no associated entity")
 	require.Nil(rt.nodes, "runtime has no associated nodes")
 
+	return BulkPopulate(t, backend, []*TestRuntime{runtime}, seed)
+}
+
+// PopulateBulk bulk populates the registry for the given TestRuntimes.
+func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, seed []byte) []*node.Node {
+	require := require.New(t)
+
+	require.True(len(runtimes) > 0, "at least one runtime")
 	EnsureRegistryEmpty(t, backend)
 
+	// Create the one entity that has ownership of every single node
+	// that will be associated with every runtime.
 	entityCh, entitySub := backend.WatchEntities()
 	defer entitySub.Close()
 
@@ -424,10 +434,13 @@ func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, runtime *Test
 		t.Fatalf("failed to receive entity registration event")
 	}
 
+	// For the sake of simplicity, require that all runtimes have the same
+	// number of nodes for now.
+
 	nodeCh, nodeSub := backend.WatchNodes()
 	defer nodeSub.Close()
 
-	numNodes := rt.Runtime.ReplicaGroupSize + rt.Runtime.ReplicaGroupBackupSize
+	numNodes := runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize
 	nodes, err := entity.NewTestNodes(int(numNodes), epochtime.EpochInvalid)
 	require.NoError(err, "NewTestNodes")
 	ret := make([]*node.Node, 0, int(numNodes))
@@ -444,8 +457,12 @@ func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, runtime *Test
 		ret = append(ret, node.Node)
 	}
 
-	rt.entity = entity
-	rt.nodes = nodes
+	for _, v := range runtimes {
+		numNodes = v.Runtime.ReplicaGroupSize + v.Runtime.ReplicaGroupBackupSize
+		require.EqualValues(len(nodes), numNodes, "runtime wants the expected number of nodes")
+		v.entity = entity
+		v.nodes = nodes
+	}
 
 	return ret
 }

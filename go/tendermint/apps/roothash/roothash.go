@@ -78,7 +78,7 @@ func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRo
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryRootHashGetLatestBlock, &api.QueryGetLatestBlock{}, app.queryGetLatestBlock)
+	queryRouter.AddRoute(api.QueryRootHashGetLatestBlock, api.QueryGetLatestBlock{}, app.queryGetLatestBlock)
 }
 
 func (app *rootHashApplication) OnCleanup() {

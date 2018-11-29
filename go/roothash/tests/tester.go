@@ -2,6 +2,8 @@
 package tests
 
 import (
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,31 +23,67 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
-const recvTimeout = 1 * time.Second
+const (
+	recvTimeout = 1 * time.Second
+	nrRuntimes  = 3
+)
+
+type runtimeState struct {
+	id           string
+	rt           *registryTests.TestRuntime
+	genesisBlock *block.Block
+	committee    *testCommittee
+}
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
 func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) {
-	seed := []byte("RootHashImplementationTests")
+	seedBase := []byte("RootHashImplementationTests")
 
 	require := require.New(t)
 
+	// Ensure that we leave the registry empty when we are done.
+	rtStates := make([]*runtimeState, 0, nrRuntimes)
+	defer func() {
+		if len(rtStates) > 0 {
+			// This is entity deregistration based, and all of the
+			// runtimes used in this test share the entity.
+			rtStates[0].rt.Cleanup(t, registry)
+		}
+
+		registryTests.EnsureRegistryEmpty(t, registry)
+	}()
+
 	// Populate the registry.
-	rt, err := registryTests.NewTestRuntime(seed)
-	require.NoError(err, "NewTestRuntime")
-	rt.MustRegister(t, registry)
-	rt.Populate(t, registry, rt, seed)
+	runtimes := make([]*registryTests.TestRuntime, 0, nrRuntimes)
+	for i := 0; i < nrRuntimes; i++ {
+		t.Logf("Generating runtime: %d", i)
+		seed := append([]byte{}, seedBase...)
+		seed = append(seed, byte(i))
+
+		rt, err := registryTests.NewTestRuntime(seed)
+		require.NoError(err, "NewTestRuntime")
+		rt.MustRegister(t, registry)
+
+		rtStates = append(rtStates, &runtimeState{
+			id: strconv.Itoa(i),
+			rt: rt,
+		})
+		runtimes = append(runtimes, rt)
+	}
+	registryTests.BulkPopulate(t, registry, runtimes, seedBase)
 
 	// Run the various tests. (Ordering matters)
-	t.Run("GenesisBlock", func(t *testing.T) {
-		testGenesisBlock(t, backend, rt)
-	})
-	var committee *testCommittee
+	for _, v := range rtStates {
+		t.Run("GenesisBlock/"+v.id, func(t *testing.T) {
+			testGenesisBlock(t, backend, v)
+		})
+	}
 	t.Run("EpochTransitionBlock", func(t *testing.T) {
-		committee = testEpochTransitionBlock(t, backend, epochtime, scheduler, rt)
+		testEpochTransitionBlock(t, backend, epochtime, scheduler, rtStates)
 	})
 	t.Run("SucessfulRound", func(t *testing.T) {
-		testSucessfulRound(t, backend, storage, rt, committee)
+		testSucessfulRound(t, backend, storage, rtStates)
 	})
 
 	// TODO: Test the various failures.
@@ -53,10 +91,11 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 	// TODO: Test WatchBlocksSince (though it will be deprecated via #1009...)
 }
 
-func testGenesisBlock(t *testing.T, backend api.Backend, rt *registryTests.TestRuntime) {
+func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require := require.New(t)
 
-	ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
+	id := state.rt.Runtime.ID
+	ch, sub, err := backend.WatchBlocks(id)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -79,35 +118,65 @@ func testGenesisBlock(t *testing.T, backend api.Backend, rt *registryTests.TestR
 		t.Fatalf("failed to receive block")
 	}
 
-	blk, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
+	blk, err := backend.GetLatestBlock(context.Background(), id)
 	require.NoError(err, "GetLatestBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 }
 
-func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, rt *registryTests.TestRuntime) *testCommittee {
+func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, states []*runtimeState) {
+	require := require.New(t)
+
+	// Before an epoch transition there should just be a genesis block.
+	for _, v := range states {
+		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID)
+		require.NoError(err, "GetLatestBlock")
+		var round uint64
+		round, err = genesisBlock.Header.Round.ToU64()
+		require.NoError(err, "header.Round.ToU64")
+		require.EqualValues(0, round, "genesis block round")
+
+		v.genesisBlock = genesisBlock
+	}
+
+	// Advance the epoch, get the committee.
+	epoch, _, err := epochtime.GetEpoch(context.Background())
+	require.NoError(err, "GetEpoch")
+
+	// Spawn the per-runtime handlers that will watch for the expected
+	// post-epoch transition events.
+	var wg sync.WaitGroup
+	wg.Add(len(states))
+	for i := range states {
+		v := states[i]
+		ch, sub, err := backend.WatchBlocks(v.rt.Runtime.ID)
+		require.NoError(err, "WatchBlocks")
+
+		go func(state *runtimeState, blkCh <-chan *block.Block) {
+			defer func() {
+				sub.Close()
+				wg.Done()
+			}()
+
+			state.testEpochTransitionBlock(t, scheduler, epoch, blkCh)
+		}(v, ch)
+	}
+
+	// Advance the epoch.
+	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+
+	// Wait for all runtimes to get the expected events.
+	wg.Wait()
+}
+
+func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *block.Block) {
 	require := require.New(t)
 
 	nodes := make(map[signature.MapKey]*registryTests.TestNode)
-	for _, node := range rt.TestNodes() {
+	for _, node := range s.rt.TestNodes() {
 		nodes[node.Node.ID.ToMapKey()] = node
 	}
 
-	// Before an epoch transition there should just be a genesis block.
-	genesisBlock, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
-	require.NoError(err, "GetLatestBlock")
-	var round uint64
-	round, err = genesisBlock.Header.Round.ToU64()
-	require.NoError(err, "header.Round.ToU64")
-	require.EqualValues(0, round, "genesis block round")
-
-	// Start watching blocks before epoch transition.
-	ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
-	require.NoError(err, "WatchBlocks")
-	defer sub.Close()
-
-	// Advance the epoch, get the committee.
-	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
-	committee := mustGetCommittee(t, rt, epoch, scheduler, nodes)
+	s.committee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -119,21 +188,38 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 				continue
 			}
 
-			require.True(header.IsParentOf(&genesisBlock.Header), "parent is parent of genesis block")
+			require.True(header.IsParentOf(&s.genesisBlock.Header), "parent is parent of genesis block")
 			require.True(header.InputHash.IsEmpty(), "block input hash empty")
 			require.True(header.OutputHash.IsEmpty(), "block output hash empty")
-			require.EqualValues(genesisBlock.Header.StateRoot, header.StateRoot, "state root preserved")
+			require.EqualValues(s.genesisBlock.Header.StateRoot, header.StateRoot, "state root preserved")
 
 			// Nothing more to do after the epoch transition block was received.
-			return committee
+			return
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive block")
 		}
 	}
 }
 
-func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backend, rt *registryTests.TestRuntime, committee *testCommittee) {
+func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backend, states []*runtimeState) {
+	var wg sync.WaitGroup
+	wg.Add(len(states))
+
+	for i := range states {
+		go func(state *runtimeState) {
+			defer wg.Done()
+
+			state.testSuccessfulRound(t, backend, storage)
+		}(states[i])
+	}
+
+	wg.Wait()
+}
+
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, storage storage.Backend) {
 	require := require.New(t)
+
+	rt, committee := s.rt, s.committee
 
 	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
 	require.NoError(err, "GetLatestBlock")
