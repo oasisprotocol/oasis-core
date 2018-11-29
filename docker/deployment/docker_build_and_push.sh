@@ -37,7 +37,7 @@ set +x
 # history, so we intentionally disable printing commands
 # with set +x.
 # TODO: Support non-simulation builds.
-docker build --rm --force-rm \
+docker build --pull --rm --force-rm \
   --build-arg SSH_PRIVATE_KEY="$(cat ${path_to_ssh_private_key})" \
   --build-arg SGX_MODE=SIM \
   --build-arg EKIDEN_SKIP_AVR_VERIFY=1 \
