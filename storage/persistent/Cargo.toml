@@ -11,5 +11,5 @@ ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
 ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
-serde_cbor = "0.8.2"
+serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 exonum_rocksdb = "~0.7.4"

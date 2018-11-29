@@ -13,23 +13,48 @@ import (
 var (
 	_ pb.IASServer = (*grpcServer)(nil)
 
-	evidenceSignatureContext = []byte("EkIASEvi")
+	_ cbor.Marshaler   = (*Evidence)(nil)
+	_ cbor.Unmarshaler = (*Evidence)(nil)
+	_ cbor.Marshaler   = (*SignedEvidence)(nil)
+	_ cbor.Unmarshaler = (*SignedEvidence)(nil)
+
+	// EvidenceSignatureContext is the signature context used for verifying evidence.
+	EvidenceSignatureContext = []byte("EkIASEvi")
 )
 
-type signedEvidence struct {
+// SignedEvidence is signed evidence.
+type SignedEvidence struct {
 	signature.Signed
 }
 
-func (s *signedEvidence) Open(context []byte, evidence *evidence) error { // nolint: interfacer
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedEvidence) Open(context []byte, evidence *Evidence) error { // nolint: interfacer
 	return s.Signed.Open(context, evidence)
 }
 
-type evidence struct {
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (s *SignedEvidence) MarshalCBOR() []byte {
+	return s.Signed.MarshalCBOR()
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (s *SignedEvidence) UnmarshalCBOR(data []byte) error {
+	return s.Signed.UnmarshalCBOR(data)
+}
+
+// Evidence is attestation evidence.
+type Evidence struct {
 	Quote       []byte `codec:"quote"`
 	PSEManifest []byte `codec:"pse_manifest"`
 }
 
-func (e *evidence) UnmarshalCBOR(data []byte) error {
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (e Evidence) MarshalCBOR() []byte {
+	return cbor.Marshal(e)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (e *Evidence) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
 }
 
@@ -38,13 +63,13 @@ type grpcServer struct {
 }
 
 func (s *grpcServer) VerifyEvidence(ctx context.Context, req *pb.VerifyEvidenceRequest) (*pb.VerifyEvidenceResponse, error) {
-	var signed signedEvidence
+	var signed SignedEvidence
 	if err := signed.FromProto(req.GetEvidence()); err != nil {
 		return nil, err
 	}
 
-	var ev evidence
-	if err := signed.Open(evidenceSignatureContext, &ev); err != nil {
+	var ev Evidence
+	if err := signed.Open(EvidenceSignatureContext, &ev); err != nil {
 		return nil, err
 	}
 
@@ -65,6 +90,23 @@ func (s *grpcServer) VerifyEvidence(ctx context.Context, req *pb.VerifyEvidenceR
 	resp.CertificateChain = certChain
 
 	return &resp, nil
+}
+
+func (s *grpcServer) GetSPIDInfo(ctx context.Context, req *pb.GetSPIDInfoRequest) (*pb.GetSPIDInfoResponse, error) {
+	info, err := s.endpoint.GetSPIDInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	spid, err := info.SPID.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetSPIDInfoResponse{
+		Spid:               spid,
+		QuoteSignatureType: uint32(info.QuoteSignatureType),
+	}, nil
 }
 
 // NewGRPCServer initializes and registers a new gRPC IAS server backed

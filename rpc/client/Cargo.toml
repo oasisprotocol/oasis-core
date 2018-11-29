@@ -13,7 +13,7 @@ ekiden-rpc-common = { path = "../common", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 sodalite = "0.3.0"
 serde = "1.0.71"
-serde_cbor = "0.8.2"
+serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 
 [target.'cfg(target_env = "sgx")'.dependencies]
 futures-sgx = { git = "https://github.com/oasislabs/futures-rs" }

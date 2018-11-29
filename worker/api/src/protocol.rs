@@ -121,7 +121,7 @@ impl Protocol {
                         .send(Message {
                             id: 0,
                             message_type: MessageType::KeepAlive,
-                            body: Body::Empty,
+                            body: Body::Empty {},
                         })
                         .discard()
                 })
@@ -286,11 +286,11 @@ mod tests {
         let (protocol_a, _) = Protocol::new(environment.clone(), socket_a, handler_a.clone());
         let (protocol_b, _) = Protocol::new(environment.clone(), socket_b, handler_b.clone());
 
-        block_on(environment.clone(), protocol_a.make_request(Body::Empty)).unwrap();
+        block_on(environment.clone(), protocol_a.make_request(Body::Empty {})).unwrap();
         assert_eq!(handler_a.calls.load(Ordering::SeqCst), 0);
         assert_eq!(handler_b.calls.load(Ordering::SeqCst), 1);
 
-        block_on(environment.clone(), protocol_b.make_request(Body::Empty)).unwrap();
+        block_on(environment.clone(), protocol_b.make_request(Body::Empty {})).unwrap();
         assert_eq!(handler_a.calls.load(Ordering::SeqCst), 1);
         assert_eq!(handler_b.calls.load(Ordering::SeqCst), 1);
     }
@@ -308,7 +308,7 @@ mod tests {
         let (_protocol_b, _) = Protocol::new(environment.clone(), socket_b, handler_b.clone());
 
         // Generate a large request.
-        let request = Body::WorkerRpcCallRequest {
+        let request = Body::WorkerRPCCallRequest {
             request: vec![42; 2_000_000],
         };
         block_on(environment.clone(), protocol_a.make_request(request)).unwrap();

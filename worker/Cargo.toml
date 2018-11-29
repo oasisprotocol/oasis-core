@@ -33,7 +33,7 @@ thread_local = "0.3.5"
 clap = "2.29.1"
 log = "0.4"
 pretty_env_logger = "0.2"
-serde_cbor = "0.8.2"
+serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 tokio-uds = "0.2.3"
 
 [build-dependencies]

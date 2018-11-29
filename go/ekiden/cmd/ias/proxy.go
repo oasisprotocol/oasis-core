@@ -2,7 +2,11 @@
 package ias
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -13,7 +17,14 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/pprof"
 )
 
-const ()
+const (
+	cfgAuthCertFile = "auth_cert"
+	cfgAuthKeyFile  = "auth_key"
+	cfgAuthCertCA   = "auth_cert_ca"
+	cfgSPID         = "spid"
+	cfgQuoteSigType = "quote_signature_type"
+	cfgIsProduction = "production"
+)
 
 var (
 	iasCmd = &cobra.Command{
@@ -27,10 +38,12 @@ var (
 		Run:   doProxy,
 	}
 
-	authCertFile string
-	authKeyFile  string
-	authCertCA   string
-	isProduction bool
+	flagAuthCertFile string
+	flagAuthKeyFile  string
+	flagAuthCertCA   string
+	flagSpid         string
+	flagQuoteSigType string
+	flagIsProduction bool
 
 	logger = logging.GetLogger("cmd/ias/proxy")
 )
@@ -50,11 +63,11 @@ func doProxy(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	if authCertFile == "" {
+	if flagAuthCertFile == "" {
 		logger.Error("auth cert not configured")
 		return
 	}
-	if authKeyFile == "" {
+	if flagAuthKeyFile == "" {
 		logger.Error("auth key not configured")
 		return
 	}
@@ -132,8 +145,25 @@ func doProxy(cmd *cobra.Command, args []string) {
 }
 
 func initProxy(cmd *cobra.Command, env *proxyEnv) error {
-	// TODO: Wire in authCertCA.
-	endpoint, err := ias.NewIASEndpoint(authCertFile, authKeyFile, nil, isProduction)
+	var quoteSigType ias.SignatureType
+	switch strings.ToLower(flagQuoteSigType) {
+	case "unlinkable":
+		quoteSigType = ias.SignatureUnlinkable
+	case "linkable":
+		quoteSigType = ias.SignatureLinkable
+	default:
+		return fmt.Errorf("ias: invalid signature type: %s", flagQuoteSigType)
+	}
+
+	// TODO: Wire in flagAuthCertCA.
+	endpoint, err := ias.NewIASEndpoint(
+		flagAuthCertFile,
+		flagAuthKeyFile,
+		nil,
+		flagSpid,
+		quoteSigType,
+		flagIsProduction,
+	)
 	if err != nil {
 		return err
 	}
@@ -147,10 +177,23 @@ func initProxy(cmd *cobra.Command, env *proxyEnv) error {
 
 // Register registers the ias sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	iasProxyCmd.Flags().StringVar(&authCertFile, "auth_cert", "", "the file with the client certificate")
-	iasProxyCmd.Flags().StringVar(&authKeyFile, "auth_key", "", "the file with the client private key")
-	iasProxyCmd.Flags().StringVar(&authCertCA, "auth_cert_ca", "", "the file with the CA that signed the client certificate")
-	iasProxyCmd.Flags().BoolVar(&isProduction, "production", false, "use the production IAS endpoint")
+	iasProxyCmd.Flags().StringVar(&flagAuthCertFile, cfgAuthCertFile, "", "the file with the client certificate")
+	iasProxyCmd.Flags().StringVar(&flagAuthKeyFile, cfgAuthKeyFile, "", "the file with the client private key")
+	iasProxyCmd.Flags().StringVar(&flagAuthCertCA, cfgAuthCertCA, "", "the file with the CA that signed the client certificate")
+	iasProxyCmd.Flags().StringVar(&flagSpid, cfgSPID, "", "SPID associated with the client certificate")
+	iasProxyCmd.Flags().StringVar(&flagQuoteSigType, cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
+	iasProxyCmd.Flags().BoolVar(&flagIsProduction, cfgIsProduction, false, "use the production IAS endpoint")
+
+	for _, v := range []string{
+		cfgAuthCertFile,
+		cfgAuthKeyFile,
+		cfgAuthCertCA,
+		cfgSPID,
+		cfgQuoteSigType,
+		cfgIsProduction,
+	} {
+		viper.BindPFlag(v, iasProxyCmd.Flags().Lookup(v)) // nolint: errcheck
+	}
 
 	for _, v := range []func(*cobra.Command){
 		metrics.RegisterFlags,

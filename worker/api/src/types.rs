@@ -4,7 +4,6 @@ use serde_bytes::{self, ByteBuf};
 use sgx_types;
 
 use ekiden_core::bytes::H256;
-use ekiden_core::enclave::api as identity_api;
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
 use ekiden_roothash_base::Block;
@@ -26,7 +25,7 @@ pub struct ComputedBatch {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Body {
     // An empty body.
-    Empty,
+    Empty {},
 
     // An error response.
     Error {
@@ -34,13 +33,13 @@ pub enum Body {
     },
 
     // Worker interface.
-    WorkerPingRequest,
-    WorkerShutdownRequest,
-    WorkerRpcCallRequest {
+    WorkerPingRequest {},
+    WorkerShutdownRequest {},
+    WorkerRPCCallRequest {
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
     },
-    WorkerRpcCallResponse {
+    WorkerRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
@@ -54,20 +53,21 @@ pub enum Body {
     },
 
     // Host interface.
-    HostRpcCallRequest {
+    HostRPCCallRequest {
         endpoint: ClientEndpoint,
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
     },
-    HostRpcCallResponse {
+    HostRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
-    HostIasGetSpidRequest,
+    HostIasGetSpidRequest {},
     HostIasGetSpidResponse {
-        spid: [u8; 16],
+        #[serde(with = "serde_bytes")]
+        spid: Vec<u8>,
     },
-    HostIasGetQuoteTypeRequest,
+    HostIasGetQuoteTypeRequest {},
     HostIasGetQuoteTypeResponse {
         quote_type: u32,
     },
@@ -83,7 +83,12 @@ pub enum Body {
         quote: Vec<u8>,
     },
     HostIasReportResponse {
-        report: identity_api::AvReport,
+        #[serde(with = "serde_bytes")]
+        avr: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        signature: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        certificates: Vec<u8>,
     },
     HostStorageGetRequest {
         key: H256,
