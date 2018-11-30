@@ -40,7 +40,7 @@ set +x
 docker build --pull --rm --force-rm \
   --build-arg SSH_PRIVATE_KEY="$(cat ${path_to_ssh_private_key})" \
   --build-arg SGX_MODE=SIM \
-  --build-arg EKIDEN_SKIP_AVR_VERIFY=1 \
+  --build-arg EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1 \
   --build-arg EKIDEN_COMMIT_SHA=${git_commit_sha} \
   --build-arg EKIDEN_BUILD_IMAGE_TAG=${docker_image_tag} \
   -t ${docker_image_name}:${docker_image_tag} \
