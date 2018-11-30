@@ -10,6 +10,7 @@ docker_plugin: &docker_plugin_configuration
       - .:/workdir
       - /var/lib/buildkite-agent/.ssh:/root/.ssh
       - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
+      - /var/lib/buildkite-agent/.codecov:/root/.codecov
       # Shared Rust target artifacts cache.
       - /tmp/cargo_target:/cargo_target
       # Shared Rust package checkouts directory.

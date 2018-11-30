@@ -25,5 +25,5 @@ popd
 ############################
 # Upload coverage to codecov
 ############################
-# TODO: Ensble this when tokens are configured.
-# bash <(curl -s https://codecov.io/bash) -Z
+export CODECOV_TOKEN=$(cat ~/.codecov/ekiden_api_token)
+bash <(curl -s https://codecov.io/bash) -Z
