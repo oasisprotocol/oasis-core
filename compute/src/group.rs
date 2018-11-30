@@ -27,7 +27,7 @@ use super::statetransfer::transition_keys;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GroupRole {
     /// Role.
-    pub role: Role,
+    pub role: Option<Role>,
     /// Committee.
     pub committee: Vec<CommitteeNode>,
     /// Epoch.
@@ -38,8 +38,12 @@ impl fmt::Display for GroupRole {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:?}/{}/{}",
-            self.role,
+            "{}/{}/{}",
+            if let Some(role) = self.role {
+                format!("{:?}", role)
+            } else {
+                format!("None")
+            },
             self.committee.get_encoded_hash(),
             self.epoch
         )
@@ -137,7 +141,7 @@ struct Inner {
     /// Node identity,
     identity: Arc<NodeIdentity>,
     /// Role subscribers.
-    role_subscribers: StreamSubscribers<Option<GroupRole>>,
+    role_subscribers: StreamSubscribers<GroupRole>,
     /// Current epoch transition state.
     epochs: Mutex<EpochTransitionState>,
 }
@@ -377,13 +381,11 @@ impl ComputationGroup {
                         );
                     }
 
-                    inner
-                        .role_subscribers
-                        .notify(&active_epoch.role.map(|role| GroupRole {
-                            role,
-                            committee: active_epoch.committee.clone(),
-                            epoch: active_epoch.number,
-                        }));
+                    inner.role_subscribers.notify(&GroupRole {
+                        role: active_epoch.role,
+                        committee: active_epoch.committee.clone(),
+                        epoch: active_epoch.number,
+                    });
 
                     Ok(())
                 })
@@ -482,7 +484,7 @@ impl ComputationGroup {
     }
 
     /// Subscribe to notifications on our current role in the computation committee.
-    pub fn watch_role(&self) -> BoxStream<Option<GroupRole>> {
+    pub fn watch_role(&self) -> BoxStream<GroupRole> {
         self.inner.role_subscribers.subscribe().1
     }
 }
