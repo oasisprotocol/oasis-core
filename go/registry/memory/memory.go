@@ -3,6 +3,7 @@ package memory
 
 import (
 	"sync"
+	"time"
 
 	"github.com/eapache/channels"
 	"golang.org/x/net/context"
@@ -143,7 +144,7 @@ func (r *memoryBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.Subscr
 }
 
 func (r *memoryBackend) RegisterNode(ctx context.Context, sigNode *node.SignedNode) error {
-	node, err := api.VerifyRegisterNodeArgs(r.logger, sigNode)
+	node, err := api.VerifyRegisterNodeArgs(r.logger, sigNode, time.Now())
 	if err != nil {
 		return err
 	}
