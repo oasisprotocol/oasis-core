@@ -19,7 +19,7 @@ ARG EKIDEN_COMMIT_SHA
 # Take SGX mode as build argument.
 ARG SGX_MODE=SIM
 # Take AVR verification as build argument.
-ARG EKIDEN_SKIP_AVR_VERIFY=1
+ARG EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1
 # Take Intel SGX SDK path as build argument.
 ARG INTEL_SGX_SDK=/opt/sgxsdk
 
