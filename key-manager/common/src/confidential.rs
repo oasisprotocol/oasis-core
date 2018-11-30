@@ -1,11 +1,17 @@
-//! Encryption utilties for web3(c) V0.5 key management.
+//! Encryption utilties for Web3(c).
+//! Wraps the ekiden_core::mrae::sivaessha2 primitives with a set of encryption
+//! methods that transparently encodes/decodes the Web3(c) wire format.
 
 use ekiden_core::error::{Error, Result};
 use ekiden_core::mrae::sivaessha2;
 
 use super::{PrivateKeyType, PublicKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY};
-use sodalite;
 
+/// Encrypts the given plaintext using the symmetric key derived from
+/// peer_public_key and secret_key. Uses the given public_key to return
+/// an encrypted payload of the form: nonce || public_key || cipher,
+/// Allowing the receipient of the encrypted payload to decrypt with
+/// the given nonce and public_key.
 pub fn encrypt(
     plaintext: Vec<u8>,
     nonce: Vec<u8>,
@@ -23,6 +29,10 @@ pub fn encrypt(
     Ok(encode_encryption(ciphertext, nonce, *public_key))
 }
 
+/// Decrypts the given payload generated in the same manner by the encrypt method.
+/// I.e., given an encrypted payload of the form nonce || public_key || cipher,
+/// extracts the nonce and public key and uses them along with the given secret_key
+/// the decrypt the cipher, returning the resulting Decryption struct.
 pub fn decrypt(data: Option<Vec<u8>>, secret_key: &PrivateKeyType) -> Result<Decryption> {
     if data.is_none() {
         return Ok(Decryption {
@@ -55,6 +65,7 @@ pub struct Decryption {
     pub peer_public_key: PublicKeyType,
 }
 
+/// Packs the given paramaters into a Vec of the form nonce || public_key || ciphertext.
 fn encode_encryption(
     mut ciphertext: Vec<u8>,
     nonce: Vec<u8>,
