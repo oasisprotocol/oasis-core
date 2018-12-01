@@ -562,9 +562,6 @@ impl RootHashFrontend {
         // If we are not a leader, clear the incoming call queue to avoid processing
         // calls which the new leader should process.
         if let Some(Role::Leader) = role.role {
-            inner.incoming_queue.lock().unwrap().take();
-            measure_gauge!("incoming_queue_size", 0);
-        } else {
             measure_gauge!(
                 "incoming_queue_size",
                 inner
@@ -575,6 +572,9 @@ impl RootHashFrontend {
                     .map(|queue| queue.calls.len())
                     .unwrap_or(0)
             );
+        } else {
+            inner.incoming_queue.lock().unwrap().take();
+            measure_gauge!("incoming_queue_size", 0);
         }
 
         if role.role.is_some() {
