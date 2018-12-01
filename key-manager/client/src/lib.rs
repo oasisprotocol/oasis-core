@@ -40,7 +40,7 @@ macro_rules! use_key_manager_contract {
                 use ekiden_trusted::key_manager::KeyManager;
 
                 // Setup the key manager contract identity.
-                KeyManager::get().unwrap().set_contract(H256(*include_bytes!($identity)));
+                KeyManager::instance().unwrap().set_contract(H256(*include_bytes!($identity)));
             }
         }
     };
