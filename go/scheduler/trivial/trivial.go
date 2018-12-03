@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/eapache/channels"
 	"golang.org/x/net/context"
@@ -21,6 +22,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 // BackendName is the name of this implementation.
@@ -47,6 +49,7 @@ type trivialScheduler struct {
 
 	state *trivialSchedulerState
 
+	service  service.TendermintService
 	notifier *pubsub.Broker
 
 	closeCh  chan struct{}
@@ -56,7 +59,9 @@ type trivialScheduler struct {
 type trivialSchedulerState struct {
 	sync.RWMutex
 
-	nodeLists  map[epochtime.EpochTime][]*node.Node
+	logger *logging.Logger
+
+	nodeLists  map[epochtime.EpochTime]map[node.TEEHardware][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
 	runtimes   map[signature.MapKey]*registry.Runtime
 	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
@@ -93,7 +98,12 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 		return committees, nil
 	}
 
-	nodeList := s.nodeLists[epoch]
+	var hw node.TEEHardware
+	if con.FeaturesSGX {
+		hw = node.TEEHardwareIntelSGX
+	}
+
+	nodeList := s.nodeLists[epoch][hw]
 	beacon := s.beacons[epoch]
 	nrNodes := len(nodeList)
 
@@ -191,6 +201,44 @@ func (s *trivialSchedulerState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
+func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, nodes []*node.Node, ts time.Time) {
+	// Invariant: s.Lock() held already.
+
+	// Re-scheduling is not allowed, and if there are node lists already there
+	// is nothing to do.
+	if s.nodeLists[epoch] != nil {
+		return
+	}
+
+	m := make(map[node.TEEHardware][]*node.Node)
+	s.nodeLists[epoch] = m
+
+	// Special case: No TEE support is requested by the runtime.
+	m[node.TEEHardwareInvalid] = nodes
+
+	// Build the per-TEE implementation node lists for the given epoch.
+	// It is safe to do it this way as `nodes` is already sorted in
+	// the appropriate order.
+	for _, node := range nodes {
+		caps := node.Capabilities.TEE
+		if caps == nil { // No TEE support at all.
+			continue
+		}
+
+		if err := caps.Verify(ts); err != nil {
+			s.logger.Warn("failed to verify node TEE attestation",
+				"err", err,
+				"node", node,
+				"time_stamp", ts,
+			)
+			continue
+		}
+
+		hw := caps.Hardware
+		m[hw] = append(m[hw], node)
+	}
+}
+
 func (s *trivialScheduler) Cleanup() {
 	s.Do(func() {
 		close(s.closeCh)
@@ -269,7 +317,12 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		if err != nil {
 			return nil, err
 		}
-		s.state.nodeLists[epoch] = nl.Nodes
+		var ts time.Time
+		ts, err = s.getEpochTransitionTime(epoch)
+		if err != nil {
+			return nil, err
+		}
+		s.state.updateNodeListLocked(epoch, nl.Nodes, ts)
 	}
 
 	con, err := reg.GetRuntime(ctx, id)
@@ -357,10 +410,22 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 			//
 			// Omitting the check is mostly harmess, since a changing
 			// node list within an epoch is an invariant violation.
+			ts, err := s.getEpochTransitionTime(ev.Epoch)
+			if err != nil {
+				// Attestation validations will fail till after the epoch transition.
+				s.logger.Error("worker: failed to get epoch transition time",
+					"err", err,
+				)
+			}
+
 			s.logger.Debug("worker: node list for epoch",
 				"epoch", ev.Epoch,
+				"transition_at", ts,
 			)
-			s.state.nodeLists[ev.Epoch] = ev.Nodes
+
+			s.state.Lock()
+			s.state.updateNodeListLocked(ev.Epoch, ev.Nodes, ts)
+			s.state.Unlock()
 		case ev := <-beaconCh:
 			if b := s.state.beacons[ev.Epoch]; b != nil {
 				if !bytes.Equal(b, ev.Beacon) {
@@ -408,24 +473,60 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 	}
 }
 
+func (s *trivialScheduler) getEpochTransitionTime(epoch epochtime.EpochTime) (time.Time, error) {
+	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
+	if !ok || s.service == nil {
+		// Incompatible time backend, no BFT time available.  This
+		// WILL cause inconsitencies if the attestations happen to
+		// expire at inconvenient times.
+		//
+		// This isn't treated as an error under the assumption that
+		// if the user configures a non-BFT time source, they are
+		// presumably ok with the consequences of their decision.
+		//
+		// All production deployments will never hit this code path.
+		return time.Now(), nil
+	}
+
+	blockHeight, err := timeSource.GetEpochBlock(context.Background(), epoch)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	switch blockHeight {
+	case 0:
+		// No timestamp in the genesis state.
+		return time.Time{}, fmt.Errorf("scheduler/trivial: no epoch transition time for 0th epoch")
+	default:
+		block, err := s.service.GetBlock(blockHeight)
+		if err != nil {
+			return time.Time{}, err
+		}
+
+		return block.Header.Time, nil
+	}
+}
+
 // New constracts a new trivial scheduler Backend instance.
-func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon beacon.Backend) api.Backend {
+func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon beacon.Backend, service service.TendermintService) api.Backend {
 	s := &trivialScheduler{
 		logger:     logging.GetLogger("scheduler/trivial"),
 		timeSource: timeSource,
 		registry:   registryBackend,
 		beacon:     beacon,
 		state: &trivialSchedulerState{
-			nodeLists:  make(map[epochtime.EpochTime][]*node.Node),
+			nodeLists:  make(map[epochtime.EpochTime]map[node.TEEHardware][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
 			runtimes:   make(map[signature.MapKey]*registry.Runtime),
 			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,
 		},
+		service:  service,
 		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}
+	s.state.logger = s.logger
 	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		s.state.RLock()
 		defer s.state.RUnlock()
