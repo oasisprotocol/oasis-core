@@ -8,6 +8,8 @@ use super::enclave::{current_storage, with_transfer_buffer};
 
 #[no_mangle]
 pub extern "C" fn untrusted_db_get(key: *const u8, value_length: *mut usize, result: *mut u8) {
+    measure_histogram_timer!("untrusted_db_get");
+
     let storage = current_storage();
 
     let key = H256::from(unsafe { from_raw_parts(key, H256::len()) });
@@ -34,6 +36,8 @@ pub extern "C" fn untrusted_db_get(key: *const u8, value_length: *mut usize, res
 
 #[no_mangle]
 pub extern "C" fn untrusted_db_insert(value_length: usize, expiry: u64, result: *mut u8) {
+    measure_histogram_timer!("untrusted_db_insert");
+
     let storage = current_storage();
 
     // Copy value from transfer buffer.
