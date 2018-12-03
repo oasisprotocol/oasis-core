@@ -33,3 +33,7 @@ RUN VERSION="35" && \
 RUN wget -O codecov https://codecov.io/bash && \
     chmod +x codecov && \
     mv codecov /usr/local/bin
+
+# Install tarpaulin.
+RUN RUSTFLAGS="--cfg procmacro2_semver_exempt" \
+    cargo install --version 0.6.9 cargo-tarpaulin

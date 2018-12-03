@@ -32,13 +32,9 @@ set +x
 coveralls_api_token=$(cat ${path_to_coveralls_api_token})
 set -x
 
-# Instal Tarpaulin
-# TODO: This should be installed into the testing image.
-RUSTFLAGS="--cfg procmacro2_semver_exempt" \
-  cargo install \
-  --git https://github.com/oasislabs/tarpaulin \
-  --branch ekiden \
-  cargo-tarpaulin
+# We need to use a separate target dir for tarpaulin as it otherwise clears
+# the build cache.
+export CARGO_TARGET_DIR=/tmp/coverage_target
 
 # Calculate coverage
 set +x
