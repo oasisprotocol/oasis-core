@@ -1,4 +1,4 @@
-package worker
+package host
 
 import (
 	"context"
@@ -20,8 +20,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/host/protocol"
 	"github.com/oasislabs/ekiden/go/worker/ias"
-	"github.com/oasislabs/ekiden/go/worker/protocol"
 )
 
 var (

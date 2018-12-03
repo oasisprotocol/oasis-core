@@ -1,5 +1,5 @@
-// Package worker implements the ekiden worker host.
-package worker
+// Package host implements the ekiden worker host.
+package host
 
 import (
 	"github.com/spf13/cobra"

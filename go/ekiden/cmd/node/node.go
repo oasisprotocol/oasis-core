@@ -30,7 +30,7 @@ import (
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
-	"github.com/oasislabs/ekiden/go/worker"
+	workerHost "github.com/oasislabs/ekiden/go/worker/host"
 )
 
 // Run runs the ekiden node.
@@ -54,7 +54,7 @@ type Node struct {
 	identity *signature.PrivateKey
 	grpcSrv  *grpc.Server
 	svcTmnt  service.TendermintService
-	wrkHost  *worker.Host
+	wrkHost  *workerHost.Host
 
 	Beacon    beaconAPI.Backend
 	Epochtime epochtimeAPI.Backend
@@ -232,7 +232,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	}
 
 	// Initialize the worker host.
-	node.wrkHost, err = worker.New(node.cmd, node.identity, node.Storage)
+	node.wrkHost, err = workerHost.New(node.cmd, node.identity, node.Storage)
 	if err != nil {
 		logger.Error("failed to initialize worker host",
 			"err", err,
@@ -307,7 +307,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermint.RegisterFlags,
-		worker.RegisterFlags,
+		workerHost.RegisterFlags,
 	} {
 		v(cmd)
 	}
