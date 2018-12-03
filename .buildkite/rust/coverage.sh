@@ -28,7 +28,9 @@ path_to_coveralls_api_token=${1:-~/.coveralls/ekiden_api_token}
 ############
 # Local vars
 ############
+set +x
 coveralls_api_token=$(cat ${path_to_coveralls_api_token})
+set -x
 
 # Instal Tarpaulin
 # TODO: This should be installed into the testing image.
@@ -39,6 +41,7 @@ RUSTFLAGS="--cfg procmacro2_semver_exempt" \
   cargo-tarpaulin
 
 # Calculate coverage
+set +x
 cargo tarpaulin \
   --ignore-tests \
   --out Xml \
@@ -69,3 +72,4 @@ cargo tarpaulin \
   --exclude-files stake/* \
   --coveralls ${coveralls_api_token} \
   -v
+set -x
