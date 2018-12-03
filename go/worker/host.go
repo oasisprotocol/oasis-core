@@ -74,6 +74,7 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary, cacheDir string
 		"--unshare-all",
 		// TODO: Proxy prometheus and tracing over an AF_LOCAL socket to avoid this.
 		"--share-net",
+		"--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
 		// Drop all capabilities.
 		"--cap-drop", "ALL",
 		// Pass SECCOMP policy via file descriptor 4.

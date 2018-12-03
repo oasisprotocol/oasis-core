@@ -121,6 +121,9 @@ impl WorkerProcess {
                 .arg("--unshare-all")
                 // TODO: Proxy prometheus and tracing over an AF_LOCAL socket to avoid this.
                 .arg("--share-net")
+                .arg("--ro-bind")
+                .arg("/etc/resolv.conf")
+                .arg("/etc/resolv.conf")
                 // Drop all capabilities.
                 .arg("--cap-drop")
                 .arg("ALL")
