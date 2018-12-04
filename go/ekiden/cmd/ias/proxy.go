@@ -77,7 +77,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	var err error
 
 	// Initialize the gRPC server.
-	env.grpcSrv, err = grpc.NewServer(cmd)
+	env.grpcSrv, err = grpc.NewServer()
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
@@ -87,7 +87,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(env.grpcSrv)
 
 	// Initialize the metrics server.
-	metrics, err := metrics.New(cmd)
+	metrics, err := metrics.New()
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
@@ -97,7 +97,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize the profiling server.
-	profiling, err := pprof.New(cmd)
+	profiling, err := pprof.New()
 	if err != nil {
 		logger.Error("failed to initialize pprof server",
 			"err", err,

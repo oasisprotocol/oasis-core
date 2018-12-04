@@ -72,7 +72,6 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 
-	cmd                      *cobra.Command
 	validatorKey             *signature.PrivateKey
 	nodeKey                  *signature.PrivateKey
 	dataDir                  string
@@ -261,11 +260,11 @@ func (t *tendermintService) lazyInit() error {
 
 	// Create Tendermint application mux.
 	var pruneCfg abci.PruneConfig
-	pruneStrat, _ := t.cmd.Flags().GetString(cfgABCIPruneStrategy)
+	pruneStrat := viper.GetString(cfgABCIPruneStrategy)
 	if err = pruneCfg.Strategy.FromString(pruneStrat); err != nil {
 		return err
 	}
-	pruneNumKept, _ := t.cmd.Flags().GetInt64(cfgABCIPruneNumKept)
+	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
 	pruneCfg.NumKept = pruneNumKept
 
 	t.mux, err = abci.NewApplicationServer(t.dataDir, &pruneCfg)
@@ -293,10 +292,10 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
-	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
-	emptyBlockInterval, _ := t.cmd.Flags().GetDuration(cfgConsensusEmptyBlockInterval)
+	timeoutCommit := viper.GetDuration(cfgConsensusTimeoutCommit)
+	emptyBlockInterval := viper.GetDuration(cfgConsensusEmptyBlockInterval)
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
-	tenderConfig.Consensus.SkipTimeoutCommit, _ = t.cmd.Flags().GetBool(cfgConsensusSkipTimeoutCommit)
+	tenderConfig.Consensus.SkipTimeoutCommit = viper.GetBool(cfgConsensusSkipTimeoutCommit)
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
 	tenderConfig.Consensus.BlockTimeIota = timeoutCommit
@@ -386,11 +385,10 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(cmd *cobra.Command, dataDir string, identity *signature.PrivateKey) service.TendermintService {
+func New(dataDir string, identity *signature.PrivateKey) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
-		cmd:                   cmd,
 		validatorKey:          identity,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),

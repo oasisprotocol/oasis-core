@@ -37,6 +37,18 @@ func registerLoggingFlags(rootCmd *cobra.Command) {
 }
 
 func initLogging() error {
+	logFile := viper.GetString(cfgLogFile)
+
+	var logLevel logging.Level
+	if err := logLevel.Set(viper.GetString(cfgLogLevel)); err != nil {
+		return err
+	}
+
+	var logFmt logging.Format
+	if err := logFmt.Set(viper.GetString(cfgLogFmt)); err != nil {
+		return err
+	}
+
 	var w io.Writer = os.Stdout
 	if logFile != "" {
 		logFile = normalizePath(logFile)

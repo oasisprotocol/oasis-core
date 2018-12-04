@@ -27,13 +27,13 @@ var (
 )
 
 // New creates a new worker host.
-func New(cmd *cobra.Command, identity *signature.PrivateKey, storage storage.Backend) (*Host, error) {
-	workerBinary, _ := cmd.Flags().GetString(cfgWorkerBinary)
-	runtimeBinary, _ := cmd.Flags().GetString(cfgRuntimeBinary)
-	cacheDir, _ := cmd.Flags().GetString(cfgCacheDir)
+func New(identity *signature.PrivateKey, storage storage.Backend) (*Host, error) {
+	workerBinary := viper.GetString(cfgWorkerBinary)
+	runtimeBinary := viper.GetString(cfgRuntimeBinary)
+	cacheDir := viper.GetString(cfgCacheDir)
 
 	// Create new IAS proxy client.
-	iasProxy, _ := cmd.Flags().GetString(cfgIASProxy)
+	iasProxy := viper.GetString(cfgIASProxy)
 	ias, err := ias.New(identity, iasProxy)
 	if err != nil {
 		return nil, err

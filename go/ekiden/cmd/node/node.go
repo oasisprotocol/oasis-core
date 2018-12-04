@@ -35,7 +35,7 @@ import (
 
 // Run runs the ekiden node.
 func Run(cmd *cobra.Command, args []string) {
-	node, err := NewNode(cmd)
+	node, err := NewNode()
 	if err != nil {
 		return
 	}
@@ -49,7 +49,6 @@ func Run(cmd *cobra.Command, args []string) {
 // WARNING: This is exposed for the benefit of tests and the interface
 // is not guaranteed to be stable.
 type Node struct {
-	cmd      *cobra.Command
 	svcMgr   *background.ServiceManager
 	identity *signature.PrivateKey
 	grpcSrv  *grpc.Server
@@ -81,30 +80,30 @@ func (n *Node) Wait() {
 }
 
 func (n *Node) initBackends() error {
-	dataDir := cmdCommon.DataDir(n.cmd)
+	dataDir := cmdCommon.DataDir()
 
 	var err error
 
 	// Initialize the various backends.
-	if n.Epochtime, err = epochtime.New(n.cmd, n.svcTmnt); err != nil {
+	if n.Epochtime, err = epochtime.New(n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Beacon, err = beacon.New(n.cmd, n.Epochtime, n.svcTmnt); err != nil {
+	if n.Beacon, err = beacon.New(n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Registry, err = registry.New(n.cmd, n.Epochtime, n.svcTmnt); err != nil {
+	if n.Registry, err = registry.New(n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry)
-	if n.Scheduler, err = scheduler.New(n.cmd, n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
+	if n.Scheduler, err = scheduler.New(n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler)
-	if n.Storage, err = storage.New(n.cmd, n.Epochtime, dataDir); err != nil {
+	if n.Storage, err = storage.New(n.Epochtime, dataDir); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage)
-	if n.RootHash, err = roothash.New(n.cmd, n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
+	if n.RootHash, err = roothash.New(n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash)
@@ -128,11 +127,10 @@ func (n *Node) initBackends() error {
 //
 // WARNING: This will misbehave iff cmd != RootCommand().  This is exposed
 // for the benefit of tests and the interface is not guaranteed to be stable.
-func NewNode(cmd *cobra.Command) (*Node, error) {
+func NewNode() (*Node, error) {
 	logger := cmdCommon.Logger()
 
 	node := &Node{
-		cmd:    cmd,
 		svcMgr: background.NewServiceManager(logger),
 	}
 
@@ -149,7 +147,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 
 	logger.Info("starting ekiden node")
 
-	dataDir := cmdCommon.DataDir(cmd)
+	dataDir := cmdCommon.DataDir()
 	if dataDir == "" {
 		logger.Error("data directory not configured")
 		return nil, errors.New("data directory not configured")
@@ -171,7 +169,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	)
 
 	// Initialize the tracing client.
-	tracingSvc, err := tracing.New(node.cmd, "ekiden-node")
+	tracingSvc, err := tracing.New("ekiden-node")
 	if err != nil {
 		logger.Error("failed to initialize tracing",
 			"err", err,
@@ -182,7 +180,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 
 	// Initialize the gRPC server.
 	// Depends on global tracer.
-	node.grpcSrv, err = grpc.NewServer(node.cmd)
+	node.grpcSrv, err = grpc.NewServer()
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
@@ -192,7 +190,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	node.svcMgr.Register(node.grpcSrv)
 
 	// Initialize the metrics server.
-	metrics, err := metrics.New(node.cmd)
+	metrics, err := metrics.New()
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
@@ -202,7 +200,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	node.svcMgr.Register(metrics)
 
 	// Initialize the profiling server.
-	profiling, err := pprof.New(node.cmd)
+	profiling, err := pprof.New()
 	if err != nil {
 		logger.Error("failed to initialize pprof server",
 			"err", err,
@@ -220,7 +218,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	}
 
 	// Initialize tendermint.
-	node.svcTmnt = tendermint.New(node.cmd, dataDir, node.identity)
+	node.svcTmnt = tendermint.New(dataDir, node.identity)
 	node.svcMgr.Register(node.svcTmnt)
 
 	// Initialize the varous node backends.
@@ -232,7 +230,7 @@ func NewNode(cmd *cobra.Command) (*Node, error) {
 	}
 
 	// Initialize the worker host.
-	node.wrkHost, err = workerHost.New(node.cmd, node.identity, node.Storage)
+	node.wrkHost, err = workerHost.New(node.identity, node.Storage)
 	if err != nil {
 		logger.Error("failed to initialize worker host",
 			"err", err,

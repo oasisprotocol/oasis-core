@@ -317,12 +317,12 @@ func (s *Server) Server() *grpc.Server {
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServer(cmd *cobra.Command) (*Server, error) {
+func NewServer() (*Server, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
 	})
 
-	port, _ := cmd.Flags().GetUint16(cfgGRPCPort)
+	port := uint16(viper.GetInt(cfgGRPCPort))
 
 	svc := *service.NewBaseBackgroundService("grpc")
 

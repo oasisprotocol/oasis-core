@@ -36,7 +36,7 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 	logger := logging.GetLogger("cmd/storage/benchmark")
 
 	// Initialize the data directory.
-	dataDir := cmdCommon.DataDir(cmd)
+	dataDir := cmdCommon.DataDir()
 	if dataDir == "" {
 		var err error
 		dataDir, err = ioutil.TempDir("", "storage-benchmark")
@@ -56,7 +56,7 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 
 	// Initialize the various backends.
 	timeSource := mock.New()
-	storage, err := storage.New(cmd, timeSource, dataDir)
+	storage, err := storage.New(timeSource, dataDir)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

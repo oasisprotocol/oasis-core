@@ -39,11 +39,11 @@ func (svc *tracingService) Cleanup() {
 }
 
 // New constructs a new tracing service.
-func New(cmd *cobra.Command, serviceName string) (service.CleanupAble, error) {
-	enabled, _ := cmd.Flags().GetBool(cfgTracingEnabled)
-	reporterFlushInterval, _ := cmd.Flags().GetDuration(cfgTracingReporterFlushInterval)
-	reporterLocalAgentHostPort, _ := cmd.Flags().GetString(cfgTracingReporterLocalAgentHostPort)
-	samplerParam, _ := cmd.Flags().GetFloat64(cfgTracingSamplerParam)
+func New(serviceName string) (service.CleanupAble, error) {
+	enabled := viper.GetBool(cfgTracingEnabled)
+	reporterFlushInterval := viper.GetDuration(cfgTracingReporterFlushInterval)
+	reporterLocalAgentHostPort := viper.GetString(cfgTracingReporterLocalAgentHostPort)
+	samplerParam := viper.GetFloat64(cfgTracingSamplerParam)
 
 	cfg := config.Configuration{
 		Disabled: !enabled,

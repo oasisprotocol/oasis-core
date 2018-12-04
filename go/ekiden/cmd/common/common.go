@@ -21,15 +21,13 @@ const (
 
 var (
 	cfgFile string
-	dataDir string
 
 	rootLog = logging.GetLogger("ekiden")
 )
 
 // DataDir retuns the data directory iff one is set.
-func DataDir(cmd *cobra.Command) string {
-	d, _ := cmd.Flags().GetString(cfgDataDir)
-	return d
+func DataDir() string {
+	return viper.GetString(cfgDataDir)
 }
 
 // EarlyLogAndExit logs the error and exits.
@@ -68,7 +66,7 @@ func Logger() *logging.Logger {
 // across all commands.
 func RegisterRootFlags(rootCmd *cobra.Command) {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, cfgConfigFile, "", "config file")
-	rootCmd.PersistentFlags().StringVar(&dataDir, cfgDataDir, "", "data directory")
+	rootCmd.PersistentFlags().String(cfgDataDir, "", "data directory")
 
 	for _, v := range []string{
 		cfgConfigFile,
@@ -95,10 +93,12 @@ func InitConfig() {
 		}
 	}
 
+	dataDir := viper.GetString(cfgDataDir)
+
 	// Force the DataDir to be an absolute path.
 	if dataDir != "" {
 		var err error
-		dataDir, err = filepath.Abs(viper.GetString(cfgDataDir))
+		dataDir, err = filepath.Abs(dataDir)
 		if err != nil {
 			EarlyLogAndExit(err)
 		}
@@ -112,12 +112,10 @@ func InitConfig() {
 	// sub-commands, so excludes things such as the gRPC/Metrics/etc
 	// configuration.
 	viper.Set(cfgDataDir, dataDir)
-	viper.Set(cfgLogFile, logFile)
-	viper.Set(cfgLogFmt, logFmt)
-	logFile = viper.GetString(cfgLogFile)
 }
 
 func initDataDir() error {
+	dataDir := viper.GetString(cfgDataDir)
 	if dataDir == "" {
 		return nil
 	}
@@ -126,6 +124,7 @@ func initDataDir() error {
 
 func normalizePath(f string) string {
 	if !filepath.IsAbs(f) {
+		dataDir := viper.GetString(cfgDataDir)
 		f = filepath.Join(dataDir, f)
 		return filepath.Clean(f)
 	}
