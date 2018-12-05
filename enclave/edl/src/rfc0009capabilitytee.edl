@@ -1,0 +1,15 @@
+enclave {
+    include "sgx_report.h"
+
+    trusted {
+        /**
+         * Start using a new runtime attestation key. Must not already be using a runtime attestation key.
+         * Output the public part and a report for a given target.
+         */
+        public void rfc0009capabilitytee_init(
+            [out, size=32] void *rak_pub,
+            [in] const sgx_target_info_t *target_info,
+            [out] sgx_report_t *report
+        );
+    };
+};
