@@ -15,6 +15,7 @@ use ekiden_core::uint::U256;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::{Database, DatabaseHandle};
 use ekiden_di::Container;
+use ekiden_keymanager_common::StateKeyType;
 use ekiden_roothash_base::{Block, RootHashBackend};
 use ekiden_storage_base::BackendIdentityMapper;
 use ekiden_storage_base::StorageBackend;
@@ -65,6 +66,13 @@ impl Database for Snapshot {
     }
 
     fn with_encryption<F>(&mut self, _runtime_id: H256, _f: F)
+    where
+        F: FnOnce(&mut DatabaseHandle) -> (),
+    {
+        unimplemented!();
+    }
+
+    fn with_encryption_key<F>(&mut self, _key: StateKeyType, _f: F)
     where
         F: FnOnce(&mut DatabaseHandle) -> (),
     {

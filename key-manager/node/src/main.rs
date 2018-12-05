@@ -25,6 +25,9 @@ extern crate serde_derive;
 
 #[macro_use]
 extern crate clap;
+extern crate ekiden_storage_base;
+extern crate ekiden_storage_frontend;
+extern crate ekiden_storage_persistent;
 extern crate pretty_env_logger;
 
 use std::path::Path;
@@ -38,12 +41,10 @@ use ekiden_di::Component;
 
 use ekiden_keymanager_untrusted::backend;
 use ekiden_keymanager_untrusted::node::{KeyManagerConfiguration, KeyManagerNode};
+use ekiden_storage_base::StorageBackend;
 
 fn main() {
-    let mut known_components = ekiden_di::KnownComponents::new();
-    ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
-    ekiden_common::identity::LocalNodeIdentity::register(&mut known_components);
-    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
+    let mut known_components = register_known_components();
 
     let matches = App::new("Ekiden Key Manager Node")
         .version(crate_version!())
@@ -82,7 +83,7 @@ fn main() {
 
     let environment = container.inject::<Environment>().unwrap();
     let node_identity = container.inject::<NodeIdentity>().unwrap();
-
+    let storage_backend = container.inject::<StorageBackend>().unwrap();
     // Setup a key manager node.
     let mut node = KeyManagerNode::new(KeyManagerConfiguration {
         // Port
@@ -101,6 +102,7 @@ fn main() {
                 ias: None,
                 saved_identity_path: None,
                 forwarded_rpc_timeout: None,
+                storage_backend: storage_backend,
             }
         },
         environment: environment.grpc(),
@@ -112,4 +114,14 @@ fn main() {
 
     // Start the loop
     environment.start();
+}
+
+fn register_known_components() -> ekiden_di::KnownComponents {
+    let mut known_components = ekiden_di::KnownComponents::new();
+    ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
+    ekiden_common::identity::LocalNodeIdentity::register(&mut known_components);
+    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
+    ekiden_storage_frontend::StorageClient::register(&mut known_components);
+    ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
+    known_components
 }

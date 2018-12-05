@@ -10,6 +10,7 @@ extern crate ekiden_keymanager_common;
 extern crate ekiden_trusted;
 #[macro_use]
 extern crate ekiden_enclave_logger;
+extern crate bincode;
 
 use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;

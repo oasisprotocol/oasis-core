@@ -38,7 +38,7 @@ pub mod schema;
 
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
-use ekiden_keymanager_common::ContractId;
+use ekiden_keymanager_common::{ContractId, StateKeyType};
 
 /// Database interface exposed to contracts.
 pub trait Database {
@@ -77,8 +77,15 @@ pub trait Database {
     /// Rollback any pending changes.
     fn rollback(&mut self);
 
-    /// Run given closure in an encrypted context for given contract.
+    /// Run the given closure in an encrypted context for given contract. Will use
+    /// the key manager client to fetch the necessary encryption key associated
+    /// with `contract_id`.
     fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
+    where
+        F: FnOnce(&mut DatabaseHandle) -> ();
+
+    /// Run the given closure in an encrypted context for the given `state_key`.
+    fn with_encryption_key<F>(&mut self, key: StateKeyType, f: F)
     where
         F: FnOnce(&mut DatabaseHandle) -> ();
 }
