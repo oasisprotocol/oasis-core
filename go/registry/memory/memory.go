@@ -260,9 +260,26 @@ func (r *memoryBackend) worker(timeSource epochtime.Backend) {
 			continue
 		}
 
-		// XXX: Sweep node list for expired nodes.
+		r.sweepNodeList(newEpoch)
 		r.buildNodeList(newEpoch)
 		r.lastEpoch = newEpoch
+	}
+}
+
+func (r *memoryBackend) sweepNodeList(newEpoch epochtime.EpochTime) {
+	r.state.Lock()
+	defer r.state.Unlock()
+
+	for _, v := range r.state.nodes {
+		if epochtime.EpochTime(v.Expiration) >= newEpoch {
+			continue
+		}
+
+		r.nodeNotifier.Broadcast(&api.NodeEvent{
+			Node:           v,
+			IsRegistration: false,
+		})
+		delete(r.state.nodes, v.ID.ToMapKey())
 	}
 }
 

@@ -2,6 +2,7 @@
 package tendermint
 
 import (
+	"bytes"
 	"encoding/hex"
 	"sync"
 
@@ -272,11 +273,11 @@ func (r *tendermintBackend) workerEvents() {
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
-		var rawTx interface{}
+		var event interface{}
 		var ok bool
 
 		select {
-		case rawTx, ok = <-txChannel:
+		case event, ok = <-txChannel:
 			if !ok {
 				r.logger.Debug("worker: terminating")
 				return
@@ -285,48 +286,78 @@ func (r *tendermintBackend) workerEvents() {
 			return
 		}
 
-		// Extract output information from transaction.
-		tx := rawTx.(tmtypes.EventDataTx)
-
-		output := &tmapi.OutputRegistry{}
-		if err := cbor.Unmarshal(tx.Result.GetData(), output); err != nil {
-			r.logger.Error("worker: malformed transaction output",
-				"tx", hex.EncodeToString(tx.Result.GetData()),
-			)
-			continue
+		switch ev := event.(type) {
+		case tmtypes.EventDataNewBlock:
+			r.onEventDataNewBlock(ev)
+		case tmtypes.EventDataTx:
+			r.onEventDataTx(ev)
+		default:
 		}
+	}
+}
 
-		if re := output.OutputRegisterEntity; re != nil {
-			// Entity registration.
-			r.entityNotifier.Broadcast(&api.EntityEvent{
-				Entity:         &re.Entity,
-				IsRegistration: true,
-			})
-		} else if de := output.OutputDeregisterEntity; de != nil {
-			// Entity deregistration.
-			r.entityNotifier.Broadcast(&api.EntityEvent{
-				Entity:         &de.Entity,
-				IsRegistration: false,
-			})
+func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
+	tags := ev.ResultBeginBlock.GetTags()
+	tags = append(tags, ev.ResultEndBlock.GetTags()...)
 
-			// Node deregistrations.
-			for _, node := range output.Nodes {
-				nodeCopy := node
+	for _, pair := range tags {
+		if bytes.Equal(pair.GetKey(), tmapi.TagRegistryNodesExpired) {
+			var nodes []*node.Node
+			if err := cbor.Unmarshal(pair.GetValue(), &nodes); err != nil {
+				r.logger.Error("worker: failed to get nodes from tag",
+					"err", err,
+				)
+			}
+
+			for _, node := range nodes {
 				r.nodeNotifier.Broadcast(&api.NodeEvent{
-					Node:           &nodeCopy,
+					Node:           node,
 					IsRegistration: false,
 				})
 			}
-		} else if rn := output.OutputRegisterNode; rn != nil {
-			// Node registration.
-			r.nodeNotifier.Broadcast(&api.NodeEvent{
-				Node:           &rn.Node,
-				IsRegistration: true,
-			})
-		} else if rc := output.OutputRegisterRuntime; rc != nil {
-			// Runtime registration.
-			r.runtimeNotifier.Broadcast(&rc.Runtime)
 		}
+	}
+}
+
+func (r *tendermintBackend) onEventDataTx(tx tmtypes.EventDataTx) {
+	output := &tmapi.OutputRegistry{}
+	if err := cbor.Unmarshal(tx.Result.GetData(), output); err != nil {
+		r.logger.Error("worker: malformed transaction output",
+			"tx", hex.EncodeToString(tx.Result.GetData()),
+		)
+		return
+	}
+
+	if re := output.OutputRegisterEntity; re != nil {
+		// Entity registration.
+		r.entityNotifier.Broadcast(&api.EntityEvent{
+			Entity:         &re.Entity,
+			IsRegistration: true,
+		})
+	} else if de := output.OutputDeregisterEntity; de != nil {
+		// Entity deregistration.
+		r.entityNotifier.Broadcast(&api.EntityEvent{
+			Entity:         &de.Entity,
+			IsRegistration: false,
+		})
+
+		// Node deregistrations.
+		for _, node := range output.Nodes {
+			nodeCopy := node
+			r.nodeNotifier.Broadcast(&api.NodeEvent{
+				Node:           &nodeCopy,
+				IsRegistration: false,
+			})
+		}
+	} else if rn := output.OutputRegisterNode; rn != nil {
+		// Node registration.
+		r.nodeNotifier.Broadcast(&api.NodeEvent{
+			Node:           &rn.Node,
+			IsRegistration: true,
+		})
+	} else if rc := output.OutputRegisterRuntime; rc != nil {
+		// Runtime registration.
+		r.runtimeNotifier.Broadcast(&rc.Runtime)
 	}
 }
 
@@ -399,9 +430,15 @@ func (r *tendermintBackend) getNodeList(ctx context.Context, epoch epochtime.Epo
 		return nil, errors.Wrap(err, "registry: failed to query nodes")
 	}
 
-	var nodes []*node.Node
-	if err := cbor.Unmarshal(response, &nodes); err != nil {
+	var nodes, tmp []*node.Node
+	if err := cbor.Unmarshal(response, &tmp); err != nil {
 		return nil, errors.Wrap(err, "registry: failed node deserialization")
+	}
+	for _, v := range tmp {
+		if epochtime.EpochTime(v.Expiration) < epoch {
+			continue
+		}
+		nodes = append(nodes, v)
 	}
 
 	api.SortNodeList(nodes)
@@ -442,7 +479,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	}
 
 	// Initialze and register the tendermint service component.
-	app := tmregistry.New()
+	app := tmregistry.New(blockTimeSource)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

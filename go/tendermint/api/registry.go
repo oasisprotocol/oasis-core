@@ -16,9 +16,16 @@ const (
 	RegistryAppName string = "registry"
 )
 
-// TagRegistryRuntimeRegistered is an ABCI transaction tag for new
-// runtime registrations (value is runtime id).
-var TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
+var (
+	// TagRegistryRuntimeRegistered is an ABCI transaction tag for new
+	// runtime registrations (value is runtime id).
+	TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
+
+	// TagRegistryNodesExpired is an ABCI transaction tag for node
+	// deregistrations due to expiration (value is a CBOR serialized
+	//  vector of node descriptors).
+	TagRegistryNodesExpired = []byte("registry.nodes.expired")
+)
 
 const (
 	// QueryRegistryGetEntity is a path for GetEntity query.

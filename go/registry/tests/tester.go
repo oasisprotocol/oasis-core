@@ -40,7 +40,7 @@ func RegistryImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 	})
 }
 
-func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) { // nolint: gocyclo
 	// Generate the entities used for the test cases.
 	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
 	require.NoError(t, err, "NewTestEntities")
@@ -100,6 +100,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	var numNodes int
 	nodes := make([][]*TestNode, 0, len(entities))
 	for i, v := range entities {
+		// Stagger the expirations so that it's possible to test it.
 		entityNodes, err := v.NewTestNodes(i+1, epoch+epochtime.EpochTime(i)+1)
 		require.NoError(t, err, "NewTestNodes")
 
@@ -133,18 +134,23 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		}
 	})
 
+	getExpectedNodeList := func() []*node.Node {
+		// Derive the expected node list.
+		l := make([]*node.Node, 0, numNodes)
+		for _, vec := range nodes {
+			for _, v := range vec {
+				l = append(l, v.Node)
+			}
+		}
+		api.SortNodeList(l)
+
+		return l
+	}
+
 	t.Run("NodeList", func(t *testing.T) {
 		require := require.New(t)
 
-		// Derive the expected node list.
-		expectedNodeList := make([]*node.Node, 0, numNodes)
-		for _, vec := range nodes {
-			for _, v := range vec {
-				expectedNodeList = append(expectedNodeList, v.Node)
-			}
-		}
-		api.SortNodeList(expectedNodeList)
-
+		expectedNodeList := getExpectedNodeList()
 		ch, sub := backend.WatchNodeList()
 		defer sub.Close()
 
@@ -168,7 +174,59 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		}
 	})
 
-	// TODO: Node expiration once that is supported.
+	t.Run("NodeExpiration", func(t *testing.T) {
+		require := require.New(t)
+
+		// Advancing the epoch should result in the 0th entity's nodes
+		// being deregistered due to expiration.
+		expectedDeregEvents := len(nodes[0])
+		deregisteredNodes := make(map[signature.MapKey]*node.Node)
+
+		ch, sub := backend.WatchNodeList()
+		defer sub.Close()
+
+		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+		for i := 0; i < expectedDeregEvents; i++ {
+			select {
+			case ev := <-nodeCh:
+				require.False(ev.IsRegistration, "event is deregistration")
+				deregisteredNodes[ev.Node.ID.ToMapKey()] = ev.Node
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to receive node deregistration event")
+			}
+		}
+		require.Len(deregisteredNodes, expectedDeregEvents, "deregistration events")
+
+		for _, v := range nodes[0] {
+			n, ok := deregisteredNodes[v.Node.ID.ToMapKey()]
+			require.True(ok, "got deregister event for node")
+			require.EqualValues(v.Node, n, "deregistered node")
+		}
+
+		// Remove the expired nodes from the test driver's view of
+		// registered nodes.
+		nodes = nodes[1:]
+		numNodes -= expectedDeregEvents
+
+		// Ensure the node list doesn't have the expired nodes.
+		expectedNodeList := getExpectedNodeList()
+	recvLoop:
+		for {
+			select {
+			case ev := <-ch:
+				if ev.Epoch < epoch {
+					continue
+				}
+
+				require.Equal(epoch, ev.Epoch, "node list epoch")
+				require.EqualValues(expectedNodeList, ev.Nodes, "node list")
+				break recvLoop
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to recevive node list event")
+			}
+		}
+	})
 
 	t.Run("EntityDeregistration", func(t *testing.T) {
 		require := require.New(t)
@@ -198,8 +256,6 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 		deregisteredNodes := make(map[signature.MapKey]*node.Node)
 
-		// Until node expiration is supported, we should get node deregistration
-		// events for every single node, after all the entities are de-registered.
 		for i := 0; i < numNodes; i++ {
 			select {
 			case ev := <-nodeCh:
