@@ -288,6 +288,12 @@ func (s *MutableState) CreateNode(node *node.Node) error {
 	return nil
 }
 
+// RemoveNode removes a node.
+func (s *MutableState) RemoveNode(node *node.Node) {
+	s.tree.Remove([]byte(fmt.Sprintf(stateNodeMap, node.ID.String())))
+	s.tree.Remove([]byte(fmt.Sprintf(stateNodeByEntityMap, node.EntityID.String(), node.ID.String())))
+}
+
 // CreateRuntime creates a new runtime.
 func (s *MutableState) CreateRuntime(con *registry.Runtime) {
 	s.tree.Set(

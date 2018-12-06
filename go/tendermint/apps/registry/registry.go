@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
@@ -25,6 +26,8 @@ var (
 type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
+
+	timeSource epochtime.BlockBackend
 }
 
 func (app *registryApplication) Name() string {
@@ -120,6 +123,9 @@ func (app *registryApplication) InitChain(request types.RequestInitChain) types.
 }
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
+	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+		app.onEpochChange(ctx, epoch)
+	}
 }
 
 func (app *registryApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -143,6 +149,35 @@ func (app *registryApplication) EndBlock(request types.RequestEndBlock) types.Re
 }
 
 func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
+}
+
+func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) {
+	state := NewMutableState(app.state.DeliverTxTree())
+
+	nodes, err := state.GetNodes()
+	if err != nil {
+		app.logger.Error("onEpochChange: failed to get nodes",
+			"err", err,
+		)
+		return
+	}
+
+	var expiredNodes []*node.Node
+	for _, node := range nodes {
+		if epochtime.EpochTime(node.Expiration) >= epoch {
+			continue
+		}
+		expiredNodes = append(expiredNodes, node)
+		state.RemoveNode(node)
+	}
+	if len(expiredNodes) == 0 {
+		return
+	}
+
+	// Iff any nodes have expired, force-emit the application tag so
+	// the change is picked up.
+	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+	ctx.EmitTag(api.TagRegistryNodesExpired, cbor.Marshal(expiredNodes))
 }
 
 // Execute transaction against given state.
@@ -331,8 +366,9 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New() abci.Application {
+func New(timeSource epochtime.BlockBackend) abci.Application {
 	return &registryApplication{
-		logger: logging.GetLogger("tendermint/registry"),
+		logger:     logging.GetLogger("tendermint/registry"),
+		timeSource: timeSource,
 	}
 }

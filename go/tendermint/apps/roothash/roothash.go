@@ -134,37 +134,13 @@ func (app *rootHashApplication) InitChain(request types.RequestInitChain) types.
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
-	app.checkCommittees(ctx)
+	// Only perform checks on epoch changes.
+	if changed, _ := app.state.EpochChanged(app.timeSource); changed {
+		app.onEpochChange(ctx)
+	}
 }
 
-func (app *rootHashApplication) checkCommittees(ctx *abci.Context) { // nolint: gocyclo
-	// Only perform checks on epoch changes.
-	if app.state.BlockHeight() == 0 {
-		return
-	}
-	previousEpoch, _, err := app.timeSource.GetBlockEpoch(context.Background(), app.state.BlockHeight()-1)
-	if err != nil {
-		app.logger.Error("checkCommittees: failed to get previous epoch",
-			"err", err,
-		)
-		return
-	}
-	currentEpoch, _, err := app.timeSource.GetBlockEpoch(context.Background(), app.state.BlockHeight())
-	if err != nil {
-		app.logger.Error("checkCommittees: failed to get current epoch",
-			"err", err,
-		)
-		return
-	}
-	if previousEpoch == currentEpoch {
-		return
-	}
-
-	app.logger.Debug("checkCommittees: epoch transition, updating rounds",
-		"prev_epoch", previousEpoch,
-		"epoch", currentEpoch,
-	)
-
+func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: gocyclo
 	state := NewMutableState(app.state.DeliverTxTree())
 
 	for _, runtime := range state.GetRuntimes() {

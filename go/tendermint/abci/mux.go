@@ -19,9 +19,11 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	tmlog "github.com/tendermint/tendermint/libs/log"
+	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 )
@@ -679,6 +681,42 @@ func (s *ApplicationState) DeliverTxTree() *iavl.MutableTree {
 // This state is never persisted.
 func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 	return s.checkTxTree
+}
+
+// EpochChanged returns true iff the current epoch has changed since the
+// last block.  As a matter of convenience, the current epoch is returned
+// iff it has changed.
+func (s *ApplicationState) EpochChanged(timeSource epochtime.BlockBackend) (bool, epochtime.EpochTime) {
+	blockHeight := s.BlockHeight()
+	if blockHeight == 0 {
+		return false, epochtime.EpochInvalid
+	}
+
+	previousEpoch, _, err := timeSource.GetBlockEpoch(context.Background(), blockHeight-1)
+	if err != nil {
+		s.logger.Error("EpochChanged: failed to get previous epoch",
+			"err", err,
+		)
+		return false, epochtime.EpochInvalid
+	}
+	currentEpoch, _, err := timeSource.GetBlockEpoch(context.Background(), blockHeight)
+	if err != nil {
+		s.logger.Error("EpochChanged: failed to get current epoch",
+			"err", err,
+		)
+		return false, epochtime.EpochInvalid
+	}
+
+	if previousEpoch == currentEpoch {
+		return false, epochtime.EpochInvalid
+	}
+
+	s.logger.Debug("EpochChanged: epoch transition detected",
+		"prev_epoch", previousEpoch,
+		"epoch", currentEpoch,
+	)
+
+	return true, currentEpoch
 }
 
 func (s *ApplicationState) doCommit() error {
