@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"sort"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -212,7 +213,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode) (*node.Node, error) {
+func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, now time.Time) (*node.Node, error) {
 	// XXX: Ensure node is well-formed.
 	var node node.Node
 	if sigNode == nil {
@@ -225,11 +226,23 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode) (*
 		return nil, ErrInvalidSignature
 	}
 	if sigNode.Signed.Signature.SanityCheck(node.EntityID) != nil {
-		logger.Error("RegisterEntity: invalid argument(s)",
+		logger.Error("RegisterNode: invalid argument(s)",
 			"signed_node", sigNode,
 			"node", node,
 		)
 		return nil, ErrInvalidArgument
+	}
+
+	// If the node entry indicates TEE support, validate the attestation
+	// evidence (currently an AVR).
+	if tee := node.Capabilities.TEE; tee != nil {
+		if err := tee.Verify(now); err != nil {
+			logger.Error("RegisterNode: failed to validate attestation",
+				"node", node,
+				"err", err,
+			)
+			return nil, err
+		}
 	}
 
 	return &node, nil

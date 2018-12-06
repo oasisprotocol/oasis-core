@@ -7,11 +7,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"math"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ethereum"
+	"github.com/oasislabs/ekiden/go/common/ias"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
@@ -20,8 +23,22 @@ var (
 	// is invalid.
 	ErrInvalidAddress = errors.New("node: invalid transport address")
 
+	// ErrInvalidTEEHardware is the error returned when a TEE hardware
+	// implementation is invalid.
+	ErrInvalidTEEHardware = errors.New("node: invalid TEE implementation")
+
+	// ErrRAKHashMismatch is the error returned when the TEE attestation
+	// does not contain the node's RAK hash.
+	ErrRAKHashMismatch = errors.New("node: RAK hash mismatch")
+
+	// ErrInvalidAttestation is the error returned when the TEE attestation
+	// is malformed.
+	ErrInvalidAttestation = errors.New("node: invalid TEE attestation")
+
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
+
+	teeHashContext = []byte("EkNodReg")
 
 	_ cbor.Marshaler   = (*Node)(nil)
 	_ cbor.Unmarshaler = (*Node)(nil)
@@ -53,6 +70,9 @@ type Node struct {
 
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
+
+	// Capabilities are the node's capabilities.
+	Capabilities Capabilities `codec:"capabilities"`
 }
 
 // Address families.
@@ -107,6 +127,136 @@ type Certificate struct {
 // Parse parses the DER encoded payload and returns the certificate.
 func (c *Certificate) Parse() (*x509.Certificate, error) {
 	return x509.ParseCertificate(c.Der)
+}
+
+// Capabilities represents a node's capabilities.
+type Capabilities struct {
+	// TEE is the capability of a node executing batches in a TEE.
+	TEE *CapabilityTEE `codec:"tee,omitempty"`
+}
+
+func (c *Capabilities) fromProto(pb *pbCommon.Capabilities) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
+
+	if pbTee := pb.GetTee(); pbTee != nil {
+		c.TEE = new(CapabilityTEE)
+		if err := c.TEE.fromProto(pbTee); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// TEEHardware is a TEE hardware implementation.
+type TEEHardware uint8
+
+// TEE Hardware implementations.
+const (
+	TEEHardwareInvalid  TEEHardware = 0
+	TEEHardwareIntelSGX TEEHardware = 1
+)
+
+// CapabilityTEE represents the node's TEE capability.
+type CapabilityTEE struct {
+	// TEE hardware type.
+	Hardware TEEHardware `codec:"hardware"`
+
+	// Runtime attestation key.
+	RAK signature.PublicKey `codec:"rak"`
+
+	// Attestation.
+	Attestation []byte `codec:"attestation"`
+}
+
+func (c *CapabilityTEE) fromProto(pb *pbCommon.CapabilitiesTEE) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
+
+	switch pb.GetHardware() {
+	case pbCommon.CapabilitiesTEE_IntelSGX:
+		c.Hardware = TEEHardwareIntelSGX
+	default:
+		return ErrInvalidTEEHardware
+	}
+
+	if err := c.RAK.UnmarshalBinary(pb.GetRak()); err != nil {
+		return err
+	}
+
+	c.Attestation = pb.GetAttestation()
+
+	return nil
+}
+
+func (c *CapabilityTEE) toProto() *pbCommon.CapabilitiesTEE {
+	pb := new(pbCommon.CapabilitiesTEE)
+
+	switch c.Hardware {
+	case TEEHardwareIntelSGX:
+		pb.Hardware = pbCommon.CapabilitiesTEE_IntelSGX
+	default:
+		panic(ErrInvalidTEEHardware)
+	}
+
+	pb.Rak, _ = c.RAK.MarshalBinary()
+
+	if c.Attestation != nil {
+		pb.Attestation = append([]byte{}, c.Attestation...)
+	}
+
+	return pb
+}
+
+// Verify verifies the node's TEE capabilities, at the provided timestamp.
+func (c *CapabilityTEE) Verify(ts time.Time) error {
+	var rakHash hash.Hash
+	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
+	hData = append(hData, teeHashContext...)
+	hData = append(hData, c.RAK[:]...)
+	rakHash.FromBytes(hData)
+
+	switch c.Hardware {
+	case TEEHardwareIntelSGX:
+		var avrBundle ias.AVRBundle
+		if err := avrBundle.UnmarshalCBOR(c.Attestation); err != nil {
+			return err
+		}
+
+		avr, err := avrBundle.Open(ias.IntelTrustRoots, ts)
+		if err != nil {
+			return err
+		}
+
+		// Extract the original ISV quote.
+		q, err := avr.Quote()
+		if err != nil {
+			return err
+		}
+
+		// Ensure that the ISV quote includes the hash of the node's
+		// RAK.
+		var avrRAKHash hash.Hash
+		_ = avrRAKHash.UnmarshalBinary(q.Report.ReportData[:hash.Size])
+		if !rakHash.Equal(&avrRAKHash) {
+			return ErrRAKHashMismatch
+		}
+
+		var acc byte
+		for _, v := range q.Report.ReportData[hash.Size:] {
+			acc |= v
+		}
+		if acc != 0 {
+			return ErrInvalidAttestation
+		}
+
+		return nil
+	default:
+		return ErrInvalidTEEHardware
+	}
 }
 
 // String returns a string representation of itself.
@@ -166,6 +316,12 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 
 	n.RegistrationTime = pb.GetRegistrationTime()
 
+	if pbCapa := pb.GetCapabilities(); pbCapa != nil {
+		if err := n.Capabilities.fromProto(pbCapa); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -191,6 +347,10 @@ func (n *Node) ToProto() *pbCommon.Node {
 		pb.Stake = append([]byte{}, n.Stake...)
 	}
 	pb.RegistrationTime = n.RegistrationTime
+	pb.Capabilities = new(pbCommon.Capabilities)
+	if n.Capabilities.TEE != nil {
+		pb.Capabilities.Tee = n.Capabilities.TEE.toProto()
+	}
 
 	return pb
 }

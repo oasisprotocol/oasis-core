@@ -19,7 +19,7 @@ use super::super::entity::Entity;
 #[allow(unused_imports)]
 use super::super::futures::Future;
 use super::super::identity::{EntityIdentity, NodeIdentity};
-use super::super::node::Node;
+use super::super::node::{Capabilities, Node};
 use super::super::ring::rand::SystemRandom;
 use super::super::ring::signature::Ed25519KeyPair;
 use super::super::signature::{InMemorySigner, Signer};
@@ -312,6 +312,7 @@ create_component!(
         let node = Node {
             id: signer.get_public_key(),
             // TODO: support different local node addresses within an entity.
+            // TODO: support registering as an SGX capable node.
             eth_address: entity_identity.get_entity().eth_address,
             entity_id: entity_identity.get_public_key(),
             expiration: 0xffffffffffffffff,
@@ -335,6 +336,7 @@ create_component!(
             certificate: key_pair.tls_certificate.clone(),
             stake: vec![],
             registration_time: now,
+            capabilities: Capabilities::default(),
         };
 
         info!("Registering node addresses: {:?}", node.addresses);

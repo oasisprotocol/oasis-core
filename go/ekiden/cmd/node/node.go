@@ -96,7 +96,7 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry)
-	if n.Scheduler, err = scheduler.New(n.cmd, n.Epochtime, n.Registry, n.Beacon); err != nil {
+	if n.Scheduler, err = scheduler.New(n.cmd, n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler)

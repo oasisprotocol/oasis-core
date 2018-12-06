@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::futures::Future;
-use ekiden_common::node::Node;
+use ekiden_common::node::{Capabilities, Node};
 use ekiden_common::ring::signature::Ed25519KeyPair;
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
@@ -44,6 +44,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
             certificate: Certificate::default(),
             stake: vec![],
             registration_time: now,
+            capabilities: Capabilities::default(),
         };
 
         let signed_node = Signed::sign(&entity_signer, &REGISTER_NODE_SIGNATURE_CONTEXT, node);

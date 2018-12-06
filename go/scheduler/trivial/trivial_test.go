@@ -15,7 +15,7 @@ func TestSchedulerTrivial(t *testing.T) {
 	registry := memory.New(timeSource)
 	defer registry.Cleanup()
 
-	backend := New(timeSource, registry, beacon)
+	backend := New(timeSource, registry, beacon, nil)
 
 	tests.SchedulerImplementationTests(t, backend, timeSource, registry)
 }

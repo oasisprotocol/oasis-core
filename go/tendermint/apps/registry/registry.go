@@ -251,7 +251,7 @@ func (app *registryApplication) registerNode(
 	state *MutableState,
 	sigNode *node.SignedNode,
 ) error {
-	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode)
+	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now())
 	if err != nil {
 		return err
 	}

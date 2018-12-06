@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/oasislabs/ekiden/go/common/cbor"
 )
 
 const nonceMaxLen = 32
@@ -57,6 +59,9 @@ var (
 		ReasonPrivilegeWithdrawn:   "privilegeWithdrawn",
 		ReasonAACompromise:         "aACompromise",
 	}
+
+	_ cbor.Marshaler   = (*AVRBundle)(nil)
+	_ cbor.Unmarshaler = (*AVRBundle)(nil)
 )
 
 // ISVEnclaveQuoteStatus is the status of an enclave quote.
@@ -145,6 +150,30 @@ func (r CRLReason) String() string {
 	return s
 }
 
+// AVRBundle is a serialized Attestation Verification Report bundled
+// with additional data required to allow offline verification.
+type AVRBundle struct {
+	Body             []byte `codec:"body"`
+	CertificateChain []byte `codec:"certificate_chain"`
+	Signature        []byte `codec:"signature"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (b *AVRBundle) MarshalCBOR() []byte {
+	return cbor.Marshal(b)
+}
+
+// UnmarshalCBOR deserializes a CBOR Byte vector into a given type.
+func (b *AVRBundle) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, b)
+}
+
+// Open decodes and validates the AVR contained in the bundle, and returns
+// the Attestation Verification Report iff it is valid
+func (b *AVRBundle) Open(trustRoots *x509.CertPool, ts time.Time) (*AttestationVerificationReport, error) {
+	return DecodeAVR(b.Body, b.Signature, b.CertificateChain, trustRoots, ts)
+}
+
 // AttestationVerificationReport is a deserialized Attestation Verification
 // Report (AVR).
 type AttestationVerificationReport struct {
@@ -159,6 +188,17 @@ type AttestationVerificationReport struct {
 	PlatformInfoBlob      string                `json:"platformInfoBlob"`
 	Nonce                 string                `json:"nonce"`
 	EPIDPseudonym         []byte                `json:"epidPseudonym"`
+}
+
+// Quote decodes and returns the enclave quote component of an Attestation
+// Verification Report.
+func (a *AttestationVerificationReport) Quote() (*Quote, error) {
+	data, err := base64.StdEncoding.DecodeString(string(a.ISVEnclaveQuoteBody))
+	if err != nil {
+		return nil, errors.Wrap(err, "ias/avr: failed to decode quote body")
+	}
+
+	return DecodeQuote(data)
 }
 
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo

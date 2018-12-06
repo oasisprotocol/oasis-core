@@ -13,6 +13,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/scheduler/trivial"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 const cfgBackend = "scheduler.backend"
@@ -20,11 +21,11 @@ const cfgBackend = "scheduler.backend"
 var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
-func New(cmd *cobra.Command, timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend) (api.Backend, error) {
+func New(cmd *cobra.Command, timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend, service service.TendermintService) (api.Backend, error) {
 	backend, _ := cmd.Flags().GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case trivial.BackendName:
-		return trivial.New(timeSource, reg, beacon), nil
+		return trivial.New(timeSource, reg, beacon, service), nil
 	default:
 		return nil, fmt.Errorf("scheduler: unsupported backend: '%v'", backend)
 	}

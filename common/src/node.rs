@@ -38,6 +38,8 @@ pub struct Node {
     pub stake: Vec<u8>,
     /// Time of registration.
     pub registration_time: u64,
+    /// Capabilities.
+    pub capabilities: Capabilities,
 }
 
 impl TryFrom<api::Node> for Node {
@@ -65,6 +67,7 @@ impl TryFrom<api::Node> for Node {
             certificate: Certificate::try_from(node.get_certificate().clone())?,
             stake: node.get_stake().to_vec(),
             registration_time: node.registration_time,
+            capabilities: Capabilities::default(), // XXX
         })
     }
 }
@@ -89,8 +92,37 @@ impl Into<api::Node> for Node {
         node.set_certificate(self.certificate.into());
         node.set_stake(self.stake.clone());
         node.set_registration_time(self.registration_time);
+        node.set_capabilities(api::Capabilities::new()); // XXX
         node
     }
+}
+
+/// Node capabilities.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Capabilities {
+    /// TEE capability.
+    pub tee: Option<CapabilityTEE>,
+}
+
+/// Node TEE capability.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapabilityTEE {
+    /// TEE Hardware implementation type.
+    pub hardware: TEEHardware,
+    /// Remote attestation key.
+    pub rak: B256,
+    /// Attestation.
+    pub attestation: Vec<u8>,
+}
+
+/// TEE Hardware implementation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum TEEHardware {
+    /// Invalid TEE hardware implementation.
+    Invalid = 0,
+    /// Intel SGX.
+    IntelSGX = 1,
 }
 
 #[cfg(not(target_env = "sgx"))]

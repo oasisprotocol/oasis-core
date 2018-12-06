@@ -17,7 +17,7 @@ func TestRootHashMemory(t *testing.T) {
 	beacon := insecure.New(timeSource)
 	registry := registry.New(timeSource)
 	defer registry.Cleanup()
-	scheduler := trivial.New(timeSource, registry, beacon)
+	scheduler := trivial.New(timeSource, registry, beacon, nil)
 	storage := storage.New(timeSource)
 	defer storage.Cleanup()
 
