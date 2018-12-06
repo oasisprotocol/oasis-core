@@ -80,12 +80,12 @@ pub trait Database {
     /// Run the given closure in an encrypted context for given contract. Will use
     /// the key manager client to fetch the necessary encryption key associated
     /// with `contract_id`.
-    fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
+    fn with_encryption<F, R>(&mut self, contract_id: ContractId, f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> ();
+        F: FnOnce(&mut DatabaseHandle) -> R;
 
     /// Run the given closure in an encrypted context for the given `state_key`.
-    fn with_encryption_key<F>(&mut self, key: StateKeyType, f: F)
+    fn with_encryption_key<F, R>(&mut self, key: StateKeyType, f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> ();
+        F: FnOnce(&mut DatabaseHandle) -> R;
 }

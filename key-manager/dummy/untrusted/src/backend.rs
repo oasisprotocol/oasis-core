@@ -27,6 +27,8 @@ use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
 use exonum_rocksdb::DB;
 
+static ROOT_HASH_KEY: &'static [u8] = b"key_manager_root_hash";
+
 /// Bytes
 pub type Blob = Vec<u8>;
 pub type BlobResult = Result<Blob>;
@@ -254,9 +256,9 @@ impl KeyManagerEnclave {
         &self,
         enclave_request: api::EnclaveRequest,
     ) -> Result<api::EnclaveResponse> {
-        // read the current root hash so that we can access the enclave's database
+        // Read the current root hash so that we can access the enclave's database.
         let root_hash = self.root_hash_db
-            .get(b"root hash")
+            .get(ROOT_HASH_KEY)
             .map_err(|e| Error::new(e.to_string()))
             .map(|result| match result {
                 Some(hash) => H256::from_slice(&hash.to_vec()),
@@ -269,8 +271,8 @@ impl KeyManagerEnclave {
             || self.enclave.call(enclave_request),
         )?;
 
-        // update the root hash so that we read the updated database on the next rpc call
-        self.root_hash_db.put(b"root hash", &enclave_response.0)?;
+        // Update the root hash so that we read the updated database on the next rpc call.
+        self.root_hash_db.put(ROOT_HASH_KEY, &enclave_response.0)?;
 
         enclave_response.1
     }

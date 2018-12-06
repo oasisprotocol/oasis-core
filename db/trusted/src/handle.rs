@@ -348,17 +348,17 @@ impl Database for DatabaseHandle {
         self.pending_ops.clear();
     }
 
-    fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
+    fn with_encryption<F, R>(&mut self, contract_id: ContractId, f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> (),
+        F: FnOnce(&mut DatabaseHandle) -> R,
     {
         let key = self.encryption_key(contract_id);
-        self.with_encryption_key(key, f);
+        self.with_encryption_key(key, f)
     }
 
-    fn with_encryption_key<F>(&mut self, state_key: StateKeyType, f: F)
+    fn with_encryption_key<F, R>(&mut self, state_key: StateKeyType, f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> (),
+        F: FnOnce(&mut DatabaseHandle) -> R,
     {
         // Make sure that the encryption context doesn't already exist,
         // as we don't support nested contexts.
@@ -375,12 +375,14 @@ impl Database for DatabaseHandle {
         });
 
         // Run provided function.
-        f(self);
+        let result = f(self);
 
         // Clear encryption context.
         // Keys are securely erased by the Drop handler on SivAesSha2,
         // we might want to do the same for the nonce.
         self.enc_ctx = None;
+
+        result
     }
 }
 

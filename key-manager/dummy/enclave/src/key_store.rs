@@ -44,41 +44,30 @@ impl KeyStore {
 
     /// Get or create keys.
     pub fn get_or_create_keys(&mut self, contract_id: ContractId) -> Result<ContractKey> {
-        let mut key = Err(Error::new(format!(
-            "Could not get or create keys for {:?}",
-            contract_id
-        )));
-
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let serialized_key = db.get(&contract_id).unwrap_or_else(|| {
                 let k = bincode::serialize(&Self::create_random_key()).unwrap();
                 db.insert(&contract_id, &k);
                 k
             });
-            key = Ok(bincode::deserialize(&serialized_key).expect("Corrupted state"));
-        });
-
-        key
+            Ok(bincode::deserialize(&serialized_key).expect("Corrupted state"))
+        })
     }
 
     /// Get the public part of the key.
     pub fn get_public_key(&self, contract_id: ContractId) -> Result<PublicKeyType> {
-        let mut public_key = Err(Error::new(format!(
-            "The requested public key doesn't exist for {:?}",
-            contract_id
-        )));
-
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let pk_serialized = db.get(&contract_id);
             if pk_serialized.is_none() {
-                return;
+                return Err(Error::new(format!(
+                    "The requested public key doesn't exist for {:?}",
+                    contract_id
+                )));
             }
             let pk: ContractKey =
                 bincode::deserialize(&pk_serialized.unwrap()).expect("Corrupted state");
-            public_key = Ok(pk.input_keypair.get_pk());
-        });
-
-        public_key
+            Ok(pk.input_keypair.get_pk())
+        })
     }
 
     /// Returns a random ContractKey.
