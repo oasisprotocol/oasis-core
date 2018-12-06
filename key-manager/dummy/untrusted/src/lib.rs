@@ -15,5 +15,7 @@ extern crate ekiden_storage_base;
 extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
+extern crate exonum_rocksdb;
+
 pub mod backend;
 pub mod node;

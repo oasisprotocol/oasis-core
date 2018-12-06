@@ -25,6 +25,7 @@ log = "0.4"
 pretty_env_logger = "0.2"
 serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 ekiden-storage-base = { path = "../../../storage/base", version = "0.2.0-alpha" }
+exonum_rocksdb = "~0.7.4"
 
 [build-dependencies]
 ekiden-tools = { path = "../../../tools", version = "0.2.0-alpha" }

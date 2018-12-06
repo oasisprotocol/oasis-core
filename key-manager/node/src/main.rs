@@ -31,7 +31,7 @@ extern crate ekiden_storage_frontend;
 extern crate ekiden_storage_persistent;
 extern crate pretty_env_logger;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clap::{App, Arg};
 use log::LevelFilter;
@@ -85,6 +85,7 @@ fn main() {
     let environment = container.inject::<Environment>().unwrap();
     let node_identity = container.inject::<NodeIdentity>().unwrap();
     let storage_backend = container.inject::<StorageBackend>().unwrap();
+    let root_hash_path = PathBuf::from(matches.value_of("storage-path").unwrap()).join("root-hash");
     // Setup a key manager node.
     let mut node = KeyManagerNode::new(KeyManagerConfiguration {
         // Port
@@ -104,6 +105,7 @@ fn main() {
                 saved_identity_path: None,
                 forwarded_rpc_timeout: None,
                 storage_backend: storage_backend,
+                root_hash_path: root_hash_path,
             }
         },
         environment: environment.grpc(),

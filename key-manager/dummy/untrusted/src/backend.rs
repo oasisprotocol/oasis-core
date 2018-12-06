@@ -27,6 +27,8 @@ use ekiden_storage_base::StorageBackend;
 use ekiden_untrusted::enclave::ias::{IASConfiguration, IAS};
 use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc};
 
+use exonum_rocksdb::DB;
+
 /// Bytes
 pub type Blob = Vec<u8>;
 pub type BlobResult = Result<Blob>;
@@ -51,8 +53,10 @@ pub struct BackendConfiguration {
     /// Time limit for forwarded gRPC calls. If an RPC takes longer
     /// than this, we treat it as failed.
     pub forwarded_rpc_timeout: Option<Duration>,
-
+    /// Storage backend for persisting the key-manager's enclave key store.
     pub storage_backend: Arc<StorageBackend>,
+    /// Filesystem storage path. Used to locate the roothash file.
+    pub root_hash_path: PathBuf,
 }
 
 /// Key manager worker which executes commands in secure enclaves.
@@ -76,6 +80,7 @@ impl KeyManagerInner {
                 config.ias,
                 config.saved_identity_path,
                 config.storage_backend,
+                config.root_hash_path,
             ).unwrap()
                 .run(command_receiver);
         });
@@ -161,10 +166,10 @@ struct KeyManagerEnclave {
     identity_proof: IdentityProof,
     /// Storage backend used to enable enclave persistence
     storage_backend: Arc<StorageBackend>,
-    /// DatabaseHandle for the sole purpose of reading/writing the database's
-    /// root hash, so that so that we can enable enclave persistence. Interior
-    /// mutability is needed since `handle_rpc_call` uses the immutable &self.
-    root_hash_db: RefCell<DatabaseHandle>,
+    /// Database for the sole purpose of reading/writing a trie root hash,
+    /// so that so that we can enable enclave persistence with the existing
+    /// DatabaseHandle.
+    root_hash_db: DB,
 }
 
 impl KeyManagerEnclave {
@@ -173,6 +178,7 @@ impl KeyManagerEnclave {
         ias_config: Option<IASConfiguration>,
         saved_identity_path: Option<PathBuf>,
         storage_backend: Arc<StorageBackend>,
+        root_hash_path: PathBuf,
     ) -> Result<Self> {
         // Check if passed contract exists.
         if !Path::new(contract_filename).exists() {
@@ -191,7 +197,8 @@ impl KeyManagerEnclave {
             enclave: contract,
             identity_proof: identity_proof,
             storage_backend: storage_backend.clone(),
-            root_hash_db: RefCell::new(DatabaseHandle::new(storage_backend.clone())),
+            root_hash_db: DB::open_default(root_hash_path.as_path())
+                .expect("Should always have a DB"),
         })
     }
 
@@ -249,13 +256,16 @@ impl KeyManagerEnclave {
         &self,
         enclave_request: api::EnclaveRequest,
     ) -> Result<api::EnclaveResponse> {
-        let mut root_hash_db = self.root_hash_db.borrow_mut();
-
         // read the current root hash so that we can access the enclave's database
-        let root_hash = root_hash_db
+        let root_hash = self.root_hash_db
             .get(b"root hash")
-            .map(|root| H256::from(root.as_slice()))
-            .unwrap_or(empty_hash());
+            .map_err(|e| Error::new(e.to_string()))
+            .map(|result| match result {
+                Some(hash) => H256::from_slice(&hash.to_vec()),
+                None => empty_hash(),
+            })?;
+
+        println!("old root hash = {:?}", root_hash);
 
         let with_storage_enclave_response = {
             self.enclave
@@ -264,8 +274,10 @@ impl KeyManagerEnclave {
                 })
         }?;
 
+        println!("new root hash = {:?}", with_storage_enclave_response.0);
         // update the root hash so that we read the updated database on the next rpc call
-        root_hash_db.insert(b"root hash", &with_storage_enclave_response.0);
+        self.root_hash_db
+            .put(b"root hash", &with_storage_enclave_response.0);
 
         with_storage_enclave_response.1
     }
