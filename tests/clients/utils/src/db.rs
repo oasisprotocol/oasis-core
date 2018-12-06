@@ -65,16 +65,16 @@ impl Database for Snapshot {
         panic!("Can't rollback Snapshot")
     }
 
-    fn with_encryption<F>(&mut self, _runtime_id: H256, _f: F)
+    fn with_encryption<F, R>(&mut self, _runtime_id: H256, _f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> (),
+        F: FnOnce(&mut DatabaseHandle) -> R,
     {
         unimplemented!();
     }
 
-    fn with_encryption_key<F>(&mut self, _key: StateKeyType, _f: F)
+    fn with_encryption_key<F, R>(&mut self, _key: StateKeyType, _f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> (),
+        F: FnOnce(&mut DatabaseHandle) -> R,
     {
         unimplemented!();
     }
