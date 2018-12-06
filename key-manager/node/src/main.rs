@@ -27,7 +27,6 @@ extern crate serde_derive;
 extern crate clap;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_dummy;
-extern crate ekiden_storage_frontend;
 extern crate ekiden_storage_persistent;
 extern crate pretty_env_logger;
 
@@ -124,7 +123,6 @@ fn register_known_components() -> ekiden_di::KnownComponents {
     ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
     ekiden_common::identity::LocalNodeIdentity::register(&mut known_components);
     ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
-    ekiden_storage_frontend::StorageClient::register(&mut known_components);
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
     known_components

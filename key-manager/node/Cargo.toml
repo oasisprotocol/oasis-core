@@ -21,7 +21,6 @@ ekiden-keymanager-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-keymanager-client = { path = "../client", version = "0.2.0-alpha" }
 ekiden-keymanager-untrusted = { path = "../dummy/untrusted" }
 ekiden-storage-dummy = { path = "../../storage/dummy", version = "0.2.0-alpha" }
-ekiden-storage-frontend = { path = "../../storage/frontend", version = "0.2.0-alpha" }
 ekiden-storage-persistent = { path = "../../storage/persistent", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../../core/untrusted", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }

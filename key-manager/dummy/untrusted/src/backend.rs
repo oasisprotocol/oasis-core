@@ -1,5 +1,4 @@
 use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::fmt::Write;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -21,7 +20,6 @@ use ekiden_core::error::Error;
 use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::{BoxFuture, Future, FutureExt};
 use ekiden_core::rpc::api;
-use ekiden_db_trusted::{Database, DatabaseHandle};
 use ekiden_rpc_api::{CallEnclaveRequest, CallEnclaveResponse, EnclaveRpc as EnclaveRpcAPI};
 use ekiden_storage_base::StorageBackend;
 use ekiden_untrusted::enclave::ias::{IASConfiguration, IAS};
@@ -55,7 +53,7 @@ pub struct BackendConfiguration {
     pub forwarded_rpc_timeout: Option<Duration>,
     /// Storage backend for persisting the key-manager's enclave key store.
     pub storage_backend: Arc<StorageBackend>,
-    /// Filesystem storage path. Used to locate the roothash file.
+    /// Filesystem storage path. Used to locate the roothash db.
     pub root_hash_path: PathBuf,
 }
 
@@ -164,7 +162,7 @@ struct KeyManagerEnclave {
     enclave: Enclave,
     /// Enclave identity proof.
     identity_proof: IdentityProof,
-    /// Storage backend used to enable enclave persistence
+    /// Storage backend used to enable enclave persistence.
     storage_backend: Arc<StorageBackend>,
     /// Database for the sole purpose of reading/writing a trie root hash,
     /// so that so that we can enable enclave persistence with the existing
@@ -265,21 +263,16 @@ impl KeyManagerEnclave {
                 None => empty_hash(),
             })?;
 
-        println!("old root hash = {:?}", root_hash);
+        let enclave_response = self.enclave.with_storage(
+            self.storage_backend.clone(),
+            &root_hash,
+            || self.enclave.call(enclave_request),
+        )?;
 
-        let with_storage_enclave_response = {
-            self.enclave
-                .with_storage(self.storage_backend.clone(), &root_hash, || {
-                    self.enclave.call(enclave_request)
-                })
-        }?;
-
-        println!("new root hash = {:?}", with_storage_enclave_response.0);
         // update the root hash so that we read the updated database on the next rpc call
-        self.root_hash_db
-            .put(b"root hash", &with_storage_enclave_response.0);
+        self.root_hash_db.put(b"root hash", &enclave_response.0)?;
 
-        with_storage_enclave_response.1
+        enclave_response.1
     }
 
     /// Process requests from a receiver until the channel closes.
