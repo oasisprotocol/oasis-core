@@ -6,15 +6,23 @@
 
 ## Developing and building the Ekiden system
 
-The canonical development environment is defined by our development Docker container.
-This is done for two reasons: First it ensures good code hygene by replicating the expectations of an SGX development environment.
-Second, it provides the expected dependencies and tools, which are relatively complex to replicate in a local environment.
+The canonical development environment is defined by our development Docker
+container. This is done for two reasons: First it ensures good code hygene by
+replicating the expectations of an SGX development environment. Second, it
+provides the expected dependencies and tools, which are relatively complex to
+replicate in a local environment.
 
-On MacOS, the ekiden docker setup needs more than 10 GB memory and at least 4 CPU cores. Make sure to have the correct docker settings before starting the ekiden container or you might experience build failures.
+Prerequisites:
+* [setup the repository authentication](https://github.com/oasislabs/runtime-ethereum#configuring-repository-authentication),
+* install Docker (tested with 1.13 and later) using your favorite package
+  manager and setup your Docker hub credentials using `docker login`,
+* install [Rust](https://www.rust-lang.org) and the nightly toolchain by
+  `rustup install nightly`.
 
-To enter the ekiden docker environment, use the ekiden cargo extension. It relies on the nightly rust toolchain.
+The Ekiden Docker setup typically needs more than 10 GB memory and at least 4
+CPU cores. To enter the Ekiden Docker environment, use the Ekiden cargo
+extension:
 ```
-$ rustup install nightly
 $ cargo +nightly install --force --path tools
 ```
 
@@ -23,28 +31,30 @@ To start the development container:
 $ cargo ekiden shell
 ```
 
-All the following commands should be run in this container and not on
-your host.  The actual prompt from the bash shell running in the
-container will look like `root@xxxx:/code#` where `xxxx` is the docker
-container id; in the text below, we will just use `#`.
+From now on, all commands are run in this container and not on your host.  The
+actual prompt from the bash shell running in the container will look like
+`root@xxxx:/code#`, where `xxxx` is the Docker container id; in the text below,
+we will just use `#`.
+
+The starting directory `/code/` in the Docker container is a mounted Ekiden
+source folder on the host and any changes made are immediately visible to both
+the host and the Docker container. Before compiling Ekiden in the container,
+remember to [setup the repository authentication](https://github.com/oasislabs/runtime-ethereum#configuring-repository-authentication) inside the Docker container as well!
 
 ## Building the Go node
 
 The Ekiden node is written in Go and lives under `go/`. For building the Go node in
 the development container:
 ```
+# cd /code
 # make -C go
 ```
 
 ## Building a test runtime and client
 
-Starting directory is
-```
-# cd /code
-```
-
 For building enclaves we have our own Cargo extension which should be installed:
 ```
+# cd /code
 # cargo install --force --path tools
 ```
 
@@ -82,13 +92,14 @@ Starting directory is
 # cd /code
 ```
 
-You need to run multiple Ekiden services, so it is recommended to run each of these in a
-separate container shell, attached to the same container. The following examples use the
-token runtime, but the process is the same for any runtime.
+You need to run multiple Ekiden services, so it is recommended to run each of
+these in a separate container shell, attached to the same container. The
+following examples use the token runtime, but the process is the same for any
+runtime.
 
 To start the key manager:
 ```
-# cargo run -p ekiden-keymanager-node -- \
+# cargo run -p ekiden-keymanager-node --bin ekiden-keymanager-node -- \
     --enclave target/enclave/ekiden-keymanager-trusted.so
 ```
 
@@ -97,22 +108,33 @@ To start the shared dummy node:
 # ./go/ekiden/ekiden --datadir /tmp/ekiden-dummy-data --grpc.port 42261
 ```
 
-To start the compute node for the token runtime (you need to start two):
+To start the compute node you first need to build the worker:
+```
+# cargo build
+``` 
+ 
+And then run at least two compute nodes each with its unique
+`--worker-cache-dir` parameter for the token runtime, for example:
 ```
 # cargo run -p ekiden-compute -- \
-    --time-source-notifier system \
     --entity-ethereum-address 0000000000000000000000000000000000000000 \
     --storage-backend remote \
     --no-persist-identity \
+    --worker-cache-dir to /tmp/worker1-cache
+    --worker-path /code/target/debug/ekiden-worker
     target/enclave/token.so
 ```
 
-After starting the nodes, to manually advance the epoch in the shared dummy node:
+The runtime's compute node will listen on `127.0.0.1` (loopback), TCP port
+`9001` by default.
+
+After starting the nodes, to manually advance the epoch in the shared dummy
+node:
 ```
-# ./go/ekiden/ekiden dummy set-epoch --epoch 1
+# ./go/ekiden/ekiden debug dummy set-epoch --epoch 1
 ```
 
-The runtime's compute node will listen on `127.0.0.1` (loopback), TCP port `9001` by default.
+More information on the Go node parameters is [available here](go/README.md).
 
 Development notes:
 
