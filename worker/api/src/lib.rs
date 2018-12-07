@@ -16,7 +16,7 @@ extern crate ekiden_roothash_base;
 extern crate ekiden_storage_base;
 extern crate ekiden_untrusted;
 
-use ekiden_core::bytes::H256;
+use ekiden_core::bytes::{B256, H256};
 use ekiden_core::enclave::api as identity_api;
 use ekiden_core::futures::prelude::*;
 use ekiden_core::rpc::client::ClientEndpoint;
@@ -37,6 +37,17 @@ use self::types::ComputedBatch;
 pub trait Worker: Send + Sync {
     /// Shutdown worker.
     fn worker_shutdown(&self) -> BoxFuture<()>;
+
+    /// Get EPID group id.
+    fn rfc0009capabilitytee_gid(&self) -> BoxFuture<[u8; 4]>;
+
+    /// Generate an RAK and get a quote for it.
+    fn rfc0009capabilitytee_rak_quote(
+        &self,
+        quote_type: u32,
+        spid: [u8; 16],
+        sig_rl: Vec<u8>,
+    ) -> BoxFuture<(B256, Vec<u8>)>;
 
     /// Request the worker to execute an RPC call.
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>>;

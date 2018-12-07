@@ -3,6 +3,7 @@ use std::sync::RwLock;
 
 use rustracing_jaeger::Span;
 
+use ekiden_core::bytes::B256;
 use ekiden_core::futures::prelude::*;
 use ekiden_core::runtime::batch::CallBatch;
 use ekiden_roothash_base::Block;
@@ -35,6 +36,23 @@ impl ProtocolHandler {
 impl ekiden_worker_api::Worker for ProtocolHandler {
     fn worker_shutdown(&self) -> BoxFuture<()> {
         unimplemented!();
+    }
+
+    fn rfc0009capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
+        let guard = self.worker.read().unwrap();
+        let worker = guard.as_ref().expect("worker must be set");
+        worker.rfc0009capabilitytee_gid()
+    }
+
+    fn rfc0009capabilitytee_rak_quote(
+        &self,
+        quote_type: u32,
+        spid: [u8; 16],
+        sig_rl: Vec<u8>,
+    ) -> BoxFuture<(B256, Vec<u8>)> {
+        let guard = self.worker.read().unwrap();
+        let worker = guard.as_ref().expect("worker must be set");
+        worker.rfc0009capabilitytee_rak_quote(quote_type, spid, sig_rl)
     }
 
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {

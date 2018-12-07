@@ -1,7 +1,7 @@
 //! Protocol trait implementations.
 use sgx_types;
 
-use ekiden_core::bytes::H256;
+use ekiden_core::bytes::{B256, H256};
 use ekiden_core::enclave::api as identity_api;
 use ekiden_core::error::{Error, Result};
 use ekiden_core::futures::block_on;
@@ -22,6 +22,34 @@ impl Worker for Protocol {
         self.make_request(Body::WorkerShutdownRequest {})
             .and_then(|body| match body {
                 Body::Empty {} => Ok(()),
+                _ => Err(Error::new("malformed response")),
+            })
+            .into_box()
+    }
+
+    fn rfc0009capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
+        self.make_request(Body::WorkerRfc0009CapabilityTEEGidRequest {})
+            .and_then(|body| match body {
+                Body::WorkerRfc0009CapabilityTEEGidResponse { gid } => Ok(gid),
+                _ => Err(Error::new("malformed response")),
+            })
+            .into_box()
+    }
+
+    fn rfc0009capabilitytee_rak_quote(
+        &self,
+        quote_type: u32,
+        spid: [u8; 16],
+        sig_rl: Vec<u8>,
+    ) -> BoxFuture<(B256, Vec<u8>)> {
+        self.make_request(Body::WorkerRfc0009CapabilityTEERakQuoteRequest {
+            quote_type,
+            spid,
+            sig_rl,
+        }).and_then(|body| match body {
+                Body::WorkerRfc0009CapabilityTEERakQuoteResponse { rak_pub, quote } => {
+                    Ok((rak_pub, quote))
+                }
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -230,6 +258,23 @@ impl<T: Worker> Handler for WorkerHandler<T> {
             Body::WorkerShutdownRequest {} => {
                 self.0.worker_shutdown().map(|_| Body::Empty {}).into_box()
             }
+            Body::WorkerRfc0009CapabilityTEEGidRequest {} => self.0
+                .rfc0009capabilitytee_gid()
+                .map(|gid| Body::WorkerRfc0009CapabilityTEEGidResponse { gid })
+                .into_box(),
+            Body::WorkerRfc0009CapabilityTEERakQuoteRequest {
+                quote_type,
+                spid,
+                sig_rl,
+            } => self.0
+                .rfc0009capabilitytee_rak_quote(quote_type, spid, sig_rl)
+                .map(
+                    |(rak_pub, quote)| Body::WorkerRfc0009CapabilityTEERakQuoteResponse {
+                        rak_pub,
+                        quote,
+                    },
+                )
+                .into_box(),
             Body::WorkerRPCCallRequest { request } => self.0
                 .rpc_call(request)
                 .map(|response| Body::WorkerRPCCallResponse { response })
