@@ -30,4 +30,11 @@ extern "C" {
         av_report: *const u8,
         av_report_length: usize,
     ) -> sgx_status_t;
+
+    pub fn rfc0009capabilitytee_init(
+        eid: sgx_enclave_id_t,
+        rak_pub: &mut [u8; 32],
+        target_info: &sgx_types::sgx_target_info_t,
+        report: &mut sgx_types::sgx_report_t,
+    ) -> sgx_status_t;
 }

@@ -13,6 +13,7 @@ pub mod ecall_proxy;
 pub mod enclave;
 pub mod ias;
 pub mod identity;
+pub mod rfc0009capabilitytee;
 
 // Exports.
 pub use enclave::Enclave;
