@@ -35,3 +35,8 @@ download_artifact ekiden-keymanager-test-client target/debug 755
 download_artifact test-db-encryption-client target/debug 755
 download_artifact test-db-encryption.so target/enclave 755
 download_artifact test-db-encryption.mrenclave target/enclave
+
+# Test logger runtime and clients.
+download_artifact test-logger-client target/debug 755
+download_artifact test-logger.so target/enclave 755
+download_artifact test-logger.mrenclave target/enclave

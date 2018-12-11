@@ -1,0 +1,22 @@
+[package]
+name = "test-logger"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Ekiden logger test"
+build = "build.rs"
+
+[features]
+default = []
+
+[dependencies]
+ekiden-core = { path = "../../../core/common" }
+ekiden-trusted = { path = "../../../core/trusted" }
+ekiden-storage-base = { path = "../../../storage/base" }
+log = { version = "0.4", features = ["serde"] }
+test-logger-api = { path = "./api" }
+serde = "1.0.71"
+serde_json = "1.0"
+
+[build-dependencies]
+ekiden-tools = { path = "../../../tools" }
+ekiden-edl = { path = "../../../core/edl" }

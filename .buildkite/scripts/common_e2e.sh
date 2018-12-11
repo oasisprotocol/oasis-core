@@ -112,6 +112,33 @@ run_compute_node_db() {
         ${WORKDIR}/target/enclave/test-db-encryption.so &
 }
 
+run_compute_node_logger() {
+    local id=$1
+    shift
+    local extra_args=$*
+
+    local log_path=/tmp/ekiden-test-logger-$id
+    local cache_dir=/tmp/ekiden-test-worker-cache-$id
+    rm -rf ${cache_dir}
+
+    # Generate port number.
+    let "port=id + 10000"
+
+    ${WORKDIR}/target/debug/ekiden-compute \
+        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
+        --worker-cache-dir ${cache_dir} \
+        --no-persist-identity \
+        --max-batch-size 1 \
+        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
+        --storage-backend remote \
+        --port ${port} \
+        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
+        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        ${extra_args} \
+        ${WORKDIR}/target/enclave/test-logger.so &>$log_path &
+}
+
 run_compute_node_storage_multilayer_remote() {
     local id=$1
     shift

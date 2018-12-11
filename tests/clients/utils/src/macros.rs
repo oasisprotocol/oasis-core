@@ -14,14 +14,16 @@ macro_rules! default_app {
     () => {{
         use $crate::macros::LevelFilter;
 
-        // Initialize logger.
-        $crate::macros::formatted_builder()
-            .unwrap()
-            .filter(None, LevelFilter::Trace)
-            .filter(Some("mio"), LevelFilter::Warn)
-            .filter(Some("tokio_threadpool"), LevelFilter::Warn)
-            .filter(Some("tokio_reactor"), LevelFilter::Warn)
-            .init();
+        // Initialize logger. If another logger is already initialized, move on.
+        drop(
+            $crate::macros::formatted_builder()
+                .unwrap()
+                .filter(None, LevelFilter::Trace)
+                .filter(Some("mio"), LevelFilter::Warn)
+                .filter(Some("tokio_threadpool"), LevelFilter::Warn)
+                .filter(Some("tokio_reactor"), LevelFilter::Warn)
+                .try_init(),
+        );
 
         App::new(concat!(crate_name!(), " client"))
             .about(crate_description!())

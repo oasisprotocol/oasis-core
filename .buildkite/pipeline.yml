@@ -79,6 +79,7 @@ steps:
       - buildkite-agent artifact upload test-db-encryption-client
       - buildkite-agent artifact upload test-long-term-client
       - buildkite-agent artifact upload token-client
+      - buildkite-agent artifact upload test-logger-client
     plugins:
       <<: *docker_plugin_configuration
 
@@ -118,6 +119,18 @@ steps:
       - cd /tmp/artifacts/enclave
       - buildkite-agent artifact upload test-db-encryption.so
       - buildkite-agent artifact upload test-db-encryption.mrenclave
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Build test logger runtime
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/rust/build_enclave.sh tests/runtimes/test-logger
+
+      # Upload the built artifacts.
+      - cd /tmp/artifacts/enclave
+      - buildkite-agent artifact upload test-logger.so
+      - buildkite-agent artifact upload test-logger.mrenclave
     plugins:
       <<: *docker_plugin_configuration
 

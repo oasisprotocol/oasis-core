@@ -7,6 +7,7 @@ extern crate serde_cbor;
 extern crate serde_derive;
 
 extern crate ekiden_common;
+extern crate ekiden_enclave_common;
 extern crate ekiden_enclave_trusted;
 extern crate ekiden_roothash_base;
 extern crate ekiden_runtime_common;

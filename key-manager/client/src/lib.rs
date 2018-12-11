@@ -3,7 +3,6 @@ extern crate lazy_static;
 
 extern crate ekiden_common;
 extern crate ekiden_enclave_common;
-extern crate ekiden_enclave_logger;
 extern crate ekiden_keymanager_api;
 extern crate ekiden_keymanager_common;
 extern crate ekiden_rpc_client;

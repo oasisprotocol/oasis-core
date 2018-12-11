@@ -35,6 +35,7 @@ run_test() {
     local start_client_first=${8:-0}
     local test_km=${9:-0}
     local enclave=${10:-token}
+    local on_success_hook=${11:-""}
 
     # Check if we should run this test.
     local test_index=$E2E_TEST_COUNTER
@@ -112,6 +113,10 @@ run_test() {
 
     # Wait on the client and check its exit status.
     wait ${client_pid}
+
+    if [[ "$on_success_hook" != "" ]]; then
+        $on_success_hook
+    fi
 
     # Cleanup.
     cleanup
@@ -209,6 +214,29 @@ scenario_kill_worker() {
     sleep 1
 }
 
+scenario_logger() {
+    run_compute_node_logger 1
+    sleep 1
+    run_compute_node_logger 2
+    sleep 1
+    run_compute_node_logger 3
+}
+
+check_logger_logs() {
+    log_files=()
+    for id in 1 2 3; do
+        log_files+="/tmp/ekiden-test-logger-$id "
+    done
+
+    # test-logger-client sends five distinct messages to five distinct log levels.
+    # Check, if they are correctly reported by the enclave and then by pretty_env_logger.
+    grep "ERROR" $log_files | grep "<enclave>::test_logger" | grep "hello_error" >/dev/null
+    grep "WARN" $log_files | grep "<enclave>::test_logger" | grep "hello_warn" >/dev/null
+    grep "INFO" $log_files | grep "<enclave>::test_logger" | grep "hello_info" >/dev/null
+    grep "DEBUG" $log_files | grep "<enclave>::test_logger" | grep "hello_debug" >/dev/null
+    grep "TRACE" $log_files | grep "<enclave>::test_logger" | grep "hello_trace" >/dev/null
+}
+
 # Tendermint backends.
 run_test scenario_basic "e2e-basic-tm-full" token 1 run_dummy_node_go_tm
 run_test scenario_basic_db "e2e-basic-tm-db" test-db-encryption 1 run_dummy_node_go_tm_mock 0 0 0 1 test-db-encryption
@@ -238,3 +266,6 @@ run_test scenario_basic "e2e-long" test-long-term 2 run_dummy_node_go_dummy
 run_test scenario_one_idle "e2e-long-one-idle" test-long-term 2 run_dummy_node_go_dummy
 run_test scenario_leader_skip_commit "e2e-leader-skip-commit" token 1 run_dummy_node_go_dummy
 run_test scenario_kill_worker "e2e-kill-worker" token 1 run_dummy_node_go_dummy
+
+# Logging.
+run_test scenario_logger "e2e-logging" test-logger 1 run_dummy_node_go_dummy 0 0 0 1 test-logger check_logger_logs

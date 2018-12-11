@@ -10,6 +10,7 @@ repository = "https://github.com/oasislabs/ekiden"
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-runtime-common = { path = "../common", version = "0.2.0-alpha" }
 ekiden-enclave-trusted = { path = "../../enclave/trusted", version = "0.2.0-alpha" }
+ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha" }
 ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
 lazy_static = { version = "1.1.0", features = ["spin_no_std"] }
 serde = "1.0.71"

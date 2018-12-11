@@ -1,3 +1,4 @@
+extern crate bincode;
 #[macro_use]
 extern crate lazy_static;
 extern crate protobuf;
@@ -8,9 +9,6 @@ extern crate ekiden_core;
 extern crate ekiden_keymanager_api;
 extern crate ekiden_keymanager_common;
 extern crate ekiden_trusted;
-#[macro_use]
-extern crate ekiden_enclave_logger;
-extern crate bincode;
 
 use ekiden_core::bytes::H256;
 use ekiden_core::error::Result;

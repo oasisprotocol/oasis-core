@@ -5,4 +5,5 @@ define_edl! {
     "enclave.edl",
     "identity.edl",
     "capabilitytee.edl",
+    "logger.edl",
 }
