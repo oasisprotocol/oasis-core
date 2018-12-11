@@ -7,4 +7,6 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
+# (pinning transitive dependency) backtrace 0.3.10 incompatible with failure 0.1
+backtrace = "=0.3.9"
 failure = "0.1"
