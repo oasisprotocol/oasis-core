@@ -77,12 +77,14 @@ members = [
     # Test runtimes.
     "tests/runtimes/token",
     "tests/runtimes/test-db-encryption",
+    "tests/runtimes/test-logger",
 
     # Test clients.
     "tests/clients/token",
     "tests/clients/test-long-term",
     "tests/clients/benchmark",
     "tests/clients/test-db-encryption",
+#    "tests/clients/test-logger",
 
     # Registry.
     "registry/api",
