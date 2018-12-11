@@ -36,4 +36,7 @@ RUN wget -O codecov https://codecov.io/bash && \
 
 # Install tarpaulin.
 RUN RUSTFLAGS="--cfg procmacro2_semver_exempt" \
-    cargo install --version 0.6.9 cargo-tarpaulin
+    cargo install \
+    --git https://github.com/oasislabs/tarpaulin \
+    --branch oasis \
+    cargo-tarpaulin
