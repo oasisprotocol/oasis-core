@@ -70,7 +70,7 @@ steps:
       - .buildkite/rust/build_generic.sh /workdir -Z unstable-options
 
       # Upload the built artifacts.
-      - cd /tmp/artifacts
+      - cd /tmp/artifacts/debug
       - buildkite-agent artifact upload ekiden-worker
       - buildkite-agent artifact upload ekiden-compute
       - buildkite-agent artifact upload ekiden-keymanager-node
