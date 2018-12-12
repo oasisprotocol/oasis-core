@@ -1,5 +1,5 @@
 [package]
-name = "logger"
+name = "test-logger-client"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden logger test"
