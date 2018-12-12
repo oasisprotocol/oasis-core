@@ -1,6 +1,6 @@
 [package]
 name = "test-logger"
-version = "0.1.0-alpha"
+version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Ekiden logger test"
 build = "build.rs"
