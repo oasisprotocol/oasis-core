@@ -25,7 +25,7 @@ use ekiden_trusted::runtime::create_runtime;
 use ekiden_trusted::runtime::dispatcher::RuntimeCallContext;
 
 #[macro_use]
-use ekiden_enclave_logger::*;
+use ekiden_enclave_logger::{error, warn, info, debug, trace};
 
 enclave_init!();
 
@@ -40,7 +40,12 @@ lazy_static! {
 }
 
 pub fn init() -> Result<LoggerInitResponse> {
-    Ok("[test test-logger enclave] Log initialized!")
+    r: LoggerInitResponse = LoggerInitResponse::new();
+
+    match ekiden_enclave_logger::init() {
+        Ok(_) => { r.set_ok(true); r },
+        Err(e) => { r.set_ok(false); r.set_value(e); r },
+    }
 }
 
 #[cfg(target_env = "sgx")]

@@ -1,7 +1,5 @@
 extern crate log;
 
-// Include macros.rs for backward compatibility. This should be removed when the logger rewrite is
-// complete and only log::* macros should be used instead! @Matevž
 #[macro_use]
 pub mod macros;
 
@@ -51,6 +49,6 @@ impl log::Log for EkidenLogger {
 }
 
 pub fn init() -> Result<(), log::SetLoggerError> {
-    log::set_boxed_logger(Box::new(EkidenLogger))
+    log::set_logger(&EKIDEN_LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Info))
 }

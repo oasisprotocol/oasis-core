@@ -3,4 +3,6 @@ syntax = "proto3";
 package test_logger;
 
 message LoggerInitResponse {
+    bool ok = 1;
+    string value = 2;
 }
