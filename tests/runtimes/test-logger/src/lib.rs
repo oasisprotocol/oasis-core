@@ -49,26 +49,31 @@ pub fn init() -> Result<LoggerInitResponse> {
 }
 
 #[cfg(target_env = "sgx")]
-pub fn write_error(message: &str) {
+pub fn write_error(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
     error!("[test test-logger enclave] Received error message: {}", message);
+    Ok(())
 }
 
 #[cfg(target_env = "sgx")]
-pub fn write_warn(message: &str) {
+pub fn write_warn(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
     warn!("[test test-logger enclave] Received warn message: {}", message);
+    Ok(())
 }
 
 #[cfg(target_env = "sgx")]
-pub fn write_info(message: &str) {
+pub fn write_info(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
     info!("[test test-logger enclave] Received info message: {}", message);
+    Ok(())
 }
 
 #[cfg(target_env = "sgx")]
-pub fn write_debug(message: &str) {
+pub fn write_debug(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
     debug!("[test test-logger enclave] Received debug message: {}", message);
+    Ok(())
 }
 
 #[cfg(target_env = "sgx")]
-pub fn write_trace(message: &str) {
+pub fn write_trace(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
     trace!("[test test-logger enclave] Received trace message: {}", message);
+    Ok(())
 }
