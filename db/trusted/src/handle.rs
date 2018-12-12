@@ -15,7 +15,7 @@ use ekiden_keymanager_client::KeyManager;
 #[cfg(not(target_env = "sgx"))]
 #[cfg(not(test))]
 use ekiden_keymanager_client::NetworkRpcClientBackendConfig;
-use ekiden_keymanager_common::ContractId;
+use ekiden_keymanager_common::{ContractId, StateKeyType};
 use ekiden_storage_base::mapper::BackendIdentityMapper;
 use ekiden_storage_base::StorageBackend;
 #[cfg(not(target_env = "sgx"))]
@@ -152,6 +152,81 @@ impl DatabaseHandle {
         // available, so we must reconfigure it everytime we obtain the lock.
         // This is done in the `with_encryption` method below.
     }
+
+    /// Returns the state encryption key for the given `contract_id`. It is used
+    /// to encrypt the database.
+    fn encryption_key(&mut self, contract_id: ContractId) -> StateKeyType {
+        // Make sure that the user has set a valid key manager configuration
+        // with db.configure_key_manager() before calling us.
+        assert!(self.key_manager_config.is_some());
+
+        let state_key: [u8; 64];
+
+        // When running tests, we don't have a key manager running, so we need
+        // to generate a fake key to test DB encryption.
+        #[cfg(test)]
+        {
+            // In test mode, the enclave should be set to zero.
+            assert_eq!(
+                self.key_manager_config.as_ref().unwrap().mrenclave,
+                MrEnclave::zero()
+            );
+
+            // Generate a dummy key based on the contract ID for testing.
+            let hash = digest::digest(&digest::SHA512, &contract_id.to_vec());
+            let mut sk = [0u8; 64];
+            sk.copy_from_slice(hash.as_ref());
+            state_key = sk;
+        }
+
+        // Get or create a key manager instance and fetch the state key.
+        #[cfg(not(test))]
+        {
+            // If we're not in an enclave, we can just use the pre-configured
+            // instance that we've made in `configure_key_manager`.
+            #[cfg(not(target_env = "sgx"))]
+            let mut key_manager = match self.key_manager {
+                None => {
+                    panic!("You forgot to call db.configure_key_manager() before calling db.with_encryption()!");
+                }
+                Some(ref mut km) => km.lock().unwrap(),
+            };
+
+            // In an enclave, there is only one global instance, so we need to
+            // get access to that instead and reconfigure it every time.
+            #[cfg(target_env = "sgx")]
+            let mut key_manager = match KeyManager::instance() {
+                Ok(mut km) => {
+                    let cfg = self.key_manager_config.as_ref().unwrap();
+
+                    // Configure the key manager.
+                    km.set_contract(cfg.mrenclave);
+
+                    km
+                }
+                Err(e) => {
+                    panic!("Cannot get key manager instance: {}", e.description());
+                }
+            };
+
+            // Finally, get the state key from the key manager.
+            let secret_keys = key_manager.get_or_create_secret_keys(contract_id);
+
+            match secret_keys {
+                Ok(pk_sk) => {
+                    state_key = pk_sk.1;
+                }
+                Err(e) => {
+                    panic!(
+                        "Failed to get state key from key manager: {}",
+                        e.description()
+                    );
+                }
+            }
+        }
+
+        state_key
+    }
 }
 
 impl Database for DatabaseHandle {
@@ -273,82 +348,21 @@ impl Database for DatabaseHandle {
         self.pending_ops.clear();
     }
 
-    fn with_encryption<F>(&mut self, contract_id: ContractId, f: F)
+    fn with_encryption<F, R>(&mut self, contract_id: ContractId, f: F) -> R
     where
-        F: FnOnce(&mut DatabaseHandle) -> (),
+        F: FnOnce(&mut DatabaseHandle) -> R,
+    {
+        let key = self.encryption_key(contract_id);
+        self.with_encryption_key(key, f)
+    }
+
+    fn with_encryption_key<F, R>(&mut self, state_key: StateKeyType, f: F) -> R
+    where
+        F: FnOnce(&mut DatabaseHandle) -> R,
     {
         // Make sure that the encryption context doesn't already exist,
         // as we don't support nested contexts.
         assert!(self.enc_ctx.is_none());
-
-        // Make sure that the user has set a valid key manager configuration
-        // with db.configure_key_manager() before calling us.
-        assert!(self.key_manager_config.is_some());
-
-        let state_key: [u8; 64];
-
-        // When running tests, we don't have a key manager running, so we need
-        // to generate a fake key to test DB encryption.
-        #[cfg(test)]
-        {
-            // In test mode, the enclave should be set to zero.
-            assert_eq!(
-                self.key_manager_config.as_ref().unwrap().mrenclave,
-                MrEnclave::zero()
-            );
-
-            // Generate a dummy key based on the contract ID for testing.
-            let hash = digest::digest(&digest::SHA512, &contract_id.to_vec());
-            let mut sk = [0u8; 64];
-            sk.copy_from_slice(hash.as_ref());
-            state_key = sk;
-        }
-
-        // Get or create a key manager instance and fetch the state key.
-        #[cfg(not(test))]
-        {
-            // If we're not in an enclave, we can just use the pre-configured
-            // instance that we've made in `configure_key_manager`.
-            #[cfg(not(target_env = "sgx"))]
-            let mut key_manager = match self.key_manager {
-                None => {
-                    panic!("You forgot to call db.configure_key_manager() before calling db.with_encryption()!");
-                }
-                Some(ref mut km) => km.lock().unwrap(),
-            };
-
-            // In an enclave, there is only one global instance, so we need to
-            // get access to that instead and reconfigure it every time.
-            #[cfg(target_env = "sgx")]
-            let mut key_manager = match KeyManager::instance() {
-                Ok(mut km) => {
-                    let cfg = self.key_manager_config.as_ref().unwrap();
-
-                    // Configure the key manager.
-                    km.set_contract(cfg.mrenclave);
-
-                    km
-                }
-                Err(e) => {
-                    panic!("Cannot get key manager instance: {}", e.description());
-                }
-            };
-
-            // Finally, get the state key from the key manager.
-            let secret_keys = key_manager.get_or_create_secret_keys(contract_id);
-
-            match secret_keys {
-                Ok(pk_sk) => {
-                    state_key = pk_sk.1;
-                }
-                Err(e) => {
-                    panic!(
-                        "Failed to get state key from key manager: {}",
-                        e.description()
-                    );
-                }
-            }
-        }
 
         // Split the state_key into a MRAE key and nonce.
         let key: Vec<u8> = state_key.as_ref()[..KEY_SIZE].to_vec();
@@ -361,12 +375,14 @@ impl Database for DatabaseHandle {
         });
 
         // Run provided function.
-        f(self);
+        let result = f(self);
 
         // Clear encryption context.
         // Keys are securely erased by the Drop handler on SivAesSha2,
         // we might want to do the same for the nonce.
         self.enc_ctx = None;
+
+        result
     }
 }
 

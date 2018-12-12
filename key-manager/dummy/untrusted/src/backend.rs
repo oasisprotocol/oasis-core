@@ -12,7 +12,8 @@ use protobuf;
 use protobuf::Message;
 use thread_local::ThreadLocal;
 
-use ekiden_common::error::Result;
+use ekiden_common::bytes::H256;
+use ekiden_common::{error::Result, hash::empty_hash};
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
 use ekiden_core::error::Error;
@@ -20,8 +21,13 @@ use ekiden_core::futures::sync::oneshot;
 use ekiden_core::futures::{BoxFuture, Future, FutureExt};
 use ekiden_core::rpc::api;
 use ekiden_rpc_api::{CallEnclaveRequest, CallEnclaveResponse, EnclaveRpc as EnclaveRpcAPI};
+use ekiden_storage_base::StorageBackend;
 use ekiden_untrusted::enclave::ias::{IASConfiguration, IAS};
-use ekiden_untrusted::{Enclave, EnclaveIdentity, EnclaveRpc};
+use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc};
+
+use exonum_rocksdb::DB;
+
+static ROOT_HASH_KEY: &'static [u8] = b"key_manager_root_hash";
 
 /// Bytes
 pub type Blob = Vec<u8>;
@@ -36,7 +42,7 @@ struct Command {
 }
 
 /// Key manager backend configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BackendConfiguration {
     /// Contract binary filename.
     pub enclave_filename: String,
@@ -47,6 +53,10 @@ pub struct BackendConfiguration {
     /// Time limit for forwarded gRPC calls. If an RPC takes longer
     /// than this, we treat it as failed.
     pub forwarded_rpc_timeout: Option<Duration>,
+    /// Storage backend for persisting the key-manager's enclave key store.
+    pub storage_backend: Arc<StorageBackend>,
+    /// Filesystem storage path. Used to locate the roothash db.
+    pub root_hash_path: PathBuf,
 }
 
 /// Key manager worker which executes commands in secure enclaves.
@@ -69,6 +79,8 @@ impl KeyManagerInner {
                 &config.enclave_filename,
                 config.ias,
                 config.saved_identity_path,
+                config.storage_backend,
+                config.root_hash_path,
             ).unwrap()
                 .run(command_receiver);
         });
@@ -152,6 +164,12 @@ struct KeyManagerEnclave {
     enclave: Enclave,
     /// Enclave identity proof.
     identity_proof: IdentityProof,
+    /// Storage backend used to enable enclave persistence.
+    storage_backend: Arc<StorageBackend>,
+    /// Database for the sole purpose of reading/writing a trie root hash,
+    /// so that so that we can enable enclave persistence with the existing
+    /// DatabaseHandle.
+    root_hash_db: DB,
 }
 
 impl KeyManagerEnclave {
@@ -159,6 +177,8 @@ impl KeyManagerEnclave {
         contract_filename: &str,
         ias_config: Option<IASConfiguration>,
         saved_identity_path: Option<PathBuf>,
+        storage_backend: Arc<StorageBackend>,
+        root_hash_path: PathBuf,
     ) -> Result<Self> {
         // Check if passed contract exists.
         if !Path::new(contract_filename).exists() {
@@ -176,6 +196,9 @@ impl KeyManagerEnclave {
         Ok(Self {
             enclave: contract,
             identity_proof: identity_proof,
+            storage_backend: storage_backend.clone(),
+            root_hash_db: DB::open_default(root_hash_path.as_path())
+                .expect("Should always have a DB"),
         })
     }
 
@@ -219,12 +242,39 @@ impl KeyManagerEnclave {
             client_requests.push(client_request);
         }
 
-        let enclave_response = { self.enclave.call(enclave_request) }?;
+        let enclave_response = self.enclave_rpc_call(enclave_request)?;
 
         match enclave_response.get_client_response().first() {
             Some(enclave_response) => Ok(enclave_response.write_to_bytes()?),
             None => Err(Error::new("no response to rpc call")),
         }
+    }
+
+    /// Performs the given enclave request in a storage context, ensuring to update the
+    /// root hash at the end of each request.
+    fn enclave_rpc_call(
+        &self,
+        enclave_request: api::EnclaveRequest,
+    ) -> Result<api::EnclaveResponse> {
+        // Read the current root hash so that we can access the enclave's database.
+        let root_hash = self.root_hash_db
+            .get(ROOT_HASH_KEY)
+            .map_err(|e| Error::new(e.to_string()))
+            .map(|result| match result {
+                Some(hash) => H256::from_slice(&hash.to_vec()),
+                None => empty_hash(),
+            })?;
+
+        let enclave_response = self.enclave.with_storage(
+            self.storage_backend.clone(),
+            &root_hash,
+            || self.enclave.call(enclave_request),
+        )?;
+
+        // Update the root hash so that we read the updated database on the next rpc call.
+        self.root_hash_db.put(ROOT_HASH_KEY, &enclave_response.0)?;
+
+        enclave_response.1
     }
 
     /// Process requests from a receiver until the channel closes.
