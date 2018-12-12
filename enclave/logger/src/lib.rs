@@ -2,6 +2,7 @@ extern crate log;
 
 #[macro_use]
 pub mod macros;
+pub use macros::*;
 
 /// Logger based on the rust's log crate
 ///
