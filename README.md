@@ -100,7 +100,8 @@ runtime.
 To start the key manager:
 ```
 # cargo run -p ekiden-keymanager-node --bin ekiden-keymanager-node -- \
-    --enclave target/enclave/ekiden-keymanager-trusted.so
+    --enclave target/enclave/ekiden-keymanager-trusted.so \
+    --storage-backend dummy
 ```
 
 To start the shared dummy node:
@@ -111,8 +112,8 @@ To start the shared dummy node:
 To start the compute node you first need to build the worker:
 ```
 # cargo build
-``` 
- 
+```
+
 And then run at least two compute nodes each with its unique
 `--worker-cache-dir` parameter for the token runtime, for example:
 ```
