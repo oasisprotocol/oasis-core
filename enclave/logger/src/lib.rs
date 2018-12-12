@@ -51,6 +51,6 @@ impl log::Log for EkidenLogger {
 }
 
 pub fn init() -> Result<(), log::SetLoggerError> {
-    log::set_boxed_logger(Box::new(SimpleLogger))
+    log::set_boxed_logger(Box::new(EkidenLogger))
         .map(|()| log::set_max_level(log::LevelFilter::Info))
 }
