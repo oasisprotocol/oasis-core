@@ -254,9 +254,7 @@ impl Database for DatabaseHandle {
         if self.enc_ctx.is_some() && value.is_some() {
             // Decrypt value using the encryption context.
             let ctx = self.enc_ctx.as_ref().unwrap();
-
             let decrypted = ctx.mrae_ctx.open(ctx.nonce.clone(), value.unwrap(), vec![]);
-
             decrypted.ok()
         } else {
             value

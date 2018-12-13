@@ -33,6 +33,8 @@ pub use client::NetworkRpcClientBackendConfig;
 #[macro_export]
 macro_rules! use_key_manager_contract {
     ($identity:expr) => {
+        static KM_MRENCLAVE: ekiden_common::bytes::H256 =
+            ekiden_common::bytes::H256(*include_bytes!($identity));
         #[cfg(target_env = "sgx")]
         global_ctors_object! {
             KEY_MANAGER_INIT, key_manager_init = {
@@ -40,7 +42,7 @@ macro_rules! use_key_manager_contract {
                 use ekiden_trusted::key_manager::KeyManager;
 
                 // Setup the key manager contract identity.
-                KeyManager::instance().unwrap().set_contract(H256(*include_bytes!($identity)));
+                KeyManager::instance().unwrap().set_contract(KM_MRENCLAVE);
             }
         }
     };
