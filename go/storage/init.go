@@ -11,6 +11,7 @@ import (
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	"github.com/oasislabs/ekiden/go/storage/leveldb"
 	"github.com/oasislabs/ekiden/go/storage/memory"
@@ -37,6 +38,8 @@ func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (api.
 		impl, err = pgx.New(timeSource)
 	case client.BackendName:
 		impl, err = client.New()
+	case cachingclient.BackendName:
+		impl, err = cachingclient.New()
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
