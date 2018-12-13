@@ -25,38 +25,43 @@ with_api! {
     create_runtime!(api);
 }
 
-pub fn init(_ctx: &RuntimeCallContext) -> Result<LoggerInitResponse> {
+pub fn init(_request: &bool, _ctx: &RuntimeCallContext) -> Result<LoggerInitResponse> {
     let mut r: LoggerInitResponse = LoggerInitResponse::new();
 
     match ekiden_enclave_logger::init() {
-        Ok(_) => { r.set_ok(true); },
-        Err(e) => { r.set_ok(false); r.set_value(String::from(e)); },
+        Ok(_) => {
+            r.set_ok(true);
+        }
+        Err(e) => {
+            r.set_ok(false);
+            r.set_value(e.to_string());
+        }
     }
 
-    Ok(r);
+    Ok(r)
 }
 
-pub fn write_error(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
-    ekiden_enclave_logger::error!("[test test-logger enclave] Received error message: {}", message);
+pub fn write_error(message: &String, _ctx: &RuntimeCallContext) -> Result<()> {
+    //ekiden_enclave_logger::error!("[test test-logger enclave] Received error message: {}", message);
     Ok(())
 }
 
-pub fn write_warn(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
-    ekiden_enclave_logger::warn!("[test test-logger enclave] Received warn message: {}", message);
+pub fn write_warn(message: &String, _ctx: &RuntimeCallContext) -> Result<()> {
+    //ekiden_enclave_logger::warn!("[test test-logger enclave] Received warn message: {}", message);
     Ok(())
 }
 
-pub fn write_info(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
-    ekiden_enclave_logger::info!("[test test-logger enclave] Received info message: {}", message);
+pub fn write_info(message: &String, _ctx: &RuntimeCallContext) -> Result<()> {
+    //ekiden_enclave_logger::info!("[test test-logger enclave] Received info message: {}", message);
     Ok(())
 }
 
-pub fn write_debug(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
-    ekiden_enclave_logger::debug!("[test test-logger enclave] Received debug message: {}", message);
+pub fn write_debug(message: &String, _ctx: &RuntimeCallContext) -> Result<()> {
+    //ekiden_enclave_logger::debug!("[test test-logger enclave] Received debug message: {}", message);
     Ok(())
 }
 
-pub fn write_trace(message: &str, _ctx: &RuntimeCallContext) -> Result<()> {
-    ekiden_enclave_logger::trace!("[test test-logger enclave] Received trace message: {}", message);
+pub fn write_trace(message: &String, _ctx: &RuntimeCallContext) -> Result<()> {
+    //ekiden_enclave_logger::trace!("[test test-logger enclave] Received trace message: {}", message);
     Ok(())
 }
