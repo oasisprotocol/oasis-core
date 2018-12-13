@@ -12,6 +12,8 @@ ekiden-core = { path = "../../../core/common" }
 ekiden-trusted = { path = "../../../core/trusted" }
 ekiden-storage-base = { path = "../../../storage/base" }
 protobuf = "~2.0"
+# (pinning transitive dependency) 0.1.41 is incompatible
+time = "=0.1.40"
 token-api = { path = "./api" }
 
 [build-dependencies]
