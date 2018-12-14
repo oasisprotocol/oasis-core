@@ -54,16 +54,16 @@ type Body struct {
 	Error *Error
 
 	// Worker interface.
-	WorkerPingRequest                          *Empty
-	WorkerShutdownRequest                      *Empty
-	WorkerRfc0009CapabilityTEEGidRequest       *Empty
-	WorkerRfc0009CapabilityTEEGidResponse      *WorkerRfc0009CapabilityTEEGidResponse
-	WorkerRfc0009CapabilityTEERakQuoteRequest  *WorkerRfc0009CapabilityTEERakQuoteRequest
-	WorkerRfc0009CapabilityTEERakQuoteResponse *WorkerRfc0009CapabilityTEERakQuoteResponse
-	WorkerRPCCallRequest                       *WorkerRPCCallRequest
-	WorkerRPCCallResponse                      *WorkerRPCCallResponse
-	WorkerRuntimeCallBatchRequest              *WorkerRuntimeCallBatchRequest
-	WorkerRuntimeCallBatchResponse             *WorkerRuntimeCallBatchResponse
+	WorkerPingRequest                   *Empty
+	WorkerShutdownRequest               *Empty
+	WorkerCapabilityTEEGidRequest       *Empty
+	WorkerCapabilityTEEGidResponse      *WorkerCapabilityTEEGidResponse
+	WorkerCapabilityTEERakQuoteRequest  *WorkerCapabilityTEERakQuoteRequest
+	WorkerCapabilityTEERakQuoteResponse *WorkerCapabilityTEERakQuoteResponse
+	WorkerRPCCallRequest                *WorkerRPCCallRequest
+	WorkerRPCCallResponse               *WorkerRPCCallResponse
+	WorkerRuntimeCallBatchRequest       *WorkerRuntimeCallBatchRequest
+	WorkerRuntimeCallBatchResponse      *WorkerRuntimeCallBatchResponse
 
 	// Host interface.
 	HostRPCCallRequest             *HostRPCCallRequest
@@ -95,20 +95,20 @@ type Error struct {
 	Message string `codec:"message"`
 }
 
-// WorkerRfc0009CapabilityTEEGidResponse is a worker RFC 0009 CapabilityTEE EPID group ID response message body.
-type WorkerRfc0009CapabilityTEEGidResponse struct {
+// WorkerCapabilityTEEGidResponse is a worker RFC 0009 CapabilityTEE EPID group ID response message body.
+type WorkerCapabilityTEEGidResponse struct {
 	Gid [4]byte `codec:"gid"`
 }
 
-// WorkerRfc0009CapabilityTEERakQuoteRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
-type WorkerRfc0009CapabilityTEERakQuoteRequest struct {
+// WorkerCapabilityTEERakQuoteRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
+type WorkerCapabilityTEERakQuoteRequest struct {
 	QuoteType uint32   `codec:"quote_type"`
 	Spid      [16]byte `codec:"spid"`
 	SigRL     []byte   `codec:"sig_rl"`
 }
 
-// WorkerRfc0009CapabilityTEERakQuoteResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
-type WorkerRfc0009CapabilityTEERakQuoteResponse struct {
+// WorkerCapabilityTEERakQuoteResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
+type WorkerCapabilityTEERakQuoteResponse struct {
 	RakPub [32]byte `codec:"rak_pub"`
 	Quote  []byte   `codec:"quote"`
 }

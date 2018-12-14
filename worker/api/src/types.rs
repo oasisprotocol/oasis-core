@@ -35,16 +35,16 @@ pub enum Body {
     // Worker interface.
     WorkerPingRequest {},
     WorkerShutdownRequest {},
-    WorkerRfc0009CapabilityTEEGidRequest {},
-    WorkerRfc0009CapabilityTEEGidResponse {
+    WorkerCapabilityTEEGidRequest {},
+    WorkerCapabilityTEEGidResponse {
         gid: [u8; 4],
     },
-    WorkerRfc0009CapabilityTEERakQuoteRequest {
+    WorkerCapabilityTEERakQuoteRequest {
         quote_type: u32,
         spid: [u8; 16],
         sig_rl: Vec<u8>,
     },
-    WorkerRfc0009CapabilityTEERakQuoteResponse {
+    WorkerCapabilityTEERakQuoteResponse {
         rak_pub: B256,
         quote: Vec<u8>,
     },

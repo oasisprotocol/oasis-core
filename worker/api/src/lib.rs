@@ -39,10 +39,10 @@ pub trait Worker: Send + Sync {
     fn worker_shutdown(&self) -> BoxFuture<()>;
 
     /// Get EPID group id.
-    fn rfc0009capabilitytee_gid(&self) -> BoxFuture<[u8; 4]>;
+    fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]>;
 
     /// Generate an RAK and get a quote for it.
-    fn rfc0009capabilitytee_rak_quote(
+    fn capabilitytee_rak_quote(
         &self,
         quote_type: u32,
         spid: [u8; 16],

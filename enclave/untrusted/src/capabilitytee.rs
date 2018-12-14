@@ -6,11 +6,11 @@ use ekiden_common::error::Result;
 
 use super::enclave::Enclave;
 
-pub trait EnclaveRfc0009CapabilityTEE {
+pub trait EnclaveCapabilityTEE {
     /// Get the platform's EPID group ID. Used for retrieving the signature revocation list.
-    fn rfc0009capabilitytee_gid(&self) -> Result<sgx_types::sgx_epid_group_id_t>;
+    fn capabilitytee_gid(&self) -> Result<sgx_types::sgx_epid_group_id_t>;
     /// Initialize the enclave with a new RAK and get the public key and quote.
-    fn rfc0009capabilitytee_rak_quote(
+    fn capabilitytee_rak_quote(
         &self,
         quote_type: sgx_types::sgx_quote_sign_type_t,
         spid: &sgx_types::sgx_spid_t,
@@ -18,8 +18,8 @@ pub trait EnclaveRfc0009CapabilityTEE {
     ) -> Result<(B256, Vec<u8>)>;
 }
 
-impl EnclaveRfc0009CapabilityTEE for Enclave {
-    fn rfc0009capabilitytee_gid(&self) -> Result<sgx_types::sgx_epid_group_id_t> {
+impl EnclaveCapabilityTEE for Enclave {
+    fn capabilitytee_gid(&self) -> Result<sgx_types::sgx_epid_group_id_t> {
         let mut qe_target_info = unsafe { std::mem::zeroed() };
         let mut gid = unsafe { std::mem::zeroed() };
         let result = unsafe { sgx_types::sgx_init_quote(&mut qe_target_info, &mut gid) };
@@ -29,7 +29,7 @@ impl EnclaveRfc0009CapabilityTEE for Enclave {
         Ok(gid)
     }
 
-    fn rfc0009capabilitytee_rak_quote(
+    fn capabilitytee_rak_quote(
         &self,
         quote_type: sgx_types::sgx_quote_sign_type_t,
         spid: &sgx_types::sgx_spid_t,
@@ -47,7 +47,7 @@ impl EnclaveRfc0009CapabilityTEE for Enclave {
         let mut rak_pub = unsafe { std::mem::zeroed() };
         let mut report = unsafe { std::mem::zeroed() };
         let result = unsafe {
-            super::ecall_proxy::rfc0009capabilitytee_init(
+            super::ecall_proxy::capabilitytee_init(
                 self.get_id(),
                 &mut rak_pub,
                 &qe_target_info,
@@ -55,7 +55,7 @@ impl EnclaveRfc0009CapabilityTEE for Enclave {
             )
         };
         if result != sgx_types::sgx_status_t::SGX_SUCCESS {
-            return Err(Error::new(format!("rfc0009capabilitytee_init: {}", result)));
+            return Err(Error::new(format!("capabilitytee_init: {}", result)));
         }
 
         // Get a quote.

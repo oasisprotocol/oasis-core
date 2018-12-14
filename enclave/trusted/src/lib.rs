@@ -16,10 +16,10 @@ extern crate sodalite;
 extern crate ekiden_common;
 extern crate ekiden_enclave_common;
 
+pub mod capabilitytee;
 pub mod crypto;
 pub mod enclave;
 pub mod identity;
-pub mod rfc0009capabilitytee;
 pub mod utils;
 
 /// Declare enclave initialization structures.

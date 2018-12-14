@@ -27,27 +27,27 @@ impl Worker for Protocol {
             .into_box()
     }
 
-    fn rfc0009capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
-        self.make_request(Body::WorkerRfc0009CapabilityTEEGidRequest {})
+    fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
+        self.make_request(Body::WorkerCapabilityTEEGidRequest {})
             .and_then(|body| match body {
-                Body::WorkerRfc0009CapabilityTEEGidResponse { gid } => Ok(gid),
+                Body::WorkerCapabilityTEEGidResponse { gid } => Ok(gid),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
     }
 
-    fn rfc0009capabilitytee_rak_quote(
+    fn capabilitytee_rak_quote(
         &self,
         quote_type: u32,
         spid: [u8; 16],
         sig_rl: Vec<u8>,
     ) -> BoxFuture<(B256, Vec<u8>)> {
-        self.make_request(Body::WorkerRfc0009CapabilityTEERakQuoteRequest {
+        self.make_request(Body::WorkerCapabilityTEERakQuoteRequest {
             quote_type,
             spid,
             sig_rl,
         }).and_then(|body| match body {
-                Body::WorkerRfc0009CapabilityTEERakQuoteResponse { rak_pub, quote } => {
+                Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote } => {
                     Ok((rak_pub, quote))
                 }
                 _ => Err(Error::new("malformed response")),
@@ -258,21 +258,18 @@ impl<T: Worker> Handler for WorkerHandler<T> {
             Body::WorkerShutdownRequest {} => {
                 self.0.worker_shutdown().map(|_| Body::Empty {}).into_box()
             }
-            Body::WorkerRfc0009CapabilityTEEGidRequest {} => self.0
-                .rfc0009capabilitytee_gid()
-                .map(|gid| Body::WorkerRfc0009CapabilityTEEGidResponse { gid })
+            Body::WorkerCapabilityTEEGidRequest {} => self.0
+                .capabilitytee_gid()
+                .map(|gid| Body::WorkerCapabilityTEEGidResponse { gid })
                 .into_box(),
-            Body::WorkerRfc0009CapabilityTEERakQuoteRequest {
+            Body::WorkerCapabilityTEERakQuoteRequest {
                 quote_type,
                 spid,
                 sig_rl,
             } => self.0
-                .rfc0009capabilitytee_rak_quote(quote_type, spid, sig_rl)
+                .capabilitytee_rak_quote(quote_type, spid, sig_rl)
                 .map(
-                    |(rak_pub, quote)| Body::WorkerRfc0009CapabilityTEERakQuoteResponse {
-                        rak_pub,
-                        quote,
-                    },
+                    |(rak_pub, quote)| Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote },
                 )
                 .into_box(),
             Body::WorkerRPCCallRequest { request } => self.0

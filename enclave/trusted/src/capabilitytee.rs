@@ -30,7 +30,7 @@ impl ekiden_common::ring::rand::SecureRandom for CommonRng {
 
 #[cfg(target_env = "sgx")]
 #[no_mangle]
-pub extern "C" fn rfc0009capabilitytee_init(
+pub extern "C" fn capabilitytee_init(
     rak_pub: &mut [u8; 32],
     target_info: &sgx_types::sgx_target_info_t,
     report: &mut sgx_types::sgx_report_t,

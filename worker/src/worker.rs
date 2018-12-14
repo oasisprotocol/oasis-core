@@ -25,8 +25,8 @@ use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_storage_batch::BatchStorageBackend;
+use ekiden_untrusted::enclave::capabilitytee::EnclaveCapabilityTEE;
 use ekiden_untrusted::enclave::identity::IAS;
-use ekiden_untrusted::enclave::rfc0009capabilitytee::EnclaveRfc0009CapabilityTEE;
 use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime};
 use ekiden_worker_api::types::ComputedBatch;
@@ -35,9 +35,9 @@ use ekiden_worker_api::Protocol;
 /// Command sent to the worker thread.
 enum Command {
     /// Request for the platform's EPID group ID.
-    Rfc0009CapabilityTEEGid(oneshot::Sender<Result<[u8; 4]>>),
+    CapabilityTEEGid(oneshot::Sender<Result<[u8; 4]>>),
     /// Request for the RAK and quote.
-    Rfc0009CapabilityTEERakQuote(
+    CapabilityTEERakQuote(
         u32,
         [u8; 16],
         Vec<u8>,
@@ -121,21 +121,21 @@ impl WorkerInner {
         (runtime, identity_proof)
     }
 
-    /// `handle_rfc0009capabilitytee_gid` is from when we handled the Rfc0009CapabilityTEEGid command.
-    fn handle_rfc0009capabilitytee_gid(&self) -> Result<[u8; 4]> {
-        self.runtime.rfc0009capabilitytee_gid()
+    /// `handle_capabilitytee_gid` is from when we handled the CapabilityTEEGid command.
+    fn handle_capabilitytee_gid(&self) -> Result<[u8; 4]> {
+        self.runtime.capabilitytee_gid()
     }
 
-    /// `handle_rfc0009capabilitytee_rak_quote` is from when we handled the Rfc0009CapabilityTEERakQuote command.
-    fn handle_rfc0009capabilitytee_rak_quote(
+    /// `handle_capabilitytee_rak_quote` is from when we handled the CapabilityTEERakQuote command.
+    fn handle_capabilitytee_rak_quote(
         &self,
         quote_type: u32,
         spid: [u8; 16],
         sig_rl: Vec<u8>,
     ) -> Result<(B256, Vec<u8>)> {
-        self.runtime.rfc0009capabilitytee_rak_quote(
+        self.runtime.capabilitytee_rak_quote(
             sgx_types::sgx_quote_sign_type_t::from_repr(quote_type).ok_or(Error::new(
-                "handle_rfc0009capabilitytee_rak_quote: unrecognized quote_type",
+                "handle_capabilitytee_rak_quote: unrecognized quote_type",
             ))?,
             &sgx_types::sgx_spid_t { id: spid },
             &sig_rl,
@@ -255,13 +255,12 @@ impl WorkerInner {
         // Block for the next call.
         while let Ok(command) = command_receiver.recv() {
             match command {
-                Command::Rfc0009CapabilityTEEGid(sender) => {
-                    let result = self.handle_rfc0009capabilitytee_gid();
+                Command::CapabilityTEEGid(sender) => {
+                    let result = self.handle_capabilitytee_gid();
                     sender.send(result).unwrap();
                 }
-                Command::Rfc0009CapabilityTEERakQuote(quote_type, spid, sig_rl, sender) => {
-                    let result =
-                        self.handle_rfc0009capabilitytee_rak_quote(quote_type, spid, sig_rl);
+                Command::CapabilityTEERakQuote(quote_type, spid, sig_rl, sender) => {
+                    let result = self.handle_capabilitytee_rak_quote(quote_type, spid, sig_rl);
                     sender.send(result).unwrap();
                 }
                 Command::RpcCall(request, sender) => {
@@ -335,10 +334,10 @@ impl Worker {
         })
     }
 
-    pub fn rfc0009capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
+    pub fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
-            .send(Command::Rfc0009CapabilityTEEGid(response_sender))
+            .send(Command::CapabilityTEEGid(response_sender))
             .unwrap();
 
         response_receiver
@@ -347,7 +346,7 @@ impl Worker {
             .into_box()
     }
 
-    pub fn rfc0009capabilitytee_rak_quote(
+    pub fn capabilitytee_rak_quote(
         &self,
         quote_type: u32,
         spid: [u8; 16],
@@ -355,7 +354,7 @@ impl Worker {
     ) -> BoxFuture<(B256, Vec<u8>)> {
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
-            .send(Command::Rfc0009CapabilityTEERakQuote(
+            .send(Command::CapabilityTEERakQuote(
                 quote_type,
                 spid,
                 sig_rl,
