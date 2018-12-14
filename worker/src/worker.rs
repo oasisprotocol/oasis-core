@@ -13,6 +13,7 @@ use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
 use thread_local::ThreadLocal;
 
+use ekiden_core::bytes::B256;
 use ekiden_core::bytes::H256;
 use ekiden_core::enclave::api::IdentityProof;
 use ekiden_core::enclave::quote;
@@ -24,6 +25,7 @@ use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_storage_batch::BatchStorageBackend;
+use ekiden_untrusted::enclave::capabilitytee::EnclaveCapabilityTEE;
 use ekiden_untrusted::enclave::identity::IAS;
 use ekiden_untrusted::rpc::router::RpcRouter;
 use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime};
@@ -32,6 +34,15 @@ use ekiden_worker_api::Protocol;
 
 /// Command sent to the worker thread.
 enum Command {
+    /// Request for the platform's EPID group ID.
+    CapabilityTEEGid(oneshot::Sender<Result<[u8; 4]>>),
+    /// Request for the RAK and quote.
+    CapabilityTEERakQuote(
+        u32,
+        [u8; 16],
+        Vec<u8>,
+        oneshot::Sender<Result<(B256, Vec<u8>)>>,
+    ),
     /// RPC call from a client.
     RpcCall(Vec<u8>, oneshot::Sender<Result<Vec<u8>>>),
     /// Runtime call batch process request.
@@ -108,6 +119,27 @@ impl WorkerInner {
         info!("Loaded runtime with MRENCLAVE: {}", mr_enclave);
 
         (runtime, identity_proof)
+    }
+
+    /// `handle_capabilitytee_gid` is from when we handled the CapabilityTEEGid command.
+    fn handle_capabilitytee_gid(&self) -> Result<[u8; 4]> {
+        self.runtime.capabilitytee_gid()
+    }
+
+    /// `handle_capabilitytee_rak_quote` is from when we handled the CapabilityTEERakQuote command.
+    fn handle_capabilitytee_rak_quote(
+        &self,
+        quote_type: u32,
+        spid: [u8; 16],
+        sig_rl: Vec<u8>,
+    ) -> Result<(B256, Vec<u8>)> {
+        self.runtime.capabilitytee_rak_quote(
+            sgx_types::sgx_quote_sign_type_t::from_repr(quote_type).ok_or(Error::new(
+                "handle_capabilitytee_rak_quote: unrecognized quote_type",
+            ))?,
+            &sgx_types::sgx_spid_t { id: spid },
+            &sig_rl,
+        )
     }
 
     /// `handle_sh` is from when we handled the CallRuntimeBatch command.
@@ -223,6 +255,14 @@ impl WorkerInner {
         // Block for the next call.
         while let Ok(command) = command_receiver.recv() {
             match command {
+                Command::CapabilityTEEGid(sender) => {
+                    let result = self.handle_capabilitytee_gid();
+                    sender.send(result).unwrap();
+                }
+                Command::CapabilityTEERakQuote(quote_type, spid, sig_rl, sender) => {
+                    let result = self.handle_capabilitytee_rak_quote(quote_type, spid, sig_rl);
+                    sender.send(result).unwrap();
+                }
                 Command::RpcCall(request, sender) => {
                     // Process (stateless) RPC call.
                     let result = self.handle_rpc_call(request);
@@ -292,6 +332,40 @@ impl Worker {
             let command_sender = self.command_sender.lock().unwrap();
             Box::new(command_sender.clone())
         })
+    }
+
+    pub fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
+        let (response_sender, response_receiver) = oneshot::channel();
+        self.get_command_sender()
+            .send(Command::CapabilityTEEGid(response_sender))
+            .unwrap();
+
+        response_receiver
+            .map_err(|_| Error::new("channel closed"))
+            .and_then(|result| result)
+            .into_box()
+    }
+
+    pub fn capabilitytee_rak_quote(
+        &self,
+        quote_type: u32,
+        spid: [u8; 16],
+        sig_rl: Vec<u8>,
+    ) -> BoxFuture<(B256, Vec<u8>)> {
+        let (response_sender, response_receiver) = oneshot::channel();
+        self.get_command_sender()
+            .send(Command::CapabilityTEERakQuote(
+                quote_type,
+                spid,
+                sig_rl,
+                response_sender,
+            ))
+            .unwrap();
+
+        response_receiver
+            .map_err(|_| Error::new("channel closed"))
+            .and_then(|result| result)
+            .into_box()
     }
 
     /// Queue an RPC call with the worker thread.

@@ -16,6 +16,7 @@ extern crate sodalite;
 extern crate ekiden_common;
 extern crate ekiden_enclave_common;
 
+pub mod capabilitytee;
 pub mod crypto;
 pub mod enclave;
 pub mod identity;

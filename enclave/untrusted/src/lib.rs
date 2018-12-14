@@ -9,6 +9,7 @@ extern crate ekiden_common;
 extern crate ekiden_core;
 extern crate ekiden_enclave_common;
 
+pub mod capabilitytee;
 pub mod ecall_proxy;
 pub mod enclave;
 pub mod ias;

@@ -54,12 +54,16 @@ type Body struct {
 	Error *Error
 
 	// Worker interface.
-	WorkerPingRequest              *Empty
-	WorkerShutdownRequest          *Empty
-	WorkerRPCCallRequest           *WorkerRPCCallRequest
-	WorkerRPCCallResponse          *WorkerRPCCallResponse
-	WorkerRuntimeCallBatchRequest  *WorkerRuntimeCallBatchRequest
-	WorkerRuntimeCallBatchResponse *WorkerRuntimeCallBatchResponse
+	WorkerPingRequest                   *Empty
+	WorkerShutdownRequest               *Empty
+	WorkerCapabilityTEEGidRequest       *Empty
+	WorkerCapabilityTEEGidResponse      *WorkerCapabilityTEEGidResponse
+	WorkerCapabilityTEERakQuoteRequest  *WorkerCapabilityTEERakQuoteRequest
+	WorkerCapabilityTEERakQuoteResponse *WorkerCapabilityTEERakQuoteResponse
+	WorkerRPCCallRequest                *WorkerRPCCallRequest
+	WorkerRPCCallResponse               *WorkerRPCCallResponse
+	WorkerRuntimeCallBatchRequest       *WorkerRuntimeCallBatchRequest
+	WorkerRuntimeCallBatchResponse      *WorkerRuntimeCallBatchResponse
 
 	// Host interface.
 	HostRPCCallRequest             *HostRPCCallRequest
@@ -89,6 +93,24 @@ type Empty struct {
 // Error is a message body representing an error.
 type Error struct {
 	Message string `codec:"message"`
+}
+
+// WorkerCapabilityTEEGidResponse is a worker RFC 0009 CapabilityTEE EPID group ID response message body.
+type WorkerCapabilityTEEGidResponse struct {
+	Gid [4]byte `codec:"gid"`
+}
+
+// WorkerCapabilityTEERakQuoteRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
+type WorkerCapabilityTEERakQuoteRequest struct {
+	QuoteType uint32   `codec:"quote_type"`
+	Spid      [16]byte `codec:"spid"`
+	SigRL     []byte   `codec:"sig_rl"`
+}
+
+// WorkerCapabilityTEERakQuoteResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
+type WorkerCapabilityTEERakQuoteResponse struct {
+	RakPub [32]byte `codec:"rak_pub"`
+	Quote  []byte   `codec:"quote"`
 }
 
 // WorkerRPCCallRequest is a worker RPC call request message body.

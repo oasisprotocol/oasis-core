@@ -63,10 +63,10 @@ union SealedDataBuffer {
     buffer: [u8; SEALED_DATA_CAPACITY],
 }
 
-const QUOTE_CAPACITY: usize = 16 * 1024;
-union QuoteBuffer {
-    quote: sgx_types::sgx_quote_t,
-    buffer: [u8; QUOTE_CAPACITY],
+pub const QUOTE_CAPACITY: usize = 16 * 1024;
+pub union QuoteBuffer {
+    pub quote: sgx_types::sgx_quote_t,
+    pub buffer: [u8; QUOTE_CAPACITY],
 }
 
 const PUBLIC_IDENTITY_CAPACITY: usize = 1024;

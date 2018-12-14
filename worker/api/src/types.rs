@@ -3,7 +3,7 @@ use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::{self, ByteBuf};
 use sgx_types;
 
-use ekiden_core::bytes::H256;
+use ekiden_core::bytes::{B256, H256};
 use ekiden_core::rpc::client::ClientEndpoint;
 use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
 use ekiden_roothash_base::Block;
@@ -35,6 +35,19 @@ pub enum Body {
     // Worker interface.
     WorkerPingRequest {},
     WorkerShutdownRequest {},
+    WorkerCapabilityTEEGidRequest {},
+    WorkerCapabilityTEEGidResponse {
+        gid: [u8; 4],
+    },
+    WorkerCapabilityTEERakQuoteRequest {
+        quote_type: u32,
+        spid: [u8; 16],
+        sig_rl: Vec<u8>,
+    },
+    WorkerCapabilityTEERakQuoteResponse {
+        rak_pub: B256,
+        quote: Vec<u8>,
+    },
     WorkerRPCCallRequest {
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
