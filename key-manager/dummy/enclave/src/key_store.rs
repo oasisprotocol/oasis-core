@@ -11,8 +11,9 @@ use std::sync::{Mutex, MutexGuard};
 use ekiden_core::error::{Error, Result};
 use ekiden_core::random;
 
-use ekiden_keymanager_common::{ContractId, ContractKey, PublicKeyType, StateKeyType,
-                               EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY, EMPTY_STATE_KEY};
+use ekiden_keymanager_common::{confidential,
+                               {ContractId, ContractKey, PublicKeyType, StateKeyType,
+                                EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY, EMPTY_STATE_KEY}};
 use ekiden_trusted::db::{Database, DatabaseHandle};
 
 /// Key store, which actually stores the key manager keys.
@@ -44,7 +45,7 @@ impl KeyStore {
 
     /// Get or create keys.
     pub fn get_or_create_keys(&mut self, contract_id: ContractId) -> Result<ContractKey> {
-        let (public_key, private_key, state_key) = default_contract_keys();
+        let (public_key, private_key, state_key) = confidential::default_contract_keys();
         Ok(ContractKey::new(public_key, private_key, state_key))
         /*
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
@@ -60,8 +61,8 @@ impl KeyStore {
 
     /// Get the public part of the key.
     pub fn get_public_key(&self, contract_id: ContractId) -> Result<PublicKeyType> {
-        let (public_key, _private_key, _state_key) = default_contract_keys();
-        public_key
+        let (public_key, _private_key, _state_key) = confidential::default_contract_keys();
+        Ok(public_key)
         /*
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let pk_serialized = db.get(&contract_id);

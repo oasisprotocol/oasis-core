@@ -5,7 +5,7 @@
 use ekiden_core::error::{Error, Result};
 use ekiden_core::mrae::sivaessha2;
 
-use super::{PrivateKeyType, PublicKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY};
+use super::{PrivateKeyType, PublicKeyType, StateKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY, EMPTY_STATE_KEY};
 
 /// Encrypts the given plaintext using the symmetric key derived from
 /// peer_public_key and secret_key. Uses the given public_key to return
