@@ -44,6 +44,9 @@ impl KeyStore {
 
     /// Get or create keys.
     pub fn get_or_create_keys(&mut self, contract_id: ContractId) -> Result<ContractKey> {
+        let (public_key, private_key, state_key) = default_contract_keys();
+        Ok(ContractKey::new(public_key, private_key, state_key))
+        /*
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let serialized_key = db.get(&contract_id).unwrap_or_else(|| {
                 let k = bincode::serialize(&Self::create_random_key()).unwrap();
@@ -52,10 +55,14 @@ impl KeyStore {
             });
             Ok(bincode::deserialize(&serialized_key).expect("Corrupted state"))
         })
+         */
     }
 
     /// Get the public part of the key.
     pub fn get_public_key(&self, contract_id: ContractId) -> Result<PublicKeyType> {
+        let (public_key, _private_key, _state_key) = default_contract_keys();
+        public_key
+        /*
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let pk_serialized = db.get(&contract_id);
             if pk_serialized.is_none() {
@@ -68,6 +75,7 @@ impl KeyStore {
                 bincode::deserialize(&pk_serialized.unwrap()).expect("Corrupted state");
             Ok(pk.input_keypair.get_pk())
         })
+         */
     }
 
     /// Returns a random ContractKey.

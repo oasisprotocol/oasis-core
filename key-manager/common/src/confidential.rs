@@ -90,3 +90,19 @@ fn split_encrypted_payload(data: Vec<u8>) -> Result<(Vec<u8>, PublicKeyType, Vec
     let cipher = data[nonce_size + 32..].to_vec();
     Ok((nonce, peer_public_key, cipher))
 }
+
+/// Hard coded key manager retrieved contract keys for Web3(c) V0.5.
+/// Public key = 0x9385b8391e06d67c3de1675a58cffc3ad16bcf7cc56ab35d7db1fc03fb227a54.
+/// Private key = 0xd5af0c986e6a9cce52d05803e962d4b19f915905debcb41f35b68eebc954fa49.
+pub fn default_contract_keys() -> (PublicKeyType, PrivateKeyType, StateKeyType) {
+    let seed = [
+        213, 175, 12, 152, 110, 106, 156, 206, 82, 208, 88, 3, 233, 98, 212, 177, 159, 145, 89, 5,
+        222, 188, 180, 31, 53, 182, 142, 235, 201, 84, 250, 73,
+    ];
+    let mut public_key = EMPTY_PUBLIC_KEY;
+    let mut private_key = EMPTY_PRIVATE_KEY;
+    let mut state_key = EMPTY_STATE_KEY;
+    sodalite::box_keypair_seed(&mut public_key, &mut private_key, &seed);
+
+    (public_key, private_key, state_key)
+}
