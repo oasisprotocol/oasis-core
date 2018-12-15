@@ -100,13 +100,11 @@ fn main() {
             let id_1 = ContractId::from_str(&"1".repeat(64)).unwrap();
             let id_2 = ContractId::from_str(&"2".repeat(64)).unwrap();
 
-            /*
             assert!(keymanager.get_or_create_secret_keys(id_1).is_err());
             assert!(keymanager.get_or_create_secret_keys(id_2).is_err());
             assert!(keymanager.get_public_key(id_0).is_ok());
             assert!(keymanager.get_public_key(id_1).is_err());
             assert!(keymanager.get_public_key(id_2).is_err());
-             */
 
             info!("Simple test passed.");
             exit(0);
