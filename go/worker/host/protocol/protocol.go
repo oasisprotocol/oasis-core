@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 )
 
@@ -21,7 +22,7 @@ type Protocol struct {
 	sync.Mutex
 
 	conn  net.Conn
-	codec *MessageCodec
+	codec *cbor.MessageCodec
 
 	handler         Handler
 	pendingRequests map[uint64]chan *Body
@@ -176,7 +177,7 @@ func (p *Protocol) workerIncoming() {
 func New(logger *logging.Logger, conn net.Conn, handler Handler) (*Protocol, error) {
 	p := &Protocol{
 		conn:            conn,
-		codec:           NewMessageCodec(conn),
+		codec:           cbor.NewMessageCodec(conn),
 		handler:         handler,
 		pendingRequests: make(map[uint64]chan *Body),
 		outCh:           make(chan *Message),

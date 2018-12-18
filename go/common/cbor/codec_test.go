@@ -1,4 +1,4 @@
-package protocol
+package cbor
 
 import (
 	"bytes"
@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type message struct {
+	Number uint64
+}
+
 func TestCodecRoundTrip(t *testing.T) {
-	msg := Message{
-		ID:          0,
-		MessageType: MessageRequest,
-		Body: Body{
-			WorkerPingRequest: &Empty{},
-		},
+	msg := message{
+		Number: 42,
 	}
 
 	var buffer bytes.Buffer
@@ -24,12 +24,12 @@ func TestCodecRoundTrip(t *testing.T) {
 	err = codec.Write(&msg)
 	require.NoError(t, err, "Write (2nd)")
 
-	var decodedMsg1 Message
+	var decodedMsg1 message
 	err = codec.Read(&decodedMsg1)
 	require.NoError(t, err, "Read (1st)")
 	require.EqualValues(t, msg, decodedMsg1, "Decoded message must be equal to source message")
 
-	var decodedMsg2 Message
+	var decodedMsg2 message
 	err = codec.Read(&decodedMsg2)
 	require.NoError(t, err, "Read (2nd)")
 	require.EqualValues(t, msg, decodedMsg2, "Decoded message must be equal to source message")

@@ -1,11 +1,9 @@
-package protocol
+package cbor
 
 import (
 	"encoding/binary"
 	"errors"
 	"io"
-
-	"github.com/oasislabs/ekiden/go/common/cbor"
 )
 
 // Maximum message size.
@@ -19,7 +17,7 @@ type MessageReader struct {
 }
 
 // Read deserializes a single CBOR-encoded Message from the underlying reader.
-func (c *MessageReader) Read(msg *Message) error {
+func (c *MessageReader) Read(msg interface{}) error {
 	// Read 32-bit length prefix.
 	rawLength := make([]byte, 4)
 	if _, err := io.ReadAtLeast(c.reader, rawLength, 4); err != nil {
@@ -38,7 +36,7 @@ func (c *MessageReader) Read(msg *Message) error {
 	}
 
 	// Decode CBOR into given message.
-	if err := cbor.Unmarshal(rawMessage, msg); err != nil {
+	if err := Unmarshal(rawMessage, msg); err != nil {
 		return err
 	}
 
@@ -51,9 +49,9 @@ type MessageWriter struct {
 }
 
 // Write serializes a single Message to CBOR and writes it to the underlying writer.
-func (c *MessageWriter) Write(msg *Message) error {
+func (c *MessageWriter) Write(msg interface{}) error {
 	// Encode into CBOR.
-	data := cbor.Marshal(msg)
+	data := Marshal(msg)
 	if len(data) > maxMessageSize {
 		return errMessageTooLarge
 	}
