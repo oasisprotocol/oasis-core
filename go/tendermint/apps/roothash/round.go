@@ -41,11 +41,11 @@ const (
 )
 
 type roundState struct {
-	Committee        *scheduler.Committee                          `codec:"committee"`
-	ComputationGroup map[signature.MapKey]*scheduler.CommitteeNode `codec:"computation_group"`
-	Commitments      map[signature.MapKey]*commitment.Commitment   `codec:"commitments"`
-	CurrentBlock     *block.Block                                  `codec:"current_block"`
-	State            state                                         `codec:"state"`
+	Committee        *scheduler.Committee                            `codec:"committee"`
+	ComputationGroup map[signature.MapKey]*scheduler.CommitteeNode   `codec:"computation_group"`
+	Commitments      map[signature.MapKey]*commitment.OpenCommitment `codec:"commitments"`
+	CurrentBlock     *block.Block                                    `codec:"current_block"`
+	State            state                                           `codec:"state"`
 }
 
 func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, error) {
@@ -71,7 +71,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 
 func (s *roundState) reset() {
 	if s.Commitments == nil || len(s.Commitments) > 0 {
-		s.Commitments = make(map[signature.MapKey]*commitment.Commitment)
+		s.Commitments = make(map[signature.MapKey]*commitment.OpenCommitment)
 	}
 	s.State = stateWaitingCommitments
 }
@@ -91,10 +91,11 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment.Comm
 	}
 
 	// Check the commitment signature and de-serialize into header.
-	if err := commitment.Open(); err != nil {
+	openCom, err := commitment.Open()
+	if err != nil {
 		return err
 	}
-	header := commitment.Header
+	header := openCom.Header
 
 	// Ensure the node did not already submit a commitment.
 	if _, ok := r.RoundState.Commitments[id]; ok {
@@ -119,7 +120,7 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment.Comm
 		}
 	}
 
-	r.RoundState.Commitments[id] = commitment
+	r.RoundState.Commitments[id] = openCom
 
 	return nil
 }
@@ -174,7 +175,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *registry.Runtime) (*bloc
 	r.populateFinalizedBlock(block)
 
 	r.RoundState.State = stateFinalized
-	r.RoundState.Commitments = make(map[signature.MapKey]*commitment.Commitment)
+	r.RoundState.Commitments = make(map[signature.MapKey]*commitment.OpenCommitment)
 
 	return block, nil
 }

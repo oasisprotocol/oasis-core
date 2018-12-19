@@ -226,7 +226,7 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 		return nil, ErrInvalidSignature
 	}
 	if sigNode.Signed.Signature.SanityCheck(node.EntityID) != nil {
-		logger.Error("RegisterNode: invalid argument(s)",
+		logger.Error("RegisterNode: not signed by entity",
 			"signed_node", sigNode,
 			"node", node,
 		)

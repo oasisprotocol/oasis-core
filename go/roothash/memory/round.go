@@ -39,7 +39,7 @@ type roundState struct {
 	runtime          *registry.Runtime
 	committee        *scheduler.Committee
 	computationGroup map[signature.MapKey]*scheduler.CommitteeNode
-	commitments      map[signature.MapKey]*commitment.Commitment
+	commitments      map[signature.MapKey]*commitment.OpenCommitment
 	currentBlock     *block.Block
 	state            state
 }
@@ -64,7 +64,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 }
 
 func (s *roundState) reset() {
-	s.commitments = make(map[signature.MapKey]*commitment.Commitment)
+	s.commitments = make(map[signature.MapKey]*commitment.OpenCommitment)
 	s.state = stateWaitingCommitments
 }
 
@@ -84,10 +84,11 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 	}
 
 	// Check the commitment signature and de-serialize into header.
-	if err := commitment.Open(); err != nil {
+	openCom, err := commitment.Open()
+	if err != nil {
 		return err
 	}
-	header := commitment.Header
+	header := openCom.Header
 
 	// Ensure the node did not already submit a commitment.
 	if _, ok := r.roundState.commitments[id]; ok {
@@ -112,7 +113,7 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 		}
 	}
 
-	r.roundState.commitments[id] = commitment
+	r.roundState.commitments[id] = openCom
 
 	return nil
 }

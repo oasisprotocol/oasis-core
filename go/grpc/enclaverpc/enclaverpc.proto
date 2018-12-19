@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package enclaverpc;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/enclaverpc";
 
 service EnclaveRpc {
     // RPC interface.
@@ -11,7 +12,7 @@ message CallEnclaveRequest {
     // Raw request payload that will be passed to the enclave.
     bytes payload = 1;
     // Enclave routing key for cases where a single node supports multiple enclaves.
-    string enclave_id = 2;
+    bytes enclave_id = 2;
 }
 
 message CallEnclaveResponse {

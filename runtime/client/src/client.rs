@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
 
+use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
@@ -32,6 +33,8 @@ pub struct RuntimeClient {
     shutdown_sender: Mutex<Option<oneshot::Sender<&'static str>>>,
     /// Environment.
     environment: Arc<Environment>,
+    /// Runtime identifier.
+    runtime_id: B256,
 }
 
 impl RuntimeClient {
@@ -43,6 +46,7 @@ impl RuntimeClient {
         rpc: ekiden_compute_api::RuntimeClient,
         call_wait_manager: Arc<super::callwait::Manager>,
         timeout: Option<Duration>,
+        runtime_id: B256,
     ) -> Self {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
@@ -53,6 +57,7 @@ impl RuntimeClient {
             shutdown_receiver: shutdown_receiver.shared(),
             shutdown_sender: Mutex::new(Some(shutdown_sender)),
             environment,
+            runtime_id,
         }
     }
 
@@ -62,6 +67,7 @@ impl RuntimeClient {
         C: Serialize,
     {
         let mut request = ekiden_compute_api::SubmitTxRequest::new();
+        request.set_runtime_id(self.runtime_id.to_vec());
         match serde_cbor::to_vec(&call) {
             Ok(data) => request.set_data(data),
             Err(_) => return future::err(Error::new("call serialize failed")).into_box(),

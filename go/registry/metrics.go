@@ -48,7 +48,8 @@ var (
 		registryRuntimes,
 	}
 
-	_ api.Backend = (*metricsWrapper)(nil)
+	_ api.Backend      = (*metricsWrapper)(nil)
+	_ api.BlockBackend = (*blockMetricsWrapper)(nil)
 
 	metricsOnce sync.Once
 )

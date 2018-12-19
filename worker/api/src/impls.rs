@@ -44,7 +44,7 @@ impl Worker for Protocol {
     ) -> BoxFuture<(B256, Vec<u8>)> {
         self.make_request(Body::WorkerCapabilityTEERakQuoteRequest {
             quote_type,
-            spid,
+            spid: spid.to_vec(),
             sig_rl,
         }).and_then(|body| match body {
                 Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote } => {
@@ -176,7 +176,7 @@ impl Host for Protocol {
     fn storage_insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
         self.make_request(Body::HostStorageInsertRequest { value, expiry })
             .and_then(|body| match body {
-                Body::Empty {} => Ok(()),
+                Body::HostStorageInsertResponse {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -187,7 +187,7 @@ impl Host for Protocol {
 
         self.make_request(Body::HostStorageInsertBatchRequest { values })
             .and_then(|body| match body {
-                Body::Empty {} => Ok(()),
+                Body::HostStorageInsertBatchResponse {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
             })
             .into_box()
@@ -266,12 +266,24 @@ impl<T: Worker> Handler for WorkerHandler<T> {
                 quote_type,
                 spid,
                 sig_rl,
-            } => self.0
-                .capabilitytee_rak_quote(quote_type, spid, sig_rl)
-                .map(
-                    |(rak_pub, quote)| Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote },
-                )
-                .into_box(),
+            } => {
+                if spid.len() != 16 {
+                    return future::err(Error::new("malformed SPID")).into_box();
+                }
+
+                let mut cspid = [0u8; 16];
+                cspid.copy_from_slice(&spid[..]);
+
+                self.0
+                    .capabilitytee_rak_quote(quote_type, cspid, sig_rl)
+                    .map(
+                        |(rak_pub, quote)| Body::WorkerCapabilityTEERakQuoteResponse {
+                            rak_pub,
+                            quote,
+                        },
+                    )
+                    .into_box()
+            }
             Body::WorkerRPCCallRequest { request } => self.0
                 .rpc_call(request)
                 .map(|response| Body::WorkerRPCCallResponse { response })
@@ -335,11 +347,11 @@ impl<T: Host> Handler for HostHandler<T> {
                 .into_box(),
             Body::HostStorageInsertRequest { value, expiry } => self.0
                 .storage_insert(value, expiry)
-                .map(|()| Body::Empty {})
+                .map(|()| Body::HostStorageInsertResponse {})
                 .into_box(),
             Body::HostStorageInsertBatchRequest { values } => self.0
                 .storage_insert_batch(values.into_iter().map(|(v, e)| (v.into(), e)).collect())
-                .map(|()| Body::Empty {})
+                .map(|()| Body::HostStorageInsertBatchResponse {})
                 .into_box(),
             _ => future::err(Error::new("unsupported method")).into_box(),
         }

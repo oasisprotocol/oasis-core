@@ -26,6 +26,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
@@ -385,11 +386,11 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(dataDir string, identity *signature.PrivateKey) service.TendermintService {
+func New(dataDir string, identity *identity.Identity) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
-		validatorKey:          identity,
+		validatorKey:          identity.NodeKey,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 	}

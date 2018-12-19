@@ -159,6 +159,7 @@ impl RuntimeClientManager {
                                     rpc,
                                     inner.call_wait_manager.clone(),
                                     inner.timeout.clone(),
+                                    inner.runtime_id,
                                 );
 
                                 // Change the leader.

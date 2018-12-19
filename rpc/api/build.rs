@@ -10,8 +10,14 @@ fn main() {
         &["enclaverpc", "enclaverpc_grpc"],
     );
 
-    protoc_grpcio::compile_grpc_protos(&["src/enclaverpc.proto"], &["src"], "src/generated")
-        .expect("failed to compile gRPC definitions");
+    protoc_grpcio::compile_grpc_protos(
+        &["../../go/grpc/enclaverpc/enclaverpc.proto"],
+        &["../../go/grpc"],
+        "src/generated",
+    ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/enclaverpc.proto");
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../go/grpc/enclaverpc/enclaverpc.proto"
+    );
 }

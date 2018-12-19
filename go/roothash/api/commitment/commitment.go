@@ -21,6 +21,13 @@ var (
 // Commitment is a roothash commitment.
 type Commitment struct {
 	signature.Signed
+}
+
+// OpenCommitment is a commitment that has been verified and deserialized.
+//
+// The open commitment still contains the original signed commitment.
+type OpenCommitment struct {
+	Commitment
 
 	Header *block.Header `codec:"header"`
 }
@@ -36,12 +43,26 @@ func (c *Commitment) ToOpaqueCommitment() *api.OpaqueCommitment {
 }
 
 // Open validates the commitment signature, and de-serializes the header.
-func (c *Commitment) Open() error {
+func (c *Commitment) Open() (*OpenCommitment, error) {
 	var header block.Header
 	if err := c.Signed.Open(SignatureContext, &header); err != nil {
-		return errors.New("roothash/commitment: commitment has invalid signature")
+		return nil, errors.New("roothash/commitment: commitment has invalid signature")
 	}
-	c.Header = &header
 
-	return nil
+	return &OpenCommitment{
+		Commitment: *c,
+		Header:     &header,
+	}, nil
+}
+
+// SignCommitment serializes the header and signs the commitment.
+func SignCommitment(privateKey signature.PrivateKey, header *block.Header) (*Commitment, error) {
+	signed, err := signature.SignSigned(privateKey, SignatureContext, header)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commitment{
+		Signed: *signed,
+	}, nil
 }

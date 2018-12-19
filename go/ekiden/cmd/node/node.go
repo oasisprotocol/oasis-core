@@ -2,15 +2,13 @@
 package node
 
 import (
-	"crypto/rand"
 	"errors"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/beacon"
 	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/dummydebug"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
@@ -30,7 +28,7 @@ import (
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
-	workerHost "github.com/oasislabs/ekiden/go/worker/host"
+	"github.com/oasislabs/ekiden/go/worker"
 )
 
 // Run runs the ekiden node.
@@ -50,10 +48,10 @@ func Run(cmd *cobra.Command, args []string) {
 // is not guaranteed to be stable.
 type Node struct {
 	svcMgr   *background.ServiceManager
-	identity *signature.PrivateKey
+	identity *identity.Identity
 	grpcSrv  *grpc.Server
 	svcTmnt  service.TendermintService
-	wrkHost  *workerHost.Host
+	worker   *worker.Worker
 
 	Beacon    beaconAPI.Backend
 	Epochtime epochtimeAPI.Backend
@@ -156,7 +154,7 @@ func NewNode() (*Node, error) {
 	var err error
 
 	// Generate/Load the node identity.
-	node.identity, err = initIdentity(dataDir)
+	node.identity, err = identity.LoadOrGenerate(dataDir)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
 			"err", err,
@@ -165,7 +163,7 @@ func NewNode() (*Node, error) {
 	}
 
 	logger.Info("loaded/generated node identity",
-		"public_key", node.identity.Public(),
+		"public_key", node.identity.NodeKey.Public(),
 	)
 
 	// Initialize the tracing client.
@@ -229,15 +227,22 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize the worker host.
-	node.wrkHost, err = workerHost.New(node.identity, node.Storage)
+	// Initialize the worker.
+	node.worker, err = worker.New(
+		node.identity,
+		node.Storage,
+		node.RootHash,
+		node.Registry,
+		node.Epochtime,
+		node.Scheduler,
+	)
 	if err != nil {
-		logger.Error("failed to initialize worker host",
+		logger.Error("failed to initialize compute worker",
 			"err", err,
 		)
 		return nil, err
 	}
-	node.svcMgr.Register(node.wrkHost)
+	node.svcMgr.Register(node.worker)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -266,9 +271,9 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Start the worker host.
-	if err = node.wrkHost.Start(); err != nil {
-		logger.Error("failed to start worker host",
+	// Start the worker.
+	if err = node.worker.Start(); err != nil {
+		logger.Error("failed to start worker",
 			"err", err,
 		)
 		return nil, err
@@ -278,16 +283,6 @@ func NewNode() (*Node, error) {
 	startOk = true
 
 	return node, nil
-}
-
-func initIdentity(dataDir string) (*signature.PrivateKey, error) {
-	var k signature.PrivateKey
-
-	if err := k.LoadPEM(filepath.Join(dataDir, "identity.pem"), rand.Reader); err != nil {
-		return nil, err
-	}
-
-	return &k, nil
 }
 
 // RegisterFlags registers the flags used by the node command.
@@ -305,7 +300,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		scheduler.RegisterFlags,
 		storage.RegisterFlags,
 		tendermint.RegisterFlags,
-		workerHost.RegisterFlags,
+		worker.RegisterFlags,
 	} {
 		v(cmd)
 	}

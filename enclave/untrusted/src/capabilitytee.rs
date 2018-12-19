@@ -59,9 +59,14 @@ impl EnclaveCapabilityTEE for Enclave {
         }
 
         // Get a quote.
+        let sig_rl_ptr = if sig_rl.len() == 0 {
+            std::ptr::null()
+        } else {
+            sig_rl.as_ptr()
+        };
         let mut quote_size = 0;
         let result = unsafe {
-            sgx_types::sgx_calc_quote_size(sig_rl.as_ptr(), sig_rl.len() as u32, &mut quote_size)
+            sgx_types::sgx_calc_quote_size(sig_rl_ptr, sig_rl.len() as u32, &mut quote_size)
         };
         if result != sgx_types::sgx_status_t::SGX_SUCCESS {
             return Err(Error::new(format!("sgx_calc_quote_size: {}", result)));
@@ -81,7 +86,7 @@ impl EnclaveCapabilityTEE for Enclave {
                 quote_type,
                 spid,
                 nonce,
-                sig_rl.as_ptr(),
+                sig_rl_ptr,
                 sig_rl.len() as u32,
                 std::ptr::null_mut(),
                 &mut quote_buf.quote,

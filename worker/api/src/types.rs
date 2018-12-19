@@ -41,11 +41,14 @@ pub enum Body {
     },
     WorkerCapabilityTEERakQuoteRequest {
         quote_type: u32,
-        spid: [u8; 16],
+        #[serde(with = "serde_bytes")]
+        spid: Vec<u8>,
+        #[serde(with = "serde_bytes")]
         sig_rl: Vec<u8>,
     },
     WorkerCapabilityTEERakQuoteResponse {
         rak_pub: B256,
+        #[serde(with = "serde_bytes")]
         quote: Vec<u8>,
     },
     WorkerRPCCallRequest {
@@ -121,9 +124,11 @@ pub enum Body {
         value: Vec<u8>,
         expiry: u64,
     },
+    HostStorageInsertResponse {},
     HostStorageInsertBatchRequest {
         values: Vec<(ByteBuf, u64)>,
     },
+    HostStorageInsertBatchResponse {},
 }
 
 #[derive(Clone, Copy, Debug)]

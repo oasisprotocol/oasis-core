@@ -46,7 +46,27 @@ func (p *Protocol) Close() {
 	p.quitWg.Wait()
 }
 
-func (p *Protocol) MakeRequest(body *Body) (<-chan *Body, error) {
+// Call sends a request to the other side and returns the response or error.
+func (p *Protocol) Call(ctx context.Context, body *Body) (*Body, error) {
+	respCh, err := p.MakeRequest(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, ok := <-respCh
+	if !ok {
+		return nil, errors.New("channel closed")
+	}
+
+	if resp.Error != nil {
+		return nil, errors.New(resp.Error.Message)
+	}
+
+	return resp, nil
+}
+
+// MakeRequest sends a request to the other side.
+func (p *Protocol) MakeRequest(ctx context.Context, body *Body) (<-chan *Body, error) {
 	// Create channel for sending the response and grab next request identifier.
 	ch := make(chan *Body, 1)
 
@@ -67,6 +87,8 @@ func (p *Protocol) MakeRequest(body *Body) (<-chan *Body, error) {
 	case p.outCh <- &msg:
 	case <-p.closeCh:
 		return nil, errors.New("connection closed")
+	case <-ctx.Done():
+		return nil, errors.New("aborted by context")
 	}
 
 	return ch, nil

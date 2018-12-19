@@ -16,11 +16,17 @@ fn main() {
     );
 
     protoc_grpcio::compile_grpc_protos(
-        &["src/computation_group.proto", "src/runtime.proto"],
+        &[
+            "src/computation_group.proto",
+            "../../go/grpc/committee/runtime.proto",
+        ],
         &["src", "../../go/grpc"],
         "src/generated",
     ).expect("failed to compile gRPC definitions");
 
-    println!("cargo:rerun-if-changed={}", "src/runtime.proto");
+    println!(
+        "cargo:rerun-if-changed={}",
+        "../../go/grpc/committee/runtime.proto"
+    );
     println!("cargo:rerun-if-changed={}", "src/computation_group.proto");
 }

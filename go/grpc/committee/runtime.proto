@@ -1,6 +1,7 @@
 syntax = "proto3";
 
-package runtime;
+package committee;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/committee";
 
 service Runtime {
     // Submit a transaction to leader.
@@ -10,6 +11,8 @@ service Runtime {
 message SubmitTxRequest {
     // Encoded transaction.
     bytes data = 1;
+    // Runtime identifier.
+    bytes runtime_id = 2;
 }
 
 message SubmitTxResponse {

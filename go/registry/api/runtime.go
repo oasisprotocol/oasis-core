@@ -171,3 +171,15 @@ type SignedRuntime struct {
 func (s *SignedRuntime) Open(context []byte, runtime *Runtime) error { // nolint: interfacer
 	return s.Signed.Open(context, runtime)
 }
+
+// SignRuntime serializes the Runtime and signs the result.
+func SignRuntime(privateKey signature.PrivateKey, context []byte, runtime *Runtime) (*SignedRuntime, error) {
+	signed, err := signature.SignSigned(privateKey, context, runtime)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedRuntime{
+		Signed: *signed,
+	}, nil
+}

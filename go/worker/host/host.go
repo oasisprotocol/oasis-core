@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
 	"github.com/oasislabs/ekiden/go/worker/ias"
 )
@@ -31,6 +32,8 @@ var (
 const (
 	// Worker connect timeout (in seconds).
 	workerConnectTimeout = 5
+	// Worker RAK initialization timeout (in seconds).
+	workerRAKTimeout = 5
 	// Worker respawn delay (in seconds).
 	workerRespawnDelay = 1
 
@@ -152,20 +155,36 @@ func prepareWorkerArgs() ([]string, error) {
 	}, nil
 }
 
+// Request is an internal request to manager goroutine that is dispatched
+// to the worker when a worker becomes available.
+type hostRequest struct {
+	ctx  context.Context
+	body *protocol.Body
+	ch   chan<- *hostResponse
+}
+
+// Response is an internal response from the manager goroutine that is
+// returned to the caller when a request has been dispatched to the worker.
+type hostResponse struct {
+	ch  <-chan *protocol.Body
+	err error
+}
+
 // Host is a worker host managing multiple workers.
 type Host struct {
 	workerBinary  string
 	runtimeBinary string
 	cacheDir      string
 
-	storage storage.Backend
-	ias     *ias.IAS
+	storage    storage.Backend
+	ias        *ias.IAS
+	keyManager *enclaverpc.Client
 
 	stopCh chan struct{}
 	quitCh chan struct{}
 
-	// TODO: Add support for multiple workers.
 	activeWorker *process
+	requestCh    chan *hostRequest
 
 	logger *logging.Logger
 }
@@ -177,12 +196,6 @@ func (h *Host) Name() string {
 
 // Start starts the service.
 func (h *Host) Start() error {
-	// TODO: Remove this after it is an error if no worker binary is configured.
-	if h.workerBinary == "" {
-		h.logger.Warn("not starting worker host as worker binary is not configured")
-		return nil
-	}
-
 	h.logger.Info("starting worker host")
 	go h.manager()
 	return nil
@@ -204,7 +217,8 @@ func (h *Host) Cleanup() {
 
 // Initialize a CapabilityTEE for a worker.
 func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout*time.Second)
+	defer cancel()
 
 	quoteType, err := h.ias.GetQuoteSignatureType(ctx)
 	if err != nil {
@@ -216,11 +230,15 @@ func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error
 		return nil, errors.Wrap(err, "worker: error while getting IAS SPID")
 	}
 
-	gidCh, err := worker.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEEGidRequest: &protocol.Empty{}})
+	gidRes, err := worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEEGidRequest: &protocol.Empty{},
+		},
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting worker EPID group")
 	}
-	gidRes := <-gidCh
 	gid := gidRes.WorkerCapabilityTEEGidResponse.Gid
 
 	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(gid[:]))
@@ -228,20 +246,20 @@ func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error
 		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
 	}
 
-	rakQuoteCh, err := worker.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEERakQuoteRequest: &protocol.WorkerCapabilityTEERakQuoteRequest{
-		QuoteType: uint32(*quoteType),
-		Spid:      spid,
-		SigRL:     sigRL,
-	}})
+	rakQuoteRes, err := worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEERakQuoteRequest: &protocol.WorkerCapabilityTEERakQuoteRequest{
+				QuoteType: uint32(*quoteType),
+				SPID:      spid,
+				SigRL:     sigRL,
+			},
+		},
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting worker quote and public RAK")
 	}
-	rakQuoteRes := <-rakQuoteCh
-	rakPub := signature.PublicKey{}
-	err = rakPub.UnmarshalBinary(rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.RakPub[:])
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while unmarshalling public RAK")
-	}
+	rakPub := rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.RakPub
 	quote := rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.Quote
 
 	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil)
@@ -262,6 +280,26 @@ func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error
 	}
 
 	return capabilityTEE, nil
+}
+
+// MakeRequest sends a request to the worker process.
+func (h *Host) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *protocol.Body, error) {
+	respCh := make(chan *hostResponse, 1)
+
+	// Send internal request to the manager goroutine.
+	select {
+	case h.requestCh <- &hostRequest{ctx, body, respCh}:
+	case <-ctx.Done():
+		return nil, errors.New("aborted by context")
+	}
+
+	// Wait for response from the manager goroutine.
+	select {
+	case resp := <-respCh:
+		return resp.ch, resp.err
+	case <-ctx.Done():
+		return nil, errors.New("aborted by context")
+	}
 }
 
 func (h *Host) spawnWorker() (*process, error) {
@@ -384,7 +422,7 @@ func (h *Host) spawnWorker() (*process, error) {
 
 	// Spawn protocol instance on the given connection.
 	logger := h.logger.With("worker_pid", cmd.Process.Pid)
-	handler := newHostHandler(h.storage, h.ias)
+	handler := newHostHandler(h.storage, h.ias, h.keyManager)
 	proto, err := protocol.New(logger, conn, handler)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while instantiating protocol")
@@ -413,14 +451,21 @@ func (h *Host) spawnWorker() (*process, error) {
 
 func (h *Host) manager() {
 	// Make sure that a worker is always available.
-	// TODO: Support multiple workers.
 	wantWorker := true
 	needSpawnDelay := false
 	for {
 		// Wait for the worker to terminate.
-		if h.activeWorker != nil {
+	WaitWorkerToTerminate:
+		for h.activeWorker != nil {
 			select {
+			case rq := <-h.requestCh:
+				// Forward request to given worker and send back the response.
+				ch, err := h.activeWorker.protocol.MakeRequest(rq.ctx, rq.body)
+				rq.ch <- &hostResponse{ch, err}
+				close(rq.ch)
+				continue WaitWorkerToTerminate
 			case err := <-h.activeWorker.quitCh:
+				// Worker has terminated.
 				h.logger.Warn("worker terminated")
 				needSpawnDelay = true
 
@@ -430,6 +475,7 @@ func (h *Host) manager() {
 					)
 				}
 			case <-h.stopCh:
+				// Termination requested.
 				h.logger.Info("termination requested")
 				wantWorker = false
 
@@ -455,6 +501,7 @@ func (h *Host) manager() {
 			h.logger.Error("failed to spawn new worker",
 				"err", err,
 			)
+			needSpawnDelay = true
 			continue
 		}
 
@@ -464,15 +511,23 @@ func (h *Host) manager() {
 	close(h.quitCh)
 }
 
-func newHost(workerBinary, runtimeBinary, cacheDir string, storage storage.Backend, ias *ias.IAS) (*Host, error) {
-	// TODO: Make it an error if worker binary is not configured.
-	if workerBinary != "" {
-		if runtimeBinary == "" {
-			return nil, errors.New("runtime binary not configured")
-		}
-		if cacheDir == "" {
-			return nil, errors.New("worker cache directory not configured")
-		}
+func New(
+	workerBinary string,
+	runtimeBinary string,
+	cacheDir string,
+	runtimeID signature.PublicKey,
+	storage storage.Backend,
+	ias *ias.IAS,
+	keyManager *enclaverpc.Client,
+) (*Host, error) {
+	if workerBinary == "" {
+		return nil, errors.New("worker binary not configured")
+	}
+	if runtimeBinary == "" {
+		return nil, errors.New("runtime binary not configured")
+	}
+	if cacheDir == "" {
+		return nil, errors.New("worker cache directory not configured")
 	}
 
 	host := &Host{
@@ -481,9 +536,11 @@ func newHost(workerBinary, runtimeBinary, cacheDir string, storage storage.Backe
 		cacheDir:      cacheDir,
 		storage:       storage,
 		ias:           ias,
+		keyManager:    keyManager,
 		quitCh:        make(chan struct{}),
 		stopCh:        make(chan struct{}),
-		logger:        logging.GetLogger("worker/host"),
+		requestCh:     make(chan *hostRequest, 10),
+		logger:        logging.GetLogger("worker/host").With("runtime_id", runtimeID),
 	}
 
 	return host, nil

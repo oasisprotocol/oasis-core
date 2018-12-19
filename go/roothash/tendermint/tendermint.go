@@ -34,7 +34,10 @@ const (
 	roundHeightMapCacheSize = 10000
 )
 
-var _ api.Backend = (*tendermintBackend)(nil)
+var (
+	_ api.Backend      = (*tendermintBackend)(nil)
+	_ api.BlockBackend = (*tendermintBackend)(nil)
+)
 
 type runtimeBrokers struct {
 	sync.Mutex
@@ -42,7 +45,8 @@ type runtimeBrokers struct {
 	blockNotifier *pubsub.Broker
 	eventNotifier *pubsub.Broker
 
-	lastBlock *block.Block
+	lastBlockHeight int64
+	lastBlock       *block.Block
 
 	roundHeightMapCache *lru.Cache
 }
@@ -86,21 +90,11 @@ func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int6
 }
 
 func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
-	notifiers := r.getRuntimeNotifiers(id)
-
-	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
-		// Replay the latest block if it exists.  This isn't handled by
-		// the Broker because the same notifier is used to handle
-		// WatchBlocksSince.
-		notifiers.Lock()
-		defer notifiers.Unlock()
-
-		if notifiers.lastBlock != nil {
-			ch.In() <- notifiers.lastBlock
-		}
-	})
-	ch := make(chan *block.Block)
-	sub.Unwrap(ch)
+	annCh, sub, err := r.WatchAnnotatedBlocks(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	ch := api.MapAnnotatedBlockToBlock(annCh)
 
 	return ch, sub, nil
 }
@@ -131,13 +125,42 @@ func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round block
 					break
 				}
 
-				ch.In() <- block
+				// NOTE: This doesn't emit the height, but height is always stripped
+				//       in this method as there is no WatchAnnotatedBlocksSince.
+				ch.In() <- &api.AnnotatedBlock{Block: block}
 			}
 
-			ch.In() <- notifiers.lastBlock
+			ch.In() <- &api.AnnotatedBlock{
+				Height: notifiers.lastBlockHeight,
+				Block:  notifiers.lastBlock,
+			}
 		}
 	})
-	ch := make(chan *block.Block)
+	annCh := make(chan *api.AnnotatedBlock)
+	sub.Unwrap(annCh)
+	ch := api.MapAnnotatedBlockToBlock(annCh)
+
+	return ch, sub, nil
+}
+
+func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+	notifiers := r.getRuntimeNotifiers(id)
+
+	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
+		// Replay the latest block if it exists.  This isn't handled by
+		// the Broker because the same notifier is used to handle
+		// WatchBlocksSince.
+		notifiers.Lock()
+		defer notifiers.Unlock()
+
+		if notifiers.lastBlock != nil {
+			ch.In() <- &api.AnnotatedBlock{
+				Height: notifiers.lastBlockHeight,
+				Block:  notifiers.lastBlock,
+			}
+		}
+	})
+	ch := make(chan *api.AnnotatedBlock)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
@@ -385,6 +408,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 				// Ensure latest block is set.
 				notifiers.Lock()
 				notifiers.lastBlock = block
+				notifiers.lastBlockHeight = r.lastBlockHeight
 				notifiers.Unlock()
 
 				// Insert the round -> block height mapping into the
@@ -393,7 +417,10 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 
 				// Broadcast new block.
 				r.allBlockNotifier.Broadcast(block)
-				notifiers.blockNotifier.Broadcast(block)
+				notifiers.blockNotifier.Broadcast(&api.AnnotatedBlock{
+					Height: r.lastBlockHeight,
+					Block:  block,
+				})
 			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashDiscrepancyDetected) {
 				var value tmapi.ValueRootHashDiscrepancyDetected
 				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {

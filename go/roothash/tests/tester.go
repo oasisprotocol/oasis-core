@@ -251,12 +251,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	toCommit = append(toCommit, committee.leader)
 	toCommit = append(toCommit, committee.workers...)
 	for _, node := range toCommit {
-		commit := &commitment.Commitment{
-			Header: &parent.Header,
-		}
-		signed, err := signature.SignSigned(node.PrivateKey, commitment.SignatureContext, commit.Header) // nolint: govet
+		commit, err := commitment.SignCommitment(node.PrivateKey, &parent.Header) // nolint: govet
 		require.NoError(err, "SignSigned")
-		commit.Signed = *signed
 		opaque := commit.ToOpaqueCommitment()
 		err = backend.Commit(context.Background(), rt.Runtime.ID, opaque)
 		require.NoError(err, "Commit")

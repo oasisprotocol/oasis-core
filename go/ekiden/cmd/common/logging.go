@@ -17,13 +17,12 @@ const (
 )
 
 var (
-	logFile  string
 	logFmt   logging.Format
 	logLevel logging.Level = logging.LevelWarn
 )
 
 func registerLoggingFlags(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().StringVar(&logFile, cfgLogFile, "", "log file")
+	rootCmd.PersistentFlags().String(cfgLogFile, "", "log file")
 	rootCmd.PersistentFlags().Var(&logFmt, cfgLogFmt, "log format")
 	rootCmd.PersistentFlags().Var(&logLevel, cfgLogLevel, "log level")
 

@@ -30,7 +30,7 @@ func TestEchoRequestResponse(t *testing.T) {
 	require.NoError(t, err, "B.New()")
 
 	reqA := Body{Empty: &Empty{}}
-	chA, err := protoA.MakeRequest(&reqA)
+	chA, err := protoA.MakeRequest(context.Background(), &reqA)
 	require.NoError(t, err, "A.MakeRequest()")
 	respA := <-chA
 	require.EqualValues(t, &reqA, respA, "A.MakeRequest()")
@@ -38,7 +38,7 @@ func TestEchoRequestResponse(t *testing.T) {
 	require.EqualValues(t, 1, handlerB.calls, "Handler B must be called")
 
 	reqB := Body{Empty: &Empty{}}
-	chB, err := protoB.MakeRequest(&reqB)
+	chB, err := protoB.MakeRequest(context.Background(), &reqB)
 	require.NoError(t, err, "B.MakeRequest()")
 	respB := <-chB
 	require.EqualValues(t, &reqB, respB, "B.MakeRequest()")
@@ -46,11 +46,11 @@ func TestEchoRequestResponse(t *testing.T) {
 	require.EqualValues(t, 1, handlerB.calls, "Handler B must not be called")
 
 	protoA.Close()
-	_, err = protoA.MakeRequest(&reqA)
+	_, err = protoA.MakeRequest(context.Background(), &reqA)
 	require.Error(t, err, "A.MakeRequest() must error when connection is closed")
 
 	protoB.Close()
-	_, err = protoB.MakeRequest(&reqB)
+	_, err = protoB.MakeRequest(context.Background(), &reqB)
 	require.Error(t, err, "B.MakeRequest() must error when connection is closed")
 }
 
@@ -66,7 +66,7 @@ func TestBigMessage(t *testing.T) {
 
 	rq := make([]byte, 2000000)
 	reqA := Body{WorkerRPCCallRequest: &WorkerRPCCallRequest{Request: rq}}
-	chA, err := protoA.MakeRequest(&reqA)
+	chA, err := protoA.MakeRequest(context.Background(), &reqA)
 	require.NoError(t, err, "A.MakeRequest()")
 	respA := <-chA
 	require.EqualValues(t, &reqA, respA, "A.MakeRequest()")

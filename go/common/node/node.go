@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"math"
+	"net"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -62,6 +63,9 @@ type Node struct {
 	// Addresses is the list of addresses at which the node can be reached.
 	Addresses []Address `codec:"addresses"`
 
+	// P2P contains information for connecting to this node via P2P transport.
+	P2P P2PInfo `codec:"p2p"`
+
 	// Certificate is the certificate for establishing TLS connections.
 	Certificate *Certificate `codec:"certificate"`
 
@@ -73,6 +77,15 @@ type Node struct {
 
 	// Capabilities are the node's capabilities.
 	Capabilities Capabilities `codec:"capabilities"`
+}
+
+// P2PInfo contains information for connecting to this node via P2P transport.
+type P2PInfo struct {
+	// ID is the unique identifier of the node on the P2P transport.
+	ID []byte `codec:"id"`
+
+	// Addresses is the list of multiaddrs at which the node can be reached.
+	Addresses [][]byte `codec:"addresses"`
 }
 
 // Address families.
@@ -105,6 +118,23 @@ func NewAddress(family string, ip []byte, port uint16) (*Address, error) {
 	}, nil
 }
 
+// FromIP populates the address from a net.IP and port.
+func (a *Address) FromIP(ip net.IP, port uint16) error {
+	if ipv4 := ip.To4(); ipv4 != nil {
+		a.Family = AddressFamilyIPv4
+		a.Tuple.IP = ipv4
+	} else if ipv6 := ip.To16(); ipv6 != nil {
+		a.Family = AddressFamilyIPv6
+		a.Tuple.IP = ipv6
+	} else {
+		return errors.New("unknown address family")
+	}
+
+	a.Tuple.Port = port
+
+	return nil
+}
+
 // AddressTuple is an (ip, port) tuple.
 //
 // This structure format is compatible with Rust's SocketAddr serialization.
@@ -120,13 +150,13 @@ type AddressTuple struct {
 
 // Certificate represents a X.509 certificate.
 type Certificate struct {
-	// Der is the DER encoding of a X.509 certificate.
-	Der []byte `codec:"der"`
+	// DER is the DER encoding of a X.509 certificate.
+	DER []byte `codec:"der"`
 }
 
 // Parse parses the DER encoded payload and returns the certificate.
 func (c *Certificate) Parse() (*x509.Certificate, error) {
-	return x509.ParseCertificate(c.Der)
+	return x509.ParseCertificate(c.DER)
 }
 
 // Capabilities represents a node's capabilities.
@@ -306,7 +336,7 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 
 	if pbCert := pb.GetCertificate(); pbCert != nil {
 		n.Certificate = &Certificate{
-			Der: append([]byte{}, pbCert.GetDer()...),
+			DER: append([]byte{}, pbCert.GetDer()...),
 		}
 	}
 
@@ -340,7 +370,7 @@ func (n *Node) ToProto() *pbCommon.Node {
 	}
 	if n.Certificate != nil {
 		pb.Certificate = &pbCommon.Certificate{
-			Der: append([]byte{}, n.Certificate.Der...),
+			Der: append([]byte{}, n.Certificate.DER...),
 		}
 	}
 	if n.Stake != nil {
@@ -378,6 +408,18 @@ type SignedNode struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfacer
 	return s.Signed.Open(context, node)
+}
+
+// SignNode serializes the Node and signs the result.
+func SignNode(privateKey signature.PrivateKey, context []byte, node *Node) (*SignedNode, error) {
+	signed, err := signature.SignSigned(privateKey, context, node)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedNode{
+		Signed: *signed,
+	}, nil
 }
 
 func parseProtoAddress(pb *pbCommon.Address) (*Address, error) {

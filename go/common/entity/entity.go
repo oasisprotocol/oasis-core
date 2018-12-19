@@ -102,3 +102,15 @@ type SignedEntity struct {
 func (s *SignedEntity) Open(context []byte, entity *Entity) error { // nolint: interfacer
 	return s.Signed.Open(context, entity)
 }
+
+// SignEntity serializes the Entity and signs the result.
+func SignEntity(privateKey signature.PrivateKey, context []byte, entity *Entity) (*SignedEntity, error) {
+	signed, err := signature.SignSigned(privateKey, context, entity)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedEntity{
+		Signed: *signed,
+	}, nil
+}

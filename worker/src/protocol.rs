@@ -1,5 +1,5 @@
 //! Protocol handler for worker RPCs.
-use std::sync::RwLock;
+use std::sync::{Condvar, Mutex};
 
 use rustracing_jaeger::Span;
 
@@ -15,21 +15,34 @@ use super::worker::Worker;
 /// Worker protocol handler.
 pub struct ProtocolHandler {
     /// Worker handle.
-    worker: RwLock<Option<Worker>>,
+    worker: Mutex<Option<Worker>>,
+    worker_cond: Condvar,
 }
 
 impl ProtocolHandler {
     /// Create new protocol handler instance.
     pub fn new() -> Self {
         Self {
-            worker: RwLock::new(None),
+            worker: Mutex::new(None),
+            worker_cond: Condvar::new(),
         }
     }
 
     /// Set worker thread to use for dispatching calls.
     pub fn set_worker(&self, worker: Worker) {
-        let mut guard = self.worker.write().unwrap();
+        let mut guard = self.worker.lock().unwrap();
         *guard = Some(worker);
+        self.worker_cond.notify_all();
+    }
+
+    fn with_worker<F: FnOnce(&Worker) -> R, R>(&self, f: F) -> R {
+        let mut guard = self.worker.lock().unwrap();
+        while guard.is_none() {
+            guard = self.worker_cond.wait(guard).unwrap();
+        }
+        let worker = guard.as_ref().expect("worker must be set");
+
+        f(worker)
     }
 }
 
@@ -39,9 +52,7 @@ impl ekiden_worker_api::Worker for ProtocolHandler {
     }
 
     fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
-        let guard = self.worker.read().unwrap();
-        let worker = guard.as_ref().expect("worker must be set");
-        worker.capabilitytee_gid()
+        self.with_worker(|worker| worker.capabilitytee_gid())
     }
 
     fn capabilitytee_rak_quote(
@@ -50,16 +61,11 @@ impl ekiden_worker_api::Worker for ProtocolHandler {
         spid: [u8; 16],
         sig_rl: Vec<u8>,
     ) -> BoxFuture<(B256, Vec<u8>)> {
-        let guard = self.worker.read().unwrap();
-        let worker = guard.as_ref().expect("worker must be set");
-        worker.capabilitytee_rak_quote(quote_type, spid, sig_rl)
+        self.with_worker(|worker| worker.capabilitytee_rak_quote(quote_type, spid, sig_rl))
     }
 
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        let guard = self.worker.read().unwrap();
-        let worker = guard.as_ref().expect("worker must be set");
-
-        worker.rpc_call(request)
+        self.with_worker(|worker| worker.rpc_call(request))
     }
 
     fn runtime_call_batch(
@@ -68,12 +74,9 @@ impl ekiden_worker_api::Worker for ProtocolHandler {
         block: Block,
         commit_storage: bool,
     ) -> BoxFuture<ComputedBatch> {
-        let guard = self.worker.read().unwrap();
-        let worker = guard.as_ref().expect("worker must be set");
-
         // TODO: Correlate to an event source
         let sh = Span::inactive().handle();
 
-        worker.runtime_call_batch(calls, block, sh, commit_storage)
+        self.with_worker(|worker| worker.runtime_call_batch(calls, block, sh, commit_storage))
     }
 }

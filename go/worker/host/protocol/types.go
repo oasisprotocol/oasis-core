@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -103,14 +104,14 @@ type WorkerCapabilityTEEGidResponse struct {
 // WorkerCapabilityTEERakQuoteRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
 type WorkerCapabilityTEERakQuoteRequest struct {
 	QuoteType uint32   `codec:"quote_type"`
-	Spid      [16]byte `codec:"spid"`
+	SPID      ias.SPID `codec:"spid"`
 	SigRL     []byte   `codec:"sig_rl"`
 }
 
 // WorkerCapabilityTEERakQuoteResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
 type WorkerCapabilityTEERakQuoteResponse struct {
-	RakPub [32]byte `codec:"rak_pub"`
-	Quote  []byte   `codec:"quote"`
+	RakPub signature.PublicKey `codec:"rak_pub"`
+	Quote  []byte              `codec:"quote"`
 }
 
 // WorkerRPCCallRequest is a worker RPC call request message body.
