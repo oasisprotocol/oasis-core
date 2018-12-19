@@ -315,12 +315,24 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 func (r *tendermintBackend) worker() { // nolint: gocyclo
 	defer close(r.closedCh)
 
+	// Create a context that gets cancelled when the backend is stopped. If
+	// this wouldn't be the case, the backend would hang in Cleanup when we
+	// were still in the middle of the subscribe (and the subscribe could not
+	// happen due to Tendermint not yet being initialized).
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-r.closeCh
+		cancel()
+	}()
+
 	// Subscribe to transactions which modify state.
-	ctx := context.Background()
 	txChannel := make(chan interface{})
 
 	if err := r.service.Subscribe(ctx, "roothash-worker", tmapi.QueryRootHashUpdate, txChannel); err != nil {
-		panic("worker: failed to subscribe")
+		r.logger.Error("failed to subscribe",
+			"err", err,
+		)
+		return
 	}
 	defer r.service.Unsubscribe(ctx, "roothash-worker", tmapi.QueryRootHashUpdate) // nolint: errcheck
 

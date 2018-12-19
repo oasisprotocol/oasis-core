@@ -262,12 +262,23 @@ func (r *tendermintBackend) GetRuntimes(ctx context.Context) ([]*api.Runtime, er
 func (r *tendermintBackend) workerEvents() {
 	defer r.closedWg.Done()
 
-	// Subscribe to transactions which modify state.
-	ctx := context.Background()
-	txChannel := make(chan interface{})
+	// Create a context that gets cancelled when the backend is stopped. If
+	// this wouldn't be the case, the backend would hang in Cleanup when we
+	// were still in the middle of the subscribe (and the subscribe could not
+	// happen due to Tendermint not yet being initialized).
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-r.closeCh
+		cancel()
+	}()
 
+	// Subscribe to transactions which modify state.
+	txChannel := make(chan interface{})
 	if err := r.service.Subscribe(ctx, "registry-worker", tmapi.QueryRegistryApp, txChannel); err != nil {
-		panic("worker: failed to subscribe")
+		r.logger.Error("failed to subscribe",
+			"err", err,
+		)
+		return
 	}
 	defer r.service.Unsubscribe(ctx, "registry-worker", tmapi.QueryRegistryApp) // nolint: errcheck
 
