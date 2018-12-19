@@ -201,6 +201,67 @@ func (h *Host) Quit() <-chan struct{} {
 func (h *Host) Cleanup() {
 }
 
+// Initialize a CapabilityTEE for a worker.
+func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
+	ctx := context.Background()
+
+	quoteType, err := h.ias.GetQuoteSignatureType(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while getting IAS signature type")
+	}
+
+	spid, err := h.ias.GetSPID(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while getting IAS SPID")
+	}
+
+	gidCh, err := worker.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEEGidRequest: &protocol.Empty{}})
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while requesting worker EPID group")
+	}
+	gidRes := <-gidCh
+	gid := gidRes.WorkerCapabilityTEEGidResponse.Gid
+
+	// TODO: request signature revocation list from IAS.
+	_ = gid
+	var sigRL []byte
+
+	rakQuoteCh, err := worker.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEERakQuoteRequest: &protocol.WorkerCapabilityTEERakQuoteRequest{
+		QuoteType: uint32(*quoteType),
+		Spid:      spid,
+		SigRL:     sigRL,
+	}})
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while requesting worker quote and public RAK")
+	}
+	rakQuoteRes := <-rakQuoteCh
+	rakPub := signature.PublicKey{}
+	err = rakPub.UnmarshalBinary(rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.RakPub[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while unmarshalling public RAK")
+	}
+	quote := rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.Quote
+
+	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
+	}
+
+	avrBundle := cias.AVRBundle{
+		Body:             avr,
+		CertificateChain: chain,
+		Signature:        sig,
+	}
+	attestation := avrBundle.MarshalCBOR()
+	capabilityTEE := &node.CapabilityTEE{
+		Hardware:    node.TEEHardwareIntelSGX,
+		RAK:         rakPub,
+		Attestation: attestation,
+	}
+
+	return capabilityTEE, nil
+}
+
 func (h *Host) spawnWorker() (*process, error) {
 	h.logger.Info("spawning worker",
 		"worker_binary", h.workerBinary,
@@ -336,61 +397,11 @@ func (h *Host) spawnWorker() (*process, error) {
 	go p.worker()
 
 	// Initialize the worker's RAK.
-	ctx := context.Background()
-
-	quoteType, err := h.ias.GetQuoteSignatureType(ctx)
+	capabilityTEE, err := h.initCapabilityTEESgx(p)
 	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while getting IAS signature type")
+		return nil, errors.Wrap(err, "worker: error initializing SGX CapabilityTEE")
 	}
 
-	spid, err := h.ias.GetSPID(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while getting IAS SPID")
-	}
-
-	gidCh, err := p.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEEGidRequest: &protocol.Empty{}})
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while requesting worker EPID group")
-	}
-	gidRes := <-gidCh
-	gid := gidRes.WorkerCapabilityTEEGidResponse.Gid
-
-	// TODO: request signature revocation list from IAS.
-	_ = gid
-	var sigRL []byte
-
-	rakQuoteCh, err := p.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEERakQuoteRequest: &protocol.WorkerCapabilityTEERakQuoteRequest{
-		QuoteType: uint32(*quoteType),
-		Spid:      spid,
-		SigRL:     sigRL,
-	}})
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while requesting worker quote and public RAK")
-	}
-	rakQuoteRes := <-rakQuoteCh
-	rakPub := signature.PublicKey{}
-	err = rakPub.UnmarshalBinary(rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.RakPub[:])
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while unmarshalling public RAK")
-	}
-	quote := rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.Quote
-
-	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
-	}
-
-	avrBundle := cias.AVRBundle{
-		Body:             avr,
-		CertificateChain: chain,
-		Signature:        sig,
-	}
-	attestation := avrBundle.MarshalCBOR()
-	capabilityTEE := &node.CapabilityTEE{
-		Hardware:    node.TEEHardwareIntelSGX,
-		RAK:         rakPub,
-		Attestation: attestation,
-	}
 	p.capabilityTEE = capabilityTEE
 
 	haveErrors = false
