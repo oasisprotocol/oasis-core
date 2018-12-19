@@ -125,7 +125,7 @@ func initStorage(env *storageEnv, dataDir string) error {
 	if err != nil {
 		return err
 	}
-	env.svcMgr.RegisterCleanupOnly(store)
+	env.svcMgr.RegisterCleanupOnly(store, "storage backend")
 
 	// Initialize and register the gRPC services.
 	storage.NewGRPCServer(env.grpcSrv.Server(), store)

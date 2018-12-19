@@ -84,9 +84,9 @@ func (s *cleanupOnlyService) Cleanup() {
 }
 
 // NewCleanupOnlyService wraps a service as a cleanup only service.
-func NewCleanupOnlyService(svc CleanupAble) BackgroundService {
+func NewCleanupOnlyService(svc CleanupAble, name string) BackgroundService {
 	return &cleanupOnlyService{
-		BaseBackgroundService: *NewBaseBackgroundService("<unknown>"),
+		BaseBackgroundService: *NewBaseBackgroundService(name),
 		svc:                   svc,
 	}
 }

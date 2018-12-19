@@ -94,19 +94,19 @@ func (n *Node) initBackends() error {
 	if n.Registry, err = registry.New(n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.Registry)
+	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
 	if n.Scheduler, err = scheduler.New(n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.Scheduler)
+	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
 	if n.Storage, err = storage.New(n.Epochtime, dataDir); err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.Storage)
+	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
 	if n.RootHash, err = roothash.New(n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.RootHash)
+	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
 
 	// Initialize and register the gRPC services.
 	grpcSrv := n.grpcSrv.Server()
@@ -176,7 +176,7 @@ func NewNode() (*Node, error) {
 		)
 		return nil, err
 	}
-	node.svcMgr.RegisterCleanupOnly(tracingSvc)
+	node.svcMgr.RegisterCleanupOnly(tracingSvc, "tracing")
 
 	// Initialize the gRPC server.
 	// Depends on global tracer.
