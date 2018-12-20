@@ -2,7 +2,9 @@
 package ias
 
 import (
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -155,11 +157,23 @@ func initProxy(cmd *cobra.Command, env *proxyEnv) error {
 		return fmt.Errorf("ias: invalid signature type: %s", flagQuoteSigType)
 	}
 
-	// TODO: Wire in flagAuthCertCA.
+	var authCertCA *x509.Certificate
+	if flagAuthCertCA != "" {
+		certData, err := ioutil.ReadFile(flagAuthCertCA)
+		if err != nil {
+			return err
+		}
+
+		authCertCA, _, err = ias.CertFromPEM(certData)
+		if err != nil {
+			return err
+		}
+	}
+
 	endpoint, err := ias.NewIASEndpoint(
 		flagAuthCertFile,
 		flagAuthKeyFile,
-		nil,
+		authCertCA,
 		flagSpid,
 		quoteSigType,
 		flagIsProduction,
