@@ -43,7 +43,7 @@ DaVzWh5aiEx+idkSGMnX
 // IntelTrustRoots are Intel's IAS signing root certificates.
 var IntelTrustRoots = x509.NewCertPool()
 
-func certFromPEM(raw []byte) (*x509.Certificate, []byte, error) {
+func CertFromPEM(raw []byte) (*x509.Certificate, []byte, error) {
 	block, rest := pem.Decode(raw)
 	if block == nil {
 		return nil, nil, nil
@@ -71,6 +71,6 @@ func certRootsAChain(cert *x509.Certificate, chains [][]*x509.Certificate) bool 
 }
 
 func init() {
-	iasRootCert, _, _ := certFromPEM([]byte(iasTrustRootCert))
+	iasRootCert, _, _ := CertFromPEM([]byte(iasTrustRootCert))
 	IntelTrustRoots.AddCert(iasRootCert)
 }

@@ -324,7 +324,7 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trust
 	var certs []*x509.Certificate
 	for {
 		var cert *x509.Certificate
-		cert, pemCerts, err = certFromPEM(pemCerts)
+		cert, pemCerts, err = CertFromPEM(pemCerts)
 		if err != nil {
 			return err
 		}
