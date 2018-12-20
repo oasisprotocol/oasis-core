@@ -4,9 +4,12 @@ package dummy
 import (
 	"os"
 
+	"github.com/cenkalti/backoff"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
@@ -82,7 +85,19 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 	)
 
 	// Use background context to block until all nodes register.
-	_, err := client.WaitNodes(context.Background(), &dummydebug.WaitNodesRequest{Nodes: nodes})
+	ctx := context.Background()
+
+	err := backoff.Retry(func() error {
+		_, err := client.WaitNodes(ctx, &dummydebug.WaitNodesRequest{Nodes: nodes})
+		// Treat Unavailable errors as transient (and retry), all other errors are permanent.
+		if s, _ := status.FromError(err); s.Code() == codes.Unavailable {
+			return err
+		} else if err != nil {
+			return backoff.Permanent(err)
+		}
+
+		return nil
+	}, backoff.NewExponentialBackOff())
 	if err != nil {
 		logger.Error("failed to wait for nodes",
 			"err", err,
