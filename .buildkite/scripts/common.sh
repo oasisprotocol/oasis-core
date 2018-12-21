@@ -3,7 +3,6 @@
 ##################
 
 cleanup() {
-    echo "Cleaning up child processes."
     # Send all child processes a kill signal.
     pkill -P $$ || true
 
