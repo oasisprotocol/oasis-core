@@ -136,6 +136,18 @@ impl ComputeNode {
         );
         runtime_registry.register_runtime(signed_runtime).wait()?;
 
+        // Environment.
+        let environment = container.inject::<Environment>()?;
+        let grpc_environment = environment.grpc();
+
+        // Create worker host.
+        let worker_host = Arc::new(WorkerHost::new(
+            environment.clone(),
+            config.worker,
+            ias,
+            storage_backend.clone(),
+        )?);
+
         // Register node with the registry.
         let node_identity = container.inject::<NodeIdentity>()?;
         let signed_node = Signed::sign(
@@ -155,18 +167,6 @@ impl ComputeNode {
                 abort();
             }
         }
-
-        // Environment.
-        let environment = container.inject::<Environment>()?;
-        let grpc_environment = environment.grpc();
-
-        // Create worker host.
-        let worker_host = Arc::new(WorkerHost::new(
-            environment.clone(),
-            config.worker,
-            ias,
-            storage_backend.clone(),
-        )?);
 
         // Create computation group.
         let computation_group = Arc::new(ComputationGroup::new(
