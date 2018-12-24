@@ -23,7 +23,7 @@ trap_add() {
         trap -- "$(
             # helper fn to get existing trap command from output
             # of trap -p
-            extract_trap_cmd() { printf '%s\n' "$3"; }
+            extract_trap_cmd() { printf '%s\n' "${3:-}"; }
             # print existing trap command with newline
             eval "extract_trap_cmd $(trap -p "${trap_add_name}")"
             # print the new trap command
