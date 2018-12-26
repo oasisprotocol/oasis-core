@@ -297,7 +297,6 @@ func (d *boltDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator
 	cur := bkt.Cursor()
 
 	// Seek to the first applicable key/value pair.
-	dbStart := toBoltDBKey(start)
 	var k, v []byte
 
 	switch isForward {
@@ -306,16 +305,16 @@ func (d *boltDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator
 		if start == nil {
 			k, v = cur.First()
 		} else {
-			k, v = cur.Seek(dbStart)
+			k, v = cur.Seek(toBoltDBKey(start))
 		}
 	case false:
 		iter.nextFn = cur.Prev
-		if start == nil {
+		if end == nil {
 			k, v = cur.Last()
 		} else {
-			k, v = cur.Seek(dbStart)
+			k, v = cur.Seek(toBoltDBKey(end))
 			if k != nil {
-				if bytes.Compare(start, fromBoltDBKeyNoCopy(k)) < 0 {
+				if bytes.Compare(end, fromBoltDBKeyNoCopy(k)) <= 0 {
 					k, v = cur.Prev()
 				}
 			} else {
@@ -330,7 +329,7 @@ func (d *boltDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator
 
 	k = fromBoltDBKeyNoCopy(k)
 	iter.isValid = true // Assume valid, seeking will reset.
-	if dbm.IsKeyInDomain(k, start, end, !isForward) {
+	if dbm.IsKeyInDomain(k, start, end) {
 		// First key happens to be in the domain.
 		iter.current.key = k
 		iter.current.valueCompressed = v
@@ -378,7 +377,7 @@ func (iter *boltDBIterator) Next() {
 	// Traverse the BoltDB cursor to find the next applicable key.
 	for k, v := iter.nextFn(); k != nil; k, v = iter.nextFn() {
 		k = fromBoltDBKeyNoCopy(k)
-		if dbm.IsKeyInDomain(k, iter.start, iter.end, !iter.isForward) {
+		if dbm.IsKeyInDomain(k, iter.start, iter.end) {
 			iter.current.key = k
 			iter.current.valueCompressed = v
 			return

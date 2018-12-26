@@ -167,8 +167,8 @@ func testIterator(t *testing.T) {
 	revIter.Close()
 
 	// Traverse backward (subset).
-	revSubIter := db.ReverseIterator([]byte("b"), []byte("a"))
-	for i := subEnd; i > subStart; i-- {
+	revSubIter := db.ReverseIterator([]byte("a"), []byte("b"))
+	for i := subEnd - 1; i >= subStart; i-- { // End is exclusive (v0.27.0)
 		ent := entries[i]
 		require.True(t, revSubIter.Valid(), "Rev[%d]: Valid(), skip", i)
 		require.EqualValues(t, ent.key, revSubIter.Key(), "Rev[%d]: Key(), skip", i)
