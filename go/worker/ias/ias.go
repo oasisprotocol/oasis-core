@@ -86,6 +86,25 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte) (av
 	return
 }
 
+// GetSigRL returns the Signature Revocation List associated with the given
+// SPID group.
+func (s *IAS) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
+	if s.client == nil {
+		// If the client is not configured, return a empty SigRL.
+		return nil, nil
+	}
+
+	req := iasGrpc.GetSigRLRequest{
+		EpidGid: epidGID,
+	}
+	res, err := s.client.GetSigRL(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.SigRl, nil
+}
+
 // New creates a new IAS client instance.
 func New(identity *signature.PrivateKey, proxyAddr string) (*IAS, error) {
 	s := &IAS{

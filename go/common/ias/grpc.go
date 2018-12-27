@@ -6,7 +6,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	//commonPB "github.com/oasislabs/ekiden/go/grpc/common"
 	pb "github.com/oasislabs/ekiden/go/grpc/ias"
 )
 
@@ -106,6 +105,19 @@ func (s *grpcServer) GetSPIDInfo(ctx context.Context, req *pb.GetSPIDInfoRequest
 	return &pb.GetSPIDInfoResponse{
 		Spid:               spid,
 		QuoteSignatureType: uint32(info.QuoteSignatureType),
+	}, nil
+}
+
+func (s *grpcServer) GetSigRL(ctx context.Context, req *pb.GetSigRLRequest) (*pb.GetSigRLResponse, error) {
+	// TODO: Validate the EPID group ID.
+
+	sigRL, err := s.endpoint.GetSigRL(ctx, req.GetEpidGid())
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetSigRLResponse{
+		SigRl: sigRL,
 	}, nil
 }
 
