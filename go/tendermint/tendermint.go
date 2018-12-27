@@ -3,7 +3,6 @@ package tendermint
 import (
 	"crypto/rand"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -295,13 +294,12 @@ func (t *tendermintService) lazyInit() error {
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit, _ := t.cmd.Flags().GetDuration(cfgConsensusTimeoutCommit)
-	timeoutCommitMsec := int(timeoutCommit / time.Millisecond)
 	emptyBlockInterval, _ := t.cmd.Flags().GetDuration(cfgConsensusEmptyBlockInterval)
-	tenderConfig.Consensus.TimeoutCommit = timeoutCommitMsec
+	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
 	tenderConfig.Consensus.SkipTimeoutCommit, _ = t.cmd.Flags().GetBool(cfgConsensusSkipTimeoutCommit)
 	tenderConfig.Consensus.CreateEmptyBlocks = true
-	tenderConfig.Consensus.CreateEmptyBlocksInterval = int(math.Ceil(emptyBlockInterval.Seconds()))
-	tenderConfig.Consensus.BlockTimeIota = timeoutCommitMsec
+	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
+	tenderConfig.Consensus.BlockTimeIota = timeoutCommit
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.RPC.ListenAddress = ""
@@ -435,7 +433,7 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0, "tendermint empty block interval")
+	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
 	cmd.Flags().StringVar(&flagABCIPruneStrategy, cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	cmd.Flags().Int64Var(&flagABCIPruneNumKept, cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	cmd.Flags().BoolVar(&flagLogDebug, cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
