@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"git.schwanenlied.me/yawning/dynlib.git"
@@ -183,8 +184,9 @@ type Host struct {
 	stopCh chan struct{}
 	quitCh chan struct{}
 
-	activeWorker *process
-	requestCh    chan *hostRequest
+	activeWorker          *process
+	activeWorkerAvailable *sync.Cond
+	requestCh             chan *hostRequest
 
 	logger *logging.Logger
 }
@@ -192,6 +194,22 @@ type Host struct {
 // Name returns the service name.
 func (h *Host) Name() string {
 	return "worker host"
+}
+
+// WaitForCapabilityTEE gets the active worker's CapabilityTEE,
+// blocking if the active worker is not yet available. The returned
+// CapabilityTEE may have out of date by the time this function
+// returns.
+func (h *Host) WaitForCapabilityTEE() *node.CapabilityTEE {
+	h.activeWorkerAvailable.L.Lock()
+	defer h.activeWorkerAvailable.L.Unlock()
+	for {
+		activeWorker := h.activeWorker
+		if activeWorker != nil {
+			return activeWorker.capabilityTEE
+		}
+		h.activeWorkerAvailable.Wait()
+	}
 }
 
 // Start starts the service.
@@ -484,7 +502,11 @@ func (h *Host) manager() {
 				<-h.activeWorker.quitCh
 			}
 
-			h.activeWorker = nil
+			func() {
+				h.activeWorkerAvailable.L.Lock()
+				defer h.activeWorkerAvailable.L.Unlock()
+				h.activeWorker = nil
+			}()
 		}
 
 		if !wantWorker {
@@ -505,7 +527,12 @@ func (h *Host) manager() {
 			continue
 		}
 
-		h.activeWorker = worker
+		func() {
+			h.activeWorkerAvailable.L.Lock()
+			defer h.activeWorkerAvailable.L.Unlock()
+			h.activeWorker = worker
+			h.activeWorkerAvailable.Broadcast()
+		}()
 	}
 
 	close(h.quitCh)
@@ -531,16 +558,17 @@ func New(
 	}
 
 	host := &Host{
-		workerBinary:  workerBinary,
-		runtimeBinary: runtimeBinary,
-		cacheDir:      cacheDir,
-		storage:       storage,
-		ias:           ias,
-		keyManager:    keyManager,
-		quitCh:        make(chan struct{}),
-		stopCh:        make(chan struct{}),
-		requestCh:     make(chan *hostRequest, 10),
-		logger:        logging.GetLogger("worker/host").With("runtime_id", runtimeID),
+		workerBinary:          workerBinary,
+		runtimeBinary:         runtimeBinary,
+		cacheDir:              cacheDir,
+		storage:               storage,
+		ias:                   ias,
+		keyManager:            keyManager,
+		quitCh:                make(chan struct{}),
+		stopCh:                make(chan struct{}),
+		activeWorkerAvailable: sync.NewCond(new(sync.Mutex)),
+		requestCh:             make(chan *hostRequest, 10),
+		logger:                logging.GetLogger("worker/host").With("runtime_id", runtimeID),
 	}
 
 	return host, nil
