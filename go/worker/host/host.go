@@ -156,6 +156,48 @@ func prepareWorkerArgs() ([]string, error) {
 	}, nil
 }
 
+// cancelableCond is like sync.Cond, but you can wait with a context
+// and bail when the context is done.
+type cancelableCond struct {
+	// L is held while observing or changing the condition
+	L                sync.Locker
+	closeOnBroadcast chan struct{}
+}
+
+// newCancelableCond returns a new cancelableCond.
+func newCancelableCond(l sync.Locker) *cancelableCond {
+	return &cancelableCond{
+		L:                l,
+		closeOnBroadcast: make(chan struct{}),
+	}
+}
+
+// Broadcast wakes all goroutines waiting on c. The caller must hold
+// c.L during the call.
+func (c *cancelableCond) Broadcast() {
+	close(c.closeOnBroadcast)
+	c.closeOnBroadcast = make(chan struct{})
+}
+
+// Wait atomically unlocks c.L and suspends execution of the calling
+// goroutine. After later resuming execution, Wait locks c.L before
+// returning. Returns true if awoken by Broadcast or false if the
+// context is done. Because c.L is not locked when Wait first resumes,
+// the caller typically cannot assume that the condition is true when
+// Wait returns. Instead, the caller should Wait in a loop.
+func (c *cancelableCond) Wait(ctx context.Context) bool {
+	closeOnBroadcast := c.closeOnBroadcast
+	c.L.Unlock()
+	select {
+	case <-closeOnBroadcast:
+		c.L.Lock()
+		return true
+	case <-ctx.Done():
+		c.L.Lock()
+		return false
+	}
+}
+
 // Request is an internal request to manager goroutine that is dispatched
 // to the worker when a worker becomes available.
 type hostRequest struct {
@@ -185,7 +227,7 @@ type Host struct {
 	quitCh chan struct{}
 
 	activeWorker          *process
-	activeWorkerAvailable *sync.Cond
+	activeWorkerAvailable *cancelableCond
 	requestCh             chan *hostRequest
 
 	logger *logging.Logger
@@ -198,17 +240,18 @@ func (h *Host) Name() string {
 
 // WaitForCapabilityTEE gets the active worker's CapabilityTEE,
 // blocking if the active worker is not yet available. The returned
-// CapabilityTEE may have out of date by the time this function
-// returns.
-func (h *Host) WaitForCapabilityTEE() *node.CapabilityTEE {
+// CapabilityTEE may be out of date by the time this function returns.
+func (h *Host) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
 	h.activeWorkerAvailable.L.Lock()
 	defer h.activeWorkerAvailable.L.Unlock()
 	for {
 		activeWorker := h.activeWorker
 		if activeWorker != nil {
-			return activeWorker.capabilityTEE
+			return activeWorker.capabilityTEE, nil
 		}
-		h.activeWorkerAvailable.Wait()
+		if !h.activeWorkerAvailable.Wait(ctx) {
+			return nil, errors.New("aborted by context")
+		}
 	}
 }
 
@@ -566,7 +609,7 @@ func New(
 		keyManager:            keyManager,
 		quitCh:                make(chan struct{}),
 		stopCh:                make(chan struct{}),
-		activeWorkerAvailable: sync.NewCond(new(sync.Mutex)),
+		activeWorkerAvailable: newCancelableCond(new(sync.Mutex)),
 		requestCh:             make(chan *hostRequest, 10),
 		logger:                logging.GetLogger("worker/host").With("runtime_id", runtimeID),
 	}
