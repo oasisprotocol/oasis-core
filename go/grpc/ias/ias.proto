@@ -10,6 +10,8 @@ service IAS {
     rpc GetSPIDInfo (GetSPIDInfoRequest) returns (GetSPIDInfoResponse) {}
 	// Verify attestation evidence.
 	rpc VerifyEvidence (VerifyEvidenceRequest) returns (VerifyEvidenceResponse) {}
+	// Get SigRL.
+	rpc GetSigRL (GetSigRLRequest) returns (GetSigRLResponse) {}
 }
 
 message GetSPIDInfoRequest {
@@ -29,4 +31,12 @@ message VerifyEvidenceResponse {
 	bytes avr = 1;
 	bytes signature = 2;
 	bytes certificate_chain = 3;
+}
+
+message GetSigRLRequest {
+	uint32 epid_gid = 1;
+}
+
+message GetSigRLResponse {
+	bytes sig_rl = 1;
 }

@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -70,6 +72,9 @@ type Endpoint interface {
 
 	// GetSPID returns the SPID and associated info used by the endpoint.
 	GetSPIDInfo(ctx context.Context) (*SPIDInfo, error)
+
+	// GetSigRL returns the Signature Revocation List for a given EPID group.
+	GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error)
 }
 
 type httpEndpoint struct {
@@ -132,6 +137,38 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []
 
 func (e *httpEndpoint) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
 	return &e.spidInfo, nil
+}
+
+func (e *httpEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
+	var gid [4]byte
+	binary.BigEndian.PutUint32(gid[:], epidGID)
+
+	// Dispatch the request via HTTP.
+	u := *e.baseURL
+	u.Path = path.Join(u.Path, "/attestation/sgx/v3/sigrl/"+hex.EncodeToString(gid[:]))
+	resp, err := ctxhttp.Get(ctx, e.httpClient, u.String())
+	if err != nil {
+		return nil, errors.Wrap(err, "ias: http GET failed")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Wrapf(err, "ias: http GET returned error: %s", http.StatusText(resp.StatusCode))
+	}
+
+	// Extract and parse the SigRL.
+	sigRL, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "ias: failed to read response body")
+	}
+	var b []byte
+	if len(sigRL) > 0 { // No SigRL is signified by a 0 byte response.
+		if b, err = base64.StdEncoding.DecodeString(string(sigRL)); err != nil {
+			return nil, errors.Wrap(err, "ias: failed to decode SigRL")
+		}
+	}
+
+	return b, nil
 }
 
 type iasEvidencePayload struct {

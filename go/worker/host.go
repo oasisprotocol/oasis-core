@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/binary"
 	"io/ioutil"
 	"net"
 	"os"
@@ -222,9 +223,10 @@ func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error
 	gidRes := <-gidCh
 	gid := gidRes.WorkerCapabilityTEEGidResponse.Gid
 
-	// TODO: request signature revocation list from IAS.
-	_ = gid
-	var sigRL []byte
+	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(gid[:]))
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
+	}
 
 	rakQuoteCh, err := worker.protocol.MakeRequest(&protocol.Body{WorkerCapabilityTEERakQuoteRequest: &protocol.WorkerCapabilityTEERakQuoteRequest{
 		QuoteType: uint32(*quoteType),

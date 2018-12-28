@@ -48,6 +48,15 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 			Certificates: certs,
 		}}, nil
 	}
+	if body.HostIasSigRlRequest != nil {
+		sigRL, err := h.ias.GetSigRL(ctx, body.HostIasSigRlRequest.GID)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostIasSigRlResponse: &protocol.HostIasSigRlResponse{
+			SigRL: sigRL,
+		}}, nil
+	}
 	// Storage.
 	if body.HostStorageGetRequest != nil {
 		value, err := h.storage.Get(ctx, body.HostStorageGetRequest.Key)
