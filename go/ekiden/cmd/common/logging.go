@@ -17,13 +17,12 @@ const (
 )
 
 var (
-	logFile  string
 	logFmt   logging.Format
 	logLevel logging.Level = logging.LevelWarn
 )
 
 func registerLoggingFlags(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().StringVar(&logFile, cfgLogFile, "", "log file")
+	rootCmd.PersistentFlags().String(cfgLogFile, "", "log file")
 	rootCmd.PersistentFlags().Var(&logFmt, cfgLogFmt, "log format")
 	rootCmd.PersistentFlags().Var(&logLevel, cfgLogLevel, "log level")
 
@@ -37,6 +36,18 @@ func registerLoggingFlags(rootCmd *cobra.Command) {
 }
 
 func initLogging() error {
+	logFile := viper.GetString(cfgLogFile)
+
+	var logLevel logging.Level
+	if err := logLevel.Set(viper.GetString(cfgLogLevel)); err != nil {
+		return err
+	}
+
+	var logFmt logging.Format
+	if err := logFmt.Set(viper.GetString(cfgLogFmt)); err != nil {
+		return err
+	}
+
 	var w io.Writer = os.Stdout
 	if logFile != "" {
 		logFile = normalizePath(logFile)

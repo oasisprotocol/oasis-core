@@ -201,9 +201,12 @@ scenario_kill_worker() {
     sleep 1
     run_compute_node 3 --compute-replicas 2
 
-    # Kill newest worker after 1 second. The compute node should restart it.
-    sleep 1
+    # Wait for all nodes to register.
+    ${WORKDIR}/go/ekiden/ekiden debug dummy wait-nodes --nodes 3
+
+    # Kill newest worker. The compute node should restart it.
     pkill -9 --newest worker
+    sleep 1
 }
 
 # Tendermint backends.

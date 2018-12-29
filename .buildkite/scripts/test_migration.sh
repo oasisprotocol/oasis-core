@@ -75,6 +75,7 @@ test_migration() {
 
     sleep 3
 
+    "${WORKDIR}/go/ekiden/ekiden" debug dummy wait-nodes --nodes 2
     "$WORKDIR/go/ekiden/ekiden" debug dummy set-epoch --epoch 1
 
     sleep 2
@@ -158,6 +159,7 @@ test_migration() {
     sleep 3
     # 7 sec
 
+    "${WORKDIR}/go/ekiden/ekiden" debug dummy wait-nodes --nodes 2
     "$WORKDIR/go/ekiden/ekiden" debug dummy set-epoch --epoch 2
 
     # Wait on the client and check its exit status.

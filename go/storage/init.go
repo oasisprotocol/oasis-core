@@ -23,11 +23,11 @@ const cfgBackend = "storage.backend"
 var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
-func New(cmd *cobra.Command, timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
+func New(timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
 	var impl api.Backend
 	var err error
 
-	backend, _ := cmd.Flags().GetString(cfgBackend)
+	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
 		impl = memory.New(timeSource)

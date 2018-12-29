@@ -38,17 +38,16 @@ var (
 
 // New constructs a new Backend based on the configuration flags.
 func New(
-	cmd *cobra.Command,
 	timeSource epochtime.Backend,
 	scheduler scheduler.Backend,
 	storage storage.Backend,
 	registry registry.Backend,
 	tmService service.TendermintService,
 ) (api.Backend, error) {
-	backend, _ := cmd.Flags().GetString(cfgBackend)
+	backend := viper.GetString(cfgBackend)
 
 	genesisBlocks := make(map[signature.MapKey]*block.Block)
-	genesisBlocksFilename, _ := cmd.Flags().GetString(cfgGenesisBlocks)
+	genesisBlocksFilename := viper.GetString(cfgGenesisBlocks)
 	if genesisBlocksFilename != "" {
 		genesisBlocksRaw, err := ioutil.ReadFile(genesisBlocksFilename)
 		if err != nil {
@@ -71,7 +70,7 @@ func New(
 		}
 	}
 
-	roundTimeout, _ := cmd.Flags().GetDuration(cfgRoundTimeout)
+	roundTimeout := viper.GetDuration(cfgRoundTimeout)
 
 	var impl api.Backend
 	var err error

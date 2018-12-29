@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	beaconTests "github.com/oasislabs/ekiden/go/beacon/tests"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -24,15 +24,18 @@ import (
 )
 
 var (
-	testNodeConfig = []string{
-		"--log.level=DEBUG",
-		"--epochtime.backend=tendermint_mock",
-		"--beacon.backend=tendermint",
-		"--registry.backend=tendermint",
-		"--roothash.backend=tendermint",
-		"--scheduler.backend=trivial",
-		"--storage.backend=leveldb",
-		"--tendermint.consensus.skip_timeout_commit",
+	testNodeConfig = []struct {
+		key   string
+		value interface{}
+	}{
+		{"log.level", "DEBUG"},
+		{"epochtime.backend", "tendermint_mock"},
+		{"beacon.backend", "tendermint"},
+		{"registry.backend", "tendermint"},
+		{"roothash.backend", "tendermint"},
+		{"scheduler.backend", "trivial"},
+		{"storage.backend", "leveldb"},
+		{"tendermint.consensus.skip_timeout_commit", true},
 	}
 
 	initConfigOnce sync.Once
@@ -64,26 +67,24 @@ func newTestNode(t *testing.T) *testNode {
 	initConfigOnce.Do(func() {
 		cmdCommon.InitConfig()
 	})
-	rootCmd := cmd.RootCommand()
 
 	require := require.New(t)
 
 	dataDir, err := ioutil.TempDir("", "ekiden-node-test_")
 	require.NoError(err, "create data dir")
 
-	args := append([]string{
-		"--datadir=" + dataDir,
-		"--log.file=" + filepath.Join(dataDir, "test-node.log"),
-	}, testNodeConfig...)
-	err = rootCmd.ParseFlags(args)
-	require.NoError(err, "parse flags")
+	viper.Set("datadir", dataDir)
+	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
+	for _, kv := range testNodeConfig {
+		viper.Set(kv.key, kv.value)
+	}
 
 	n := &testNode{
 		dataDir: dataDir,
 		start:   time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
-	n.Node, err = node.NewNode(rootCmd)
+	n.Node, err = node.NewNode()
 	require.NoError(err, "start node")
 
 	return n

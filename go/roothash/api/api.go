@@ -112,6 +112,44 @@ type Backend interface {
 	Cleanup()
 }
 
+// BlockBackend is a root hash backend that is backed by a blockchain.
+type BlockBackend interface {
+	Backend
+
+	// WatchAnnotatedBlocks returns a channel that produces a stream of
+	// annotated blocks.
+	WatchAnnotatedBlocks(signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
+}
+
+// AnnotatedBlock is an annotated roothash block.
+type AnnotatedBlock struct {
+	// Height is the underlying roothash backend's block height that
+	// generated this block.
+	Height int64
+
+	// Block is the roothash block.
+	Block *block.Block
+}
+
+// MapAnnotatedBlockToBlock maps a channel of annotated blocks to a channel of
+// plain blocks.
+func MapAnnotatedBlockToBlock(annCh <-chan *AnnotatedBlock) <-chan *block.Block {
+	ch := make(chan *block.Block)
+	go func() {
+		for {
+			ann, ok := <-annCh
+			if !ok {
+				close(ch)
+				return
+			}
+
+			ch <- ann.Block
+		}
+	}()
+
+	return ch
+}
+
 // DiscrepancyDetectedEvent is a discrepancy detected event.
 type DiscrepancyDetectedEvent struct {
 	// BatchHash is the CallBatch hash that is set when a discrepancy

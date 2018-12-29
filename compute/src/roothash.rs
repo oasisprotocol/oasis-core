@@ -894,6 +894,7 @@ impl RootHashFrontend {
 
             // Persist batch into storage so that the workers can get it.
             // Save it for one epoch so that the current committee can access it.
+            let batch: CallBatch = batch.into();
             let inner = inner.clone();
             let inner_clone = inner.clone();
             let encoded_batch = serde_cbor::to_vec(&batch).unwrap();
@@ -901,7 +902,7 @@ impl RootHashFrontend {
 
             Self::transition(
                 inner.clone(),
-                State::ProcessingBatch(role, Arc::new(batch.into()), block),
+                State::ProcessingBatch(role, Arc::new(batch), block),
             );
 
             measure_histogram!("batch_insert_size", encoded_batch.len());

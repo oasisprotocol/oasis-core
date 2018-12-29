@@ -13,3 +13,5 @@ grpc/registry/*.pb.go
 grpc/roothash/*.pb.go
 grpc/scheduler/*.pb.go
 grpc/storage/*.pb.go
+grpc/committee/*.pb.go
+grpc/enclaverpc/*.pb.go

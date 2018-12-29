@@ -2,6 +2,7 @@
 package grpc
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -313,20 +315,27 @@ func (s *Server) Server() *grpc.Server {
 	return s.s
 }
 
-// NewServer constructs a new gRPC server service.
+// NewServer constructs a new gRPC server service using default arguments.
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServer(cmd *cobra.Command) (*Server, error) {
+func NewServer() (*Server, error) {
+	port := uint16(viper.GetInt(cfgGRPCPort))
+	return NewServerEx(port, nil)
+}
+
+// NewServerEx constructs a new gRPC server service.
+//
+// This internally takes a snapshot of the current global tracer, so
+// make sure you initialize the global tracer before calling this.
+func NewServerEx(port uint16, cert *tls.Certificate) (*Server, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
 	})
 
-	port, _ := cmd.Flags().GetUint16(cfgGRPCPort)
+	svc := *service.NewBaseBackgroundService(fmt.Sprintf("grpc-%d", port))
 
-	svc := *service.NewBaseBackgroundService("grpc")
-
-	svc.Logger.Debug("gRPC Server Params", "port", port)
+	svc.Logger.Debug("gRPC server params", "port", port)
 
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
@@ -341,6 +350,10 @@ func NewServer(cmd *cobra.Command) (*Server, error) {
 	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(logAdapter.streamLogger, grpc_opentracing.StreamServerInterceptor())))
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(104857600)) // 100 MiB
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(104857600)) // 100 MiB
+
+	if cert != nil {
+		sOpts = append(sOpts, grpc.Creds(credentials.NewServerTLSFromCert(cert)))
+	}
 
 	return &Server{
 		BaseBackgroundService: svc,

@@ -72,13 +72,18 @@ impl KnownComponents {
 
         arguments.append(&mut groups
             .iter()
-            .filter(|&(_, choices)| choices.len() > 1)
             .map(|(group, choices)| {
-                clap::Arg::with_name(group)
+                let arg = clap::Arg::with_name(group)
                     .long(group)
                     .takes_value(true)
                     .possible_values(choices)
-                    .required(true)
+                    .required(true);
+
+                if choices.len() > 1 {
+                    arg
+                } else {
+                    arg.default_value(choices[0])
+                }
             })
             .collect());
 

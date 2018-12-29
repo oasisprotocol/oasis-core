@@ -35,8 +35,8 @@ func (m *ServiceManager) Register(srv service.BackgroundService) {
 }
 
 // RegisterCleanupOnly registers a cleanup only background service.
-func (m *ServiceManager) RegisterCleanupOnly(svc service.CleanupAble) {
-	m.services = append(m.services, service.NewCleanupOnlyService(svc))
+func (m *ServiceManager) RegisterCleanupOnly(svc service.CleanupAble, name string) {
+	m.services = append(m.services, service.NewCleanupOnlyService(svc, name))
 }
 
 // Wait waits for interruption via Stop, SIGINT, SIGTERM, or any of
@@ -71,6 +71,9 @@ func (m *ServiceManager) Cleanup() {
 	m.logger.Debug("begining cleanup")
 
 	for _, svc := range m.services {
+		m.logger.Debug("cleaning up",
+			"svc", svc.Name(),
+		)
 		svc.Cleanup()
 	}
 

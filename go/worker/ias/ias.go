@@ -11,13 +11,14 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ias"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	iasGrpc "github.com/oasislabs/ekiden/go/grpc/ias"
 )
 
 // IAS is an IAS proxy client.
 type IAS struct {
-	identity *signature.PrivateKey
+	identity *identity.Identity
 
 	conn   *grpc.ClientConn
 	client iasGrpc.IASClient
@@ -67,7 +68,7 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte) (av
 		Quote:       quote,
 		PSEManifest: pseManifest,
 	}
-	se, err := signature.SignSigned(*s.identity, ias.EvidenceSignatureContext, &evidence)
+	se, err := signature.SignSigned(*s.identity.NodeKey, ias.EvidenceSignatureContext, &evidence)
 	if err != nil {
 		return
 	}
@@ -106,7 +107,7 @@ func (s *IAS) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
 }
 
 // New creates a new IAS client instance.
-func New(identity *signature.PrivateKey, proxyAddr string) (*IAS, error) {
+func New(identity *identity.Identity, proxyAddr string) (*IAS, error) {
 	s := &IAS{
 		identity: identity,
 		logger:   logging.GetLogger("worker/ias"),
@@ -116,6 +117,7 @@ func New(identity *signature.PrivateKey, proxyAddr string) (*IAS, error) {
 		s.logger.Warn("IAS proxy is not configured, all reports will be mocked")
 
 		s.spidInfo = &ias.SPIDInfo{}
+		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {
 		conn, err := grpc.Dial(proxyAddr, grpc.WithInsecure()) // TODO: TLS?
 		if err != nil {

@@ -88,8 +88,8 @@ func (p *pprofService) Cleanup() {
 }
 
 // New constructs a new pprof service.
-func New(cmd *cobra.Command) (service.BackgroundService, error) {
-	address, _ := cmd.Flags().GetString(cfgPprofBind)
+func New() (service.BackgroundService, error) {
+	address := viper.GetString(cfgPprofBind)
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),

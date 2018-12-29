@@ -20,8 +20,8 @@ const cfgBackend = "registry.backend"
 var flagBackend string
 
 // New constructs a new Backend based on the configuration flags.
-func New(cmd *cobra.Command, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
-	backend, _ := cmd.Flags().GetString(cfgBackend)
+func New(timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
+	backend := viper.GetString(cfgBackend)
 
 	var impl api.Backend
 	var err error

@@ -80,8 +80,8 @@ func (s *pullService) Cleanup() {
 	}
 }
 
-func newPullService(cmd *cobra.Command) (service.BackgroundService, error) {
-	addr, _ := cmd.Flags().GetString(cfgMetricsAddr)
+func newPullService() (service.BackgroundService, error) {
+	addr := viper.GetString(cfgMetricsAddr)
 
 	svc := *service.NewBaseBackgroundService("metrics")
 
@@ -136,11 +136,11 @@ func (s *pushService) worker() {
 	}
 }
 
-func newPushService(cmd *cobra.Command) (service.BackgroundService, error) {
-	addr, _ := cmd.Flags().GetString(cfgMetricsAddr)
-	jobName, _ := cmd.Flags().GetString(cfgMetricsPushJobName)
-	instanceLabel, _ := cmd.Flags().GetString(cfgMetricsPushInstanceLabel)
-	interval, _ := cmd.Flags().GetDuration(cfgMetricsPushInterval)
+func newPushService() (service.BackgroundService, error) {
+	addr := viper.GetString(cfgMetricsAddr)
+	jobName := viper.GetString(cfgMetricsPushJobName)
+	instanceLabel := viper.GetString(cfgMetricsPushInstanceLabel)
+	interval := viper.GetDuration(cfgMetricsPushInterval)
 
 	if jobName == "" {
 		return nil, fmt.Errorf("metrics: metrics.push.job_name required for push mode")
@@ -167,13 +167,13 @@ func newPushService(cmd *cobra.Command) (service.BackgroundService, error) {
 }
 
 // New constructs a new metrics service.
-func New(cmd *cobra.Command) (service.BackgroundService, error) {
-	mode, _ := cmd.Flags().GetString(cfgMetricsMode)
+func New() (service.BackgroundService, error) {
+	mode := viper.GetString(cfgMetricsMode)
 	switch strings.ToLower(mode) {
 	case metricsModePull:
-		return newPullService(cmd)
+		return newPullService()
 	case metricsModePush:
-		return newPushService(cmd)
+		return newPushService()
 	default:
 		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
 	}
