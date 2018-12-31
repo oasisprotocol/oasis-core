@@ -150,10 +150,10 @@ func New(
 			ClientAddresses: registerAddresses,
 		},
 		P2PPort:      uint16(viper.GetInt(cfgP2pPort)),
+		TEEHardware:  teeHardware,
 		WorkerBinary: workerBinary,
 		CacheDir:     cacheDir,
 		Runtimes:     runtimes,
-		TEEHardware:  teeHardware,
 	}
 
 	return newWorker(identity, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)

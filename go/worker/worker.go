@@ -29,10 +29,10 @@ type RuntimeConfig struct {
 type Config struct {
 	Committee    committee.Config
 	P2PPort      uint16
+	TEEHardware  node.TEEHardware
 	WorkerBinary string
 	CacheDir     string
 	Runtimes     []RuntimeConfig
-	TEEHardware  node.TEEHardware
 }
 
 type runtime struct {
