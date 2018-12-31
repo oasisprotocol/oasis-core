@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -31,6 +32,7 @@ type Config struct {
 	WorkerBinary string
 	CacheDir     string
 	Runtimes     []RuntimeConfig
+	TEEHardware  node.TEEHardware
 }
 
 type runtime struct {
@@ -160,6 +162,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		path.Join(cfg.CacheDir, rtCfg.ID.String()),
 		rtCfg.ID,
 		w.storage,
+		cfg.TEEHardware,
 		w.ias,
 		w.keyManager,
 	)

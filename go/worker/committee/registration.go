@@ -121,6 +121,14 @@ func (n *Node) registerNode() error {
 		return rerr
 	}
 
+	capabilitiesTEE, err := n.workerHost.WaitForCapabilityTEE(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to obtain CapabilityTEE",
+			"err", err,
+		)
+		return err
+	}
+
 	nodeDesc := node.Node{
 		ID:         identityPublic,
 		EntityID:   identityPublic,
@@ -131,6 +139,9 @@ func (n *Node) registerNode() error {
 			DER: n.identity.TLSCertificate.Certificate[0],
 		},
 		RegistrationTime: uint64(time.Now().Unix()),
+		Capabilities: node.Capabilities{
+			TEE: capabilitiesTEE,
+		},
 	}
 
 	signedNode, err := node.SignNode(*n.identity.NodeKey, registry.RegisterNodeSignatureContext, &nodeDesc)

@@ -27,7 +27,8 @@ const (
 	cfgWorkerBinary = "worker.binary"
 	cfgCacheDir     = "worker.cache_dir"
 
-	cfgIASProxy = "worker.ias.proxy_addr"
+	cfgTEEHardware = "worker.tee_hardware"
+	cfgIASProxy    = "worker.ias.proxy_addr"
 
 	cfgKeyManagerAddress = "worker.key_manager.address"
 	cfgKeyManagerCert    = "worker.key_manager.certificate"
@@ -127,6 +128,17 @@ func New(
 		registerAddresses = append(registerAddresses, address)
 	}
 
+	// Parse TEE hardware setting.
+	var teeHardware node.TEEHardware
+	switch viper.GetString(cfgTEEHardware) {
+	case "invalid":
+		teeHardware = node.TEEHardwareInvalid
+	case "intel-sgx":
+		teeHardware = node.TEEHardwareIntelSGX
+	default:
+		return nil, node.ErrInvalidTEEHardware
+	}
+
 	cfg := Config{
 		Committee: committee.Config{
 			MaxQueueSize:      maxQueueSize,
@@ -141,6 +153,7 @@ func New(
 		WorkerBinary: workerBinary,
 		CacheDir:     cacheDir,
 		Runtimes:     runtimes,
+		TEEHardware:  teeHardware,
 	}
 
 	return newWorker(identity, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
@@ -152,6 +165,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
 	cmd.Flags().String(cfgCacheDir, "", "Path to worker cache directory")
 
+	cmd.Flags().String(cfgTEEHardware, "invalid", "Type of TEE hardware. Supported values are \"invalid\" and \"intel-sgx\".")
 	cmd.Flags().String(cfgIASProxy, "", "IAS proxy address")
 
 	cmd.Flags().String(cfgKeyManagerAddress, "", "key manager address")
@@ -174,6 +188,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgWorkerBinary,
 		cfgCacheDir,
 
+		cfgTEEHardware,
 		cfgIASProxy,
 
 		cfgKeyManagerAddress,
