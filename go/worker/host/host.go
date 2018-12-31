@@ -504,11 +504,9 @@ func (h *Host) manager() {
 				<-h.activeWorker.quitCh
 			}
 
-			func() {
-				h.activeWorkerAvailable.L.Lock()
-				defer h.activeWorkerAvailable.L.Unlock()
-				h.activeWorker = nil
-			}()
+			h.activeWorkerAvailable.L.Lock()
+			h.activeWorker = nil
+			h.activeWorkerAvailable.L.Unlock()
 		}
 
 		if !wantWorker {
@@ -529,12 +527,10 @@ func (h *Host) manager() {
 			continue
 		}
 
-		func() {
-			h.activeWorkerAvailable.L.Lock()
-			defer h.activeWorkerAvailable.L.Unlock()
-			h.activeWorker = worker
-			h.activeWorkerAvailable.Broadcast()
-		}()
+		h.activeWorkerAvailable.L.Lock()
+		h.activeWorker = worker
+		h.activeWorkerAvailable.Broadcast()
+		h.activeWorkerAvailable.L.Unlock()
 	}
 
 	close(h.quitCh)
