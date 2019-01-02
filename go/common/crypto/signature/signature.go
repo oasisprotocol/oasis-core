@@ -32,7 +32,10 @@ const (
 	// ContextSize is the size of a signature context in bytes
 	ContextSize = 8
 
-	pemType = "ED25519 PRIVATE KEY"
+	privPEMType = "ED25519 PRIVATE KEY"
+	pubPEMType  = "ED25519 PUBLIC KEY"
+
+	filePerm = 0600
 )
 
 var (
@@ -64,6 +67,8 @@ var (
 	errNilPEM          = errors.New("signature: PEM data missing blocks")
 	errTrailingGarbage = errors.New("signature: PEM data has trailing garbage")
 	errMalformedPEM    = errors.New("signature: malformed PEM")
+
+	errKeyMismatch = errors.New("signature: public key PEM is not for private key")
 
 	_ cbor.Marshaler             = PublicKey{}
 	_ cbor.Unmarshaler           = (*PublicKey)(nil)
@@ -140,6 +145,21 @@ func (k *PublicKey) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, k)
 }
 
+// UnmarshalPEM decodes a PEM marshaled PublicKey.
+func (k *PublicKey) UnmarshalPEM(data []byte) error {
+	b, err := unmarshalPEM(pubPEMType, data)
+	if err != nil {
+		return err
+	}
+
+	return k.UnmarshalBinary(b)
+}
+
+// MarshalPEM encodes a PublicKey into PEM form.
+func (k PublicKey) MarshalPEM() (data []byte, err error) {
+	return marshalPEM(pubPEMType, k[:])
+}
+
 // Equal compares vs another public key for equality.
 func (k PublicKey) Equal(cmp PublicKey) bool {
 	return bytes.Equal(k, cmp)
@@ -166,6 +186,44 @@ func (k PublicKey) ToMapKey() MapKey {
 	copy(mk[:], k)
 
 	return mk
+}
+
+// LoadPEM loads a public key from a PEM file on disk.  Iff the public key
+// is missing and a private key is provided, the private key's corresponding
+// public key will be written and loaded.
+func (k *PublicKey) LoadPEM(fn string, priv *PrivateKey) error {
+	f, err := os.Open(fn) // nolint: gosec
+	if err != nil {
+		if os.IsNotExist(err) && priv != nil {
+			pubKey := priv.Public()
+
+			var buf []byte
+			if buf, err = pubKey.MarshalPEM(); err != nil {
+				return err
+			}
+
+			copy((*k)[:], pubKey[:])
+
+			return ioutil.WriteFile(fn, buf, filePerm)
+		}
+		return err
+	}
+	defer f.Close() // nolint: errcheck
+
+	buf, err := ioutil.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
+	if err = k.UnmarshalPEM(buf); err != nil {
+		return err
+	}
+
+	if priv != nil && !k.Equal(priv.Public()) {
+		return errKeyMismatch
+	}
+
+	return nil
 }
 
 // RawSignature is a raw signature.
@@ -233,42 +291,23 @@ func (k *PrivateKey) UnmarshalBinary(data []byte) error {
 
 // UnmarshalPEM decodes a PEM marshaled PrivateKey.
 func (k *PrivateKey) UnmarshalPEM(data []byte) error {
-	blk, rest := pem.Decode(data)
-	if blk == nil {
-		return errNilPEM
-	}
-	if len(rest) != 0 {
-		return errTrailingGarbage
-	}
-	if blk.Type != pemType {
-		return errMalformedPEM
+	b, err := unmarshalPEM(privPEMType, data)
+	if err != nil {
+		return err
 	}
 
-	return k.UnmarshalBinary(blk.Bytes)
+	return k.UnmarshalBinary(b)
 }
 
 // MarshalPEM encodes a PrivateKey into PEM form.
 func (k PrivateKey) MarshalPEM() (data []byte, err error) {
-	blk := &pem.Block{
-		Type:  pemType,
-		Bytes: k[:],
-	}
-
-	var buf bytes.Buffer
-	if err = pem.Encode(&buf, blk); err != nil {
-		return nil, err
-	}
-	data = buf.Bytes()
-
-	return
+	return marshalPEM(privPEMType, k[:])
 }
 
 // LoadPEM loads a private key from a PEM file on disk.  Iff the private
 // key is missing and an entropy source is provided, a new private key
 // will be generated and written.
 func (k *PrivateKey) LoadPEM(fn string, rng io.Reader) error {
-	const filePerm = 0600
-
 	f, err := os.Open(fn) // nolint: gosec
 	if err != nil {
 		if os.IsNotExist(err) && rng != nil {
@@ -480,4 +519,33 @@ func digest(context, message []byte) ([]byte, error) {
 	sum := h.Sum(nil)
 
 	return sum[:], nil
+}
+
+func unmarshalPEM(pemType string, data []byte) ([]byte, error) {
+	blk, rest := pem.Decode(data)
+	if blk == nil {
+		return nil, errNilPEM
+	}
+	if len(rest) != 0 {
+		return nil, errTrailingGarbage
+	}
+	if blk.Type != pemType {
+		return nil, errMalformedPEM
+	}
+
+	return blk.Bytes, nil
+}
+
+func marshalPEM(pemType string, data []byte) ([]byte, error) {
+	blk := &pem.Block{
+		Type:  pemType,
+		Bytes: data,
+	}
+
+	var buf bytes.Buffer
+	if err := pem.Encode(&buf, blk); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
