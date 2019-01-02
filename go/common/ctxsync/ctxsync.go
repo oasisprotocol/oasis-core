@@ -16,7 +16,7 @@ type CancelableCond struct {
 	closeOnBroadcast chan struct{}
 }
 
-// newCancelableCond returns a new CancelableCond.
+// NewCancelableCond returns a new CancelableCond.
 func NewCancelableCond(l sync.Locker) *CancelableCond {
 	return &CancelableCond{
 		L:                l,
