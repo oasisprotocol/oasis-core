@@ -96,6 +96,8 @@ github.com/jbenet/goprocess v0.0.0-20160826012719-b497e2f366b8 h1:bspPhN+oKYFk5f
 github.com/jbenet/goprocess v0.0.0-20160826012719-b497e2f366b8/go.mod h1:Ly/wlsjFq/qrU3Rar62tu1gASgGw6chQbSh/XgIIXCY=
 github.com/jmhodges/levigo v0.0.0-20161115193449-c42d9e0ca023 h1:y5P5G9cANJZt3MXlMrgELo5mNLZPXH8aGFFFG7IzPU0=
 github.com/jmhodges/levigo v0.0.0-20161115193449-c42d9e0ca023/go.mod h1:Q6Qx+uH3RAqyK4rFQroq9RL7mdkABMcfhEI+nNuzMJQ=
+github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 h1:Z9n2FFNUXsshfwJMBgNA0RU6/i7WVaAegv3PtuIHPMs=
+github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51/go.mod h1:CzGEWj7cYgsdH8dAjBGEr58BoE7ScuLd+fwFZ44+/x8=
 github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515 h1:T+h1c/A9Gawja4Y9mFVWj2vyii2bbUNDw3kt9VxK2EY=
 github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515/go.mod h1:+0opPa2QZZtGFBFZlji/RkVcI2GknAs/DXo4wKdlNEc=
 github.com/lib/pq v1.0.0 h1:X5PMW56eZitiTeO7tKzZxFCSpbFZJtkMMooicw2us9A=
@@ -174,6 +176,8 @@ github.com/mattn/go-isatty v0.0.4 h1:bnP0vzxcAdeI1zdubAl5PjU6zsERjGZb7raWodagDYs
 github.com/mattn/go-isatty v0.0.4/go.mod h1:M+lRXTBqGeGNdLjl/ufCoiOlB5xdOkqRJdNxMWT7Zi4=
 github.com/matttproud/golang_protobuf_extensions v1.0.1 h1:4hp9jkHxhMHkqkrB3Ix0jegS5sx/RkqARlsWZ6pIwiU=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
+github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b h1:j7+1HpAFS1zy5+Q4qx1fWh90gTKwiN4QCGoY9TWyyO4=
+github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b/go.mod h1:01TrycV0kFyexm33Z7vhZRXopbI8J3TDReVlkTgMUxE=
 github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 h1:lYpkrQH5ajf0OXOcUbGjvZxxijuBwbbmlSxLiuofa+g=
 github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1/go.mod h1:pD8RvIylQ358TN4wwqatJ8rNavkEINozVn9DtGI3dfQ=
 github.com/minio/sha256-simd v0.0.0-20181005183134-51976451ce19 h1:d9VfRe71OW+ZtutCBgQ54kXBwFy5Tz5hR0OBIE6qlFo=
@@ -192,6 +196,7 @@ github.com/multiformats/go-multihash v1.0.8 h1:pyowaBSivNxBr137ZjYkr0q4o41MKSJVP
 github.com/multiformats/go-multihash v1.0.8/go.mod h1:sT17phG+xVgnrZc8ht/ZoCIV0sKRwvmZkXk46UfSxM4=
 github.com/multiformats/go-multistream v0.3.9 h1:ZqVaUxtVzjRUCGaO3596vk/rj9UXheIGAdKXXo/VKUA=
 github.com/multiformats/go-multistream v0.3.9/go.mod h1:fJTiDfXJVmItycydCnNx4+wSzZ5NwG2FEVAI30fiovg=
+github.com/oasislabs/iavl v0.12.0-ekiden2 h1:kzdp6OTHYrn8TXlAo+2NsL84Qi2gqydFvjhWQZ/H9GM=
 github.com/oasislabs/iavl v0.12.0-ekiden2/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0 h1:WSHQ+IS43OoUrWtD1/bbclrwK8TTH5hzp+umCiuxHgs=
@@ -293,6 +298,8 @@ google.golang.org/genproto v0.0.0-20180413175816-7fd901a49ba6 h1:VrRtqEIrO5wUzNw
 google.golang.org/genproto v0.0.0-20180413175816-7fd901a49ba6/go.mod h1:JiN7NxoALGmiZfu7CAH4rXhgtRTLTxftemlI0sWmxmc=
 google.golang.org/grpc v1.13.0 h1:bHIbVsCwmvbArgCJmLdgOdHFXlKqTOVjbibbS19cXHc=
 google.golang.org/grpc v1.13.0/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
+gopkg.in/AlecAivazis/survey.v1 v1.7.1 h1:mzQIVyOPSXJaQWi1m6AFCjrCEPIwQBSOn48Ri8ZpzAg=
+gopkg.in/AlecAivazis/survey.v1 v1.7.1/go.mod h1:2Ehl7OqkBl3Xb8VmC4oFW2bItAhnUfzIjrOzwRxCrOU=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/fsnotify.v1 v1.4.7 h1:xOHLXZwVvI9hhs+cLKq5+I5onOuwQLhQwiu63xxlHs4=

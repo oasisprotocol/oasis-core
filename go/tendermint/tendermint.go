@@ -2,9 +2,12 @@ package tendermint
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -316,24 +319,52 @@ func (t *tendermintService) lazyInit() error {
 		tendermintPV.Save()
 	}
 
-	var tenderminGenesisProvider tmnode.GenesisDocProvider
+	var (
+		tenderminGenesisProvider tmnode.GenesisDocProvider
+		tmGenDoc                 *tmtypes.GenesisDoc
+		genDoc                   GenesisDocument
+	)
 	genFile := tenderConfig.GenesisFile()
 	if _, err = os.Lstat(genFile); err != nil && os.IsNotExist(err) {
 		t.Logger.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
-		genDoc := tmtypes.GenesisDoc{
-			ChainID:         "0xa515",
-			GenesisTime:     time.Now(),
-			ConsensusParams: tmtypes.DefaultConsensusParams(),
+		genDoc.Validators = []*GenesisValidator{
+			{
+				PubKey: t.validatorKey.Public(),
+				Name:   "ekiden-dummy",
+				Power:  10,
+			},
 		}
-		genDoc.Validators = []tmtypes.GenesisValidator{{
-			PubKey: tendermintPV.GetPubKey(),
-			Power:  10,
-		}}
-		tenderminGenesisProvider = func() (*tmtypes.GenesisDoc, error) {
-			return &genDoc, nil
-		}
+		genDoc.GenesisTime = time.Now()
 	} else {
-		tenderminGenesisProvider = tmnode.DefaultGenesisDocProviderFunc(tenderConfig)
+		// The genesis document is just an array of GenesisValidator(s)
+		// in JSON format for now.
+		var b []byte
+
+		if b, err = ioutil.ReadFile(genFile); err != nil {
+			return errors.Wrap(err, "tendermint: failed to read genesis doc")
+		}
+
+		if err = json.Unmarshal(b, &genDoc); err != nil {
+			return errors.Wrap(err, "tendermint: failed to parse genesis doc")
+		}
+
+		// Since validators are static for the moment, just have every
+		// node open persistent connections to all the validators.
+		var addrs []string
+		for _, v := range genDoc.Validators {
+			if v.PubKey.Equal(t.validatorKey.Public()) {
+				continue
+			}
+
+			addrs = append(addrs, v.CoreAddress)
+		}
+		tenderConfig.P2P.PersistentPeers = strings.Join(addrs, ",")
+	}
+	if tmGenDoc, err = newTMGenesisDoc(&genDoc); err != nil {
+		return errors.Wrap(err, "tendermint: failed to create genesis doc")
+	}
+	tenderminGenesisProvider = func() (*tmtypes.GenesisDoc, error) {
+		return tmGenDoc, nil
 	}
 
 	t.node, err = tmnode.NewNode(tenderConfig,
@@ -447,4 +478,42 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
+}
+
+// GenesisDocument is the ekiden format tendermint GenesisDocument.
+type GenesisDocument struct {
+	Validators  []*GenesisValidator `json:"validators"`
+	GenesisTime time.Time           `json:"genesis_time"`
+}
+
+// GenesisValidator is the ekiden format tendermint GenesisValidator
+type GenesisValidator struct {
+	PubKey      signature.PublicKey `json:"pub_key"`
+	Name        string              `json:"name"`
+	Power       int64               `json:"power"`
+	CoreAddress string              `json:"core_address"`
+}
+
+func newTMGenesisDoc(srcDoc *GenesisDocument) (*tmtypes.GenesisDoc, error) {
+	doc := tmtypes.GenesisDoc{
+		ChainID:         "0xa515",
+		GenesisTime:     srcDoc.GenesisTime,
+		ConsensusParams: tmtypes.DefaultConsensusParams(),
+	}
+
+	var tmValidators []tmtypes.GenesisValidator
+	for _, v := range srcDoc.Validators {
+		pk := crypto.PublicKeyToTendermint(&v.PubKey)
+		validator := tmtypes.GenesisValidator{
+			Address: pk.Address(),
+			PubKey:  pk,
+			Power:   v.Power,
+			Name:    v.Name,
+		}
+		tmValidators = append(tmValidators, validator)
+	}
+
+	doc.Validators = tmValidators
+
+	return &doc, nil
 }

@@ -46,6 +46,7 @@ require (
 	github.com/jbenet/go-temp-err-catcher v0.0.0-20150120210811-aac704a3f4f2 // indirect
 	github.com/jbenet/goprocess v0.0.0-20160826012719-b497e2f366b8 // indirect
 	github.com/jmhodges/levigo v0.0.0-20161115193449-c42d9e0ca023 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515 // indirect
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/libp2p/go-addr-util v2.0.7+incompatible // indirect
@@ -85,6 +86,7 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
+	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
 	github.com/minio/sha256-simd v0.0.0-20181005183134-51976451ce19 // indirect
 	github.com/mitchellh/mapstructure v1.0.0 // indirect
@@ -141,4 +143,5 @@ require (
 	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4 // indirect
 	google.golang.org/genproto v0.0.0-20180413175816-7fd901a49ba6 // indirect
 	google.golang.org/grpc v1.13.0
+	gopkg.in/AlecAivazis/survey.v1 v1.7.1
 )
