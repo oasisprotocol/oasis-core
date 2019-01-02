@@ -21,6 +21,7 @@ import (
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
+	workerTests "github.com/oasislabs/ekiden/go/worker/tests"
 )
 
 var (
@@ -36,6 +37,9 @@ var (
 		{"scheduler.backend", "trivial"},
 		{"storage.backend", "leveldb"},
 		{"tendermint.consensus.skip_timeout_commit", true},
+		{"worker.backend", "mock"},
+		{"worker.runtime", "mock-runtime"},
+		{"worker.runtime_id", "0000000000000000000000000000000000000000000000000000000000000000"},
 	}
 
 	initConfigOnce sync.Once
@@ -113,7 +117,12 @@ func TestNode(t *testing.T) {
 		}
 	}()
 
+	// NOTE: Order of test cases is important.
 	testCases := []*testCase{
+		// Worker test case must run first as starting the worker will
+		// automatically register the runtime and node.
+		{"Worker", testWorker},
+
 		{"EpochTime", testEpochTime},
 		{"Beacon", testBeacon},
 		{"Storage", testStorage},
@@ -161,4 +170,10 @@ func testRootHash(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	roothashTests.RootHashImplementationTests(t, node.RootHash, timeSource, node.Scheduler, node.Storage, node.Registry)
+}
+
+func testWorker(t *testing.T, node *testNode) {
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+
+	workerTests.WorkerImplementationTests(t, node.Worker, timeSource, node.Registry, node.RootHash, node.Identity)
 }

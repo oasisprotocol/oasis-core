@@ -47,18 +47,18 @@ func Run(cmd *cobra.Command, args []string) {
 // WARNING: This is exposed for the benefit of tests and the interface
 // is not guaranteed to be stable.
 type Node struct {
-	svcMgr   *background.ServiceManager
-	identity *identity.Identity
-	grpcSrv  *grpc.Server
-	svcTmnt  service.TendermintService
-	worker   *worker.Worker
+	svcMgr  *background.ServiceManager
+	grpcSrv *grpc.Server
+	svcTmnt service.TendermintService
 
+	Identity  *identity.Identity
 	Beacon    beaconAPI.Backend
 	Epochtime epochtimeAPI.Backend
 	Registry  registryAPI.Backend
 	RootHash  roothashAPI.Backend
 	Scheduler schedulerAPI.Backend
 	Storage   storageAPI.Backend
+	Worker    *worker.Worker
 }
 
 // Cleanup cleans up after the ndoe has terminated.
@@ -154,7 +154,7 @@ func NewNode() (*Node, error) {
 	var err error
 
 	// Generate/Load the node identity.
-	node.identity, err = identity.LoadOrGenerate(dataDir)
+	node.Identity, err = identity.LoadOrGenerate(dataDir)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
 			"err", err,
@@ -163,7 +163,7 @@ func NewNode() (*Node, error) {
 	}
 
 	logger.Info("loaded/generated node identity",
-		"public_key", node.identity.NodeKey.Public(),
+		"public_key", node.Identity.NodeKey.Public(),
 	)
 
 	// Initialize the tracing client.
@@ -216,7 +216,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize tendermint.
-	node.svcTmnt = tendermint.New(dataDir, node.identity)
+	node.svcTmnt = tendermint.New(dataDir, node.Identity)
 	node.svcMgr.Register(node.svcTmnt)
 
 	// Initialize the varous node backends.
@@ -228,8 +228,8 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize the worker.
-	node.worker, err = worker.New(
-		node.identity,
+	node.Worker, err = worker.New(
+		node.Identity,
 		node.Storage,
 		node.RootHash,
 		node.Registry,
@@ -242,7 +242,7 @@ func NewNode() (*Node, error) {
 		)
 		return nil, err
 	}
-	node.svcMgr.Register(node.worker)
+	node.svcMgr.Register(node.Worker)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -272,7 +272,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Start the worker.
-	if err = node.worker.Start(); err != nil {
+	if err = node.Worker.Start(); err != nil {
 		logger.Error("failed to start worker",
 			"err", err,
 		)

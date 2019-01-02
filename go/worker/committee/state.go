@@ -52,59 +52,70 @@ var validStateTransitions = map[string][]string{
 	},
 }
 
-type nodeState interface {
+// NodeState is a node's state.
+type NodeState interface {
 	// String returns a string representation of the state.
 	String() string
 }
 
-type stateNotReady struct {
+// StateNotReady is the not ready state.
+type StateNotReady struct {
 }
 
-func (s stateNotReady) String() string {
+// String returns a string representation of the state.
+func (s StateNotReady) String() string {
 	return "NotReady"
 }
 
-type stateWaitingForBatch struct {
+// StateWaitingForBatch is the waiting for batch state.
+type StateWaitingForBatch struct {
 }
 
-func (s stateWaitingForBatch) String() string {
+// String returns a string representation of the state.
+func (s StateWaitingForBatch) String() string {
 	return "WaitingForBatch"
 }
 
-type stateWaitingForBlock struct {
+// StateWaitingForBlock is the waiting for block state.
+type StateWaitingForBlock struct {
 	// Batch that is waiting to be processed.
 	batch runtime.Batch
 	// Header of the block we are waiting for.
 	header *block.Header
 }
 
-func (s stateWaitingForBlock) String() string {
+// String returns a string representation of the state.
+func (s StateWaitingForBlock) String() string {
 	return "WaitingForBlock"
 }
 
-type stateProcessingBatch struct {
+// StateProcessingBatch is the processing batch state.
+type StateProcessingBatch struct {
 	// Batch that is being processed.
 	batch runtime.Batch
 	// Function for cancelling batch processing.
-	cancel context.CancelFunc
+	cancelFn context.CancelFunc
 	// Channel which will provide the result.
 	done chan *protocol.ComputedBatch
 }
 
-func (s stateProcessingBatch) String() string {
+// String returns a string representation of the state.
+func (s StateProcessingBatch) String() string {
 	return "ProcessingBatch"
 }
 
-func (s *stateProcessingBatch) Cancel() {
+func (s *StateProcessingBatch) cancel() {
 	// Invoke the cancellation function and wait for the processing
 	// to actually stop.
-	(s.cancel)()
+	(s.cancelFn)()
 	<-s.done
 }
 
-type stateWaitingForFinalize struct {
+// StateWaitingForFinalize is the waiting for finalize state.
+type StateWaitingForFinalize struct {
 }
 
-func (s stateWaitingForFinalize) String() string {
+// String returns a string representation of the state.
+func (s StateWaitingForFinalize) String() string {
 	return "WaitingForFinalize"
 }

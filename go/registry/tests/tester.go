@@ -284,6 +284,9 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 func testRegistryRuntime(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
+	existingRuntimes, err := backend.GetRuntimes(context.Background())
+	require.NoError(err, "GetRuntimes")
+
 	rt, err := NewTestRuntime([]byte("testRegistryRuntime"))
 	require.NoError(err, "NewTestRuntime")
 
@@ -291,8 +294,11 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 
 	registeredRuntimes, err := backend.GetRuntimes(context.Background())
 	require.NoError(err, "GetRuntimes")
-	require.Len(registeredRuntimes, 1, "registry has one runtime")
-	require.EqualValues(rt.Runtime, registeredRuntimes[0], "expected runtime is registered")
+	// NOTE: There can be two runtimes registered here instead of one because the worker
+	//       tests that run before this register their own runtime and this runtime
+	//       cannot be deregistered.
+	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
+	require.EqualValues(rt.Runtime, registeredRuntimes[len(registeredRuntimes)-1], "expected runtime is registered")
 
 	// TODO: Test the various failures.
 
