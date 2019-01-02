@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -130,10 +131,10 @@ func New(
 
 	// Parse TEE hardware setting.
 	var teeHardware node.TEEHardware
-	switch viper.GetString(cfgTEEHardware) {
-	case "invalid":
+	switch strings.ToUpper(viper.GetString(cfgTEEHardware)) {
+	case "INVALID":
 		teeHardware = node.TEEHardwareInvalid
-	case "intel-sgx":
+	case "INTEL-SGX":
 		teeHardware = node.TEEHardwareIntelSGX
 	default:
 		return nil, node.ErrInvalidTEEHardware
