@@ -40,12 +40,12 @@ func (c *CancelableCond) Broadcast() {
 func (c *CancelableCond) Wait(ctx context.Context) bool {
 	closeOnBroadcast := c.closeOnBroadcast
 	c.L.Unlock()
+	ok := false
 	select {
 	case <-closeOnBroadcast:
-		c.L.Lock()
-		return true
+		ok = true
 	case <-ctx.Done():
-		c.L.Lock()
-		return false
 	}
+	c.L.Lock()
+	return ok
 }
