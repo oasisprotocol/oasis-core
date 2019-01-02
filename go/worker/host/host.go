@@ -9,12 +9,14 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"git.schwanenlied.me/yawning/dynlib.git"
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/ctxsync"
 	cias "github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -183,8 +185,9 @@ type Host struct {
 	stopCh chan struct{}
 	quitCh chan struct{}
 
-	activeWorker *process
-	requestCh    chan *hostRequest
+	activeWorker          *process
+	activeWorkerAvailable *ctxsync.CancelableCond
+	requestCh             chan *hostRequest
 
 	logger *logging.Logger
 }
@@ -192,6 +195,23 @@ type Host struct {
 // Name returns the service name.
 func (h *Host) Name() string {
 	return "worker host"
+}
+
+// WaitForCapabilityTEE gets the active worker's CapabilityTEE,
+// blocking if the active worker is not yet available. The returned
+// CapabilityTEE may be out of date by the time this function returns.
+func (h *Host) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+	h.activeWorkerAvailable.L.Lock()
+	defer h.activeWorkerAvailable.L.Unlock()
+	for {
+		activeWorker := h.activeWorker
+		if activeWorker != nil {
+			return activeWorker.capabilityTEE, nil
+		}
+		if !h.activeWorkerAvailable.Wait(ctx) {
+			return nil, errors.New("aborted by context")
+		}
+	}
 }
 
 // Start starts the service.
@@ -484,7 +504,9 @@ func (h *Host) manager() {
 				<-h.activeWorker.quitCh
 			}
 
+			h.activeWorkerAvailable.L.Lock()
 			h.activeWorker = nil
+			h.activeWorkerAvailable.L.Unlock()
 		}
 
 		if !wantWorker {
@@ -505,7 +527,10 @@ func (h *Host) manager() {
 			continue
 		}
 
+		h.activeWorkerAvailable.L.Lock()
 		h.activeWorker = worker
+		h.activeWorkerAvailable.Broadcast()
+		h.activeWorkerAvailable.L.Unlock()
 	}
 
 	close(h.quitCh)
@@ -531,16 +556,17 @@ func New(
 	}
 
 	host := &Host{
-		workerBinary:  workerBinary,
-		runtimeBinary: runtimeBinary,
-		cacheDir:      cacheDir,
-		storage:       storage,
-		ias:           ias,
-		keyManager:    keyManager,
-		quitCh:        make(chan struct{}),
-		stopCh:        make(chan struct{}),
-		requestCh:     make(chan *hostRequest, 10),
-		logger:        logging.GetLogger("worker/host").With("runtime_id", runtimeID),
+		workerBinary:          workerBinary,
+		runtimeBinary:         runtimeBinary,
+		cacheDir:              cacheDir,
+		storage:               storage,
+		ias:                   ias,
+		keyManager:            keyManager,
+		quitCh:                make(chan struct{}),
+		stopCh:                make(chan struct{}),
+		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
+		requestCh:             make(chan *hostRequest, 10),
+		logger:                logging.GetLogger("worker/host").With("runtime_id", runtimeID),
 	}
 
 	return host, nil
