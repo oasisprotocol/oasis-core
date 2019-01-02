@@ -146,10 +146,13 @@ run_compute_node_storage_multilayer_remote() {
 run_keymanager_node() {
     local extra_args=$*
 
+    local db_dir=/tmp/ekiden-test-keymanager
+    rm -rf ${db_dir}
+
     ${WORKDIR}/target/debug/ekiden-keymanager-node \
         --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
         --node-key-pair ${WORKDIR}/tests/keymanager/km.key \
         --storage-backend dummy \
-        --storage-path ${WORKDIR}/tests/keymanager/keys \
+        --storage-path ${db_dir} \
         ${extra_args} &
 }
