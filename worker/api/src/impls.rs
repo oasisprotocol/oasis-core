@@ -27,6 +27,15 @@ impl Worker for Protocol {
             .into_box()
     }
 
+    fn worker_abort(&self) -> BoxFuture<()> {
+        self.make_request(Body::WorkerAbortRequest {})
+            .and_then(|body| match body {
+                Body::WorkerAbortResponse {} => Ok(()),
+                _ => Err(Error::new("malformed response")),
+            })
+            .into_box()
+    }
+
     fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
         self.make_request(Body::WorkerCapabilityTEEGidRequest {})
             .and_then(|body| match body {
@@ -255,9 +264,14 @@ pub struct HostHandler<T: Host>(pub T);
 impl<T: Worker> Handler for WorkerHandler<T> {
     fn handle(&self, body: Body) -> BoxFuture<Body> {
         match body {
+            Body::WorkerPingRequest {} => future::ok(Body::Empty {}).into_box(),
             Body::WorkerShutdownRequest {} => {
                 self.0.worker_shutdown().map(|_| Body::Empty {}).into_box()
             }
+            Body::WorkerAbortRequest {} => self.0
+                .worker_abort()
+                .map(|_| Body::WorkerAbortResponse {})
+                .into_box(),
             Body::WorkerCapabilityTEEGidRequest {} => self.0
                 .capabilitytee_gid()
                 .map(|gid| Body::WorkerCapabilityTEEGidResponse { gid })

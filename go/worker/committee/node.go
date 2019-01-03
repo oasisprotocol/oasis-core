@@ -436,8 +436,15 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 
 			done <- &rsp.Batch
 		case <-ctx.Done():
-			n.logger.Error("batch processing aborted by context")
-			// TODO: Interrupt the worker.
+			n.logger.Error("batch processing aborted by context, interrupting worker")
+
+			// Interrupt the worker, so we can start processing the next batch.
+			err := n.workerHost.InterruptWorker(n.ctx)
+			if err != nil {
+				n.logger.Error("failed to interrupt the worker",
+					"err", err,
+				)
+			}
 			return
 		}
 	}()

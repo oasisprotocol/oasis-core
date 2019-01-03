@@ -51,6 +51,16 @@ impl ekiden_worker_api::Worker for ProtocolHandler {
         unimplemented!();
     }
 
+    fn worker_abort(&self) -> BoxFuture<()> {
+        // TODO: Currently there is no way to actually interrupt the enclave
+        //       as it is running in a single thread processing a single ECALL.
+        //
+        //       If it were possible to gracefully interrupt the enclave, then
+        //       this method could do so and avoid getting the whole worker
+        //       killed and respawned.
+        unimplemented!("graceful abort not supported");
+    }
+
     fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
         self.with_worker(|worker| worker.capabilitytee_gid())
     }

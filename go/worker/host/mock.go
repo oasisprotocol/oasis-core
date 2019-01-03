@@ -75,6 +75,10 @@ func (h *mockHost) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTE
 	return nil, nil
 }
 
+func (h *mockHost) InterruptWorker(ctx context.Context) error {
+	return nil
+}
+
 // NewMockHost creates a new mock worker host.
 func NewMockHost() (Host, error) {
 	host := &mockHost{

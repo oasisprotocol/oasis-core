@@ -65,6 +65,8 @@ type Body struct {
 	WorkerRPCCallResponse               *WorkerRPCCallResponse
 	WorkerRuntimeCallBatchRequest       *WorkerRuntimeCallBatchRequest
 	WorkerRuntimeCallBatchResponse      *WorkerRuntimeCallBatchResponse
+	WorkerAbortRequest                  *Empty
+	WorkerAbortResponse                 *Empty
 
 	// Host interface.
 	HostRPCCallRequest             *HostRPCCallRequest

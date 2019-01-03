@@ -35,6 +35,8 @@ pub enum Body {
     // Worker interface.
     WorkerPingRequest {},
     WorkerShutdownRequest {},
+    WorkerAbortRequest {},
+    WorkerAbortResponse {},
     WorkerCapabilityTEEGidRequest {},
     WorkerCapabilityTEEGidResponse {
         gid: [u8; 4],

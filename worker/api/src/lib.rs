@@ -38,6 +38,9 @@ pub trait Worker: Send + Sync {
     /// Shutdown worker.
     fn worker_shutdown(&self) -> BoxFuture<()>;
 
+    /// Request the worker to abort runtime or RPC processing.
+    fn worker_abort(&self) -> BoxFuture<()>;
+
     /// Get EPID group id.
     fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]>;
 

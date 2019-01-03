@@ -59,8 +59,8 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte) (av
 				base64.StdEncoding.EncodeToString(quote),
 			),
 		)
-		sig = []byte("")
-		chain = []byte("")
+		sig = nil
+		chain = nil
 		return
 	}
 

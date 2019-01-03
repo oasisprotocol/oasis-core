@@ -34,12 +34,14 @@ const (
 	// BackendSandboxed is the name of the sandboxed backend.
 	BackendSandboxed = "sandboxed"
 
-	// Worker connect timeout (in seconds).
-	workerConnectTimeout = 5
-	// Worker RAK initialization timeout (in seconds).
-	workerRAKTimeout = 5
-	// Worker respawn delay (in seconds).
-	workerRespawnDelay = 1
+	// Worker connect timeout.
+	workerConnectTimeout = 5 * time.Second
+	// Worker RAK initialization timeout.
+	workerRAKTimeout = 5 * time.Second
+	// Worker respawn delay.
+	workerRespawnDelay = 1 * time.Second
+	// Worker interrupt timeout.
+	workerInterruptTimeout = 1 * time.Second
 
 	// Path to bubblewrap sandbox.
 	workerBubblewrapBinary = "/usr/bin/bwrap"
@@ -159,7 +161,7 @@ func prepareWorkerArgs() ([]string, error) {
 	}, nil
 }
 
-// Request is an internal request to manager goroutine that is dispatched
+// HostRequest is an internal request to manager goroutine that is dispatched
 // to the worker when a worker becomes available.
 type hostRequest struct {
 	ctx  context.Context
@@ -167,11 +169,18 @@ type hostRequest struct {
 	ch   chan<- *hostResponse
 }
 
-// Response is an internal response from the manager goroutine that is
+// HostResponse is an internal response from the manager goroutine that is
 // returned to the caller when a request has been dispatched to the worker.
 type hostResponse struct {
 	ch  <-chan *protocol.Body
 	err error
+}
+
+// InterruptRequest is an internal request to manager goroutine that signals
+// the worker should be interrupted.
+type interruptRequest struct {
+	ctx context.Context
+	ch  chan<- error
 }
 
 // SandboxedHost is a worker Host that runs worker processes in a bubblewrap
@@ -192,6 +201,7 @@ type sandboxedHost struct {
 	activeWorker          *process
 	activeWorkerAvailable *ctxsync.CancelableCond
 	requestCh             chan *hostRequest
+	interruptCh           chan *interruptRequest
 
 	logger *logging.Logger
 }
@@ -232,7 +242,7 @@ func (h *sandboxedHost) Cleanup() {
 }
 
 func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
 	defer cancel()
 
 	quoteType, err := h.ias.GetQuoteSignatureType(ctx)
@@ -259,6 +269,9 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(gid[:]))
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
+	}
+	if len(sigRL) == 0 {
+		sigRL = []byte("")
 	}
 
 	rakQuoteRes, err := worker.protocol.Call(
@@ -313,6 +326,25 @@ func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<
 		return resp.ch, resp.err
 	case <-ctx.Done():
 		return nil, errors.New("aborted by context")
+	}
+}
+
+func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
+	respCh := make(chan error, 1)
+
+	// Send internal request to the manager goroutine.
+	select {
+	case h.interruptCh <- &interruptRequest{ctx, respCh}:
+	case <-ctx.Done():
+		return errors.New("aborted by context")
+	}
+
+	// Wait for response from the manager goroutine.
+	select {
+	case resp := <-respCh:
+		return resp
+	case <-ctx.Done():
+		return errors.New("aborted by context")
 	}
 }
 
@@ -421,7 +453,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		"worker_pid", cmd.Process.Pid,
 	)
 
-	err = listener.SetDeadline(time.Now().Add(workerConnectTimeout * time.Second))
+	err = listener.SetDeadline(time.Now().Add(workerConnectTimeout))
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while accepting worker connection")
 	}
@@ -469,10 +501,60 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	return p, nil
 }
 
+func (h *sandboxedHost) spawnAndReplaceWorker() error {
+	worker, err := h.spawnWorker()
+	if err != nil {
+		return err
+	}
+
+	h.activeWorkerAvailable.L.Lock()
+	h.activeWorker = worker
+	h.activeWorkerAvailable.Broadcast()
+	h.activeWorkerAvailable.L.Unlock()
+
+	return nil
+}
+
+func (h *sandboxedHost) handleInterruptWorker(ctx context.Context) error {
+	h.logger.Warn("interrupting worker")
+
+	// First attempt to gracefully interrupt the worker by sending a request.
+	ictx, cancel := context.WithTimeout(ctx, workerInterruptTimeout)
+	defer cancel()
+
+	response, err := h.activeWorker.protocol.Call(ictx, &protocol.Body{WorkerAbortRequest: &protocol.Empty{}})
+	if err == nil && response.WorkerAbortResponse != nil {
+		// Successful response, assume worker is done.
+		return nil
+	}
+
+	h.logger.Warn("graceful interrupt failed, killing worker")
+
+	// Failed to gracefully interrupt the worker. Kill the worker and it
+	// will be automatically restarted by the manager after it dies.
+	_ = h.activeWorker.Kill()
+
+	// Wait for the worker to terminate. We do this here so that the response
+	// to the interrupt request is only sent after the new worker has been
+	// respawned and is ready to use.
+	select {
+	case <-h.activeWorker.quitCh:
+	case <-ctx.Done():
+		return errors.New("aborted by context")
+	}
+
+	// Respawn worker.
+	// NOTE: This may violate the context deadline, but interrupting this
+	//       method does not make sense. The method uses its own deadlines
+	//       so it should never block forever.
+	return h.spawnAndReplaceWorker()
+}
+
 func (h *sandboxedHost) manager() {
 	// Make sure that a worker is always available.
 	wantWorker := true
 	needSpawnDelay := false
+ManagerLoop:
 	for {
 		// Wait for the worker to terminate.
 	WaitWorkerToTerminate:
@@ -483,6 +565,11 @@ func (h *sandboxedHost) manager() {
 				ch, err := h.activeWorker.protocol.MakeRequest(rq.ctx, rq.body)
 				rq.ch <- &hostResponse{ch, err}
 				close(rq.ch)
+				continue WaitWorkerToTerminate
+			case intr := <-h.interruptCh:
+				// Attempt to interrupt the worker.
+				intr.ch <- h.handleInterruptWorker(intr.ctx)
+				close(intr.ch)
 				continue WaitWorkerToTerminate
 			case err := <-h.activeWorker.quitCh:
 				// Worker has terminated.
@@ -515,10 +602,16 @@ func (h *sandboxedHost) manager() {
 
 		// Spawn new worker process after a respawn delay.
 		if needSpawnDelay {
-			time.Sleep(time.Second * workerRespawnDelay)
+			select {
+			case <-time.After(workerRespawnDelay):
+			case <-h.stopCh:
+				// Termination requested while no worker is spawned.
+				h.logger.Info("termination requested")
+				break ManagerLoop
+			}
 		}
 
-		worker, err := h.spawnWorker()
+		err := h.spawnAndReplaceWorker()
 		if err != nil {
 			h.logger.Error("failed to spawn new worker",
 				"err", err,
@@ -526,11 +619,6 @@ func (h *sandboxedHost) manager() {
 			needSpawnDelay = true
 			continue
 		}
-
-		h.activeWorkerAvailable.L.Lock()
-		h.activeWorker = worker
-		h.activeWorkerAvailable.Broadcast()
-		h.activeWorkerAvailable.L.Unlock()
 	}
 
 	close(h.quitCh)
@@ -569,6 +657,7 @@ func NewSandboxedHost(
 		stopCh:                make(chan struct{}),
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
 		requestCh:             make(chan *hostRequest, 10),
+		interruptCh:           make(chan *interruptRequest, 10),
 		logger:                logging.GetLogger("worker/host/sandboxed").With("runtime_id", runtimeID),
 	}
 	return host, nil
