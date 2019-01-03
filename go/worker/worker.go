@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -28,6 +29,7 @@ type RuntimeConfig struct {
 type Config struct {
 	Committee    committee.Config
 	P2PPort      uint16
+	TEEHardware  node.TEEHardware
 	WorkerBinary string
 	CacheDir     string
 	Runtimes     []RuntimeConfig
@@ -160,6 +162,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		path.Join(cfg.CacheDir, rtCfg.ID.String()),
 		rtCfg.ID,
 		w.storage,
+		cfg.TEEHardware,
 		w.ias,
 		w.keyManager,
 	)

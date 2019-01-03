@@ -178,9 +178,10 @@ type Host struct {
 	runtimeBinary string
 	cacheDir      string
 
-	storage    storage.Backend
-	ias        *ias.IAS
-	keyManager *enclaverpc.Client
+	storage     storage.Backend
+	teeHardware node.TEEHardware
+	ias         *ias.IAS
+	keyManager  *enclaverpc.Client
 
 	stopCh chan struct{}
 	quitCh chan struct{}
@@ -456,13 +457,19 @@ func (h *Host) spawnWorker() (*process, error) {
 	}
 	go p.worker()
 
-	// Initialize the worker's RAK.
-	capabilityTEE, err := h.initCapabilityTEESgx(p)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error initializing SGX CapabilityTEE")
+	// Initialize the worker's CapabilityTEE.
+	switch h.teeHardware {
+	case node.TEEHardwareInvalid:
+		// No initialization needed.
+	case node.TEEHardwareIntelSGX:
+		capabilityTEE, err := h.initCapabilityTEESgx(p)
+		if err != nil {
+			return nil, errors.Wrap(err, "worker: error initializing SGX CapabilityTEE")
+		}
+		p.capabilityTEE = capabilityTEE
+	default:
+		return nil, node.ErrInvalidTEEHardware
 	}
-
-	p.capabilityTEE = capabilityTEE
 
 	haveErrors = false
 
@@ -542,6 +549,7 @@ func New(
 	cacheDir string,
 	runtimeID signature.PublicKey,
 	storage storage.Backend,
+	teeHardware node.TEEHardware,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
 ) (*Host, error) {
@@ -560,6 +568,7 @@ func New(
 		runtimeBinary:         runtimeBinary,
 		cacheDir:              cacheDir,
 		storage:               storage,
+		teeHardware:           teeHardware,
 		ias:                   ias,
 		keyManager:            keyManager,
 		quitCh:                make(chan struct{}),
