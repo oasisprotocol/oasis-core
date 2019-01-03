@@ -124,13 +124,6 @@ steps:
   ###########
   # Test jobs
   ###########
-  - label: Test Go node
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/go/test_and_coverage_ekiden.sh
-    plugins:
-      <<: *docker_plugin_configuration
-
   - label: Test Rust crates
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -141,6 +134,16 @@ steps:
   # Wait for all jobs defined before this point
   # to finish running in parallel before continuing.
   - wait
+
+  #####################################
+  # Test jobs requiring build artifacts
+  #####################################
+  - label: Test Go node
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/go/test_and_coverage_ekiden.sh
+    plugins:
+      <<: *docker_plugin_configuration
 
   ###############
   # E2E test jobs
