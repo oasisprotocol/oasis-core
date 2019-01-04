@@ -193,7 +193,7 @@ impl Protocol {
                 })
                 .map_err(|error| {
                     error!(
-                        "Unhandled error while processing incoming requests: {:?}",
+                        "Unhandled error while decoding incoming requests: {:?}",
                         error
                     );
                     // Send may fail if the protocol has already shut down.
