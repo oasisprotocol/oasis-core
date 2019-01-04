@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"git.schwanenlied.me/yawning/dynlib.git"
@@ -59,11 +61,30 @@ type process struct {
 	process  *os.Process
 	protocol *protocol.Protocol
 
+	waitCh <-chan error
 	quitCh chan error
 
 	logger *logging.Logger
 
 	capabilityTEE *node.CapabilityTEE
+}
+
+func waitOnProcess(p *os.Process) <-chan error {
+	waitCh := make(chan error)
+	go func() {
+		ps, err := p.Wait()
+		if err != nil {
+			// Error while waiting on process.
+			waitCh <- err
+		} else if !ps.Success() {
+			// Process terminated with a non-zero exit code.
+			waitCh <- fmt.Errorf("process terminated with exit code %d", ps.Sys().(syscall.WaitStatus).ExitStatus())
+		}
+
+		close(waitCh)
+	}()
+
+	return waitCh
 }
 
 func (p *process) Kill() error {
@@ -72,7 +93,7 @@ func (p *process) Kill() error {
 
 func (p *process) worker() {
 	// Wait for the process to exit.
-	_, err := p.process.Wait()
+	err := <-p.waitCh
 
 	p.logger.Warn("worker process terminated")
 
@@ -453,13 +474,49 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		"worker_pid", cmd.Process.Pid,
 	)
 
-	err = listener.SetDeadline(time.Now().Add(workerConnectTimeout))
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while accepting worker connection")
-	}
-	conn, err := listener.Accept()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while accepting worker connection")
+	// Spawn goroutine that waits for the sync FD to be closed. We only need it while
+	// we wait for the connection to be accepted as later we can simply wait on the
+	// sandbox process to exit.
+	waitCh := waitOnProcess(cmd.Process)
+
+	// Spawn goroutine that waits for a connection to be established.
+	connCh := make(chan interface{})
+	go func() {
+		lerr := listener.SetDeadline(time.Now().Add(workerConnectTimeout))
+		if lerr != nil {
+			connCh <- lerr
+			return
+		}
+		conn, lerr := listener.Accept()
+		if lerr != nil {
+			connCh <- lerr
+			return
+		}
+
+		connCh <- conn
+		close(connCh)
+	}()
+
+	var conn net.Conn
+	select {
+	case res := <-connCh:
+		// Got a connection or timed out while accepting a connection.
+		switch r := res.(type) {
+		case error:
+			return nil, errors.Wrap(r, "worker: error while accepting worker connection")
+		case net.Conn:
+			conn = r
+		default:
+			panic("invalid type")
+		}
+	case werr := <-waitCh:
+		// Worker has terminated before a connection was accepted.
+		h.logger.Debug("worker process exited unexpectedly",
+			"worker_pid", cmd.Process.Pid,
+			"err", werr,
+		)
+
+		return nil, errors.New("worker: terminated while waiting for connection")
 	}
 
 	h.logger.Info("worker connected",
@@ -478,6 +535,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		process:  cmd.Process,
 		protocol: proto,
 		quitCh:   make(chan error),
+		waitCh:   waitCh,
 		logger:   logger,
 	}
 	go p.worker()
