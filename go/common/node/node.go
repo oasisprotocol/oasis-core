@@ -4,6 +4,8 @@
 package node
 
 import (
+	"crypto/sha512"
+	"crypto/subtle"
 	"crypto/x509"
 	"errors"
 	"math"
@@ -12,7 +14,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ethereum"
 	"github.com/oasislabs/ekiden/go/common/ias"
@@ -276,11 +277,10 @@ func (c *CapabilityTEE) toProto() *pbCommon.CapabilitiesTEE {
 
 // Verify verifies the node's TEE capabilities, at the provided timestamp.
 func (c *CapabilityTEE) Verify(ts time.Time) error {
-	var rakHash hash.Hash
 	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
 	hData = append(hData, teeHashContext...)
 	hData = append(hData, c.RAK[:]...)
-	rakHash.FromBytes(hData)
+	rakHash := sha512.Sum512(hData)
 
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
@@ -302,18 +302,8 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 
 		// Ensure that the ISV quote includes the hash of the node's
 		// RAK.
-		var avrRAKHash hash.Hash
-		_ = avrRAKHash.UnmarshalBinary(q.Report.ReportData[:hash.Size])
-		if !rakHash.Equal(&avrRAKHash) {
+		if subtle.ConstantTimeCompare(rakHash[:], q.Report.ReportData[:]) != 1 {
 			return ErrRAKHashMismatch
-		}
-
-		var acc byte
-		for _, v := range q.Report.ReportData[hash.Size:] {
-			acc |= v
-		}
-		if acc != 0 {
-			return ErrInvalidAttestation
 		}
 
 		return nil
