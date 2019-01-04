@@ -25,6 +25,8 @@ import (
 )
 
 const (
+	cfgWorkerBackend = "worker.backend"
+
 	cfgWorkerBinary = "worker.binary"
 	cfgCacheDir     = "worker.cache_dir"
 
@@ -58,6 +60,7 @@ func New(
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 ) (*Worker, error) {
+	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
 	cacheDir := viper.GetString(cfgCacheDir)
 
@@ -141,6 +144,7 @@ func New(
 	}
 
 	cfg := Config{
+		Backend: backend,
 		Committee: committee.Config{
 			MaxQueueSize:      maxQueueSize,
 			MaxBatchSize:      maxBatchSize,
@@ -163,6 +167,8 @@ func New(
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
+	cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
+
 	cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
 	cmd.Flags().String(cfgCacheDir, "", "Path to worker cache directory")
 
@@ -186,6 +192,8 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
 
 	for _, v := range []string{
+		cfgWorkerBackend,
+
 		cfgWorkerBinary,
 		cfgCacheDir,
 

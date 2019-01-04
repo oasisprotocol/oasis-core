@@ -20,7 +20,6 @@ import (
 	cias "github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/service"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
@@ -28,10 +27,13 @@ import (
 )
 
 var (
-	_ service.BackgroundService = (*Host)(nil)
+	_ Host = (*sandboxedHost)(nil)
 )
 
 const (
+	// BackendSandboxed is the name of the sandboxed backend.
+	BackendSandboxed = "sandboxed"
+
 	// Worker connect timeout (in seconds).
 	workerConnectTimeout = 5
 	// Worker RAK initialization timeout (in seconds).
@@ -172,8 +174,9 @@ type hostResponse struct {
 	err error
 }
 
-// Host is a worker host managing multiple workers.
-type Host struct {
+// SandboxedHost is a worker Host that runs worker processes in a bubblewrap
+// sandbox.
+type sandboxedHost struct {
 	workerBinary  string
 	runtimeBinary string
 	cacheDir      string
@@ -193,15 +196,11 @@ type Host struct {
 	logger *logging.Logger
 }
 
-// Name returns the service name.
-func (h *Host) Name() string {
-	return "worker host"
+func (h *sandboxedHost) Name() string {
+	return "sandboxed worker host"
 }
 
-// WaitForCapabilityTEE gets the active worker's CapabilityTEE,
-// blocking if the active worker is not yet available. The returned
-// CapabilityTEE may be out of date by the time this function returns.
-func (h *Host) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+func (h *sandboxedHost) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
 	h.activeWorkerAvailable.L.Lock()
 	defer h.activeWorkerAvailable.L.Unlock()
 	for {
@@ -215,29 +214,24 @@ func (h *Host) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, e
 	}
 }
 
-// Start starts the service.
-func (h *Host) Start() error {
+func (h *sandboxedHost) Start() error {
 	h.logger.Info("starting worker host")
 	go h.manager()
 	return nil
 }
 
-// Stop halts the service.
-func (h *Host) Stop() {
+func (h *sandboxedHost) Stop() {
 	close(h.stopCh)
 }
 
-// Quit returns a channel that will be closed when the service terminates.
-func (h *Host) Quit() <-chan struct{} {
+func (h *sandboxedHost) Quit() <-chan struct{} {
 	return h.quitCh
 }
 
-// Cleanup performs the service specific post-termination cleanup.
-func (h *Host) Cleanup() {
+func (h *sandboxedHost) Cleanup() {
 }
 
-// Initialize a CapabilityTEE for a worker.
-func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
+func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout*time.Second)
 	defer cancel()
 
@@ -303,8 +297,7 @@ func (h *Host) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error
 	return capabilityTEE, nil
 }
 
-// MakeRequest sends a request to the worker process.
-func (h *Host) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *protocol.Body, error) {
+func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *protocol.Body, error) {
 	respCh := make(chan *hostResponse, 1)
 
 	// Send internal request to the manager goroutine.
@@ -323,7 +316,7 @@ func (h *Host) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *pr
 	}
 }
 
-func (h *Host) spawnWorker() (*process, error) {
+func (h *sandboxedHost) spawnWorker() (*process, error) {
 	h.logger.Info("spawning worker",
 		"worker_binary", h.workerBinary,
 		"runtime_binary", h.runtimeBinary,
@@ -476,7 +469,7 @@ func (h *Host) spawnWorker() (*process, error) {
 	return p, nil
 }
 
-func (h *Host) manager() {
+func (h *sandboxedHost) manager() {
 	// Make sure that a worker is always available.
 	wantWorker := true
 	needSpawnDelay := false
@@ -543,7 +536,8 @@ func (h *Host) manager() {
 	close(h.quitCh)
 }
 
-func New(
+// NewSandboxedHost creates a new sandboxed worker host.
+func NewSandboxedHost(
 	workerBinary string,
 	runtimeBinary string,
 	cacheDir string,
@@ -552,7 +546,7 @@ func New(
 	teeHardware node.TEEHardware,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
-) (*Host, error) {
+) (Host, error) {
 	if workerBinary == "" {
 		return nil, errors.New("worker binary not configured")
 	}
@@ -563,7 +557,7 @@ func New(
 		return nil, errors.New("worker cache directory not configured")
 	}
 
-	host := &Host{
+	host := &sandboxedHost{
 		workerBinary:          workerBinary,
 		runtimeBinary:         runtimeBinary,
 		cacheDir:              cacheDir,
@@ -575,8 +569,7 @@ func New(
 		stopCh:                make(chan struct{}),
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
 		requestCh:             make(chan *hostRequest, 10),
-		logger:                logging.GetLogger("worker/host").With("runtime_id", runtimeID),
+		logger:                logging.GetLogger("worker/host/sandboxed").With("runtime_id", runtimeID),
 	}
-
 	return host, nil
 }

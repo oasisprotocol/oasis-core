@@ -2,7 +2,9 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"path"
+	"strings"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -21,12 +23,15 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
+// RuntimeConfig is a single runtime's configuration.
 type RuntimeConfig struct {
 	ID     signature.PublicKey
 	Binary string
 }
 
+// Config is the worker configuration.
 type Config struct {
+	Backend      string
 	Committee    committee.Config
 	P2PPort      uint16
 	TEEHardware  node.TEEHardware
@@ -35,15 +40,23 @@ type Config struct {
 	Runtimes     []RuntimeConfig
 }
 
-type runtime struct {
+// Runtime is a single runtime.
+type Runtime struct {
 	id signature.PublicKey
 
-	workerHost *host.Host
+	workerHost host.Host
 	node       *committee.Node
 }
 
+// GetNode returns the committee node for this runtime.
+func (r *Runtime) GetNode() *committee.Node {
+	return r.node
+}
+
+// Worker is a worker handling many runtimes.
 type Worker struct {
 	enabled bool
+	cfg     Config
 
 	identity   *identity.Identity
 	storage    storage.Backend
@@ -56,11 +69,12 @@ type Worker struct {
 	p2p        *p2p.P2P
 	grpc       *grpc.Server
 
-	runtimes map[signature.MapKey]*runtime
+	runtimes map[signature.MapKey]*Runtime
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	quitCh    chan struct{}
+	initCh    chan struct{}
 
 	logger *logging.Logger
 }
@@ -74,6 +88,10 @@ func (w *Worker) Name() string {
 func (w *Worker) Start() error {
 	if !w.enabled {
 		w.logger.Info("not starting worker as it is disabled")
+
+		// In case the worker is not enabled, close the init channel immediately.
+		close(w.initCh)
+
 		return nil
 	}
 
@@ -88,6 +106,15 @@ func (w *Worker) Start() error {
 		}
 
 		<-w.grpc.Quit()
+	}()
+
+	// Wait for all runtimes to be initialized.
+	go func() {
+		for _, rt := range w.runtimes {
+			<-rt.node.Initialized()
+		}
+
+		close(w.initCh)
 	}()
 
 	// Start client gRPC server.
@@ -150,22 +177,59 @@ func (w *Worker) Cleanup() {
 	w.grpc.Cleanup()
 }
 
+// Initialized returns a channel that will be closed when the worker is
+// initialized and ready to service requests.
+func (w *Worker) Initialized() <-chan struct{} {
+	return w.initCh
+}
+
+// GetConfig returns the worker's configuration.
+func (w *Worker) GetConfig() Config {
+	return w.cfg
+}
+
+// GetRuntime returns a registered runtime.
+//
+// In case the runtime with the specified id was not registered it
+// returns nil.
+func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
+	rt, ok := w.runtimes[id.ToMapKey()]
+	if !ok {
+		return nil
+	}
+
+	return rt
+}
+
+func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, err error) {
+	switch strings.ToLower(cfg.Backend) {
+	case host.BackendSandboxed:
+		h, err = host.NewSandboxedHost(
+			cfg.WorkerBinary,
+			rtCfg.Binary,
+			path.Join(cfg.CacheDir, rtCfg.ID.String()),
+			rtCfg.ID,
+			w.storage,
+			cfg.TEEHardware,
+			w.ias,
+			w.keyManager,
+		)
+	case host.BackendMock:
+		h, err = host.NewMockHost()
+	default:
+		err = fmt.Errorf("unsupported worker host backend: '%v'", cfg.Backend)
+	}
+
+	return
+}
+
 func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	w.logger.Info("registering new runtime",
 		"runtime_id", rtCfg.ID,
 	)
 
 	// Create worker host for the given runtime.
-	workerHost, err := host.New(
-		cfg.WorkerBinary,
-		rtCfg.Binary,
-		path.Join(cfg.CacheDir, rtCfg.ID.String()),
-		rtCfg.ID,
-		w.storage,
-		cfg.TEEHardware,
-		w.ias,
-		w.keyManager,
-	)
+	workerHost, err := w.newWorkerHost(cfg, rtCfg)
 	if err != nil {
 		return err
 	}
@@ -187,7 +251,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		return err
 	}
 
-	rt := &runtime{
+	rt := &Runtime{
 		id:         rtCfg.ID,
 		workerHost: workerHost,
 		node:       node,
@@ -213,7 +277,7 @@ func newWorker(
 	cfg Config,
 ) (*Worker, error) {
 	enabled := false
-	if cfg.WorkerBinary != "" {
+	if cfg.WorkerBinary != "" || cfg.Backend == host.BackendMock {
 		enabled = true
 	}
 
@@ -221,6 +285,7 @@ func newWorker(
 
 	w := &Worker{
 		enabled:    enabled,
+		cfg:        cfg,
 		identity:   identity,
 		storage:    storage,
 		roothash:   roothash,
@@ -229,10 +294,11 @@ func newWorker(
 		scheduler:  scheduler,
 		ias:        ias,
 		keyManager: keyManager,
-		runtimes:   make(map[signature.MapKey]*runtime),
+		runtimes:   make(map[signature.MapKey]*Runtime),
 		ctx:        ctx,
 		cancelCtx:  cancelCtx,
 		quitCh:     make(chan struct{}),
+		initCh:     make(chan struct{}),
 		logger:     logging.GetLogger("worker"),
 	}
 

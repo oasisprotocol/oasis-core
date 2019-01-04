@@ -118,14 +118,16 @@ type Node struct {
 	registry   registry.Backend
 	epochtime  epochtime.Backend
 	scheduler  scheduler.Backend
-	workerHost *host.Host
+	workerHost host.Host
 
 	cfg Config
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	stopCh    chan struct{}
+	stopOnce  sync.Once
 	quitCh    chan struct{}
+	initCh    chan struct{}
 
 	incomingQueue    *incomingQueue
 	incomingExtBatch chan *externalBatch
@@ -133,8 +135,10 @@ type Node struct {
 
 	// No locking required, the variables in the next group are only accessed
 	// and modified from the worker goroutine.
-	state        nodeState
+	state        NodeState
 	currentBlock *block.Block
+
+	stateTransitions *pubsub.Broker
 
 	logger *logging.Logger
 }
@@ -153,7 +157,7 @@ func (n *Node) Start() error {
 
 // Stop halts the service.
 func (n *Node) Stop() {
-	close(n.stopCh)
+	n.stopOnce.Do(func() { close(n.stopCh) })
 }
 
 // Quit returns a channel that will be closed when the service terminates.
@@ -163,6 +167,21 @@ func (n *Node) Quit() <-chan struct{} {
 
 // Cleanup performs the service specific post-termination cleanup.
 func (n *Node) Cleanup() {
+}
+
+// Initialized returns a channel that will be closed when the node is
+// initialized and ready to service requests.
+func (n *Node) Initialized() <-chan struct{} {
+	return n.initCh
+}
+
+// WatchStateTransitions subscribes to the node's state transitions.
+func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) {
+	sub := n.stateTransitions.Subscribe()
+	ch := make(chan NodeState)
+	sub.Unwrap(ch)
+
+	return ch, sub
 }
 
 func (n *Node) getMetricLabels() prometheus.Labels {
@@ -236,7 +255,7 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	return nil
 }
 
-func (n *Node) transition(state nodeState) {
+func (n *Node) transition(state NodeState) {
 	n.logger.Info("state transition",
 		"current_state", n.state,
 		"new_state", state,
@@ -258,6 +277,7 @@ func (n *Node) transition(state nodeState) {
 	}
 
 	n.state = state
+	n.stateTransitions.Broadcast(state)
 }
 
 func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
@@ -282,17 +302,17 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
 
-	if epoch.IsMember() {
-		n.transition(stateWaitingForBatch{})
-	} else {
-		n.transition(stateNotReady{})
-	}
-
 	// Re-register node to increase expiry.
 	if err := n.registerNode(); err != nil {
 		n.logger.Error("failed to re-register node",
 			"err", err,
 		)
+	}
+
+	if epoch.IsMember() {
+		n.transition(StateWaitingForBatch{})
+	} else {
+		n.transition(StateNotReady{})
 	}
 }
 
@@ -331,7 +351,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 	// Perform actions based on current state.
 	switch state := n.state.(type) {
-	case stateWaitingForBlock:
+	case StateWaitingForBlock:
 		// Check if this was the block we were waiting for.
 		if header.Equal(state.header) {
 			n.logger.Info("received block needed for batch processing")
@@ -346,7 +366,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		waitRound, _ := state.header.Round.ToU64()
 		if curRound >= waitRound {
 			n.logger.Warn("seen newer block while waiting for block")
-			n.transition(stateWaitingForBatch{})
+			n.transition(StateWaitingForBatch{})
 			break
 		}
 
@@ -355,10 +375,10 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 			"current_round", curRound,
 			"wait_round", waitRound,
 		)
-	case stateWaitingForFinalize:
+	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
 		n.logger.Info("considering the round finalized")
-		n.transition(stateWaitingForBatch{})
+		n.transition(StateWaitingForBatch{})
 	}
 }
 
@@ -384,7 +404,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 		},
 	}
 
-	n.transition(stateProcessingBatch{batch, cancel, done})
+	n.transition(StateProcessingBatch{batch, cancel, done})
 
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
@@ -424,7 +444,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 }
 
 func (n *Node) abortBatch(reason error) {
-	state, ok := n.state.(stateProcessingBatch)
+	state, ok := n.state.(StateProcessingBatch)
 	if !ok {
 		// We can only abort if a batch is being processed.
 		return
@@ -435,7 +455,7 @@ func (n *Node) abortBatch(reason error) {
 	)
 
 	// Cancel the batch processing context and wait for it to finish.
-	state.Cancel()
+	state.cancel()
 
 	// If we are a leader, put the batch back into the incoming queue.
 	if n.group.GetEpochSnapshot().IsLeader() {
@@ -452,7 +472,7 @@ func (n *Node) abortBatch(reason error) {
 
 	// After the batch has been aborted, we must wait for the round to be
 	// finalized.
-	n.transition(stateWaitingForFinalize{})
+	n.transition(StateWaitingForFinalize{})
 }
 
 func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
@@ -490,7 +510,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		return
 	}
 
-	n.transition(stateWaitingForFinalize{})
+	n.transition(StateWaitingForFinalize{})
 
 	if err := n.roothash.Commit(n.ctx, n.runtimeID, commit.ToOpaqueCommitment()); err != nil {
 		n.logger.Error("failed to submit commitment",
@@ -526,7 +546,7 @@ func (n *Node) handleNewEvent(ev *roothash.Event) {
 
 func (n *Node) checkIncomingQueue(force bool) {
 	// If we are not waiting for a batch, don't do anything.
-	if _, ok := n.state.(stateWaitingForBatch); !ok {
+	if _, ok := n.state.(StateWaitingForBatch); !ok {
 		return
 	}
 
@@ -606,7 +626,7 @@ func (n *Node) handleExternalBatch(batch *externalBatch) {
 	}
 
 	// Wait for the correct block to arrive.
-	n.transition(stateWaitingForBlock{batch.batch, &batch.header})
+	n.transition(StateWaitingForBlock{batch.batch, &batch.header})
 }
 
 func (n *Node) worker() {
@@ -659,11 +679,14 @@ func (n *Node) worker() {
 	// Check incoming queue when signalled.
 	incomingQueueSignal := n.incomingQueue.Signal()
 
+	// We are initialized.
+	close(n.initCh)
+
 	for {
 		// Check if we are currently processing a batch. In this case, we also
 		// need to select over the result channel.
 		var processingDoneCh chan *protocol.ComputedBatch
-		if stateProcessing, ok := n.state.(stateProcessingBatch); ok {
+		if stateProcessing, ok := n.state.(StateProcessingBatch); ok {
 			processingDoneCh = stateProcessing.done
 		}
 
@@ -713,7 +736,7 @@ func NewNode(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	worker *host.Host,
+	worker host.Host,
 	p2p *p2p.P2P,
 	cfg Config,
 ) (*Node, error) {
@@ -737,9 +760,11 @@ func NewNode(
 		cancelCtx:        cancel,
 		quitCh:           make(chan struct{}),
 		stopCh:           make(chan struct{}),
+		initCh:           make(chan struct{}),
 		incomingQueue:    newIncomingQueue(cfg.MaxQueueSize, cfg.MaxBatchSize, cfg.MaxBatchSizeBytes),
 		incomingExtBatch: make(chan *externalBatch, 10),
-		state:            stateNotReady{},
+		state:            StateNotReady{},
+		stateTransitions: pubsub.NewBroker(false),
 		logger:           logging.GetLogger("worker/committee").With("runtime_id", runtimeID),
 	}
 	group, err := NewGroup(identity, runtimeID, n, registry, scheduler, p2p)
