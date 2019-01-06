@@ -150,6 +150,7 @@ steps:
   ###############
   - label: E2E tests (%n)
     parallelism: 4
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -157,6 +158,7 @@ steps:
       <<: *docker_plugin_configuration
 
   - label: E2E migration tests
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
