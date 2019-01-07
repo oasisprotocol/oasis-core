@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	recvTimeout = 1 * time.Second
+	recvTimeout = 2 * time.Second
 	nrRuntimes  = 3
 )
 
