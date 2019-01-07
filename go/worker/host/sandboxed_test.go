@@ -76,6 +76,7 @@ func TestSandboxedHost(t *testing.T) {
 		node.TEEHardwareIntelSGX,
 		ias,
 		nil,
+		true,
 	)
 	require.NoError(t, err, "NewSandboxedHost")
 

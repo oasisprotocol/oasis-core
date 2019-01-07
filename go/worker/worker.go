@@ -213,6 +213,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			cfg.TEEHardware,
 			w.ias,
 			w.keyManager,
+			false,
 		)
 	case host.BackendMock:
 		h, err = host.NewMockHost()

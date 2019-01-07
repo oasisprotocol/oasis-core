@@ -174,12 +174,12 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary, cacheDir string
 	return args, nil
 }
 
-func prepareWorkerArgs() ([]string, error) {
+func prepareWorkerArgs(hostSocket, cacheDir, runtimeBinary string) []string {
 	return []string{
-		"--host-socket", workerMountHostSocket,
-		"--cache-dir", workerMountCacheDir,
-		workerMountRuntimeBin,
-	}, nil
+		"--host-socket", hostSocket,
+		"--cache-dir", cacheDir,
+		runtimeBinary,
+	}
 }
 
 // HostRequest is an internal request to manager goroutine that is dispatched
@@ -206,10 +206,11 @@ type interruptRequest struct {
 
 // SandboxedHost is a worker Host that runs worker processes in a bubblewrap
 // sandbox.
-type sandboxedHost struct {
+type sandboxedHost struct { // nolint: maligned
 	workerBinary  string
 	runtimeBinary string
 	cacheDir      string
+	noSandbox     bool
 
 	storage     storage.Backend
 	teeHardware node.TEEHardware
@@ -390,20 +391,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		return nil, errors.Wrap(err, "worker: failed to create worker cache directory")
 	}
 
-	// Create a pipe for passing the sandbox arguments. The read end of the
-	// pipe is passed to the child process.
-	cmdPipeR, cmdPipeW, err := os.Pipe()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: failed to create pipe (args)")
-	}
-
-	// Create a pipe for passing the sandbox SECCOMP policy. The read end of
-	// the pipe is passed to the child process.
-	seccompPipeR, seccompPipeW, err := os.Pipe()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: failed to create pipe (seccomp)")
-	}
-
 	// Create unix socket.
 	hostSocket := path.Join(workerDir, "host.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: hostSocket})
@@ -415,26 +402,64 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	// in any case.
 	defer listener.Close()
 
-	// Start the worker sandbox.
-	bwrapArgs := []string{
-		"--args", "3",
-		"--",
-		workerMountWorkerBin,
+	// Start the worker (optionally in a sandbox).
+	var sandboxArgs []string
+	var sandboxBinary string
+	var workerArgs []string
+	if h.noSandbox {
+		sandboxBinary = h.workerBinary
+		workerArgs = prepareWorkerArgs(
+			hostSocket,
+			h.cacheDir,
+			h.runtimeBinary,
+		)
+	} else {
+		sandboxArgs = []string{
+			"--args", "3",
+			"--",
+			workerMountWorkerBin,
+		}
+		sandboxBinary = workerBubblewrapBinary
+		workerArgs = prepareWorkerArgs(
+			workerMountHostSocket,
+			workerMountCacheDir,
+			workerMountRuntimeBin,
+		)
 	}
-	workerArgs, err := prepareWorkerArgs()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while preparing worker args")
-	}
-	args := append(bwrapArgs, workerArgs...)
-	cmd := exec.Command(workerBubblewrapBinary, args...)
+
+	args := append(sandboxArgs, workerArgs...)
+	cmd := exec.Command(sandboxBinary, args...)
 	// Forward stdout and stderr.
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// Pass the arguments pipe file descriptor.
-	// NOTE: Entry i becomes file descriptor 3+i.
-	cmd.ExtraFiles = []*os.File{cmdPipeR, seccompPipeR}
+
+	var sandboxCmdPipeW *os.File
+	var sandboxSeccompPipeW *os.File
+	if !h.noSandbox {
+		// Create a pipe for passing the sandbox arguments. The read end of the
+		// pipe is passed to the child process.
+		cmdPipeR, cmdPipeW, perr := os.Pipe()
+		if perr != nil {
+			return nil, errors.Wrap(perr, "worker: failed to create pipe (args)")
+		}
+
+		// Create a pipe for passing the sandbox SECCOMP policy. The read end of
+		// the pipe is passed to the child process.
+		seccompPipeR, seccompPipeW, perr := os.Pipe()
+		if perr != nil {
+			return nil, errors.Wrap(perr, "worker: failed to create pipe (seccomp)")
+		}
+
+		// Pass the arguments pipe file descriptor.
+		// NOTE: Entry i becomes file descriptor 3+i.
+		cmd.ExtraFiles = []*os.File{cmdPipeR, seccompPipeR}
+
+		sandboxCmdPipeW = cmdPipeW
+		sandboxSeccompPipeW = seccompPipeW
+	}
+
 	if cerr := cmd.Start(); cerr != nil {
-		return nil, errors.Wrap(cerr, "worker: failed to start sandbox")
+		return nil, errors.Wrap(cerr, "worker: failed to start worker process")
 	}
 
 	// Ensure that the spawned process gets killed in case of errors.
@@ -446,27 +471,29 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		}
 	}()
 
-	// Instruct the sandbox how to prepare itself.
-	sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.cacheDir)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
-	}
-	for _, arg := range sandboxArgs {
-		if _, werr := cmdPipeW.Write([]byte(arg + "\x00")); werr != nil {
+	if !h.noSandbox {
+		// Instruct the sandbox how to prepare itself.
+		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.cacheDir) // nolint: govet
+		if err != nil {
+			return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
+		}
+		for _, arg := range sandboxArgs {
+			if _, werr := sandboxCmdPipeW.Write([]byte(arg + "\x00")); werr != nil {
+				return nil, errors.Wrap(werr, "worker: error while sending args to sandbox")
+			}
+		}
+		if werr := sandboxCmdPipeW.Close(); werr != nil {
 			return nil, errors.Wrap(werr, "worker: error while sending args to sandbox")
 		}
-	}
-	if werr := cmdPipeW.Close(); werr != nil {
-		return nil, errors.Wrap(werr, "worker: error while sending args to sandbox")
-	}
 
-	// Generate SECCOMP policy and pass it to the sandbox.
-	err = generateSeccompPolicy(seccompPipeW)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while generating seccomp policy")
-	}
-	if werr := seccompPipeW.Close(); werr != nil {
-		return nil, errors.Wrap(werr, "worker: error while sending seccomp policy to sandbox")
+		// Generate SECCOMP policy and pass it to the sandbox.
+		err = generateSeccompPolicy(sandboxSeccompPipeW)
+		if err != nil {
+			return nil, errors.Wrap(err, "worker: error while generating seccomp policy")
+		}
+		if werr := sandboxSeccompPipeW.Close(); werr != nil {
+			return nil, errors.Wrap(werr, "worker: error while sending seccomp policy to sandbox")
+		}
 	}
 
 	// Wait for the worker to connect.
@@ -692,6 +719,7 @@ func NewSandboxedHost(
 	teeHardware node.TEEHardware,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
+	noSandbox bool,
 ) (Host, error) {
 	if workerBinary == "" {
 		return nil, errors.New("worker binary not configured")
@@ -707,6 +735,7 @@ func NewSandboxedHost(
 		workerBinary:          workerBinary,
 		runtimeBinary:         runtimeBinary,
 		cacheDir:              cacheDir,
+		noSandbox:             noSandbox,
 		storage:               storage,
 		teeHardware:           teeHardware,
 		ias:                   ias,
