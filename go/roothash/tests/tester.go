@@ -3,7 +3,6 @@ package tests
 
 import (
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -142,30 +141,25 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	epoch, _, err := epochtime.GetEpoch(context.Background())
 	require.NoError(err, "GetEpoch")
 
-	// Spawn the per-runtime handlers that will watch for the expected
-	// post-epoch transition events.
-	var wg sync.WaitGroup
-	wg.Add(len(states))
+	// Subscribe to blocks for all of the runtimes.
+	var blkChannels []<-chan *block.Block
 	for i := range states {
 		v := states[i]
 		ch, sub, err := backend.WatchBlocks(v.rt.Runtime.ID)
 		require.NoError(err, "WatchBlocks")
+		defer sub.Close()
 
-		go func(state *runtimeState, blkCh <-chan *block.Block) {
-			defer func() {
-				sub.Close()
-				wg.Done()
-			}()
-
-			state.testEpochTransitionBlock(t, scheduler, epoch, blkCh)
-		}(v, ch)
+		blkChannels = append(blkChannels, ch)
 	}
 
 	// Advance the epoch.
 	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	// Wait for all runtimes to get the expected events.
-	wg.Wait()
+	// Check for the expected post-epoch transition events.
+	for i, state := range states {
+		blkCh := blkChannels[i]
+		state.testEpochTransitionBlock(t, scheduler, epoch, blkCh)
+	}
 }
 
 func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *block.Block) {
@@ -202,18 +196,9 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 }
 
 func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backend, states []*runtimeState) {
-	var wg sync.WaitGroup
-	wg.Add(len(states))
-
-	for i := range states {
-		go func(state *runtimeState) {
-			defer wg.Done()
-
-			state.testSuccessfulRound(t, backend, storage)
-		}(states[i])
+	for _, state := range states {
+		state.testSuccessfulRound(t, backend, storage)
 	}
-
-	wg.Wait()
 }
 
 func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, storage storage.Backend) {
