@@ -52,7 +52,8 @@ the development container:
 
 ## Building a test runtime and client
 
-For building enclaves we have our own Cargo extension which should be installed:
+For building enclaves we have our own `cargo ekiden` extension for Cargo which
+should be installed:
 ```
 # cd /code
 # cargo install --force --path tools
@@ -100,13 +101,12 @@ runtime.
 To start the key manager:
 ```
 # cargo run -p ekiden-keymanager-node --bin ekiden-keymanager-node -- \
-    --enclave target/enclave/ekiden-keymanager-trusted.so \
-    --storage-backend dummy
+    --enclave target/enclave/ekiden-keymanager-trusted.so
 ```
 
 To start the shared dummy node:
 ```
-# ./go/ekiden/ekiden --datadir /tmp/ekiden-dummy-data --grpc.port 42261
+# ./go/ekiden/ekiden --datadir /tmp/ekiden-dummy-data --epochtime.backend mock --grpc.port 42261
 ```
 
 To start the compute node you first need to build the worker:
@@ -121,8 +121,8 @@ And then run at least two compute nodes each with its unique
     --entity-ethereum-address 0000000000000000000000000000000000000000 \
     --storage-backend remote \
     --no-persist-identity \
-    --worker-cache-dir to /tmp/worker1-cache
-    --worker-path /code/target/debug/ekiden-worker
+    --worker-cache-dir to /tmp/worker1-cache \
+    --worker-path /code/target/debug/ekiden-worker \
     target/enclave/token.so
 ```
 
