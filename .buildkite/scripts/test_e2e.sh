@@ -250,6 +250,8 @@ run_test scenario_basic "e2e-long-tm" test-long-term 2 run_dummy_node_go_tm_mock
 run_test scenario_one_idle "e2e-long-one-idle-tm" test-long-term 2 run_dummy_node_go_tm_mock
 run_test scenario_leader_skip_commit "e2e-leader-skip-commit-tm" token 1 run_dummy_node_go_tm_mock
 
+run_test scenario_basic "e2e-basic-tm-full-distributed" token 1 run_committee_go_tm
+
 # Alternate starting order (client before dummy node).
 run_test scenario_basic "e2e-basic-client-starts-first" token 1 run_dummy_node_go_dummy 0 0 1
 run_test scenario_basic "e2e-basic-client-starts-first-tm-full" token 1 run_dummy_node_go_tm 0 0 1

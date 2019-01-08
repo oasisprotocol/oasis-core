@@ -60,6 +60,75 @@ run_dummy_node_go_tm_mock() {
         &
 }
 
+run_committee_go_tm() {
+    local base_datadir=/tmp/ekiden-committee-data
+    local validator_files=""
+    let nodes=3
+
+    # Provision the validators.
+    for idx in $(seq 1 $nodes); do
+        local datadir=${base_datadir}-${idx}
+        rm -rf ${datadir}
+
+        let port=(idx-1)+26656
+        ${WORKDIR}/go/ekiden/ekiden \
+            tendermint provision_validator \
+            --datadir ${datadir} \
+            --node_addr 127.0.0.1:${port} \
+            --node_name ekiden-committee-node-${idx} \
+            --validator_file ${datadir}/validator.json
+        validator_files="$validator_files $datadir/validator.json"
+    done
+
+    # Create the genesis document.
+    local genesis_file=/tmp/genesis.json
+    rm -Rf ${genesis_file}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        tendermint init_genesis \
+        --genesis_file ${genesis_file} \
+        ${validator_files}
+
+    # Run the storage node.
+    local storage_datadir=/tmp/ekiden-storage
+    local storage_port=60000
+    rm -Rf ${storage_datadir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        storage node \
+        --datadir ${storage_datadir} \
+        --grpc.port ${storage_port} \
+        &
+
+    # Run the validator nodes.
+    for idx in $(seq 1 $nodes); do
+        local datadir=${base_datadir}-${idx}
+
+        let grpc_port=(idx-1)+42261
+        let tm_port=(idx-1)+26656
+
+        ${WORKDIR}/go/ekiden/ekiden \
+            --log.level debug \
+            --grpc.port ${grpc_port} \
+            --grpc.log.verbose_debug \
+            --epochtime.backend tendermint \
+            --epochtime.tendermint.interval 30 \
+            --beacon.backend tendermint \
+            --metrics.mode none \
+            --storage.backend client \
+            --storage.client.address 127.0.0.1:${storage_port} \
+            --scheduler.backend trivial \
+            --registry.backend tendermint \
+            --roothash.backend tendermint \
+            --tendermint.core.genesis_file ${genesis_file} \
+            --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
+            --tendermint.consensus.timeout_commit 250ms \
+            --tendermint.log.debug \
+            --datadir ${datadir} \
+            &
+    done
+}
+
 run_compute_node() {
     local id=$1
     shift
