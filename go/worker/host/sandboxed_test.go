@@ -67,6 +67,7 @@ func TestSandboxedHost(t *testing.T) {
 	require.NoError(t, err, "create cache dir")
 	defer os.RemoveAll(cacheDir)
 
+	// Create host with sandbox disabled.
 	host, err := NewSandboxedHost(
 		envWorkerHostWorkerBinary,
 		envWorkerHostRuntimeBinary,
@@ -80,8 +81,32 @@ func TestSandboxedHost(t *testing.T) {
 	)
 	require.NoError(t, err, "NewSandboxedHost")
 
+	t.Run("WithNoSandbox", func(t *testing.T) {
+		testSandboxedHost(t, host)
+	})
+
+	// Create host with sandbox enabled.
+	host, err = NewSandboxedHost(
+		envWorkerHostWorkerBinary,
+		envWorkerHostRuntimeBinary,
+		cacheDir,
+		runtimeID,
+		storage,
+		node.TEEHardwareIntelSGX,
+		ias,
+		nil,
+		false,
+	)
+	require.NoError(t, err, "NewSandboxedHost")
+
+	t.Run("WithSandbox", func(t *testing.T) {
+		testSandboxedHost(t, host)
+	})
+}
+
+func testSandboxedHost(t *testing.T, host Host) {
 	// Start the host.
-	err = host.Start()
+	err := host.Start()
 	require.NoError(t, err, "Start")
 	defer func() {
 		host.Stop()
