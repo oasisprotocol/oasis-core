@@ -193,12 +193,7 @@ type AttestationVerificationReport struct {
 // Quote decodes and returns the enclave quote component of an Attestation
 // Verification Report.
 func (a *AttestationVerificationReport) Quote() (*Quote, error) {
-	data, err := base64.StdEncoding.DecodeString(string(a.ISVEnclaveQuoteBody))
-	if err != nil {
-		return nil, errors.Wrap(err, "ias/avr: failed to decode quote body")
-	}
-
-	return DecodeQuote(data)
+	return DecodeQuote(a.ISVEnclaveQuoteBody)
 }
 
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
