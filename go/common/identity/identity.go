@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	nodeKeyFilename = "identity.pem"
+	nodeKeyPrivFilename = "identity.pem"
+	nodeKeyPubFilename  = "identity_pub.pem"
 
 	tlsKeyFilename = "tls-identity.pem"
 	tlsKeyPEMType  = "EC PRIVATE KEY"
@@ -52,7 +53,11 @@ type Identity struct {
 func LoadOrGenerate(dataDir string) (*Identity, error) {
 	// Node key.
 	var nodeKey signature.PrivateKey
-	if err := nodeKey.LoadPEM(filepath.Join(dataDir, nodeKeyFilename), rand.Reader); err != nil {
+	if err := nodeKey.LoadPEM(filepath.Join(dataDir, nodeKeyPrivFilename), rand.Reader); err != nil {
+		return nil, err
+	}
+	var nodePub signature.PublicKey
+	if err := nodePub.LoadPEM(filepath.Join(dataDir, nodeKeyPubFilename), &nodeKey); err != nil {
 		return nil, err
 	}
 

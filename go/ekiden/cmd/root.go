@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/storage"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/tendermint"
 )
 
 var (
@@ -46,6 +47,7 @@ func init() {
 		ias.Register,
 		registry.Register,
 		storage.Register,
+		tendermint.Register,
 	} {
 		v(rootCmd)
 	}
