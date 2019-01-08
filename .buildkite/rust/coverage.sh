@@ -45,7 +45,6 @@ cargo tarpaulin \
   --packages ekiden-db-trusted \
   --packages ekiden-di \
   --packages ekiden-enclave-common \
-  --packages ekiden-enclave-logger \
   --packages ekiden-enclave-trusted \
   --packages ekiden-rpc-client \
   --packages ekiden-rpc-common \
