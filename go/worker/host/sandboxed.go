@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"git.schwanenlied.me/yawning/dynlib.git"
@@ -34,12 +36,14 @@ const (
 	// BackendSandboxed is the name of the sandboxed backend.
 	BackendSandboxed = "sandboxed"
 
-	// Worker connect timeout (in seconds).
-	workerConnectTimeout = 5
-	// Worker RAK initialization timeout (in seconds).
-	workerRAKTimeout = 5
-	// Worker respawn delay (in seconds).
-	workerRespawnDelay = 1
+	// Worker connect timeout.
+	workerConnectTimeout = 5 * time.Second
+	// Worker RAK initialization timeout.
+	workerRAKTimeout = 5 * time.Second
+	// Worker respawn delay.
+	workerRespawnDelay = 1 * time.Second
+	// Worker interrupt timeout.
+	workerInterruptTimeout = 1 * time.Second
 
 	// Path to bubblewrap sandbox.
 	workerBubblewrapBinary = "/usr/bin/bwrap"
@@ -57,11 +61,30 @@ type process struct {
 	process  *os.Process
 	protocol *protocol.Protocol
 
+	waitCh <-chan error
 	quitCh chan error
 
 	logger *logging.Logger
 
 	capabilityTEE *node.CapabilityTEE
+}
+
+func waitOnProcess(p *os.Process) <-chan error {
+	waitCh := make(chan error)
+	go func() {
+		ps, err := p.Wait()
+		if err != nil {
+			// Error while waiting on process.
+			waitCh <- err
+		} else if !ps.Success() {
+			// Process terminated with a non-zero exit code.
+			waitCh <- fmt.Errorf("process terminated with exit code %d", ps.Sys().(syscall.WaitStatus).ExitStatus())
+		}
+
+		close(waitCh)
+	}()
+
+	return waitCh
 }
 
 func (p *process) Kill() error {
@@ -70,7 +93,7 @@ func (p *process) Kill() error {
 
 func (p *process) worker() {
 	// Wait for the process to exit.
-	_, err := p.process.Wait()
+	err := <-p.waitCh
 
 	p.logger.Warn("worker process terminated")
 
@@ -151,15 +174,15 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary, cacheDir string
 	return args, nil
 }
 
-func prepareWorkerArgs() ([]string, error) {
+func prepareWorkerArgs(hostSocket, cacheDir, runtimeBinary string) []string {
 	return []string{
-		"--host-socket", workerMountHostSocket,
-		"--cache-dir", workerMountCacheDir,
-		workerMountRuntimeBin,
-	}, nil
+		"--host-socket", hostSocket,
+		"--cache-dir", cacheDir,
+		runtimeBinary,
+	}
 }
 
-// Request is an internal request to manager goroutine that is dispatched
+// HostRequest is an internal request to manager goroutine that is dispatched
 // to the worker when a worker becomes available.
 type hostRequest struct {
 	ctx  context.Context
@@ -167,19 +190,27 @@ type hostRequest struct {
 	ch   chan<- *hostResponse
 }
 
-// Response is an internal response from the manager goroutine that is
+// HostResponse is an internal response from the manager goroutine that is
 // returned to the caller when a request has been dispatched to the worker.
 type hostResponse struct {
 	ch  <-chan *protocol.Body
 	err error
 }
 
+// InterruptRequest is an internal request to manager goroutine that signals
+// the worker should be interrupted.
+type interruptRequest struct {
+	ctx context.Context
+	ch  chan<- error
+}
+
 // SandboxedHost is a worker Host that runs worker processes in a bubblewrap
 // sandbox.
-type sandboxedHost struct {
+type sandboxedHost struct { // nolint: maligned
 	workerBinary  string
 	runtimeBinary string
 	cacheDir      string
+	noSandbox     bool
 
 	storage     storage.Backend
 	teeHardware node.TEEHardware
@@ -192,6 +223,7 @@ type sandboxedHost struct {
 	activeWorker          *process
 	activeWorkerAvailable *ctxsync.CancelableCond
 	requestCh             chan *hostRequest
+	interruptCh           chan *interruptRequest
 
 	logger *logging.Logger
 }
@@ -232,7 +264,7 @@ func (h *sandboxedHost) Cleanup() {
 }
 
 func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
 	defer cancel()
 
 	quoteType, err := h.ias.GetQuoteSignatureType(ctx)
@@ -259,6 +291,9 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(gid[:]))
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
+	}
+	if len(sigRL) == 0 {
+		sigRL = []byte("")
 	}
 
 	rakQuoteRes, err := worker.protocol.Call(
@@ -316,6 +351,25 @@ func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<
 	}
 }
 
+func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
+	respCh := make(chan error, 1)
+
+	// Send internal request to the manager goroutine.
+	select {
+	case h.interruptCh <- &interruptRequest{ctx, respCh}:
+	case <-ctx.Done():
+		return errors.New("aborted by context")
+	}
+
+	// Wait for response from the manager goroutine.
+	select {
+	case resp := <-respCh:
+		return resp
+	case <-ctx.Done():
+		return errors.New("aborted by context")
+	}
+}
+
 func (h *sandboxedHost) spawnWorker() (*process, error) {
 	h.logger.Info("spawning worker",
 		"worker_binary", h.workerBinary,
@@ -337,20 +391,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		return nil, errors.Wrap(err, "worker: failed to create worker cache directory")
 	}
 
-	// Create a pipe for passing the sandbox arguments. The read end of the
-	// pipe is passed to the child process.
-	cmdPipeR, cmdPipeW, err := os.Pipe()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: failed to create pipe (args)")
-	}
-
-	// Create a pipe for passing the sandbox SECCOMP policy. The read end of
-	// the pipe is passed to the child process.
-	seccompPipeR, seccompPipeW, err := os.Pipe()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: failed to create pipe (seccomp)")
-	}
-
 	// Create unix socket.
 	hostSocket := path.Join(workerDir, "host.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: hostSocket})
@@ -362,26 +402,64 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	// in any case.
 	defer listener.Close()
 
-	// Start the worker sandbox.
-	bwrapArgs := []string{
-		"--args", "3",
-		"--",
-		workerMountWorkerBin,
+	// Start the worker (optionally in a sandbox).
+	var sandboxArgs []string
+	var sandboxBinary string
+	var workerArgs []string
+	if h.noSandbox {
+		sandboxBinary = h.workerBinary
+		workerArgs = prepareWorkerArgs(
+			hostSocket,
+			h.cacheDir,
+			h.runtimeBinary,
+		)
+	} else {
+		sandboxArgs = []string{
+			"--args", "3",
+			"--",
+			workerMountWorkerBin,
+		}
+		sandboxBinary = workerBubblewrapBinary
+		workerArgs = prepareWorkerArgs(
+			workerMountHostSocket,
+			workerMountCacheDir,
+			workerMountRuntimeBin,
+		)
 	}
-	workerArgs, err := prepareWorkerArgs()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while preparing worker args")
-	}
-	args := append(bwrapArgs, workerArgs...)
-	cmd := exec.Command(workerBubblewrapBinary, args...)
+
+	args := append(sandboxArgs, workerArgs...)
+	cmd := exec.Command(sandboxBinary, args...)
 	// Forward stdout and stderr.
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// Pass the arguments pipe file descriptor.
-	// NOTE: Entry i becomes file descriptor 3+i.
-	cmd.ExtraFiles = []*os.File{cmdPipeR, seccompPipeR}
+
+	var sandboxCmdPipeW *os.File
+	var sandboxSeccompPipeW *os.File
+	if !h.noSandbox {
+		// Create a pipe for passing the sandbox arguments. The read end of the
+		// pipe is passed to the child process.
+		cmdPipeR, cmdPipeW, perr := os.Pipe()
+		if perr != nil {
+			return nil, errors.Wrap(perr, "worker: failed to create pipe (args)")
+		}
+
+		// Create a pipe for passing the sandbox SECCOMP policy. The read end of
+		// the pipe is passed to the child process.
+		seccompPipeR, seccompPipeW, perr := os.Pipe()
+		if perr != nil {
+			return nil, errors.Wrap(perr, "worker: failed to create pipe (seccomp)")
+		}
+
+		// Pass the arguments pipe file descriptor.
+		// NOTE: Entry i becomes file descriptor 3+i.
+		cmd.ExtraFiles = []*os.File{cmdPipeR, seccompPipeR}
+
+		sandboxCmdPipeW = cmdPipeW
+		sandboxSeccompPipeW = seccompPipeW
+	}
+
 	if cerr := cmd.Start(); cerr != nil {
-		return nil, errors.Wrap(cerr, "worker: failed to start sandbox")
+		return nil, errors.Wrap(cerr, "worker: failed to start worker process")
 	}
 
 	// Ensure that the spawned process gets killed in case of errors.
@@ -393,27 +471,29 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		}
 	}()
 
-	// Instruct the sandbox how to prepare itself.
-	sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.cacheDir)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
-	}
-	for _, arg := range sandboxArgs {
-		if _, werr := cmdPipeW.Write([]byte(arg + "\x00")); werr != nil {
+	if !h.noSandbox {
+		// Instruct the sandbox how to prepare itself.
+		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.cacheDir) // nolint: govet
+		if err != nil {
+			return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
+		}
+		for _, arg := range sandboxArgs {
+			if _, werr := sandboxCmdPipeW.Write([]byte(arg + "\x00")); werr != nil {
+				return nil, errors.Wrap(werr, "worker: error while sending args to sandbox")
+			}
+		}
+		if werr := sandboxCmdPipeW.Close(); werr != nil {
 			return nil, errors.Wrap(werr, "worker: error while sending args to sandbox")
 		}
-	}
-	if werr := cmdPipeW.Close(); werr != nil {
-		return nil, errors.Wrap(werr, "worker: error while sending args to sandbox")
-	}
 
-	// Generate SECCOMP policy and pass it to the sandbox.
-	err = generateSeccompPolicy(seccompPipeW)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while generating seccomp policy")
-	}
-	if werr := seccompPipeW.Close(); werr != nil {
-		return nil, errors.Wrap(werr, "worker: error while sending seccomp policy to sandbox")
+		// Generate SECCOMP policy and pass it to the sandbox.
+		err = generateSeccompPolicy(sandboxSeccompPipeW)
+		if err != nil {
+			return nil, errors.Wrap(err, "worker: error while generating seccomp policy")
+		}
+		if werr := sandboxSeccompPipeW.Close(); werr != nil {
+			return nil, errors.Wrap(werr, "worker: error while sending seccomp policy to sandbox")
+		}
 	}
 
 	// Wait for the worker to connect.
@@ -421,13 +501,49 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		"worker_pid", cmd.Process.Pid,
 	)
 
-	err = listener.SetDeadline(time.Now().Add(workerConnectTimeout * time.Second))
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while accepting worker connection")
-	}
-	conn, err := listener.Accept()
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while accepting worker connection")
+	// Spawn goroutine that waits for the sync FD to be closed. We only need it while
+	// we wait for the connection to be accepted as later we can simply wait on the
+	// sandbox process to exit.
+	waitCh := waitOnProcess(cmd.Process)
+
+	// Spawn goroutine that waits for a connection to be established.
+	connCh := make(chan interface{})
+	go func() {
+		lerr := listener.SetDeadline(time.Now().Add(workerConnectTimeout))
+		if lerr != nil {
+			connCh <- lerr
+			return
+		}
+		conn, lerr := listener.Accept()
+		if lerr != nil {
+			connCh <- lerr
+			return
+		}
+
+		connCh <- conn
+		close(connCh)
+	}()
+
+	var conn net.Conn
+	select {
+	case res := <-connCh:
+		// Got a connection or timed out while accepting a connection.
+		switch r := res.(type) {
+		case error:
+			return nil, errors.Wrap(r, "worker: error while accepting worker connection")
+		case net.Conn:
+			conn = r
+		default:
+			panic("invalid type")
+		}
+	case werr := <-waitCh:
+		// Worker has terminated before a connection was accepted.
+		h.logger.Debug("worker process exited unexpectedly",
+			"worker_pid", cmd.Process.Pid,
+			"err", werr,
+		)
+
+		return nil, errors.New("worker: terminated while waiting for connection")
 	}
 
 	h.logger.Info("worker connected",
@@ -446,6 +562,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		process:  cmd.Process,
 		protocol: proto,
 		quitCh:   make(chan error),
+		waitCh:   waitCh,
 		logger:   logger,
 	}
 	go p.worker()
@@ -469,10 +586,60 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	return p, nil
 }
 
+func (h *sandboxedHost) spawnAndReplaceWorker() error {
+	worker, err := h.spawnWorker()
+	if err != nil {
+		return err
+	}
+
+	h.activeWorkerAvailable.L.Lock()
+	h.activeWorker = worker
+	h.activeWorkerAvailable.Broadcast()
+	h.activeWorkerAvailable.L.Unlock()
+
+	return nil
+}
+
+func (h *sandboxedHost) handleInterruptWorker(ctx context.Context) error {
+	h.logger.Warn("interrupting worker")
+
+	// First attempt to gracefully interrupt the worker by sending a request.
+	ictx, cancel := context.WithTimeout(ctx, workerInterruptTimeout)
+	defer cancel()
+
+	response, err := h.activeWorker.protocol.Call(ictx, &protocol.Body{WorkerAbortRequest: &protocol.Empty{}})
+	if err == nil && response.WorkerAbortResponse != nil {
+		// Successful response, assume worker is done.
+		return nil
+	}
+
+	h.logger.Warn("graceful interrupt failed, killing worker")
+
+	// Failed to gracefully interrupt the worker. Kill the worker and it
+	// will be automatically restarted by the manager after it dies.
+	_ = h.activeWorker.Kill()
+
+	// Wait for the worker to terminate. We do this here so that the response
+	// to the interrupt request is only sent after the new worker has been
+	// respawned and is ready to use.
+	select {
+	case <-h.activeWorker.quitCh:
+	case <-ctx.Done():
+		return errors.New("aborted by context")
+	}
+
+	// Respawn worker.
+	// NOTE: This may violate the context deadline, but interrupting this
+	//       method does not make sense. The method uses its own deadlines
+	//       so it should never block forever.
+	return h.spawnAndReplaceWorker()
+}
+
 func (h *sandboxedHost) manager() {
 	// Make sure that a worker is always available.
 	wantWorker := true
 	needSpawnDelay := false
+ManagerLoop:
 	for {
 		// Wait for the worker to terminate.
 	WaitWorkerToTerminate:
@@ -483,6 +650,11 @@ func (h *sandboxedHost) manager() {
 				ch, err := h.activeWorker.protocol.MakeRequest(rq.ctx, rq.body)
 				rq.ch <- &hostResponse{ch, err}
 				close(rq.ch)
+				continue WaitWorkerToTerminate
+			case intr := <-h.interruptCh:
+				// Attempt to interrupt the worker.
+				intr.ch <- h.handleInterruptWorker(intr.ctx)
+				close(intr.ch)
 				continue WaitWorkerToTerminate
 			case err := <-h.activeWorker.quitCh:
 				// Worker has terminated.
@@ -515,10 +687,16 @@ func (h *sandboxedHost) manager() {
 
 		// Spawn new worker process after a respawn delay.
 		if needSpawnDelay {
-			time.Sleep(time.Second * workerRespawnDelay)
+			select {
+			case <-time.After(workerRespawnDelay):
+			case <-h.stopCh:
+				// Termination requested while no worker is spawned.
+				h.logger.Info("termination requested")
+				break ManagerLoop
+			}
 		}
 
-		worker, err := h.spawnWorker()
+		err := h.spawnAndReplaceWorker()
 		if err != nil {
 			h.logger.Error("failed to spawn new worker",
 				"err", err,
@@ -526,11 +704,6 @@ func (h *sandboxedHost) manager() {
 			needSpawnDelay = true
 			continue
 		}
-
-		h.activeWorkerAvailable.L.Lock()
-		h.activeWorker = worker
-		h.activeWorkerAvailable.Broadcast()
-		h.activeWorkerAvailable.L.Unlock()
 	}
 
 	close(h.quitCh)
@@ -546,6 +719,7 @@ func NewSandboxedHost(
 	teeHardware node.TEEHardware,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
+	noSandbox bool,
 ) (Host, error) {
 	if workerBinary == "" {
 		return nil, errors.New("worker binary not configured")
@@ -561,6 +735,7 @@ func NewSandboxedHost(
 		workerBinary:          workerBinary,
 		runtimeBinary:         runtimeBinary,
 		cacheDir:              cacheDir,
+		noSandbox:             noSandbox,
 		storage:               storage,
 		teeHardware:           teeHardware,
 		ias:                   ias,
@@ -569,6 +744,7 @@ func NewSandboxedHost(
 		stopCh:                make(chan struct{}),
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
 		requestCh:             make(chan *hostRequest, 10),
+		interruptCh:           make(chan *interruptRequest, 10),
 		logger:                logging.GetLogger("worker/host/sandboxed").With("runtime_id", runtimeID),
 	}
 	return host, nil

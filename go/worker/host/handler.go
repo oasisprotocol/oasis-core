@@ -46,6 +46,15 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		if err != nil {
 			return nil, err
 		}
+		// We need to be sure to represent nil bytes as empty byte slices instead of nil as
+		// those are encoded differently in CBOR and the other side expects them to be
+		// serialized as byte arrays.
+		if len(signature) == 0 {
+			signature = []byte("")
+		}
+		if len(certs) == 0 {
+			certs = []byte("")
+		}
 		return &protocol.Body{HostIasReportResponse: &protocol.HostIasReportResponse{
 			AVR:          avr,
 			Signature:    signature,
@@ -56,6 +65,12 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		sigRL, err := h.ias.GetSigRL(ctx, body.HostIasSigRlRequest.GID)
 		if err != nil {
 			return nil, err
+		}
+		// We need to be sure to represent nil bytes as empty byte slices instead of nil as
+		// those are encoded differently in CBOR and the other side expects them to be
+		// serialized as byte arrays.
+		if len(sigRL) == 0 {
+			sigRL = []byte("")
 		}
 		return &protocol.Body{HostIasSigRlResponse: &protocol.HostIasSigRlResponse{
 			SigRL: sigRL,

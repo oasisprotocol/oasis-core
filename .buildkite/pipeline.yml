@@ -2,7 +2,7 @@
 # Build pipeline
 ################
 docker_plugin: &docker_plugin_configuration
-  oasislabs/docker#v2.1.0-oasis1:
+  oasislabs/docker#v2.1.0-oasis4:
     image: "oasislabs/testing:0.2.0"
     always_pull: true
     workdir: /workdir
@@ -124,13 +124,6 @@ steps:
   ###########
   # Test jobs
   ###########
-  - label: Test Go node
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/go/test_and_coverage_ekiden.sh
-    plugins:
-      <<: *docker_plugin_configuration
-
   - label: Test Rust crates
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -142,11 +135,22 @@ steps:
   # to finish running in parallel before continuing.
   - wait
 
+  #####################################
+  # Test jobs requiring build artifacts
+  #####################################
+  - label: Test Go node
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - .buildkite/go/test_and_coverage_ekiden.sh
+    plugins:
+      <<: *docker_plugin_configuration
+
   ###############
   # E2E test jobs
   ###############
   - label: E2E tests (%n)
     parallelism: 4
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -154,6 +158,7 @@ steps:
       <<: *docker_plugin_configuration
 
   - label: E2E migration tests
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh

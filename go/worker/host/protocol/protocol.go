@@ -53,16 +53,20 @@ func (p *Protocol) Call(ctx context.Context, body *Body) (*Body, error) {
 		return nil, err
 	}
 
-	resp, ok := <-respCh
-	if !ok {
-		return nil, errors.New("channel closed")
-	}
+	select {
+	case resp, ok := <-respCh:
+		if !ok {
+			return nil, errors.New("channel closed")
+		}
 
-	if resp.Error != nil {
-		return nil, errors.New(resp.Error.Message)
-	}
+		if resp.Error != nil {
+			return nil, errors.New(resp.Error.Message)
+		}
 
-	return resp, nil
+		return resp, nil
+	case <-ctx.Done():
+		return nil, errors.New("aborted by context")
+	}
 }
 
 // MakeRequest sends a request to the other side.

@@ -19,4 +19,8 @@ type Host interface {
 	// blocking if the active worker is not yet available. The returned
 	// CapabilityTEE may be out of date by the time this function returns.
 	WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error)
+
+	// InterruptWorker attempts to interrupt the worker, killing and
+	// respawning it if necessary.
+	InterruptWorker(ctx context.Context) error
 }

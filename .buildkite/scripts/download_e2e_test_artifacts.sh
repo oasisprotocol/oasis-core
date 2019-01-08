@@ -10,26 +10,7 @@
 # https://buildkite.com/docs/pipelines/writing-build-scripts
 set -euxo pipefail
 
-# Temporary artifacts download directory.
-ARTIFACTS_TEMPORARY_DIR=/tmp/artifacts
-
-##########################################
-# Download an artifact and change its mode
-##########################################
-download_artifact() {
-    local name=$1
-    local dst_dir=$2
-    local mode=${3:-644}
-
-    mkdir -p ${ARTIFACTS_TEMPORARY_DIR}
-    mkdir -p ${dst_dir}
-
-    pushd ${ARTIFACTS_TEMPORARY_DIR}
-        buildkite-agent artifact download ${name} .
-    popd
-    cp ${ARTIFACTS_TEMPORARY_DIR}/${name} ${dst_dir}/${name}
-    chmod ${mode} ${dst_dir}/${name}
-}
+source .buildkite/scripts/common.sh
 
 # Ekiden node, worker and compute node.
 download_artifact ekiden go/ekiden 755

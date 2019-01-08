@@ -22,7 +22,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/committee"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 // WorkerImplementationTests runs the worker implementation tests.
 //
@@ -86,12 +86,7 @@ func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState
 	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
 	// Node should transition to WaitingForBatch state.
-	select {
-	case newState := <-stateCh:
-		require.EqualValues(t, committee.StateWaitingForBatch{}, newState)
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive transition to WaitingForBatch state")
-	}
+	waitForNodeTransition(t, stateCh, "WaitingForBatch")
 }
 
 func testQueueCall(
@@ -118,14 +113,14 @@ func testQueueCall(
 	require.NoError(t, err, "QueueCall")
 
 	// Node should transition to ProcessingBatch state.
-	waitForNodeTransition(t, stateCh, rtNode, "ProcessingBatch")
+	waitForNodeTransition(t, stateCh, "ProcessingBatch")
 
 	// Node should transition to WaitingForFinalize state.
-	waitForNodeTransition(t, stateCh, rtNode, "WaitingForFinalize")
+	waitForNodeTransition(t, stateCh, "WaitingForFinalize")
 
 	// Node should transition to WaitingForBatch state and a block should be
 	// finalized containing our batch.
-	waitForNodeTransition(t, stateCh, rtNode, "WaitingForBatch")
+	waitForNodeTransition(t, stateCh, "WaitingForBatch")
 
 	select {
 	case blk := <-blocksCh:
@@ -145,7 +140,7 @@ func testQueueCall(
 	}
 }
 
-func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, rtNode *committee.Node, expectedState string) {
+func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState string) {
 	select {
 	case newState := <-stateCh:
 		require.EqualValues(t, expectedState, newState.String())
