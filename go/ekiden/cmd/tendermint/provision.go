@@ -152,7 +152,7 @@ func provisionInteractive(validator *tendermint.GenesisValidator) error {
 
 	if flagNodeAddr == "" || common.IsAddrPort(flagNodeAddr) != nil {
 		if addr := common.GuessExternalAddress(); addr != nil {
-			flagNodeAddr = addr.String() + ":46656" // Default port.
+			flagNodeAddr = addr.String() + ":26656" // Default port.
 		}
 	}
 	qs = append(qs, &survey.Question{
