@@ -1,5 +1,5 @@
 //! ECALLs provided by the runtime interface.
-use ekiden_enclave_trusted::utils::{read_enclave_request, write_enclave_response};
+use ekiden_enclave_common::utils::{read_enclave_request, write_enclave_response};
 use ekiden_roothash_base::header::Header;
 use ekiden_runtime_common::batch::CallBatch;
 

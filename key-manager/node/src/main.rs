@@ -21,9 +21,6 @@ extern crate ekiden_tools;
 extern crate ekiden_untrusted;
 
 #[macro_use]
-extern crate serde_derive;
-
-#[macro_use]
 extern crate clap;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_dummy;

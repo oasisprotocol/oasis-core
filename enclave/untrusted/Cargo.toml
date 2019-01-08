@@ -18,6 +18,9 @@ sgx_urts = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.1-ek
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../core/common", version = "0.2.0-alpha" }
 ekiden-enclave-common = { path = "../common", version = "0.2.0-alpha" }
+log = "0.4"
+serde = "1.0.71"
+serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }

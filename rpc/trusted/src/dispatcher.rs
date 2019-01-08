@@ -13,7 +13,7 @@ use serde_cbor;
 
 use ekiden_common::error::Result;
 use ekiden_common::profile_block;
-use ekiden_enclave_trusted::utils::{read_enclave_request, write_enclave_response};
+use ekiden_enclave_common::utils::{read_enclave_request, write_enclave_response};
 use ekiden_rpc_common::api;
 use ekiden_rpc_common::reflection::ApiMethodDescriptor;
 

@@ -13,6 +13,8 @@ extern crate serde;
 extern crate serde_cbor;
 extern crate sodalite;
 
+extern crate log;
+
 extern crate ekiden_common;
 extern crate ekiden_enclave_common;
 
@@ -20,7 +22,7 @@ pub mod capabilitytee;
 pub mod crypto;
 pub mod enclave;
 pub mod identity;
-pub mod utils;
+pub mod logger;
 
 /// Declare enclave initialization structures.
 ///

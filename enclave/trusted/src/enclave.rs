@@ -1,6 +1,9 @@
 #[cfg(target_env = "sgx")]
 use std;
 
+#[cfg(target_env = "sgx")]
+use logger;
+
 /// ECALL, see edl
 #[cfg(target_env = "sgx")]
 #[no_mangle]
@@ -15,4 +18,10 @@ pub extern "C" fn enclave_late_init() {
     } else {
         println!("Couldn't enable backtrace: enclave path not available");
     }
+
+    // Initialize ekiden logger for making OCALLs on log messages.
+    match logger::init() {
+        Ok(_) => (),
+        Err(e) => println!("Unable to initialize ekiden logger: {}", e),
+    };
 }
