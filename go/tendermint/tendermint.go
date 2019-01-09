@@ -43,6 +43,9 @@ import (
 const (
 	configDir = "config"
 
+	cfgCoreGenesisFile   = "tendermint.core.genesis_file"
+	cfgCoreListenAddress = "tendermint.core.listen_address"
+
 	cfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
 	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval = "tendermint.consensus.empty_block_interval"
@@ -55,6 +58,9 @@ const (
 
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
+
+	flagCoreGenesisFile   string
+	flagCoreListenAddress string
 
 	flagConsensusTimeoutCommit      time.Duration
 	flagConsensusSkipTimeoutCommit  bool
@@ -298,6 +304,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit := viper.GetDuration(cfgConsensusTimeoutCommit)
 	emptyBlockInterval := viper.GetDuration(cfgConsensusEmptyBlockInterval)
+	tenderConfig.Genesis = viper.GetString(cfgCoreGenesisFile)
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
 	tenderConfig.Consensus.SkipTimeoutCommit = viper.GetBool(cfgConsensusSkipTimeoutCommit)
 	tenderConfig.Consensus.CreateEmptyBlocks = true
@@ -305,6 +312,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.BlockTimeIota = timeoutCommit
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
+	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
 	tenderConfig.RPC.ListenAddress = ""
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
@@ -352,11 +360,17 @@ func (t *tendermintService) lazyInit() error {
 		// node open persistent connections to all the validators.
 		var addrs []string
 		for _, v := range genDoc.Validators {
+			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
+			vAddr := vPubKey.Address().String() + "@" + v.CoreAddress
+
 			if v.PubKey.Equal(t.validatorKey.Public()) {
+				// This validator entry is the current node, set the
+				// node name to that specified in the genesis document.
+				tenderConfig.Moniker = v.Name
 				continue
 			}
 
-			addrs = append(addrs, v.CoreAddress)
+			addrs = append(addrs, vAddr)
 		}
 		tenderConfig.P2P.PersistentPeers = strings.Join(addrs, ",")
 	}
@@ -461,6 +475,8 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&flagCoreGenesisFile, cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
+	cmd.Flags().StringVar(&flagCoreListenAddress, cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
 	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
@@ -469,6 +485,8 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&flagLogDebug, cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 
 	for _, v := range []string{
+		cfgCoreGenesisFile,
+		cfgCoreListenAddress,
 		cfgConsensusTimeoutCommit,
 		cfgConsensusSkipTimeoutCommit,
 		cfgConsensusEmptyBlockInterval,

@@ -25,6 +25,7 @@ const (
 	cfgMetricsPushInstanceLabel = "metrics.push.instance_label"
 	cfgMetricsPushInterval      = "metrics.push.interval"
 
+	metricsModeNone = "none"
 	metricsModePull = "pull"
 	metricsModePush = "push"
 )
@@ -37,6 +38,26 @@ var (
 	metricsPushInstanceLabel string
 	metricsPushInterval      time.Duration
 )
+
+type stubService struct {
+	service.BaseBackgroundService
+}
+
+func (s *stubService) Start() error {
+	return nil
+}
+
+func (s *stubService) Stop() {}
+
+func (s *stubService) Cleanup() {}
+
+func newStubService() (service.BackgroundService, error) {
+	svc := *service.NewBaseBackgroundService("metrics")
+
+	return &stubService{
+		BaseBackgroundService: svc,
+	}, nil
+}
 
 type pullService struct {
 	service.BaseBackgroundService
@@ -170,6 +191,8 @@ func newPushService() (service.BackgroundService, error) {
 func New() (service.BackgroundService, error) {
 	mode := viper.GetString(cfgMetricsMode)
 	switch strings.ToLower(mode) {
+	case metricsModeNone:
+		return newStubService()
 	case metricsModePull:
 		return newPullService()
 	case metricsModePush:
