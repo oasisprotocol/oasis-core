@@ -41,7 +41,7 @@ pub const STATIC_MAX_LEVEL: log::Level = log::Level::Trace;
 #[cfg(target_env = "sgx")]
 impl log::Log for EkidenLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= STATIC_MAX_LEVEL
+        metadata.level() <= log::max_level().to_level().unwrap()
     }
 
     fn log(&self, record: &log::Record) {
