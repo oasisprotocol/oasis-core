@@ -230,11 +230,19 @@ check_logger_logs() {
 
     # test-logger-client sends five distinct messages to five distinct log levels.
     # Check, if they are correctly reported by the enclave and then by pretty_env_logger.
-    grep "ERROR" $log_files | grep "<enclave>::test_logger" | grep "hello_error" >/dev/null
-    grep "WARN" $log_files | grep "<enclave>::test_logger" | grep "hello_warn" >/dev/null
-    grep "INFO" $log_files | grep "<enclave>::test_logger" | grep "hello_info" >/dev/null
-    grep "DEBUG" $log_files | grep "<enclave>::test_logger" | grep "hello_debug" >/dev/null
-    grep "TRACE" $log_files | grep "<enclave>::test_logger" | grep "hello_trace" >/dev/null
+    grep "ERROR" $log_files | grep "<enclave>::test_logger" | grep -q "hello_error"
+    grep "WARN" $log_files | grep "<enclave>::test_logger" | grep -q "hello_warn"
+    grep "INFO" $log_files | grep "<enclave>::test_logger" | grep -q "hello_info"
+    grep "DEBUG" $log_files | grep "<enclave>::test_logger" | grep -q "hello_debug"
+    grep "TRACE" $log_files | grep "<enclave>::test_logger" | grep -q "hello_trace"
+
+    # Then a new max_log_level is set to ERROR.
+    # Check, if hello_new_error is reported and other hello_new messages omitted.
+    grep "ERROR" $log_files | grep "<enclave>::test_logger" | grep -q "hello_new_error"
+    grep "WARN" $log_files | grep "<enclave>::test_logger" | (! grep -q "hello_new_warn")
+    grep "INFO" $log_files | grep "<enclave>::test_logger" | (! grep -q "hello_new_info")
+    grep "DEBUG" $log_files | grep "<enclave>::test_logger" | (! grep -q "hello_new_debug")
+    grep "TRACE" $log_files | grep "<enclave>::test_logger" | (! grep -q "hello_new_trace")
 }
 
 # Tendermint backends.

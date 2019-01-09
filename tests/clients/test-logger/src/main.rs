@@ -6,6 +6,7 @@ extern crate client_utils;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
 extern crate ekiden_runtime_client;
+extern crate log;
 
 extern crate serde_json;
 extern crate test_logger_api;
@@ -56,6 +57,37 @@ fn main() {
     println!("Sending \"hello_trace\" request to runtime on trace level");
     runtime
         .block_on(client.write_trace(String::from("hello_trace")))
+        .unwrap();
+
+    let new_level = log::LevelFilter::Error;
+    println!("Now setting max level to {}.", new_level);
+    runtime
+        .block_on(client.set_max_level(new_level.to_string()))
+        .unwrap();
+
+    println!("Sending \"hello_new_error\" request to runtime on error level");
+    runtime
+        .block_on(client.write_error(String::from("hello_new_error")))
+        .unwrap();
+
+    println!("Sending \"hello_new_warn\" request to runtime on warn level which should be omitted");
+    runtime
+        .block_on(client.write_warn(String::from("hello_new_warn")))
+        .unwrap();
+
+    println!("Sending \"hello_new_info\" request to runtime on info level");
+    runtime
+        .block_on(client.write_info(String::from("hello_new_info")))
+        .unwrap();
+
+    println!("Sending \"hello_new_debug\" request to runtime on debug level");
+    runtime
+        .block_on(client.write_debug(String::from("hello_new_debug")))
+        .unwrap();
+
+    println!("Sending \"hello_new_trace\" request to runtime on trace level");
+    runtime
+        .block_on(client.write_trace(String::from("hello_new_trace")))
         .unwrap();
 
     println!("Simple test-logger test passed.")
