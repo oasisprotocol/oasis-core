@@ -5,7 +5,6 @@ package node
 
 import (
 	"crypto/sha512"
-	"crypto/subtle"
 	"crypto/x509"
 	"errors"
 	"math"
@@ -302,7 +301,7 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 
 		// Ensure that the ISV quote includes the hash of the node's
 		// RAK.
-		if subtle.ConstantTimeCompare(rakHash[:], q.Report.ReportData[:]) != 1 {
+		if rakHash != q.Report.ReportData {
 			return ErrRAKHashMismatch
 		}
 
