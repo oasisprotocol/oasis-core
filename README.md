@@ -121,7 +121,7 @@ And then run at least two compute nodes each with its unique
     --entity-ethereum-address 0000000000000000000000000000000000000000 \
     --storage-backend remote \
     --no-persist-identity \
-    --worker-cache-dir to /tmp/worker1-cache \
+    --worker-cache-dir /tmp/worker1-cache \
     --worker-path /code/target/debug/ekiden-worker \
     target/enclave/token.so
 ```
