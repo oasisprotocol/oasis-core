@@ -31,6 +31,7 @@ fn main() {
     ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
     ekiden_common::identity::LocalNodeIdentity::register(&mut known_components);
     ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
+    ekiden_common::remote_node::RemoteNodeInfo::register(&mut known_components);
 
     let matches = App::new("Ekiden key manager client test")
         .version(crate_version!())

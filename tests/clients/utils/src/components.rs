@@ -26,6 +26,8 @@ pub fn register_components(known_components: &mut KnownComponents) {
     // Storage.
     ekiden_storage_frontend::StorageClient::register(known_components);
     ekiden_storage_multilayer::MultilayerBackend::register(known_components);
+    // Remote node.
+    ekiden_core::remote_node::RemoteNodeInfo::register(known_components);
 }
 
 /// Create known component registry.

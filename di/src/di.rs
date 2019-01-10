@@ -316,7 +316,7 @@ impl<'a> Container<'a> {
         // Create new instance.
         let component = match self.components.remove(&type_id) {
             Some(component) => component,
-            None => return Err("component not found".into()),
+            None => return Err("to-be-owned component not found".into()),
         };
 
         let instance = component.factory.build(self)?;
