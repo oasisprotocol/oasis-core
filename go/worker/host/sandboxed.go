@@ -35,6 +35,8 @@ var (
 const (
 	// BackendSandboxed is the name of the sandboxed backend.
 	BackendSandboxed = "sandboxed"
+	// BackendUnconfined is the name of the no-sandbox backend.
+	BackendUnconfined = "unconfined"
 
 	// Worker connect timeout.
 	workerConnectTimeout = 5 * time.Second
