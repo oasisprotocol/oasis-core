@@ -27,6 +27,10 @@ import (
 type RuntimeConfig struct {
 	ID     signature.PublicKey
 	Binary string
+
+	// XXX: This is needed until we decide how we want to actually register runtimes.
+	ReplicaGroupSize       uint64
+	ReplicaGroupBackupSize uint64
 }
 
 // Config is the worker configuration.
@@ -236,6 +240,10 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	}
 
 	// Create committee node for the given runtime.
+	nodeCfg := cfg.Committee
+	nodeCfg.ReplicaGroupSize = rtCfg.ReplicaGroupSize
+	nodeCfg.ReplicaGroupBackupSize = rtCfg.ReplicaGroupBackupSize
+
 	node, err := committee.NewNode(
 		rtCfg.ID,
 		w.identity,
@@ -246,7 +254,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		w.scheduler,
 		workerHost,
 		w.p2p,
-		cfg.Committee,
+		nodeCfg,
 	)
 	if err != nil {
 		return err

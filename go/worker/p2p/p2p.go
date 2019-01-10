@@ -110,7 +110,7 @@ func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg Message) err
 		return err
 	}
 	defer func() {
-		_ = rawStream.Reset()
+		_ = rawStream.Close()
 	}()
 
 	stream := NewStream(rawStream)
@@ -165,7 +165,7 @@ func (p *P2P) RegisterHandler(runtimeID signature.PublicKey, handler Handler) {
 
 func (p *P2P) handleStreamMessages(stream *Stream) {
 	defer func() {
-		_ = stream.Reset()
+		_ = stream.Close()
 	}()
 
 	peerID := stream.Conn().RemotePeer()
@@ -194,6 +194,17 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 		return
 	}
 
+	// Check if peer is authorized to send messages.
+	if !handler.IsPeerAuthorized(rawPeerID) {
+		p.logger.Error("dropping stream from unauthorized peer",
+			"runtime_id", message.RuntimeID,
+			"peer_id", peerID,
+		)
+
+		_ = stream.Reset()
+		return
+	}
+
 	err := handler.HandlePeerMessage(rawPeerID, message)
 	response := &Message{
 		RuntimeID: message.RuntimeID,
@@ -214,28 +225,9 @@ func (p *P2P) handleStream(rawStream libp2pNet.Stream) {
 }
 
 func (p *P2P) handleConnection(conn libp2pNet.Conn) {
-	p.RLock()
-	defer p.RUnlock()
-
-	// Ensure that the connection is from an authorized peer.
-	peerID := conn.RemotePeer()
-	rawPeerID, _ := peerID.Marshal()
-
-	authorized := false
-	for _, handler := range p.handlers {
-		if handler.IsPeerAuthorized(rawPeerID) {
-			authorized = true
-			break
-		}
-	}
-
-	if !authorized {
-		p.logger.Warn("dropping stream from an unauthorized peer",
-			"peer_id", peerID,
-		)
-
-		_ = conn.Close()
-	}
+	p.logger.Debug("new connection from peer",
+		"peer_id", conn.RemotePeer(),
+	)
 }
 
 // New creates a new P2P node.

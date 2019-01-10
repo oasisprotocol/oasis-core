@@ -38,8 +38,8 @@ var (
 		{"storage.backend", "leveldb"},
 		{"tendermint.consensus.skip_timeout_commit", true},
 		{"worker.backend", "mock"},
-		{"worker.runtime", "mock-runtime"},
-		{"worker.runtime_id", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"worker.runtime.binary", "mock-runtime"},
+		{"worker.runtime.id", "0000000000000000000000000000000000000000000000000000000000000000"},
 	}
 
 	initConfigOnce sync.Once

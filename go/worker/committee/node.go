@@ -29,12 +29,16 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
+const queueExternalBatchTimeout = 5 * time.Second
+
 var (
 	ErrNotLeader = errors.New("not leader")
 
 	errSeenNewerBlock    = errors.New("seen newer block")
 	errWorkerAborted     = errors.New("worker aborted batch processing")
 	errIncomatibleHeader = errors.New("incompatible header")
+	errIncorrectRole     = errors.New("incorrect role")
+	errIncorrectState    = errors.New("incorrect state")
 )
 
 var (
@@ -99,13 +103,22 @@ type Config struct {
 	MaxBatchSizeBytes uint64
 	MaxBatchTimeout   time.Duration
 
+	ByzantineInjectDiscrepancies bool
+
 	ClientPort      uint16
 	ClientAddresses []node.Address
+
+	// XXX: This is needed until we decide how we want to actually register runtimes.
+	ReplicaGroupSize       uint64
+	ReplicaGroupBackupSize uint64
 }
 
+// ExternalBatch is an internal request to the worker goroutine that signals
+// an external batch has been received.
 type externalBatch struct {
 	batch  runtime.Batch
 	header block.Header
+	ch     chan<- error
 }
 
 // Node is a committee node.
@@ -201,12 +214,27 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 // The block header determines what block the batch should be
 // computed against.
 func (n *Node) HandleBatchFromCommittee(ctx context.Context, batchHash hash.Hash, hdr block.Header) error {
+	respCh, err := n.queueExternalBatch(ctx, batchHash, hdr)
+	if err != nil {
+		return err
+	}
+
+	// Wait for response from the worker goroutine.
+	select {
+	case resp := <-respCh:
+		return resp
+	case <-ctx.Done():
+		return errors.New("aborted by context")
+	}
+}
+
+func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr block.Header) (<-chan error, error) {
 	// Quick check to see if header is compatible.
 	if !bytes.Equal(hdr.Namespace[:], n.runtimeID) {
 		n.logger.Warn("received incompatible header in external batch",
 			"header", hdr,
 		)
-		return errIncomatibleHeader
+		return nil, errIncomatibleHeader
 	}
 
 	// Fetch batch from storage.
@@ -218,7 +246,7 @@ func (n *Node) HandleBatchFromCommittee(ctx context.Context, batchHash hash.Hash
 		n.logger.Error("failed to fetch batch from storage",
 			"err", err,
 		)
-		return err
+		return nil, err
 	}
 
 	var batch runtime.Batch
@@ -226,16 +254,18 @@ func (n *Node) HandleBatchFromCommittee(ctx context.Context, batchHash hash.Hash
 		n.logger.Error("failed to deserialize batch",
 			"err", err,
 		)
-		return err
+		return nil, err
 	}
+
+	respCh := make(chan error, 1)
 
 	select {
-	case n.incomingExtBatch <- &externalBatch{batch, hdr}:
+	case n.incomingExtBatch <- &externalBatch{batch, hdr, respCh}:
 	case <-ctx.Done():
-		return errors.New("aborted by context")
+		return nil, errors.New("aborted by context")
 	}
 
-	return nil
+	return respCh, nil
 }
 
 // QueueCall queues a call for processing by this node.
@@ -302,12 +332,16 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
 
-	// Re-register node to increase expiry.
-	if err := n.registerNode(); err != nil {
-		n.logger.Error("failed to re-register node",
-			"err", err,
-		)
-	}
+	// Re-register node to increase expiry. Do this in the background to avoid
+	// blocking on node registration to complete as we can be processing stuff
+	// while re-registration is ongoing.
+	go func() {
+		if err := n.registerNode(); err != nil {
+			n.logger.Error("failed to re-register node",
+				"err", err,
+			)
+		}
+	}()
 
 	if epoch.IsMember() {
 		n.transition(StateWaitingForBatch{})
@@ -489,6 +523,15 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 
 	epoch := n.group.GetEpochSnapshot()
 
+	// Byzantine mode: inject discrepancy.
+	if n.cfg.ByzantineInjectDiscrepancies {
+		n.logger.Error("BYZANTINE MODE: injecting discrepancy into batch")
+
+		for idx := range batch.Outputs {
+			batch.Outputs[idx] = []byte("boom")
+		}
+	}
+
 	// Generate proposed block header.
 	blk := block.NewEmptyBlock(n.currentBlock, 0, block.Normal)
 	blk.Header.GroupHash = epoch.GetGroupHash()
@@ -497,7 +540,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	blk.Header.StateRoot = batch.NewStateRoot
 
 	// Commit outputs to storage.
-	if epoch.IsLeader() {
+	if epoch.IsLeader() || epoch.IsBackupWorker() {
 		if err := n.storage.Insert(n.ctx, batch.Outputs.MarshalCBOR(), 2); err != nil {
 			n.logger.Error("failed to commit outputs to storage",
 				"err", err,
@@ -543,8 +586,18 @@ func (n *Node) handleNewEvent(ev *roothash.Event) {
 
 	if n.group.GetEpochSnapshot().IsBackupWorker() {
 		// Backup worker, start processing a batch.
-		if err := n.HandleBatchFromCommittee(n.ctx, *dis.BatchHash, *dis.BlockHeader); err != nil {
-			n.logger.Error("backup worker failed to start processing batch",
+		n.logger.Info("backup worker activating and processing batch",
+			"input_hash", dis.BatchHash,
+			"header", dis.BlockHeader,
+		)
+
+		// This may block if we are unable to fetch the batch from storage or if
+		// the external batch channel is full. Be sure to abort early in this case.
+		ctx, cancel := context.WithTimeout(n.ctx, queueExternalBatchTimeout)
+		defer cancel()
+
+		if _, err := n.queueExternalBatch(ctx, *dis.BatchHash, *dis.BlockHeader); err != nil {
+			n.logger.Error("backup worker failed to queue external batch",
 				"err", err,
 			)
 		}
@@ -606,19 +659,24 @@ func (n *Node) checkIncomingQueue(force bool) {
 	processOk = true
 }
 
-func (n *Node) handleExternalBatch(batch *externalBatch) {
+func (n *Node) handleExternalBatch(batch *externalBatch) error {
+	// If we are not waiting for a batch, don't do anything.
+	if _, ok := n.state.(StateWaitingForBatch); !ok {
+		return errIncorrectState
+	}
+
 	epoch := n.group.GetEpochSnapshot()
 
-	// We can only receive external batches if we are a leader or a backup worker.
-	if !epoch.IsLeader() && !epoch.IsBackupWorker() {
+	// We can only receive external batches if we are a worker or a backup worker.
+	if !epoch.IsWorker() && !epoch.IsBackupWorker() {
 		n.logger.Error("got external batch while in incorrect role")
-		return
+		return errIncorrectRole
 	}
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.currentBlock.Header.Equal(&batch.header) {
 		n.startProcessingBatch(batch.batch)
-		return
+		return nil
 	}
 
 	// Check if the current block is older than what is expected we base our batch
@@ -629,11 +687,13 @@ func (n *Node) handleExternalBatch(batch *externalBatch) {
 		n.logger.Warn("got external batch based on incompatible header",
 			"header", batch.header,
 		)
-		return
+		return errIncomatibleHeader
 	}
 
 	// Wait for the correct block to arrive.
 	n.transition(StateWaitingForBlock{batch.batch, &batch.header})
+
+	return nil
 }
 
 func (n *Node) worker() {
@@ -730,7 +790,8 @@ func (n *Node) worker() {
 		case batch := <-n.incomingExtBatch:
 			// New incoming batch from an external source (compute committee or
 			// roothash discrepancy event).
-			n.handleExternalBatch(batch)
+			err := n.handleExternalBatch(batch)
+			batch.ch <- err
 		}
 	}
 }

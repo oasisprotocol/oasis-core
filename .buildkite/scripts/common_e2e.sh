@@ -2,66 +2,14 @@
 # Common functions for E2E tests
 ################################
 
-run_dummy_node_go_dummy() {
-    local datadir=/tmp/ekiden-dummy-data
-    rm -rf ${datadir}
+# Temporary test base directory.
+TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
-        --grpc.port 42261 \
-        --grpc.log.verbose_debug \
-        --epochtime.backend mock \
-        --beacon.backend insecure \
-        --storage.backend memory \
-        --scheduler.backend trivial \
-        --registry.backend memory \
-        --datadir ${datadir} \
-        &
-}
-
-run_dummy_node_go_tm() {
-    local datadir=/tmp/ekiden-dummy-data
-    rm -rf ${datadir}
-
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
-        --grpc.port 42261 \
-        --grpc.log.verbose_debug \
-        --epochtime.backend tendermint \
-        --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
-        --storage.backend memory \
-        --scheduler.backend trivial \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.log.debug \
-        --datadir ${datadir} \
-        &
-}
-
-run_dummy_node_go_tm_mock() {
-    local datadir=/tmp/ekiden-dummy-data
-    rm -rf ${datadir}
-
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
-        --grpc.port 42261 \
-        --grpc.log.verbose_debug \
-        --epochtime.backend tendermint_mock \
-        --beacon.backend insecure \
-        --storage.backend memory \
-        --scheduler.backend trivial \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.log.debug \
-        --datadir ${datadir} \
-        &
-}
-
-run_committee_go_tm() {
-    local base_datadir=/tmp/ekiden-committee-data
+# Run a Tendermint validator committee and a storage node.
+#
+# Sets EKIDEN_TM_GENESIS_FILE and EKIDEN_STORAGE_PORT.
+run_backend_tendermint_committee() {
+    local base_datadir=${TEST_BASE_DIR}/committee-data
     local validator_files=""
     let nodes=3
 
@@ -81,7 +29,7 @@ run_committee_go_tm() {
     done
 
     # Create the genesis document.
-    local genesis_file=/tmp/genesis.json
+    local genesis_file=${TEST_BASE_DIR}/genesis.json
     rm -Rf ${genesis_file}
 
     ${WORKDIR}/go/ekiden/ekiden \
@@ -90,7 +38,7 @@ run_committee_go_tm() {
         ${validator_files}
 
     # Run the storage node.
-    local storage_datadir=/tmp/ekiden-storage
+    local storage_datadir=${TEST_BASE_DIR}/storage
     local storage_port=60000
     rm -Rf ${storage_datadir}
 
@@ -98,6 +46,7 @@ run_committee_go_tm() {
         storage node \
         --datadir ${storage_datadir} \
         --grpc.port ${storage_port} \
+        --log.file ${TEST_BASE_DIR}/storage.log \
         &
 
     # Run the validator nodes.
@@ -109,6 +58,7 @@ run_committee_go_tm() {
 
         ${WORKDIR}/go/ekiden/ekiden \
             --log.level debug \
+            --log.file ${TEST_BASE_DIR}/validator-${idx}.log \
             --grpc.port ${grpc_port} \
             --grpc.log.verbose_debug \
             --epochtime.backend tendermint \
@@ -127,122 +77,110 @@ run_committee_go_tm() {
             --datadir ${datadir} \
             &
     done
+
+    # Export some variables so compute workers can find them.
+    EKIDEN_STORAGE_PORT=${storage_port}
+    EKIDEN_TM_GENESIS_FILE=${genesis_file}
 }
 
+# Run a compute node.
+#
+# Requires that EKIDEN_TM_GENESIS_FILE and EKIDEN_STORAGE_PORT are
+# set. Exits with an error otherwise.
+#
+# Arguments:
+#   id - compute node index
+#   runtime - name of the runtime to use
+#
+# Any additional arguments are passed to the Go node.
 run_compute_node() {
     local id=$1
     shift
-    local extra_args=$*
-
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
-    # Generate port number.
-    let "port=id + 10000"
-
-    ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so &
-}
-
-run_compute_node_db() {
-    local id=$1
+    local runtime=$1
     shift
     local extra_args=$*
 
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
+    # Ensure the genesis file and storage port are available.
+    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" || "${EKIDEN_STORAGE_PORT:-}" == "" ]]; then
+        echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
+        exit 1
+    fi
+
+    local data_dir=${TEST_BASE_DIR}/worker-$id
+    rm -rf ${data_dir}
+    local cache_dir=${TEST_BASE_DIR}/worker-cache-$id
     rm -rf ${cache_dir}
+    local log_file=${TEST_BASE_DIR}/worker-$id.log
 
     # Generate port number.
-    let "port=id + 10000"
+    let grpc_port=id+10000
+    let client_port=id+11000
+    let p2p_port=id+12000
+    let tm_port=id+13000
 
-    RUST_BACKTRACE=1 ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/test-db-encryption.so &
+    ${WORKDIR}/go/ekiden/ekiden \
+        --log.level debug \
+        --grpc.port ${grpc_port} \
+        --grpc.log.verbose_debug \
+        --storage.backend client \
+        --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
+        --epochtime.backend tendermint \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --metrics.mode none \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.log.debug \
+        --worker.backend sandboxed \
+        --worker.binary ${WORKDIR}/target/debug/ekiden-worker \
+        --worker.cache_dir ${cache_dir} \
+        --worker.runtime.binary ${WORKDIR}/target/enclave/${runtime}.so \
+        --worker.runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --worker.client.port ${client_port} \
+        --worker.p2p.port ${p2p_port} \
+        --worker.leader.max_batch_size 1 \
+        --worker.key_manager.address 127.0.0.1:9003 \
+        --worker.key_manager.certificate ${WORKDIR}/tests/keymanager/km.pem \
+        --datadir ${data_dir} \
+        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
 }
 
-run_compute_node_logger() {
-    local id=$1
-    shift
-    local extra_args=$*
-
-    local log_path=/tmp/ekiden-test-logger-$id
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
-    # Generate port number.
-    let "port=id + 10000"
-
-    ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/test-logger.so &>$log_path &
+# Cat all compute node logs.
+cat_compute_logs() {
+    cat ${TEST_BASE_DIR}/worker-*.log
 }
 
-run_compute_node_storage_multilayer_remote() {
-    local id=$1
-    shift
-    local extra_args=$*
+# Wait for a number of compute nodes to register.
+#
+# Arguments:
+#   nodes - number of nodes to wait for
+wait_compute_nodes() {
+    local nodes=$1
 
-    local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
-    rm -rf ${db_dir}
-
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
-    # Generate port number.
-    let "port=id + 10000"
-
-    ${WORKDIR}/target/debug/ekiden-compute \
-        --worker-path ${WORKDIR}/target/debug/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
-        --no-persist-identity \
-        --max-batch-size 1 \
-        --entity-ethereum-address 627306090abab3a6e1400e9345bc60c78a8bef57 \
-        --storage-backend multilayer \
-        --storage-multilayer-local-storage-base "$db_dir" \
-        --storage-multilayer-bottom-backend remote \
-        --port ${port} \
-        --node-key-pair ${WORKDIR}/tests/committee_3_nodes/node${id}.key \
-        --key-manager-cert ${WORKDIR}/tests/keymanager/km.key \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so &
+    ${WORKDIR}/go/ekiden/ekiden debug dummy wait-nodes --nodes $1
 }
 
+# Set epoch.
+#
+# Arguments:
+#   epoch - epoch to set
+set_epoch() {
+    local epoch=$1
+
+    ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch --epoch $epoch
+}
+
+# Run a key manager node.
+#
+# Any arguments are passed to the key manager node.
 run_keymanager_node() {
     local extra_args=$*
 
-    local db_dir=/tmp/ekiden-test-keymanager
+    local db_dir=${TEST_BASE_DIR}/test-keymanager
     rm -rf ${db_dir}
 
     ${WORKDIR}/target/debug/ekiden-keymanager-node \
@@ -251,4 +189,148 @@ run_keymanager_node() {
         --storage-backend dummy \
         --storage-path ${db_dir} \
         ${extra_args} &
+}
+
+# Run a basic client.
+#
+# Sets EKIDEN_CLIENT_PID to the PID of the client process.
+#
+# Required arguments:
+#   runtime        - name of the runtime enclave to use (without .so); the
+#                    enclave must be available under target/enclave
+#   client         - name of the client binary to use (without -client)
+run_basic_client() {
+    local runtime=$1
+    local client=$2
+
+    ${WORKDIR}/target/debug/${client}-client \
+        --storage-backend remote \
+        --mr-enclave $(cat ${WORKDIR}/target/enclave/${runtime}.mrenclave) \
+        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        &
+    EKIDEN_CLIENT_PID=$!
+}
+
+# Global test counter used for parallelizing jobs.
+E2E_TEST_COUNTER=0
+
+# Run a specific test scenario.
+#
+# Required named arguments:
+#
+#   name           - unique test name
+#   scenario       - function that will start the compute nodes; see the
+#                    scenario function section below for details
+#   backend_runner - function that will prepare and run the backend services
+#   runtime        - name of the runtime enclave to use (without .so); the
+#                    enclave must be available under target/enclave
+#   client         - name of the client binary to use (without -client)
+#
+# Optional named arguments:
+#
+#   post_km_hook    - function that will run after the key manager node
+#                     has been started
+#   on_success_hook - function that will run after the client successfully
+#                     exits (default: assert_basic_success)
+#   client_runner   - function that will run the client (default: run_basic_client)
+#
+# Scenario function:
+#
+# The scenario function defines what will be executed during the test. It will
+# receive the following arguments when called:
+#
+#   runtime - the name of the runtime to use
+#
+run_test() {
+    # Required arguments.
+    local name scenario backend_runner runtime client
+    # Optional arguments with default values.
+    local post_km_hook=""
+    local on_success_hook="assert_basic_success"
+    local start_client_first=0
+    local client_runner=run_basic_client
+    # Load named arguments that override defaults.
+    local "${@}"
+
+    # Check if we should run this test.
+    if [[ "${TEST_FILTER:-}" == "" ]]; then
+        local test_index=$E2E_TEST_COUNTER
+        let E2E_TEST_COUNTER+=1 1
+
+        if [[ -n ${BUILDKITE_PARALLEL_JOB+x} ]]; then
+            let test_index%=BUILDKITE_PARALLEL_JOB_COUNT 1
+
+            if [[ $BUILDKITE_PARALLEL_JOB != $test_index ]]; then
+                echo "Skipping test '${name}' (assigned to different parallel build)."
+                return
+            fi
+        fi
+    elif [[ "${TEST_FILTER}" != "${name}" ]]; then
+        return
+    fi
+
+    echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${name}\e[0m\n"
+
+    # Cleanup logs.
+    rm -f ${TEST_BASE_DIR}/worker-*.log
+
+    # Start the key manager before starting anything else.
+    run_keymanager_node
+    sleep 1
+
+    # Run post key-manager startup hook.
+    if [[ "$post_km_hook" != "" ]]; then
+        $post_km_hook
+    fi
+
+    if [[ "${start_client_first}" == 0 ]]; then
+        # Start backend.
+        $backend_runner
+        sleep 1
+    fi
+
+    # Run the client.
+    $client_runner $runtime $client
+    local client_pid=$EKIDEN_CLIENT_PID
+
+    if [[ "${start_client_first}" == 1 ]]; then
+        # Start backend.
+        $backend_runner
+        sleep 1
+    fi
+
+    # Run scenario.
+    $scenario $runtime
+
+    # Wait on the client and check its exit status.
+    wait ${client_pid}
+
+    # Run on success hook.
+    if [[ "$on_success_hook" != "" ]]; then
+        $on_success_hook
+    fi
+
+    # Cleanup.
+    cleanup
+}
+
+####################
+# Common assertions.
+####################
+
+# Assert that there are were no round timeouts.
+assert_no_round_timeouts() {
+    cat_compute_logs | (! grep -q 'FireTimer')
+    cat_compute_logs | (! grep -q 'round failed')
+}
+
+# Assert that there were no discrepancies.
+assert_no_discrepancies() {
+    cat_compute_logs | (! grep -q 'discrepancy detected')
+}
+
+# Assert that all computations ran successfully without hiccups.
+assert_basic_success() {
+    assert_no_round_timeouts
+    assert_no_discrepancies
 }

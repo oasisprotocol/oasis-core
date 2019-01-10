@@ -95,7 +95,13 @@ func (p *process) worker() {
 	// Wait for the process to exit.
 	err := <-p.waitCh
 
-	p.logger.Warn("worker process terminated")
+	if err == nil {
+		p.logger.Warn("worker process terminated")
+	} else {
+		p.logger.Error("worker process terminated unexpectedly",
+			"err", err,
+		)
+	}
 
 	// Close connection after worker process has exited.
 	p.protocol.Close()
