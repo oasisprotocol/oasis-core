@@ -219,6 +219,18 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			w.keyManager,
 			false,
 		)
+	case host.BackendUnconfined:
+		h, err = host.NewSandboxedHost(
+			cfg.WorkerBinary,
+			rtCfg.Binary,
+			path.Join(cfg.CacheDir, rtCfg.ID.String()),
+			rtCfg.ID,
+			w.storage,
+			cfg.TEEHardware,
+			w.ias,
+			w.keyManager,
+			true,
+		)
 	case host.BackendMock:
 		h, err = host.NewMockHost()
 	default:
