@@ -37,8 +37,11 @@ const (
 	cfgKeyManagerCert    = "worker.key_manager.certificate"
 
 	// TODO: Support multiple runtimes.
-	cfgRuntimeBinary = "worker.runtime"
-	cfgRuntimeID     = "worker.runtime_id"
+	cfgRuntimeBinary = "worker.runtime.binary"
+	cfgRuntimeID     = "worker.runtime.id"
+	// XXX: This is needed until we decide how we want to actually register runtimes.
+	cfgRuntimeReplicaGroupSize       = "worker.runtime.replica_group_size"
+	cfgRuntimeReplicaGroupBackupSize = "worker.runtime.replica_group_backup_size"
 
 	cfgMaxQueueSize      = "worker.leader.max_queue_size"
 	cfgMaxBatchSize      = "worker.leader.max_batch_size"
@@ -49,6 +52,8 @@ const (
 	cfgClientAddresses = "worker.client.addresses"
 
 	cfgP2pPort = "worker.p2p.port"
+
+	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
 )
 
 // New creates a new worker.
@@ -79,7 +84,13 @@ func New(
 			return nil, err
 		}
 
-		runtimes = append(runtimes, RuntimeConfig{runtimeID, runtimeBinary})
+		runtimes = append(runtimes, RuntimeConfig{
+			ID:     runtimeID,
+			Binary: runtimeBinary,
+			// XXX: This is needed until we decide how we want to actually register runtimes.
+			ReplicaGroupSize:       uint64(viper.GetInt64(cfgRuntimeReplicaGroupSize)),
+			ReplicaGroupBackupSize: uint64(viper.GetInt64(cfgRuntimeReplicaGroupBackupSize)),
+		})
 	}
 
 	// Create new IAS proxy client.
@@ -153,6 +164,8 @@ func New(
 
 			ClientPort:      uint16(viper.GetInt(cfgClientPort)),
 			ClientAddresses: registerAddresses,
+
+			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
 		P2PPort:      uint16(viper.GetInt(cfgP2pPort)),
 		TEEHardware:  teeHardware,
@@ -180,6 +193,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	cmd.Flags().String(cfgRuntimeBinary, "", "Path to runtime binary")
 	cmd.Flags().String(cfgRuntimeID, "", "Runtime ID")
+	cmd.Flags().String(cfgRuntimeReplicaGroupSize, "1", "Number of workers in runtime replica group")
+	cmd.Flags().String(cfgRuntimeReplicaGroupBackupSize, "0", "Number of backup workers in runtime replica group")
 
 	cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
 	cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
@@ -190,6 +205,8 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use when registering this node (if not set, all non-loopback local interfaces will be used)")
 
 	cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
+
+	cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
 
 	for _, v := range []string{
 		cfgWorkerBackend,
@@ -205,6 +222,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cfgRuntimeBinary,
 		cfgRuntimeID,
+		cfgRuntimeReplicaGroupSize,
+		cfgRuntimeReplicaGroupBackupSize,
 
 		cfgMaxQueueSize,
 		cfgMaxBatchSize,
@@ -215,6 +234,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgClientAddresses,
 
 		cfgP2pPort,
+
+		cfgByzantineInjectDiscrepancies,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}

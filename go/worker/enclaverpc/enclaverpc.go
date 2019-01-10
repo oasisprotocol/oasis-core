@@ -43,7 +43,7 @@ func (c *Client) CallEnclave(ctx context.Context, request []byte) ([]byte, error
 
 // NewClient creates a new enclave RPC client instance.
 func NewClient(address string, certFile string, enclaveID []byte) (*Client, error) {
-	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	creds, err := credentials.NewClientTLSFromFile(certFile, "ekiden-node")
 	if err != nil {
 		return nil, err
 	}

@@ -15,8 +15,8 @@ func (n *Node) registerRuntime() error {
 
 	rtDesc := registry.Runtime{
 		ID:                     n.runtimeID,
-		ReplicaGroupSize:       1,
-		ReplicaGroupBackupSize: 0,
+		ReplicaGroupSize:       n.cfg.ReplicaGroupSize,
+		ReplicaGroupBackupSize: n.cfg.ReplicaGroupBackupSize,
 		StorageGroupSize:       1,
 		RegistrationTime:       uint64(time.Now().Unix()),
 	}
