@@ -11,6 +11,7 @@ use serde_cbor;
 
 use super::bytes::{B256, B512, B64, H256};
 use super::error::{Error, Result};
+use super::ring::signature::KeyPair;
 use super::ring::{digest, signature};
 use super::untrusted;
 
@@ -98,7 +99,7 @@ impl Signer for InMemorySigner {
     }
 
     fn get_public_key(&self) -> B256 {
-        B256::from(self.key_pair.public_key_bytes())
+        B256::from(self.key_pair.public_key().as_ref())
     }
 
     fn attest(&self, _data: &H256) -> Option<Vec<u8>> {

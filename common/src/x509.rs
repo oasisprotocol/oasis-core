@@ -242,7 +242,10 @@ mod test {
     fn test_x509_serialization() {
         // Generate new node private key and certificate.
         let rng = SystemRandom::new();
-        let seed = Ed25519KeyPair::generate_pkcs8(&rng).unwrap().to_vec();
+        let seed = Ed25519KeyPair::generate_pkcs8(&rng)
+            .unwrap()
+            .as_ref()
+            .to_vec();
         let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&seed)).unwrap();
         let signer = InMemorySigner::new(key_pair);
         let (tls_certificate, _) = Certificate::generate(&signer).unwrap();
