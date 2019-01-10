@@ -6,7 +6,7 @@ use ekiden_common::bytes::B256;
 use ekiden_common::entity::Entity;
 use ekiden_common::futures::Future;
 use ekiden_common::node::{Capabilities, Node};
-use ekiden_common::ring::signature::Ed25519KeyPair;
+use ekiden_common::ring::signature::{Ed25519KeyPair, KeyPair};
 use ekiden_common::signature::{InMemorySigner, Signed};
 use ekiden_common::untrusted;
 use ekiden_common::x509::Certificate;
@@ -19,7 +19,7 @@ pub fn populate_entity_registry(registry: Arc<EntityRegistryBackend>, public_key
     // Fake entity owning the compute nodes.
     let entity_sk =
         Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&B256::random())).unwrap();
-    let entity_pk = B256::from(entity_sk.public_key_bytes());
+    let entity_pk = B256::from(entity_sk.public_key().as_ref());
     let entity_signer = InMemorySigner::new(entity_sk);
     let signed_entity = Signed::sign(
         &entity_signer,
