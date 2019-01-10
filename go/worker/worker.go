@@ -3,6 +3,9 @@ package worker
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -12,6 +15,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -22,6 +27,11 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/host"
 	"github.com/oasislabs/ekiden/go/worker/ias"
 	"github.com/oasislabs/ekiden/go/worker/p2p"
+)
+
+const (
+	metricsProxySocketName = "metrics.sock"
+	tracingProxySocketName = "tracing.sock"
 )
 
 // RuntimeConfig is a single runtime's configuration.
@@ -79,6 +89,9 @@ type Worker struct {
 
 	runtimes map[signature.MapKey]*Runtime
 
+	netProxies map[string]NetworkProxy
+	socketDir  string
+
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	quitCh    chan struct{}
@@ -103,7 +116,7 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for the gRPC server and all runtimes to terminate.
+	// Wait for the gRPC server, all runtimes and all proxies to terminate.
 	go func() {
 		defer close(w.quitCh)
 		defer (w.cancelCtx)()
@@ -113,8 +126,19 @@ func (w *Worker) Start() error {
 			<-rt.node.Quit()
 		}
 
+		for _, proxy := range w.netProxies {
+			<-proxy.Quit()
+		}
+
 		<-w.grpc.Quit()
 	}()
+
+	// Start all the network proxies.
+	for _, proxy := range w.netProxies {
+		if err := proxy.Start(); err != nil {
+			return err
+		}
+	}
 
 	// Wait for all runtimes to be initialized.
 	go func() {
@@ -184,6 +208,10 @@ func (w *Worker) Stop() {
 		rt.workerHost.Stop()
 	}
 
+	for _, proxy := range w.netProxies {
+		proxy.Stop()
+	}
+
 	w.grpc.Stop()
 }
 
@@ -203,7 +231,13 @@ func (w *Worker) Cleanup() {
 		rt.workerHost.Cleanup()
 	}
 
+	for _, proxy := range w.netProxies {
+		proxy.Cleanup()
+	}
+
 	w.grpc.Cleanup()
+
+	os.RemoveAll(w.socketDir)
 }
 
 // Initialized returns a channel that will be closed when the worker is
@@ -231,6 +265,13 @@ func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
 }
 
 func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, err error) {
+	proxies := make(map[string]host.ProxySpecification)
+	for k, v := range w.netProxies {
+		proxies[k] = host.ProxySpecification{
+			ProxyType:  v.Type(),
+			SourceName: v.UnixPath(),
+		}
+	}
 	switch strings.ToLower(cfg.Backend) {
 	case host.BackendSandboxed:
 		h, err = host.NewSandboxedHost(
@@ -238,6 +279,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			rtCfg.Binary,
 			rtCfg.ID,
 			w.storage,
+			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
 			w.keyManager,
@@ -249,6 +291,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			rtCfg.Binary,
 			rtCfg.ID,
 			w.storage,
+			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
 			w.keyManager,
@@ -325,6 +368,17 @@ func newWorker(
 		enabled = true
 	}
 
+	startedOk := false
+	socketDir, err := ioutil.TempDir("", "ekiden-proxy-sockets")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if !startedOk {
+			os.RemoveAll(socketDir)
+		}
+	}()
+
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
@@ -339,6 +393,8 @@ func newWorker(
 		ias:        ias,
 		keyManager: keyManager,
 		runtimes:   make(map[signature.MapKey]*Runtime),
+		netProxies: make(map[string]NetworkProxy),
+		socketDir:  socketDir,
 		ctx:        ctx,
 		cancelCtx:  cancelCtx,
 		quitCh:     make(chan struct{}),
@@ -369,6 +425,25 @@ func newWorker(
 		}
 		w.p2p = p2p
 
+		// Create required network proxies.
+		metricsConfig := metrics.GetServiceConfig()
+		if metricsConfig.Mode == "push" {
+			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "stream", path.Join(w.socketDir, metricsProxySocketName), metricsConfig.Address)
+			if err != nil {
+				return nil, err
+			}
+			w.netProxies[host.MetricsProxyKey] = proxy
+		}
+
+		tracingConfig := tracing.GetServiceConfig()
+		if tracingConfig.Enabled {
+			proxy, err := NewNetworkProxy(host.TracingProxyKey, "dgram", path.Join(w.socketDir, tracingProxySocketName), tracingConfig.AgentAddress)
+			if err != nil {
+				return nil, err
+			}
+			w.netProxies[host.TracingProxyKey] = proxy
+		}
+
 		// Register all configured runtimes.
 		for _, rtCfg := range cfg.Runtimes {
 			if err := w.registerRuntime(&cfg, &rtCfg); err != nil {
@@ -378,6 +453,7 @@ func newWorker(
 		}
 	}
 
+	startedOk = true
 	return w, nil
 }
 

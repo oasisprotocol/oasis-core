@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,14 +23,12 @@ import (
 	cias "github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
 	"github.com/oasislabs/ekiden/go/worker/ias"
-)
-
-var (
-	_ Host = (*sandboxedHost)(nil)
 )
 
 const (
@@ -37,6 +36,11 @@ const (
 	BackendSandboxed = "sandboxed"
 	// BackendUnconfined is the name of the no-sandbox backend.
 	BackendUnconfined = "unconfined"
+
+	// MetricsProxyKey is the key used to configure the metrics proxy.
+	MetricsProxyKey = "metrics"
+	// TracingProxyKey is the key used to configure the tracing proxy.
+	TracingProxyKey = "tracing"
 
 	// Worker connect timeout.
 	workerConnectTimeout = 5 * time.Second
@@ -57,6 +61,34 @@ const (
 	workerMountRuntimeBin = "/runtime.so"
 	workerMountLibDir     = "/usr/lib"
 )
+
+var (
+	_ Host = (*sandboxedHost)(nil)
+
+	// Paths for proxy sockets inside the sandbox.
+	workerMountSocketMap = map[string]string{
+		MetricsProxyKey: "/prometheus-proxy.sock",
+		TracingProxyKey: "/jaeger-proxy.sock",
+	}
+
+	// Ports inside the sandbox to forward to the outside.
+	workerProxyInnerAddrs = map[string]string{
+		MetricsProxyKey: "127.0.0.1:8080",
+		TracingProxyKey: "127.0.0.1:6831",
+	}
+)
+
+// ProxySpecification contains all necessary details about a single proxy.
+type ProxySpecification struct {
+	// ProxyType is the type of this proxy ("stream" or "dgram").
+	ProxyType string
+	// SourceName is the path of the unix socket outside the sandbox.
+	SourceName string
+	// mapName is the name of the unix socket inside the sandbox.
+	mapName string
+	// innerAddr is the address on which the proxy will listen inside the sandbox.
+	innerAddr string
+}
 
 type process struct {
 	process  *os.Process
@@ -111,14 +143,11 @@ func (p *process) worker() {
 	close(p.quitCh)
 }
 
-func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string) ([]string, error) {
+func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification) ([]string, error) {
 	// Prepare general arguments.
 	args := []string{
 		// Unshare all possible namespaces.
 		"--unshare-all",
-		// TODO: Proxy prometheus and tracing over an AF_LOCAL socket to avoid this.
-		"--share-net",
-		"--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
 		// Drop all capabilities.
 		"--cap-drop", "ALL",
 		// Pass SECCOMP policy via file descriptor 4.
@@ -141,6 +170,11 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string) ([]strin
 		"--new-session",
 		// Change working directory to /.
 		"--chdir", "/",
+	}
+
+	// Append any extra bind options for proxies.
+	for _, pair := range proxies {
+		args = append(args, "--bind", pair.SourceName, pair.mapName)
 	}
 
 	// Resolve worker binary library dependencies so we can mount them in.
@@ -179,11 +213,28 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string) ([]strin
 	return args, nil
 }
 
-func prepareWorkerArgs(hostSocket, runtimeBinary string) []string {
-	return []string{
+func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]ProxySpecification) []string {
+	args := []string{
 		"--host-socket", hostSocket,
-		runtimeBinary,
 	}
+	if _, ok := proxies[MetricsProxyKey]; ok {
+		config := metrics.GetServiceConfig()
+		args = append(args, "--prometheus-mode", config.Mode)
+		args = append(args, "--prometheus-metrics-addr", workerProxyInnerAddrs[MetricsProxyKey])
+		args = append(args, "--prometheus-push-job-name", config.JobName)
+		args = append(args, "--prometheus-push-instance-label", config.InstanceLabel)
+	}
+	if _, ok := proxies[TracingProxyKey]; ok {
+		config := tracing.GetServiceConfig()
+		args = append(args, "--tracing-enable")
+		args = append(args, "--tracing-sample-probability", strconv.FormatFloat(config.SamplerParam, 'f', -1, 64))
+		args = append(args, "--tracing-agent-addr", workerProxyInnerAddrs[TracingProxyKey])
+	}
+	for name, proxy := range proxies {
+		args = append(args, fmt.Sprintf("--proxy-bind=%s,%s,%s,%s", proxy.ProxyType, name, proxy.innerAddr, proxy.mapName))
+	}
+	args = append(args, runtimeBinary)
+	return args
 }
 
 // HostRequest is an internal request to manager goroutine that is dispatched
@@ -215,6 +266,7 @@ type sandboxedHost struct { // nolint: maligned
 	runtimeBinary string
 	noSandbox     bool
 
+	proxies     map[string]ProxySpecification
 	storage     storage.Backend
 	teeHardware node.TEEHardware
 	ias         *ias.IAS
@@ -408,6 +460,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		workerArgs = prepareWorkerArgs(
 			hostSocket,
 			h.runtimeBinary,
+			h.proxies,
 		)
 	} else {
 		sandboxArgs = []string{
@@ -419,6 +472,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		workerArgs = prepareWorkerArgs(
 			workerMountHostSocket,
 			workerMountRuntimeBin,
+			h.proxies,
 		)
 	}
 
@@ -468,7 +522,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 
 	if !h.noSandbox {
 		// Instruct the sandbox how to prepare itself.
-		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary) // nolint: govet
+		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.proxies) // nolint: govet
 		if err != nil {
 			return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
 		}
@@ -710,6 +764,7 @@ func NewSandboxedHost(
 	runtimeBinary string,
 	runtimeID signature.PublicKey,
 	storage storage.Backend,
+	proxies map[string]ProxySpecification,
 	teeHardware node.TEEHardware,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
@@ -722,10 +777,20 @@ func NewSandboxedHost(
 		return nil, errors.New("runtime binary not configured")
 	}
 
+	knownProxies := make(map[string]ProxySpecification)
+	for name, mappedSocket := range workerMountSocketMap {
+		if proxy, ok := proxies[name]; ok {
+			proxy.mapName = mappedSocket
+			proxy.innerAddr = workerProxyInnerAddrs[name]
+			knownProxies[name] = proxy
+		}
+	}
+
 	host := &sandboxedHost{
 		workerBinary:          workerBinary,
 		runtimeBinary:         runtimeBinary,
 		noSandbox:             noSandbox,
+		proxies:               knownProxies,
 		storage:               storage,
 		teeHardware:           teeHardware,
 		ias:                   ias,

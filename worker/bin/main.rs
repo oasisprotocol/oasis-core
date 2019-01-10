@@ -27,6 +27,8 @@ use ekiden_worker_api::WorkerHandler;
 use ekiden_worker::protocol::ProtocolHandler;
 use ekiden_worker::worker::{Worker, WorkerConfiguration};
 
+mod proxy;
+
 /// Register known components for dependency injection.
 fn register_components(known_components: &mut KnownComponents) {
     // Environment.
@@ -60,6 +62,7 @@ fn main() {
         )
         .args(&known_components.get_arguments())
         .args(&ekiden_tracing::get_arguments())
+        .args(&proxy::get_arguments())
         .get_matches();
 
     // Initialize logger.
@@ -82,6 +85,11 @@ fn main() {
         .build_with_arguments(&matches)
         .expect("failed to initialize component container");
 
+    let environment = container.inject::<Environment>().unwrap();
+
+    // Start the networking proxies.
+    proxy::start_proxies(environment.clone(), &matches);
+
     // Initialize metric collector.
     let metrics = container
         .inject_owned::<MetricCollector>()
@@ -96,8 +104,6 @@ fn main() {
     if !Path::new(&runtime_filename).exists() {
         panic!("Could not find runtime: {}", runtime_filename);
     }
-
-    let environment = container.inject::<Environment>().unwrap();
 
     // Connect to passed UNIX socket.
     let socket = block_on(
