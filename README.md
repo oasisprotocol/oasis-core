@@ -41,54 +41,23 @@ source folder on the host and any changes made are immediately visible to both
 the host and the Docker container. Before compiling Ekiden in the container,
 remember to [setup the repository authentication](https://github.com/oasislabs/runtime-ethereum#configuring-repository-authentication) inside the Docker container as well!
 
-## Building the Go node
+## Building
 
-The Ekiden node is written in Go and lives under `go/`. For building the Go node in
-the development container:
+To build everything required for running an Ekiden node, simply execute:
 ```
 # cd /code
-# make -C go
+# make
 ```
 
-## Building a test runtime and client
-
-For building enclaves we have our own `cargo ekiden` extension for Cargo which
-should be installed:
-```
-# cd /code
-# cargo install --force --path tools
-```
-
-To build the token runtime:
-```
-# cd /code/tests/runtimes/token
-# cargo ekiden build-enclave --output-identity
-```
-
-The built enclave will be stored under `target/enclave/token.so`.
-
-To build the token runtime client:
-```
-# cd /code/tests/clients/token
-# cargo build
-```
-
-## Building the key manager enclave
-
-The key manager enclave handles secure storage of keys.
-
-To build it:
-```
-# cd /code/key-manager/dummy/enclave
-# cargo ekiden build-enclave --output-identity
-```
-
-The built enclave will be stored under `target/enclave/ekiden-keymanager-trusted.so`.
-
+This will build all the required parts (build tools, Ekiden node, worker process,
+key manager and test runtimes).
 
 ## Running an Ekiden node
 
-Starting directory is
+Make sure that you have built everything as described in the *Building* section
+before proceeding.
+
+Starting directory for all commands is `/code`.
 ```
 # cd /code
 ```
@@ -98,48 +67,37 @@ these in a separate container shell, attached to the same container. The
 following examples use the token runtime, but the process is the same for any
 runtime.
 
+*These instructions specify how to run a single-node "network" for development
+purposes. For more complex setups see E2E test helpers in `.buildkite/scripts/common_e2e.sh`.*
+
 To start the key manager:
 ```
-# cargo run -p ekiden-keymanager-node --bin ekiden-keymanager-node -- \
+# ./target/debug/ekiden-keymanager-node \
     --enclave target/enclave/ekiden-keymanager-trusted.so
 ```
 
-To start the shared dummy node:
+To start a single worker using the test `token` runtime:
 ```
-# ./go/ekiden/ekiden --datadir /tmp/ekiden-dummy-data --epochtime.backend mock --grpc.port 42261
-```
-
-To start the compute node you first need to build the worker:
-```
-# cargo build
+# ./go/ekiden/ekiden --config configs/single_node.yml
 ```
 
-And then run at least two compute nodes each with its unique
-`--worker-cache-dir` parameter for the token runtime, for example:
-```
-# cargo run -p ekiden-compute -- \
-    --entity-ethereum-address 0000000000000000000000000000000000000000 \
-    --storage-backend remote \
-    --no-persist-identity \
-    --worker-cache-dir /tmp/worker1-cache \
-    --worker-path /code/target/debug/ekiden-worker \
-    target/enclave/token.so
-```
+The node will store data in `/tmp/ekiden-node-data`, so in case you restart it
+you may need to remove this directory first.
 
-The runtime's compute node will listen on `127.0.0.1` (loopback), TCP port
-`9001` by default.
+*More information on the Go node parameters is [available here](go/README.md).*
 
-After starting the nodes, to manually advance the epoch in the shared dummy
-node:
+To test that the single node setup works you can use the built test client for the
+`token` runtime:
 ```
-# ./go/ekiden/ekiden debug dummy set-epoch --epoch 1
+# ./target/debug/token-client \
+    --mr-enclave $(cat target/enclave/token.mrenclave) \
+    --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+    --storage-backend remote
 ```
 
-More information on the Go node parameters is [available here](go/README.md).
-
-Development notes:
-
-* If you are developing a runtime and changing things, be sure to either use the `--no-persist-identity` flag or remove the referenced enclave identity file (e.g., `/tmp/token.identity.pb`). Otherwise the compute node will fail to start as it will be impossible to unseal the old identity. For more information about the content of enclave identity check [enclave identity documentation](docs/enclave-identity.md#state).
+The single worker is configured with a 30-second epoch, so you may initially
+need to wait for the first epoch to pass before the test client will make any
+progress.
 
 ## Running tests and benchmarks
 

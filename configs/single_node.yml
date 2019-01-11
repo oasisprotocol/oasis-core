@@ -1,0 +1,71 @@
+############################################
+# Single node configuration for development.
+############################################
+#
+# NOTE: This sets up a single node that is a Tendermint validator,
+#       a storage node and an Ekiden worker at the same time. In
+#       actual deployments these nodes will likely run separately.
+#
+datadir: /tmp/ekiden-node-data
+
+# Logging.
+log:
+  level: debug
+
+# Internal gRPC services.
+grpc:
+  port: 42261
+  log:
+    verbose_debug: true
+
+# Worker configuration.
+worker:
+  backend: sandboxed
+  binary: /code/target/debug/ekiden-worker
+  cache_dir: /tmp/ekiden-worker-cache
+  runtime:
+    id: "0000000000000000000000000000000000000000000000000000000000000000"
+    binary: /code/target/enclave/token.so
+    replica_group_size: 1
+    replica_group_backup_size: 0
+  client:
+    port: 9200
+    addresses:
+      - "127.0.0.1:9200"
+  p2p:
+    port: 9100
+  key_manager:
+    address: "127.0.0.1:9003"
+    certificate: /code/tests/keymanager/km.pem
+
+# Epochtime backend.
+epochtime:
+  backend: tendermint
+  tendermint:
+    # This makes each epoch last for 30 tendermint blocks.
+    interval: 30
+
+# Random beacon backend.
+beacon:
+  backend: tendermint
+
+# Storage backend.
+storage:
+  backend: memory
+
+# Scheduler backend.
+scheduler:
+  backend: trivial
+
+# Registry backend.
+registry:
+  backend: tendermint
+
+# Roothash backend.
+roothash:
+  backend: tendermint
+
+# Tendermint backend configuration.
+tendermint:
+  consensus:
+    timeout_commit: 1s
