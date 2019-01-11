@@ -35,6 +35,7 @@ import (
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -54,6 +55,10 @@ const (
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
 	cfgLogDebug = "tendermint.log.debug"
+
+	cfgDebugBootstrapAddress  = "tendermint.debug.bootstrap.address"
+	cfgDebugBootstrapNodeAddr = "tendermint.debug.bootstrap.node_addr"
+	cfgDebugBootstrapNodeName = "tendermint.debug.bootstrap.node_name"
 )
 
 var (
@@ -70,6 +75,10 @@ var (
 	flagABCIPruneNumKept  int64
 
 	flagLogDebug bool
+
+	flagDebugBootstrapAddress  string
+	flagDebugBootstrapNodeAddr string
+	flagDebugBoostrapNodeName  string
 )
 
 type tendermintService struct {
@@ -327,57 +336,14 @@ func (t *tendermintService) lazyInit() error {
 		tendermintPV.Save()
 	}
 
-	var (
-		tenderminGenesisProvider tmnode.GenesisDocProvider
-		tmGenDoc                 *tmtypes.GenesisDoc
-		genDoc                   GenesisDocument
-	)
-	genFile := tenderConfig.GenesisFile()
-	if _, err = os.Lstat(genFile); err != nil && os.IsNotExist(err) {
-		t.Logger.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
-		genDoc.Validators = []*GenesisValidator{
-			{
-				PubKey: t.validatorKey.Public(),
-				Name:   "ekiden-dummy",
-				Power:  10,
-			},
-		}
-		genDoc.GenesisTime = time.Now()
-	} else {
-		// The genesis document is just an array of GenesisValidator(s)
-		// in JSON format for now.
-		var b []byte
-
-		if b, err = ioutil.ReadFile(genFile); err != nil {
-			return errors.Wrap(err, "tendermint: failed to read genesis doc")
-		}
-
-		if err = json.Unmarshal(b, &genDoc); err != nil {
-			return errors.Wrap(err, "tendermint: failed to parse genesis doc")
-		}
-
-		// Since validators are static for the moment, just have every
-		// node open persistent connections to all the validators.
-		var addrs []string
-		for _, v := range genDoc.Validators {
-			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
-			vAddr := vPubKey.Address().String() + "@" + v.CoreAddress
-
-			if v.PubKey.Equal(t.validatorKey.Public()) {
-				// This validator entry is the current node, set the
-				// node name to that specified in the genesis document.
-				tenderConfig.Moniker = v.Name
-				continue
-			}
-
-			addrs = append(addrs, vAddr)
-		}
-		tenderConfig.P2P.PersistentPeers = strings.Join(addrs, ",")
+	tmGenDoc, err := t.getGenesis(tenderConfig)
+	if err != nil {
+		t.Logger.Error("failed to obtain genesis document",
+			"err", err,
+		)
+		return err
 	}
-	if tmGenDoc, err = newTMGenesisDoc(&genDoc); err != nil {
-		return errors.Wrap(err, "tendermint: failed to create genesis doc")
-	}
-	tenderminGenesisProvider = func() (*tmtypes.GenesisDoc, error) {
+	tenderminGenesisProvider := func() (*tmtypes.GenesisDoc, error) {
 		return tmGenDoc, nil
 	}
 
@@ -402,6 +368,98 @@ func (t *tendermintService) lazyInit() error {
 	t.isInitialized = true
 
 	return nil
+}
+
+func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.GenesisDoc, error) {
+	var (
+		genDoc   *bootstrap.GenesisDocument
+		isSingle bool
+	)
+
+	genFile := tenderConfig.GenesisFile()
+	if addr := viper.GetString(cfgDebugBootstrapAddress); addr != "" {
+		t.Logger.Warn("The bootstrap provisioning server is NOT FOR PRODUCTION USE.")
+		var (
+			nodeAddr = viper.GetString(cfgDebugBootstrapNodeAddr)
+			nodeName = viper.GetString(cfgDebugBootstrapNodeName)
+			err      error
+		)
+		if nodeAddr == "" && nodeName == "" {
+			genDoc, err = bootstrap.Client(addr)
+			if err != nil {
+				return nil, errors.Wrap(err, "tendermint: client bootstrap failed")
+			}
+		} else {
+			if err = common.IsAddrPort(nodeAddr); err != nil {
+				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node address")
+			}
+			if err = common.IsFQDN(nodeName); err != nil {
+				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node name")
+			}
+
+			validator := &bootstrap.GenesisValidator{
+				PubKey:      t.validatorKey.Public(),
+				Name:        common.NormalizeFQDN(nodeName),
+				CoreAddress: nodeAddr,
+			}
+			genDoc, err = bootstrap.Validator(addr, validator)
+			if err != nil {
+				return nil, errors.Wrap(err, "tendermint: validator bootstrap failed")
+			}
+		}
+	} else if _, err := os.Lstat(genFile); err != nil && os.IsNotExist(err) {
+		t.Logger.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
+		genDoc = &bootstrap.GenesisDocument{
+			Validators: []*bootstrap.GenesisValidator{
+				{
+					PubKey: t.validatorKey.Public(),
+					Name:   "ekiden-dummy",
+					Power:  10,
+				},
+			},
+			GenesisTime: time.Now(),
+		}
+		isSingle = true
+	} else {
+		// The genesis document is just an array of GenesisValidator(s)
+		// in JSON format for now.
+		b, err := ioutil.ReadFile(genFile)
+		if err != nil {
+			return nil, errors.Wrap(err, "tendermint: failed to read genesis doc")
+		}
+
+		genDoc = new(bootstrap.GenesisDocument)
+		if err = json.Unmarshal(b, &genDoc); err != nil {
+			return nil, errors.Wrap(err, "tendermint: failed to parse genesis doc")
+		}
+	}
+
+	if !isSingle {
+		// Since validators are static for the moment, just have every
+		// node open persistent connections to all the validators.
+		var addrs []string
+		for _, v := range genDoc.Validators {
+			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
+			vAddr := vPubKey.Address().String() + "@" + v.CoreAddress
+
+			if v.PubKey.Equal(t.validatorKey.Public()) {
+				// This validator entry is the current node, set the
+				// node name to that specified in the genesis document.
+				tenderConfig.Moniker = v.Name
+				continue
+			}
+
+			addrs = append(addrs, vAddr)
+		}
+		tenderConfig.P2P.PersistentPeers = strings.Join(addrs, ",")
+	}
+
+	tmGenDoc, err := genDoc.ToTendermint()
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
+	}
+
+	return tmGenDoc, nil
 }
 
 func (t *tendermintService) worker() {
@@ -483,6 +541,9 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&flagABCIPruneStrategy, cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	cmd.Flags().Int64Var(&flagABCIPruneNumKept, cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	cmd.Flags().BoolVar(&flagLogDebug, cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
+	cmd.Flags().StringVar(&flagDebugBootstrapAddress, cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
+	cmd.Flags().StringVar(&flagDebugBootstrapNodeAddr, cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
+	cmd.Flags().StringVar(&flagDebugBoostrapNodeName, cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
 
 	for _, v := range []string{
 		cfgCoreGenesisFile,
@@ -493,45 +554,10 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgABCIPruneStrategy,
 		cfgABCIPruneNumKept,
 		cfgLogDebug,
+		cfgDebugBootstrapAddress,
+		cfgDebugBootstrapNodeAddr,
+		cfgDebugBootstrapNodeName,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
-}
-
-// GenesisDocument is the ekiden format tendermint GenesisDocument.
-type GenesisDocument struct {
-	Validators  []*GenesisValidator `json:"validators"`
-	GenesisTime time.Time           `json:"genesis_time"`
-}
-
-// GenesisValidator is the ekiden format tendermint GenesisValidator
-type GenesisValidator struct {
-	PubKey      signature.PublicKey `json:"pub_key"`
-	Name        string              `json:"name"`
-	Power       int64               `json:"power"`
-	CoreAddress string              `json:"core_address"`
-}
-
-func newTMGenesisDoc(srcDoc *GenesisDocument) (*tmtypes.GenesisDoc, error) {
-	doc := tmtypes.GenesisDoc{
-		ChainID:         "0xa515",
-		GenesisTime:     srcDoc.GenesisTime,
-		ConsensusParams: tmtypes.DefaultConsensusParams(),
-	}
-
-	var tmValidators []tmtypes.GenesisValidator
-	for _, v := range srcDoc.Validators {
-		pk := crypto.PublicKeyToTendermint(&v.PubKey)
-		validator := tmtypes.GenesisValidator{
-			Address: pk.Address(),
-			PubKey:  pk,
-			Power:   v.Power,
-			Name:    v.Name,
-		}
-		tmValidators = append(tmValidators, validator)
-	}
-
-	doc.Validators = tmValidators
-
-	return &doc, nil
 }

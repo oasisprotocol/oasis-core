@@ -27,14 +27,14 @@ var (
 		Short: "dump ABCI mux state as JSON",
 		Run:   doDumpMuxState,
 	}
-
-	logger = logging.GetLogger("cmd/tendermint")
 )
 
 func doDumpMuxState(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
+
+	logger := logging.GetLogger("cmd/debug/tendermint/dump-abci-mux-state")
 
 	state, err := inspector.OpenMuxState(stateFilename)
 	if err != nil {
@@ -70,6 +70,7 @@ func doDumpMuxState(cmd *cobra.Command, args []string) {
 
 // Register registers the tendermint sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
+	registerBootstrap(tmCmd)
 	tmDumpMuxStateCmd.Flags().StringVarP(&stateFilename, "state", "s", "abci-mux-state.bolt.db", "ABCI mux state file to dump")
 
 	tmCmd.AddCommand(tmDumpMuxStateCmd)
