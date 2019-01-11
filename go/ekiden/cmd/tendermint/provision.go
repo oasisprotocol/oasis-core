@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/tendermint"
+	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 )
 
 const (
@@ -84,7 +84,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	validator := tendermint.GenesisValidator{
+	validator := bootstrap.GenesisValidator{
 		PubKey: id.NodeKey.Public(),
 	}
 
@@ -134,7 +134,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 }
 
-func provisionInteractive(validator *tendermint.GenesisValidator) error {
+func provisionInteractive(validator *bootstrap.GenesisValidator) error {
 	var qs []*survey.Question
 
 	if flagNodeName == "" || common.IsFQDN(flagNodeName) != nil {

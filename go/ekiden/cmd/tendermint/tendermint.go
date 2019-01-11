@@ -12,7 +12,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/tendermint"
+	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 )
 
 const cfgGenesisFile = "genesis_file"
@@ -54,7 +54,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		common.EarlyLogAndExit(err)
 	}
 
-	validators := make([]*tendermint.GenesisValidator, 0, len(args))
+	validators := make([]*bootstrap.GenesisValidator, 0, len(args))
 	for _, v := range args {
 		b, err := ioutil.ReadFile(v)
 		if err != nil {
@@ -65,7 +65,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		var validator tendermint.GenesisValidator
+		var validator bootstrap.GenesisValidator
 		if err := json.Unmarshal(b, &validator); err != nil {
 			logger.Error("failed to parse genesis validator",
 				"err", err,
@@ -78,7 +78,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		validators = append(validators, &validator)
 	}
 
-	doc := &tendermint.GenesisDocument{
+	doc := &bootstrap.GenesisDocument{
 		Validators:  validators,
 		GenesisTime: time.Now(),
 	}
