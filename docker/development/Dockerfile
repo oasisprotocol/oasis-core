@@ -85,7 +85,7 @@ RUN . $NVM_DIR/nvm.sh && \
     nvm install lts/carbon --latest-npm && \
     nvm use lts/carbon && \
     nvm alias default node && \
-    npm install -g truffle@4.1
+    npm install -g truffle-oasis
 
 # Install golang 1.11 and utilities.
 RUN wget https://dl.google.com/go/go1.11.1.linux-amd64.tar.gz && \
