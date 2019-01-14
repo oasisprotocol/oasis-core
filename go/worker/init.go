@@ -51,10 +51,40 @@ const (
 	cfgClientPort      = "worker.client.port"
 	cfgClientAddresses = "worker.client.addresses"
 
-	cfgP2pPort = "worker.p2p.port"
+	cfgP2pPort      = "worker.p2p.port"
+	cfgP2pAddresses = "worker.p2p.addresses"
 
 	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
 )
+
+func parseAddressList(addresses []string) ([]node.Address, error) {
+	var output []node.Address
+	for _, rawAddress := range addresses {
+		rawIP, rawPort, err := net.SplitHostPort(rawAddress)
+		if err != nil {
+			return nil, fmt.Errorf("malformed address: %s", err)
+		}
+
+		port, err := strconv.ParseUint(rawPort, 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("malformed port: %s", rawPort)
+		}
+
+		ip := net.ParseIP(rawIP)
+		if ip == nil {
+			return nil, fmt.Errorf("malformed ip address: %s", rawIP)
+		}
+
+		var address node.Address
+		if err := address.FromIP(ip, uint16(port)); err != nil {
+			return nil, fmt.Errorf("unknown address family: %s", rawIP)
+		}
+
+		output = append(output, address)
+	}
+
+	return output, nil
+}
 
 // New creates a new worker.
 func New(
@@ -117,30 +147,13 @@ func New(
 	maxBatchTimeout := viper.GetDuration(cfgMaxBatchTimeout)
 
 	// Parse register address overrides.
-	var registerAddresses []node.Address
-	rawRegisterAddresses := viper.GetStringSlice(cfgClientAddresses)
-	for _, rawAddress := range rawRegisterAddresses {
-		rawIP, rawPort, err := net.SplitHostPort(rawAddress)
-		if err != nil {
-			return nil, fmt.Errorf("malformed address: %s", err)
-		}
-
-		port, err := strconv.ParseUint(rawPort, 10, 16)
-		if err != nil {
-			return nil, fmt.Errorf("malformed port: %s", rawPort)
-		}
-
-		ip := net.ParseIP(rawIP)
-		if ip == nil {
-			return nil, fmt.Errorf("malformed ip address: %s", rawIP)
-		}
-
-		var address node.Address
-		if err := address.FromIP(ip, uint16(port)); err != nil {
-			return nil, fmt.Errorf("unknown address family: %s", rawIP)
-		}
-
-		registerAddresses = append(registerAddresses, address)
+	clientAddresses, err := parseAddressList(viper.GetStringSlice(cfgClientAddresses))
+	if err != nil {
+		return nil, err
+	}
+	p2pAddresses, err := parseAddressList(viper.GetStringSlice(cfgP2pAddresses))
+	if err != nil {
+		return nil, err
 	}
 
 	// Parse TEE hardware setting.
@@ -163,11 +176,12 @@ func New(
 			MaxBatchTimeout:   maxBatchTimeout,
 
 			ClientPort:      uint16(viper.GetInt(cfgClientPort)),
-			ClientAddresses: registerAddresses,
+			ClientAddresses: clientAddresses,
 
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
 		P2PPort:      uint16(viper.GetInt(cfgP2pPort)),
+		P2PAddresses: p2pAddresses,
 		TEEHardware:  teeHardware,
 		WorkerBinary: workerBinary,
 		CacheDir:     cacheDir,
@@ -202,9 +216,10 @@ func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
 
 	cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
-	cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use when registering this node (if not set, all non-loopback local interfaces will be used)")
+	cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
 	cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
+	cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
 	cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
 
