@@ -89,6 +89,8 @@ fn register_components(known_components: &mut KnownComponents) {
     ekiden_core::identity::LocalNodeIdentity::register(known_components);
     // Instrumentation.
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
+    // Remote node.
+    ekiden_core::remote_node::RemoteNodeInfo::register(known_components);
 }
 
 fn main() {

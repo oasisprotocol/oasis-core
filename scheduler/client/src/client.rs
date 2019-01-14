@@ -11,6 +11,7 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
+use ekiden_common::remote_node::RemoteNode;
 use ekiden_scheduler_api as api;
 use ekiden_scheduler_base::{Committee, Scheduler};
 
@@ -70,26 +71,17 @@ create_component!(
     (|container: &mut Container| -> Result<Box<Any>> {
         let environment: Arc<Environment> = container.inject()?;
 
-        let args = container.get_arguments().unwrap();
+        // "node-host" and "node-port" arguments.
+        let remote_node: Arc<RemoteNode> = container.inject()?;
+
         let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
             "{}:{}",
-            args.value_of("scheduler-client-host").unwrap(),
-            args.value_of("scheduler-client-port").unwrap(),
+            remote_node.get_node_host(),
+            remote_node.get_node_port(),
         ));
 
         let instance: Arc<Scheduler> = Arc::new(SchedulerClient::new(channel));
         Ok(Box::new(instance))
     }),
-    [
-        Arg::with_name("scheduler-client-host")
-            .long("scheduler-client-host")
-            .help("(remote scheduler backend) Host that the scheduler client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1"),
-        Arg::with_name("scheduler-client-port")
-            .long("scheduler-client-port")
-            .help("(remote scheduler backend) Port that the scheduler client should connect to")
-            .takes_value(true)
-            .default_value("42261")
-    ]
+    []
 );

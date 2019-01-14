@@ -64,6 +64,8 @@ pub mod profiling;
 #[macro_use]
 pub mod protobuf;
 pub mod random;
+#[cfg(not(target_env = "sgx"))]
+pub mod remote_node;
 pub mod signature;
 #[macro_use]
 pub mod uint;

@@ -10,6 +10,7 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
+use ekiden_common::remote_node::RemoteNode;
 use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
 use ekiden_roothash_base::{Block, Commitment, Event, Header, RootHashBackend};
@@ -114,26 +115,17 @@ create_component!(
     (|container: &mut Container| -> Result<Box<Any>> {
         let environment: Arc<Environment> = container.inject()?;
 
-        let args = container.get_arguments().unwrap();
+        // "node-host" and "node-port" arguments.
+        let remote_node: Arc<RemoteNode> = container.inject()?;
+
         let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
             "{}:{}",
-            args.value_of("roothash-client-host").unwrap(),
-            args.value_of("roothash-client-port").unwrap(),
+            remote_node.get_node_host(),
+            remote_node.get_node_port(),
         ));
 
         let instance: Arc<RootHashBackend> = Arc::new(RootHashClient::new(channel));
         Ok(Box::new(instance))
     }),
-    [
-        Arg::with_name("roothash-client-host")
-            .long("roothash-client-host")
-            .help("(remote roothash backend) Host that the roothash client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1"),
-        Arg::with_name("roothash-client-port")
-            .long("roothash-client-port")
-            .help("(remote roothash backend) Port that the roothash client should connect to")
-            .takes_value(true)
-            .default_value("42261")
-    ]
+    []
 );

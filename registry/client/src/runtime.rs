@@ -11,6 +11,7 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, Future, Stream};
 use ekiden_common::identity::NodeIdentity;
 use ekiden_common::node::Node;
+use ekiden_common::remote_node::RemoteNode;
 use ekiden_common::signature::Signed;
 use ekiden_registry_api as api;
 use ekiden_registry_base::runtime::Runtime;
@@ -81,28 +82,17 @@ create_component!(
     (|container: &mut Container| -> Result<Box<Any>> {
         let environment: Arc<Environment> = container.inject()?;
 
-        let args = container.get_arguments().unwrap();
+        // "node-host" and "node-port" arguments.
+        let remote_node: Arc<RemoteNode> = container.inject()?;
+
         let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
             "{}:{}",
-            args.value_of("runtime-registry-client-host").unwrap(),
-            args.value_of("runtime-registry-client-port").unwrap(),
+            remote_node.get_node_host(),
+            remote_node.get_node_port(),
         ));
 
-        let instance: Arc<RuntimeRegistryBackend> = Arc::new(
-            RuntimeRegistryClient::new(channel)
-        );
+        let instance: Arc<RuntimeRegistryBackend> = Arc::new(RuntimeRegistryClient::new(channel));
         Ok(Box::new(instance))
     }),
-    [
-        Arg::with_name("runtime-registry-client-host")
-            .long("runtime-registry-client-host")
-            .help("(remote runtime registry backend) Host that the runtime registry client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1"),
-        Arg::with_name("runtime-registry-client-port")
-            .long("runtime-registry-client-port")
-            .help("(remote runtime registry backend) Port that the runtime registry client should connect to")
-            .takes_value(true)
-            .default_value("42261")
-    ]
+    []
 );
