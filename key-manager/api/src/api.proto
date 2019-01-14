@@ -11,4 +11,8 @@ message GetOrCreateKeyResponse {
     // Key in clear text. Note that keys can be sent like this as the
     // key manager requires a mutually authenticated secure channel.
     bytes key = 1;
+    // Timestamp representing the expiry of the returned key.
+    uint64 timestamp = 2;
+    // Sign(sk, (key || timestamp)) from the key manager.
+    bytes signature = 3;
 }

@@ -9,6 +9,7 @@ use std::sync::SgxMutexGuard as MutexGuard;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
+use ekiden_common::bytes::B512;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
@@ -24,8 +25,8 @@ use ekiden_rpc_common::client::ClientEndpoint;
 #[cfg(target_env = "sgx")]
 use ekiden_rpc_trusted::client::OcallRpcClientBackend;
 
-use ekiden_keymanager_common::{ContractId, ContractKey, PrivateKeyType, PublicKeyType,
-                               StateKeyType};
+use ekiden_keymanager_common::{ContractId, ContractKey, PrivateKeyType, PublicKeyPayload,
+                               PublicKeyType, StateKeyType};
 use serde_cbor;
 
 // Create API client for the key manager.
@@ -44,8 +45,10 @@ pub struct KeyManager {
     client: Option<key_manager::Client<NetworkRpcClientBackend>>,
     #[cfg(not(target_env = "sgx"))]
     backend_config: Option<NetworkRpcClientBackendConfig>,
-    /// Local key cache.
-    cache: HashMap<ContractId, ContractKey>,
+    /// Local cache for the get_or_create_keys KeyManager endpoint.
+    get_or_create_secret_keys_cache: HashMap<ContractId, ContractKey>,
+    /// Local cache for the get_public_key KeyManager endpoint.
+    get_public_key_cache: HashMap<ContractId, PublicKeyPayload>,
 }
 
 /// gRPC client backend configuration
@@ -77,7 +80,8 @@ impl KeyManager {
             client: None,
             #[cfg(not(target_env = "sgx"))]
             backend_config: None,
-            cache: HashMap::new(),
+            get_or_create_secret_keys_cache: HashMap::new(),
+            get_public_key_cache: HashMap::new(),
         }
     }
 
@@ -164,7 +168,8 @@ impl KeyManager {
     ///
     /// This will make the client re-fetch the keys from the key manager.
     pub fn clear_cache(&mut self) {
-        self.cache.clear();
+        self.get_or_create_secret_keys_cache.clear();
+        self.get_public_key_cache.clear();
     }
 
     /// Get or create named key.
@@ -180,7 +185,7 @@ impl KeyManager {
         self.connect()?;
 
         // Check cache first.
-        match self.cache.entry(contract_id) {
+        match self.get_or_create_secret_keys_cache.entry(contract_id) {
             Entry::Occupied(entry) => {
                 let keys = entry.get().clone();
                 Ok((keys.input_keypair.get_sk(), keys.state_key))
@@ -209,11 +214,11 @@ impl KeyManager {
         }
     }
 
-    pub fn get_public_key(&mut self, contract_id: ContractId) -> Result<PublicKeyType> {
+    pub fn get_public_key(&mut self, contract_id: ContractId) -> Result<PublicKeyPayload> {
         self.connect()?;
 
-        match self.cache.entry(contract_id) {
-            Entry::Occupied(entry) => Ok(entry.get().clone().input_keypair.get_pk()),
+        match self.get_public_key_cache.entry(contract_id) {
+            Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
                 request.set_contract_id(contract_id.to_vec());
@@ -225,8 +230,18 @@ impl KeyManager {
                     };
 
                 let public_key: PublicKeyType = serde_cbor::from_slice(&response.take_key())?;
-                entry.insert(ContractKey::from_public_key(public_key));
-                Ok(public_key)
+                let timestamp: u64 = response.timestamp;
+                let signature: B512 = serde_cbor::from_slice(&response.take_signature())?;
+
+                let public_key_payload = PublicKeyPayload {
+                    public_key,
+                    timestamp,
+                    signature,
+                };
+
+                entry.insert(public_key_payload.clone());
+
+                Ok(public_key_payload)
             }
         }
     }

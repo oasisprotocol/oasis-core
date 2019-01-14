@@ -7,7 +7,7 @@ extern crate serde_derive;
 
 pub mod confidential;
 
-use ekiden_core::bytes::H256;
+use ekiden_core::bytes::{B512, H256};
 use serde::de::{Deserialize, Deserializer, Error, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeTuple, Serializer};
 use sodalite::*;
@@ -106,6 +106,14 @@ pub struct ContractKey {
     /// State encryption key
     #[serde(with = "BigArray")]
     pub state_key: StateKeyType,
+}
+
+/// Data structure returned by the key manager's `get_public_key` method.
+#[derive(Clone, Debug)]
+pub struct PublicKeyPayload {
+    pub public_key: PublicKeyType,
+    pub timestamp: u64,
+    pub signature: B512,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
