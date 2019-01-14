@@ -77,7 +77,7 @@ steps:
       - buildkite-agent artifact upload ekiden-keymanager-test-client
       - buildkite-agent artifact upload test-db-encryption-client
       - buildkite-agent artifact upload test-long-term-client
-      - buildkite-agent artifact upload token-client
+      - buildkite-agent artifact upload simple-keyvalue-client
       - buildkite-agent artifact upload test-logger-client
     plugins:
       <<: *docker_plugin_configuration
@@ -88,12 +88,12 @@ steps:
   - label: Build test runtime
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_enclave.sh tests/runtimes/token
+      - .buildkite/rust/build_enclave.sh tests/runtimes/simple-keyvalue
 
       # Upload the built artifacts.
       - cd /tmp/artifacts/enclave
-      - buildkite-agent artifact upload token.so
-      - buildkite-agent artifact upload token.mrenclave
+      - buildkite-agent artifact upload simple-keyvalue.so
+      - buildkite-agent artifact upload simple-keyvalue.mrenclave
     plugins:
       <<: *docker_plugin_configuration
 

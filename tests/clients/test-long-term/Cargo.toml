@@ -8,6 +8,6 @@ client-utils = { path = "../utils" }
 ekiden-core = { path = "../../../core/common" }
 ekiden-runtime-client = { path = "../../../runtime/client" }
 ekiden-rpc-client = { path = "../../../rpc/client" }
-token-api = { path = "../../runtimes/token/api" }
+simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
 rand = "0.4"

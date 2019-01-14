@@ -38,7 +38,7 @@ RUNTIME_ID=0000000000000000000000000000000000000000000000000000000000000000
 # Storage and roothash migration test.
 ######################################
 test_migration() {
-    local runtime=token
+    local runtime=simple-keyvalue
 
     # Start the first network.
     run_backend_tendermint_committee tendermint_mock 1
@@ -56,7 +56,7 @@ test_migration() {
     # that we test if the migration works without restarting the client.
     "$WORKDIR/target/debug/test-long-term-client" \
         --storage-backend remote \
-        --mr-enclave "$(cat "$WORKDIR/target/enclave/token.mrenclave")" \
+        --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
         --test-runtime-id "$RUNTIME_ID" \
         &
     local client_pid=$(jobs -p +)

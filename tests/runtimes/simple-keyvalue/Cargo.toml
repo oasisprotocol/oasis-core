@@ -1,7 +1,8 @@
 [package]
-name = "token"
+name = "simple-keyvalue"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Example of using a simple key/value store"
 build = "build.rs"
 
 [features]
@@ -11,8 +12,8 @@ default = []
 ekiden-core = { path = "../../../core/common" }
 ekiden-trusted = { path = "../../../core/trusted" }
 ekiden-storage-base = { path = "../../../storage/base" }
-protobuf = "~2.0"
-token-api = { path = "./api" }
+log = "0.4"
+simple-keyvalue-api = { path = "./api" }
 
 [build-dependencies]
 ekiden-tools = { path = "../../../tools" }

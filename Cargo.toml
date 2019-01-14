@@ -70,16 +70,15 @@ members = [
     "worker",
 
     # Test runtimes.
-    "tests/runtimes/token",
+    "tests/runtimes/simple-keyvalue",
     "tests/runtimes/test-db-encryption",
     "tests/runtimes/test-logger",
 
     # Test clients.
-    "tests/clients/token",
-    "tests/clients/test-long-term",
-    "tests/clients/benchmark",
+    "tests/clients/simple-keyvalue",
     "tests/clients/test-db-encryption",
     "tests/clients/test-logger",
+    "tests/clients/test-long-term",
 
     # Registry.
     "registry/api",

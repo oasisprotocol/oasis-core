@@ -111,13 +111,13 @@ test_suite() {
     local backend_name=$1
     local backend_runner=$2
 
-    # Basic scenario using the token runtime and client.
+    # Basic scenario using the simple-keyvalue runtime and client.
     run_test \
         scenario=scenario_basic \
         name="e2e-${backend_name}-basic-full" \
         backend_runner=$backend_runner \
-        runtime=token \
-        client=token
+        runtime=simple-keyvalue \
+        client=simple-keyvalue
 
     # Database encryption test.
     run_test \
@@ -142,8 +142,8 @@ test_suite() {
         scenario=scenario_discrepancy \
         name="e2e-${backend_name}-discrepancy" \
         backend_runner=$backend_runner \
-        runtime=token \
-        client=token \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue \
         on_success_hook=assert_no_round_timeouts
 }
 

@@ -183,7 +183,7 @@ cargo run -p ekiden-compute -- \
     --prometheus-mode push \
     --prometheus-push-job-name "ekiden-example" \
     --prometheus-push-instance-label "ekiden-dev-instance" \
-    target/enclave/token.so
+    target/enclave/simple-keyvalue.so
 ```
 
 

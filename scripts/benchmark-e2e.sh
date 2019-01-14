@@ -79,7 +79,7 @@ run_compute_node() {
         --disable-key-manager \
         --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
+        ${WORKDIR}/target/enclave/simple-keyvalue.so 2>${LOGDIR}/compute${id}.log &
 }
 
 run_compute_node_storage_multilayer_remote() {
@@ -112,7 +112,7 @@ run_compute_node_storage_multilayer_remote() {
         --disable-key-manager \
         --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         ${extra_args} \
-        ${WORKDIR}/target/enclave/token.so 2>${LOGDIR}/compute${id}.log &
+        ${WORKDIR}/target/enclave/simple-keyvalue.so 2>${LOGDIR}/compute${id}.log &
 }
 
 run_benchmark() {
@@ -151,7 +151,7 @@ run_benchmark() {
     # Run the client.
     RUST_LOG=info ${WORKDIR}/target/release/${client}-client \
         --storage-backend remote \
-        --mr-enclave $(cat ${WORKDIR}/target/enclave/token.mrenclave) \
+        --mr-enclave $(cat ${WORKDIR}/target/enclave/simple-keyvalue.mrenclave) \
         --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         --benchmark-threads 50 \
         --benchmark-runs ${rq_per_thread} \

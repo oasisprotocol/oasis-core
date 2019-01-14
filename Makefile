@@ -1,9 +1,9 @@
 #!/usr/bin/env gmake
 
 # List of paths to enclaves that we should build.
-ENCLAVES = tests/runtimes/token \
-	tests/runtimes/test-db-encryption \
+ENCLAVES = tests/runtimes/test-db-encryption \
 	tests/runtimes/test-logger \
+	tests/runtimes/simple-keyvalue \
 	key-manager/dummy/enclave
 
 # Command that builds each enclave.
