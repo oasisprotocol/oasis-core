@@ -56,9 +56,10 @@ const (
 
 	cfgLogDebug = "tendermint.log.debug"
 
-	cfgDebugBootstrapAddress  = "tendermint.debug.bootstrap.address"
-	cfgDebugBootstrapNodeAddr = "tendermint.debug.bootstrap.node_addr"
-	cfgDebugBootstrapNodeName = "tendermint.debug.bootstrap.node_name"
+	cfgDebugBootstrapAddress       = "tendermint.debug.bootstrap.address"
+	cfgDebugBootstrapNodeAddr      = "tendermint.debug.bootstrap.node_addr"
+	cfgDebugBootstrapNodeName      = "tendermint.debug.bootstrap.node_name"
+	cfgDebugConsensusBlockTimeIota = "tenderming.debug.block_time_iota"
 )
 
 var (
@@ -303,6 +304,10 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
 	tenderConfig.Consensus.BlockTimeIota = timeoutCommit
+	if blockTimeIota := viper.GetDuration(cfgDebugConsensusBlockTimeIota); blockTimeIota > 0*time.Second {
+		// Override BlockTimeIota if set.
+		tenderConfig.Consensus.BlockTimeIota = blockTimeIota
+	}
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
@@ -529,6 +534,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
 		cmd.Flags().String(cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
+		cmd.Flags().Duration(cfgDebugConsensusBlockTimeIota, 0*time.Second, "tendermint block time iota")
 	}
 
 	for _, v := range []string{
@@ -543,6 +549,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgDebugBootstrapAddress,
 		cfgDebugBootstrapNodeAddr,
 		cfgDebugBootstrapNodeName,
+		cfgDebugConsensusBlockTimeIota,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
