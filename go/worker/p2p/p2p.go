@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 
 	"github.com/cenkalti/backoff"
@@ -37,6 +38,8 @@ type Handler interface {
 type P2P struct {
 	sync.RWMutex
 
+	registerAddresses []multiaddr.Multiaddr
+
 	host     libp2pHost.Host
 	handlers map[signature.MapKey]Handler
 
@@ -55,8 +58,15 @@ func bytesToPeerID(raw []byte) (peer.ID, error) {
 // Info returns the information needed to establish connections to this
 // node via the P2P transport.
 func (p *P2P) Info() node.P2PInfo {
+	var addrs []multiaddr.Multiaddr
+	if len(p.registerAddresses) == 0 {
+		addrs = p.host.Addrs()
+	} else {
+		addrs = p.registerAddresses
+	}
+
 	var addresses [][]byte
-	for _, addr := range p.host.Addrs() {
+	for _, addr := range addrs {
 		addresses = append(addresses, addr.Bytes())
 	}
 
@@ -231,11 +241,31 @@ func (p *P2P) handleConnection(conn libp2pNet.Conn) {
 }
 
 // New creates a new P2P node.
-func New(ctx context.Context, identity *identity.Identity, port uint16) (*P2P, error) {
+func New(ctx context.Context, identity *identity.Identity, port uint16, addresses []node.Address) (*P2P, error) {
 	// TODO: Should we use a separate key for authenticating P2P communication?
 	p2pKey, err := libp2pCrypto.UnmarshalEd25519PrivateKey((*identity.NodeKey)[:])
 	if err != nil {
 		return nil, err
+	}
+
+	var registerAddresses []multiaddr.Multiaddr
+	for _, addr := range addresses {
+		maFamily := "ip4"
+		ip := net.IP(addr.Tuple.IP)
+
+		switch addr.Family {
+		case node.AddressFamilyIPv4:
+			maFamily = "ip4"
+		case node.AddressFamilyIPv6:
+			maFamily = "ip6"
+		default:
+			panic("unsupported address family")
+		}
+
+		ma, _ := multiaddr.NewMultiaddr(
+			fmt.Sprintf("/%s/%s/tcp/%d", maFamily, ip, addr.Tuple.Port),
+		)
+		registerAddresses = append(registerAddresses, ma)
 	}
 
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(
@@ -265,9 +295,10 @@ func New(ctx context.Context, identity *identity.Identity, port uint16) (*P2P, e
 	}
 
 	p := &P2P{
-		host:     host,
-		handlers: make(map[signature.MapKey]Handler),
-		logger:   logging.GetLogger("worker/p2p"),
+		registerAddresses: registerAddresses,
+		host:              host,
+		handlers:          make(map[signature.MapKey]Handler),
+		logger:            logging.GetLogger("worker/p2p"),
 	}
 
 	p.host.Network().SetConnHandler(p.handleConnection)

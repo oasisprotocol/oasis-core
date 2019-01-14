@@ -34,10 +34,11 @@ type RuntimeConfig struct {
 }
 
 // Config is the worker configuration.
-type Config struct {
+type Config struct { // nolint: maligned
 	Backend      string
 	Committee    committee.Config
 	P2PPort      uint16
+	P2PAddresses []node.Address
 	TEEHardware  node.TEEHardware
 	WorkerBinary string
 	CacheDir     string
@@ -333,7 +334,7 @@ func newWorker(
 		newClientGRPCServer(grpc.Server(), w)
 
 		// Create P2P node.
-		p2p, err := p2p.New(w.ctx, identity, cfg.P2PPort)
+		p2p, err := p2p.New(w.ctx, identity, cfg.P2PPort, cfg.P2PAddresses)
 		if err != nil {
 			return nil, err
 		}
