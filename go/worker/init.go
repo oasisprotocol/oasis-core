@@ -175,17 +175,16 @@ func New(
 			MaxBatchSizeBytes: maxBatchSizeBytes,
 			MaxBatchTimeout:   maxBatchTimeout,
 
-			ClientPort:      uint16(viper.GetInt(cfgClientPort)),
-			ClientAddresses: clientAddresses,
-
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
-		P2PPort:      uint16(viper.GetInt(cfgP2pPort)),
-		P2PAddresses: p2pAddresses,
-		TEEHardware:  teeHardware,
-		WorkerBinary: workerBinary,
-		CacheDir:     cacheDir,
-		Runtimes:     runtimes,
+		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
+		ClientAddresses: clientAddresses,
+		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
+		P2PAddresses:    p2pAddresses,
+		TEEHardware:     teeHardware,
+		WorkerBinary:    workerBinary,
+		CacheDir:        cacheDir,
+		Runtimes:        runtimes,
 	}
 
 	return newWorker(identity, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)

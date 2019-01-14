@@ -69,14 +69,47 @@ type Node struct {
 	// Certificate is the certificate for establishing TLS connections.
 	Certificate *Certificate `codec:"certificate"`
 
-	// Stake is the node's stake. (TODO: Not defined yet.)
-	Stake []byte `codec:"stake"`
-
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
 
-	// Capabilities are the node's capabilities.
+	// Runtimes are the node's runtimes.
+	Runtimes []*Runtime `codec:"runtimes"`
+}
+
+// Runtime represents the runtimes supported by a given Ekiden node.
+type Runtime struct {
+	// ID is the public key identifying the runtime.
+	ID signature.PublicKey `codec:"id"`
+
+	// Capabilities are the node's capabilities for a given runtime.
 	Capabilities Capabilities `codec:"capabilities"`
+}
+
+func (r *Runtime) fromProto(pb *pbCommon.NodeRuntime) error {
+	if err := r.ID.UnmarshalBinary(pb.GetId()); err != nil {
+		return err
+	}
+
+	if pbCapa := pb.GetCapabilities(); pbCapa != nil {
+		if err := r.Capabilities.fromProto(pbCapa); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *Runtime) toProto() *pbCommon.NodeRuntime {
+	pb := new(pbCommon.NodeRuntime)
+
+	pb.Id, _ = r.ID.MarshalBinary()
+
+	pb.Capabilities = new(pbCommon.Capabilities)
+	if r.Capabilities.TEE != nil {
+		pb.Capabilities.Tee = r.Capabilities.TEE.toProto()
+	}
+
+	return pb
 }
 
 // P2PInfo contains information for connecting to this node via P2P transport.
@@ -340,15 +373,16 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		}
 	}
 
-	if b := pb.GetStake(); b != nil {
-		n.Stake = append([]byte{}, b...) // Copy
-	}
-
 	n.RegistrationTime = pb.GetRegistrationTime()
 
-	if pbCapa := pb.GetCapabilities(); pbCapa != nil {
-		if err := n.Capabilities.fromProto(pbCapa); err != nil {
-			return err
+	if pbRuntimes := pb.GetRuntimes(); pbRuntimes != nil {
+		n.Runtimes = make([]*Runtime, 0, len(pbRuntimes))
+		for _, v := range pbRuntimes {
+			rt := new(Runtime)
+			if err := rt.fromProto(v); err != nil {
+				return err
+			}
+			n.Runtimes = append(n.Runtimes, rt)
 		}
 	}
 
@@ -373,13 +407,12 @@ func (n *Node) ToProto() *pbCommon.Node {
 			Der: append([]byte{}, n.Certificate.DER...),
 		}
 	}
-	if n.Stake != nil {
-		pb.Stake = append([]byte{}, n.Stake...)
-	}
 	pb.RegistrationTime = n.RegistrationTime
-	pb.Capabilities = new(pbCommon.Capabilities)
-	if n.Capabilities.TEE != nil {
-		pb.Capabilities.Tee = n.Capabilities.TEE.toProto()
+	if n.Runtimes != nil {
+		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))
+		for _, v := range n.Runtimes {
+			pb.Runtimes = append(pb.Runtimes, v.toProto())
+		}
 	}
 
 	return pb

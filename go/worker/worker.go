@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -35,19 +37,21 @@ type RuntimeConfig struct {
 
 // Config is the worker configuration.
 type Config struct { // nolint: maligned
-	Backend      string
-	Committee    committee.Config
-	P2PPort      uint16
-	P2PAddresses []node.Address
-	TEEHardware  node.TEEHardware
-	WorkerBinary string
-	CacheDir     string
-	Runtimes     []RuntimeConfig
+	Backend         string
+	Committee       committee.Config
+	ClientPort      uint16
+	ClientAddresses []node.Address
+	P2PPort         uint16
+	P2PAddresses    []node.Address
+	TEEHardware     node.TEEHardware
+	WorkerBinary    string
+	CacheDir        string
+	Runtimes        []RuntimeConfig
 }
 
 // Runtime is a single runtime.
 type Runtime struct {
-	id signature.PublicKey
+	cfg *RuntimeConfig
 
 	workerHost host.Host
 	node       *committee.Node
@@ -64,6 +68,7 @@ type Worker struct {
 	cfg     Config
 
 	identity   *identity.Identity
+	entity     *entity.Entity
 	storage    storage.Backend
 	roothash   roothash.Backend
 	registry   registry.Backend
@@ -122,6 +127,24 @@ func (w *Worker) Start() error {
 		close(w.initCh)
 	}()
 
+	// XXX: Register the entity, remove when this is done elsewhere.
+	if err := retryLoop(func() error {
+		return w.registerEntity()
+	}); err != nil {
+		return err
+	}
+
+	// Register the runtimes with the registry.
+	//
+	// XXX: Remove once we decide how to register runtimes.
+	for _, rtCfg := range w.cfg.Runtimes {
+		if err := retryLoop(func() error {
+			return w.registryRegisterRuntime(&rtCfg)
+		}); err != nil {
+			return err
+		}
+	}
+
 	// Start client gRPC server.
 	if err := w.grpc.Start(); err != nil {
 		return err
@@ -130,7 +153,7 @@ func (w *Worker) Start() error {
 	// Start runtime services.
 	for _, rt := range w.runtimes {
 		w.logger.Info("starting services for runtime",
-			"runtime_id", rt.id,
+			"runtime_id", rt.cfg.ID,
 		)
 
 		if err := rt.workerHost.Start(); err != nil {
@@ -140,6 +163,9 @@ func (w *Worker) Start() error {
 			return err
 		}
 	}
+
+	// Start the node (re-)registration worker.
+	go w.doNodeRegistration()
 
 	return nil
 }
@@ -153,7 +179,7 @@ func (w *Worker) Stop() {
 
 	for _, rt := range w.runtimes {
 		w.logger.Info("stopping services for runtime",
-			"runtime_id", rt.id,
+			"runtime_id", rt.cfg.ID,
 		)
 
 		rt.node.Stop()
@@ -274,14 +300,14 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	}
 
 	rt := &Runtime{
-		id:         rtCfg.ID,
+		cfg:        rtCfg,
 		workerHost: workerHost,
 		node:       node,
 	}
-	w.runtimes[rt.id.ToMapKey()] = rt
+	w.runtimes[rt.cfg.ID.ToMapKey()] = rt
 
 	w.logger.Info("new runtime registered",
-		"runtime_id", rt.id,
+		"runtime_id", rt.cfg.ID,
 	)
 
 	return nil
@@ -291,7 +317,7 @@ func newWorker(
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
-	registry registry.Backend,
+	registryInst registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 	ias *ias.IAS,
@@ -311,7 +337,7 @@ func newWorker(
 		identity:   identity,
 		storage:    storage,
 		roothash:   roothash,
-		registry:   registry,
+		registry:   registryInst,
 		epochtime:  epochtime,
 		scheduler:  scheduler,
 		ias:        ias,
@@ -324,9 +350,16 @@ func newWorker(
 		logger:     logging.GetLogger("worker"),
 	}
 
+	// XXX: Reuse the node's key as the entity key for now.  At some
+	// point in the future this will be the node operator's identity.
+	w.entity = &entity.Entity{
+		ID:               identity.NodeKey.Public(),
+		RegistrationTime: uint64(time.Now().Unix()),
+	}
+
 	if enabled {
 		// Create client gRPC server.
-		grpc, err := grpc.NewServerEx(cfg.Committee.ClientPort, identity.TLSCertificate)
+		grpc, err := grpc.NewServerEx(cfg.ClientPort, identity.TLSCertificate)
 		if err != nil {
 			return nil, err
 		}
@@ -345,8 +378,20 @@ func newWorker(
 			if err := w.registerRuntime(&cfg, &rtCfg); err != nil {
 				return nil, err
 			}
+
 		}
 	}
 
 	return w, nil
+}
+
+func retryLoop(fn func() error) error {
+	for {
+		err := fn()
+		switch err {
+		case nil, context.Canceled:
+			return err
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
