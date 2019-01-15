@@ -36,9 +36,9 @@ const (
 	cfgKeyManagerAddress = "worker.key_manager.address"
 	cfgKeyManagerCert    = "worker.key_manager.certificate"
 
-	// TODO: Support multiple runtimes.
 	cfgRuntimeBinary = "worker.runtime.binary"
 	cfgRuntimeID     = "worker.runtime.id"
+
 	// XXX: This is needed until we decide how we want to actually register runtimes.
 	cfgRuntimeReplicaGroupSize       = "worker.runtime.replica_group_size"
 	cfgRuntimeReplicaGroupBackupSize = "worker.runtime.replica_group_backup_size"
@@ -100,16 +100,19 @@ func New(
 	cacheDir := viper.GetString(cfgCacheDir)
 
 	// Setup runtimes.
-	// TODO: Support multiple runtimes.
 	var runtimes []RuntimeConfig
-	runtimeBinary := viper.GetString(cfgRuntimeBinary)
-	if runtimeBinary != "" {
-		runtimeIDHex := viper.GetString(cfgRuntimeID)
-		runtimeIDRaw, err := hex.DecodeString(runtimeIDHex)
+	runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
+	runtimeIDs := viper.GetStringSlice(cfgRuntimeID)
+	if len(runtimeBinaries) != len(runtimeIDs) {
+		return nil, fmt.Errorf("runtime binary/id count mismatch")
+	}
+	for idx, runtimeBinary := range runtimeBinaries {
+		runtimeIDRaw, err := hex.DecodeString(runtimeIDs[idx])
 		if err != nil {
 			return nil, err
 		}
 		var runtimeID signature.PublicKey
+
 		if err := runtimeID.UnmarshalBinary(runtimeIDRaw); err != nil {
 			return nil, err
 		}
@@ -205,8 +208,10 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgKeyManagerAddress, "", "key manager address")
 		cmd.Flags().String(cfgKeyManagerCert, "", "key manager TLS certificate")
 
-		cmd.Flags().String(cfgRuntimeBinary, "", "Path to runtime binary")
-		cmd.Flags().String(cfgRuntimeID, "", "Runtime ID")
+		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
+		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
+
+		// XXX: Needed till runtime registration is done elsewhere.
 		cmd.Flags().String(cfgRuntimeReplicaGroupSize, "1", "Number of workers in runtime replica group")
 		cmd.Flags().String(cfgRuntimeReplicaGroupBackupSize, "0", "Number of backup workers in runtime replica group")
 
