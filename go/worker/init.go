@@ -194,34 +194,36 @@ func New(
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
 
-	cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
-	cmd.Flags().String(cfgCacheDir, "", "Path to worker cache directory")
+		cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
+		cmd.Flags().String(cfgCacheDir, "", "Path to worker cache directory")
 
-	cmd.Flags().String(cfgTEEHardware, "invalid", "Type of TEE hardware. Supported values are \"invalid\" and \"intel-sgx\".")
-	cmd.Flags().String(cfgIASProxy, "", "IAS proxy address")
+		cmd.Flags().String(cfgTEEHardware, "invalid", "Type of TEE hardware. Supported values are \"invalid\" and \"intel-sgx\".")
+		cmd.Flags().String(cfgIASProxy, "", "IAS proxy address")
 
-	cmd.Flags().String(cfgKeyManagerAddress, "", "key manager address")
-	cmd.Flags().String(cfgKeyManagerCert, "", "key manager TLS certificate")
+		cmd.Flags().String(cfgKeyManagerAddress, "", "key manager address")
+		cmd.Flags().String(cfgKeyManagerCert, "", "key manager TLS certificate")
 
-	cmd.Flags().String(cfgRuntimeBinary, "", "Path to runtime binary")
-	cmd.Flags().String(cfgRuntimeID, "", "Runtime ID")
-	cmd.Flags().String(cfgRuntimeReplicaGroupSize, "1", "Number of workers in runtime replica group")
-	cmd.Flags().String(cfgRuntimeReplicaGroupBackupSize, "0", "Number of backup workers in runtime replica group")
+		cmd.Flags().String(cfgRuntimeBinary, "", "Path to runtime binary")
+		cmd.Flags().String(cfgRuntimeID, "", "Runtime ID")
+		cmd.Flags().String(cfgRuntimeReplicaGroupSize, "1", "Number of workers in runtime replica group")
+		cmd.Flags().String(cfgRuntimeReplicaGroupBackupSize, "0", "Number of backup workers in runtime replica group")
 
-	cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
-	cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-	cmd.Flags().Uint64(cfgMaxBatchSizeBytes, 16777216, "Maximum size (in bytes) of a batch of runtime requests")
-	cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
+		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
+		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
+		cmd.Flags().Uint64(cfgMaxBatchSizeBytes, 16777216, "Maximum size (in bytes) of a batch of runtime requests")
+		cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
 
-	cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
-	cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
+		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
+		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-	cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
-	cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
+		cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
+		cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-	cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
+		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
+	}
 
 	for _, v := range []string{
 		cfgWorkerBackend,

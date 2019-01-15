@@ -34,9 +34,7 @@ const (
 )
 
 var (
-	grpcPort         uint16
-	grpcVerboseDebug bool
-	grpcMetricsOnce  sync.Once
+	grpcMetricsOnce sync.Once
 
 	remoteAddress string
 
@@ -216,6 +214,8 @@ func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, inf
 }
 
 func newGrpcLogAdapter(baseLogger *logging.Logger) *grpcLogAdapter {
+	grpcVerboseDebug := viper.GetBool(cfgGRPCVerboseDebug)
+
 	// A extra 2 level 2 of unwinding since there's an adapter here,
 	// and there's wrappers in the grpc library.
 	//
@@ -365,8 +365,10 @@ func NewServerEx(port uint16, cert *tls.Certificate) (*Server, error) {
 
 // RegisterServerFlags registers the flags used by the gRPC server.
 func RegisterServerFlags(cmd *cobra.Command) {
-	cmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
-	cmd.Flags().BoolVar(&grpcVerboseDebug, cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Uint16(cfgGRPCPort, 9001, "gRPC server port")
+		cmd.Flags().Bool(cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+	}
 
 	for _, v := range []string{
 		cfgGRPCPort,
@@ -386,7 +388,9 @@ func RegisterClientFlags(cmd *cobra.Command, persistent bool) {
 		flagSet = cmd.Flags()
 	}
 
-	flagSet.StringVarP(&remoteAddress, cfgAddress, "a", defaultAddress, "remote gRPC address")
+	if !cmd.Flags().Parsed() {
+		flagSet.StringVarP(&remoteAddress, cfgAddress, "a", defaultAddress, "remote gRPC address")
+	}
 
 	if persistent {
 		_ = viper.BindPFlag(cfgAddress, flagSet.Lookup(cfgAddress))

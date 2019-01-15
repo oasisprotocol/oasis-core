@@ -30,15 +30,6 @@ const (
 	metricsModePush = "push"
 )
 
-var (
-	metricsMode string
-	metricsAddr string
-
-	metricsPushJobName       string
-	metricsPushInstanceLabel string
-	metricsPushInterval      time.Duration
-)
-
 type stubService struct {
 	service.BaseBackgroundService
 }
@@ -204,11 +195,13 @@ func New() (service.BackgroundService, error) {
 
 // RegisterFlags registers the flags used by the metrics service.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&metricsMode, cfgMetricsMode, metricsModePull, "metrics (prometheus) mode")
-	cmd.Flags().StringVar(&metricsAddr, cfgMetricsAddr, "0.0.0.0:3000", "metrics pull/push address")
-	cmd.Flags().StringVar(&metricsPushJobName, cfgMetricsPushJobName, "", "metrics push job name")
-	cmd.Flags().StringVar(&metricsPushInstanceLabel, cfgMetricsPushInstanceLabel, "", "metrics push instance label")
-	cmd.Flags().DurationVar(&metricsPushInterval, cfgMetricsPushInterval, 5*time.Second, "metrics push interval")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgMetricsMode, metricsModePull, "metrics (prometheus) mode")
+		cmd.Flags().String(cfgMetricsAddr, "0.0.0.0:3000", "metrics pull/push address")
+		cmd.Flags().String(cfgMetricsPushJobName, "", "metrics push job name")
+		cmd.Flags().String(cfgMetricsPushInstanceLabel, "", "metrics push instance label")
+		cmd.Flags().Duration(cfgMetricsPushInterval, 5*time.Second, "metrics push interval")
+	}
 
 	for _, v := range []string{
 		cfgMetricsMode,

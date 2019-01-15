@@ -29,6 +29,9 @@ var (
 )
 
 func doBenchmark(cmd *cobra.Command, args []string) {
+	// Re-register flags due to https://github.com/spf13/viper/issues/233.
+	RegisterFlags(cmd)
+
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -142,13 +145,17 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 	sweeper.PurgeExpired(9002)
 }
 
-// Register registers the storage benchmark sub-command.
-func Register(parentCmd *cobra.Command) {
+// RegisterFlags registers the flags used by the benchmark sub-command.
+func RegisterFlags(cmd *cobra.Command) {
 	for _, v := range []func(*cobra.Command){
 		storage.RegisterFlags,
 	} {
-		v(benchmarkStorageCmd)
+		v(cmd)
 	}
+}
 
+// Register registers the storage benchmark sub-command.
+func Register(parentCmd *cobra.Command) {
+	RegisterFlags(benchmarkStorageCmd)
 	parentCmd.AddCommand(benchmarkStorageCmd)
 }
