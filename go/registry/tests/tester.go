@@ -101,7 +101,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	nodes := make([][]*TestNode, 0, len(entities))
 	for i, v := range entities {
 		// Stagger the expirations so that it's possible to test it.
-		entityNodes, err := v.NewTestNodes(i+1, epoch+epochtime.EpochTime(i)+1)
+		entityNodes, err := v.NewTestNodes(i+1, nil, epoch+epochtime.EpochTime(i)+1)
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
@@ -340,7 +340,7 @@ type TestNode struct {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(n int, expiration epochtime.EpochTime) ([]*TestNode, error) {
+func (ent *TestEntity) NewTestNodes(n int, runtimes []*TestRuntime, expiration epochtime.EpochTime) ([]*TestNode, error) {
 	if n <= 0 || n > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -348,6 +348,13 @@ func (ent *TestEntity) NewTestNodes(n int, expiration epochtime.EpochTime) ([]*T
 	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID), nil, []byte("TestNodes"))
 	if err != nil {
 		return nil, err
+	}
+
+	var nodeRts []*node.Runtime
+	for _, v := range runtimes {
+		nodeRts = append(nodeRts, &node.Runtime{
+			ID: v.Runtime.ID,
+		})
 	}
 
 	nodes := make([]*TestNode, 0, n)
@@ -360,8 +367,8 @@ func (ent *TestEntity) NewTestNodes(n int, expiration epochtime.EpochTime) ([]*T
 			ID:               nod.PrivateKey.Public(),
 			EntityID:         ent.Entity.ID,
 			Expiration:       uint64(expiration),
-			Stake:            []byte("You use a wooden stake, silver or sunlight to kill them."),
 			RegistrationTime: uint64(time.Now().Unix()),
+			Runtimes:         nodeRts,
 		}
 		if nod.Node.EthAddress, err = newEthAddress(rng); err != nil {
 			return nil, err
@@ -503,7 +510,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 	defer nodeSub.Close()
 
 	numNodes := runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize
-	nodes, err := entity.NewTestNodes(int(numNodes), epochtime.EpochInvalid)
+	nodes, err := entity.NewTestNodes(int(numNodes), runtimes, epochtime.EpochInvalid)
 	require.NoError(err, "NewTestNodes")
 	ret := make([]*node.Node, 0, int(numNodes))
 	for _, node := range nodes {

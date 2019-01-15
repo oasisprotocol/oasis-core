@@ -61,7 +61,7 @@ type trivialSchedulerState struct {
 
 	logger *logging.Logger
 
-	nodeLists  map[epochtime.EpochTime]map[node.TEEHardware][]*node.Node
+	nodeLists  map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
 	runtimes   map[signature.MapKey]*registry.Runtime
 	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
@@ -103,7 +103,7 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 		hw = node.TEEHardwareIntelSGX
 	}
 
-	nodeList := s.nodeLists[epoch][hw]
+	nodeList := s.nodeLists[epoch][conID][hw]
 	beacon := s.beacons[epoch]
 	nrNodes := len(nodeList)
 
@@ -210,33 +210,51 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 		return
 	}
 
-	m := make(map[node.TEEHardware][]*node.Node)
-	s.nodeLists[epoch] = m
-
-	// Special case: No TEE support is requested by the runtime.
-	m[node.TEEHardwareInvalid] = nodes
-
-	// Build the per-TEE implementation node lists for the given epoch.
-	// It is safe to do it this way as `nodes` is already sorted in
-	// the appropriate order.
-	for _, node := range nodes {
-		caps := node.Capabilities.TEE
-		if caps == nil { // No TEE support at all.
-			continue
-		}
-
-		if err := caps.Verify(ts); err != nil {
-			s.logger.Warn("failed to verify node TEE attestation",
-				"err", err,
-				"node", node,
-				"time_stamp", ts,
-			)
-			continue
-		}
-
-		hw := caps.Hardware
-		m[hw] = append(m[hw], node)
+	m := make(map[signature.MapKey]map[node.TEEHardware][]*node.Node)
+	for id := range s.runtimes {
+		m[id] = make(map[node.TEEHardware][]*node.Node)
 	}
+
+	// Build the per-node -> per-runtime -> per-TEE implementation node
+	// lists for the epoch.  It is safe to do it this way as `nodes` is
+	// already sorted in the appropriate order.
+	for _, n := range nodes {
+		for _, rt := range n.Runtimes {
+			nls, ok := m[rt.ID.ToMapKey()]
+			if !ok {
+				s.logger.Warn("node supports unknown runtime",
+					"node", n,
+					"runtime", rt.ID,
+				)
+				continue
+			}
+
+			var (
+				hw   = node.TEEHardwareInvalid
+				caps = rt.Capabilities.TEE
+			)
+			switch caps {
+			case nil:
+				// No TEE support for this runtime on this node.
+			default:
+				if err := caps.Verify(ts); err != nil {
+					s.logger.Warn("failed to verify node TEE attestaion",
+						"err", err,
+						"node", n,
+						"time_stamp", ts,
+						"runtime", rt.ID,
+					)
+					continue
+				}
+
+				hw = caps.Hardware
+			}
+
+			nls[hw] = append(nls[hw], n)
+		}
+	}
+
+	s.nodeLists[epoch] = m
 }
 
 func (s *trivialScheduler) Cleanup() {
@@ -515,7 +533,7 @@ func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon 
 		registry:   registryBackend,
 		beacon:     beacon,
 		state: &trivialSchedulerState{
-			nodeLists:  make(map[epochtime.EpochTime]map[node.TEEHardware][]*node.Node),
+			nodeLists:  make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
 			runtimes:   make(map[signature.MapKey]*registry.Runtime),
 			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),

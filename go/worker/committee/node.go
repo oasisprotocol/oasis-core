@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -104,9 +103,6 @@ type Config struct {
 	MaxBatchTimeout   time.Duration
 
 	ByzantineInjectDiscrepancies bool
-
-	ClientPort      uint16
-	ClientAddresses []node.Address
 
 	// XXX: This is needed until we decide how we want to actually register runtimes.
 	ReplicaGroupSize       uint64
@@ -331,17 +327,6 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 		n.incomingQueue.Clear()
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
-
-	// Re-register node to increase expiry. Do this in the background to avoid
-	// blocking on node registration to complete as we can be processing stuff
-	// while re-registration is ongoing.
-	go func() {
-		if err := n.registerNode(); err != nil {
-			n.logger.Error("failed to re-register node",
-				"err", err,
-			)
-		}
-	}()
 
 	if epoch.IsMember() {
 		n.transition(StateWaitingForBatch{})
@@ -699,17 +684,6 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
-
-	// XXX: Register runtime.
-	for n.registerRuntime() != nil {
-		time.Sleep(1 * time.Second)
-	}
-
-	// Register node. Initially we retry until registered, then we will update
-	// expiration on each epoch transition.
-	for n.registerNode() != nil {
-		time.Sleep(1 * time.Second)
-	}
 
 	// Start watching roothash blocks.
 	var blocksAnn <-chan *roothash.AnnotatedBlock

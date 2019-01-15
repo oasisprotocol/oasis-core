@@ -233,15 +233,28 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 		return nil, ErrInvalidArgument
 	}
 
-	// If the node entry indicates TEE support, validate the attestation
-	// evidence (currently an AVR).
-	if tee := node.Capabilities.TEE; tee != nil {
-		if err := tee.Verify(now); err != nil {
-			logger.Error("RegisterNode: failed to validate attestation",
-				"node", node,
-				"err", err,
-			)
-			return nil, err
+	switch len(node.Runtimes) {
+	case 0:
+		logger.Warn("RegisterNode: no runtimes in registration",
+			"node", node,
+		)
+	default:
+		// If the node indicates TEE support for any of it's runtimes,
+		// validate the attestation evidence.
+		for _, rt := range node.Runtimes {
+			tee := rt.Capabilities.TEE
+			if tee == nil {
+				continue
+			}
+
+			if err := tee.Verify(now); err != nil {
+				logger.Error("RegisterNode: failed to validate attestation",
+					"node", node,
+					"runtime", rt.ID,
+					"err", err,
+				)
+				return nil, err
+			}
 		}
 	}
 
