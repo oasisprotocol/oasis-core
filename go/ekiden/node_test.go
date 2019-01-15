@@ -37,6 +37,7 @@ var (
 		{"scheduler.backend", "trivial"},
 		{"storage.backend", "leveldb"},
 		{"tendermint.consensus.skip_timeout_commit", true},
+		{"tendermint.debug.block_time_iota", 10 * time.Millisecond},
 		{"worker.backend", "mock"},
 		{"worker.runtime.binary", "mock-runtime"},
 		{"worker.runtime.id", "0000000000000000000000000000000000000000000000000000000000000000"},

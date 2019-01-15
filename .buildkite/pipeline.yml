@@ -170,13 +170,15 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
-  - label: E2E migration tests
-    timeout_in_minutes: 20
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_migration.sh
-    plugins:
-      <<: *docker_plugin_configuration
+  # Temporarily disabled pending being ported to the new
+  # worker host/comittee (#1304).
+  # - label: E2E migration tests
+  #   timeout_in_minutes: 20
+  #   command:
+  #     - .buildkite/scripts/download_e2e_test_artifacts.sh
+  #     - .buildkite/scripts/test_migration.sh
+  #   plugins:
+  #     <<: *docker_plugin_configuration
 
   ####################################
   # Rust coverage job (only on master)

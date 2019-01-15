@@ -19,7 +19,7 @@ use super::super::entity::Entity;
 #[allow(unused_imports)]
 use super::super::futures::Future;
 use super::super::identity::{EntityIdentity, NodeIdentity};
-use super::super::node::{Capabilities, Node};
+use super::super::node::Node;
 use super::super::ring::rand::SystemRandom;
 use super::super::ring::signature::Ed25519KeyPair;
 use super::super::signature::{InMemorySigner, Signer};
@@ -340,9 +340,8 @@ create_component!(
                 }
             },
             certificate: key_pair.tls_certificate.clone(),
-            stake: vec![],
             registration_time: now,
-            capabilities: Capabilities::default(),
+            runtimes: vec![], // XXX
         };
 
         info!("Registering node addresses: {:?}", node.addresses);

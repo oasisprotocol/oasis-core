@@ -34,12 +34,10 @@ pub struct Node {
     pub addresses: Vec<Address>,
     /// Certificate for establishing TLS connections.
     pub certificate: Certificate,
-    //TODO: define the reference to a stake.
-    pub stake: Vec<u8>,
     /// Time of registration.
     pub registration_time: u64,
-    /// Capabilities.
-    pub capabilities: Capabilities,
+    /// The runtimes supported by the node.
+    pub runtimes: Vec<Runtime>,
 }
 
 impl TryFrom<api::Node> for Node {
@@ -65,9 +63,8 @@ impl TryFrom<api::Node> for Node {
             expiration: node.expiration,
             addresses: addresses,
             certificate: Certificate::try_from(node.get_certificate().clone())?,
-            stake: node.get_stake().to_vec(),
             registration_time: node.registration_time,
-            capabilities: Capabilities::default(), // XXX
+            runtimes: vec![], // XXX
         })
     }
 }
@@ -90,11 +87,18 @@ impl Into<api::Node> for Node {
                 .collect(),
         );
         node.set_certificate(self.certificate.into());
-        node.set_stake(self.stake.clone());
         node.set_registration_time(self.registration_time);
-        node.set_capabilities(api::Capabilities::new()); // XXX
         node
     }
+}
+
+/// Node's supported runtimes.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Runtime {
+    /// The runtime ID supported by the node.
+    pub id: B256,
+    /// Capabilities supported by the node for this runtime.
+    pub capabilities: Capabilities,
 }
 
 /// Node capabilities.
@@ -184,7 +188,6 @@ mod test {
         original.expiration = 1_000_000_000;
         original.addresses = Address::for_local_port(42).unwrap();
         original.certificate = Certificate::generate(&NullSignerVerifier).unwrap().0;
-        original.stake = vec![42; 10];
         original.registration_time = 42;
 
         let intermediate: api::Node = original.clone().into();
