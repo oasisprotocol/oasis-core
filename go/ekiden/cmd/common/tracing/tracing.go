@@ -20,13 +20,6 @@ const (
 	cfgTracingSamplerParam               = "tracing.sampler.param"
 )
 
-var (
-	tracingEnabled                    bool
-	tracingReporterFlushInterval      time.Duration
-	tracingReporterLocalAgentHostPort string
-	tracingSamplerParam               float64
-)
-
 type tracingService struct {
 	closer io.Closer
 }
@@ -67,10 +60,10 @@ func New(serviceName string) (service.CleanupAble, error) {
 // RegisterFlags registers the flags used by the tracing service.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().BoolVar(&tracingEnabled, cfgTracingEnabled, true, "Enable tracing")
-		cmd.Flags().DurationVar(&tracingReporterFlushInterval, cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
-		cmd.Flags().StringVar(&tracingReporterLocalAgentHostPort, cfgTracingReporterLocalAgentHostPort, "localhost:6831", "Send spans to jaeger-agent at this address")
-		cmd.Flags().Float64Var(&tracingSamplerParam, cfgTracingSamplerParam, 0.001, "Probability for probabilistic sampler")
+		cmd.Flags().Bool(cfgTracingEnabled, true, "Enable tracing")
+		cmd.Flags().Duration(cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
+		cmd.Flags().String(cfgTracingReporterLocalAgentHostPort, "localhost:6831", "Send spans to jaeger-agent at this address")
+		cmd.Flags().Float64(cfgTracingSamplerParam, 0.001, "Probability for probabilistic sampler")
 	}
 
 	for _, v := range []string{

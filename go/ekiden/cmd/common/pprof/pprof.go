@@ -15,8 +15,6 @@ import (
 
 const cfgPprofBind = "pprof.bind"
 
-var pprofBind string
-
 type pprofService struct {
 	service.BaseBackgroundService
 
@@ -101,7 +99,7 @@ func New() (service.BackgroundService, error) {
 // RegisterFlags registers the flags used by the pprof service.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().StringVar(&pprofBind, cfgPprofBind, "", "enable profiling endpoint at given address")
+		cmd.Flags().String(cfgPprofBind, "", "enable profiling endpoint at given address")
 	}
 
 	for _, v := range []string{
