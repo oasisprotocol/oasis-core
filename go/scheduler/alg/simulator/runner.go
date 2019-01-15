@@ -36,6 +36,7 @@ type SimulationResults struct {
 	LinearExecutionTime int64
 	ActualExecutionTime int64
 	NumberOfSchedules   int
+	ServerUtilization   float64
 }
 
 // DistributionConfig are distribution parameters, gathered into one struct.  When we add new
@@ -558,6 +559,9 @@ func RunSimulationWithConfigs(
 	totalExecutionTime := alg.ExecutionTime(0)
 	linearExecutionTime := alg.ExecutionTime(0)
 
+	totalCommitteeBusyTime := alg.ExecutionTime(0)
+	totalCommitteeTimeAvailable := alg.ExecutionTime(0)
+
 	ts := transactionSourceFactory(dcnf)
 	sched := schedulerFactory(scnf)
 	var err error
@@ -650,6 +654,12 @@ func RunSimulationWithConfigs(
 				}
 			}
 			totalExecutionTime += schedExecutionTime
+
+			// Calculate how much time committee members are actually busy.
+			for ix := range committee {
+				totalCommitteeBusyTime += committee[ix].executionTime
+			}
+			totalCommitteeTimeAvailable += alg.ExecutionTime(xcnf.numCommittees * int(schedExecutionTime))
 		}
 		if flush && len(sgl) == 0 {
 			break
@@ -662,6 +672,7 @@ func RunSimulationWithConfigs(
 		LinearExecutionTime: int64(linearExecutionTime),
 		ActualExecutionTime: int64(totalExecutionTime),
 		NumberOfSchedules:   schedNum,
+		ServerUtilization:   float64(totalCommitteeBusyTime) / float64(totalCommitteeTimeAvailable),
 	}
 }
 

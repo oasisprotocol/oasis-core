@@ -161,11 +161,12 @@ func main() {
 		}
 	}
 	vHeaders = append(vHeaders, "Speedup")
+	vHeaders = append(vHeaders, "Util")
 
 	colWidth := 16
 	precision := 4
 
-	numCols := numVarying + 1
+	numCols := numVarying + 2
 	if !printMarkdown {
 		printHeavySeparators(bw, numCols, colWidth)
 	}
@@ -204,8 +205,10 @@ func main() {
 			_, _ = fmt.Fprintf(bw, "Actual execution time:    %8d\n", res.ActualExecutionTime)
 			_, _ = fmt.Fprintf(bw, "Speedup:                  %22.13f\n", avgSpeedup)
 			_, _ = fmt.Fprintf(bw, "Number of schedules:      %8d\n", res.NumberOfSchedules)
+			_, _ = fmt.Fprintf(bw, "Server utilization:       %22.13f\n", res.ServerUtilization)
 		}
 		data[numVarying] = fmt.Sprintf("%*.*g", colWidth, precision, avgSpeedup)
+		data[numVarying+1] = fmt.Sprintf("%*.*g", colWidth, precision, res.ServerUtilization)
 
 		printFields(bw, data, colWidth)
 		if bw.Flush() != nil {
