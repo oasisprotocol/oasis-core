@@ -196,6 +196,8 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 }
 
 func (w *Worker) registerEntity() error {
+	w.entity.RegistrationTime = uint64(time.Now().Unix())
+
 	signedEnt, err := entity.SignEntity(*w.identity.NodeKey, registry.RegisterEntitySignatureContext, w.entity)
 	if err != nil {
 		w.logger.Error("failed to register entity: unable to sign entity descriptor",
