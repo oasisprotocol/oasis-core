@@ -33,6 +33,9 @@ import (
 
 // Run runs the ekiden node.
 func Run(cmd *cobra.Command, args []string) {
+	// Re-register flags due to https://github.com/spf13/viper/issues/233.
+	RegisterFlags(cmd)
+
 	node, err := NewNode()
 	if err != nil {
 		return

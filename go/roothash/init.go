@@ -30,12 +30,6 @@ const (
 	cfgRoundTimeout  = "roothash.round_timeout"
 )
 
-var (
-	flagBackend       string
-	flagGenesisBlocks string
-	flagRoundTimeout  time.Duration
-)
-
 // New constructs a new Backend based on the configuration flags.
 func New(
 	timeSource epochtime.Backend,
@@ -93,9 +87,11 @@ func New(
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagBackend, cfgBackend, memory.BackendName, "Root hash backend")
-	cmd.Flags().StringVar(&flagGenesisBlocks, cfgGenesisBlocks, "", "File with serialized genesis blocks")
-	cmd.Flags().DurationVar(&flagRoundTimeout, cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, memory.BackendName, "Root hash backend")
+		cmd.Flags().String(cfgGenesisBlocks, "", "File with serialized genesis blocks")
+		cmd.Flags().Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
+	}
 
 	for _, v := range []string{
 		cfgBackend,
