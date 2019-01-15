@@ -63,4 +63,5 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	pgx.RegisterFlags(cmd)
 	client.RegisterFlags(cmd)
+	cachingclient.RegisterFlags(cmd)
 }
