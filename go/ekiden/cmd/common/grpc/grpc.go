@@ -365,8 +365,10 @@ func NewServerEx(port uint16, cert *tls.Certificate) (*Server, error) {
 
 // RegisterServerFlags registers the flags used by the gRPC server.
 func RegisterServerFlags(cmd *cobra.Command) {
-	cmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
-	cmd.Flags().BoolVar(&grpcVerboseDebug, cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Uint16Var(&grpcPort, cfgGRPCPort, 9001, "gRPC server port")
+		cmd.Flags().BoolVar(&grpcVerboseDebug, cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+	}
 
 	for _, v := range []string{
 		cfgGRPCPort,
@@ -386,7 +388,9 @@ func RegisterClientFlags(cmd *cobra.Command, persistent bool) {
 		flagSet = cmd.Flags()
 	}
 
-	flagSet.StringVarP(&remoteAddress, cfgAddress, "a", defaultAddress, "remote gRPC address")
+	if !cmd.Flags().Parsed() {
+		flagSet.StringVarP(&remoteAddress, cfgAddress, "a", defaultAddress, "remote gRPC address")
+	}
 
 	if persistent {
 		_ = viper.BindPFlag(cfgAddress, flagSet.Lookup(cfgAddress))

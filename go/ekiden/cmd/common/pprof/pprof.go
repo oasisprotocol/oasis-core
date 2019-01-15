@@ -100,7 +100,9 @@ func New() (service.BackgroundService, error) {
 
 // RegisterFlags registers the flags used by the pprof service.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&pprofBind, cfgPprofBind, "", "enable profiling endpoint at given address")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().StringVar(&pprofBind, cfgPprofBind, "", "enable profiling endpoint at given address")
+	}
 
 	for _, v := range []string{
 		cfgPprofBind,

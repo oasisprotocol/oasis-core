@@ -469,8 +469,10 @@ func (c *pgxConfig) Type() string {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().Var(&flagDatabaseURI, cfgDatabaseURI, "pgx database URI")
-	cmd.Flags().Int(cfgMaxConnections, 5, "pgx database maximum connections")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Var(&flagDatabaseURI, cfgDatabaseURI, "pgx database URI")
+		cmd.Flags().Int(cfgMaxConnections, 5, "pgx database maximum connections")
+	}
 
 	for _, v := range []string{
 		cfgDatabaseURI,

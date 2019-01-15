@@ -517,17 +517,19 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
-	cmd.Flags().String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
-	cmd.Flags().Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
-	cmd.Flags().Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-	cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
-	cmd.Flags().String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
-	cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-	cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
-	cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
-	cmd.Flags().String(cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
-	cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
+		cmd.Flags().String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
+		cmd.Flags().Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
+		cmd.Flags().Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
+		cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
+		cmd.Flags().String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
+		cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
+		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
+		cmd.Flags().String(cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
+		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
+	}
 
 	for _, v := range []string{
 		cfgCoreGenesisFile,

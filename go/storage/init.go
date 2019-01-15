@@ -51,7 +51,9 @@ func New(timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgBackend, memory.BackendName, "Storage backend")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, memory.BackendName, "Storage backend")
+	}
 
 	for _, v := range []string{
 		cfgBackend,

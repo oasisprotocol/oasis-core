@@ -33,7 +33,9 @@ func New(timeSource epochtime.Backend, tmService service.TendermintService) (api
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgBackend, insecure.BackendName, "Random beacon backend")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, insecure.BackendName, "Random beacon backend")
+	}
 
 	for _, v := range []string{
 		cfgBackend,

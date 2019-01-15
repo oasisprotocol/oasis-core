@@ -30,6 +30,9 @@ type storageEnv struct {
 }
 
 func doNode(cmd *cobra.Command, args []string) {
+	// Re-register flags due to https://github.com/spf13/viper/issues/233.
+	RegisterFlags(cmd)
+
 	env := &storageEnv{
 		svcMgr: background.NewServiceManager(logger),
 	}
@@ -135,8 +138,8 @@ func initStorage(env *storageEnv, dataDir string) error {
 	return nil
 }
 
-// Register registers the storage node sub-command.
-func Register(parentCmd *cobra.Command) {
+// RegisterFlags registers the flags used by the storage node sub-command.
+func RegisterFlags(cmd *cobra.Command) {
 	// Backend initialization flags.
 	for _, v := range []func(*cobra.Command){
 		metrics.RegisterFlags,
@@ -144,8 +147,12 @@ func Register(parentCmd *cobra.Command) {
 		pprof.RegisterFlags,
 		storage.RegisterFlags,
 	} {
-		v(nodeCmd)
+		v(cmd)
 	}
+}
 
+// Register registers the storage node sub-command.
+func Register(parentCmd *cobra.Command) {
+	RegisterFlags(nodeCmd)
 	parentCmd.AddCommand(nodeCmd)
 }

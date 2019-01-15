@@ -167,8 +167,10 @@ func New() (api.Backend, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
-	cmd.Flags().Int(cfgCacheSize, 1000000, "Cache size")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
+		cmd.Flags().Int(cfgCacheSize, 1000000, "Cache size")
+	}
 
 	for _, v := range []string{
 		cfgCacheFile,

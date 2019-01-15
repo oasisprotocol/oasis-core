@@ -42,7 +42,9 @@ func New(timeSource epochtime.Backend, tmService service.TendermintService) (api
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgBackend, memory.BackendName, "Registry backend")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, memory.BackendName, "Registry backend")
+	}
 
 	for _, v := range []string{
 		cfgBackend,

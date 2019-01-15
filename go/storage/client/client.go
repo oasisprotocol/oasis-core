@@ -156,7 +156,9 @@ func New() (api.Backend, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgClientAddress, "localhost:42261", "Address of node to connect to with the storage client")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgClientAddress, "localhost:42261", "Address of node to connect to with the storage client")
+	}
 
 	for _, v := range []string{
 		cfgClientAddress,

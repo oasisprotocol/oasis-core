@@ -32,7 +32,9 @@ func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backe
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgBackend, trivial.BackendName, "Scheduler backend")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, trivial.BackendName, "Scheduler backend")
+	}
 
 	for _, v := range []string{
 		cfgBackend,

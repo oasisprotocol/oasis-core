@@ -87,9 +87,11 @@ func New(
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgBackend, memory.BackendName, "Root hash backend")
-	cmd.Flags().String(cfgGenesisBlocks, "", "File with serialized genesis blocks")
-	cmd.Flags().Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, memory.BackendName, "Root hash backend")
+		cmd.Flags().String(cfgGenesisBlocks, "", "File with serialized genesis blocks")
+		cmd.Flags().Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
+	}
 
 	for _, v := range []string{
 		cfgBackend,

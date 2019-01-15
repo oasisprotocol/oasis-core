@@ -44,9 +44,11 @@ func New(tmService service.TendermintService) (api.Backend, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().String(cfgBackend, system.BackendName, "Epoch time backend")
-	cmd.Flags().Int64(cfgSystemInterval, api.EpochInterval, "Epoch interval")
-	cmd.Flags().Int64(cfgTendermintInterval, api.EpochInterval, "Epoch interval (in blocks)")
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBackend, system.BackendName, "Epoch time backend")
+		cmd.Flags().Int64(cfgSystemInterval, api.EpochInterval, "Epoch interval")
+		cmd.Flags().Int64(cfgTendermintInterval, api.EpochInterval, "Epoch interval (in blocks)")
+	}
 
 	for _, v := range []string{
 		cfgBackend,
