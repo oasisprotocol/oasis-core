@@ -18,8 +18,6 @@ import (
 
 const cfgBackend = "scheduler.backend"
 
-var flagBackend string
-
 // New constructs a new Backend based on the configuration flags.
 func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend, service service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
@@ -34,7 +32,7 @@ func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backe
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagBackend, cfgBackend, trivial.BackendName, "Scheduler backend")
+	cmd.Flags().String(cfgBackend, trivial.BackendName, "Scheduler backend")
 
 	for _, v := range []string{
 		cfgBackend,

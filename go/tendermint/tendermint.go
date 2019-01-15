@@ -63,22 +63,6 @@ const (
 
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
-
-	flagCoreGenesisFile   string
-	flagCoreListenAddress string
-
-	flagConsensusTimeoutCommit      time.Duration
-	flagConsensusSkipTimeoutCommit  bool
-	flagConsensusEmptyBlockInterval time.Duration
-
-	flagABCIPruneStrategy string
-	flagABCIPruneNumKept  int64
-
-	flagLogDebug bool
-
-	flagDebugBootstrapAddress  string
-	flagDebugBootstrapNodeAddr string
-	flagDebugBoostrapNodeName  string
 )
 
 type tendermintService struct {
@@ -357,7 +341,7 @@ func (t *tendermintService) lazyInit() error {
 		&abci.LogAdapter{
 			Logger:           logging.GetLogger("tendermint"),
 			IsTendermintCore: true,
-			SuppressDebug:    !flagLogDebug,
+			SuppressDebug:    !viper.GetBool(cfgLogDebug),
 		},
 	)
 	if err != nil {
@@ -533,17 +517,17 @@ func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagCoreGenesisFile, cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
-	cmd.Flags().StringVar(&flagCoreListenAddress, cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
-	cmd.Flags().DurationVar(&flagConsensusTimeoutCommit, cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
-	cmd.Flags().BoolVar(&flagConsensusSkipTimeoutCommit, cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-	cmd.Flags().DurationVar(&flagConsensusEmptyBlockInterval, cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
-	cmd.Flags().StringVar(&flagABCIPruneStrategy, cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
-	cmd.Flags().Int64Var(&flagABCIPruneNumKept, cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-	cmd.Flags().BoolVar(&flagLogDebug, cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
-	cmd.Flags().StringVar(&flagDebugBootstrapAddress, cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
-	cmd.Flags().StringVar(&flagDebugBootstrapNodeAddr, cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
-	cmd.Flags().StringVar(&flagDebugBoostrapNodeName, cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
+	cmd.Flags().String(cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
+	cmd.Flags().String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
+	cmd.Flags().Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
+	cmd.Flags().Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
+	cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
+	cmd.Flags().String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
+	cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
+	cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
+	cmd.Flags().String(cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
+	cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
 
 	for _, v := range []string{
 		cfgCoreGenesisFile,

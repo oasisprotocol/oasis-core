@@ -20,8 +20,6 @@ import (
 
 const cfgBackend = "storage.backend"
 
-var flagBackend string
-
 // New constructs a new Backend based on the configuration flags.
 func New(timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
 	var impl api.Backend
@@ -53,7 +51,7 @@ func New(timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagBackend, cfgBackend, memory.BackendName, "Storage backend")
+	cmd.Flags().String(cfgBackend, memory.BackendName, "Storage backend")
 
 	for _, v := range []string{
 		cfgBackend,

@@ -50,8 +50,7 @@ var (
 
 	_ pflag.Value = (*pgxConfig)(nil)
 
-	flagDatabaseURI    pgxConfig
-	flagMaxConnections int
+	flagDatabaseURI pgxConfig
 
 	errElementTooLarge = fmt.Errorf("storage/pgx: element too large for insert")
 )
@@ -387,16 +386,17 @@ func New(timeSource epochtime.Backend) (api.Backend, error) {
 	}
 
 	// Ensure that sufficient configuration is provided.
+	maxConnections := viper.GetInt(cfgMaxConnections)
 	if flagDatabaseURI.cfg == nil {
 		return nil, fmt.Errorf("storage/pgx: no database configured")
 	}
-	if flagMaxConnections <= 0 {
-		flagMaxConnections = 1
+	if maxConnections <= 0 {
+		maxConnections = 1
 	}
 
 	connPoolCfg := pgx.ConnPoolConfig{
 		ConnConfig:     *flagDatabaseURI.cfg,
-		MaxConnections: flagMaxConnections,
+		MaxConnections: maxConnections,
 	}
 
 	var err error
@@ -470,10 +470,11 @@ func (c *pgxConfig) Type() string {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().Var(&flagDatabaseURI, cfgDatabaseURI, "pgx database URI")
-	cmd.Flags().IntVar(&flagMaxConnections, cfgMaxConnections, 5, "pgx database maximum connections")
+	cmd.Flags().Int(cfgMaxConnections, 5, "pgx database maximum connections")
 
 	for _, v := range []string{
 		cfgDatabaseURI,
+		cfgMaxConnections,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

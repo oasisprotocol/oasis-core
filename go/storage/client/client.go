@@ -24,8 +24,6 @@ const (
 
 var (
 	_ api.Backend = (*storageClientBackend)(nil)
-
-	flagClientAddress string
 )
 
 type storageClientBackend struct {
@@ -138,7 +136,7 @@ func (b *storageClientBackend) Initialized() <-chan struct{} {
 }
 
 func New() (api.Backend, error) {
-	conn, err := grpc.Dial(flagClientAddress, grpc.WithInsecure())
+	conn, err := grpc.Dial(viper.GetString(cfgClientAddress), grpc.WithInsecure())
 
 	if err != nil {
 		return nil, err
@@ -158,7 +156,7 @@ func New() (api.Backend, error) {
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagClientAddress, cfgClientAddress, "localhost:42261", "Address of node to connect to with the storage client")
+	cmd.Flags().String(cfgClientAddress, "localhost:42261", "Address of node to connect to with the storage client")
 
 	for _, v := range []string{
 		cfgClientAddress,
