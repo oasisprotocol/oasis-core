@@ -7,9 +7,28 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 
 # Run a Tendermint validator committee and a storage node.
 #
-# Sets EKIDEN_TM_GENESIS_FILE and EKIDEN_STORAGE_PORT.
+# Sets:
+#   EKIDEN_COMMITTEE_DIR
+#   EKIDEN_TM_GENESIS_FILE
+#   EKIDEN_STORAGE_PORT
+#   EKIDEN_EPOCHTIME_BACKEND
+#   EKIDEN_EXTRA_ARGS
+#
+# Arguments:
+#   epochtime_backend - epochtime backend (default: tendermint)
+#   id - commitee identifier (default: 1)
+#
+# Any additional arguments are passed to the validator Go node and
+# all compute nodes.
 run_backend_tendermint_committee() {
-    local base_datadir=${TEST_BASE_DIR}/committee-data
+    local epochtime_backend=${1:-tendermint}
+    shift || true
+    local id=${1:-1}
+    shift || true
+    local extra_args=$*
+
+    local committee_dir=${TEST_BASE_DIR}/committee-${id}
+    local base_datadir=${committee_dir}/committee-data
     local validator_files=""
     let nodes=3
 
@@ -29,7 +48,7 @@ run_backend_tendermint_committee() {
     done
 
     # Create the genesis document.
-    local genesis_file=${TEST_BASE_DIR}/genesis.json
+    local genesis_file=${committee_dir}/genesis.json
     rm -Rf ${genesis_file}
 
     ${WORKDIR}/go/ekiden/ekiden \
@@ -38,7 +57,7 @@ run_backend_tendermint_committee() {
         ${validator_files}
 
     # Run the storage node.
-    local storage_datadir=${TEST_BASE_DIR}/storage
+    local storage_datadir=${committee_dir}/storage
     local storage_port=60000
     rm -Rf ${storage_datadir}
 
@@ -46,7 +65,7 @@ run_backend_tendermint_committee() {
         storage node \
         --datadir ${storage_datadir} \
         --grpc.port ${storage_port} \
-        --log.file ${TEST_BASE_DIR}/storage.log \
+        --log.file ${committee_dir}/storage.log \
         &
 
     # Run the validator nodes.
@@ -58,10 +77,10 @@ run_backend_tendermint_committee() {
 
         ${WORKDIR}/go/ekiden/ekiden \
             --log.level debug \
-            --log.file ${TEST_BASE_DIR}/validator-${idx}.log \
+            --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.port ${grpc_port} \
             --grpc.log.verbose_debug \
-            --epochtime.backend tendermint \
+            --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
             --beacon.backend tendermint \
             --metrics.mode none \
@@ -75,12 +94,16 @@ run_backend_tendermint_committee() {
             --tendermint.consensus.timeout_commit 250ms \
             --tendermint.log.debug \
             --datadir ${datadir} \
+            ${extra_args} \
             &
     done
 
     # Export some variables so compute workers can find them.
+    EKIDEN_COMMITTEE_DIR=${committee_dir}
     EKIDEN_STORAGE_PORT=${storage_port}
     EKIDEN_TM_GENESIS_FILE=${genesis_file}
+    EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
+    EKIDEN_EXTRA_ARGS="${extra_args}"
 }
 
 # Run a compute node.
@@ -95,9 +118,9 @@ run_backend_tendermint_committee() {
 # Any additional arguments are passed to the Go node.
 run_compute_node() {
     local id=$1
-    shift
+    shift || true
     local runtime=$1
-    shift
+    shift || true
     local extra_args=$*
 
     # Ensure the genesis file and storage port are available.
@@ -106,11 +129,12 @@ run_compute_node() {
         exit 1
     fi
 
-    local data_dir=${TEST_BASE_DIR}/worker-$id
+    local data_dir=${EKIDEN_COMMITTEE_DIR}/worker-$id
     rm -rf ${data_dir}
-    local cache_dir=${TEST_BASE_DIR}/worker-cache-$id
+    local cache_dir=${EKIDEN_COMMITTEE_DIR}/worker-cache-$id
     rm -rf ${cache_dir}
-    local log_file=${TEST_BASE_DIR}/worker-$id.log
+    local log_file=${EKIDEN_COMMITTEE_DIR}/worker-$id.log
+    rm -rf ${log_file}
 
     # Generate port number.
     let grpc_port=id+10000
@@ -124,7 +148,7 @@ run_compute_node() {
         --grpc.log.verbose_debug \
         --storage.backend client \
         --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
-        --epochtime.backend tendermint \
+        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
         --metrics.mode none \
@@ -146,12 +170,12 @@ run_compute_node() {
         --worker.key_manager.address 127.0.0.1:9003 \
         --worker.key_manager.certificate ${WORKDIR}/tests/keymanager/km.pem \
         --datadir ${data_dir} \
-        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
+        ${EKIDEN_EXTRA_ARGS} ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
 }
 
 # Cat all compute node logs.
 cat_compute_logs() {
-    cat ${TEST_BASE_DIR}/worker-*.log
+    cat ${EKIDEN_COMMITTEE_DIR}/worker-*.log
 }
 
 # Wait for a number of compute nodes to register.
@@ -270,9 +294,6 @@ run_test() {
     fi
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${name}\e[0m\n"
-
-    # Cleanup logs.
-    rm -f ${TEST_BASE_DIR}/worker-*.log
 
     # Start the key manager before starting anything else.
     run_keymanager_node
