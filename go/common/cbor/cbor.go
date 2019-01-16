@@ -7,10 +7,8 @@ package cbor
 
 import "github.com/ugorji/go/codec"
 
-var (
-	// CBORHandle is the CBOR codec Handle used to encode/decode CBOR blobs.
-	CBORHandle codec.Handle
-)
+// Handle is the CBOR codec Handle used to encode/decode CBOR blobs.
+var Handle codec.Handle
 
 // Marshaler allows a type to be serialized into CBOR.
 type Marshaler interface {
@@ -27,14 +25,14 @@ type Unmarshaler interface {
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
 	var b []byte
-	enc := codec.NewEncoderBytes(&b, CBORHandle)
+	enc := codec.NewEncoderBytes(&b, Handle)
 	enc.MustEncode(src)
 	return b
 }
 
 // Unmarshal deserializes a CBOR byte vector into a given type.
 func Unmarshal(data []byte, dst interface{}) error {
-	dec := codec.NewDecoderBytes(data, CBORHandle)
+	dec := codec.NewDecoderBytes(data, Handle)
 	if err := dec.Decode(dst); err != nil {
 		return err
 	}
@@ -45,7 +43,7 @@ func Unmarshal(data []byte, dst interface{}) error {
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
 // Panics if unmarshal fails.
 func MustUnmarshal(data []byte, dst interface{}) {
-	dec := codec.NewDecoderBytes(data, CBORHandle)
+	dec := codec.NewDecoderBytes(data, Handle)
 	if err := dec.Decode(dst); err != nil {
 		panic(err)
 	}
@@ -55,5 +53,5 @@ func init() {
 	h := new(codec.CborHandle)
 	h.EncodeOptions.Canonical = true
 
-	CBORHandle = h
+	Handle = h
 }
