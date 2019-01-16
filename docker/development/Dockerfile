@@ -87,10 +87,11 @@ RUN . $NVM_DIR/nvm.sh && \
     nvm alias default node && \
     npm install -g truffle-oasis
 
-# Install golang 1.11 and utilities.
-RUN wget https://dl.google.com/go/go1.11.1.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.11.1.linux-amd64.tar.gz && \
-    rm go1.11.1.linux-amd64.tar.gz && \
+# Install golang and utilities.
+ARG GO_VERSION=1.11.4
+RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
     # Install a specific version of protoc-gen-go (1.2.0).
     go get -d github.com/golang/protobuf/protoc-gen-go && \
