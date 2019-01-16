@@ -91,12 +91,6 @@ members = [
     "scheduler/base",
     "scheduler/client",
 
-    # Stake escrow.
-    "stake/api",
-    "stake/base",
-    "stake/client",
-    "stake/dummy",
-
     # Key manager.
     "key-manager/api",
     "key-manager/common",
