@@ -17,6 +17,7 @@ func (w *Worker) registryRegisterRuntime(cfg *RuntimeConfig) error {
 
 	rtDesc := registry.Runtime{
 		ID:                     cfg.ID,
+		FeaturesSGX:            cfg.SGX,
 		ReplicaGroupSize:       cfg.ReplicaGroupSize,
 		ReplicaGroupBackupSize: cfg.ReplicaGroupBackupSize,
 		StorageGroupSize:       1,

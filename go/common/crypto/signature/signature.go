@@ -160,6 +160,16 @@ func (k PublicKey) MarshalPEM() (data []byte, err error) {
 	return marshalPEM(pubPEMType, k[:])
 }
 
+// UnmarshalHex deserializes a hexadecimal text string into the given type.
+func (k *PublicKey) UnmarshalHex(text string) error {
+	b, err := hex.DecodeString(text)
+	if err != nil {
+		return err
+	}
+
+	return k.UnmarshalBinary(b)
+}
+
 // Equal compares vs another public key for equality.
 func (k PublicKey) Equal(cmp PublicKey) bool {
 	return bytes.Equal(k, cmp)
