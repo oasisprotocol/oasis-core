@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"encoding/hex"
 	"fmt"
 	"net"
 	"strconv"
@@ -40,6 +39,7 @@ const (
 	cfgRuntimeID     = "worker.runtime.id"
 
 	// XXX: This is needed until we decide how we want to actually register runtimes.
+	cfgRuntimeSGXIDs                 = "worker.runtime.sgx_ids"
 	cfgRuntimeReplicaGroupSize       = "worker.runtime.replica_group_size"
 	cfgRuntimeReplicaGroupBackupSize = "worker.runtime.replica_group_backup_size"
 
@@ -86,6 +86,21 @@ func parseAddressList(addresses []string) ([]node.Address, error) {
 	return output, nil
 }
 
+func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
+	m := make(map[signature.MapKey]bool)
+
+	for _, v := range viper.GetStringSlice(cfgRuntimeSGXIDs) {
+		var id signature.PublicKey
+		if err := id.UnmarshalHex(v); err != nil {
+			return nil, err
+		}
+
+		m[id.ToMapKey()] = true
+	}
+
+	return m, nil
+}
+
 // New creates a new worker.
 func New(
 	identity *identity.Identity,
@@ -106,14 +121,15 @@ func New(
 	if len(runtimeBinaries) != len(runtimeIDs) {
 		return nil, fmt.Errorf("runtime binary/id count mismatch")
 	}
-	for idx, runtimeBinary := range runtimeBinaries {
-		runtimeIDRaw, err := hex.DecodeString(runtimeIDs[idx])
-		if err != nil {
-			return nil, err
-		}
-		var runtimeID signature.PublicKey
 
-		if err := runtimeID.UnmarshalBinary(runtimeIDRaw); err != nil {
+	sgxRuntimeIDs, err := getSGXRuntimeIDs()
+	if err != nil {
+		return nil, err
+	}
+
+	for idx, runtimeBinary := range runtimeBinaries {
+		var runtimeID signature.PublicKey
+		if err = runtimeID.UnmarshalHex(runtimeIDs[idx]); err != nil {
 			return nil, err
 		}
 
@@ -121,6 +137,7 @@ func New(
 			ID:     runtimeID,
 			Binary: runtimeBinary,
 			// XXX: This is needed until we decide how we want to actually register runtimes.
+			SGX:                    sgxRuntimeIDs[runtimeID.ToMapKey()],
 			ReplicaGroupSize:       uint64(viper.GetInt64(cfgRuntimeReplicaGroupSize)),
 			ReplicaGroupBackupSize: uint64(viper.GetInt64(cfgRuntimeReplicaGroupBackupSize)),
 		})
@@ -212,6 +229,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
 
 		// XXX: Needed till runtime registration is done elsewhere.
+		cmd.Flags().StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
 		cmd.Flags().String(cfgRuntimeReplicaGroupSize, "1", "Number of workers in runtime replica group")
 		cmd.Flags().String(cfgRuntimeReplicaGroupBackupSize, "0", "Number of backup workers in runtime replica group")
 
@@ -243,6 +261,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cfgRuntimeBinary,
 		cfgRuntimeID,
+
+		cfgRuntimeSGXIDs,
 		cfgRuntimeReplicaGroupSize,
 		cfgRuntimeReplicaGroupBackupSize,
 

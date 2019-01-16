@@ -31,6 +31,7 @@ type RuntimeConfig struct {
 	Binary string
 
 	// XXX: This is needed until we decide how we want to actually register runtimes.
+	SGX                    bool
 	ReplicaGroupSize       uint64
 	ReplicaGroupBackupSize uint64
 }
