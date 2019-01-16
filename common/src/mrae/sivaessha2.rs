@@ -17,8 +17,6 @@ use super::sodalite::{scalarmult, scalarmult_base};
 
 /// Size of the expanded SIV_CTR-AES128_HMAC-SHA256-128 key in bytes.
 pub const KEY_SIZE: usize = 48;
-/// Recommended size of the nonce in bytes.
-pub const NONCE_SIZE: usize = 16;
 /// Size of the authentication tag in bytes.
 pub const TAG_SIZE: usize = 16;
 
@@ -285,6 +283,7 @@ mod tests {
     use self::base64::decode;
     use self::serde_json::{Map, Value};
     use self::test::{black_box, Bencher};
+    use super::super::nonce::NONCE_SIZE;
     use super::*;
 
     #[test]

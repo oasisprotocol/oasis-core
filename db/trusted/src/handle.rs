@@ -6,7 +6,8 @@ use std::sync::{Mutex, MutexGuard};
 use ekiden_common::bytes::H256;
 use ekiden_common::error::Result;
 use ekiden_common::hash::empty_hash;
-use ekiden_common::mrae::sivaessha2::{SivAesSha2, KEY_SIZE, NONCE_SIZE};
+use ekiden_common::mrae::{nonce::NONCE_SIZE,
+                          sivaessha2::{SivAesSha2, KEY_SIZE}};
 #[cfg(test)]
 use ekiden_common::ring::digest;
 use ekiden_enclave_common::quote::MrEnclave;
