@@ -63,7 +63,6 @@ RUN eval $(ssh-agent -s) && \
     cd ekiden && \
     make -C go && \
     cargo build -p ekiden-worker --release && \
-    cargo build -p ekiden-compute --release && \
     cargo build -p ekiden-keymanager-node --release && \
     cd key-manager/dummy/enclave && \
     cargo ekiden build-enclave --output-identity --release
@@ -84,7 +83,6 @@ LABEL com.oasislabs.ekiden-build-image-tag="${EKIDEN_BUILD_IMAGE_TAG}"
 
 COPY --from=builder /workdir/ekiden/go/ekiden/ekiden /ekiden/bin/ekiden-node
 COPY --from=builder /workdir/ekiden/target/release/ekiden-worker /ekiden/bin/
-COPY --from=builder /workdir/ekiden/target/release/ekiden-compute /ekiden/bin/
 COPY --from=builder /workdir/ekiden/target/release/ekiden-keymanager-node /ekiden/bin/
 COPY --from=builder /workdir/ekiden/target/enclave/ekiden-keymanager-trusted.so /ekiden/lib/
 COPY --from=builder /workdir/ekiden/target/enclave/ekiden-keymanager-trusted.mrenclave /ekiden/res/

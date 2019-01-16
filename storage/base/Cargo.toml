@@ -8,9 +8,3 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-
-[target.'cfg(not(target_env = "sgx"))'.dependencies]
-ekiden-storage-api = { path = "../api", version = "0.2.0-alpha" }
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
-protobuf = "~2.0"
-log = "0.4"

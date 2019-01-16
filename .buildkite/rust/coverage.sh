@@ -60,11 +60,9 @@ cargo tarpaulin \
   --packages ekiden-storage-persistent \
   --packages ekiden-tools \
   --exclude-files *generated* \
-  --exclude-files compute/* \
   --exclude-files key-manager/* \
   --exclude-files registry/* \
   --exclude-files scheduler/* \
-  --exclude-files stake/* \
   --coveralls ${coveralls_api_token} \
   -v
 set -x

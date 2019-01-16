@@ -72,7 +72,6 @@ steps:
       # Upload the built artifacts.
       - cd /tmp/artifacts/debug
       - buildkite-agent artifact upload ekiden-worker
-      - buildkite-agent artifact upload ekiden-compute
       - buildkite-agent artifact upload ekiden-keymanager-node
       # Clients for E2E tests.
       - buildkite-agent artifact upload ekiden-keymanager-test-client

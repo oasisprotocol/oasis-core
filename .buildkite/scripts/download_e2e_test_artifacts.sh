@@ -15,7 +15,6 @@ source .buildkite/scripts/common.sh
 # Ekiden node, worker and compute node.
 download_artifact ekiden go/ekiden 755
 download_artifact ekiden-worker target/debug 755
-download_artifact ekiden-compute target/debug 755
 
 # Key manager.
 download_artifact ekiden-keymanager-node target/debug 755

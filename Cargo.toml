@@ -66,10 +66,6 @@ members = [
     "core/trusted",
     "core/edl",
 
-    # Compute node.
-    "compute/api",
-    "compute",
-
     # Compute worker.
     "worker",
 
@@ -94,12 +90,6 @@ members = [
     "scheduler/api",
     "scheduler/base",
     "scheduler/client",
-
-    # Stake escrow.
-    "stake/api",
-    "stake/base",
-    "stake/client",
-    "stake/dummy",
 
     # Key manager.
     "key-manager/api",

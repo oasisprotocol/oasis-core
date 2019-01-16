@@ -14,7 +14,7 @@ ekiden-enclave-common = { path = "../../enclave/common", version = "0.2.0-alpha"
 ekiden-rpc-client = { path = "../../rpc/client", version = "0.2.0-alpha" }
 ekiden-rpc-common = { path = "../../rpc/common", version = "0.2.0-alpha" }
 ekiden-rpc-api = { path="../../rpc/api", version = "0.2.0-alpha" }
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+grpcio = { version = "~0.4.2", features = ["openssl"] }
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
 ekiden-keymanager-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-keymanager-common = { path = "../common", version = "0.2.0-alpha" }

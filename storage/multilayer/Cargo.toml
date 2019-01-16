@@ -9,7 +9,7 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 clap = "2.31.2"
 futures = "0.1"
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+grpcio = { version = "~0.4.2", features = ["openssl"] }
 log = "0.4.1"
 rusoto_core = "0.34.0"
 
