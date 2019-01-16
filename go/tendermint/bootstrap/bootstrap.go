@@ -4,7 +4,6 @@ package bootstrap
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,6 +17,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
@@ -30,8 +30,8 @@ const (
 
 // GenesisDocument is the ekiden format tendermint GenesisDocument.
 type GenesisDocument struct {
-	Validators  []*GenesisValidator `json:"validators"`
-	GenesisTime time.Time           `json:"genesis_time"`
+	Validators  []*GenesisValidator `codec:"validators"`
+	GenesisTime time.Time           `codec:"genesis_time"`
 }
 
 // ToTendermint converts the GenesisDocument to tendermint's format.
@@ -61,10 +61,10 @@ func (d *GenesisDocument) ToTendermint() (*tmtypes.GenesisDoc, error) {
 
 // GenesisValidator is the ekiden format tendermint GenesisValidator
 type GenesisValidator struct {
-	PubKey      signature.PublicKey `json:"pub_key"`
-	Name        string              `json:"name"`
-	Power       int64               `json:"power"`
-	CoreAddress string              `json:"core_address"`
+	PubKey      signature.PublicKey `codec:"pub_key"`
+	Name        string              `codec:"name"`
+	Power       int64               `codec:"power"`
+	CoreAddress string              `codec:"core_address"`
 }
 
 type server struct {
@@ -221,7 +221,7 @@ func (s *server) buildGenesis() {
 		GenesisTime: time.Now(),
 	}
 
-	s.genesisDoc, _ = json.Marshal(doc)
+	s.genesisDoc = json.Marshal(doc)
 	if s.genesisPath != "" {
 		_ = ioutil.WriteFile(s.genesisPath, s.genesisDoc, 0600)
 	}
@@ -307,7 +307,7 @@ func Client(addr string) (*GenesisDocument, error) {
 // Validator posts the node's GenesisValidator to the specified server,
 // and retrives the genesis document.
 func Validator(addr string, validator *GenesisValidator) (*GenesisDocument, error) {
-	b, _ := json.Marshal(validator)
+	b := json.Marshal(validator)
 	resp, err := http.Post("http://"+addr+validatorURIPath, "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint/bootstrap: HTTP POST failed")

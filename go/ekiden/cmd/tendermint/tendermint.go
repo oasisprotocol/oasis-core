@@ -2,7 +2,6 @@
 package tendermint
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"os"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
@@ -83,7 +83,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		GenesisTime: time.Now(),
 	}
 
-	b, _ := json.Marshal(doc)
+	b := json.Marshal(doc)
 	if err := ioutil.WriteFile(flagGenesisFile, b, 0600); err != nil {
 		logger.Error("failed to save generated genesis document",
 			"err", err,

@@ -2,7 +2,6 @@ package tendermint
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,6 +29,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"

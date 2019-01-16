@@ -1,7 +1,6 @@
 package tendermint
 
 import (
-	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/json"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 )
@@ -125,7 +125,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	if !filepath.IsAbs(flagValidatorFile) {
 		flagValidatorFile = filepath.Join(dataDir, flagValidatorFile)
 	}
-	b, _ := json.Marshal(validator)
+	b := json.Marshal(validator)
 	if err = ioutil.WriteFile(flagValidatorFile, b, 0600); err != nil {
 		logger.Error("failed to write validator identity file",
 			"err", err,

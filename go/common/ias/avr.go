@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/json"
 )
 
 const nonceMaxLen = 32
@@ -80,7 +80,7 @@ const (
 	QuoteConfigurationNeeded
 )
 
-// UnmarshalText implements the encoding.BinaryUnmarshaler interface.
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (s *ISVEnclaveQuoteStatus) UnmarshalText(text []byte) error {
 	var ok bool
 
@@ -89,6 +89,16 @@ func (s *ISVEnclaveQuoteStatus) UnmarshalText(text []byte) error {
 		return fmt.Errorf("ias/avr: invalid quote status: '%v'", string(text))
 	}
 	return nil
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (s *ISVEnclaveQuoteStatus) MarshalText() ([]byte, error) {
+	str, ok := isvQuoteRevMap[*s]
+	if !ok {
+		return nil, fmt.Errorf("ias/avr: invalid quote status: '%v'", int(*s))
+	}
+
+	return []byte(str), nil
 }
 
 func (s ISVEnclaveQuoteStatus) String() string {
@@ -118,6 +128,16 @@ func (p *PSEManifestStatus) UnmarshalText(text []byte) error {
 		return fmt.Errorf("ias/avr: invalid PSE manifest status: '%v'", string(text))
 	}
 	return nil
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (p *PSEManifestStatus) MarshalText() ([]byte, error) {
+	str, ok := pseManifRevMap[*p]
+	if !ok {
+		return nil, fmt.Errorf("ias/avr: invalid PSE manifest status: '%v'", int(*p))
+	}
+
+	return []byte(str), nil
 }
 
 func (p PSEManifestStatus) String() string {
@@ -177,17 +197,17 @@ func (b *AVRBundle) Open(trustRoots *x509.CertPool, ts time.Time) (*AttestationV
 // AttestationVerificationReport is a deserialized Attestation Verification
 // Report (AVR).
 type AttestationVerificationReport struct {
-	ID                    string                `json:"id"`
-	Timestamp             string                `json:"timestamp"`
-	Version               int                   `json:"version"`
-	ISVEnclaveQuoteStatus ISVEnclaveQuoteStatus `json:"isvEnclaveQuoteStatus"`
-	ISVEnclaveQuoteBody   []byte                `json:"isvEnclaveQuoteBody"`
-	RevocationReason      *CRLReason            `json:"revocationReason"`
-	PSEManifestStatus     *PSEManifestStatus    `json:"pseManifestStatus"`
-	PSEManifestHash       string                `json:"pseManifestHash"`
-	PlatformInfoBlob      string                `json:"platformInfoBlob"`
-	Nonce                 string                `json:"nonce"`
-	EPIDPseudonym         []byte                `json:"epidPseudonym"`
+	ID                    string                `codec:"id"`
+	Timestamp             string                `codec:"timestamp"`
+	Version               int                   `codec:"version"`
+	ISVEnclaveQuoteStatus ISVEnclaveQuoteStatus `codec:"isvEnclaveQuoteStatus"`
+	ISVEnclaveQuoteBody   []byte                `codec:"isvEnclaveQuoteBody"`
+	RevocationReason      *CRLReason            `codec:"revocationReason"`
+	PSEManifestStatus     *PSEManifestStatus    `codec:"pseManifestStatus"`
+	PSEManifestHash       string                `codec:"pseManifestHash"`
+	PlatformInfoBlob      string                `codec:"platformInfoBlob"`
+	Nonce                 string                `codec:"nonce"`
+	EPIDPseudonym         []byte                `codec:"epidPseudonym"`
 }
 
 // Quote decodes and returns the enclave quote component of an Attestation
