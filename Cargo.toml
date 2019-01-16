@@ -66,10 +66,6 @@ members = [
     "core/trusted",
     "core/edl",
 
-    # Compute node.
-    "compute/api",
-    "compute",
-
     # Compute worker.
     "worker",
 

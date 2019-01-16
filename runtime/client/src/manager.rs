@@ -13,7 +13,6 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::retry_until_ok_or_max;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::node::Node;
-use ekiden_compute_api;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_roothash_base::backend::RootHashBackend;
@@ -21,7 +20,8 @@ use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 use ekiden_tracing;
 
-use super::client::RuntimeClient;
+use crate::client::RuntimeClient;
+use crate::generated::runtime_grpc as api;
 
 /// Computation group leader.
 struct Leader {
@@ -151,9 +151,9 @@ impl RuntimeClientManager {
                             .get_node(new_leader)
                             .and_then(move |node| {
                                 // Create new client to the leader node.
-                                let rpc = ekiden_compute_api::RuntimeClient::new(
-                                    node.connect_without_identity(inner.environment.clone()),
-                                );
+                                let rpc = api::RuntimeClient::new(node.connect_without_identity(
+                                    inner.environment.clone(),
+                                ));
                                 let client = RuntimeClient::new(
                                     inner.environment.clone(),
                                     rpc,

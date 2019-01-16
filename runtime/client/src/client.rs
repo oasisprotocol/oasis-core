@@ -15,14 +15,18 @@ use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::retry_until_ok;
 use ekiden_common::futures::sync::oneshot;
 use ekiden_common::hash::EncodedHash;
-use ekiden_compute_api;
 use ekiden_runtime_common::call::{RuntimeCall, RuntimeOutput};
 use ekiden_tracing::inject_to_options;
+
+mod api {
+    pub use crate::generated::runtime::*;
+    pub use crate::generated::runtime_grpc::*;
+}
 
 /// Runtime client.
 pub struct RuntimeClient {
     /// Underlying gRPC client.
-    rpc: Arc<ekiden_compute_api::RuntimeClient>,
+    rpc: Arc<api::RuntimeClient>,
     /// Shared service for waiting for runtime calls.
     call_wait_manager: Arc<super::callwait::Manager>,
     /// Optional call timeout.
@@ -43,7 +47,7 @@ impl RuntimeClient {
     /// Create new client instance.
     pub fn new(
         environment: Arc<Environment>,
-        rpc: ekiden_compute_api::RuntimeClient,
+        rpc: api::RuntimeClient,
         call_wait_manager: Arc<super::callwait::Manager>,
         timeout: Option<Duration>,
         runtime_id: B256,
@@ -66,7 +70,7 @@ impl RuntimeClient {
     where
         C: Serialize,
     {
-        let mut request = ekiden_compute_api::SubmitTxRequest::new();
+        let mut request = api::SubmitTxRequest::new();
         request.set_runtime_id(self.runtime_id.to_vec());
         match serde_cbor::to_vec(&call) {
             Ok(data) => request.set_data(data),
