@@ -254,9 +254,7 @@ impl KeyPair for NodeKeyPair {
             .unwrap()
             .as_ref()
             .to_vec();
-        let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&seed)).unwrap();
-        let signer = InMemorySigner::new(key_pair);
-        let (tls_certificate, tls_private_key) = x509::Certificate::generate(&signer).unwrap();
+        let (tls_certificate, tls_private_key) = x509::Certificate::generate().unwrap();
 
         Self {
             seed,

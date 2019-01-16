@@ -16,4 +16,4 @@ ekiden-storage-api = { path = "../api", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-scheduler-base = { path = "../../scheduler/base", version = "0.2.0-alpha" }
 ekiden-tracing = { path = "../../tracing", version = "0.2.0-alpha" }
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+grpcio = { version = "~0.4.2", features = ["openssl"] }

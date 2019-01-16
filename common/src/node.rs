@@ -170,8 +170,6 @@ impl Node {
 mod test {
     use super::*;
 
-    use super::super::signature::NullSignerVerifier;
-
     #[test]
     fn test_node_conversion() {
         // Default node.
@@ -187,7 +185,7 @@ mod test {
         original.entity_id = B256::random();
         original.expiration = 1_000_000_000;
         original.addresses = Address::for_local_port(42).unwrap();
-        original.certificate = Certificate::generate(&NullSignerVerifier).unwrap().0;
+        original.certificate = Certificate::generate().unwrap().0;
         original.registration_time = 42;
 
         let intermediate: api::Node = original.clone().into();

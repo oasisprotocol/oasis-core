@@ -23,5 +23,5 @@ byteorder = "1.2.7"
 log = "0.4"
 
 [dev-dependencies]
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+grpcio = { version = "~0.4.2", features = ["openssl"] }
 tokio-uds = "0.2.3"

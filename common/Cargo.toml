@@ -36,7 +36,7 @@ futures-sgx = { git = "https://github.com/oasislabs/futures-rs" }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 rand = "0.4.2"
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+grpcio = { version = "~0.4.2", features = ["openssl"] }
 futures = "0.1"
 get_if_addrs = "~0.5.1"
 env_logger = "0.5.10"

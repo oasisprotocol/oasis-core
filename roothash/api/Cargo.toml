@@ -10,7 +10,7 @@ build = "build.rs"
 [dependencies]
 ekiden-common-api = { path = "../../common/api", version = "0.2.0-alpha" }
 protobuf = "~2.0"
-ekiden-grpcio = { version = "0.3.2", features = ["openssl"] }
+grpcio = { version = "~0.4.2", features = ["openssl"] }
 futures = "0.1"
 
 [build-dependencies]
