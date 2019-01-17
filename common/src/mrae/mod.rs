@@ -7,4 +7,5 @@ extern crate sodalite;
 
 use super::error;
 
+pub mod nonce;
 pub mod sivaessha2;
