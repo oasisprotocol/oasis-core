@@ -39,10 +39,14 @@ source .buildkite/rust/common.sh
 scenario_basic() {
     local runtime=$1
 
+    register_runtime \
+        --runtime.replica_group_size 2 \
+        --runtime.replica_group_backup_size 1
+
     # Initialize compute nodes.
-    run_compute_node 1 ${runtime} --worker.runtime.replica_group_size 2 --worker.runtime.replica_group_backup_size 1
-    run_compute_node 2 ${runtime} --worker.runtime.replica_group_size 2 --worker.runtime.replica_group_backup_size 1
-    run_compute_node 3 ${runtime} --worker.runtime.replica_group_size 2 --worker.runtime.replica_group_backup_size 1
+    run_compute_node 1 ${runtime}
+    run_compute_node 2 ${runtime}
+    run_compute_node 3 ${runtime}
 
     # Wait for all compute nodes to start.
     wait_compute_nodes 3
@@ -54,14 +58,16 @@ scenario_basic() {
 scenario_discrepancy() {
     local runtime=$1
 
+    register_runtime \
+        --runtime.replica_group_size 2 \
+        --runtime.replica_group_backup_size 1
+
     # Initialize compute nodes.
     run_compute_node 1 ${runtime} \
-        --worker.runtime.replica_group_size 2 \
-        --worker.runtime.replica_group_backup_size 1 \
         --worker.byzantine.inject_discrepancies
 
-    run_compute_node 2 ${runtime} --worker.runtime.replica_group_size 2 --worker.runtime.replica_group_backup_size 1
-    run_compute_node 3 ${runtime} --worker.runtime.replica_group_size 2 --worker.runtime.replica_group_backup_size 1
+    run_compute_node 2 ${runtime}
+    run_compute_node 3 ${runtime}
 
     # Wait for all compute nodes to start.
     wait_compute_nodes 3

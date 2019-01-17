@@ -44,9 +44,11 @@ test_migration() {
     run_backend_tendermint_committee tendermint_mock 1
     sleep 1
 
-    run_compute_node 1 ${runtime} \
-        --worker.runtime.replica_group_size 1 \
-        --worker.runtime.replica_group_backup_size 0 &>/dev/null
+    register_runtime \
+        --runtime.replica_group_size 1 \
+        --runtime.replica_group_backup_size 0
+
+    run_compute_node 1 ${runtime} &>/dev/null
 
     wait_compute_nodes 1
     set_epoch 1
@@ -92,6 +94,10 @@ test_migration() {
     # Replace validator socket.
     ln -sf ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}
 
+    register_runtime \
+        --runtime.replica_group_size 1 \
+        --runtime.replica_group_backup_size 0
+
     sleep 1
     # 6 sec
 
@@ -102,9 +108,7 @@ test_migration() {
         --current_epoch 1
 
     # Finish starting the second network.
-    run_compute_node 1 ${runtime} \
-        --worker.runtime.replica_group_size 1 \
-        --worker.runtime.replica_group_backup_size 0 &>/dev/null
+    run_compute_node 1 ${runtime} &>/dev/null
 
     sleep 3
     # 9 sec

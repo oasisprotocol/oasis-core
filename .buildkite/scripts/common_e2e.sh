@@ -13,6 +13,7 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 #   EKIDEN_STORAGE_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
+#   EKIDEN_ENTITY_PRIVATE_KEY
 #   EKIDEN_EXTRA_ARGS
 #
 # Arguments:
@@ -97,13 +98,39 @@ run_backend_tendermint_committee() {
             &
     done
 
+    # Initialize and register the entity for all the workers.
+    local entity_dir=${committee_dir}/entity
+    rm -Rf ${entity_dir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        registry entity init \
+        --datadir ${entity_dir}
+    ${WORKDIR}/go/ekiden/ekiden \
+        registry entity register \
+        --address unix:${base_datadir}-1/internal.sock \
+        --datadir ${entity_dir}
+
     # Export some variables so compute workers can find them.
     EKIDEN_COMMITTEE_DIR=${committee_dir}
     EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
     EKIDEN_STORAGE_PORT=${storage_port}
     EKIDEN_TM_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
+    EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
     EKIDEN_EXTRA_ARGS="${extra_args}"
+}
+
+# Register the runtime.
+#
+# Any arguments are passed to the runtime registration process.
+register_runtime() {
+    local extra_args=$*
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        registry runtime register \
+        --address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
+        ${extra_args}
 }
 
 # Run a compute node.
@@ -164,6 +191,7 @@ run_compute_node() {
         --worker.leader.max_batch_size 1 \
         --worker.key_manager.address 127.0.0.1:9003 \
         --worker.key_manager.certificate ${WORKDIR}/tests/keymanager/km.pem \
+        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
         ${EKIDEN_EXTRA_ARGS} ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
 }
