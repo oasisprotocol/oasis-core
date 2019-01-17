@@ -40,7 +40,7 @@ impl Nonce {
         // Increment the count and wrap to 0 if necessary.
         let new_counter: u32 = {
             let mut counter = counter_array.read_u32::<BigEndian>().unwrap();
-            // if about to overflow
+            // If about to overflow wrap around to 0.
             if counter == !(0 as u32) {
                 counter = 0;
             } else {
@@ -48,7 +48,7 @@ impl Nonce {
             }
             counter
         };
-        // Merge this new counter back into the nonce
+        // Merge this new counter back into the nonce.
         let new_value: [u8; NONCE_SIZE] = {
             let mut new_value_vec = self.current_value[..TAG_SIZE].to_vec();
             new_value_vec.write_u32::<BigEndian>(new_counter).unwrap();
