@@ -1,8 +1,8 @@
 //! Nonce utility used to ensure nonces are safely incremented.
 
 use super::error::{Error, Result};
-use std::ops::Deref;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::ops::Deref;
 
 /// Size of the nonce in bytes.
 pub const NONCE_SIZE: usize = 16;
