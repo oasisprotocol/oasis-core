@@ -17,7 +17,6 @@ extern crate time;
 extern crate ekiden_core;
 extern crate ekiden_db_trusted;
 extern crate ekiden_di;
-extern crate ekiden_epochtime;
 extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_keymanager_common;

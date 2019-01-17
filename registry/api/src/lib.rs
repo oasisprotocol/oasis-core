@@ -10,5 +10,3 @@ use ekiden_common_api as common;
 
 pub use generated::entity::*;
 pub use generated::entity_grpc::*;
-pub use generated::runtime::*;
-pub use generated::runtime_grpc::*;

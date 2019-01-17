@@ -47,19 +47,6 @@ impl Scheduler for SchedulerClient {
             Err(e) => Box::new(future::err(Error::new(e.description()))),
         }
     }
-
-    fn watch_committees(&self) -> BoxStream<Committee> {
-        let req = api::WatchRequest::new();
-        match self.0.watch_committees(&req) {
-            Ok(s) => Box::new(s.then(|result| match result {
-                Ok(r) => Ok(Committee::try_from(r.get_committee().to_owned())?),
-                Err(e) => Err(Error::new(e.description())),
-            })),
-            Err(e) => Box::new(stream::once::<Committee, _>(Err(Error::new(
-                e.description(),
-            )))),
-        }
-    }
 }
 
 // Register for dependency injection.

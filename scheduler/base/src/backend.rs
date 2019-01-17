@@ -6,8 +6,7 @@ use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::error::Error;
-use ekiden_common::futures::{BoxFuture, BoxStream};
-use ekiden_epochtime::interface::EpochTime;
+use ekiden_common::futures::BoxFuture;
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.
@@ -144,7 +143,7 @@ pub struct Committee {
     // ID is not really needed here.
     #[serde(skip)]
     pub runtime_id: B256,
-    pub valid_for: EpochTime,
+    pub valid_for: u64,
 }
 
 impl TryFrom<api::Committee> for Committee {
@@ -193,8 +192,4 @@ pub trait Scheduler: Send + Sync {
     /// Return a vector of the committees for a given runtime ID,
     /// for the current epoch.
     fn get_committees(&self, runtime: B256) -> BoxFuture<Vec<Committee>>;
-
-    /// Subscribe to all committee generation updates.  Upon subscription
-    /// all committees for the current epoch will be send immediately.
-    fn watch_committees(&self) -> BoxStream<Committee>;
 }

@@ -185,10 +185,8 @@ mod tests {
     use ekiden_core::uint::U256;
     use ekiden_db_trusted::patricia_trie::PatriciaTrie;
     use ekiden_db_trusted::Database;
-    use ekiden_roothash_base::backend::Event;
     use ekiden_roothash_base::backend::RootHashBackend;
     use ekiden_roothash_base::block::Block;
-    use ekiden_roothash_base::commitment::Commitment;
     use ekiden_roothash_base::header::Header;
     use ekiden_storage_base::mapper::BackendIdentityMapper;
     extern crate ekiden_storage_dummy;
@@ -212,14 +210,6 @@ mod tests {
         }
 
         fn get_blocks_since(&self, _runtime_id: B256, _round: U256) -> BoxStream<Block> {
-            unimplemented!()
-        }
-
-        fn get_events(&self, _runtime_id: B256) -> BoxStream<Event> {
-            unimplemented!()
-        }
-
-        fn commit(&self, _runtime_id: B256, _commitment: Commitment) -> BoxFuture<()> {
             unimplemented!()
         }
     }
