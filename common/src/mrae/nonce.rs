@@ -2,9 +2,12 @@
 
 use super::error::{Error, Result};
 use std::ops::Deref;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-/// Recommended size of the nonce in bytes.
+/// Size of the nonce in bytes.
 pub const NONCE_SIZE: usize = 16;
+/// Size of tag portion of the nonce in bytes. These bytes will never update.
+const TAG_SIZE: usize = 12;
 
 /// 128 bit nonce with a 96 bit tag and 32 bit counter. If the counter exceeds
 /// 32 bits, then the nonce is no longer valid and must be refreshed with a new
@@ -32,42 +35,40 @@ impl Nonce {
     /// we've incremented 2^32 times. In this case, the Nonce remains unchanged,
     /// and all subsequent calls to this method will return an Error.
     pub fn increment(&mut self) -> Result<()> {
-        let mut carry = 1;
-        // The current byte we're incrementing.
-        let mut byte_index = self.current_value.len() - 1;
-        // The value of `byte_index` before incrementing.
-        let mut old_byte = self.current_value[byte_index];
-
-        while carry == 1 {
-            // Track the old value in case we need to revert the increment.
-            old_byte = self.current_value[byte_index];
-            // Increment as u64 to maintain aa potential carry.
-            carry += self.current_value[byte_index] as u64;
-            // Remove the potential carry to update the new byte position.
-            self.current_value[byte_index] = carry as u8;
-            // Extract out the carry.
-            carry /= 256;
-            // Move onto the next byte.
-            byte_index -= 1;
-            // Allow the counter to wrap around.
-            if self.overflows_counter(byte_index) {
-                break;
+        // Extract the current counter out of the nonce.
+        let mut counter_array = &self.current_value.clone()[TAG_SIZE..];
+        // Increment the count and wrap to 0 if necessary.
+        let new_counter: u32 = {
+            let mut counter = counter_array.read_u32::<BigEndian>().unwrap();
+            // if about to overflow
+            if counter == !(0 as u32) {
+                counter = 0;
+            } else {
+                counter += 1;
             }
-        }
-        // If we've exhausted all 2^32 counters.
-        if self.current_value == self.start_value {
-            // Undo the change and return an error.
-            self.current_value[byte_index + 1] = old_byte;
+            counter
+        };
+        // Merge this new counter back into the nonce
+        let new_value: [u8; NONCE_SIZE] = {
+            let mut new_value_vec = self.current_value[..TAG_SIZE].to_vec();
+            new_value_vec.write_u32::<BigEndian>(new_counter).unwrap();
+
+            assert!(new_value_vec.len() == NONCE_SIZE);
+
+            let mut new_value = [0; NONCE_SIZE];
+            new_value.copy_from_slice(&new_value_vec);
+            new_value
+        };
+        // If we've exhausted all 2^32 counters, then error.
+        if new_value == self.start_value {
             return Err(Error::new(
                 "This nonce has been exhausted, and a new one must be created",
             ));
         }
+        // Update is valid, so mutate.
+        self.current_value = new_value;
+        // Success.
         Ok(())
-    }
-
-    /// Returns true iff `byte_index` is past our 32 bit counter.
-    fn overflows_counter(&self, byte_index: usize) -> bool {
-        byte_index == self.current_value.len() - 1 - 4
     }
 }
 
