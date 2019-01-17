@@ -83,14 +83,23 @@ type server struct {
 }
 
 func (s *server) Start() error {
-	err := s.srv.ListenAndServe()
-	if err == nil {
-		go func() {
-			<-s.Quit()
-			s.srv.Close()
-		}()
-	}
-	return err
+	// Start the server.
+	go func() {
+		err := s.srv.ListenAndServe()
+		if err != http.ErrServerClosed {
+			s.logger.Error("error while running server",
+				"err", err,
+			)
+		}
+	}()
+
+	// Wait for the quit signal.
+	go func() {
+		<-s.Quit()
+		s.srv.Close()
+	}()
+
+	return nil
 }
 
 func errMethodNotAllowed(w http.ResponseWriter, allowed string) {
@@ -124,7 +133,43 @@ func (s *server) handleValidator(w http.ResponseWriter, req *http.Request) {
 	defer s.Unlock()
 
 	if s.genesisDoc != nil {
-		http.Error(w, "already have a genesis doc", http.StatusBadRequest)
+		// Already have a genesis document. This means we need to ensure that
+		// validators cannot change, only their addresses can. In case a validator
+		// re-registers (e.g., due to it being restarted) we shouldn't fail as
+		// that would prevent the validator from starting. Instead we just update
+		// its CoreAddress and return the updated genesis document.
+		var foundValidator bool
+		for _, v := range s.validators {
+			if v.PubKey.Equal(validator.PubKey) {
+				// Other fields must not change.
+				if v.Name != validator.Name || v.Power != validator.Power {
+					break
+				}
+
+				s.logger.Info("updating validator's core address",
+					"validator", validator,
+				)
+
+				v.CoreAddress = validator.CoreAddress
+				foundValidator = true
+				break
+			}
+		}
+
+		if !foundValidator {
+			// Updating validators when there is already a genesis document is
+			// not allowed.
+			s.logger.Error("tried to modify validators after genesis",
+				"validator", validator,
+			)
+			http.Error(w, "already have a genesis doc", http.StatusBadRequest)
+			return
+		}
+
+		// Update the genesis document. This is done in a separate goroutine and
+		// even though the submitting validator may not receive the updated address
+		// it doesn't really matter as this is its own address.
+		go s.buildGenesis()
 		return
 	}
 
@@ -164,6 +209,10 @@ func (s *server) buildGenesis() {
 	s.Lock()
 	defer s.Unlock()
 
+	if s.genesisDoc == nil {
+		defer close(s.bootstrappedCh)
+	}
+
 	doc := &GenesisDocument{
 		Validators:  s.validators,
 		GenesisTime: time.Now(),
@@ -177,8 +226,6 @@ func (s *server) buildGenesis() {
 	s.logger.Info("generated genesis document",
 		"genesis_doc", string(s.genesisDoc),
 	)
-
-	close(s.bootstrappedCh)
 }
 
 // NewServer initializes a new testnet (debug) bootstrap server instance.
@@ -206,6 +253,7 @@ func NewServer(addr string, numValidators int, dataDir string) (service.Backgrou
 				"genesis_doc", string(b),
 			)
 			s.genesisDoc = b
+			close(s.bootstrappedCh)
 		}
 	}
 
