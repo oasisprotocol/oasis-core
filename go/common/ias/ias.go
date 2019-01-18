@@ -19,11 +19,15 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
+
+	"github.com/oasislabs/ekiden/go/common/logging"
 )
 
 var (
 	// ErrMalformedSPID is the error returned when an SPID is malformed.
 	ErrMalformedSPID = errors.New("ias: malformed SPID")
+
+	logger = logging.GetLogger("common/ias")
 
 	_ encoding.BinaryMarshaler   = (*SPID)(nil)
 	_ encoding.BinaryUnmarshaler = (*SPID)(nil)
@@ -130,6 +134,15 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []
 	// Ensure that the AVR is valid.
 	if _, err = DecodeAVR(avr, sig, certChain, e.trustRoots, time.Now()); err != nil {
 		return nil, nil, nil, errors.Wrap(err, "ias: failed to parse/validate AVR")
+	}
+
+	// Check for advisories.
+	// TODO: Maybe forward these to the caller.
+	if advisoryIDs := resp.Header.Get("Advisory-IDs"); advisoryIDs != "" {
+		logger.Warn("Received advisory IDs", "advisoryIDs", advisoryIDs)
+	}
+	if advisoryURL := resp.Header.Get("Advisory-URL"); advisoryURL != "" {
+		logger.Warn("Received advisory URL", "advisoryURL", advisoryURL)
 	}
 
 	return avr, sig, certChain, nil
