@@ -400,7 +400,7 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.EntityId, _ = n.EntityID.MarshalBinary()
 	pb.Expiration = n.Expiration
 	if n.Addresses != nil {
-		pb.Addresses = toProtoAddresses(n.Addresses)
+		pb.Addresses = ToProtoAddresses(n.Addresses)
 	}
 	if n.Certificate != nil {
 		pb.Certificate = &pbCommon.Certificate{
@@ -497,7 +497,8 @@ func toProtoAddress(addr Address) *pbCommon.Address {
 	return pbAddr
 }
 
-func toProtoAddresses(addrs []Address) []*pbCommon.Address {
+// ToProtoAddresses converts a list of Addresses to protocol buffers.
+func ToProtoAddresses(addrs []Address) []*pbCommon.Address {
 	var pbAddrs []*pbCommon.Address
 	for _, addr := range addrs {
 		pbAddrs = append(pbAddrs, toProtoAddress(addr))

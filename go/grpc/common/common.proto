@@ -64,23 +64,3 @@ message Signed {
     bytes blob = 1;
     Signature signature = 2;
 }
-
-service TimeSource {
-  rpc GetEpoch (EpochRequest) returns (EpochResponse) {}
-  rpc WatchEpochs (WatchEpochRequest) returns (stream WatchEpochResponse) {}
-}
-
-message EpochRequest {
-}
-
-message EpochResponse {
-  uint64 current_epoch = 1;
-  uint64 within_epoch = 2;
-}
-
-message WatchEpochRequest {
-}
-
-message WatchEpochResponse {
-  uint64 current_epoch = 1;
-}

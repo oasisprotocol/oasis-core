@@ -8,3 +8,4 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
+grpcio = { version = "~0.4.2", features = ["openssl"] }

@@ -111,8 +111,6 @@ func (n *Node) initBackends() error {
 
 	// Initialize and register the gRPC services.
 	grpcSrv := n.grpcSrv.Server()
-	epochtime.NewGRPCServer(grpcSrv, n.Epochtime)
-	beacon.NewGRPCServer(grpcSrv, n.Beacon)
 	registry.NewGRPCServer(grpcSrv, n.Registry)
 	roothash.NewGRPCServer(grpcSrv, n.RootHash)
 	scheduler.NewGRPCServer(grpcSrv, n.Scheduler)

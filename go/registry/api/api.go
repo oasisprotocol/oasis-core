@@ -101,6 +101,9 @@ type Backend interface {
 	// GetNodesForEntity gets a list of nodes registered to an entity ID.
 	GetNodesForEntity(context.Context, signature.PublicKey) []*node.Node
 
+	// GetNodeTransport gets a registered node's transport information.
+	GetNodeTransport(context.Context, signature.PublicKey) (*NodeTransport, error)
+
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
 	WatchNodes() (<-chan *NodeEvent, *pubsub.Subscription)
@@ -128,6 +131,13 @@ type Backend interface {
 
 	// Cleanup cleans up the regsitry backend.
 	Cleanup()
+}
+
+// NodeTransport is a registered node's transport information required to
+// establish a secure connection with the node.
+type NodeTransport struct {
+	Addresses   []node.Address
+	Certificate *node.Certificate
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify

@@ -12,7 +12,6 @@ use ekiden_common::environment::Environment;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::retry_until_ok_or_max;
 use ekiden_common::futures::sync::oneshot;
-use ekiden_common::node::Node;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_roothash_base::backend::RootHashBackend;
@@ -25,8 +24,8 @@ use crate::generated::runtime_grpc as api;
 
 /// Computation group leader.
 struct Leader {
-    /// Node descriptor.
-    node: Node,
+    // Node identifier.
+    id: B256,
     /// Runtime client.
     client: RuntimeClient,
 }
@@ -133,7 +132,7 @@ impl RuntimeClientManager {
                         let previous_leader = inner.leader.read().unwrap();
 
                         if let Some(ref previous_leader) = *previous_leader {
-                            if previous_leader.node.id == new_leader {
+                            if previous_leader.id == new_leader {
                                 return future::ok(()).into_box();
                             }
                         }
@@ -148,10 +147,10 @@ impl RuntimeClientManager {
 
                         inner
                             .entity_registry
-                            .get_node(new_leader)
-                            .and_then(move |node| {
+                            .get_node_transport(new_leader)
+                            .and_then(move |transport| {
                                 // Create new client to the leader node.
-                                let rpc = api::RuntimeClient::new(node.connect_without_identity(
+                                let rpc = api::RuntimeClient::new(transport.connect(
                                     inner.environment.clone(),
                                 ));
                                 let client = RuntimeClient::new(
@@ -164,7 +163,8 @@ impl RuntimeClientManager {
 
                                 // Change the leader.
                                 let mut previous_leader = inner.leader.write().unwrap();
-                                let new_leader = Arc::new(Leader { node, client });
+                                let id = new_leader;
+                                let new_leader = Arc::new(Leader { id, client });
                                 if previous_leader.is_none() {
                                     // Notify tasks waiting for the leader. Unwrap is safe as this is only
                                     // needed the first time when there is no leader yet.

@@ -13,8 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-
-	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
 
 const (
@@ -28,8 +26,6 @@ var (
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("roothash: invalid argument")
-
-	errNilProtobuf = errors.New("roothash: protobuf is nil")
 
 	_ encoding.BinaryMarshaler   = (*OpaqueCommitment)(nil)
 	_ encoding.BinaryUnmarshaler = (*OpaqueCommitment)(nil)
@@ -54,24 +50,6 @@ func (c *OpaqueCommitment) UnmarshalBinary(data []byte) error {
 	c.Data = append([]byte{}, data...)
 
 	return nil
-}
-
-// FromProto deserializes a protobuf into an opaque commitment.
-func (c *OpaqueCommitment) FromProto(pb *pbRoothash.Commitment) error {
-	if pb == nil {
-		return errNilProtobuf
-	}
-
-	return c.UnmarshalBinary(pb.GetData())
-}
-
-// ToProto serializes an opaque commitment into a protobuf.
-func (c *OpaqueCommitment) ToProto() *pbRoothash.Commitment {
-	pb := new(pbRoothash.Commitment)
-
-	pb.Data, _ = c.MarshalBinary()
-
-	return pb
 }
 
 // String returns a string representation of the opaque commitment.

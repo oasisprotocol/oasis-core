@@ -15,6 +15,7 @@ service EntityRegistry {
     rpc GetNode (NodeRequest) returns (NodeResponse) {}
     rpc GetNodes (NodesRequest) returns (NodesResponse) {}
     rpc GetNodesForEntity (EntityNodesRequest) returns (EntityNodesResponse) {}
+    rpc GetNodeTransport (NodeRequest) returns (NodeTransportResponse) {}
     rpc WatchNodes (WatchNodeRequest) returns (stream WatchNodeResponse) {}
     rpc WatchNodeList (WatchNodeListRequest) returns (stream WatchNodeListResponse) {}
 }
@@ -92,6 +93,11 @@ message EntityNodesRequest {
 
 message EntityNodesResponse {
     repeated common.Node node = 1;
+}
+
+message NodeTransportResponse {
+    repeated common.Address addresses = 1;
+    common.Certificate certificate = 2;
 }
 
 message WatchNodeRequest {
