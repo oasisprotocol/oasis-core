@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,8 +28,7 @@ const (
 	cfgWorkerBinary = "worker.binary"
 	cfgCacheDir     = "worker.cache_dir"
 
-	cfgTEEHardware = "worker.tee_hardware"
-	cfgIASProxy    = "worker.ias.proxy_addr"
+	cfgIASProxy = "worker.ias.proxy_addr"
 
 	cfgKeyManagerAddress = "worker.key_manager.address"
 	cfgKeyManagerCert    = "worker.key_manager.certificate"
@@ -133,11 +131,16 @@ func New(
 			return nil, err
 		}
 
+		var teeHardware node.TEEHardware
+		if sgxRuntimeIDs[runtimeID.ToMapKey()] {
+			teeHardware = node.TEEHardwareIntelSGX
+		}
+
 		runtimes = append(runtimes, RuntimeConfig{
-			ID:     runtimeID,
-			Binary: runtimeBinary,
+			ID:          runtimeID,
+			Binary:      runtimeBinary,
+			TEEHardware: teeHardware,
 			// XXX: This is needed until we decide how we want to actually register runtimes.
-			SGX:                    sgxRuntimeIDs[runtimeID.ToMapKey()],
 			ReplicaGroupSize:       uint64(viper.GetInt64(cfgRuntimeReplicaGroupSize)),
 			ReplicaGroupBackupSize: uint64(viper.GetInt64(cfgRuntimeReplicaGroupBackupSize)),
 		})
@@ -176,17 +179,6 @@ func New(
 		return nil, err
 	}
 
-	// Parse TEE hardware setting.
-	var teeHardware node.TEEHardware
-	switch strings.ToUpper(viper.GetString(cfgTEEHardware)) {
-	case "INVALID":
-		teeHardware = node.TEEHardwareInvalid
-	case "INTEL-SGX":
-		teeHardware = node.TEEHardwareIntelSGX
-	default:
-		return nil, node.ErrInvalidTEEHardware
-	}
-
 	cfg := Config{
 		Backend: backend,
 		Committee: committee.Config{
@@ -201,7 +193,6 @@ func New(
 		ClientAddresses: clientAddresses,
 		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
 		P2PAddresses:    p2pAddresses,
-		TEEHardware:     teeHardware,
 		WorkerBinary:    workerBinary,
 		CacheDir:        cacheDir,
 		Runtimes:        runtimes,
@@ -219,7 +210,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
 		cmd.Flags().String(cfgCacheDir, "", "Path to worker cache directory")
 
-		cmd.Flags().String(cfgTEEHardware, "invalid", "Type of TEE hardware. Supported values are \"invalid\" and \"intel-sgx\".")
 		cmd.Flags().String(cfgIASProxy, "", "IAS proxy address")
 
 		cmd.Flags().String(cfgKeyManagerAddress, "", "key manager address")
@@ -253,7 +243,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgWorkerBinary,
 		cfgCacheDir,
 
-		cfgTEEHardware,
 		cfgIASProxy,
 
 		cfgKeyManagerAddress,

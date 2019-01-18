@@ -27,11 +27,11 @@ import (
 
 // RuntimeConfig is a single runtime's configuration.
 type RuntimeConfig struct {
-	ID     signature.PublicKey
-	Binary string
+	ID          signature.PublicKey
+	Binary      string
+	TEEHardware node.TEEHardware
 
 	// XXX: This is needed until we decide how we want to actually register runtimes.
-	SGX                    bool
 	ReplicaGroupSize       uint64
 	ReplicaGroupBackupSize uint64
 }
@@ -44,7 +44,6 @@ type Config struct { // nolint: maligned
 	ClientAddresses []node.Address
 	P2PPort         uint16
 	P2PAddresses    []node.Address
-	TEEHardware     node.TEEHardware
 	WorkerBinary    string
 	CacheDir        string
 	Runtimes        []RuntimeConfig
@@ -242,7 +241,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			path.Join(cfg.CacheDir, rtCfg.ID.String()),
 			rtCfg.ID,
 			w.storage,
-			cfg.TEEHardware,
+			rtCfg.TEEHardware,
 			w.ias,
 			w.keyManager,
 			false,
@@ -254,7 +253,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			path.Join(cfg.CacheDir, rtCfg.ID.String()),
 			rtCfg.ID,
 			w.storage,
-			cfg.TEEHardware,
+			rtCfg.TEEHardware,
 			w.ias,
 			w.keyManager,
 			true,
