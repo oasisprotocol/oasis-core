@@ -45,6 +45,9 @@ func TestBootstrap(t *testing.T) {
 	require.NoError(t, err)
 	defer srv.Stop()
 
+	// Wait for the server to start.
+	time.Sleep(1 * time.Second)
+
 	// Spawn a client first. It should block until all the validators
 	// are registered.
 	genDocCh := make(chan interface{}, numValidators+1)
@@ -138,6 +141,9 @@ func TestBootstrap(t *testing.T) {
 	err = srv.Start()
 	require.NoError(t, err)
 	defer srv.Stop()
+
+	// Wait for the server to start.
+	time.Sleep(1 * time.Second)
 
 	// Genesis file should be immediately available to a client.
 	genDocCh = make(chan interface{}, 1)
