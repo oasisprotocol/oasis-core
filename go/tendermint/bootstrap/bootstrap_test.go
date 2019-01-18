@@ -47,10 +47,14 @@ func TestBootstrap(t *testing.T) {
 
 	// Spawn a client first. It should block until all the validators
 	// are registered.
-	genDocCh := make(chan *GenesisDocument, numValidators+1)
+	genDocCh := make(chan interface{}, numValidators+1)
 	go func() {
-		genDoc, _ := Client(testServer1Address)
-		genDocCh <- genDoc
+		genDoc, gerr := Client(testServer1Address)
+		if gerr != nil {
+			genDocCh <- gerr
+		} else {
+			genDocCh <- genDoc
+		}
 	}()
 
 	// Create some validators.
@@ -63,8 +67,12 @@ func TestBootstrap(t *testing.T) {
 		validatorMapKeys = append(validatorMapKeys, k)
 
 		go func(v *GenesisValidator) {
-			genDoc, _ := Validator(testServer1Address, v)
-			genDocCh <- genDoc
+			genDoc, gerr := Validator(testServer1Address, v)
+			if gerr != nil {
+				genDocCh <- gerr
+			} else {
+				genDocCh <- genDoc
+			}
 		}(v)
 	}
 
@@ -87,7 +95,14 @@ func TestBootstrap(t *testing.T) {
 	for i := 0; i < numValidators+1; i++ {
 		select {
 		case genDoc := <-genDocCh:
-			checkGenesisDoc(genDoc)
+			switch r := genDoc.(type) {
+			case *GenesisDocument:
+				checkGenesisDoc(r)
+			case error:
+				require.Failf(t, "failed to get genesis document", "error: %s", r.Error())
+			default:
+				require.Fail(t, "unknown type")
+			}
 		case <-time.After(1 * time.Second):
 			require.Fail(t, "timed out waiting for genesis document")
 		}
@@ -125,15 +140,26 @@ func TestBootstrap(t *testing.T) {
 	defer srv.Stop()
 
 	// Genesis file should be immediately available to a client.
-	genDocCh = make(chan *GenesisDocument, 1)
+	genDocCh = make(chan interface{}, 1)
 	go func() {
-		genDoc, _ := Client(testServer2Address)
-		genDocCh <- genDoc
+		genDoc, gerr := Client(testServer2Address)
+		if gerr != nil {
+			genDocCh <- gerr
+		} else {
+			genDocCh <- genDoc
+		}
 	}()
 
 	select {
 	case genDoc := <-genDocCh:
-		checkGenesisDoc(genDoc)
+		switch r := genDoc.(type) {
+		case *GenesisDocument:
+			checkGenesisDoc(r)
+		case error:
+			require.Failf(t, "failed to get genesis document", "error: %s", r.Error())
+		default:
+			require.Fail(t, "unknown type")
+		}
 	case <-time.After(1 * time.Second):
 		require.Fail(t, "timed out waiting for genesis document after restore")
 	}
