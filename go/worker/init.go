@@ -220,8 +220,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		// XXX: Needed till runtime registration is done elsewhere.
 		cmd.Flags().StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
-		cmd.Flags().String(cfgRuntimeReplicaGroupSize, "1", "Number of workers in runtime replica group")
-		cmd.Flags().String(cfgRuntimeReplicaGroupBackupSize, "0", "Number of backup workers in runtime replica group")
+		cmd.Flags().Uint64(cfgRuntimeReplicaGroupSize, 1, "Number of workers in runtime replica group")
+		cmd.Flags().Uint64(cfgRuntimeReplicaGroupBackupSize, 0, "Number of backup workers in runtime replica group")
 
 		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
 		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
