@@ -175,6 +175,7 @@ pub struct IdentityAuthenticatedInfo {
 pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInfo> {
     let avr_body = identity_proof.get_av_report().get_body();
     let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
+    let strict_avr_verification = option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
 
     // Get the current time.
     //
@@ -213,6 +214,11 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     match avr_body["isvEnclaveQuoteStatus"].as_str() {
         Some(status) => match status {
             "OK" => {}
+            "CONFIGURATION_NEEDED" => {
+                if strict_avr_verification {
+                    return Err(Error::new("Rejecting quote status CONFIGURATION_NEEDED. Build without EKIDEN_STRICT_AVR_VERIFY=1 to allow"));
+                }
+            }
             _ => {
                 return Err(Error::new(format!("Quote status was {}", status)));
             }
