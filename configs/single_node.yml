@@ -25,7 +25,7 @@ worker:
   cache_dir: /tmp/ekiden-worker-cache
   runtime:
     id: "0000000000000000000000000000000000000000000000000000000000000000"
-    binary: /code/target/enclave/token.so
+    binary: /code/target/enclave/simple-keyvalue.so
     replica_group_size: 1
     replica_group_backup_size: 0
   client:

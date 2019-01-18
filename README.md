@@ -54,50 +54,56 @@ key manager and test runtimes).
 
 ## Running an Ekiden node
 
-Make sure that you have built everything as described in the *Building* section
-before proceeding.
+These instructions specify how to run a single-node "network" for development
+purposes. For more complex setups, see E2E test helpers [here](.buildkite/scripts/common_e2e.sh).
 
-Starting directory for all commands is `/code`.
+First, make sure that you have built everything as described in the *Building* section
+before proceeding and move to the starting directory `/code`:
 ```
 # cd /code
 ```
 
-You need to run multiple Ekiden services, so it is recommended to run each of
-these in a separate container shell, attached to the same container. The
-following examples use the token runtime, but the process is the same for any
-runtime.
+We will execute multiple ekiden services, so it is convenient to start a new
+`ekiden shell` instance for each service.
 
-*These instructions specify how to run a single-node "network" for development
-purposes. For more complex setups see E2E test helpers in `.buildkite/scripts/common_e2e.sh`.*
-
-To start the key manager:
+First, we start a key manager service, which stores encryption keys in a
+protected enclave:
 ```
 # ./target/debug/ekiden-keymanager-node \
+    --storage-backend dummy \
     --enclave target/enclave/ekiden-keymanager-trusted.so
 ```
 
-To start a single worker using the test `token` runtime:
+Second, we launch a single Ekiden node with an example `simple-keyvalue`
+runtime loaded to trusted enclave as defined in `configs/single_node.yml`:
 ```
 # ./go/ekiden/ekiden --config configs/single_node.yml
 ```
 
-The node will store data in `/tmp/ekiden-node-data`, so in case you restart it
-you may need to remove this directory first.
+The `simple-keyvalue` runtime implements a key-value hash map in the enclave
+and supports reading, writing, and fetching string values associated with the
+given key. To learn how to create your own runtime, see the sources of the
+example [here](tests/runtimes/simple-keyvalue).
 
-*More information on the Go node parameters is [available here](go/README.md).*
+Ekiden node stores data in `/tmp/ekiden-node-data` regardless the loaded
+runtime. In case you restart it, you may need to remove this directory first.
+More information on Ekiden node is available [here](go/README.md).
 
-To test that the single node setup works you can use the built test client for the
-`token` runtime:
+Finally, to test Ekiden node, we will run a test client written specifically
+for the `simple-keyvalue` runtime. The client sends a few keys with associated
+values and fetches them back over RPC defined in the runtime's API. Execute the
+client as follows:
 ```
-# ./target/debug/token-client \
-    --mr-enclave $(cat target/enclave/token.mrenclave) \
+# ./target/debug/simple-keyvalue-client \
+    --mr-enclave $(cat target/enclave/simple-keyvalue.mrenclave) \
     --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
     --storage-backend remote
 ```
 
-The single worker is configured with a 30-second epoch, so you may initially
-need to wait for the first epoch to pass before the test client will make any
-progress.
+By default, Ekiden node is configured with a 30-second epoch, so you may
+initially need to wait for the first epoch to pass before the test client will
+make any progress. For more information on writing your own client, see the
+`simple-keyvalue` client sources [here](tests/clients/simple-keyvalue).
 
 ## Running tests and benchmarks
 

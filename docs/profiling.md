@@ -12,7 +12,7 @@ After installing Valgrind, you can use it as normal (e.g., for profiling the com
 $ valgrind \
     --tool=callgrind \
     --callgrind-out-file=callgrind.out \
-    target/debug/ekiden-compute target/enclave/token.signed.so
+    target/debug/ekiden-compute target/enclave/simple-keyvalue.so
 ```
 
 After the program terminates (you can interrupt it using CTRL+C), you can run the annotate tool

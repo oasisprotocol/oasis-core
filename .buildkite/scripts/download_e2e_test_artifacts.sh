@@ -23,11 +23,11 @@ download_artifact ekiden-keymanager-node target/debug 755
 download_artifact ekiden-keymanager-trusted.so target/enclave 755
 download_artifact ekiden-keymanager-trusted.mrenclave target/enclave
 
-# Test token runtime and clients.
+# Test simple-keyvalue runtime and clients.
 download_artifact test-long-term-client target/debug 755
-download_artifact token-client target/debug 755
-download_artifact token.so target/enclave 755
-download_artifact token.mrenclave target/enclave
+download_artifact simple-keyvalue-client target/debug 755
+download_artifact simple-keyvalue.so target/enclave 755
+download_artifact simple-keyvalue.mrenclave target/enclave
 
 # Test db encryption runtime and clients.
 download_artifact ekiden-keymanager-test-client target/debug 755

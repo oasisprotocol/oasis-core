@@ -1,13 +1,19 @@
 [package]
-name = "benchmark-client"
+name = "simple-keyvalue-client"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Key value test client"
+
+[features]
+default = []
 
 [dependencies]
-client-utils = { path = "../utils", features = ["benchmark"] }
+client-utils = { path = "../utils" }
 ekiden-core = { path = "../../../core/common" }
 ekiden-runtime-client = { path = "../../../runtime/client" }
 ekiden-rpc-client = { path = "../../../rpc/client" }
-token-api = { path = "../../runtimes/token/api" }
+simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
-rand = "0.4"
+log = "0.4"
+serde = "1.0.71"
+serde_json = "1.0"

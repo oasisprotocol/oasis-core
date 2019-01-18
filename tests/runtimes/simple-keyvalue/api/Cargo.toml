@@ -1,13 +1,12 @@
 [package]
-name = "token-api"
+name = "simple-keyvalue-api"
 version = "0.2.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
-description = "Ekiden runtime used in E2E tests"
-build = "build.rs"
+description = "Example of using a simple key/value store API"
 
 [dependencies]
 ekiden-core = { path = "../../../../core/common" }
-protobuf = "~2.0"
+ekiden-trusted = { path = "../../../../core/trusted" }
 serde = "1.0.71"
 serde_derive = "1.0"
 
