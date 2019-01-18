@@ -24,8 +24,6 @@ use ekiden_core::environment::Environment;
 use ekiden_core::futures::block_on;
 use ekiden_di::{Component, KnownComponents};
 use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
-use ekiden_storage_multilayer::MultilayerBackend;
-use ekiden_storage_persistent::PersistentStorageBackend;
 use ekiden_worker_api::WorkerHandler;
 
 use ekiden_worker::protocol::ProtocolHandler;
@@ -60,13 +58,6 @@ fn main() {
                 .long("host-socket")
                 .takes_value(true)
                 .display_order(2)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("cache-dir")
-                .long("cache-dir")
-                .takes_value(true)
-                .display_order(3)
                 .required(true),
         )
         .args(&known_components.get_arguments())
@@ -124,17 +115,6 @@ fn main() {
         ekiden_worker_api::Protocol::new(environment.clone(), socket, protocol_handler.clone());
     let protocol = Arc::new(protocol);
 
-    // Create storage backend.
-    let storage_backend = Arc::new(MultilayerBackend::new(
-        // Use per-worker cache directory.
-        Arc::new(
-            PersistentStorageBackend::new(&Path::new(matches.value_of("cache-dir").unwrap()).join("storage"))
-                .expect("persistent storage backend creation must succeed"),
-        ),
-        // Use protocol for the bottom storage layer.
-        protocol.clone(),
-    ));
-
     // Setup worker thread.
     let worker = Worker::new(
         WorkerConfiguration {
@@ -144,7 +124,7 @@ fn main() {
         },
         // Use protocol for IAS.
         protocol.clone(),
-        storage_backend,
+        protocol,
     );
     protocol_handler.0.set_worker(worker);
 

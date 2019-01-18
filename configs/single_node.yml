@@ -22,7 +22,6 @@ grpc:
 worker:
   backend: sandboxed
   binary: /code/target/debug/ekiden-worker
-  cache_dir: /tmp/ekiden-worker-cache
   runtime:
     id: "0000000000000000000000000000000000000000000000000000000000000000"
     binary: /code/target/enclave/simple-keyvalue.so

@@ -53,7 +53,6 @@ const (
 	workerHostname = "ekiden-worker"
 
 	workerMountHostSocket = "/host.sock"
-	workerMountCacheDir   = "/cache"
 	workerMountWorkerBin  = "/worker"
 	workerMountRuntimeBin = "/runtime.so"
 	workerMountLibDir     = "/usr/lib"
@@ -112,7 +111,7 @@ func (p *process) worker() {
 	close(p.quitCh)
 }
 
-func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary, cacheDir string) ([]string, error) {
+func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string) ([]string, error) {
 	// Prepare general arguments.
 	args := []string{
 		// Unshare all possible namespaces.
@@ -132,8 +131,6 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary, cacheDir string
 		"--dev", "/dev",
 		// Host socket is bound as /host.sock.
 		"--bind", hostSocket, workerMountHostSocket,
-		// Cache directory is bound as /cache (writable).
-		"--bind", cacheDir, workerMountCacheDir,
 		// Worker binary is bound as /worker (read-only).
 		"--ro-bind", workerBinary, workerMountWorkerBin,
 		// Runtime binary is bound as /runtime.so (read-only).
@@ -182,10 +179,9 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary, cacheDir string
 	return args, nil
 }
 
-func prepareWorkerArgs(hostSocket, cacheDir, runtimeBinary string) []string {
+func prepareWorkerArgs(hostSocket, runtimeBinary string) []string {
 	return []string{
 		"--host-socket", hostSocket,
-		"--cache-dir", cacheDir,
 		runtimeBinary,
 	}
 }
@@ -217,7 +213,6 @@ type interruptRequest struct {
 type sandboxedHost struct { // nolint: maligned
 	workerBinary  string
 	runtimeBinary string
-	cacheDir      string
 	noSandbox     bool
 
 	storage     storage.Backend
@@ -393,12 +388,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	// has been mounted into the sandbox and is no longer needed.
 	defer os.RemoveAll(workerDir)
 
-	// Ensure worker cache directory exists.
-	err = os.MkdirAll(h.cacheDir, 0700)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: failed to create worker cache directory")
-	}
-
 	// Create unix socket.
 	hostSocket := path.Join(workerDir, "host.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: hostSocket})
@@ -418,7 +407,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		sandboxBinary = h.workerBinary
 		workerArgs = prepareWorkerArgs(
 			hostSocket,
-			h.cacheDir,
 			h.runtimeBinary,
 		)
 	} else {
@@ -430,7 +418,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 		sandboxBinary = workerBubblewrapBinary
 		workerArgs = prepareWorkerArgs(
 			workerMountHostSocket,
-			workerMountCacheDir,
 			workerMountRuntimeBin,
 		)
 	}
@@ -481,7 +468,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 
 	if !h.noSandbox {
 		// Instruct the sandbox how to prepare itself.
-		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.cacheDir) // nolint: govet
+		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary) // nolint: govet
 		if err != nil {
 			return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
 		}
@@ -721,7 +708,6 @@ ManagerLoop:
 func NewSandboxedHost(
 	workerBinary string,
 	runtimeBinary string,
-	cacheDir string,
 	runtimeID signature.PublicKey,
 	storage storage.Backend,
 	teeHardware node.TEEHardware,
@@ -735,14 +721,10 @@ func NewSandboxedHost(
 	if runtimeBinary == "" {
 		return nil, errors.New("runtime binary not configured")
 	}
-	if cacheDir == "" {
-		return nil, errors.New("worker cache directory not configured")
-	}
 
 	host := &sandboxedHost{
 		workerBinary:          workerBinary,
 		runtimeBinary:         runtimeBinary,
-		cacheDir:              cacheDir,
 		noSandbox:             noSandbox,
 		storage:               storage,
 		teeHardware:           teeHardware,
