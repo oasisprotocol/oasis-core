@@ -199,6 +199,9 @@ func (s *server) handleGenesis(w http.ResponseWriter, req *http.Request) {
 	case <-s.bootstrappedCh:
 	}
 
+	s.Lock()
+	defer s.Unlock()
+
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(s.genesisDoc)
 }
