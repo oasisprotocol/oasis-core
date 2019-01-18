@@ -251,11 +251,21 @@ func NewServer(addr string, numValidators int, dataDir string) (service.Backgrou
 
 		b, err := ioutil.ReadFile(s.genesisPath)
 		if err == nil {
-			s.logger.Info("Using existing genesis document",
+			var doc GenesisDocument
+			if err := json.Unmarshal(b, &doc); err != nil {
+				s.logger.Error("corrupted genesis document",
+					"err", err,
+					"genesis_doc", string(b),
+				)
+				return nil, err
+			}
+
+			s.logger.Info("using existing genesis document",
 				"path", s.genesisPath,
 				"genesis_doc", string(b),
 			)
 			s.genesisDoc = b
+			s.validators = doc.Validators
 			close(s.bootstrappedCh)
 		}
 	}

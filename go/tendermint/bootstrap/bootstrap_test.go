@@ -148,7 +148,7 @@ func TestBootstrap(t *testing.T) {
 	// Genesis file should be immediately available to a client.
 	genDocCh = make(chan interface{}, 1)
 	go func() {
-		genDoc, gerr := Client(testServer2Address)
+		genDoc, gerr := Client(testServer2Address) // nolint: govet
 		if gerr != nil {
 			genDocCh <- gerr
 		} else {
@@ -169,4 +169,12 @@ func TestBootstrap(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		require.Fail(t, "timed out waiting for genesis document after restore")
 	}
+
+	// After the genesis document is generated, we should still be
+	// able to update validator addresses.
+	v = validators[validatorMapKeys[0]]
+	v.CoreAddress = "127.2.2.2:1001"
+	genDoc, err = Validator(testServer2Address, v)
+	require.NoError(t, err, "updating a validator address must not fail")
+	checkGenesisDoc(genDoc)
 }
