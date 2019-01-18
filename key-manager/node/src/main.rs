@@ -33,9 +33,8 @@ use clap::{App, Arg};
 use log::LevelFilter;
 
 use ekiden_common::environment::Environment;
-use ekiden_common::identity::NodeIdentity;
+use ekiden_common::x509;
 use ekiden_di::Component;
-
 use ekiden_keymanager_untrusted::backend;
 use ekiden_keymanager_untrusted::node::{KeyManagerConfiguration, KeyManagerNode};
 use ekiden_storage_base::StorageBackend;
@@ -64,6 +63,22 @@ fn main() {
                 .help("Path to the key manager enclave")
                 .display_order(2),
         )
+        .arg(
+            Arg::with_name("tls-certificate")
+                .long("tls-certificate")
+                .takes_value(true)
+                .help("Path to TLS certificate to use for gRPC (if it doesn't exist one will be generated)")
+                .default_value("km-tls-certificate.pem")
+                .required(true)
+        )
+        .arg(
+            Arg::with_name("tls-key")
+                .long("tls-key")
+                .takes_value(true)
+                .help("Path to TLS key to use for gRPC (if it doesn't exist one will be generated)")
+                .default_value("km-tls-key.pem")
+                .required(true)
+        )
         .args(&known_components.get_arguments())
         .get_matches();
 
@@ -79,9 +94,15 @@ fn main() {
         .init();
 
     let environment = container.inject::<Environment>().unwrap();
-    let node_identity = container.inject::<NodeIdentity>().unwrap();
     let storage_backend = container.inject::<StorageBackend>().unwrap();
     let root_hash_path = PathBuf::from(matches.value_of("storage-path").unwrap()).join("root-hash");
+
+    // Load or generate TLS certificate.
+    let (tls_certificate, tls_private_key) = x509::load_or_generate_certificate(
+        matches.value_of("tls-certificate").expect("is required"),
+        matches.value_of("tls-key").expect("is required"),
+    ).expect("TLS credentials load must succeed");
+
     // Setup a key manager node.
     let mut node = KeyManagerNode::new(KeyManagerConfiguration {
         // Port
@@ -105,7 +126,8 @@ fn main() {
             }
         },
         environment: environment.grpc(),
-        identity: node_identity.clone(),
+        tls_certificate,
+        tls_private_key,
     }).expect("failed to initialize compute node");
 
     // Start the key manager.
@@ -118,8 +140,6 @@ fn main() {
 fn register_known_components() -> ekiden_di::KnownComponents {
     let mut known_components = ekiden_di::KnownComponents::new();
     ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
-    ekiden_common::identity::LocalNodeIdentity::register(&mut known_components);
-    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
     ekiden_common::remote_node::RemoteNodeInfo::register(&mut known_components);
     ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
     ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);

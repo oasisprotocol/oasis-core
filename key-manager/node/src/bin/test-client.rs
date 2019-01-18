@@ -20,7 +20,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use ekiden_common::environment::Environment;
-use ekiden_common::identity::NodeIdentity;
+use ekiden_common::x509;
 use ekiden_di::Component;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_keymanager_client::{KeyManager, NetworkRpcClientBackendConfig};
@@ -29,8 +29,6 @@ use ekiden_keymanager_common::ContractId;
 fn main() {
     let mut known_components = ekiden_di::KnownComponents::new();
     ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
-    ekiden_common::identity::LocalNodeIdentity::register(&mut known_components);
-    ekiden_common::identity::LocalEntityIdentity::register(&mut known_components);
     ekiden_common::remote_node::RemoteNodeInfo::register(&mut known_components);
 
     let matches = App::new("Ekiden key manager client test")
@@ -62,6 +60,14 @@ fn main() {
                 .help("keymanager MRENCLAVE")
                 .display_order(3),
         )
+        .arg(
+            Arg::with_name("tls-certificate")
+                .long("tls-certificate")
+                .takes_value(true)
+                .help("Path to TLS certificate to use for gRPC")
+                .default_value("km-tls-certificate.pem")
+                .required(true),
+        )
         .args(&known_components.get_arguments())
         .get_matches();
 
@@ -79,8 +85,12 @@ fn main() {
     let keymanager_id =
         value_t!(matches.value_of("enclave"), MrEnclave).unwrap_or_else(|e| e.exit());
 
+    // Load TLS certificate.
+    let tls_certificate = x509::load_certificate_pem(
+        matches.value_of("tls-certificate").expect("is required"),
+    ).expect("TLS credentials load must succeed");
+
     let environment = container.inject::<Environment>().unwrap();
-    let keymanager_identity = container.inject::<NodeIdentity>().unwrap();
 
     let timeout = Some(Duration::new(5, 0));
 
@@ -91,7 +101,7 @@ fn main() {
                 timeout,
                 host: value_t!(matches.value_of("host"), String).unwrap_or_else(|e| e.exit()),
                 port: value_t!(matches.value_of("port"), u16).unwrap_or_else(|e| e.exit()),
-                certificate: keymanager_identity.get_tls_certificate().to_owned(),
+                certificate: x509::Certificate::from_pem(&tls_certificate).unwrap(),
             });
 
             keymanager.set_contract(keymanager_id);

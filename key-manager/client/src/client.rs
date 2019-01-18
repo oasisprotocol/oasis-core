@@ -7,6 +7,7 @@ use std::sync::SgxMutex as Mutex;
 use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
+#[cfg(not(target_env = "sgx"))]
 use std::time::Duration;
 
 use ekiden_common::bytes::B512;
@@ -14,6 +15,7 @@ use ekiden_common::bytes::B512;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::{Error, Result};
 use ekiden_common::futures::prelude::*;
+#[cfg(not(target_env = "sgx"))]
 use ekiden_common::x509::Certificate;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_keymanager_api::with_api;

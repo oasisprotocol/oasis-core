@@ -76,7 +76,7 @@ test_keymanager() {
 
     ${WORKDIR}/target/debug/ekiden-keymanager-test-client \
         --mrenclave $(cat ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.mrenclave) \
-        --node-key-pair ${WORKDIR}/tests/keymanager/km.key
+        --tls-certificate ${WORKDIR}/tests/keymanager/km.pem
 }
 
 # Assert that the logger works.

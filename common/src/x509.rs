@@ -1,6 +1,10 @@
 //! X509 certificate generation from Ed25519 keys.
 // TODO: Remove this when it is no longer being used by the key manager node.
 use std::convert::TryFrom;
+#[cfg(not(target_env = "sgx"))]
+use std::{fs::File,
+          io::{Read, Write},
+          path::Path};
 
 use ekiden_common_api as api;
 
@@ -40,6 +44,16 @@ pub struct Certificate {
 }
 
 impl Certificate {
+    /// Load a certificate in PEM format.
+    #[cfg(not(target_env = "sgx"))]
+    pub fn from_pem(pem: &[u8]) -> Result<Certificate> {
+        use openssl::x509::X509;
+
+        Ok(Certificate {
+            der: X509::from_pem(&pem)?.to_der()?,
+        })
+    }
+
     /// Generate a new self-signed X509 certificate.
     ///
     /// A new NIST P-256 EC key pair is generated for use in this certificate.
@@ -144,6 +158,66 @@ impl Into<api::Certificate> for Certificate {
         let mut certificate = api::Certificate::new();
         certificate.set_der(self.der);
         certificate
+    }
+}
+
+/// Load a certificate from a PEM-encoded file.
+#[cfg(not(target_env = "sgx"))]
+pub fn load_certificate_pem(filename: &str) -> Result<Vec<u8>> {
+    use openssl::x509::X509;
+
+    let mut file = File::open(filename)?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data)?;
+    // Validate that certificate is valid.
+    X509::from_pem(&data)?;
+
+    Ok(data)
+}
+
+/// Load a private key from a PEM-encoded file.
+#[cfg(not(target_env = "sgx"))]
+pub fn load_private_key_pem(filename: &str) -> Result<Vec<u8>> {
+    use openssl::pkey::PKey;
+
+    let mut file = File::open(filename)?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data)?;
+    // Validate that private key is valid.
+    PKey::private_key_from_pem(&data)?;
+
+    Ok(data)
+}
+
+/// Load or generate a certificate and private key.
+///
+/// Returns a tuple `(certificate, private_key)` in PEM format.
+#[cfg(not(target_env = "sgx"))]
+pub fn load_or_generate_certificate(
+    certificate_path: &str,
+    private_key_path: &str,
+) -> Result<(Vec<u8>, Vec<u8>)> {
+    // Check if there is an existing private key.
+    if Path::new(private_key_path).exists() {
+        let private_key = load_private_key_pem(private_key_path)?;
+        let certificate = load_certificate_pem(certificate_path)?;
+
+        Ok((certificate, private_key))
+    } else {
+        // Generate new certificate and private key.
+        let (certificate, private_key) = Certificate::generate()?;
+
+        // Persist certificate.
+        let mut file = File::create(certificate_path)?;
+        let certificate = certificate.get_pem()?;
+        file.write_all(&certificate)?;
+
+        // Persist private key.
+        let mut file = File::create(private_key_path)?;
+        let private_key = private_key.get_pem()?;
+        file.write_all(&private_key)?;
+
+        Ok((certificate, private_key))
     }
 }
 

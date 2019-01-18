@@ -1,14 +1,11 @@
 //! Root hash gRPC client.
 use std::convert::TryFrom;
-use std::sync::Arc;
 
 use grpcio::{Channel, ChannelBuilder};
 
 use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::futures::prelude::*;
-use ekiden_common::identity::NodeIdentity;
-use ekiden_common::node::Node;
 use ekiden_common::remote_node::RemoteNode;
 use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
@@ -20,14 +17,6 @@ pub struct RootHashClient(api::RootHashClient);
 impl RootHashClient {
     pub fn new(channel: Channel) -> Self {
         RootHashClient(api::RootHashClient::new(channel))
-    }
-
-    pub fn from_node(
-        node: &Node,
-        environment: Arc<Environment>,
-        identity: Arc<NodeIdentity>,
-    ) -> Self {
-        RootHashClient::new(node.connect(environment, identity))
     }
 }
 

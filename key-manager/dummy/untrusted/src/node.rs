@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use super::backend::{BackendConfiguration, KeyManager};
 use ekiden_common::error::Result;
-use ekiden_common::identity::NodeIdentity;
 use ekiden_rpc_api;
 
 /// Key manager node configuration.
@@ -12,10 +11,12 @@ pub struct KeyManagerConfiguration {
     pub port: u16,
     /// Backend configuration.
     pub backend: BackendConfiguration,
-    /// gRPC environment
+    /// gRPC environment.
     pub environment: Arc<grpcio::Environment>,
-    /// Credentials.
-    pub identity: Arc<NodeIdentity>,
+    /// TLS certificate.
+    pub tls_certificate: Vec<u8>,
+    /// TLS private key.
+    pub tls_private_key: Vec<u8>,
 }
 
 /// Key manager node.
@@ -37,10 +38,7 @@ impl KeyManagerNode {
                 "0.0.0.0",
                 config.port,
                 grpcio::ServerCredentialsBuilder::new()
-                    .add_cert(
-                        config.identity.get_tls_certificate().get_pem()?,
-                        config.identity.get_tls_private_key().get_pem()?,
-                    )
+                    .add_cert(config.tls_certificate, config.tls_private_key)
                     .build(),
             )
             .build()?;

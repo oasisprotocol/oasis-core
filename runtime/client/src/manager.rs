@@ -150,9 +150,9 @@ impl RuntimeClientManager {
                             .get_node_transport(new_leader)
                             .and_then(move |transport| {
                                 // Create new client to the leader node.
-                                let rpc = api::RuntimeClient::new(transport.connect(
-                                    inner.environment.clone(),
-                                ));
+                                let rpc = api::RuntimeClient::new(
+                                    transport.connect(inner.environment.clone()),
+                                );
                                 let client = RuntimeClient::new(
                                     inner.environment.clone(),
                                     rpc,

@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use grpcio;
 
-use ekiden_common::environment::Environment;
 use ekiden_common::address::Address;
 use ekiden_common::bytes::B256;
+use ekiden_common::environment::Environment;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
 
