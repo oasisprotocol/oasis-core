@@ -12,9 +12,6 @@ use ekiden_storage_multilayer;
 pub fn register_components(known_components: &mut KnownComponents) {
     // Environment.
     ekiden_core::environment::GrpcEnvironment::register(known_components);
-    // Local identities.
-    ekiden_core::identity::LocalEntityIdentity::register(known_components);
-    ekiden_core::identity::LocalNodeIdentity::register(known_components);
     // Instrumentation.
     ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
     // Scheduler.

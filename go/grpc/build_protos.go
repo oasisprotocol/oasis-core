@@ -22,7 +22,6 @@ import (
 // It is assumed that each proto file explicitly specifies the Go package
 // via the `option go_package` directive.
 var protoFiles = [][]string{
-	{"beacon/beacon.proto"},
 	{"common/common.proto"},
 	{"dummydebug/dummy_debug.proto"},
 	{"ias/ias.proto"},

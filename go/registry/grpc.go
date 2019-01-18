@@ -176,6 +176,30 @@ func (s *grpcServer) GetNodesForEntity(ctx context.Context, req *pb.EntityNodesR
 	return &pb.EntityNodesResponse{Node: pbNodes}, nil
 }
 
+func (s *grpcServer) GetNodeTransport(ctx context.Context, req *pb.NodeRequest) (*pb.NodeTransportResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetId()); err != nil {
+		return nil, err
+	}
+
+	transport, err := s.backend.GetNodeTransport(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp pb.NodeTransportResponse
+	if transport.Addresses != nil {
+		resp.Addresses = node.ToProtoAddresses(transport.Addresses)
+	}
+	if transport.Certificate != nil {
+		resp.Certificate = &commonPB.Certificate{
+			Der: append([]byte{}, transport.Certificate.DER...),
+		}
+	}
+
+	return &resp, nil
+}
+
 func (s *grpcServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.EntityRegistry_WatchNodesServer) error {
 	ch, sub := s.backend.WatchNodes()
 	defer sub.Close()

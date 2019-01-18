@@ -1,8 +1,0 @@
-/ips.txt
-/known_hosts
-/ssh_config
-/tendermint
-*.json
-*.pem
-*.stamp
-*.zip

@@ -25,7 +25,6 @@ use ekiden_common::futures::BoxStream;
 use ekiden_common::futures::FutureExt;
 extern crate ekiden_di;
 use ekiden_di::create_component;
-extern crate ekiden_epochtime;
 extern crate ekiden_storage_base;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 extern crate ekiden_storage_dynamodb;

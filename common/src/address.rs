@@ -4,12 +4,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-#[cfg(not(target_env = "sgx"))]
-use get_if_addrs::get_if_addrs;
-
 use super::error::Error;
-#[cfg(not(target_env = "sgx"))]
-use super::error::Result;
 
 use ekiden_common_api as api;
 
@@ -18,16 +13,6 @@ use ekiden_common_api as api;
 pub struct Address(pub SocketAddr);
 
 impl Address {
-    /// Generate a list of addresses for the local node and a given port.
-    #[cfg(not(target_env = "sgx"))]
-    pub fn for_local_port(port: u16) -> Result<Vec<Self>> {
-        Ok(get_if_addrs()?
-            .iter()
-            .filter(|interface| !interface.is_loopback())
-            .map(|interface| Address(SocketAddr::new(interface.ip(), port)))
-            .collect())
-    }
-
     /// Port associated with this address.
     pub fn port(&self) -> u16 {
         self.0.port()

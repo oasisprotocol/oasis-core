@@ -19,12 +19,9 @@ extern crate pretty_env_logger;
 extern crate bigint;
 extern crate byteorder;
 extern crate chrono;
-extern crate core;
 #[cfg(not(target_env = "sgx"))]
-#[macro_use]
 extern crate clap;
-#[cfg(not(target_env = "sgx"))]
-extern crate get_if_addrs;
+extern crate core;
 #[macro_use]
 extern crate log;
 #[cfg(not(target_env = "sgx"))]
@@ -48,14 +45,10 @@ extern crate ekiden_di;
 pub mod address;
 pub mod bytes;
 pub mod drbg;
-pub mod entity;
 pub mod error;
 pub mod futures;
 pub mod hash;
 pub mod mrae;
-pub mod node;
-#[cfg(not(target_env = "sgx"))]
-pub mod node_group;
 #[macro_use]
 pub mod profiling;
 #[macro_use]
@@ -68,7 +61,6 @@ pub mod signature;
 pub mod uint;
 #[cfg(not(target_env = "sgx"))]
 pub mod environment;
-pub mod identity;
 pub mod subscribers;
 pub mod testing;
 pub mod usize_iterable_hashmap;

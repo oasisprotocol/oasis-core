@@ -203,6 +203,18 @@ func (r *memoryBackend) GetNodesForEntity(ctx context.Context, id signature.Publ
 	return r.getNodesForEntryLocked(id)
 }
 
+func (r *memoryBackend) GetNodeTransport(ctx context.Context, id signature.PublicKey) (*api.NodeTransport, error) {
+	node, err := r.GetNode(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.NodeTransport{
+		Addresses:   node.Addresses,
+		Certificate: node.Certificate,
+	}, nil
+}
+
 func (r *memoryBackend) WatchNodes() (<-chan *api.NodeEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.NodeEvent)
 	sub := r.nodeNotifier.Subscribe()

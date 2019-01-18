@@ -1,69 +1,39 @@
 //! Registry backend interface.
-use ekiden_common::bytes::{B256, B64};
-use ekiden_common::entity::Entity;
-use ekiden_common::futures::{BoxFuture, BoxStream};
-use ekiden_common::node::Node;
-use ekiden_common::signature::Signed;
-use ekiden_epochtime::interface::EpochTime;
+use std::sync::Arc;
 
-/// Signature context used for entity registration
-pub const REGISTER_ENTITY_SIGNATURE_CONTEXT: B64 = B64(*b"EkEntReg");
+use grpcio;
 
-/// Signature context used for entity deregistration
-pub const DEREGISTER_ENTITY_SIGNATURE_CONTEXT: B64 = B64(*b"EkEDeReg");
-
-/// Signature context used for entity registration
-pub const REGISTER_NODE_SIGNATURE_CONTEXT: B64 = B64(*b"EkNodReg");
-
-/// Event subscription to registration and deregistration of entities and nodes.
-#[derive(Clone, Copy)]
-pub enum RegistryEvent<T> {
-    Registered(T),
-    Deregistered(T),
-}
+use ekiden_common::address::Address;
+use ekiden_common::bytes::B256;
+use ekiden_common::environment::Environment;
+use ekiden_common::futures::BoxFuture;
+use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
 
 /// Registry backend implementing the Ekiden registry interface.
 pub trait EntityRegistryBackend: Send + Sync {
-    /// Register and or update an entity with the registry.
-    ///
-    /// The signature should be made using `REGISTER_ENTITY_SIGNATURE_CONTEXT`
-    fn register_entity(&self, entity: Signed<Entity>) -> BoxFuture<()>;
+    /// Get a registered node's transport information.
+    fn get_node_transport(&self, id: B256) -> BoxFuture<NodeTransport>;
+}
 
-    /// Deregister an entity.
-    ///
-    /// The signature should be made using `DEREGISTER_ENTITY_SIGNATURE_CONTEXT`
-    fn deregister_entity(&self, timestamp: Signed<u64>) -> BoxFuture<()>;
+// Node transport information.
+pub struct NodeTransport {
+    /// The list of `Address`es at which the node can be reached.
+    pub addresses: Vec<Address>,
+    /// Certificate for establishing TLS connections.
+    pub certificate: Certificate,
+}
 
-    /// Get an entity by id.
-    fn get_entity(&self, id: B256) -> BoxFuture<Entity>;
-
-    /// Get a list of all registered entities.
-    fn get_entities(&self) -> BoxFuture<Vec<Entity>>;
-
-    /// Watch for changes in entity registration.
-    fn watch_entities(&self) -> BoxStream<RegistryEvent<Entity>>;
-
-    /// Register and or update a node with the registry.
-    ///
-    /// The signature should be made using `REGISTER_NODE_SIGNATURE_CONTEXT`
-    fn register_node(&self, node: Signed<Node>) -> BoxFuture<()>;
-
-    /// Get a node by id.
-    fn get_node(&self, id: B256) -> BoxFuture<Node>;
-
-    /// Get a list of all registered nodes.
-    fn get_nodes(&self, epoch: EpochTime) -> BoxFuture<Vec<Node>>;
-
-    /// Get a list of nodes registered to an entity id.
-    fn get_nodes_for_entity(&self, id: B256) -> BoxFuture<Vec<Node>>;
-
-    /// Watch for changes in node registration.
-    fn watch_nodes(&self) -> BoxStream<RegistryEvent<Node>>;
-
-    /// Watch for the per-epoch stable node lists.  Upon subscription, the
-    /// node list for the current epoch will be sent immediately if available.
-    ///
-    /// Each node list will be sorted by node ID in lexographically ascending
-    /// order.
-    fn watch_node_list(&self) -> BoxStream<(EpochTime, Vec<Node>)>;
+impl NodeTransport {
+    /// Construct a gRPC channel to given node.
+    pub fn connect(&self, environment: Arc<Environment>) -> grpcio::Channel {
+        grpcio::ChannelBuilder::new(environment.grpc())
+            .override_ssl_target(CERTIFICATE_COMMON_NAME)
+            .secure_connect(
+                // TODO: Configure all addresses instead of just the first one.
+                &format!("{}", self.addresses[0]),
+                grpcio::ChannelCredentialsBuilder::new()
+                    .root_cert(self.certificate.get_pem().unwrap())
+                    .build(),
+            )
+    }
 }

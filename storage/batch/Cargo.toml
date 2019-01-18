@@ -8,7 +8,6 @@ repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
-ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-storage-dummy = { path = "../dummy", version = "0.2.0-alpha" }
 grpcio = { version = "~0.4.2", features = ["openssl"] }

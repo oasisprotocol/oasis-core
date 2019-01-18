@@ -130,6 +130,11 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 				nod, err := backend.GetNode(context.Background(), v.Node.ID)
 				require.NoError(err, "GetNode")
 				require.EqualValues(v.Node, nod, "retrieved node")
+
+				tp, err := backend.GetNodeTransport(context.Background(), v.Node.ID)
+				require.NoError(err, "GetNodeTransport")
+				require.EqualValues(v.Node.Addresses, tp.Addresses, "retrieved transport addresses")
+				require.EqualValues(v.Node.Certificate, tp.Certificate, "retrieved transport certificate")
 			}
 		}
 	})

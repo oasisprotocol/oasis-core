@@ -9,5 +9,3 @@ extern crate protobuf;
 mod generated;
 
 pub use generated::common::*;
-#[cfg(not(target_env = "sgx"))]
-pub use generated::common_grpc::*;

@@ -209,7 +209,8 @@ run_keymanager_node() {
 
     ${WORKDIR}/target/debug/ekiden-keymanager-node \
         --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
-        --node-key-pair ${WORKDIR}/tests/keymanager/km.key \
+        --tls-certificate ${WORKDIR}/tests/keymanager/km.pem \
+        --tls-key ${WORKDIR}/tests/keymanager/km-key.pem \
         --storage-backend dummy \
         --storage-path ${db_dir} \
         ${extra_args} &

@@ -1,7 +1,6 @@
 //! Scheduler gRPC client.
 use std::convert::TryFrom;
 use std::error::Error as StdError;
-use std::sync::Arc;
 
 use grpcio::{Channel, ChannelBuilder};
 
@@ -9,8 +8,6 @@ use ekiden_common::bytes::B256;
 use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
-use ekiden_common::identity::NodeIdentity;
-use ekiden_common::node::Node;
 use ekiden_common::remote_node::RemoteNode;
 use ekiden_scheduler_api as api;
 use ekiden_scheduler_base::{Committee, Scheduler};
@@ -21,14 +18,6 @@ pub struct SchedulerClient(api::SchedulerClient);
 impl SchedulerClient {
     pub fn new(channel: Channel) -> Self {
         SchedulerClient(api::SchedulerClient::new(channel))
-    }
-
-    pub fn from_node(
-        node: &Node,
-        environment: Arc<Environment>,
-        identity: Arc<NodeIdentity>,
-    ) -> Self {
-        SchedulerClient::new(node.connect(environment, identity))
     }
 }
 
@@ -45,19 +34,6 @@ impl Scheduler for SchedulerClient {
                 committees
             }).map_err(|e| Error::new(e.description()))),
             Err(e) => Box::new(future::err(Error::new(e.description()))),
-        }
-    }
-
-    fn watch_committees(&self) -> BoxStream<Committee> {
-        let req = api::WatchRequest::new();
-        match self.0.watch_committees(&req) {
-            Ok(s) => Box::new(s.then(|result| match result {
-                Ok(r) => Ok(Committee::try_from(r.get_committee().to_owned())?),
-                Err(e) => Err(Error::new(e.description())),
-            })),
-            Err(e) => Box::new(stream::once::<Committee, _>(Err(Error::new(
-                e.description(),
-            )))),
         }
     }
 }

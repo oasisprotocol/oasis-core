@@ -15,7 +15,6 @@ rusoto_core = "0.34.0"
 
 ekiden-common = { path = "../../common", version = "0.2.0-alpha" }
 ekiden-di = { path = "../../di", version = "0.2.0-alpha" }
-ekiden-epochtime = { path = "../../epochtime", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../base", version = "0.2.0-alpha" }
 ekiden-storage-dynamodb = { path = "../dynamodb", version = "0.2.0-alpha" }
 ekiden-storage-frontend = { path = "../frontend", version = "0.2.0-alpha" }

@@ -12,7 +12,5 @@ extern crate grpcio;
 extern crate rustracing;
 
 pub mod client;
-pub mod frontend;
 
 pub use client::*;
-pub use frontend::*;
