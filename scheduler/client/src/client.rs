@@ -47,14 +47,10 @@ create_component!(
     (|container: &mut Container| -> Result<Box<Any>> {
         let environment: Arc<Environment> = container.inject()?;
 
-        // "node-host" and "node-port" arguments.
+        // "node-address" argument.
         let remote_node: Arc<RemoteNode> = container.inject()?;
-
-        let channel = ChannelBuilder::new(environment.grpc()).connect(&format!(
-            "{}:{}",
-            remote_node.get_node_host(),
-            remote_node.get_node_port(),
-        ));
+        let channel =
+            ChannelBuilder::new(environment.grpc()).connect(remote_node.get_node_address());
 
         let instance: Arc<Scheduler> = Arc::new(SchedulerClient::new(channel));
         Ok(Box::new(instance))

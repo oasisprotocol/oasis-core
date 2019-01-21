@@ -12,6 +12,7 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 #   EKIDEN_TM_GENESIS_FILE
 #   EKIDEN_STORAGE_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
+#   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_EXTRA_ARGS
 #
 # Arguments:
@@ -72,13 +73,11 @@ run_backend_tendermint_committee() {
     for idx in $(seq 1 $nodes); do
         local datadir=${base_datadir}-${idx}
 
-        let grpc_port=(idx-1)+42261
         let tm_port=(idx-1)+26656
 
         ${WORKDIR}/go/ekiden/ekiden \
             --log.level debug \
             --log.file ${committee_dir}/validator-${idx}.log \
-            --grpc.port ${grpc_port} \
             --grpc.log.verbose_debug \
             --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
@@ -100,6 +99,7 @@ run_backend_tendermint_committee() {
 
     # Export some variables so compute workers can find them.
     EKIDEN_COMMITTEE_DIR=${committee_dir}
+    EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
     EKIDEN_STORAGE_PORT=${storage_port}
     EKIDEN_TM_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
@@ -135,14 +135,12 @@ run_compute_node() {
     rm -rf ${log_file}
 
     # Generate port number.
-    let grpc_port=id+10000
     let client_port=id+11000
     let p2p_port=id+12000
     let tm_port=id+13000
 
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
-        --grpc.port ${grpc_port} \
         --grpc.log.verbose_debug \
         --storage.backend client \
         --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
@@ -182,7 +180,9 @@ cat_compute_logs() {
 wait_compute_nodes() {
     local nodes=$1
 
-    ${WORKDIR}/go/ekiden/ekiden debug dummy wait-nodes --nodes $1
+    ${WORKDIR}/go/ekiden/ekiden debug dummy wait-nodes \
+        --address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --nodes $nodes
 }
 
 # Set epoch.
@@ -192,7 +192,9 @@ wait_compute_nodes() {
 set_epoch() {
     local epoch=$1
 
-    ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch --epoch $epoch
+    ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch \
+        --address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --epoch $epoch
 }
 
 # Run a key manager node.
@@ -227,6 +229,7 @@ run_basic_client() {
 
     ${WORKDIR}/target/debug/${client}-client \
         --storage-backend remote \
+        --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/${runtime}.mrenclave) \
         --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
         &

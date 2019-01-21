@@ -52,10 +52,15 @@ test_migration() {
     set_epoch 1
     sleep 1
 
+    # Link to correct UNIX socket so that we can switch the actual socket later.
+    local validator_sock=${TEST_BASE_DIR}/validator.sock
+    ln -s ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}
+
     # Start long term client, which has a 10-second wait. We run this client so
     # that we test if the migration works without restarting the client.
     "$WORKDIR/target/debug/test-long-term-client" \
         --storage-backend remote \
+        --node-address unix:${validator_sock} \
         --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
         --test-runtime-id "$RUNTIME_ID" \
         &
@@ -71,10 +76,12 @@ test_migration() {
     "$WORKDIR/go/ekiden/ekiden" storage export \
         --address "127.0.0.1:${EKIDEN_STORAGE_PORT}" \
         --output_file ${TEST_BASE_DIR}/export-storage.dat
-    "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" --output_file ${TEST_BASE_DIR}/export-roothash.dat
+    "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" \
+        --address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --output_file ${TEST_BASE_DIR}/export-roothash.dat
 
     # Stop the validator and storage nodes.
-    pkill --echo --full --signal 9 ekiden
+    pkill --echo --signal 9 ekiden
 
     sleep 1
     # 5 sec
@@ -82,6 +89,9 @@ test_migration() {
     # Start the second network.
     run_backend_tendermint_committee tendermint_mock 2 \
         --roothash.genesis_blocks ${TEST_BASE_DIR}/export-roothash.dat
+
+    # Replace validator socket.
+    ln -sf ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}
 
     sleep 1
     # 6 sec

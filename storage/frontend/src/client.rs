@@ -7,6 +7,7 @@ use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::IntoFuture;
+use ekiden_common::remote_node::RemoteNode;
 use ekiden_storage_api as api;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_tracing::{self, inject_to_options};
@@ -120,30 +121,17 @@ create_component!(
     StorageBackend,
     (|container: &mut Container| -> Result<Box<Any>> {
         let environment: Arc<Environment> = container.inject()?;
+        // "node-address" argument.
+        let remote_node: Arc<RemoteNode> = container.inject()?;
 
         let args = container.get_arguments().unwrap();
         let channel = ChannelBuilder::new(environment.grpc())
             .max_receive_message_len(i32::max_value())
             .max_send_message_len(i32::max_value())
-            .connect(&format!(
-                "{}:{}",
-                args.value_of("storage-client-host").unwrap(),
-                args.value_of("storage-client-port").unwrap(),
-            ));
+            .connect(remote_node.get_node_address());
 
         let instance: Arc<StorageBackend> = Arc::new(StorageClient::new(channel));
         Ok(Box::new(instance))
     }),
-    [
-        Arg::with_name("storage-client-host")
-            .long("storage-client-host")
-            .help("(remote storage backend) Host that the storage client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1"),
-        Arg::with_name("storage-client-port")
-            .long("storage-client-port")
-            .help("(remote storage backend) Port that the storage client should connect to")
-            .takes_value(true)
-            .default_value("42261")
-    ]
+    []
 );

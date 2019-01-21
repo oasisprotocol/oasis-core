@@ -97,7 +97,8 @@ client as follows:
 # ./target/debug/simple-keyvalue-client \
     --mr-enclave $(cat target/enclave/simple-keyvalue.mrenclave) \
     --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-    --storage-backend remote
+    --storage-backend remote \
+    --node-address unix:/tmp/ekiden-node-data/internal.sock
 ```
 
 By default, Ekiden node is configured with a 30-second epoch, so you may

@@ -180,7 +180,7 @@ func NewNode() (*Node, error) {
 
 	// Initialize the gRPC server.
 	// Depends on global tracer.
-	node.grpcSrv, err = cmdGrpc.NewServerTCP()
+	node.grpcSrv, err = cmdGrpc.NewServerLocal()
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
@@ -293,7 +293,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	for _, v := range []func(*cobra.Command){
 		metrics.RegisterFlags,
 		tracing.RegisterFlags,
-		cmdGrpc.RegisterServerTCPFlags,
+		cmdGrpc.RegisterServerLocalFlags,
 		pprof.RegisterFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
