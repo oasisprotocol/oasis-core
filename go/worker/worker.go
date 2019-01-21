@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"path"
 	"strings"
 	"time"
 
@@ -45,7 +44,6 @@ type Config struct { // nolint: maligned
 	P2PPort         uint16
 	P2PAddresses    []node.Address
 	WorkerBinary    string
-	CacheDir        string
 	Runtimes        []RuntimeConfig
 }
 
@@ -238,7 +236,6 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 		h, err = host.NewSandboxedHost(
 			cfg.WorkerBinary,
 			rtCfg.Binary,
-			path.Join(cfg.CacheDir, rtCfg.ID.String()),
 			rtCfg.ID,
 			w.storage,
 			rtCfg.TEEHardware,
@@ -250,7 +247,6 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 		h, err = host.NewSandboxedHost(
 			cfg.WorkerBinary,
 			rtCfg.Binary,
-			path.Join(cfg.CacheDir, rtCfg.ID.String()),
 			rtCfg.ID,
 			w.storage,
 			rtCfg.TEEHardware,

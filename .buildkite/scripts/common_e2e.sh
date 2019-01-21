@@ -131,8 +131,6 @@ run_compute_node() {
 
     local data_dir=${EKIDEN_COMMITTEE_DIR}/worker-$id
     rm -rf ${data_dir}
-    local cache_dir=${EKIDEN_COMMITTEE_DIR}/worker-cache-$id
-    rm -rf ${cache_dir}
     local log_file=${EKIDEN_COMMITTEE_DIR}/worker-$id.log
     rm -rf ${log_file}
 
@@ -161,7 +159,6 @@ run_compute_node() {
         --tendermint.log.debug \
         --worker.backend sandboxed \
         --worker.binary ${WORKDIR}/target/debug/ekiden-worker \
-        --worker.cache_dir ${cache_dir} \
         --worker.runtime.binary ${WORKDIR}/target/enclave/${runtime}.so \
         --worker.runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
         --worker.client.port ${client_port} \

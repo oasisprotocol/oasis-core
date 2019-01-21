@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"encoding/hex"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -63,15 +62,10 @@ func TestSandboxedHost(t *testing.T) {
 	ias, err := ias.New(nil, "")
 	require.NoError(t, err, "ias.New")
 
-	cacheDir, err := ioutil.TempDir("", "ekiden-sandboxed-host-test_")
-	require.NoError(t, err, "create cache dir")
-	defer os.RemoveAll(cacheDir)
-
 	// Create host with sandbox disabled.
 	host, err := NewSandboxedHost(
 		envWorkerHostWorkerBinary,
 		envWorkerHostRuntimeBinary,
-		cacheDir,
 		runtimeID,
 		storage,
 		node.TEEHardwareIntelSGX,
@@ -89,7 +83,6 @@ func TestSandboxedHost(t *testing.T) {
 	host, err = NewSandboxedHost(
 		envWorkerHostWorkerBinary,
 		envWorkerHostRuntimeBinary,
-		cacheDir,
 		runtimeID,
 		storage,
 		node.TEEHardwareIntelSGX,

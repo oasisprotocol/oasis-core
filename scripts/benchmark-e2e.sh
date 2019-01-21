@@ -59,15 +59,11 @@ run_compute_node() {
     shift
     local extra_args=$*
 
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
     # Generate port number.
     let "port=id + 10000"
 
     ${WORKDIR}/target/release/ekiden-compute \
         --worker-path ${WORKDIR}/target/release/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
         --no-persist-identity \
         --max-batch-size 20 \
         --max-batch-timeout 100 \
@@ -90,15 +86,11 @@ run_compute_node_storage_multilayer_remote() {
     local db_dir=/tmp/ekiden-test-storage-multilayer-local-$id
     rm -rf ${db_dir}
 
-    local cache_dir=/tmp/ekiden-test-worker-cache-$id
-    rm -rf ${cache_dir}
-
     # Generate port number.
     let "port=id + 10000"
 
     ${WORKDIR}/target/release/ekiden-compute \
         --worker-path ${WORKDIR}/target/release/ekiden-worker \
-        --worker-cache-dir ${cache_dir} \
         --no-persist-identity \
         --max-batch-size 20 \
         --max-batch-timeout 100 \

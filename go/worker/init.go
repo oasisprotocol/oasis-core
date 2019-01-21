@@ -26,7 +26,6 @@ const (
 	cfgWorkerBackend = "worker.backend"
 
 	cfgWorkerBinary = "worker.binary"
-	cfgCacheDir     = "worker.cache_dir"
 
 	cfgIASProxy = "worker.ias.proxy_addr"
 
@@ -110,7 +109,6 @@ func New(
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
-	cacheDir := viper.GetString(cfgCacheDir)
 
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
@@ -194,7 +192,6 @@ func New(
 		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
 		P2PAddresses:    p2pAddresses,
 		WorkerBinary:    workerBinary,
-		CacheDir:        cacheDir,
 		Runtimes:        runtimes,
 	}
 
@@ -208,7 +205,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
 
 		cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
-		cmd.Flags().String(cfgCacheDir, "", "Path to worker cache directory")
 
 		cmd.Flags().String(cfgIASProxy, "", "IAS proxy address")
 
@@ -241,7 +237,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgWorkerBackend,
 
 		cfgWorkerBinary,
-		cfgCacheDir,
 
 		cfgIASProxy,
 
