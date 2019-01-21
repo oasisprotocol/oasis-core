@@ -8,10 +8,10 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -355,7 +355,7 @@ func newWorker(
 
 	if enabled {
 		// Create client gRPC server.
-		grpc, err := grpc.NewServerEx(cfg.ClientPort, identity.TLSCertificate)
+		grpc, err := grpc.NewServerTCP("worker-client", cfg.ClientPort, identity.TLSCertificate)
 		if err != nil {
 			return nil, err
 		}

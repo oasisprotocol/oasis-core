@@ -8,11 +8,12 @@ import (
 
 	"github.com/oasislabs/ekiden/go/beacon"
 	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/dummydebug"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
+	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/pprof"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
@@ -179,7 +180,7 @@ func NewNode() (*Node, error) {
 
 	// Initialize the gRPC server.
 	// Depends on global tracer.
-	node.grpcSrv, err = grpc.NewServer()
+	node.grpcSrv, err = cmdGrpc.NewServerTCP()
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
@@ -292,7 +293,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	for _, v := range []func(*cobra.Command){
 		metrics.RegisterFlags,
 		tracing.RegisterFlags,
-		grpc.RegisterServerFlags,
+		cmdGrpc.RegisterServerTCPFlags,
 		pprof.RegisterFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
