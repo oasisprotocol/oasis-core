@@ -22,7 +22,6 @@ members = [
     "roothash/client",
 
     # Storage interface.
-    "storage/api",
     "storage/base",
     "storage/dummy",
     "storage/frontend",

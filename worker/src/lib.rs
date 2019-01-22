@@ -13,7 +13,6 @@ extern crate tokio_uds;
 
 extern crate ekiden_core;
 extern crate ekiden_roothash_base;
-extern crate ekiden_storage_api;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_batch;
 extern crate ekiden_tracing;

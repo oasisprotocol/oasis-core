@@ -8,9 +8,13 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::IntoFuture;
 use ekiden_common::remote_node::RemoteNode;
-use ekiden_storage_api as api;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_tracing::{self, inject_to_options};
+
+mod api {
+    pub use crate::generated::storage::*;
+    pub use crate::generated::storage_grpc::*;
+}
 
 /// Storage client implements the storage interface.  It exposes storage calls across a gRPC channel.
 pub struct StorageClient(api::StorageClient);
