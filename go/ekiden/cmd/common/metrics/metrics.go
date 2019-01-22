@@ -30,6 +30,31 @@ const (
 	metricsModePush = "push"
 )
 
+// ServiceConfig contains the configuration parameters for metrics.
+type ServiceConfig struct {
+	// Mode is the service mode ("none", "pull", "push").
+	Mode string
+	// Address is the address of the push server.
+	Address string
+	// JobName is the name of the job for which metrics are collected.
+	JobName string
+	// InstanceLabel is the instance label of the job being collected for.
+	InstanceLabel string
+	// Interval defined the push interval for metrics collection.
+	Interval time.Duration
+}
+
+// GetServiceConfig gets the metrics configuration parameter struct.
+func GetServiceConfig() *ServiceConfig {
+	return &ServiceConfig{
+		Mode:          viper.GetString(cfgMetricsMode),
+		Address:       viper.GetString(cfgMetricsAddr),
+		JobName:       viper.GetString(cfgMetricsPushJobName),
+		InstanceLabel: viper.GetString(cfgMetricsPushInstanceLabel),
+		Interval:      viper.GetDuration(cfgMetricsPushInterval),
+	}
+}
+
 type stubService struct {
 	service.BaseBackgroundService
 }

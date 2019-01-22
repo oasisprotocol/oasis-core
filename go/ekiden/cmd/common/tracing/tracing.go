@@ -20,6 +20,28 @@ const (
 	cfgTracingSamplerParam               = "tracing.sampler.param"
 )
 
+// ServiceConfig contains the configuration parameters for tracing.
+type ServiceConfig struct {
+	// Enabled is true if the service is enabled.
+	Enabled bool
+	// FlushInterval
+	FlushInterval time.Duration
+	// AgentAddress is the address of the tracing server.
+	AgentAddress string
+	// SamplerParam
+	SamplerParam float64
+}
+
+// GetServiceConfig gets the tracing configuration parameter struct.
+func GetServiceConfig() *ServiceConfig {
+	return &ServiceConfig{
+		Enabled:       viper.GetBool(cfgTracingEnabled),
+		FlushInterval: viper.GetDuration(cfgTracingReporterFlushInterval),
+		AgentAddress:  viper.GetString(cfgTracingReporterLocalAgentHostPort),
+		SamplerParam:  viper.GetFloat64(cfgTracingSamplerParam),
+	}
+}
+
 type tracingService struct {
 	closer io.Closer
 }
