@@ -11,23 +11,13 @@ import (
 // in time (epoch date).
 type EpochTime uint64
 
-const (
-	// EkidenEpoch is the epoch date, as the number of seconds since
-	// the UNIX epoch.
-	EkidenEpoch int64 = 1514764800 // 2018-01-01T00:00:00+00:00
-
-	// EpochInterval is the epoch interval in seconds.
-	EpochInterval = 86400 // 1 day
-
-	// EpochInvalid is the placeholder invalid epoch.
-	EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
-)
+// EpochInvalid is the placeholder invalid epoch.
+const EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
 
 // Backend is a timekeeping implementation.
 type Backend interface {
-	// GetEpoch returns the current epoch and the number of seconds
-	// since the begining of the current epoch.
-	GetEpoch(context.Context) (epoch EpochTime, elapsed uint64, err error)
+	// GetEpoch returns the current epoch.
+	GetEpoch(context.Context) (epoch EpochTime, err error)
 
 	// WatchEpochs returns a channel that produces a stream of messages
 	// on epoch transitions.
@@ -40,18 +30,16 @@ type Backend interface {
 type SetableBackend interface {
 	Backend
 
-	// SetEpoch sets the current epoch and number of seconds since
-	// the begining of the current epoch.
-	SetEpoch(context.Context, EpochTime, uint64) error
+	// SetEpoch sets the current epoch.
+	SetEpoch(context.Context, EpochTime) error
 }
 
 // BlockBackend is a Backend that is backed by a blockchain.
 type BlockBackend interface {
 	Backend
 
-	// GetBlockEpoch returns the epoch at the specified block height,
-	// and the number of blocks since the begining of said epoch.
-	GetBlockEpoch(context.Context, int64) (epoch EpochTime, elapsed uint64, err error)
+	// GetBlockEpoch returns the epoch at the specified block height.
+	GetBlockEpoch(context.Context, int64) (epoch EpochTime, err error)
 
 	// GetEpochBlock returns the block height at the start of the said
 	// epoch.

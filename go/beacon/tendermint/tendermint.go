@@ -66,7 +66,7 @@ func (t *tendermintBackend) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.S
 }
 
 func (t *tendermintBackend) GetBlockBeacon(ctx context.Context, height int64) ([]byte, error) {
-	epoch, _, err := t.timeSource.GetBlockEpoch(ctx, height)
+	epoch, err := t.timeSource.GetBlockEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}

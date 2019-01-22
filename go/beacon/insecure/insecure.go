@@ -64,7 +64,7 @@ func (r *insecureDummy) GetBlockBeacon(ctx context.Context, height int64) ([]byt
 		return nil, errIncompatibleBackend
 	}
 
-	epoch, _, err := blockTimeSource.GetBlockEpoch(ctx, height)
+	epoch, err := blockTimeSource.GetBlockEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}

@@ -297,7 +297,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		return nil, errIncompatibleBackends
 	}
 
-	epoch, _, err := timeSource.GetBlockEpoch(ctx, height)
+	epoch, err := timeSource.GetBlockEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}

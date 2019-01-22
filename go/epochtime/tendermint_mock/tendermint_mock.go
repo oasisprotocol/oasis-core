@@ -38,25 +38,25 @@ type tendermintMockBackend struct {
 	currentBlock int64
 }
 
-func (t *tendermintMockBackend) GetEpoch(ctx context.Context) (api.EpochTime, uint64, error) {
+func (t *tendermintMockBackend) GetEpoch(ctx context.Context) (api.EpochTime, error) {
 	t.RLock()
 	defer t.RUnlock()
 
-	return t.epoch, 0, nil
+	return t.epoch, nil
 }
 
-func (t *tendermintMockBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, uint64, error) {
+func (t *tendermintMockBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
 	response, err := t.service.Query(tmapi.QueryEpochTimeMockGetEpoch, tmapi.QueryGetEpoch{}, height)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "epochtime: get block epoch query failed")
+		return 0, errors.Wrap(err, "epochtime: get block epoch query failed")
 	}
 
 	var data tmapi.QueryGetEpochResponse
 	if err := cbor.Unmarshal(response, &data); err != nil {
-		return 0, 0, errors.Wrap(err, "epochtime: get block epoch malformed response")
+		return 0, errors.Wrap(err, "epochtime: get block epoch malformed response")
 	}
 
-	return data.Epoch, 0, nil
+	return data.Epoch, nil
 }
 
 func (t *tendermintMockBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
@@ -78,7 +78,7 @@ func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime, elapsed uint64) error {
+func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
 	tx := tmapi.TxEpochTimeMock{
 		TxSetEpoch: &tmapi.TxSetEpoch{
 			Epoch: epoch,
