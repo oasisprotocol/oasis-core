@@ -7,7 +7,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/ethereum"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
@@ -24,9 +23,6 @@ var (
 type Entity struct {
 	// ID is the public key identifying the entity.
 	ID signature.PublicKey `codec:"id"`
-
-	// EthAddress is the Ethereum address of this Entity.
-	EthAddress *ethereum.Address `codec:"eth_address"`
 
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
@@ -53,13 +49,6 @@ func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 		return err
 	}
 
-	if b := pb.GetEthAddress(); b != nil {
-		e.EthAddress = new(ethereum.Address)
-		if err := e.EthAddress.UnmarshalBinary(b); err != nil {
-			return err
-		}
-	}
-
 	e.RegistrationTime = pb.GetRegistrationTime()
 
 	return nil
@@ -70,9 +59,6 @@ func (e *Entity) ToProto() *pbCommon.Entity {
 	pb := new(pbCommon.Entity)
 
 	pb.Id, _ = e.ID.MarshalBinary()
-	if e.EthAddress != nil {
-		pb.EthAddress, _ = e.EthAddress.MarshalBinary()
-	}
 	pb.RegistrationTime = e.RegistrationTime
 
 	return pb

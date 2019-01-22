@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/ethereum"
 	"github.com/oasislabs/ekiden/go/common/ias"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
@@ -49,9 +48,6 @@ var (
 type Node struct {
 	// ID is the public key identifying the node.
 	ID signature.PublicKey `codec:"id"`
-
-	// EthAddress is the optional Ethereum address of this node.
-	EthAddress *ethereum.Address `codec:"eth_address"`
 
 	// EntityID is the public key identifying the Entity controlling
 	// the node.
@@ -343,13 +339,6 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		return err
 	}
 
-	if b := pb.GetEthAddress(); b != nil {
-		n.EthAddress = new(ethereum.Address)
-		if err := n.EthAddress.UnmarshalBinary(b); err != nil {
-			return err
-		}
-	}
-
 	if err := n.EntityID.UnmarshalBinary(pb.GetEntityId()); err != nil {
 		return err
 	}
@@ -394,9 +383,6 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb := new(pbCommon.Node)
 
 	pb.Id, _ = n.ID.MarshalBinary()
-	if n.EthAddress != nil {
-		pb.EthAddress, _ = n.EthAddress.MarshalBinary()
-	}
 	pb.EntityId, _ = n.EntityID.MarshalBinary()
 	pb.Expiration = n.Expiration
 	if n.Addresses != nil {

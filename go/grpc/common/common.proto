@@ -21,19 +21,17 @@ message Certificate {
 
 message Entity {
     bytes id = 1;
-    bytes eth_address = 2;
-    uint64 registration_time = 3;
+    uint64 registration_time = 2;
 }
 
 message Node {
     bytes id = 1;
-    bytes eth_address = 2;
-    bytes entity_id = 3;
-    uint64 expiration = 4;
-    repeated Address addresses = 5;
-    Certificate certificate = 6;
-    uint64 registration_time = 7;
-    repeated NodeRuntime runtimes = 8;
+    bytes entity_id = 2;
+    uint64 expiration = 3;
+    repeated Address addresses = 4;
+    Certificate certificate = 5;
+    uint64 registration_time = 6;
+    repeated NodeRuntime runtimes = 7;
 }
 
 message NodeRuntime {

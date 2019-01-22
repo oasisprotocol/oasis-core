@@ -4,7 +4,6 @@ package tests
 import (
 	"crypto"
 	"errors"
-	"io"
 	"testing"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/ethereum"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
@@ -375,9 +373,6 @@ func (ent *TestEntity) NewTestNodes(n int, runtimes []*TestRuntime, expiration e
 			RegistrationTime: uint64(time.Now().Unix()),
 			Runtimes:         nodeRts,
 		}
-		if nod.Node.EthAddress, err = newEthAddress(rng); err != nil {
-			return nil, err
-		}
 		addr, err := node.NewAddress(node.AddressFamilyIPv4, []byte{192, 0, 2, byte(i + 1)}, 451)
 		if err != nil {
 			return nil, err
@@ -413,9 +408,6 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 		ent.Entity = &entity.Entity{
 			ID:               ent.PrivateKey.Public(),
 			RegistrationTime: uint64(time.Now().Unix()),
-		}
-		if ent.Entity.EthAddress, err = newEthAddress(rng); err != nil {
-			return nil, err
 		}
 
 		signed, err := signature.SignSigned(ent.PrivateKey, api.RegisterEntitySignatureContext, ent.Entity)
@@ -616,14 +608,6 @@ func NewTestRuntime(seed []byte) (*TestRuntime, error) {
 	rt.SignedRegistration = &api.SignedRuntime{Signed: *signed}
 
 	return &rt, nil
-}
-
-func newEthAddress(rng io.Reader) (*ethereum.Address, error) {
-	var addr ethereum.Address
-	if _, err := rng.Read(addr[:]); err != nil {
-		return nil, err
-	}
-	return &addr, nil
 }
 
 func hashForDrbg(seed []byte) []byte {
