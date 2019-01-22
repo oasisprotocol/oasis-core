@@ -1,28 +1,24 @@
-// Package cbor provides helpers for encoding and decoding canonical CBOR.
+// Package json provides helpers for encoding and decoding canonical JSON.
 //
 // Using this package will produce canonical encodings which can be used
 // in cryptographic contexts like signing as the same message is guaranteed
 // to always have the same serialization.
-package cbor
+//
+// Notes:
+//  * The notion of "canonical JSON is somewhat non-standard, and the
+//    primary benefit of this package is the ability to use `codec`
+//    struct tags uniformly.
+//  * Due to the go-codec package's decision tree when encoding/decoding,
+//    and signature collisions with the `encoding/json` package, neither
+//    a `Marshaler` nor a `Unmarshaler` interface are defined.
+package json
 
 import "github.com/ugorji/go/codec"
 
-// Handle is the CBOR codec Handle used to encode/decode CBOR blobs.
+// Handle is the JSON codec Handle used to encode/decode JSON blobs.
 var Handle codec.Handle
 
-// Marshaler allows a type to be serialized into CBOR.
-type Marshaler interface {
-	// MarshalCBOR serializes the type into a CBOR byte vector.
-	MarshalCBOR() []byte
-}
-
-// Unmarshaler allows a type to be deserialized from CBOR.
-type Unmarshaler interface {
-	// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-	UnmarshalCBOR([]byte) error
-}
-
-// Marshal serializes a given type into a CBOR byte vector.
+// Marshal serializes a given type into a JSON byte vector.
 func Marshal(src interface{}) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, Handle)
@@ -30,7 +26,7 @@ func Marshal(src interface{}) []byte {
 	return b
 }
 
-// Unmarshal deserializes a CBOR byte vector into a given type.
+// Unmarshal deserializes a JSON byte vector into a given type.
 func Unmarshal(data []byte, dst interface{}) error {
 	dec := codec.NewDecoderBytes(data, Handle)
 	if err := dec.Decode(dst); err != nil {
@@ -40,7 +36,7 @@ func Unmarshal(data []byte, dst interface{}) error {
 	return nil
 }
 
-// MustUnmarshal deserializes a CBOR byte vector into a given type.
+// MustUnmarshal deserializes a JSON byte vector into a given type.
 // Panics if unmarshal fails.
 func MustUnmarshal(data []byte, dst interface{}) {
 	dec := codec.NewDecoderBytes(data, Handle)
@@ -50,7 +46,7 @@ func MustUnmarshal(data []byte, dst interface{}) {
 }
 
 func init() {
-	h := new(codec.CborHandle)
+	h := new(codec.JsonHandle)
 	h.EncodeOptions.Canonical = true
 
 	Handle = h

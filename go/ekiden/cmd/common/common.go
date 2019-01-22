@@ -30,6 +30,18 @@ func DataDir() string {
 	return viper.GetString(cfgDataDir)
 }
 
+// DataDirOrPwd returns the data directory iff one is set, pwd otherwise.
+func DataDirOrPwd() (string, error) {
+	dataDir := DataDir()
+	if dataDir == "" {
+		var err error
+		if dataDir, err = os.Getwd(); err != nil {
+			return "", err
+		}
+	}
+	return dataDir, nil
+}
+
 // EarlyLogAndExit logs the error and exits.
 //
 // Note: This routine should only be used prior to the logging system
