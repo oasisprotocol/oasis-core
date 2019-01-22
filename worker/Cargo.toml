@@ -23,8 +23,6 @@ ekiden-storage-api = { path = "../storage/api", version = "0.2.0-alpha" }
 ekiden-roothash-base = { path = "../roothash/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
-ekiden-storage-multilayer = { path = "../storage/multilayer", version = "0.2.0-alpha" }
-ekiden-storage-persistent = { path = "../storage/persistent", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 rustracing = "0.1.7"
 rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.1.7-ekiden1" }

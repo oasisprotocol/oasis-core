@@ -56,7 +56,6 @@ cargo tarpaulin \
   --packages ekiden-storage-batch \
   --packages ekiden-storage-frontend \
   --packages ekiden-storage-lru \
-  --packages ekiden-storage-multilayer \
   --packages ekiden-storage-persistent \
   --packages ekiden-tools \
   --exclude-files *generated* \

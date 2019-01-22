@@ -1,5 +1,4 @@
 //! Read-only database access with best-effort freshness.
-
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -179,7 +178,6 @@ mod tests {
     use ekiden_core;
     use ekiden_core::bytes::B256;
     use ekiden_core::environment::GrpcEnvironment;
-    use ekiden_core::futures::BoxFuture;
     use ekiden_core::futures::BoxStream;
     use ekiden_core::futures::Stream;
     use ekiden_core::uint::U256;

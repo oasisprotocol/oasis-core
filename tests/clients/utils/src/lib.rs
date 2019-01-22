@@ -6,7 +6,7 @@ extern crate histogram;
 extern crate log;
 extern crate pretty_env_logger;
 extern crate serde;
-#[macro_use]
+#[cfg_attr(feature = "benchmark", macro_use)]
 extern crate serde_derive;
 extern crate serde_json;
 #[cfg(feature = "benchmark")]
@@ -28,7 +28,6 @@ extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_base;
 extern crate ekiden_storage_frontend;
-extern crate ekiden_storage_multilayer;
 extern crate ekiden_tracing;
 
 #[cfg(feature = "benchmark")]
