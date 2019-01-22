@@ -27,7 +27,7 @@ extern crate ekiden_roothash_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_base;
-extern crate ekiden_storage_frontend;
+extern crate ekiden_storage_client;
 extern crate ekiden_tracing;
 
 #[cfg(feature = "benchmark")]
