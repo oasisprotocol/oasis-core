@@ -8,8 +8,6 @@ extern crate ekiden_core;
 extern crate ekiden_di;
 extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
-extern crate ekiden_storage_multilayer;
-extern crate ekiden_storage_persistent;
 extern crate ekiden_tracing;
 extern crate ekiden_worker;
 extern crate ekiden_worker_api;

@@ -5,8 +5,7 @@ use ekiden_instrumentation_prometheus;
 use ekiden_registry_client;
 use ekiden_roothash_client;
 use ekiden_scheduler_client;
-use ekiden_storage_frontend;
-use ekiden_storage_multilayer;
+use ekiden_storage_client;
 
 /// Register known components for dependency injection.
 pub fn register_components(known_components: &mut KnownComponents) {
@@ -21,8 +20,7 @@ pub fn register_components(known_components: &mut KnownComponents) {
     // Consensus.
     ekiden_roothash_client::RootHashClient::register(known_components);
     // Storage.
-    ekiden_storage_frontend::StorageClient::register(known_components);
-    ekiden_storage_multilayer::MultilayerBackend::register(known_components);
+    ekiden_storage_client::StorageClient::register(known_components);
     // Remote node.
     ekiden_core::remote_node::RemoteNodeInfo::register(known_components);
 }
