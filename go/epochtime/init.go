@@ -10,7 +10,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
-	"github.com/oasislabs/ekiden/go/epochtime/system"
 	"github.com/oasislabs/ekiden/go/epochtime/tendermint"
 	"github.com/oasislabs/ekiden/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -18,7 +17,6 @@ import (
 
 const (
 	cfgBackend            = "epochtime.backend"
-	cfgSystemInterval     = "epochtime.system.interval"
 	cfgTendermintInterval = "epochtime.tendermint.interval"
 )
 
@@ -26,9 +24,6 @@ const (
 func New(tmService service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
-	case system.BackendName:
-		interval := viper.GetInt64(cfgSystemInterval)
-		return system.New(interval)
 	case mock.BackendName:
 		return mock.New(), nil
 	case tendermint.BackendName:
@@ -45,14 +40,12 @@ func New(tmService service.TendermintService) (api.Backend, error) {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, system.BackendName, "Epoch time backend")
-		cmd.Flags().Int64(cfgSystemInterval, api.EpochInterval, "Epoch interval")
-		cmd.Flags().Int64(cfgTendermintInterval, api.EpochInterval, "Epoch interval (in blocks)")
+		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Epoch time backend")
+		cmd.Flags().Int64(cfgTendermintInterval, 86400, "Epoch interval (in blocks)")
 	}
 
 	for _, v := range []string{
 		cfgBackend,
-		cfgSystemInterval,
 		cfgTendermintInterval,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck

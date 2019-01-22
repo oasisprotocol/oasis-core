@@ -138,7 +138,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	}
 
 	// Advance the epoch, get the committee.
-	epoch, _, err := epochtime.GetEpoch(context.Background())
+	epoch, err := epochtime.GetEpoch(context.Background())
 	require.NoError(err, "GetEpoch")
 
 	// Subscribe to blocks for all of the runtimes.

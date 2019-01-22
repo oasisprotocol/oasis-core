@@ -33,7 +33,7 @@ func (s *grpcServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (
 	}
 
 	epoch := epochtime.EpochTime(req.GetEpoch())
-	err := mockTS.SetEpoch(ctx, epoch, 0)
+	err := mockTS.SetEpoch(ctx, epoch)
 	if err != nil {
 		return nil, err
 	}

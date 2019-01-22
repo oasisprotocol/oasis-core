@@ -22,9 +22,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	require.Implements((*api.SetableBackend)(nil), backend, "epoch time backend is mock")
 	timeSource := (backend).(api.SetableBackend)
 
-	// Note: The tendermint_mock backend does not return elapsed,
-	// and the value is to be deprecated (#1079).
-	epoch, _, err := timeSource.GetEpoch(context.Background())
+	epoch, err := timeSource.GetEpoch(context.Background())
 	require.NoError(err, "GetEpoch")
 
 	var e api.EpochTime
@@ -39,7 +37,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	}
 
 	epoch++
-	err = timeSource.SetEpoch(context.Background(), epoch, 0)
+	err = timeSource.SetEpoch(context.Background(), epoch)
 	require.NoError(err, "SetEpoch")
 
 	select {
@@ -49,7 +47,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive epoch notification after transition")
 	}
 
-	e, _, err = timeSource.GetEpoch(context.Background())
+	e, err = timeSource.GetEpoch(context.Background())
 	require.NoError(err, "GetEpoch after set")
 	require.Equal(epoch, e, "GetEpoch after set, epoch")
 }
@@ -59,11 +57,11 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend, increment uint64) api.EpochTime {
 	require := require.New(t)
 
-	epoch, _, err := backend.GetEpoch(context.Background())
+	epoch, err := backend.GetEpoch(context.Background())
 	require.NoError(err, "GetEpoch")
 
 	epoch = epoch + api.EpochTime(increment)
-	err = backend.SetEpoch(context.Background(), epoch, 0)
+	err = backend.SetEpoch(context.Background(), epoch)
 	require.NoError(err, "SetEpoch")
 
 	return epoch

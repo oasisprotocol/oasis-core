@@ -2,7 +2,6 @@
 package mock
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -17,8 +16,6 @@ import (
 const BackendName = "mock"
 
 var (
-	errInvalidElapsed = errors.New("epochtime/mock: elapsed time greater than EpochInterval")
-
 	_ (api.Backend)        = (*mockBackend)(nil)
 	_ (api.SetableBackend) = (*mockBackend)(nil)
 )
@@ -31,14 +28,13 @@ type mockBackend struct {
 
 	lastNotified api.EpochTime
 	epoch        api.EpochTime
-	elapsed      uint64
 }
 
-func (m *mockBackend) GetEpoch(ctx context.Context) (api.EpochTime, uint64, error) {
+func (m *mockBackend) GetEpoch(ctx context.Context) (api.EpochTime, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	return m.epoch, m.elapsed, nil
+	return m.epoch, nil
 }
 
 func (m *mockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
@@ -49,24 +45,20 @@ func (m *mockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription)
 	return typedCh, sub
 }
 
-func (m *mockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime, elapsed uint64) error {
-	if elapsed > api.EpochInterval {
-		return errInvalidElapsed
-	}
-
-	if m.updateEpoch(epoch, elapsed) {
+func (m *mockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
+	if m.updateEpoch(epoch) {
 		m.notifier.Broadcast(epoch)
 	}
 
 	return nil
 }
 
-func (m *mockBackend) updateEpoch(epoch api.EpochTime, elapsed uint64) bool {
+func (m *mockBackend) updateEpoch(epoch api.EpochTime) bool {
 	m.Lock()
 	defer m.Unlock()
 
 	oldEpoch := m.epoch
-	m.epoch, m.elapsed = epoch, elapsed
+	m.epoch = epoch
 
 	if oldEpoch != epoch {
 		m.lastNotified = epoch

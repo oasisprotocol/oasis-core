@@ -32,21 +32,19 @@ type tendermintBackend struct {
 	interval     int64
 	lastNotified api.EpochTime
 	epoch        api.EpochTime
-	elapsed      uint64
 }
 
-func (t *tendermintBackend) GetEpoch(ctx context.Context) (api.EpochTime, uint64, error) {
+func (t *tendermintBackend) GetEpoch(ctx context.Context) (api.EpochTime, error) {
 	t.RLock()
 	defer t.RUnlock()
 
-	return t.epoch, t.elapsed, nil
+	return t.epoch, nil
 }
 
-func (t *tendermintBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, uint64, error) {
+func (t *tendermintBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
 	epoch := api.EpochTime(height / t.interval)
-	elapsed := uint64(height % t.interval)
 
-	return epoch, elapsed, nil
+	return epoch, nil
 }
 
 func (t *tendermintBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
@@ -84,10 +82,9 @@ func (t *tendermintBackend) updateCached(block *tmtypes.Block) bool {
 	t.Lock()
 	defer t.Unlock()
 
-	epoch, elapsed, _ := t.GetBlockEpoch(context.Background(), block.Header.Height)
+	epoch, _ := t.GetBlockEpoch(context.Background(), block.Header.Height)
 
 	t.epoch = epoch
-	t.elapsed = elapsed
 
 	if t.lastNotified != epoch {
 		t.logger.Debug("epoch transition",
