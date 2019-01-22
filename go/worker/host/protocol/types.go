@@ -138,6 +138,11 @@ type ComputedBatch struct {
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
 
+// String returns a string representation of a computed batch.
+func (b *ComputedBatch) String() string {
+	return "<ComputedBatch>"
+}
+
 // WorkerRuntimeCallBatchRequest is a worker batch runtime call request message body.
 type WorkerRuntimeCallBatchRequest struct {
 	Calls         runtime.Batch  `codec:"calls"`

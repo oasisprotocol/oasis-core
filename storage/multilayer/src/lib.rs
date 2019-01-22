@@ -23,6 +23,7 @@ use ekiden_common::error::Error;
 use ekiden_common::futures::BoxFuture;
 use ekiden_common::futures::BoxStream;
 use ekiden_common::futures::FutureExt;
+use ekiden_common::remote_node::RemoteNode;
 extern crate ekiden_di;
 use ekiden_di::create_component;
 extern crate ekiden_storage_base;
@@ -169,6 +170,8 @@ fn di_factory(
     container: &mut ekiden_di::Container,
 ) -> ekiden_di::error::Result<Box<std::any::Any>> {
     let env: Arc<Environment> = container.inject()?;
+    // "node-address" argument.
+    let remote_node: Arc<RemoteNode> = container.inject()?;
     let args = container.get_arguments().unwrap();
     let local = Arc::new(PersistentStorageBackend::new(Path::new(args.value_of(
         "storage-multilayer-local-storage-base",
@@ -194,11 +197,7 @@ fn di_factory(
                 let channel = ChannelBuilder::new(env.grpc())
                     .max_receive_message_len(i32::max_value())
                     .max_send_message_len(i32::max_value())
-                    .connect(&format!(
-                        "{}:{}",
-                        args.value_of("storage-multilayer-client-host").unwrap(),
-                        args.value_of("storage-multilayer-client-port").unwrap(),
-                    ));
+                    .connect(remote_node.get_node_address());
                 Arc::new(StorageClient::new(channel))
             }
             bottom_type => panic!("no match branch for last resort layer {}", bottom_type),
@@ -242,24 +241,6 @@ fn di_arg_aws_table_name<'a, 'b>() -> clap::Arg<'a, 'b> {
         .required_if("storage-multilayer-storage-backend", "dynamodb")
 }
 
-fn di_arg_client_host<'a, 'b>() -> clap::Arg<'a, 'b> {
-    clap::Arg::with_name("storage-multilayer-client-host")
-        .long("storage-multilayer-client-host")
-        .help("Host that the remote last resort layer of the multilayer storage backend should use")
-        .takes_value(true)
-        .required_if("storage-multilayer-storage-backend", "remote")
-        .default_value("127.0.0.1")
-}
-
-fn di_arg_client_port<'a, 'b>() -> clap::Arg<'a, 'b> {
-    clap::Arg::with_name("storage-multilayer-client-port")
-        .long("storage-multilayer-client-port")
-        .help("Port that the remote last resort layer of the multilayer storage backend should use")
-        .takes_value(true)
-        .required_if("storage-multilayer-storage-backend", "remote")
-        .default_value("42261")
-}
-
 // Register for dependency injection. When using DynamoDB as the last resort layer, the factory
 // starts a thread for the reactor core that runs forever.
 create_component!(
@@ -272,9 +253,7 @@ create_component!(
         di_arg_local_storage_base(),
         di_arg_bottom_storage_backend(),
         di_arg_aws_region(),
-        di_arg_aws_table_name(),
-        di_arg_client_host(),
-        di_arg_client_port()
+        di_arg_aws_table_name()
     ]
 );
 

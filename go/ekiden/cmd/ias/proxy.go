@@ -10,11 +10,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
+	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/pprof"
 )
@@ -77,7 +78,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	var err error
 
 	// Initialize the gRPC server.
-	env.grpcSrv, err = grpc.NewServer()
+	env.grpcSrv, err = cmdGrpc.NewServerTCP()
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
@@ -211,7 +212,7 @@ func Register(parentCmd *cobra.Command) {
 
 	for _, v := range []func(*cobra.Command){
 		metrics.RegisterFlags,
-		grpc.RegisterServerFlags,
+		cmdGrpc.RegisterServerTCPFlags,
 		pprof.RegisterFlags,
 	} {
 		v(iasProxyCmd)

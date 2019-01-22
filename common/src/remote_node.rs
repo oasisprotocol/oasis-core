@@ -1,29 +1,20 @@
 use clap::value_t;
 
-/// Dependency used for injecting `--node-host` and `--node-port` command line arguments when
+/// Dependency used for injecting `--node-address` command line argument when
 /// using create_component() macro.
 pub struct RemoteNodeInfo {
-    // Remote node host.
-    node_host: String,
-    // Remote node port.
-    node_port: u16,
+    // Remote node address.
+    node_address: String,
 }
 
 pub trait RemoteNode: Sync + Send {
-    /// Return remote node host.
-    fn get_node_host(&self) -> &str;
-
-    /// Return remote node port.
-    fn get_node_port(&self) -> u16;
+    /// Return remote node address.
+    fn get_node_address(&self) -> &str;
 }
 
 impl RemoteNode for RemoteNodeInfo {
-    fn get_node_host(&self) -> &str {
-        self.node_host.as_str()
-    }
-
-    fn get_node_port(&self) -> u16 {
-        self.node_port
+    fn get_node_address(&self) -> &str {
+        self.node_address.as_str()
     }
 }
 
@@ -37,22 +28,15 @@ create_component!(
         let args = container.get_arguments().unwrap();
 
         let rnode: Arc<RemoteNode> = Arc::new(RemoteNodeInfo {
-            node_host: value_t!(args.value_of("node-host"), String).unwrap_or_else(|e| e.exit()),
-            node_port: value_t!(args.value_of("node-port"), u16).unwrap_or_else(|e| e.exit()),
+            node_address: value_t!(args.value_of("node-address"), String)
+                .unwrap_or_else(|e| e.exit()),
         });
 
         Ok(Box::new(rnode))
     }),
-    [
-        Arg::with_name("node-host")
-            .long("node-host")
-            .help("Remote node hostname that the client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1"),
-        Arg::with_name("node-port")
-            .long("node-port")
-            .help("Remote node port that the client should connect to")
-            .takes_value(true)
-            .default_value("42261")
-    ]
+    [Arg::with_name("node-address")
+        .long("node-address")
+        .help("Remote node hostname:port that the client should connect to")
+        .takes_value(true)
+        .default_value("127.0.0.1:42261")]
 );
