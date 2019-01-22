@@ -99,9 +99,6 @@ func doRegister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	conn, client := doConnect(cmd)
-	defer conn.Close()
-
 	rt := &registry.Runtime{
 		ID:                       id,
 		Code:                     nil, // TBD
@@ -110,8 +107,28 @@ func doRegister(cmd *cobra.Command, args []string) {
 		ReplicaGroupBackupSize:   uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
 		ReplicaAllowedStragglers: uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
 		StorageGroupSize:         uint64(viper.GetInt64(cfgStorageGroupSize)),
-		RegistrationTime:         uint64(time.Now().Unix()),
 	}
+
+	nrRetries := cmdFlags.Retries()
+	for i := 0; i < nrRetries; {
+		if err := actuallyRegister(cmd, &id, rt); err == nil {
+			return
+		}
+
+		if nrRetries > 0 {
+			i++
+		}
+		if i <= nrRetries {
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+func actuallyRegister(cmd *cobra.Command, id *signature.PublicKey, rt *registry.Runtime) error {
+	conn, client := doConnect(cmd)
+	defer conn.Close()
+
+	rt.RegistrationTime = uint64(time.Now().Unix())
 
 	// Note: This can currently be absolutely anything, the registry just
 	// checks that the signature is valid, but doesn't care about the signing
@@ -123,7 +140,7 @@ func doRegister(cmd *cobra.Command, args []string) {
 		logger.Error("failed to generate a temporary signing key",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	signed, err := registry.SignRuntime(owner, registry.RegisterRuntimeSignatureContext, rt)
@@ -131,7 +148,7 @@ func doRegister(cmd *cobra.Command, args []string) {
 		logger.Error("failed to sign runtime descriptor",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	req := &grpcRegistry.RegisterRuntimeRequest{
@@ -141,12 +158,14 @@ func doRegister(cmd *cobra.Command, args []string) {
 		logger.Error("failed to register runtime",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("registered runtime",
 		"runtime", id,
 	)
+
+	return nil
 }
 
 func doList(cmd *cobra.Command, args []string) {
@@ -188,6 +207,8 @@ func doList(cmd *cobra.Command, args []string) {
 }
 
 func registerRegFlags(cmd *cobra.Command) {
+	cmdFlags.RegisterRetries(cmd)
+
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgID, "", "Runtime ID")
 		cmd.Flags().String(cfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")

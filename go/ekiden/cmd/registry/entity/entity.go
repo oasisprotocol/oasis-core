@@ -42,6 +42,7 @@ var (
 		Use:   cmdRegister,
 		Short: "register an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
+			cmdFlags.RegisterRetries(cmd)
 			cmdGrpc.RegisterClientFlags(cmd, false)
 		},
 		Run: doRegisterOrDeregister,
@@ -51,6 +52,7 @@ var (
 		Use:   "deregister",
 		Short: "deregister an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
+			cmdFlags.RegisterRetries(cmd)
 			cmdGrpc.RegisterClientFlags(cmd, false)
 		},
 		Run: doRegisterOrDeregister,
@@ -143,25 +145,43 @@ func doRegisterOrDeregister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	conn, client := doConnect(cmd)
-	defer conn.Close()
+	nrRetries := cmdFlags.Retries()
+	for i := 0; i <= nrRetries; {
+		if err = func() error {
+			conn, client := doConnect(cmd)
+			defer conn.Close()
 
-	switch cmd.Use == cmdRegister {
-	case true:
-		doRegister(client, ent, privKey)
-	case false:
-		doDeregister(client, ent, privKey)
+			var actErr error
+			switch cmd.Use == cmdRegister {
+			case true:
+				actErr = doRegister(client, ent, privKey)
+			case false:
+				actErr = doDeregister(client, ent, privKey)
+			}
+			return actErr
+		}(); err == nil {
+			return
+		}
+
+		if nrRetries > 0 {
+			i++
+		}
+		if i <= nrRetries {
+			time.Sleep(1 * time.Second)
+		}
 	}
+
+	os.Exit(1)
 }
 
-func doRegister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, privKey *signature.PrivateKey) {
+func doRegister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, privKey *signature.PrivateKey) error {
 	ent.RegistrationTime = uint64(time.Now().Unix())
 	signed, err := entity.SignEntity(*privKey, registry.RegisterEntitySignatureContext, ent)
 	if err != nil {
 		logger.Error("failed to sign entity",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	req := &grpcRegistry.RegisterRequest{
@@ -171,22 +191,24 @@ func doRegister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, pr
 		logger.Error("failed to register entity",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("registered entity",
 		"entity", privKey.Public(),
 	)
+
+	return nil
 }
 
-func doDeregister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, privKey *signature.PrivateKey) {
+func doDeregister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, privKey *signature.PrivateKey) error {
 	ts := registry.Timestamp(time.Now().Unix())
 	signed, err := signature.SignSigned(*privKey, registry.DeregisterEntitySignatureContext, &ts)
 	if err != nil {
 		logger.Error("failed to sign deregistration",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	req := &grpcRegistry.DeregisterRequest{
@@ -196,12 +218,14 @@ func doDeregister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, 
 		logger.Error("failed to deregister entity",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("deregistered entity",
 		"entity", privKey.Public(),
 	)
+
+	return nil
 }
 
 func doList(cmd *cobra.Command, args []string) {
@@ -254,6 +278,8 @@ func Register(parentCmd *cobra.Command) {
 	}
 
 	cmdFlags.RegisterForce(initCmd)
+	cmdFlags.RegisterRetries(registerCmd)
+	cmdFlags.RegisterRetries(deregisterCmd)
 	cmdFlags.RegisterVerbose(listCmd)
 
 	for _, v := range []*cobra.Command{

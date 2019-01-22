@@ -10,6 +10,7 @@ import (
 const (
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
+	cfgRetries = "retries"
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -38,4 +39,18 @@ func RegisterForce(cmd *cobra.Command) {
 	}
 
 	_ = viper.BindPFlag(cfgForce, cmd.Flags().Lookup(cfgForce))
+}
+
+// Retries returns the retries flag value.
+func Retries() int {
+	return viper.GetInt(cfgRetries)
+}
+
+// RegisterRetries registers the retries flag for the provided command.
+func RegisterRetries(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Int(cfgRetries, 0, "retries (-1 = forever)")
+	}
+
+	_ = viper.BindPFlag(cfgRetries, cmd.Flags().Lookup(cfgRetries))
 }

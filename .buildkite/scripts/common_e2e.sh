@@ -108,6 +108,7 @@ run_backend_tendermint_committee() {
     ${WORKDIR}/go/ekiden/ekiden \
         registry entity register \
         --address unix:${base_datadir}-1/internal.sock \
+        --retries 5 \
         --datadir ${entity_dir}
 
     # Export some variables so compute workers can find them.
@@ -130,6 +131,7 @@ register_runtime() {
         registry runtime register \
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --retries 5 \
         ${extra_args}
 }
 
