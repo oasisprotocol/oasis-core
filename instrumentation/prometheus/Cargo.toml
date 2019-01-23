@@ -7,10 +7,9 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [features]
-default = ["server", "di", "push"]
-server = ["hyper", "http", "futures", "ekiden-common"]
-di = ["ekiden-di", "clap"]
-push = ["futures", "ekiden-common"]
+default = ["server", "push"]
+server = ["hyper", "http", "futures"]
+push = ["futures"]
 
 [dependencies]
 ekiden-instrumentation = { path = "..", version = "0.2.0-alpha" }
@@ -18,7 +17,6 @@ prometheus = { version = "~0.4.2", features = ["push"] }
 hyper = { version = "~0.12", optional = true }
 http = { version = "~0.1.6", optional = true }
 futures = { version = "~0.1", optional = true }
-ekiden-common = { path = "../../common", "version" = "0.2.0-alpha", optional = true }
-ekiden-di = { path = "../../di", "version" = "0.2.0-alpha", optional = true }
-clap = { version = "2.29.1", optional = true }
+ekiden-common = { path = "../../common", "version" = "0.2.0-alpha" }
+clap = { version = "2.29.1" }
 log = "0.4"

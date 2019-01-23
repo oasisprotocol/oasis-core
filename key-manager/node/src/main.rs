@@ -14,7 +14,6 @@ extern crate serde_cbor;
 extern crate thread_local;
 
 extern crate ekiden_common;
-extern crate ekiden_di;
 extern crate ekiden_keymanager_untrusted;
 extern crate ekiden_rpc_api;
 extern crate ekiden_tools;
@@ -22,26 +21,21 @@ extern crate ekiden_untrusted;
 
 #[macro_use]
 extern crate clap;
-extern crate ekiden_storage_base;
-extern crate ekiden_storage_dummy;
 extern crate ekiden_storage_persistent;
 extern crate pretty_env_logger;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_common::environment::Environment;
+use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::x509;
-use ekiden_di::Component;
 use ekiden_keymanager_untrusted::backend;
 use ekiden_keymanager_untrusted::node::{KeyManagerConfiguration, KeyManagerNode};
-use ekiden_storage_base::StorageBackend;
 
 fn main() {
-    let known_components = register_known_components();
-
     let matches = App::new("Ekiden Key Manager Node")
         .version(crate_version!())
         .author(crate_authors!())
@@ -79,13 +73,14 @@ fn main() {
                 .default_value("km-tls-key.pem")
                 .required(true)
         )
-        .args(&known_components.get_arguments())
+        .arg(
+            Arg::with_name("storage-path")
+                .long("storage-path")
+                .help("Path to storage directory")
+                .default_value("persistent_storage")
+                .takes_value(true)
+        )
         .get_matches();
-
-    // Build components.
-    let mut container = known_components
-        .build_with_arguments(&matches)
-        .expect("failed to initialize component container");
 
     // Initialize logger.
     pretty_env_logger::formatted_builder()
@@ -93,9 +88,11 @@ fn main() {
         .filter(None, LevelFilter::Debug)
         .init();
 
-    let environment = container.inject::<Environment>().unwrap();
-    let storage_backend = container.inject::<StorageBackend>().unwrap();
-    let root_hash_path = PathBuf::from(matches.value_of("storage-path").unwrap()).join("root-hash");
+    let environment: Arc<Environment> = Arc::new(GrpcEnvironment::default());
+    let storage_path = PathBuf::from(matches.value_of("storage-path").unwrap());
+    let storage_backend =
+        Arc::new(ekiden_storage_persistent::PersistentStorageBackend::new(&storage_path).unwrap());
+    let root_hash_path = storage_path.join("root-hash");
 
     // Load or generate TLS certificate.
     let (tls_certificate, tls_private_key) = x509::load_or_generate_certificate(
@@ -135,13 +132,4 @@ fn main() {
 
     // Start the loop
     environment.start();
-}
-
-fn register_known_components() -> ekiden_di::KnownComponents {
-    let mut known_components = ekiden_di::KnownComponents::new();
-    ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
-    ekiden_common::remote_node::RemoteNodeInfo::register(&mut known_components);
-    ekiden_storage_dummy::DummyStorageBackend::register(&mut known_components);
-    ekiden_storage_persistent::PersistentStorageBackend::register(&mut known_components);
-    known_components
 }

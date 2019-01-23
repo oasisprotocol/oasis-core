@@ -1,12 +1,10 @@
 //! Root hash gRPC client.
 use std::convert::TryFrom;
 
-use grpcio::{Channel, ChannelBuilder};
+use grpcio::Channel;
 
 use ekiden_common::bytes::B256;
-use ekiden_common::environment::Environment;
 use ekiden_common::futures::prelude::*;
-use ekiden_common::remote_node::RemoteNode;
 use ekiden_common::uint::U256;
 use ekiden_roothash_api as api;
 use ekiden_roothash_base::{Block, RootHashBackend};
@@ -46,23 +44,3 @@ impl RootHashBackend for RootHashClient {
         }
     }
 }
-
-// Register for dependency injection.
-create_component!(
-    remote,
-    "roothash-backend",
-    RootHashClient,
-    RootHashBackend,
-    (|container: &mut Container| -> Result<Box<Any>> {
-        let environment: Arc<Environment> = container.inject()?;
-
-        // "node-address" argument.
-        let remote_node: Arc<RemoteNode> = container.inject()?;
-        let channel =
-            ChannelBuilder::new(environment.grpc()).connect(remote_node.get_node_address());
-
-        let instance: Arc<RootHashBackend> = Arc::new(RootHashClient::new(channel));
-        Ok(Box::new(instance))
-    }),
-    []
-);

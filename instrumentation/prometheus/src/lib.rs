@@ -5,7 +5,6 @@
 #[cfg_attr(test, macro_use)]
 extern crate ekiden_instrumentation;
 
-#[cfg(any(feature = "server", feature = "push"))]
 extern crate ekiden_common;
 #[cfg(any(feature = "server", feature = "push"))]
 extern crate futures;
@@ -15,17 +14,11 @@ extern crate http;
 extern crate hyper;
 #[macro_use]
 extern crate prometheus;
-#[cfg(feature = "server")]
-#[macro_use]
-extern crate ekiden_di;
 #[macro_use]
 extern crate log;
-#[cfg(feature = "di")]
 #[macro_use]
 extern crate clap;
 
-#[cfg(feature = "di")]
-pub mod di;
 #[cfg(feature = "server")]
 pub mod server;
 
@@ -34,10 +27,16 @@ pub mod server;
 pub mod push;
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::net::SocketAddr;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
+use ekiden_common::environment::Environment;
 use ekiden_instrumentation::{set_boxed_metric_collector, Metric, MetricCollector,
                              MetricCollectorError, MetricConfig, MetricValue};
+
+const PROMETHEUS_MODE_PULL: &'static str = "pull";
+const PROMETHEUS_MODE_PUSH: &'static str = "push";
 
 enum PrometheusMetric {
     Counter(prometheus::Counter),
@@ -173,9 +172,77 @@ pub fn init() -> Result<(), MetricCollectorError> {
     set_boxed_metric_collector(Box::new(PrometheusMetricCollector::new()))
 }
 
-#[cfg(feature = "di")]
-#[doc(hidden)]
-pub use self::di::*;
+/// Initialize the Prometheus metric collector from arguments.
+///
+/// This function may only be called once in the lifetime of a program. Any metric
+/// emits that occur before the call to `set_metric_collector` completes will be
+/// ignored.
+pub fn init_from_args(
+    environment: Arc<Environment>,
+    matches: &clap::ArgMatches,
+) -> Result<(), MetricCollectorError> {
+    // Start Prometheus metrics endpoint or push task when available.
+    #[cfg(any(feature = "server", feature = "push"))]
+    {
+        let mode = value_t!(matches, "prometheus-mode", String);
+        match mode.as_ref().map(|x| x.as_ref()) {
+            Ok(PROMETHEUS_MODE_PULL) => {
+                if let Ok(address) = value_t!(matches, "prometheus-metrics-addr", SocketAddr) {
+                    server::start(environment, address);
+                }
+            }
+            Ok(PROMETHEUS_MODE_PUSH) => {
+                if let Ok(address) = value_t!(matches, "prometheus-metrics-addr", String) {
+                    let interval = value_t!(matches, "prometheus-push-interval", u64).unwrap_or(5);
+                    let job = value_t!(matches, "prometheus-push-job-name", String).unwrap();
+                    let instance =
+                        value_t!(matches, "prometheus-push-instance-label", String).unwrap();
+                    push::start(
+                        environment,
+                        address,
+                        Duration::from_secs(interval),
+                        job,
+                        instance,
+                    );
+                }
+            }
+            _ => (),
+        }
+    }
+
+    init()
+}
+
+/// Create a Vec of args for App::args(&...) with configuration options for instrumentation.
+pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
+    use clap::Arg;
+
+    vec![
+        Arg::with_name("prometheus-mode")
+            .long("prometheus-mode")
+            .possible_values(&[PROMETHEUS_MODE_PULL, PROMETHEUS_MODE_PUSH])
+            .takes_value(true),
+        Arg::with_name("prometheus-push-interval")
+            .long("prometheus-push-interval")
+            .help("Push interval in seconds (only used if using push mode).")
+            .takes_value(true),
+        Arg::with_name("prometheus-push-job-name")
+            .long("prometheus-push-job-name")
+            .help("Prometheus `job` name used if using push mode.")
+            .required_if("prometheus-mode", PROMETHEUS_MODE_PUSH)
+            .takes_value(true),
+        Arg::with_name("prometheus-push-instance-label")
+            .long("prometheus-push-instance-label")
+            .help("Prometheus `instance` label used if using push mode.")
+            .required_if("prometheus-mode", PROMETHEUS_MODE_PUSH)
+            .takes_value(true),
+        Arg::with_name("prometheus-metrics-addr")
+            .long("prometheus-metrics-addr")
+            .requires("prometheus-mode")
+            .help("If pull mode: A SocketAddr (as a string) from which to serve metrics to Prometheus. If push mode: prometheus 'pushgateway' address.")
+            .takes_value(true)
+    ]
+}
 
 #[cfg(test)]
 mod tests {

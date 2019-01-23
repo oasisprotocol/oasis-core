@@ -2,13 +2,11 @@
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 
-use grpcio::{Channel, ChannelBuilder};
+use grpcio::Channel;
 
 use ekiden_common::bytes::B256;
-use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
-use ekiden_common::remote_node::RemoteNode;
 use ekiden_scheduler_api as api;
 use ekiden_scheduler_base::{Committee, Scheduler};
 
@@ -37,23 +35,3 @@ impl Scheduler for SchedulerClient {
         }
     }
 }
-
-// Register for dependency injection.
-create_component!(
-    remote,
-    "scheduler-backend",
-    SchedulerClient,
-    Scheduler,
-    (|container: &mut Container| -> Result<Box<Any>> {
-        let environment: Arc<Environment> = container.inject()?;
-
-        // "node-address" argument.
-        let remote_node: Arc<RemoteNode> = container.inject()?;
-        let channel =
-            ChannelBuilder::new(environment.grpc()).connect(remote_node.get_node_address());
-
-        let instance: Arc<Scheduler> = Arc::new(SchedulerClient::new(channel));
-        Ok(Box::new(instance))
-    }),
-    []
-);

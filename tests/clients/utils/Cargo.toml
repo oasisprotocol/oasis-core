@@ -17,7 +17,6 @@ ekiden-roothash-client = { path = "../../../roothash/client", version = "0.2.0-a
 ekiden-tracing = { path = "../../../tracing", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../../core/common", version = "0.2.0-alpha" }
 ekiden-db-trusted = { path = "../../../db/trusted", version = "0.2.0-alpha" }
-ekiden-di = { path = "../../../di", version = "0.2.0-alpha" }
 ekiden-keymanager-common = { path = "../../../key-manager/common", version = "0.2.0-alpha" }
 ekiden-instrumentation = { path = "../../../instrumentation", version = "0.2.0-alpha" }
 ekiden-instrumentation-prometheus = { path = "../../../instrumentation/prometheus", version = "0.2.0-alpha" }

@@ -1,13 +1,11 @@
 //! Storage gRPC client.
-use grpcio::{CallOption, Channel, ChannelBuilder};
+use grpcio::{CallOption, Channel};
 use rustracing::tag;
 
 use ekiden_common::bytes::H256;
-use ekiden_common::environment::Environment;
 use ekiden_common::error::Error;
 use ekiden_common::futures::prelude::*;
 use ekiden_common::futures::IntoFuture;
-use ekiden_common::remote_node::RemoteNode;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_tracing::{self, inject_to_options};
 
@@ -116,26 +114,3 @@ impl StorageBackend for StorageClient {
             .into_box()
     }
 }
-
-// Register for dependency injection.
-create_component!(
-    remote,
-    "storage-backend",
-    StorageClient,
-    StorageBackend,
-    (|container: &mut Container| -> Result<Box<Any>> {
-        let environment: Arc<Environment> = container.inject()?;
-        // "node-address" argument.
-        let remote_node: Arc<RemoteNode> = container.inject()?;
-
-        let args = container.get_arguments().unwrap();
-        let channel = ChannelBuilder::new(environment.grpc())
-            .max_receive_message_len(i32::max_value())
-            .max_send_message_len(i32::max_value())
-            .connect(remote_node.get_node_address());
-
-        let instance: Arc<StorageBackend> = Arc::new(StorageClient::new(channel));
-        Ok(Box::new(instance))
-    }),
-    []
-);

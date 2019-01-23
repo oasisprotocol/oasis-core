@@ -210,7 +210,6 @@ run_keymanager_node() {
         --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
         --tls-certificate ${WORKDIR}/tests/keymanager/km.pem \
         --tls-key ${WORKDIR}/tests/keymanager/km-key.pem \
-        --storage-backend dummy \
         --storage-path ${db_dir} \
         ${extra_args} &
 }
@@ -228,7 +227,6 @@ run_basic_client() {
     local client=$2
 
     ${WORKDIR}/target/debug/${client}-client \
-        --storage-backend remote \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --mr-enclave $(cat ${WORKDIR}/target/enclave/${runtime}.mrenclave) \
         --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \

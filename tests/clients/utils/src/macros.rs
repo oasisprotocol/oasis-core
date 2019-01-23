@@ -4,8 +4,14 @@ pub use pretty_env_logger::formatted_builder;
 
 pub use ekiden_core::bytes::B256;
 pub use ekiden_core::enclave::quote::MrEnclave;
-pub use ekiden_instrumentation::set_boxed_metric_collector;
-pub use ekiden_instrumentation::MetricCollector;
+pub use ekiden_core::environment::{Environment, GrpcEnvironment};
+pub use ekiden_core::remote_node;
+pub use ekiden_instrumentation_prometheus::get_arguments as get_instrumentation_arguments;
+pub use ekiden_instrumentation_prometheus::init_from_args as instrumentation_init;
+pub use ekiden_registry_client::EntityRegistryClient;
+pub use ekiden_roothash_client::RootHashClient;
+pub use ekiden_scheduler_client::SchedulerClient;
+pub use ekiden_storage_client::StorageClient;
 pub use ekiden_tracing::get_arguments as get_tracing_arguments;
 pub use ekiden_tracing::report_forever;
 
@@ -52,19 +58,35 @@ macro_rules! default_app {
                     .help("Mark nodes that take longer than this many seconds as failed")
                     .takes_value(true),
             )
+            .args(&$crate::macros::get_instrumentation_arguments())
             .args(&$crate::macros::get_tracing_arguments())
+            .args(&$crate::macros::remote_node::get_arguments())
     }};
 }
 
 #[macro_export]
 macro_rules! runtime_client {
-    ($runtime:ident, $args:ident, $container:ident) => {{
+    ($runtime:ident, $args:ident) => {{
+        use std::sync::Arc;
+
         use $crate::macros::*;
 
+        // Initialize environment.
+        let environment: Arc<Environment> = Arc::new(GrpcEnvironment::default());
+
         // Initialize metric collector (if not already initialized).
-        if let Ok(metrics) = $container.inject_owned::<$crate::macros::MetricCollector>() {
-            $crate::macros::set_boxed_metric_collector(metrics).unwrap();
-        }
+        drop($crate::macros::instrumentation_init(
+            environment.clone(),
+            &$args,
+        ));
+
+        // Initialize backends.
+        let remote_node = remote_node::RemoteNode::from_args(&$args);
+        let channel = remote_node.create_channel(environment.clone());
+        let scheduler = Arc::new(SchedulerClient::new(channel.clone()));
+        let entity_registry = Arc::new(EntityRegistryClient::new(channel.clone()));
+        let roothash = Arc::new(RootHashClient::new(channel.clone()));
+        let storage = Arc::new(StorageClient::new(channel.clone()));
 
         $runtime::Client::new(
             $crate::args::get_runtime_id(&$args),
@@ -77,28 +99,20 @@ macro_rules! runtime_client {
             } else {
                 None
             },
-            $container.inject().unwrap(),
-            $container.inject().unwrap(),
-            $container.inject().unwrap(),
-            $container.inject().unwrap(),
-            $container.inject().unwrap(),
+            environment,
+            scheduler,
+            entity_registry,
+            roothash,
+            storage,
         )
     }};
     ($runtime:ident) => {{
-        let known_components = $crate::components::create_known_components();
-        let args = default_app!()
-            .args(&known_components.get_arguments())
-            .get_matches();
-
-        // Initialize component container.
-        let mut container = known_components
-            .build_with_arguments(&args)
-            .expect("failed to initialize component container");
+        let args = default_app!().get_matches();
 
         // Initialize tracing.
         $crate::macros::report_forever("runtime-client", &args);
 
-        runtime_client!($runtime, args, container)
+        runtime_client!($runtime, args)
     }};
 }
 
@@ -108,7 +122,6 @@ macro_rules! benchmark_app {
     () => {{
         use std::sync::{Arc, Mutex};
 
-        let known_components = $crate::components::create_known_components();
         let args = Arc::new(
             default_app!()
                 .arg(
@@ -140,27 +153,13 @@ macro_rules! benchmark_app {
                         .takes_value(true)
                         .default_value(""),
                 )
-                .args(&known_components.get_arguments())
                 .get_matches(),
         );
-
-        // Initialize component container.
-        let mut container = known_components
-            .build_with_arguments(&args)
-            .expect("failed to initialize component container");
-
-        // Initialize metric collector.
-        let metrics = container
-            .inject_owned::<$crate::macros::MetricCollector>()
-            .expect("failed to inject MetricCollector");
-        $crate::macros::set_boxed_metric_collector(metrics).unwrap();
-
-        let container = Arc::new(Mutex::new(container));
 
         // Initialize tracing.
         $crate::macros::report_forever("runtime-client", &args);
 
-        (args, container)
+        args
     }};
 }
 
@@ -170,7 +169,7 @@ macro_rules! benchmark_client {
     ($app:ident, $runtime:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
         use $crate::benchmark::OutputFormat;
 
-        let (args, container) = ($app.0.clone(), $app.1.clone());
+        let args = $app.clone();
 
         let output_format = match args.value_of("output-format").unwrap() {
             "text" => OutputFormat::Text,
@@ -189,10 +188,8 @@ macro_rules! benchmark_client {
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
             move || {
                 let args = args.clone();
-                let shared_container = container.clone();
-                let mut container = shared_container.lock().unwrap();
 
-                runtime_client!($runtime, args, container)
+                runtime_client!($runtime, args)
             },
         );
 

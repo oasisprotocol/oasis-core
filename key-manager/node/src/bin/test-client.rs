@@ -1,36 +1,32 @@
-/// A dummy client for testing purpose
-extern crate ekiden_common;
-extern crate ekiden_di;
-extern crate ekiden_enclave_common;
-extern crate ekiden_keymanager_client;
-extern crate ekiden_keymanager_common;
-extern crate ekiden_rpc_client;
+//! A dummy client for testing purpose.
 extern crate grpcio;
 extern crate pretty_env_logger;
-
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate clap;
 
-use clap::{App, Arg};
-use log::LevelFilter;
+extern crate ekiden_common;
+extern crate ekiden_enclave_common;
+extern crate ekiden_keymanager_client;
+extern crate ekiden_keymanager_common;
+extern crate ekiden_rpc_client;
+
 use std::process::exit;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
-use ekiden_common::environment::Environment;
+use clap::{App, Arg};
+use log::LevelFilter;
+
+use ekiden_common::environment::{Environment, GrpcEnvironment};
 use ekiden_common::x509;
-use ekiden_di::Component;
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_keymanager_client::{KeyManager, NetworkRpcClientBackendConfig};
 use ekiden_keymanager_common::ContractId;
 
 fn main() {
-    let mut known_components = ekiden_di::KnownComponents::new();
-    ekiden_common::environment::GrpcEnvironment::register(&mut known_components);
-    ekiden_common::remote_node::RemoteNodeInfo::register(&mut known_components);
-
     let matches = App::new("Ekiden key manager client test")
         .version(crate_version!())
         .author(crate_authors!())
@@ -68,7 +64,6 @@ fn main() {
                 .default_value("km-tls-certificate.pem")
                 .required(true),
         )
-        .args(&known_components.get_arguments())
         .get_matches();
 
     // Initialize logger.
@@ -76,11 +71,6 @@ fn main() {
         .unwrap()
         .filter(None, LevelFilter::Debug)
         .init();
-
-    // Build components.
-    let mut container = known_components
-        .build_with_arguments(&matches)
-        .expect("failed to initialize component container");
 
     let keymanager_id =
         value_t!(matches.value_of("enclave"), MrEnclave).unwrap_or_else(|e| e.exit());
@@ -90,7 +80,7 @@ fn main() {
         matches.value_of("tls-certificate").expect("is required"),
     ).expect("TLS credentials load must succeed");
 
-    let environment = container.inject::<Environment>().unwrap();
+    let environment: Arc<Environment> = Arc::new(GrpcEnvironment::default());
 
     let timeout = Some(Duration::new(5, 0));
 

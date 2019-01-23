@@ -13,11 +13,8 @@ use ekiden_core::hash::empty_hash;
 use ekiden_core::uint::U256;
 use ekiden_db_trusted::patricia_trie::PatriciaTrie;
 use ekiden_db_trusted::{Database, DatabaseHandle};
-use ekiden_di::Container;
 use ekiden_keymanager_common::StateKeyType;
 use ekiden_roothash_base::{Block, RootHashBackend};
-use ekiden_storage_base::BackendIdentityMapper;
-use ekiden_storage_base::StorageBackend;
 use ekiden_storage_base::StorageMapper;
 
 /// An implementation of the read methods of `Database`. Represents a single fixed state.
@@ -140,16 +137,6 @@ impl Manager {
             mapper,
             blocks_kill_handle,
         }
-    }
-
-    /// Make a `Manager` from an injected `RootHashBackend` and an identity map over an injected
-    /// `StorageBackend`.
-    pub fn new_from_injected(runtime_id: B256, container: &mut Container) -> Result<Self> {
-        let env: Arc<Environment> = container.inject()?;
-        let roothash: Arc<RootHashBackend> = container.inject()?;
-        let storage: Arc<StorageBackend> = container.inject()?;
-        let mapper = Arc::new(BackendIdentityMapper::new(storage));
-        Ok(Self::new(env, runtime_id, roothash, mapper))
     }
 
     pub fn get_snapshot(&self) -> Snapshot {
