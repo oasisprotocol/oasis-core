@@ -4,6 +4,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
 const (
@@ -97,4 +98,10 @@ func (v *ValueRootHashDiscrepancyDetected) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into the given type.
 func (v *ValueRootHashDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, v)
+}
+
+// GenesisRootHashState is the roothash genesis state.
+type GenesisRootHashState struct {
+	// Blocks is the per-runtime map of genesis blocks.
+	Blocks map[signature.MapKey]*block.Block `codec:"blocks,omit_empty"`
 }

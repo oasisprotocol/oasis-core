@@ -30,6 +30,10 @@ var (
 	// registration.
 	RegisterEntitySignatureContext = []byte("EkEntReg")
 
+	// RegisterGenesisEntitySignatureContext is the context used for
+	// entity registration in the genesis document.
+	RegisterGenesisEntitySignatureContext = []byte("EkEntGen")
+
 	// DeregisterEntitySignatureContext is the context used for entity
 	// deregistration.
 	DeregisterEntitySignatureContext = []byte("EkEDeReg")
@@ -181,13 +185,22 @@ func (t *Timestamp) UnmarshalCBOR(data []byte) error {
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
-func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity) (*entity.Entity, error) {
+func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
 	// XXX: Ensure ent is well-formed.
 	var ent entity.Entity
 	if sigEnt == nil {
 		return nil, ErrInvalidArgument
 	}
-	if err := sigEnt.Open(RegisterEntitySignatureContext, &ent); err != nil {
+
+	var ctx []byte
+	switch isGenesis {
+	case true:
+		ctx = RegisterGenesisEntitySignatureContext
+	case false:
+		ctx = RegisterEntitySignatureContext
+	}
+
+	if err := sigEnt.Open(ctx, &ent); err != nil {
 		logger.Error("RegisterEntity: invalid signature",
 			"signed_entity", sigEnt,
 		)

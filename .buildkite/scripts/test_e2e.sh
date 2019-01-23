@@ -39,10 +39,6 @@ source .buildkite/rust/common.sh
 scenario_basic() {
     local runtime=$1
 
-    register_runtime \
-        --runtime.replica_group_size 2 \
-        --runtime.replica_group_backup_size 1
-
     # Initialize compute nodes.
     run_compute_node 1 ${runtime}
     run_compute_node 2 ${runtime}
@@ -57,10 +53,6 @@ scenario_basic() {
 
 scenario_discrepancy() {
     local runtime=$1
-
-    register_runtime \
-        --runtime.replica_group_size 2 \
-        --runtime.replica_group_backup_size 1
 
     # Initialize compute nodes.
     run_compute_node 1 ${runtime} \

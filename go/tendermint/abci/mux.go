@@ -22,6 +22,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
@@ -37,7 +38,8 @@ const (
 	// used to determine if a peer is authorized to connect.
 	QueryKeyP2PFilterPubkey = "p2p/filter/pubkey/"
 
-	stateKeyGenesisDigest = "OasisGenesisDigest"
+	stateKeyGenesisDigest  = "OasisGenesisDigest"
+	stateKeyGenesisRequest = "OasisGenesisRequest"
 
 	metricsUpdateInterval = 10 * time.Second
 )
@@ -62,7 +64,7 @@ type Application interface {
 	// Name returns the name of the Application.
 	//
 	// Note: The name is also used as a prefix for de-multiplexing SetOption
-	// and Query calls.
+	// and Query calls and accessing genesis state.
 	Name() string
 
 	// TransactionTag returns the transaction tag used to disambiguate
@@ -111,7 +113,7 @@ type Application interface {
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
-	InitChain(types.RequestInitChain) types.ResponseInitChain
+	InitChain(*Context, types.RequestInitChain) types.ResponseInitChain
 
 	// BeginBlock signals the beginning of a block.
 	//
@@ -342,6 +344,21 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		"req", req,
 	)
 
+	ctx := NewContext(ContextInitChain, req.Time)
+
+	// Sanity-check the genesis application state.
+	st, err := parseGenesisAppState(req)
+	if err != nil {
+		mux.logger.Error("failed to unmarshal genesis application state",
+			"err", err,
+		)
+		panic("mux: invalid genesis application state")
+	}
+
+	mux.logger.Debug("Genesis ABCI application state",
+		"state", string(json.Marshal(st)),
+	)
+
 	// Stick the digest of the genesis block (the RequestInitChain) into
 	// the state.
 	//
@@ -354,13 +371,22 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	genesisDigest := sha512.Sum512_256(tmp.Bytes())
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisDigest), genesisDigest[:])
 
+	// HACK: Can't emit tags from InitChain, stash the genesis state
+	// so that processing can happen in BeginBlock.
+	b, _ := req.Marshal()
+	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
+
 	resp := mux.BaseApplication.InitChain(req)
-	for _, app := range mux.appsByLexOrder {
-		newResp := app.InitChain(req)
-		if app.Blessed() {
-			resp = newResp
-		}
+
+	// HACK: The state is only updated iff validators or consensus paremeters
+	// are returned.
+	//
+	// See: tendermint/consensus/replay.go (Handshaker.ReplayBlocks)
+	if len(resp.Validators) == 0 && resp.ConsensusParams == nil {
+		resp.ConsensusParams = req.ConsensusParams
 	}
+
+	ctx.fireOnCommitHooks(mux.state)
 
 	return resp
 }
@@ -380,6 +406,40 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.currentTime = req.Header.Time
 
 	ctx := NewContext(ContextBeginBlock, mux.currentTime)
+
+	// HACK: Our entire system is driven with a tag backed pub-sub
+	// interface gluing the various components together.  While we
+	// desire to have things that would emit tags (like runtime
+	// registration) in InitChain, and tendermint does not allow
+	// emiting tags in the ABCI InitChain hook, we defer actually
+	// initializing the multiplexed application genesis state till
+	// the first block.
+	if blockHeight == 1 {
+		mux.logger.Debug("BeginBlock: processing defered InitChain")
+
+		_, b := mux.state.checkTxTree.Get([]byte(stateKeyGenesisRequest))
+
+		var initReq types.RequestInitChain
+		if err := initReq.Unmarshal(b); err != nil {
+			mux.logger.Error("BeginBlock: corrupted defered genesis state",
+				"err", err,
+			)
+			panic("mux: invalid defered genesis application state")
+		}
+
+		ctx.outputType = ContextInitChain
+
+		for _, app := range mux.appsByLexOrder {
+			mux.logger.Debug("BeginBlock: defered InitChain",
+				"app", app.Name(),
+			)
+
+			// I hope nothing wants to alter the validator set.
+			_ = app.InitChain(ctx, initReq)
+		}
+
+		ctx.outputType = ContextBeginBlock
+	}
 
 	// Fire all application timers first.
 	for _, app := range mux.appsByLexOrder {
@@ -869,4 +929,42 @@ func newApplicationState(dataDir string, pruneCfg *PruneConfig) (*ApplicationSta
 
 func isP2PFilterQuery(s string) bool {
 	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
+}
+
+// UnmarshalGenesisAppState deserializes the specific application's gensis state
+// from the provided RequestInitChain.
+func UnmarshalGenesisAppState(req types.RequestInitChain, app Application, v interface{}) error {
+	// This is redundant, the application interface could toss the map around,
+	// but this isn't critical path, and doing it this way keeps the interface
+	// near-identical to that of upstream tendermint ABCI.
+	st, err := parseGenesisAppState(req)
+	if err != nil {
+		return err
+	}
+
+	b, ok := st.ABCIAppState[app.Name()]
+	if !ok {
+		// No state for the app is treated as a success.
+		return nil
+	}
+
+	return cbor.Unmarshal(b, v)
+}
+
+func parseGenesisAppState(req types.RequestInitChain) (*api.GenesisAppState, error) {
+	b := req.AppStateBytes
+	if len(b) == 0 {
+		// No genesis state is treated as a success, return a new
+		// empty map for code commonality reasons.
+		return &api.GenesisAppState{
+			ABCIAppState: make(map[string][]byte),
+		}, nil
+	}
+
+	var st api.GenesisAppState
+	if err := json.Unmarshal(b, &st); err != nil {
+		return nil, err
+	}
+
+	return &st, nil
 }

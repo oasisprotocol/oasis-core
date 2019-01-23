@@ -41,12 +41,9 @@ test_migration() {
     local runtime=simple-keyvalue
 
     # Start the first network.
-    run_backend_tendermint_committee tendermint_mock 1
-    sleep 1
+    run_backend_tendermint_committee tendermint_mock 1 1 0
 
-    register_runtime \
-        --runtime.replica_group_size 1 \
-        --runtime.replica_group_backup_size 0
+    sleep 1
 
     run_compute_node 1 ${runtime} &>/dev/null
 
@@ -88,15 +85,11 @@ test_migration() {
     # 5 sec
 
     # Start the second network.
-    run_backend_tendermint_committee tendermint_mock 2 \
+    run_backend_tendermint_committee tendermint_mock 2 1 0 \
         --roothash.genesis_blocks ${TEST_BASE_DIR}/export-roothash.dat
 
     # Replace validator socket.
     ln -sf ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}
-
-    register_runtime \
-        --runtime.replica_group_size 1 \
-        --runtime.replica_group_backup_size 0
 
     sleep 1
     # 6 sec

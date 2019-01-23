@@ -4,7 +4,9 @@ package entity
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,7 +23,11 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 )
 
-const cmdRegister = "register"
+const (
+	cmdRegister = "register"
+
+	entityGenesisFilename = "entity_genesis.json"
+)
 
 var (
 	entityCmd = &cobra.Command{
@@ -111,9 +117,27 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate a new entity.
-	ent, _, err := entity.Generate(dataDir)
+	ent, privKey, err := entity.Generate(dataDir)
 	if err != nil {
 		logger.Error("failed to generate entity",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Sign the entity registration for use in a genesis document.
+	signed, err := entity.SignEntity(*privKey, registry.RegisterGenesisEntitySignatureContext, ent)
+	if err != nil {
+		logger.Error("failed to sign entity for genesis registration",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Write out the signed entity registration.
+	b := json.Marshal(signed)
+	if err = ioutil.WriteFile(filepath.Join(dataDir, entityGenesisFilename), b, 0600); err != nil {
+		logger.Error("failed to write signed entity genesis registration",
 			"err", err,
 		)
 		os.Exit(1)

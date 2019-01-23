@@ -129,7 +129,46 @@ func (app *rootHashApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *rootHashApplication) InitChain(request types.RequestInitChain) types.ResponseInitChain {
+func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
+	var st api.GenesisRootHashState
+	if err := abci.UnmarshalGenesisAppState(request, app, &st); err != nil {
+		app.logger.Error("InitChain: failed to unmarshal genesis state",
+			"err", err,
+		)
+		panic("roothash: invalid genesis state")
+	}
+
+	if len(st.Blocks) != 0 {
+		// XXX: Either deprecate the command line option, or figure
+		// out a nice way to merge the two.  Probably the former.
+		if len(app.genesisBlocks) != 0 {
+			app.logger.Error("InitChain: genesis blocks already exist")
+			panic("roothash: genesis blocks already exist")
+		}
+
+		// Note: Entries from the genesis blocks doesn't actually
+		// appear on-chain till actual blocks start happening.
+		app.genesisBlocks = st.Blocks
+	}
+
+	// The per-runtime roothash state is done primarily via DeliverTx, but
+	// also needs to be done here since the genesis state can have runtime
+	// registrations.
+	//
+	// Note: This could use the genesis state, but the registry has already
+	// carved out it's entries by this point.
+
+	tree := app.state.DeliverTxTree()
+
+	regState := registryapp.NewMutableState(tree)
+	runtimes, _ := regState.GetRuntimes()
+	for _, v := range runtimes {
+		app.logger.Info("InitChain: allocating per-runtime state",
+			"runtime", v.ID,
+		)
+		app.onNewRuntime(ctx, tree, v)
+	}
+
 	return types.ResponseInitChain{}
 }
 
@@ -249,51 +288,55 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 				return errors.Wrap(err, "roothash: failed to fetch new runtime")
 			}
 
-			state := NewMutableState(tree)
-
-			// Check if state already exists for the given runtime.
-			cs, _ := state.GetRuntimeState(runtime.ID)
-			if cs != nil {
-				// Do not propagate the error as this would fail the transaction.
-				app.logger.Warn("ForeignDeliverTx: state for runtime already exists",
-					"runtime", runtime,
-				)
-				return nil
-			}
-
-			// Create genesis block.
-			genesisBlock := app.genesisBlocks[runtime.ID.ToMapKey()]
-			if genesisBlock == nil {
-				now := ctx.Now().Unix()
-				genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
-			}
-
-			roundNr, _ := genesisBlock.Header.Round.ToU64()
-
-			// Create new state containing the genesis block.
-			timerCtx := &timerContext{ID: runtime.ID}
-			state.UpdateRuntimeState(&RuntimeState{
-				ID:           runtime.ID,
-				CurrentBlock: genesisBlock,
-				Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
-			})
-
-			app.logger.Debug("ForeignDeliverTx: created genesis state for runtime",
-				"runtime", runtime,
-			)
-
-			// This transaction now also includes a new block for the given runtime.
-			id, _ := runtime.ID.MarshalBinary()
-			ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-			tagV := api.ValueRootHashFinalized{
-				ID:    id,
-				Round: roundNr,
-			}
-			ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
+			app.onNewRuntime(ctx, tree, runtime)
 		}
 	}
 
 	return nil
+}
+
+func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime) {
+	state := NewMutableState(tree)
+
+	// Check if state already exists for the given runtime.
+	cs, _ := state.GetRuntimeState(runtime.ID)
+	if cs != nil {
+		// Do not propagate the error as this would fail the transaction.
+		app.logger.Warn("onNewRuntime: state for runtime already exists",
+			"runtime", runtime,
+		)
+		return
+	}
+
+	// Create genesis block.
+	genesisBlock := app.genesisBlocks[runtime.ID.ToMapKey()]
+	if genesisBlock == nil {
+		now := ctx.Now().Unix()
+		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
+	}
+
+	roundNr, _ := genesisBlock.Header.Round.ToU64()
+
+	// Create new state containing the genesis block.
+	timerCtx := &timerContext{ID: runtime.ID}
+	state.UpdateRuntimeState(&RuntimeState{
+		ID:           runtime.ID,
+		CurrentBlock: genesisBlock,
+		Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
+	})
+
+	app.logger.Debug("onNewRuntime: created genesis state for runtime",
+		"runtime", runtime,
+	)
+
+	// This transaction now also includes a new block for the given runtime.
+	id, _ := runtime.ID.MarshalBinary()
+	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
+	tagV := api.ValueRootHashFinalized{
+		ID:    id,
+		Round: roundNr,
+	}
+	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
 }
 
 func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {

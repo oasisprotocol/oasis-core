@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -140,7 +141,8 @@ func Generate(baseDir string) (*Entity, *signature.PrivateKey, error) {
 		return nil, nil, err
 	}
 	ent := &Entity{
-		ID: privKey.Public(),
+		ID:               privKey.Public(),
+		RegistrationTime: uint64(time.Now().Unix()),
 	}
 
 	// Write to disk.

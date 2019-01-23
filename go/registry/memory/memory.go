@@ -49,7 +49,7 @@ type memoryBackendState struct {
 }
 
 func (r *memoryBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
-	ent, err := api.VerifyRegisterEntityArgs(r.logger, sigEnt)
+	ent, err := api.VerifyRegisterEntityArgs(r.logger, sigEnt, false)
 	if err != nil {
 		return err
 	}

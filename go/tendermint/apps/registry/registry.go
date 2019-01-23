@@ -17,6 +17,8 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+
+	"github.com/oasislabs/ekiden/go/common/json"
 )
 
 var (
@@ -118,7 +120,49 @@ func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *registryApplication) InitChain(request types.RequestInitChain) types.ResponseInitChain {
+func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
+	var st api.GenesisRegistryState
+	if err := abci.UnmarshalGenesisAppState(request, app, &st); err != nil {
+		app.logger.Error("InitChain: failed to unmarshal genesis state",
+			"err", err,
+		)
+		panic("registry: invalid genesis state")
+	}
+
+	app.logger.Debug("InitChain: Genesis state",
+		"state", string(json.Marshal(st)),
+	)
+
+	state := NewMutableState(app.state.DeliverTxTree())
+	for _, v := range st.Entities {
+		app.logger.Debug("InitChain: Registering genesis entity",
+			"entity", v.Signature.PublicKey,
+		)
+		if err := app.registerEntity(ctx, state, v); err != nil {
+			app.logger.Error("InitChain: failed to register entity",
+				"err", err,
+				"entity", v,
+			)
+			panic("registry: genesis entity registration failure")
+		}
+	}
+	for _, v := range st.Runtimes {
+		app.logger.Debug("InitChain: Registering genesis runtime",
+			"runtime_owner", v.Signature.PublicKey,
+		)
+		if err := app.registerRuntime(ctx, state, v); err != nil {
+			app.logger.Error("InitChain: failed to register runtime",
+				"err", err,
+				"runtime", v,
+			)
+			panic("registry: genesis runtime registration failure")
+		}
+	}
+
+	if len(st.Entities) > 0 || len(st.Runtimes) > 0 {
+		ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+	}
+
 	return types.ResponseInitChain{}
 }
 
@@ -207,12 +251,12 @@ func (app *registryApplication) registerEntity(
 	state *MutableState,
 	sigEnt *entity.SignedEntity,
 ) error {
-	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt)
+	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt, ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
+	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(ent.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterEntity: INVALID TIMESTAMP",
@@ -304,8 +348,10 @@ func (app *registryApplication) registerNode(
 
 	err = state.CreateNode(node)
 	if err != nil {
-		app.logger.Error("RegisterNode: unknown entity in node registration",
+		app.logger.Error("RegisterNode: failed to create node",
+			"err", err,
 			"node", node,
+			"entity", node.EntityID,
 		)
 		return registry.ErrBadEntityForNode
 	}
@@ -336,7 +382,7 @@ func (app *registryApplication) registerRuntime(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
+	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(con.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterRuntime: INVALID TIMESTAMP",
