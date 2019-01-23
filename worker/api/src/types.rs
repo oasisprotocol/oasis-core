@@ -17,6 +17,8 @@ pub struct ComputedBatch {
     pub calls: CallBatch,
     /// Batch of runtime outputs.
     pub outputs: OutputBatch,
+    /// Batch of storage inserts.
+    pub storage_inserts: Vec<(ByteBuf, u64)>,
     /// New state root hash.
     pub new_state_root: H256,
 }
@@ -64,7 +66,6 @@ pub enum Body {
     WorkerRuntimeCallBatchRequest {
         calls: CallBatch,
         block: Block,
-        commit_storage: bool,
     },
     WorkerRuntimeCallBatchResponse {
         batch: ComputedBatch,
@@ -121,16 +122,6 @@ pub enum Body {
     HostStorageGetBatchResponse {
         values: Vec<Option<ByteBuf>>,
     },
-    HostStorageInsertRequest {
-        #[serde(with = "serde_bytes")]
-        value: Vec<u8>,
-        expiry: u64,
-    },
-    HostStorageInsertResponse {},
-    HostStorageInsertBatchRequest {
-        values: Vec<(ByteBuf, u64)>,
-    },
-    HostStorageInsertBatchResponse {},
 }
 
 #[derive(Clone, Copy, Debug)]

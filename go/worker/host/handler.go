@@ -112,24 +112,6 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 		return &protocol.Body{HostStorageGetBatchResponse: &protocol.HostStorageGetBatchResponse{Values: values}}, nil
 	}
-	if body.HostStorageInsertRequest != nil {
-		err := h.storage.Insert(
-			ctx,
-			body.HostStorageInsertRequest.Value,
-			body.HostStorageInsertRequest.Expiry,
-		)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostStorageInsertResponse: &protocol.Empty{}}, nil
-	}
-	if body.HostStorageInsertBatchRequest != nil {
-		err := h.storage.InsertBatch(ctx, body.HostStorageInsertBatchRequest.Values)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostStorageInsertBatchResponse: &protocol.Empty{}}, nil
-	}
 
 	return nil, errMethodNotSupported
 }

@@ -78,15 +78,10 @@ impl ekiden_worker_api::Worker for ProtocolHandler {
         self.with_worker(|worker| worker.rpc_call(request))
     }
 
-    fn runtime_call_batch(
-        &self,
-        calls: CallBatch,
-        block: Block,
-        commit_storage: bool,
-    ) -> BoxFuture<ComputedBatch> {
+    fn runtime_call_batch(&self, calls: CallBatch, block: Block) -> BoxFuture<ComputedBatch> {
         // TODO: Correlate to an event source
         let sh = Span::inactive().handle();
 
-        self.with_worker(|worker| worker.runtime_call_batch(calls, block, sh, commit_storage))
+        self.with_worker(|worker| worker.runtime_call_batch(calls, block, sh))
     }
 }

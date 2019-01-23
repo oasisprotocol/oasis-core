@@ -69,24 +69,20 @@ type Body struct {
 	WorkerAbortResponse                 *Empty
 
 	// Host interface.
-	HostRPCCallRequest             *HostRPCCallRequest
-	HostRPCCallResponse            *HostRPCCallResponse
-	HostIasGetSpidRequest          *Empty
-	HostIasGetSpidResponse         *HostIasGetSpidResponse
-	HostIasGetQuoteTypeRequest     *Empty
-	HostIasGetQuoteTypeResponse    *HostIasGetQuoteTypeResponse
-	HostIasSigRlRequest            *HostIasSigRlRequest
-	HostIasSigRlResponse           *HostIasSigRlResponse
-	HostIasReportRequest           *HostIasReportRequest
-	HostIasReportResponse          *HostIasReportResponse
-	HostStorageGetRequest          *HostStorageGetRequest
-	HostStorageGetResponse         *HostStorageGetResponse
-	HostStorageGetBatchRequest     *HostStorageGetBatchRequest
-	HostStorageGetBatchResponse    *HostStorageGetBatchResponse
-	HostStorageInsertRequest       *HostStorageInsertRequest
-	HostStorageInsertResponse      *Empty
-	HostStorageInsertBatchRequest  *HostStorageInsertBatchRequest
-	HostStorageInsertBatchResponse *Empty
+	HostRPCCallRequest          *HostRPCCallRequest
+	HostRPCCallResponse         *HostRPCCallResponse
+	HostIasGetSpidRequest       *Empty
+	HostIasGetSpidResponse      *HostIasGetSpidResponse
+	HostIasGetQuoteTypeRequest  *Empty
+	HostIasGetQuoteTypeResponse *HostIasGetQuoteTypeResponse
+	HostIasSigRlRequest         *HostIasSigRlRequest
+	HostIasSigRlResponse        *HostIasSigRlResponse
+	HostIasReportRequest        *HostIasReportRequest
+	HostIasReportResponse       *HostIasReportResponse
+	HostStorageGetRequest       *HostStorageGetRequest
+	HostStorageGetResponse      *HostStorageGetResponse
+	HostStorageGetBatchRequest  *HostStorageGetBatchRequest
+	HostStorageGetBatchResponse *HostStorageGetBatchResponse
 }
 
 // Empty is an empty message body.
@@ -134,6 +130,8 @@ type ComputedBatch struct {
 	Calls runtime.Batch `codec:"calls"`
 	// Batch of runtime outputs.
 	Outputs runtime.Batch `codec:"outputs"`
+	// Batch of storage inserts.
+	StorageInserts []storage.Value `codec:"storage_inserts"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
@@ -145,9 +143,8 @@ func (b *ComputedBatch) String() string {
 
 // WorkerRuntimeCallBatchRequest is a worker batch runtime call request message body.
 type WorkerRuntimeCallBatchRequest struct {
-	Calls         runtime.Batch  `codec:"calls"`
-	Block         roothash.Block `codec:"block"`
-	CommitStorage bool           `codec:"commit_storage"`
+	Calls runtime.Batch  `codec:"calls"`
+	Block roothash.Block `codec:"block"`
 }
 
 // WorkerRuntimeCallBatchResponse is a worker batch runtime call response message body.
@@ -227,15 +224,4 @@ type HostStorageGetBatchRequest struct {
 // HostStorageGetBatchResponse is a host storage batch get response message body.
 type HostStorageGetBatchResponse struct {
 	Values [][]byte `codec:"values"`
-}
-
-// HostStorageInsertRequest is a host storage insert request message body.
-type HostStorageInsertRequest struct {
-	Value  []byte `codec:"value"`
-	Expiry uint64 `codec:"expiry"`
-}
-
-// HostStorageInsertBatchRequest is a host storage batch insert request message body.
-type HostStorageInsertBatchRequest struct {
-	Values []storage.Value `codec:"values"`
 }

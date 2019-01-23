@@ -28,7 +28,10 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
-const queueExternalBatchTimeout = 5 * time.Second
+const (
+	queueExternalBatchTimeout = 5 * time.Second
+	storageCommitTimeout      = 5 * time.Second
+)
 
 var (
 	ErrNotLeader = errors.New("not leader")
@@ -83,6 +86,13 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	storageCommitLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_storage_commit_latency",
+			Help: "Latency of storage commit calls (state + outputs)",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		incomingQueueSize,
 		discrepancyDetectedCount,
@@ -90,6 +100,7 @@ var (
 		failedRoundCount,
 		epochTransitionCount,
 		abortedBatchCount,
+		storageCommitLatency,
 	}
 
 	metricsOnce sync.Once
@@ -414,12 +425,10 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 	ctx, cancel := context.WithCancel(n.ctx)
 	done := make(chan *protocol.ComputedBatch, 1)
 
-	epoch := n.group.GetEpochSnapshot()
 	rq := &protocol.Body{
 		WorkerRuntimeCallBatchRequest: &protocol.WorkerRuntimeCallBatchRequest{
-			Calls:         batch,
-			Block:         *n.currentBlock,
-			CommitStorage: epoch.IsLeader() || epoch.IsBackupWorker(),
+			Calls: batch,
+			Block: *n.currentBlock,
 		},
 	}
 
@@ -524,12 +533,32 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	blk.Header.OutputHash.From(batch.Outputs)
 	blk.Header.StateRoot = batch.NewStateRoot
 
-	// Commit outputs to storage.
+	// Commit outputs and state to storage.
 	if epoch.IsLeader() || epoch.IsBackupWorker() {
-		if err := n.storage.Insert(n.ctx, batch.Outputs.MarshalCBOR(), 2); err != nil {
-			n.logger.Error("failed to commit outputs to storage",
-				"err", err,
-			)
+		start := time.Now()
+		err := func() error {
+			ctx, cancel := context.WithTimeout(n.ctx, storageCommitTimeout)
+			defer cancel()
+
+			if err := n.storage.InsertBatch(ctx, batch.StorageInserts); err != nil {
+				n.logger.Error("failed to commit state to storage",
+					"err", err,
+				)
+				return err
+			}
+
+			if err := n.storage.Insert(ctx, batch.Outputs.MarshalCBOR(), 2); err != nil {
+				n.logger.Error("failed to commit outputs to storage",
+					"err", err,
+				)
+				return err
+			}
+
+			return nil
+		}()
+		storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+
+		if err != nil {
 			n.abortBatch(err)
 			return
 		}

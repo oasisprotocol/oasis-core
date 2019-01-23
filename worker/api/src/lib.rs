@@ -56,12 +56,7 @@ pub trait Worker: Send + Sync {
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>>;
 
     /// Request the worker to execute a runtime call batch.
-    fn runtime_call_batch(
-        &self,
-        calls: CallBatch,
-        block: Block,
-        commit_storage: bool,
-    ) -> BoxFuture<ComputedBatch>;
+    fn runtime_call_batch(&self, calls: CallBatch, block: Block) -> BoxFuture<ComputedBatch>;
 }
 
 /// Interface exposed by the host.
@@ -86,10 +81,4 @@ pub trait Host: Send + Sync {
 
     /// Request host to fetch a batch of keys from storage.
     fn storage_get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>>;
-
-    /// Request host to insert value into storage.
-    fn storage_insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()>;
-
-    /// Request host to insert a batch of values into storage.
-    fn storage_insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()>;
 }
