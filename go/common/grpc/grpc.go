@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -333,6 +334,9 @@ func NewServerTCP(name string, port uint16, cert *tls.Certificate) (*Server, err
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
 func NewServerLocal(name, path string) (*Server, error) {
+	// Remove any existing socket files first.
+	_ = os.Remove(path)
+
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		return nil, err
