@@ -100,6 +100,7 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 
 // New creates a new worker.
 func New(
+	dataDir string,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -195,7 +196,7 @@ func New(
 		Runtimes:        runtimes,
 	}
 
-	return newWorker(identity, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
+	return newWorker(dataDir, identity, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

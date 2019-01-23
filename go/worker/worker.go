@@ -3,9 +3,8 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 )
 
 const (
+	proxySocketDirName     = "proxy-sockets"
 	metricsProxySocketName = "metrics.sock"
 	tracingProxySocketName = "tracing.sock"
 )
@@ -354,6 +354,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 }
 
 func newWorker(
+	dataDir string,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -370,7 +371,8 @@ func newWorker(
 	}
 
 	startedOk := false
-	socketDir, err := ioutil.TempDir("", "ekiden-proxy-sockets")
+	socketDir := filepath.Join(dataDir, proxySocketDirName)
+	err := common.Mkdir(socketDir)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +435,7 @@ func newWorker(
 			if err != nil {
 				return nil, err
 			}
-			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "stream", path.Join(w.socketDir, metricsProxySocketName), address)
+			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "stream", filepath.Join(w.socketDir, metricsProxySocketName), address)
 			if err != nil {
 				return nil, err
 			}
@@ -446,7 +448,7 @@ func newWorker(
 			if err != nil {
 				return nil, err
 			}
-			proxy, err := NewNetworkProxy(host.TracingProxyKey, "dgram", path.Join(w.socketDir, tracingProxySocketName), address)
+			proxy, err := NewNetworkProxy(host.TracingProxyKey, "dgram", filepath.Join(w.socketDir, tracingProxySocketName), address)
 			if err != nil {
 				return nil, err
 			}
