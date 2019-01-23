@@ -2,8 +2,11 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"golang.org/x/net/idna"
 )
@@ -71,4 +74,43 @@ func IsAddrPort(s string) error {
 	}
 
 	return nil
+}
+
+// GetHostPort makes a normalized "host:port" string from the given raw URL.
+func GetHostPort(rawURL string) (string, error) {
+	// If the URL is a "host:port" pair already, return it,
+	// otherwise url.Parse will choke on it.
+	if IsAddrPort(rawURL) == nil {
+		return rawURL, nil
+	}
+	if !strings.Contains(rawURL, "/") {
+		_, _, err := net.SplitHostPort(rawURL)
+		if err != nil {
+			return "", err
+		}
+		return rawURL, nil
+	}
+
+	url, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if url.Path != "" {
+		return "", fmt.Errorf("invalid url: %s includes a path", rawURL)
+	}
+
+	// Get the port out first, even if not given explicitly.
+	port := url.Port()
+	if port == "" {
+		switch url.Scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		default:
+			return "", fmt.Errorf("invalid url %s: no scheme/port", rawURL)
+		}
+	}
+
+	return net.JoinHostPort(url.Hostname(), port), nil
 }
