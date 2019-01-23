@@ -73,17 +73,9 @@ impl Worker for Protocol {
             .into_box()
     }
 
-    fn runtime_call_batch(
-        &self,
-        calls: CallBatch,
-        block: Block,
-        commit_storage: bool,
-    ) -> BoxFuture<ComputedBatch> {
-        self.make_request(Body::WorkerRuntimeCallBatchRequest {
-            calls,
-            block,
-            commit_storage,
-        }).and_then(|body| match body {
+    fn runtime_call_batch(&self, calls: CallBatch, block: Block) -> BoxFuture<ComputedBatch> {
+        self.make_request(Body::WorkerRuntimeCallBatchRequest { calls, block })
+            .and_then(|body| match body {
                 Body::WorkerRuntimeCallBatchResponse { batch } => Ok(batch),
                 _ => Err(Error::new("malformed response")),
             })
@@ -181,26 +173,6 @@ impl Host for Protocol {
             })
             .into_box()
     }
-
-    fn storage_insert(&self, value: Vec<u8>, expiry: u64) -> BoxFuture<()> {
-        self.make_request(Body::HostStorageInsertRequest { value, expiry })
-            .and_then(|body| match body {
-                Body::HostStorageInsertResponse {} => Ok(()),
-                _ => Err(Error::new("malformed response")),
-            })
-            .into_box()
-    }
-
-    fn storage_insert_batch(&self, values: Vec<(Vec<u8>, u64)>) -> BoxFuture<()> {
-        let values = values.into_iter().map(|(v, e)| (v.into(), e)).collect();
-
-        self.make_request(Body::HostStorageInsertBatchRequest { values })
-            .and_then(|body| match body {
-                Body::HostStorageInsertBatchResponse {} => Ok(()),
-                _ => Err(Error::new("malformed response")),
-            })
-            .into_box()
-    }
 }
 
 impl IAS for Protocol {
@@ -243,12 +215,12 @@ impl StorageBackend for Protocol {
         self.storage_get_batch(keys)
     }
 
-    fn insert(&self, value: Vec<u8>, expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
-        self.storage_insert(value, expiry)
+    fn insert(&self, _value: Vec<u8>, _expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
+        unimplemented!("worker cannot insert directly to storage");
     }
 
-    fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
-        self.storage_insert_batch(values)
+    fn insert_batch(&self, _values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
+        unimplemented!("worker cannot insert directly to storage");
     }
 
     fn get_keys(&self) -> BoxStream<(H256, u64)> {
@@ -302,12 +274,8 @@ impl<T: Worker> Handler for WorkerHandler<T> {
                 .rpc_call(request)
                 .map(|response| Body::WorkerRPCCallResponse { response })
                 .into_box(),
-            Body::WorkerRuntimeCallBatchRequest {
-                calls,
-                block,
-                commit_storage,
-            } => self.0
-                .runtime_call_batch(calls, block, commit_storage)
+            Body::WorkerRuntimeCallBatchRequest { calls, block } => self.0
+                .runtime_call_batch(calls, block)
                 .map(|batch| Body::WorkerRuntimeCallBatchResponse { batch })
                 .into_box(),
             _ => future::err(Error::new("unsupported method")).into_box(),
@@ -358,14 +326,6 @@ impl<T: Host> Handler for HostHandler<T> {
                         .map(|x| x.map(|bytes| bytes.into()))
                         .collect(),
                 })
-                .into_box(),
-            Body::HostStorageInsertRequest { value, expiry } => self.0
-                .storage_insert(value, expiry)
-                .map(|()| Body::HostStorageInsertResponse {})
-                .into_box(),
-            Body::HostStorageInsertBatchRequest { values } => self.0
-                .storage_insert_batch(values.into_iter().map(|(v, e)| (v.into(), e)).collect())
-                .map(|()| Body::HostStorageInsertBatchResponse {})
                 .into_box(),
             _ => future::err(Error::new("unsupported method")).into_box(),
         }

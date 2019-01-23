@@ -23,7 +23,7 @@ use ekiden_core::futures::sync::oneshot;
 use ekiden_core::rpc::api;
 use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
 use ekiden_roothash_base::Block;
-use ekiden_storage_base::{InsertOptions, StorageBackend};
+use ekiden_storage_base::StorageBackend;
 use ekiden_storage_batch::BatchStorageBackend;
 use ekiden_untrusted::enclave::capabilitytee::EnclaveCapabilityTEE;
 use ekiden_untrusted::enclave::identity::IAS;
@@ -51,7 +51,6 @@ enum Command {
         Block,
         oneshot::Sender<Result<ComputedBatch>>,
         SpanHandle,
-        bool,
     ),
 }
 
@@ -142,26 +141,20 @@ impl WorkerInner {
         )
     }
 
-    /// `handle_sh` is from when we handled the CallRuntimeBatch command.
     fn call_runtime_batch_fallible(
         &mut self,
         batch: &CallBatch,
         block: &Block,
-        handle_sh: SpanHandle,
-        commit_storage: bool,
-    ) -> Result<(OutputBatch, H256)> {
+    ) -> Result<(OutputBatch, Vec<(Vec<u8>, u64)>, H256)> {
         measure_histogram!("runtime_call_batch_size", batch.len());
 
         // Prepare batch storage.
         let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone()));
 
         let root_hash = &block.header.state_root;
-        let enclave_sh;
 
         let (new_state_root, outputs) = {
             measure_histogram_timer!("runtime_call_batch_enclave_time");
-            let span = handle_sh.child("call_runtime_batch_enclave", |opts| opts.start());
-            enclave_sh = span.handle();
 
             // Run in storage context.
             self.runtime
@@ -176,18 +169,10 @@ impl WorkerInner {
             batch_storage.get_batch_size()
         );
 
-        // Commit batch storage.
-        {
-            let opts = InsertOptions {
-                local_only: !commit_storage,
-            };
+        // Get batch of storage inserts.
+        let storage_inserts = batch_storage.take_batch();
 
-            measure_histogram_timer!("runtime_call_storage_commit_time");
-            let _span = enclave_sh.follower("runtime_call_storage_commit", |opts| opts.start());
-            batch_storage.commit(0, opts).wait()?;
-        }
-
-        Ok((outputs?, new_state_root))
+        Ok((outputs?, storage_inserts, new_state_root))
     }
 
     /// Handle RPC call.
@@ -222,22 +207,26 @@ impl WorkerInner {
         block: Block,
         sender: oneshot::Sender<Result<ComputedBatch>>,
         sh: SpanHandle,
-        commit_storage: bool,
     ) {
-        let span = sh.follower("handle_runtime_batch", |opts| {
+        let _span = sh.follower("handle_runtime_batch", |opts| {
             opts.tag(tag::StdTag::span_kind("consumer")).start()
         });
-        let result =
-            self.call_runtime_batch_fallible(&calls, &block, span.handle(), commit_storage);
+        let result = self.call_runtime_batch_fallible(&calls, &block);
 
         match result {
-            Ok((outputs, new_state_root)) => {
-                // No errors, hand over the batch to root hash frontend.
+            Ok((outputs, storage_inserts, new_state_root)) => {
+                // No errors, hand over the batch to worker host.
+                let storage_inserts = storage_inserts
+                    .into_iter()
+                    .map(|(v, e)| (v.into(), e))
+                    .collect();
+
                 sender
                     .send(Ok(ComputedBatch {
                         block,
                         calls,
                         outputs,
+                        storage_inserts,
                         new_state_root,
                     }))
                     .unwrap();
@@ -270,10 +259,10 @@ impl WorkerInner {
 
                     measure_counter_inc!("rpc_call_processed");
                 }
-                Command::RuntimeCallBatch(calls, block, sender, sh, commit_storage) => {
+                Command::RuntimeCallBatch(calls, block, sender, sh) => {
                     // Process batch of runtime calls.
                     let call_count = calls.len();
-                    self.handle_runtime_batch(calls, block, sender, sh, commit_storage);
+                    self.handle_runtime_batch(calls, block, sender, sh);
 
                     measure_counter_inc!("runtime_call_processed", call_count);
                 }
@@ -391,7 +380,6 @@ impl Worker {
         calls: CallBatch,
         block: Block,
         sh: SpanHandle,
-        commit_storage: bool,
     ) -> BoxFuture<ComputedBatch> {
         measure_counter_inc!("runtime_call_request");
         let span = sh.child("send_runtime_call_batch", |opts| {
@@ -405,7 +393,6 @@ impl Worker {
                 block,
                 response_sender,
                 span.handle(),
-                commit_storage,
             ))
             .unwrap();
 

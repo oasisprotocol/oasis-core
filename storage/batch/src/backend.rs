@@ -46,6 +46,21 @@ impl BatchStorageBackend {
         size
     }
 
+    /// Take the current batch.
+    pub fn take_batch(&self) -> Vec<(Vec<u8>, u64)> {
+        let inner = self.inner
+            .write()
+            .unwrap()
+            .take()
+            .expect("BatchStorageBackend access after commit");
+        let mut writeback_guard = inner.writeback.lock().unwrap();
+        let values = std::mem::replace(writeback_guard.deref_mut(), HashMap::new())
+            .into_iter()
+            .map(|(_key, value)| value);
+
+        values.collect()
+    }
+
     /// Commit batch to delegate backend.
     ///
     /// Batches will contain a maximum of `max_chunk_size` elements. If set to zero,
