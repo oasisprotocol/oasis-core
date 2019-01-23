@@ -126,6 +126,11 @@ func (p *streamProxy) handleConnection(innerSocket net.Conn) {
 
 // Start makes the proxy start listening on its Unix socket.
 func (p *streamProxy) Start() error {
+	err := os.Remove(p.localPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
 	listener, err := net.Listen("unix", p.localPath)
 	if err != nil {
 		p.BaseBackgroundService.Stop()
@@ -189,6 +194,11 @@ func (p *dgramProxy) proxy(localSocket *net.UnixConn, remoteSocket net.Conn) {
 
 // Start makes the proxy start listening on its Unix socket.
 func (p *dgramProxy) Start() error {
+	err := os.Remove(p.localPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
 	localSocket, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: p.localPath})
 	if err != nil {
 		p.BaseBackgroundService.Stop()

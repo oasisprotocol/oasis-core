@@ -231,6 +231,7 @@ func NewNode() (*Node, error) {
 
 	// Initialize the worker.
 	node.Worker, err = worker.New(
+		cmdCommon.DataDir(),
 		node.Identity,
 		node.Storage,
 		node.RootHash,
