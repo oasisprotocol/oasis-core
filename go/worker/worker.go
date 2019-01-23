@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/grpc"
@@ -428,7 +429,11 @@ func newWorker(
 		// Create required network proxies.
 		metricsConfig := metrics.GetServiceConfig()
 		if metricsConfig.Mode == "push" {
-			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "stream", path.Join(w.socketDir, metricsProxySocketName), metricsConfig.Address)
+			address, err := common.GetHostPort(metricsConfig.Address)
+			if err != nil {
+				return nil, err
+			}
+			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "stream", path.Join(w.socketDir, metricsProxySocketName), address)
 			if err != nil {
 				return nil, err
 			}
@@ -437,7 +442,11 @@ func newWorker(
 
 		tracingConfig := tracing.GetServiceConfig()
 		if tracingConfig.Enabled {
-			proxy, err := NewNetworkProxy(host.TracingProxyKey, "dgram", path.Join(w.socketDir, tracingProxySocketName), tracingConfig.AgentAddress)
+			address, err := common.GetHostPort(tracingConfig.AgentAddress)
+			if err != nil {
+				return nil, err
+			}
+			proxy, err := NewNetworkProxy(host.TracingProxyKey, "dgram", path.Join(w.socketDir, tracingProxySocketName), address)
 			if err != nil {
 				return nil, err
 			}
