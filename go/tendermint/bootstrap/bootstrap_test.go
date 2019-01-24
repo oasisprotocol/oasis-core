@@ -80,7 +80,14 @@ func TestBootstrap(t *testing.T) {
 	}
 
 	// All genesis documents should be equal and valid.
+	var genesisTime time.Time
 	checkGenesisDoc := func(genDoc *GenesisDocument) {
+		if genesisTime.IsZero() {
+			genesisTime = genDoc.GenesisTime
+		} else {
+			require.Equal(t, genesisTime, genDoc.GenesisTime)
+		}
+
 		require.NotNil(t, genDoc, "failed to receive genesis document")
 		require.Equal(t, numValidators, len(genDoc.Validators), "incorrect number of validators")
 

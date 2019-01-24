@@ -78,6 +78,7 @@ type server struct {
 
 	genesisPath   string
 	genesisDoc    []byte
+	genesisTime   time.Time
 	validators    []*GenesisValidator
 	numValidators int
 }
@@ -212,13 +213,16 @@ func (s *server) buildGenesis() {
 	s.Lock()
 	defer s.Unlock()
 
-	if s.genesisDoc == nil {
-		defer close(s.bootstrappedCh)
-	}
-
 	doc := &GenesisDocument{
 		Validators:  s.validators,
 		GenesisTime: time.Now(),
+	}
+
+	if s.genesisDoc == nil {
+		s.genesisTime = doc.GenesisTime
+		defer close(s.bootstrappedCh)
+	} else {
+		doc.GenesisTime = s.genesisTime
 	}
 
 	s.genesisDoc = json.Marshal(doc)
@@ -265,6 +269,7 @@ func NewServer(addr string, numValidators int, dataDir string) (service.Backgrou
 				"genesis_doc", string(b),
 			)
 			s.genesisDoc = b
+			s.genesisTime = doc.GenesisTime
 			s.validators = doc.Validators
 			close(s.bootstrappedCh)
 		}
