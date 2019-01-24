@@ -45,6 +45,8 @@ const (
 	cfgMaxBatchSizeBytes = "worker.leader.max_batch_size_bytes"
 	cfgMaxBatchTimeout   = "worker.leader.max_batch_timeout"
 
+	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
+
 	cfgClientPort      = "worker.client.port"
 	cfgClientAddresses = "worker.client.addresses"
 
@@ -186,6 +188,8 @@ func New(
 			MaxBatchSizeBytes: maxBatchSizeBytes,
 			MaxBatchTimeout:   maxBatchTimeout,
 
+			StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
+
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
 		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
@@ -225,6 +229,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgMaxBatchSizeBytes, 16777216, "Maximum size (in bytes) of a batch of runtime requests")
 		cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
 
+		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
+
 		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
@@ -255,6 +261,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgMaxBatchSize,
 		cfgMaxBatchSizeBytes,
 		cfgMaxBatchTimeout,
+
+		cfgStorageCommitTimeout,
 
 		cfgClientPort,
 		cfgClientAddresses,

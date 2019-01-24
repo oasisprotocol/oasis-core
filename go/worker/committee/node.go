@@ -3,6 +3,7 @@ package committee
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -28,10 +29,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
-const (
-	queueExternalBatchTimeout = 5 * time.Second
-	storageCommitTimeout      = 5 * time.Second
-)
+const queueExternalBatchTimeout = 5 * time.Second
 
 var (
 	ErrNotLeader = errors.New("not leader")
@@ -112,6 +110,8 @@ type Config struct {
 	MaxBatchSize      uint64
 	MaxBatchSizeBytes uint64
 	MaxBatchTimeout   time.Duration
+
+	StorageCommitTimeout time.Duration
 
 	ByzantineInjectDiscrepancies bool
 
@@ -284,6 +284,15 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	}
 
 	if err := n.incomingQueue.Add(call); err != nil {
+		// Return success in case of duplicate calls to avoid the client
+		// mistaking this for an actual error.
+		if err == errCallAlreadyExists {
+			n.logger.Warn("ignoring duplicate call",
+				"call", hex.EncodeToString(call),
+			)
+			return nil
+		}
+
 		return err
 	}
 
@@ -537,7 +546,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	if epoch.IsLeader() || epoch.IsBackupWorker() {
 		start := time.Now()
 		err := func() error {
-			ctx, cancel := context.WithTimeout(n.ctx, storageCommitTimeout)
+			ctx, cancel := context.WithTimeout(n.ctx, n.cfg.StorageCommitTimeout)
 			defer cancel()
 
 			if err := n.storage.InsertBatch(ctx, batch.StorageInserts); err != nil {
