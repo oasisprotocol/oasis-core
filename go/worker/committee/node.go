@@ -3,6 +3,7 @@ package committee
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -284,6 +285,15 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	}
 
 	if err := n.incomingQueue.Add(call); err != nil {
+		// Return success in case of duplicate calls to avoid the client
+		// mistaking this for an actual error.
+		if err == errCallAlreadyExists {
+			n.logger.Warn("ignoring duplicate call",
+				"call", hex.EncodeToString(call),
+			)
+			return nil
+		}
+
 		return err
 	}
 
