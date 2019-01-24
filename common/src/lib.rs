@@ -38,9 +38,6 @@ pub extern crate tokio;
 pub extern crate untrusted;
 
 extern crate ekiden_common_api;
-#[allow(unused_imports)]
-#[macro_use]
-extern crate ekiden_di;
 
 pub mod address;
 pub mod bytes;

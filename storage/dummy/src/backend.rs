@@ -88,12 +88,3 @@ impl StorageBackend for DummyStorageBackend {
         stream::once(Err(Error::new("Not implemented"))).into_box()
     }
 }
-
-// Register for dependency injection.
-create_component!(
-    dummy,
-    "storage-backend",
-    DummyStorageBackend,
-    StorageBackend,
-    []
-);

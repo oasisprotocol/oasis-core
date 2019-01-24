@@ -5,7 +5,6 @@ extern crate pretty_env_logger;
 extern crate tokio_uds;
 
 extern crate ekiden_core;
-extern crate ekiden_di;
 extern crate ekiden_instrumentation;
 extern crate ekiden_instrumentation_prometheus;
 extern crate ekiden_tracing;
@@ -18,10 +17,8 @@ use std::sync::Arc;
 use clap::{App, Arg};
 use log::{info, LevelFilter};
 
-use ekiden_core::environment::Environment;
+use ekiden_core::environment::{Environment, GrpcEnvironment};
 use ekiden_core::futures::block_on;
-use ekiden_di::{Component, KnownComponents};
-use ekiden_instrumentation::{set_boxed_metric_collector, MetricCollector};
 use ekiden_worker_api::WorkerHandler;
 
 use ekiden_worker::protocol::ProtocolHandler;
@@ -29,19 +26,7 @@ use ekiden_worker::worker::{Worker, WorkerConfiguration};
 
 mod proxy;
 
-/// Register known components for dependency injection.
-fn register_components(known_components: &mut KnownComponents) {
-    // Environment.
-    ekiden_core::environment::GrpcEnvironment::register(known_components);
-    // Instrumentation.
-    ekiden_instrumentation_prometheus::PrometheusMetricCollector::register(known_components);
-}
-
 fn main() {
-    // Create known components registry.
-    let mut known_components = KnownComponents::new();
-    register_components(&mut known_components);
-
     let matches = App::new("Ekiden worker process")
         .arg(
             Arg::with_name("runtime")
@@ -60,7 +45,7 @@ fn main() {
                 .display_order(2)
                 .required(true),
         )
-        .args(&known_components.get_arguments())
+        .args(&ekiden_instrumentation_prometheus::get_arguments())
         .args(&ekiden_tracing::get_arguments())
         .args(&proxy::get_arguments())
         .get_matches();
@@ -80,21 +65,13 @@ fn main() {
         .filter(Some("want"), LevelFilter::Debug)
         .init();
 
-    // Initialize component container.
-    let mut container = known_components
-        .build_with_arguments(&matches)
-        .expect("failed to initialize component container");
-
-    let environment = container.inject::<Environment>().unwrap();
+    let environment: Arc<Environment> = Arc::new(GrpcEnvironment::default());
 
     // Start the networking proxies.
     proxy::start_proxies(environment.clone(), &matches);
 
     // Initialize metric collector.
-    let metrics = container
-        .inject_owned::<MetricCollector>()
-        .expect("failed to inject MetricCollector");
-    set_boxed_metric_collector(metrics).unwrap();
+    ekiden_instrumentation_prometheus::init_from_args(environment.clone(), &matches).unwrap();
 
     // Initialize tracing.
     ekiden_tracing::report_forever("ekiden-worker", &matches);

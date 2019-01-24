@@ -70,7 +70,7 @@ First, we start a key manager service, which stores encryption keys in a
 protected enclave:
 ```
 # ./target/debug/ekiden-keymanager-node \
-    --storage-backend dummy \
+    --storage-path /tmp/ekiden-keymanager-node \
     --enclave target/enclave/ekiden-keymanager-trusted.so
 ```
 
@@ -97,7 +97,6 @@ client as follows:
 # ./target/debug/simple-keyvalue-client \
     --mr-enclave $(cat target/enclave/simple-keyvalue.mrenclave) \
     --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-    --storage-backend remote \
     --node-address unix:/tmp/ekiden-node-data/internal.sock
 ```
 

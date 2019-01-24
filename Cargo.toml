@@ -2,9 +2,6 @@
 members = [
     "tools",
 
-    # Dependency injection.
-    "di",
-
     # Instrumentation.
     "instrumentation",
     "instrumentation/prometheus",

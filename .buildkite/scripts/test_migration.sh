@@ -59,7 +59,6 @@ test_migration() {
     # Start long term client, which has a 10-second wait. We run this client so
     # that we test if the migration works without restarting the client.
     "$WORKDIR/target/debug/test-long-term-client" \
-        --storage-backend remote \
         --node-address unix:${validator_sock} \
         --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
         --test-runtime-id "$RUNTIME_ID" \

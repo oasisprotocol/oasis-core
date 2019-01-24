@@ -12,7 +12,6 @@ profiling = []
 
 [dependencies]
 ekiden-common-api = { path = "./api", version = "0.2.0-alpha" }
-ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 byteorder = "1.2.1"
 rustc-hex = "1.0"

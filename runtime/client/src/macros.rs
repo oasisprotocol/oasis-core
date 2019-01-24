@@ -46,6 +46,9 @@ macro_rules! create_runtime_client {
             pub use $api_module::*;
 
             pub struct Client {
+                environment: Arc<Environment>,
+                storage: Arc<StorageBackend>,
+                roothash: Arc<RootHashBackend>,
                 manager: RuntimeClientManager,
             }
 
@@ -67,13 +70,31 @@ macro_rules! create_runtime_client {
                             runtime_id,
                             mr_enclave,
                             timeout,
-                            environment,
+                            environment.clone(),
                             scheduler,
                             entity_registry,
-                            roothash,
-                            storage,
+                            roothash.clone(),
+                            storage.clone(),
                         ),
+                        environment,
+                        storage,
+                        roothash,
                     }
+                }
+
+                /// Return the used Ekiden environment instance.
+                pub fn get_environment(&self) -> Arc<Environment> {
+                    self.environment.clone()
+                }
+
+                /// Return the used Ekiden storage backend instance.
+                pub fn get_storage(&self) -> Arc<StorageBackend> {
+                    self.storage.clone()
+                }
+
+                /// Return the used Ekiden roothash backend instance.
+                pub fn get_roothash(&self) -> Arc<RootHashBackend> {
+                    self.roothash.clone()
                 }
 
                 // Generate methods.

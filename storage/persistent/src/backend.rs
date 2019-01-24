@@ -106,28 +106,3 @@ impl StorageBackend for PersistentStorageBackend {
         rx.map_err(|()| unreachable!()).into_box()
     }
 }
-
-// Register for dependency injection.
-create_component!(
-    persistent,
-    "storage-backend",
-    PersistentStorageBackend,
-    StorageBackend,
-    (|container: &mut Container| -> Result<Box<Any>> {
-        let args = container.get_arguments().unwrap();
-        let db_path = args.value_of("storage-path").unwrap();
-
-        let backend = match PersistentStorageBackend::new(Path::new(db_path)) {
-            Ok(backend) => backend,
-            Err(error) => return Err(error.message.into()),
-        };
-
-        let instance: Arc<StorageBackend> = Arc::new(backend);
-        Ok(Box::new(instance))
-    }),
-    [Arg::with_name("storage-path")
-        .long("storage-path")
-        .help("Path to storage directory")
-        .default_value("persistent_storage")
-        .takes_value(true)]
-);

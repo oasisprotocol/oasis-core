@@ -14,7 +14,6 @@ testing = []
 [dependencies]
 ekiden-worker-api = { path = "./api", version = "0.2.0-alpha" }
 ekiden-core = { path = "../core/common", version = "0.2.0-alpha" }
-ekiden-di = { path = "../di", version = "0.2.0-alpha" }
 ekiden-instrumentation = { path = "../instrumentation", version = "0.2.0-alpha" }
 ekiden-instrumentation-prometheus = { path = "../instrumentation/prometheus", version = "0.2.0-alpha" }
 ekiden-tracing = { path = "../tracing", version = "0.2.0-alpha" }
