@@ -14,6 +14,8 @@ const (
 	cfgLogFile  = "log.file"
 	cfgLogFmt   = "log.format"
 	cfgLogLevel = "log.level"
+	// Custom log levels for modules are not supported by cobra.
+	// Use the config file (parsed by viper) instead.
 )
 
 var (
@@ -39,8 +41,23 @@ func initLogging() error {
 	logFile := viper.GetString(cfgLogFile)
 
 	var logLevel logging.Level
+	var moduleLevels = map[string]logging.Level{}
 	if err := logLevel.Set(viper.GetString(cfgLogLevel)); err != nil {
-		return err
+		if errDefault := logLevel.Set(viper.GetString(cfgLogLevel + ".default")); errDefault != nil {
+			return errDefault
+		}
+
+		for k, v := range viper.GetStringMapString(cfgLogLevel) {
+			if k == "default" {
+				continue
+			}
+
+			var lvl logging.Level
+			if err = lvl.Set(v); err != nil {
+				return err
+			}
+			moduleLevels[k] = lvl
+		}
 	}
 
 	var logFmt logging.Format
@@ -58,5 +75,5 @@ func initLogging() error {
 		}
 	}
 
-	return logging.Initialize(w, logLevel, logFmt)
+	return logging.Initialize(w, logFmt, logLevel, moduleLevels)
 }

@@ -9,8 +9,15 @@
 datadir: /tmp/ekiden-node-data
 
 # Logging.
+# Per-module log levels are defined below. If you prefer just one unified log level, you can use:
+# log:
+#   level: debug
 log:
-  level: debug
+  level:
+    # Per-module log levels. Longest prefix match will be taken. Fallback to "default", if no match.
+    default: debug
+    tendermint: warn
+    tendermint/context: error
 
 # Internal gRPC services.
 grpc:

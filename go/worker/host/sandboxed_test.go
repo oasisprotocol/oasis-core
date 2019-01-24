@@ -47,7 +47,7 @@ func TestSandboxedHost(t *testing.T) {
 
 	if testing.Verbose() {
 		// Initialize logging to aid debugging.
-		_ = logging.Initialize(os.Stdout, logging.LevelDebug, logging.FmtLogfmt)
+		_ = logging.Initialize(os.Stdout, logging.FmtLogfmt, logging.LevelDebug, map[string]logging.Level{})
 	}
 
 	// Initialize sandboxed host.

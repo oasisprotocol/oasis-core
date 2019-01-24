@@ -3,6 +3,8 @@ package node
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -142,6 +144,8 @@ func NewNode() (*Node, error) {
 	}()
 
 	if err := cmdCommon.Init(); err != nil {
+		// Common stuff like logger not correcty initialized. Print to stderr
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		return nil, err
 	}
 
