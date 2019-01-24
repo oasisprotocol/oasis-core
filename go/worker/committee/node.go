@@ -29,10 +29,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
-const (
-	queueExternalBatchTimeout = 5 * time.Second
-	storageCommitTimeout      = 5 * time.Second
-)
+const queueExternalBatchTimeout = 5 * time.Second
 
 var (
 	ErrNotLeader = errors.New("not leader")
@@ -113,6 +110,8 @@ type Config struct {
 	MaxBatchSize      uint64
 	MaxBatchSizeBytes uint64
 	MaxBatchTimeout   time.Duration
+
+	StorageCommitTimeout time.Duration
 
 	ByzantineInjectDiscrepancies bool
 
@@ -547,7 +546,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	if epoch.IsLeader() || epoch.IsBackupWorker() {
 		start := time.Now()
 		err := func() error {
-			ctx, cancel := context.WithTimeout(n.ctx, storageCommitTimeout)
+			ctx, cancel := context.WithTimeout(n.ctx, n.cfg.StorageCommitTimeout)
 			defer cancel()
 
 			if err := n.storage.InsertBatch(ctx, batch.StorageInserts); err != nil {
