@@ -4,11 +4,17 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common/service"
 )
+
+const proxyTimeout = 2 * time.Second
 
 // NetworkProxy is the common interface for network proxy implementations.
 type NetworkProxy interface {
@@ -36,6 +42,10 @@ type streamProxy struct {
 }
 
 type dgramProxy struct {
+	proxyCommon
+}
+
+type httpProxy struct {
 	proxyCommon
 }
 
@@ -83,10 +93,8 @@ func (p *streamProxy) listener(listener net.Listener) {
 func (p *streamProxy) streamXfer(from, to net.Conn, doneCh chan<- int) {
 	defer p.groupDone.Done()
 	defer func() { doneCh <- 1 }()
-	_, err := io.Copy(to, from)
-	if err != nil {
-		p.Logger.Error("error copying on stream", "err", err)
-	}
+
+	_, _ = io.Copy(to, from)
 }
 
 func (p *streamProxy) handleConnection(innerSocket net.Conn) {
@@ -99,6 +107,11 @@ func (p *streamProxy) handleConnection(innerSocket net.Conn) {
 		return
 	}
 	defer upstreamSocket.Close()
+
+	// Enforce a read/write timeout on both connections to avoid getting
+	// stuck during copy forever.
+	_ = innerSocket.SetDeadline(time.Now().Add(proxyTimeout))
+	_ = upstreamSocket.SetDeadline(time.Now().Add(proxyTimeout))
 
 	transfers := 2
 	streamCloseCh := make(chan int)
@@ -222,6 +235,57 @@ func (p *dgramProxy) Start() error {
 	return nil
 }
 
+// Start makes the proxy start listening on its Unix socket.
+func (p *httpProxy) Start() error {
+	err := os.Remove(p.localPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	listener, err := net.Listen("unix", p.localPath)
+	if err != nil {
+		p.BaseBackgroundService.Stop()
+		return err
+	}
+
+	remoteURL, err := url.Parse(p.remoteAddress)
+	if err != nil {
+		p.BaseBackgroundService.Stop()
+		return err
+	}
+
+	// Create a new reverse proxy that rewrites the Host header.
+	server := &http.Server{
+		Handler: &httputil.ReverseProxy{
+			Director: func(req *http.Request) {
+				req.URL.Scheme = remoteURL.Scheme
+				req.URL.Host = remoteURL.Host
+				req.Host = remoteURL.Host
+			},
+		},
+		ReadTimeout:  proxyTimeout,
+		WriteTimeout: proxyTimeout,
+	}
+	go func() {
+		p.Logger.Debug("starting proxy")
+		if serr := server.Serve(listener); serr != nil && serr != http.ErrServerClosed {
+			p.Logger.Error("error while running proxy server",
+				"err", serr,
+			)
+		}
+
+		p.Logger.Debug("proxy stopped")
+		p.BaseBackgroundService.Stop()
+	}()
+	go func() {
+		<-p.stopCh
+		p.Logger.Debug("stopping proxy")
+		_ = server.Close()
+	}()
+
+	return nil
+}
+
 // NewNetworkProxy constructs and returns a new proxy instance with the given type, name and addresses.
 func NewNetworkProxy(name, proxyType, local, remote string) (NetworkProxy, error) {
 	svc := *service.NewBaseBackgroundService("proxy/" + name)
@@ -242,6 +306,17 @@ func NewNetworkProxy(name, proxyType, local, remote string) (NetworkProxy, error
 			proxyCommon: proxyCommon{
 				BaseBackgroundService: svc,
 				proxyType:             proxyType,
+				localPath:             local,
+				remoteAddress:         remote,
+				stopCh:                make(chan struct{}),
+			},
+		}, nil
+
+	case "http":
+		return &httpProxy{
+			proxyCommon: proxyCommon{
+				BaseBackgroundService: svc,
+				proxyType:             "stream",
 				localPath:             local,
 				remoteAddress:         remote,
 				stopCh:                make(chan struct{}),

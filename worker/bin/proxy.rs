@@ -44,7 +44,8 @@ impl StreamProxy {
         let environment = self.common.environment.clone();
         let remote_addr = self.common.remote_addr.clone();
 
-        let listener = TcpListener::bind(&self.common.local_addr).unwrap();
+        let listener =
+            TcpListener::bind(&self.common.local_addr).expect("proxy TCP bind must succeed");
         listener
             .incoming()
             .for_each(move |local_socket| {
@@ -88,7 +89,7 @@ struct DgramProxy {
 
 impl DgramProxy {
     fn new(common: Proxy) -> DgramProxy {
-        let source = UdpSocket::bind(&common.local_addr).unwrap();
+        let source = UdpSocket::bind(&common.local_addr).expect("proxy UDP bind must succeed");
         DgramProxy {
             common: common,
             source: source,
