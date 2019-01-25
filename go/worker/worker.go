@@ -400,11 +400,7 @@ func newWorker(
 		// Create required network proxies.
 		metricsConfig := metrics.GetServiceConfig()
 		if metricsConfig.Mode == "push" {
-			address, err := common.GetHostPort(metricsConfig.Address)
-			if err != nil {
-				return nil, err
-			}
-			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "stream", filepath.Join(w.socketDir, metricsProxySocketName), address)
+			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "http", filepath.Join(w.socketDir, metricsProxySocketName), metricsConfig.Address)
 			if err != nil {
 				return nil, err
 			}
