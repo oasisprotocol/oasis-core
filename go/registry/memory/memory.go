@@ -315,7 +315,7 @@ func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
 }
 
 func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
-	con, err := api.VerifyRegisterRuntimeArgs(r.logger, sigCon)
+	con, err := api.VerifyRegisterRuntimeArgs(r.logger, sigCon, false)
 	if err != nil {
 		return err
 	}

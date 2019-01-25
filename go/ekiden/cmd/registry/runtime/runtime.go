@@ -109,7 +109,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	signed, err := signForRegistration(rt, privKey, false)
+	signed, err := signForRegistration(rt, privKey, true)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -157,7 +157,7 @@ func actuallyRegister(cmd *cobra.Command, rt *registry.Runtime, privKey *signatu
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	signed, err := signForRegistration(rt, privKey, true)
+	signed, err := signForRegistration(rt, privKey, false)
 	if err != nil {
 		return err
 	}
@@ -259,12 +259,17 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 	}, privKey, nil
 }
 
-func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, fixupTime bool) (*registry.SignedRuntime, error) {
-	if fixupTime {
+func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, isGenesis bool) (*registry.SignedRuntime, error) {
+	var ctx []byte
+	switch isGenesis {
+	case false:
+		ctx = registry.RegisterRuntimeSignatureContext
 		rt.RegistrationTime = uint64(time.Now().Unix())
+	case true:
+		ctx = registry.RegisterGenesisRuntimeSignatureContext
 	}
 
-	signed, err := registry.SignRuntime(*privKey, registry.RegisterRuntimeSignatureContext, rt)
+	signed, err := registry.SignRuntime(*privKey, ctx, rt)
 	if err != nil {
 		logger.Error("failed to sign runtime descriptor",
 			"err", err,

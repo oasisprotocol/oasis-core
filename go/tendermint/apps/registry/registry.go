@@ -377,7 +377,7 @@ func (app *registryApplication) registerRuntime(
 	state *MutableState,
 	sigCon *registry.SignedRuntime,
 ) error {
-	con, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigCon)
+	con, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigCon, ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
