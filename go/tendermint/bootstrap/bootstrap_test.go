@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/json"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
 const (
@@ -37,8 +39,18 @@ func TestBootstrap(t *testing.T) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(tmpDir)
 
+	// Create fake app state.
+	appState := &api.GenesisAppState{
+		ABCIAppState: map[string][]byte{
+			"1": []byte("The state lieth in all languages good and evil;"),
+			"2": []byte("and whatever it saith it lieth;"),
+			"3": []byte("and whatever it hath it hath stolen."),
+		},
+	}
+	rawAppState := string(json.Marshal(appState)) // For comparison.
+
 	// Create a bootstrap server.
-	srv, err := NewServer(testServer1Address, numValidators, tmpDir)
+	srv, err := NewServer(testServer1Address, numValidators, appState, tmpDir)
 	require.NoError(t, err, "NewServer")
 
 	err = srv.Start()
@@ -90,6 +102,7 @@ func TestBootstrap(t *testing.T) {
 
 		require.NotNil(t, genDoc, "failed to receive genesis document")
 		require.Equal(t, numValidators, len(genDoc.Validators), "incorrect number of validators")
+		require.EqualValues(t, rawAppState, genDoc.AppState, "invalid app state")
 
 		for _, v := range genDoc.Validators {
 			vd := validators[v.PubKey.ToMapKey()]
@@ -142,7 +155,7 @@ func TestBootstrap(t *testing.T) {
 	// a second server in the same data directory.
 
 	// Create a bootstrap server.
-	srv, err = NewServer(testServer2Address, numValidators, tmpDir)
+	srv, err = NewServer(testServer2Address, numValidators, appState, tmpDir)
 	require.NoError(t, err, "NewServer")
 
 	err = srv.Start()

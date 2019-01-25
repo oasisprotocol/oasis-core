@@ -14,8 +14,10 @@ import (
 type ContextType uint
 
 const (
+	// ContextInitChain is InitChain context.
+	ContextInitChain ContextType = iota
 	// ContextCheckTx is CheckTx context.
-	ContextCheckTx ContextType = iota
+	ContextCheckTx
 	// ContextDeliverTx is DeliverTx context.
 	ContextDeliverTx
 	// ContextBeginBlock is BeginBlock context.
@@ -60,6 +62,11 @@ func (c *Context) Data() interface{} {
 // Tags returns the tags to be passed with this output.
 func (c *Context) Tags() []tmcmn.KVPair {
 	return c.tags
+}
+
+// IsInitChain returns true if this output is part of a InitChain.
+func (c *Context) IsInitChain() bool {
+	return c.outputType == ContextInitChain
 }
 
 // IsCheckOnly returns true if this output is part of a CheckTx.

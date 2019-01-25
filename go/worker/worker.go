@@ -6,11 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -40,10 +38,6 @@ type RuntimeConfig struct {
 	ID          signature.PublicKey
 	Binary      string
 	TEEHardware node.TEEHardware
-
-	// XXX: This is needed until we decide how we want to actually register runtimes.
-	ReplicaGroupSize       uint64
-	ReplicaGroupBackupSize uint64
 }
 
 // Config is the worker configuration.
@@ -76,17 +70,17 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	identity   *identity.Identity
-	entity     *entity.Entity
-	storage    storage.Backend
-	roothash   roothash.Backend
-	registry   registry.Backend
-	epochtime  epochtime.Backend
-	scheduler  scheduler.Backend
-	ias        *ias.IAS
-	keyManager *enclaverpc.Client
-	p2p        *p2p.P2P
-	grpc       *grpc.Server
+	identity      *identity.Identity
+	entityPrivKey *signature.PrivateKey
+	storage       storage.Backend
+	roothash      roothash.Backend
+	registry      registry.Backend
+	epochtime     epochtime.Backend
+	scheduler     scheduler.Backend
+	ias           *ias.IAS
+	keyManager    *enclaverpc.Client
+	p2p           *p2p.P2P
+	grpc          *grpc.Server
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -149,24 +143,6 @@ func (w *Worker) Start() error {
 
 		close(w.initCh)
 	}()
-
-	// XXX: Register the entity, remove when this is done elsewhere.
-	if err := retryLoop(func() error {
-		return w.registerEntity()
-	}); err != nil {
-		return err
-	}
-
-	// Register the runtimes with the registry.
-	//
-	// XXX: Remove once we decide how to register runtimes.
-	for _, rtCfg := range w.cfg.Runtimes {
-		if err := retryLoop(func() error {
-			return w.registryRegisterRuntime(&rtCfg)
-		}); err != nil {
-			return err
-		}
-	}
 
 	// Start client gRPC server.
 	if err := w.grpc.Start(); err != nil {
@@ -320,8 +296,6 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 
 	// Create committee node for the given runtime.
 	nodeCfg := cfg.Committee
-	nodeCfg.ReplicaGroupSize = rtCfg.ReplicaGroupSize
-	nodeCfg.ReplicaGroupBackupSize = rtCfg.ReplicaGroupBackupSize
 
 	node, err := committee.NewNode(
 		rtCfg.ID,
@@ -356,6 +330,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 func newWorker(
 	dataDir string,
 	identity *identity.Identity,
+	entityPrivKey *signature.PrivateKey,
 	storage storage.Backend,
 	roothash roothash.Backend,
 	registryInst registry.Backend,
@@ -385,31 +360,25 @@ func newWorker(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:    enabled,
-		cfg:        cfg,
-		identity:   identity,
-		storage:    storage,
-		roothash:   roothash,
-		registry:   registryInst,
-		epochtime:  epochtime,
-		scheduler:  scheduler,
-		ias:        ias,
-		keyManager: keyManager,
-		runtimes:   make(map[signature.MapKey]*Runtime),
-		netProxies: make(map[string]NetworkProxy),
-		socketDir:  socketDir,
-		ctx:        ctx,
-		cancelCtx:  cancelCtx,
-		quitCh:     make(chan struct{}),
-		initCh:     make(chan struct{}),
-		logger:     logging.GetLogger("worker"),
-	}
-
-	// XXX: Reuse the node's key as the entity key for now.  At some
-	// point in the future this will be the node operator's identity.
-	w.entity = &entity.Entity{
-		ID:               identity.NodeKey.Public(),
-		RegistrationTime: uint64(time.Now().Unix()),
+		enabled:       enabled,
+		cfg:           cfg,
+		identity:      identity,
+		entityPrivKey: entityPrivKey,
+		storage:       storage,
+		roothash:      roothash,
+		registry:      registryInst,
+		epochtime:     epochtime,
+		scheduler:     scheduler,
+		ias:           ias,
+		keyManager:    keyManager,
+		runtimes:      make(map[signature.MapKey]*Runtime),
+		netProxies:    make(map[string]NetworkProxy),
+		socketDir:     socketDir,
+		ctx:           ctx,
+		cancelCtx:     cancelCtx,
+		quitCh:        make(chan struct{}),
+		initCh:        make(chan struct{}),
+		logger:        logging.GetLogger("worker"),
 	}
 
 	if enabled {
@@ -466,15 +435,4 @@ func newWorker(
 
 	startedOk = true
 	return w, nil
-}
-
-func retryLoop(fn func() error) error {
-	for {
-		err := fn()
-		switch err {
-		case nil, context.Canceled:
-			return err
-		}
-		time.Sleep(1 * time.Second)
-	}
 }

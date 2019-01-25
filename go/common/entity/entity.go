@@ -2,12 +2,25 @@
 package entity
 
 import (
+	"crypto/rand"
 	"errors"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/json"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
+)
+
+const (
+	entityFilename  = "entity.json"
+	privKeyFilename = "entity.pem"
+
+	fileMode = 0600
 )
 
 var (
@@ -77,6 +90,75 @@ func (e *Entity) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (e *Entity) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
+}
+
+// LoadOrGenerate loads or generates an entity (to/on disk).
+func LoadOrGenerate(baseDir string) (*Entity, *signature.PrivateKey, error) {
+	ent, privKey, err := Load(baseDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, nil, err
+		}
+		ent, privKey, err = Generate(baseDir)
+	}
+	return ent, privKey, err
+}
+
+// Load loads an existing entity from disk.
+func Load(baseDir string) (*Entity, *signature.PrivateKey, error) {
+	entityPath, privKeyPath := getPaths(baseDir)
+
+	rawPriv, err := ioutil.ReadFile(privKeyPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var privKey signature.PrivateKey
+	if err = privKey.UnmarshalPEM(rawPriv); err != nil {
+		return nil, nil, err
+	}
+
+	rawEnt, err := ioutil.ReadFile(entityPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var ent Entity
+	if err = json.Unmarshal(rawEnt, &ent); err != nil {
+		return nil, nil, err
+	}
+
+	return &ent, &privKey, nil
+}
+
+// Generate generates a new entity and serializes it to disk.
+func Generate(baseDir string) (*Entity, *signature.PrivateKey, error) {
+	entityPath, privKeyPath := getPaths(baseDir)
+
+	// Generate a new entity.
+	privKey, err := signature.NewPrivateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	ent := &Entity{
+		ID:               privKey.Public(),
+		RegistrationTime: uint64(time.Now().Unix()),
+	}
+
+	// Write to disk.
+	b, _ := privKey.MarshalPEM()
+	if err = ioutil.WriteFile(privKeyPath, b, fileMode); err != nil {
+		return nil, nil, err
+	}
+	if err = ioutil.WriteFile(entityPath, json.Marshal(ent), fileMode); err != nil {
+		return nil, nil, err
+	}
+
+	return ent, &privKey, nil
+}
+
+func getPaths(baseDir string) (string, string) {
+	return filepath.Join(baseDir, entityFilename), filepath.Join(baseDir, privKeyFilename)
 }
 
 // SignedEntity is a signed blob containing a CBOR-serialized Entity.

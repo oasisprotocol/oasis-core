@@ -3,6 +3,7 @@ package tendermint
 import (
 	"errors"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 
@@ -28,13 +29,11 @@ var (
 	provisionValidatorCmd = &cobra.Command{
 		Use:   "provision_validator",
 		Short: "provision a validator node",
-		Run:   doProvisionValidator,
+		PreRun: func(cmd *cobra.Command, args []string) {
+			registerProvisionValidatorFlags(cmd)
+		},
+		Run: doProvisionValidator,
 	}
-
-	flagInteractive   bool
-	flagNodeName      string
-	flagNodeAddr      string
-	flagValidatorFile string
 
 	errNotString = errors.New("input is not a string")
 
@@ -89,7 +88,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 
 	// Interactively prompt if requested.
-	if flagInteractive {
+	if viper.GetBool(cfgInteractive) {
 		if err = provisionInteractive(&validator); err != nil {
 			logger.Error("failed to determine node parameters",
 				"err", err,
@@ -98,35 +97,39 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		}
 	} else {
 		// Validate the command line args.
-		if err = nodeNameValidator(flagNodeName); err != nil {
+		nodeName := viper.GetString(cfgNodeName)
+		if err = nodeNameValidator(nodeName); err != nil {
 			logger.Error("malformed node name",
 				"err", err,
-				"node_name", flagNodeName,
+				"node_name", nodeName,
 			)
 			os.Exit(1)
 		}
-		if err = coreAddressValidator(flagNodeAddr); err != nil {
+
+		nodeAddr := viper.GetString(cfgNodeAddr)
+		if err = coreAddressValidator(nodeAddr); err != nil {
 			logger.Error("malformed node address",
 				"err", err,
-				"node_addr", flagNodeAddr,
+				"node_addr", nodeAddr,
 			)
 			os.Exit(1)
 		}
 
 		// Populate the validator struct.
-		validator.CoreAddress = flagNodeAddr
-		validator.Name = common.NormalizeFQDN(flagNodeName)
+		validator.CoreAddress = nodeAddr
+		validator.Name = common.NormalizeFQDN(nodeName)
 	}
 
 	// Write out the validator json to disk.
-	if flagValidatorFile == "" {
-		flagValidatorFile = "validator-" + id.NodeKey.Public().String() + ".json"
+	f := viper.GetString(cfgValidatorFile)
+	if f == "" {
+		f = "validator-" + id.NodeKey.Public().String() + ".json"
 	}
-	if !filepath.IsAbs(flagValidatorFile) {
-		flagValidatorFile = filepath.Join(dataDir, flagValidatorFile)
+	if !filepath.IsAbs(f) {
+		f = filepath.Join(dataDir, f)
 	}
 	b := json.Marshal(validator)
-	if err = ioutil.WriteFile(flagValidatorFile, b, 0600); err != nil {
+	if err = ioutil.WriteFile(f, b, 0600); err != nil {
 		logger.Error("failed to write validator identity file",
 			"err", err,
 		)
@@ -137,29 +140,31 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 func provisionInteractive(validator *bootstrap.GenesisValidator) error {
 	var qs []*survey.Question
 
-	if flagNodeName == "" || common.IsFQDN(flagNodeName) != nil {
-		flagNodeName, _ = os.Hostname()
+	nodeName := viper.GetString(cfgNodeName)
+	if nodeName == "" || common.IsFQDN(nodeName) != nil {
+		nodeName, _ = os.Hostname()
 	}
 	qs = append(qs, &survey.Question{
 		Name: "Name",
 		Prompt: &survey.Input{
 			Message: "Node name:",
-			Default: flagNodeName,
+			Default: nodeName,
 		},
 		Validate:  nodeNameValidator,
 		Transform: survey.TransformString(common.NormalizeFQDN),
 	})
 
-	if flagNodeAddr == "" || common.IsAddrPort(flagNodeAddr) != nil {
+	nodeAddr := viper.GetString(cfgNodeAddr)
+	if nodeAddr == "" || common.IsAddrPort(nodeAddr) != nil {
 		if addr := common.GuessExternalAddress(); addr != nil {
-			flagNodeAddr = addr.String() + ":26656" // Default port.
+			nodeAddr = net.JoinHostPort(addr.String(), "26656")
 		}
 	}
 	qs = append(qs, &survey.Question{
 		Name: "CoreAddress",
 		Prompt: &survey.Input{
 			Message: "Tendermint core address:",
-			Default: flagNodeAddr,
+			Default: nodeAddr,
 		},
 		Validate: coreAddressValidator,
 	})
@@ -167,18 +172,26 @@ func provisionInteractive(validator *bootstrap.GenesisValidator) error {
 	return survey.Ask(qs, validator)
 }
 
-func initProvisionValidatorCmd(parentCmd *cobra.Command) {
-	provisionValidatorCmd.Flags().BoolVarP(&flagInteractive, cfgInteractive, "i", false, "interactive")
-	provisionValidatorCmd.Flags().StringVar(&flagNodeName, cfgNodeName, "", "validator node name")
-	provisionValidatorCmd.Flags().StringVar(&flagNodeAddr, cfgNodeAddr, "", "validator node Tendermint core address")
-	provisionValidatorCmd.Flags().StringVar(&flagValidatorFile, cfgValidatorFile, "", "validator identity file")
+func registerProvisionValidatorFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().BoolP(cfgInteractive, "i", false, "interactive")
+		cmd.Flags().String(cfgNodeName, "", "validator node name")
+		cmd.Flags().String(cfgNodeAddr, "", "validator node Tendermint core address")
+		cmd.Flags().String(cfgValidatorFile, "", "validator identity file")
+	}
 
 	for _, v := range []string{
+		cfgInteractive,
 		cfgNodeAddr,
 		cfgNodeName,
+		cfgValidatorFile,
 	} {
-		_ = viper.BindPFlag(v, provisionValidatorCmd.Flags().Lookup(v))
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+}
+
+func initProvisionValidatorCmd(parentCmd *cobra.Command) {
+	registerProvisionValidatorFlags(provisionValidatorCmd)
 
 	parentCmd.AddCommand(provisionValidatorCmd)
 }

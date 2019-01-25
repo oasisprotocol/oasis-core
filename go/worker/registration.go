@@ -5,48 +5,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 )
-
-// XXX: This is needed until we decide how we want to actually register runtimes.
-func (w *Worker) registryRegisterRuntime(cfg *RuntimeConfig) error {
-	w.logger.Info("performing runtime registration")
-
-	rtDesc := registry.Runtime{
-		ID:                     cfg.ID,
-		FeaturesSGX:            cfg.TEEHardware == node.TEEHardwareIntelSGX,
-		ReplicaGroupSize:       cfg.ReplicaGroupSize,
-		ReplicaGroupBackupSize: cfg.ReplicaGroupBackupSize,
-		StorageGroupSize:       1,
-		RegistrationTime:       uint64(time.Now().Unix()),
-	}
-
-	signedRt, err := registry.SignRuntime(*w.identity.NodeKey, registry.RegisterRuntimeSignatureContext, &rtDesc)
-	if err != nil {
-		w.logger.Error("failed to register runtime: unable to sign runtime descriptor",
-			"err", err,
-			"runtime", cfg.ID,
-		)
-		return err
-	}
-
-	if err := w.registry.RegisterRuntime(w.ctx, signedRt); err != nil {
-		w.logger.Error("failed to register runtime",
-			"err", err,
-			"runtime", cfg.ID,
-		)
-		return err
-	}
-
-	w.logger.Info("runtime registered",
-		"runtime", cfg.ID,
-	)
-
-	return nil
-}
 
 func (w *Worker) doNodeRegistration() {
 	// (re-)register the node on each epoch transition.  This doesn't
@@ -150,7 +112,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 	identityPublic := w.identity.NodeKey.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
-		EntityID:   identityPublic,
+		EntityID:   w.entityPrivKey.Public(),
 		Expiration: uint64(epoch) + 2,
 		Addresses:  addresses,
 		P2P:        w.p2p.Info(),
@@ -176,7 +138,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		nodeDesc.Runtimes = append(nodeDesc.Runtimes, rt)
 	}
 
-	signedNode, err := node.SignNode(*w.identity.NodeKey, registry.RegisterNodeSignatureContext, &nodeDesc)
+	signedNode, err := node.SignNode(*w.entityPrivKey, registry.RegisterNodeSignatureContext, &nodeDesc)
 	if err != nil {
 		w.logger.Error("failed to register node: unable to sign node descriptor",
 			"err", err,
@@ -194,23 +156,4 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 	w.logger.Info("node registered with the registry")
 
 	return nil
-}
-
-func (w *Worker) registerEntity() error {
-	w.entity.RegistrationTime = uint64(time.Now().Unix())
-
-	signedEnt, err := entity.SignEntity(*w.identity.NodeKey, registry.RegisterEntitySignatureContext, w.entity)
-	if err != nil {
-		w.logger.Error("failed to register entity: unable to sign entity descriptor",
-			"err", err,
-		)
-		return err
-	}
-
-	if err = w.registry.RegisterEntity(w.ctx, signedEnt); err != nil {
-		w.logger.Error("failed to register entity",
-			"err", err,
-		)
-	}
-	return err
 }

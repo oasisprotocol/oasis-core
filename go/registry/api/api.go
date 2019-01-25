@@ -30,6 +30,10 @@ var (
 	// registration.
 	RegisterEntitySignatureContext = []byte("EkEntReg")
 
+	// RegisterGenesisEntitySignatureContext is the context used for
+	// entity registration in the genesis document.
+	RegisterGenesisEntitySignatureContext = []byte("EkEntGen")
+
 	// DeregisterEntitySignatureContext is the context used for entity
 	// deregistration.
 	DeregisterEntitySignatureContext = []byte("EkEDeReg")
@@ -41,6 +45,10 @@ var (
 	// RegisterRuntimeSignatureContext is the context used for runtime
 	// registration.
 	RegisterRuntimeSignatureContext = []byte("EkRunReg")
+
+	// RegisterGenesisRuntimeSignatureContext is the context used for
+	// runtime registation in the genesis document.
+	RegisterGenesisRuntimeSignatureContext = []byte("EkRunGen")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
@@ -181,13 +189,22 @@ func (t *Timestamp) UnmarshalCBOR(data []byte) error {
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
-func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity) (*entity.Entity, error) {
+func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
 	// XXX: Ensure ent is well-formed.
 	var ent entity.Entity
 	if sigEnt == nil {
 		return nil, ErrInvalidArgument
 	}
-	if err := sigEnt.Open(RegisterEntitySignatureContext, &ent); err != nil {
+
+	var ctx []byte
+	switch isGenesis {
+	case true:
+		ctx = RegisterGenesisEntitySignatureContext
+	case false:
+		ctx = RegisterEntitySignatureContext
+	}
+
+	if err := sigEnt.Open(ctx, &ent); err != nil {
 		logger.Error("RegisterEntity: invalid signature",
 			"signed_entity", sigEnt,
 		)
@@ -272,22 +289,31 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 }
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
-func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigCon *SignedRuntime) (*Runtime, error) {
-	// XXX: Ensure contact is well-formed.
-	var con Runtime
-	if sigCon == nil {
+func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isGenesis bool) (*Runtime, error) {
+	// XXX: Ensure runtime is well-formed.
+	var rt Runtime
+	if sigRt == nil {
 		return nil, ErrInvalidArgument
 	}
-	if err := sigCon.Open(RegisterRuntimeSignatureContext, &con); err != nil {
+
+	var ctx []byte
+	switch isGenesis {
+	case true:
+		ctx = RegisterGenesisRuntimeSignatureContext
+	case false:
+		ctx = RegisterRuntimeSignatureContext
+	}
+
+	if err := sigRt.Open(ctx, &rt); err != nil {
 		logger.Error("RegisterRuntime: invalid signature",
-			"signed_runtime", sigCon,
+			"signed_runtime", sigRt,
 		)
 		return nil, ErrInvalidSignature
 	}
 
 	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
 
-	return &con, nil
+	return &rt, nil
 }
 
 // SortNodeList sorts the given node list to ensure a canonical order.

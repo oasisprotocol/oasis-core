@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -35,10 +36,8 @@ const (
 	cfgRuntimeBinary = "worker.runtime.binary"
 	cfgRuntimeID     = "worker.runtime.id"
 
-	// XXX: This is needed until we decide how we want to actually register runtimes.
-	cfgRuntimeSGXIDs                 = "worker.runtime.sgx_ids"
-	cfgRuntimeReplicaGroupSize       = "worker.runtime.replica_group_size"
-	cfgRuntimeReplicaGroupBackupSize = "worker.runtime.replica_group_backup_size"
+	// XXX: This is needed till the code can watch the registry for runtimes.
+	cfgRuntimeSGXIDs = "worker.runtime.sgx_ids"
 
 	cfgMaxQueueSize      = "worker.leader.max_queue_size"
 	cfgMaxBatchSize      = "worker.leader.max_batch_size"
@@ -54,6 +53,8 @@ const (
 	cfgP2pAddresses = "worker.p2p.addresses"
 
 	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
+
+	cfgEntityPrivateKey = "worker.entity_private_key"
 )
 
 func parseAddressList(addresses []string) ([]node.Address, error) {
@@ -100,6 +101,27 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	return m, nil
 }
 
+func getEntityPrivKey(dataDir string) (*signature.PrivateKey, error) {
+	var (
+		entityPrivKey *signature.PrivateKey
+		err           error
+	)
+
+	if f := viper.GetString(cfgEntityPrivateKey); f != "" {
+		// Load PEM.
+		entityPrivKey = new(signature.PrivateKey)
+		if err = entityPrivKey.LoadPEM(f, nil); err != nil {
+			entityPrivKey = nil
+		}
+	} else {
+		// Load or generate in the data dir.  If this generates,
+		// the entity will NOT be in the registry.
+		_, entityPrivKey, err = entity.LoadOrGenerate(dataDir)
+	}
+
+	return entityPrivKey, err
+}
+
 // New creates a new worker.
 func New(
 	dataDir string,
@@ -112,6 +134,12 @@ func New(
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
+
+	// Load the entity private key used for node registration.
+	entityPrivKey, err := getEntityPrivKey(dataDir)
+	if err != nil {
+		return nil, err
+	}
 
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
@@ -138,12 +166,10 @@ func New(
 		}
 
 		runtimes = append(runtimes, RuntimeConfig{
-			ID:          runtimeID,
-			Binary:      runtimeBinary,
+			ID:     runtimeID,
+			Binary: runtimeBinary,
+			// XXX: This is needed till the code can watch the registry for runtimes.
 			TEEHardware: teeHardware,
-			// XXX: This is needed until we decide how we want to actually register runtimes.
-			ReplicaGroupSize:       uint64(viper.GetInt64(cfgRuntimeReplicaGroupSize)),
-			ReplicaGroupBackupSize: uint64(viper.GetInt64(cfgRuntimeReplicaGroupBackupSize)),
 		})
 	}
 
@@ -200,7 +226,7 @@ func New(
 		Runtimes:        runtimes,
 	}
 
-	return newWorker(dataDir, identity, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
+	return newWorker(dataDir, identity, entityPrivKey, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
@@ -219,10 +245,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
 		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
 
-		// XXX: Needed till runtime registration is done elsewhere.
+		// XXX: This is needed till the code can watch the registry for runtimes.
 		cmd.Flags().StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
-		cmd.Flags().Uint64(cfgRuntimeReplicaGroupSize, 1, "Number of workers in runtime replica group")
-		cmd.Flags().Uint64(cfgRuntimeReplicaGroupBackupSize, 0, "Number of backup workers in runtime replica group")
 
 		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
 		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
@@ -236,6 +260,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
 		cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
+
+		cmd.Flags().String(cfgEntityPrivateKey, "", "Private key to use to sign node registrations")
 
 		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
 	}
@@ -254,8 +280,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgRuntimeID,
 
 		cfgRuntimeSGXIDs,
-		cfgRuntimeReplicaGroupSize,
-		cfgRuntimeReplicaGroupBackupSize,
 
 		cfgMaxQueueSize,
 		cfgMaxBatchSize,
@@ -268,6 +292,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgClientAddresses,
 
 		cfgP2pPort,
+
+		cfgEntityPrivateKey,
 
 		cfgByzantineInjectDiscrepancies,
 	} {

@@ -9,23 +9,27 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/tendermint"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 )
 
 const (
 	cfgBootstrapAddress    = "debug.tendermint.bootstrap.address"
 	cfgBootstrapValidators = "debug.tendermint.bootstrap.validators"
+	cfgBootstrapRuntime    = "debug.tendermint.bootstrap.runtime"
+	cfgBootstrapEntity     = "debug.tendermint.bootstrap.entity"
 )
 
 var (
 	bootstrapCmd = &cobra.Command{
 		Use:   "bootstrap",
 		Short: "testnet bootstrap provisioning server",
-		Run:   doBootstrap,
+		PreRun: func(cmd *cobra.Command, args []string) {
+			registerBootstrapFlags(cmd)
+		},
+		Run: doBootstrap,
 	}
-
-	flagBootstrapAddress    string
-	flagBootstrapValidators int
 )
 
 func doBootstrap(cmd *cobra.Command, args []string) {
@@ -41,16 +45,33 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 		logger.Warn("data directory not set, genesis file will not be persisted")
 	}
 
-	if flagBootstrapValidators < 1 {
+	bootstrapValidators := viper.GetInt(cfgBootstrapValidators)
+	if bootstrapValidators < 1 {
 		logger.Error("insufficient validators",
-			"validators", flagBootstrapValidators,
+			"validators", bootstrapValidators,
 		)
 		os.Exit(1)
 	}
 
+	st := &api.GenesisAppState{
+		ABCIAppState: make(map[string][]byte),
+	}
+	entities := viper.GetStringSlice(cfgBootstrapEntity)
+	runtimes := viper.GetStringSlice(cfgBootstrapRuntime)
+	if err := tendermint.AppendRegistryState(st, entities, runtimes, logger); err != nil {
+		logger.Error("failed to parse registry genesis state",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if len(st.ABCIAppState) == 0 {
+		st = nil
+	}
+
 	svcMgr := background.NewServiceManager(logger)
 
-	srv, err := bootstrap.NewServer(flagBootstrapAddress, flagBootstrapValidators, dataDir)
+	bootstrapAddr := viper.GetString(cfgBootstrapAddress)
+	srv, err := bootstrap.NewServer(bootstrapAddr, bootstrapValidators, st, dataDir)
 	if err != nil {
 		logger.Error("failed to initialize bootstrap server",
 			"err", err,
@@ -71,16 +92,26 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 	svcMgr.Wait()
 }
 
-func registerBootstrap(parentCmd *cobra.Command) {
-	bootstrapCmd.Flags().StringVar(&flagBootstrapAddress, cfgBootstrapAddress, ":19156", "server listen address")
-	bootstrapCmd.Flags().IntVar(&flagBootstrapValidators, cfgBootstrapValidators, 3, "number of validators")
+func registerBootstrapFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgBootstrapAddress, ":19156", "server listen address")
+		cmd.Flags().Int(cfgBootstrapValidators, 3, "number of validators")
+		cmd.Flags().StringSlice(cfgBootstrapEntity, nil, "path to entity registration file")
+		cmd.Flags().StringSlice(cfgBootstrapRuntime, nil, "path to runtime registration file")
+	}
 
 	for _, v := range []string{
 		cfgBootstrapAddress,
 		cfgBootstrapValidators,
+		cfgBootstrapRuntime,
+		cfgBootstrapEntity,
 	} {
-		_ = viper.BindPFlag(v, bootstrapCmd.Flags().Lookup(v))
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+}
+
+func registerBootstrap(parentCmd *cobra.Command) {
+	registerBootstrapFlags(bootstrapCmd)
 
 	parentCmd.AddCommand(bootstrapCmd)
 }

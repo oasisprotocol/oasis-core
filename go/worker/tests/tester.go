@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -36,12 +37,23 @@ func WorkerImplementationTests(
 	registry registryApi.Backend,
 	roothash roothash.Backend,
 	identity *identity.Identity,
+	ent *entity.Entity,
+	entityPrivKey *signature.PrivateKey,
 ) {
 	// Get the runtime and the corresponding committee node instance.
 	runtimeID := worker.GetConfig().Runtimes[0].ID
 	rt := worker.GetRuntime(runtimeID)
 	require.NotNil(t, rt)
 	rtNode := rt.GetNode()
+
+	t.Run("RegisterTestEntity", func(t *testing.T) {
+		ent.RegistrationTime = uint64(time.Now().Unix())
+		signed, err := entity.SignEntity(*entityPrivKey, registryApi.RegisterEntitySignatureContext, ent)
+		require.NoError(t, err, "SignEntity")
+
+		err = registry.RegisterEntity(context.Background(), signed)
+		require.NoError(t, err, "RegisterEntity")
+	})
 
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -56,7 +68,7 @@ func WorkerImplementationTests(
 
 		// Deregister the entity which should also deregister the node.
 		ts := registryApi.Timestamp(uint64(time.Now().Unix()))
-		signed, err := signature.SignSigned(*identity.NodeKey, registryApi.DeregisterEntitySignatureContext, &ts)
+		signed, err := signature.SignSigned(*entityPrivKey, registryApi.DeregisterEntitySignatureContext, &ts)
 		require.NoError(t, err, "SignSigned")
 
 		err = registry.DeregisterEntity(context.Background(), signed)

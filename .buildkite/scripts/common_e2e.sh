@@ -13,11 +13,14 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 #   EKIDEN_STORAGE_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
+#   EKIDEN_ENTITY_PRIVATE_KEY
 #   EKIDEN_EXTRA_ARGS
 #
 # Arguments:
 #   epochtime_backend - epochtime backend (default: tendermint)
 #   id - commitee identifier (default: 1)
+#   replica_group_size - runtime replica group size (default: 2)
+#   replica_group_backup_size - runtime replica group backup size (default: 1)
 #
 # Any additional arguments are passed to the validator Go node and
 # all compute nodes.
@@ -25,6 +28,10 @@ run_backend_tendermint_committee() {
     local epochtime_backend=${1:-tendermint}
     shift || true
     local id=${1:-1}
+    shift || true
+    local replica_group_size=${1:-2}
+    shift || true
+    local replica_group_backup_size=${1:-1}
     shift || true
     local extra_args=$*
 
@@ -45,8 +52,25 @@ run_backend_tendermint_committee() {
             --node_addr 127.0.0.1:${port} \
             --node_name ekiden-committee-node-${idx} \
             --validator_file ${datadir}/validator.json
-        validator_files="$validator_files $datadir/validator.json"
+        validator_files="$validator_files --validator=${datadir}/validator.json"
     done
+
+    # Provision the entity for all the workers.
+    local entity_dir=${committee_dir}/entity
+    rm -Rf ${entity_dir}
+
+    ${WORKDIR}/go/ekiden/ekiden \
+        registry entity init \
+        --datadir ${entity_dir}
+
+    # Provision the runtime.
+    ${WORKDIR}/go/ekiden/ekiden \
+        registry runtime init_genesis \
+        --runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --runtime.replica_group_size ${replica_group_size} \
+        --runtime.replica_group_backup_size ${replica_group_backup_size} \
+        --entity ${entity_dir} \
+        --datadir ${entity_dir}
 
     # Create the genesis document.
     local genesis_file=${committee_dir}/genesis.json
@@ -55,6 +79,8 @@ run_backend_tendermint_committee() {
     ${WORKDIR}/go/ekiden/ekiden \
         tendermint init_genesis \
         --genesis_file ${genesis_file} \
+        --entity ${entity_dir}/entity_genesis.json \
+        --runtime ${entity_dir}/runtime_genesis.json \
         ${validator_files}
 
     # Run the storage node.
@@ -103,6 +129,7 @@ run_backend_tendermint_committee() {
     EKIDEN_STORAGE_PORT=${storage_port}
     EKIDEN_TM_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
+    EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
     EKIDEN_EXTRA_ARGS="${extra_args}"
 }
 
@@ -164,6 +191,7 @@ run_compute_node() {
         --worker.leader.max_batch_size 1 \
         --worker.key_manager.address 127.0.0.1:9003 \
         --worker.key_manager.certificate ${WORKDIR}/tests/keymanager/km.pem \
+        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
         ${EKIDEN_EXTRA_ARGS} ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
 }

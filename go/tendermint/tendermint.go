@@ -81,6 +81,8 @@ type tendermintService struct {
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
+
+	startFn func() error
 }
 
 func (t *tendermintService) initialized() bool {
@@ -88,6 +90,13 @@ func (t *tendermintService) initialized() bool {
 	defer t.Unlock()
 
 	return t.isInitialized
+}
+
+func (t *tendermintService) started() bool {
+	t.Lock()
+	defer t.Unlock()
+
+	return t.isStarted
 }
 
 func (t *tendermintService) Start() error {
@@ -98,20 +107,26 @@ func (t *tendermintService) Start() error {
 	if err := t.mux.Start(); err != nil {
 		return err
 	}
+	if err := t.startFn(); err != nil {
+		return err
+	}
 	if err := t.node.Start(); err != nil {
 		return errors.Wrap(err, "tendermint: failed to start service")
 	}
 
 	go t.worker()
 
-	close(t.startedCh)
+	t.Lock()
 	t.isStarted = true
+	t.Unlock()
+
+	close(t.startedCh)
 
 	return nil
 }
 
 func (t *tendermintService) Quit() <-chan struct{} {
-	if !t.initialized() {
+	if !t.started() {
 		return make(chan struct{})
 	}
 
@@ -119,7 +134,7 @@ func (t *tendermintService) Quit() <-chan struct{} {
 }
 
 func (t *tendermintService) Stop() {
-	if !t.initialized() {
+	if !t.initialized() && !t.started() {
 		return
 	}
 
@@ -182,7 +197,29 @@ func (t *tendermintService) Query(path string, query interface{}, height int64) 
 }
 
 func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error {
-	return t.node.EventBus().Subscribe(ctx, subscriber, query, out)
+	subFn := func() error {
+		return t.node.EventBus().Subscribe(ctx, subscriber, query, out)
+	}
+
+	if t.started() {
+		return subFn()
+	}
+
+	// The node doesn't exist until it's started since, creating the node
+	// triggers replay, InitChain, and etc.
+	go func() {
+		<-t.startedCh
+		if err := subFn(); err != nil {
+			t.Logger.Error("failed defered Subscribe",
+				"err", err,
+				"subscriber", subscriber,
+				"query", query,
+			)
+			panic("tendermint: defered Subscribe failure")
+		}
+	}()
+
+	return nil
 }
 
 func (t *tendermintService) Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error {
@@ -190,6 +227,10 @@ func (t *tendermintService) Unsubscribe(ctx context.Context, subscriber string, 
 }
 
 func (t *tendermintService) Genesis() (*tmrpctypes.ResultGenesis, error) {
+	if t.client == nil {
+		panic("client not available yet")
+	}
+
 	return t.client.Genesis()
 }
 
@@ -197,7 +238,7 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	if err := t.ForceInitialize(); err != nil {
 		return err
 	}
-	if t.isStarted {
+	if t.started() {
 		return errors.New("tendermint: service already started")
 	}
 
@@ -218,6 +259,10 @@ func (t *tendermintService) ForceInitialize() error {
 }
 
 func (t *tendermintService) GetBlock(height int64) (*tmtypes.Block, error) {
+	if t.client == nil {
+		panic("client not available yet")
+	}
+
 	result, err := t.client.Block(&height)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: block query failed")
@@ -336,23 +381,34 @@ func (t *tendermintService) lazyInit() error {
 		return tmGenDoc, nil
 	}
 
-	t.node, err = tmnode.NewNode(tenderConfig,
-		tendermintPV,
-		&tmp2p.NodeKey{PrivKey: crypto.PrivateKeyToTendermint(t.nodeKey)},
-		tmproxy.NewLocalClientCreator(t.mux.Mux()),
-		tenderminGenesisProvider,
-		bolt.BoltDBProvider,
-		tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
-		&abci.LogAdapter{
-			Logger:           logging.GetLogger("tendermint"),
-			IsTendermintCore: true,
-			SuppressDebug:    !viper.GetBool(cfgLogDebug),
-		},
-	)
-	if err != nil {
-		return errors.Wrap(err, "tendermint: failed to create node")
+	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
+	// initialization, instead of t.node.Start().  This is a problem
+	// because at the time that lazyInit() is called, none of the ABCI
+	// applications are registered.
+	//
+	// Defer actually initializing the node till after everything
+	// else is setup.
+	t.startFn = func() error {
+		t.node, err = tmnode.NewNode(tenderConfig,
+			tendermintPV,
+			&tmp2p.NodeKey{PrivKey: crypto.PrivateKeyToTendermint(t.nodeKey)},
+			tmproxy.NewLocalClientCreator(t.mux.Mux()),
+			tenderminGenesisProvider,
+			bolt.BoltDBProvider,
+			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
+			&abci.LogAdapter{
+				Logger:           logging.GetLogger("tendermint"),
+				IsTendermintCore: true,
+				SuppressDebug:    !viper.GetBool(cfgLogDebug),
+			},
+		)
+		if err != nil {
+			return errors.Wrap(err, "tendermint: failed to create node")
+		}
+		t.client = tmcli.NewLocal(t.node)
+
+		return nil
 	}
-	t.client = tmcli.NewLocal(t.node)
 
 	t.isInitialized = true
 

@@ -126,3 +126,12 @@ type OutputRegisterRuntime struct {
 type QueryGetByIDRequest struct {
 	ID signature.PublicKey
 }
+
+// GenesisRegistryState is the registry genesis state.
+type GenesisRegistryState struct {
+	// Entities is the initial list of entities.
+	Entities []*entity.SignedEntity `codec:"entities,omit_empty"`
+
+	// Runtimes is the initial list of runtimes.
+	Runtimes []*registry.SignedRuntime `codec:"runtimes,omit_empty"`
+}

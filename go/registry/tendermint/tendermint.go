@@ -338,6 +338,25 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 					IsRegistration: false,
 				})
 			}
+		} else if bytes.Equal(pair.GetKey(), tmapi.TagRegistryRuntimeRegistered) {
+			var id signature.PublicKey
+			if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
+				r.logger.Error("worker: failed to get runtime from tag",
+					"err", err,
+				)
+				continue
+			}
+
+			rt, err := r.GetRuntime(context.Background(), id)
+			if err != nil {
+				r.logger.Error("worker: failed to get runtime from registry",
+					"err", err,
+					"runtime", id,
+				)
+				continue
+			}
+
+			r.runtimeNotifier.Broadcast(rt)
 		}
 	}
 }

@@ -73,3 +73,10 @@ func GetTag(tags []tmcommon.KVPair, tag []byte) []byte {
 func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
 	return tmquery.MustParse(fmt.Sprintf("%s='%s'", eventApp, eventType))
 }
+
+// GenesisAppState is the encoded ABCI mux genesis application state.
+type GenesisAppState struct {
+	// ABCIAppState is the per-ABCI application genesis state if any, by
+	// ABCI application name.
+	ABCIAppState map[string][]byte `json:"abci_app_state,omit_empty"`
+}

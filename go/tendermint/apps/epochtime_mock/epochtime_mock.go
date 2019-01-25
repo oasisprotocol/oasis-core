@@ -87,7 +87,7 @@ func (app *epochTimeMockApplication) ForeignCheckTx(ctx *abci.Context, other abc
 	return nil
 }
 
-func (app *epochTimeMockApplication) InitChain(request types.RequestInitChain) types.ResponseInitChain {
+func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
 	return types.ResponseInitChain{}
 }
 

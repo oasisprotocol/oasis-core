@@ -114,10 +114,6 @@ type Config struct {
 	StorageCommitTimeout time.Duration
 
 	ByzantineInjectDiscrepancies bool
-
-	// XXX: This is needed until we decide how we want to actually register runtimes.
-	ReplicaGroupSize       uint64
-	ReplicaGroupBackupSize uint64
 }
 
 // ExternalBatch is an internal request to the worker goroutine that signals

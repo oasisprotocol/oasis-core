@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
 )
 
@@ -32,6 +33,7 @@ const (
 type GenesisDocument struct {
 	Validators  []*GenesisValidator `codec:"validators"`
 	GenesisTime time.Time           `codec:"genesis_time"`
+	AppState    string              `codec:"app_state,omit_empty"`
 }
 
 // ToTendermint converts the GenesisDocument to tendermint's format.
@@ -40,6 +42,7 @@ func (d *GenesisDocument) ToTendermint() (*tmtypes.GenesisDoc, error) {
 		ChainID:         "0xa515",
 		GenesisTime:     d.GenesisTime,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
+		AppState:        []byte(d.AppState),
 	}
 
 	var tmValidators []tmtypes.GenesisValidator
@@ -80,6 +83,7 @@ type server struct {
 	genesisDoc    []byte
 	genesisTime   time.Time
 	validators    []*GenesisValidator
+	appState      string
 	numValidators int
 }
 
@@ -216,6 +220,7 @@ func (s *server) buildGenesis() {
 	doc := &GenesisDocument{
 		Validators:  s.validators,
 		GenesisTime: time.Now(),
+		AppState:    s.appState,
 	}
 
 	if s.genesisDoc == nil {
@@ -236,7 +241,7 @@ func (s *server) buildGenesis() {
 }
 
 // NewServer initializes a new testnet (debug) bootstrap server instance.
-func NewServer(addr string, numValidators int, dataDir string) (service.BackgroundService, error) {
+func NewServer(addr string, numValidators int, appState *api.GenesisAppState, dataDir string) (service.BackgroundService, error) {
 	baseSvc := *service.NewBaseBackgroundService("tendermint/bootstrap/server")
 	s := &server{
 		BaseBackgroundService: baseSvc,
@@ -247,6 +252,9 @@ func NewServer(addr string, numValidators int, dataDir string) (service.Backgrou
 		},
 		bootstrappedCh: make(chan struct{}),
 		numValidators:  numValidators,
+	}
+	if appState != nil {
+		s.appState = string(json.Marshal(appState))
 	}
 
 	// Load the old genesis file iff it exists.
@@ -268,9 +276,18 @@ func NewServer(addr string, numValidators int, dataDir string) (service.Backgrou
 				"path", s.genesisPath,
 				"genesis_doc", string(b),
 			)
+
+			if doc.AppState != s.appState {
+				s.logger.Warn("appState mismatch, using persisted value",
+					"provided", appState,
+					"saved", doc.AppState,
+				)
+			}
+
 			s.genesisDoc = b
 			s.genesisTime = doc.GenesisTime
 			s.validators = doc.Validators
+			s.appState = doc.AppState
 			close(s.bootstrappedCh)
 		}
 	}

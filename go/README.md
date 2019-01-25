@@ -67,13 +67,21 @@ ekiden debug dummy wait-nodes -n 5      # Wait until 5 compute nodes register
 The `registry` sub-command provides faclities for interacting with the
 various registries.
 
-#### `registry list-runtimes` - List registered runtimes
+#### `registry runtime` - Runtime registry backend utilities
 
-The `registry list-runtimes` sub-command will dump the runtime IDs of all
+The `registry runtime sub-command provides facilities for interacting with
+the runtime registry.
+
+#### `registry runtime list` - List registered runtimes
+
+The `registry runtime list` sub-command will dump the runtime IDs of all
 currently registered runtimes as newline deliniated hexadecimal strings.
 
+Specifying the optional `-v` (`--verbose`) flag will instead dump each
+runtime descriptor encoded as JSON.
+
 ```
-ekiden registry list-runtimes
+ekiden registry runtime list
 ```
 
 ### `debug roothash` - Root hash backend utilites
