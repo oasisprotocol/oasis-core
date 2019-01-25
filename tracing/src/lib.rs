@@ -44,17 +44,17 @@ pub fn report_forever(service_name: &str, matches: &clap::ArgMatches) {
                 matches,
                 "tracing-sample-probability",
                 f64
-            )).unwrap(),
+            )).expect("sampler creation must succeed"),
         );
         let agent_addr = matches
             .value_of("tracing-agent-addr")
             .unwrap()
             .to_socket_addrs()
-            .unwrap()
+            .expect("tracing agent address must be a valid socket address")
             .next()
-            .unwrap();
-        let mut reporter =
-            rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name).unwrap();
+            .expect("must have a tracing agent address");
+        let mut reporter = rustracing_jaeger::reporter::JaegerCompactReporter::new(service_name)
+            .expect("reporter creation must succeed");
         reporter.set_agent_addr(agent_addr);
 
         std::thread::spawn(move || {
