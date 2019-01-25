@@ -1,16 +1,14 @@
 //! Prometheus metric push.
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::thread;
+use std::time::Duration;
 
 use prometheus;
 
 use ekiden_common::environment::Environment;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::prelude::*;
-use ekiden_common::tokio::timer::Interval;
 
 /// Pushes metrics to Prometheus pushgateway.
-pub fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Result<()> {
+pub fn push_metrics(address: &str, job_name: &str, instance_name: &str) {
     prometheus::push_metrics(
         job_name,
         labels!{"instance".to_owned() => instance_name.to_owned(),},
@@ -21,24 +19,27 @@ pub fn push_metrics(address: &str, job_name: &str, instance_name: &str) -> Resul
         Ok(())
     })
         .unwrap();
-    Ok(())
 }
 
-/// Start a task for pushing Prometheus metrics.
+/// Start a thread for pushing Prometheus metrics.
 pub fn start(
-    environment: Arc<Environment>,
+    _environment: Arc<Environment>,
     address: String,
     period: Duration,
     job_name: String,
     instance_name: String,
 ) {
-    let push = Box::new(
-        Interval::new(Instant::now(), period)
-            .map_err(|error| Error::from(error))
-            .for_each(move |_| push_metrics(&address, &job_name, &instance_name))
-            .then(|_| future::ok(())),
-    );
+    // We need to spawn a thread instead of a task because the Prometheus push
+    // implementation is blocking.
+    thread::spawn(move || {
+        info!("Starting Prometheus metrics push");
 
-    info!("Starting Prometheus metrics push!");
-    environment.spawn(push);
+        loop {
+            // Sleep for the given period.
+            thread::sleep(period.clone());
+
+            // Try to push metrics.
+            push_metrics(&address, &job_name, &instance_name);
+        }
+    });
 }
