@@ -223,7 +223,11 @@ func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, qu
 }
 
 func (t *tendermintService) Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error {
-	return t.node.EventBus().Unsubscribe(ctx, subscriber, query)
+	if t.started() {
+		return t.node.EventBus().Unsubscribe(ctx, subscriber, query)
+	}
+
+	return errors.New("tendermint: unsubscribe called with no backing service")
 }
 
 func (t *tendermintService) Genesis() (*tmrpctypes.ResultGenesis, error) {
