@@ -9,29 +9,17 @@ message Runtime {
     bytes id = 1;
     bytes code = 2;
 
-    uint64 minimum_bond = 3;
-    enum Mode {
-        Deterministic = 0;
-        Nondeterministic = 1;
-    }
-    Mode mode = 4;
+    common.CapabilitiesTEE.Hardware tee_hardware = 3;
 
-    enum Features {
-        SGX = 0;
-    }
-    repeated Features features = 5;
+    uint64 replica_group_size = 4;
 
-    uint64 advertisement_rate = 6;
+    uint64 storage_group_size = 5;
 
-    uint64 replica_group_size = 7;
+    uint64 replica_group_backup_size = 6;
 
-    uint64 storage_group_size = 8;
+    uint64 replica_allowed_stragglers = 7;
 
-    uint64 replica_group_backup_size = 9;
-
-    uint64 replica_allowed_stragglers = 10;
-
-    uint64 registration_time = 11;
+    uint64 registration_time = 8;
 }
 
 service RuntimeRegistry {
