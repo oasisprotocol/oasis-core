@@ -9,10 +9,7 @@ message Runtime {
     bytes id = 1;
     bytes code = 2;
 
-    enum Features {
-        SGX = 0;
-    }
-    repeated Features features = 3;
+    common.CapabilitiesTEE.Hardware tee_hardware = 3;
 
     uint64 replica_group_size = 4;
 

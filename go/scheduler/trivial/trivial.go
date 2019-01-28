@@ -98,12 +98,7 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 		return committees, nil
 	}
 
-	var hw node.TEEHardware
-	if con.FeaturesSGX {
-		hw = node.TEEHardwareIntelSGX
-	}
-
-	nodeList := s.nodeLists[epoch][conID][hw]
+	nodeList := s.nodeLists[epoch][conID][con.TEEHardware]
 	beacon := s.beacons[epoch]
 	nrNodes := len(nodeList)
 
