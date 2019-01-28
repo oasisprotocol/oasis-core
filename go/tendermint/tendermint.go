@@ -360,17 +360,18 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
+	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
 	tenderConfig.RPC.ListenAddress = ""
 
-	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorFile())
+	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
 	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
-	if !tenderValIdent.Equals(tendermintPV.PrivKey) {
+	if !tenderValIdent.Equals(tendermintPV.Key.PrivKey) {
 		// The private validator must have been just generated.  Force
 		// it to use the oasis identity rather than the new key.
 		t.Logger.Debug("fixing up tendermint private validator identity")
-		tendermintPV.PrivKey = tenderValIdent
-		tendermintPV.PubKey = tenderValIdent.PubKey()
-		tendermintPV.Address = tendermintPV.PubKey.Address()
+		tendermintPV.Key.PrivKey = tenderValIdent
+		tendermintPV.Key.PubKey = tenderValIdent.PubKey()
+		tendermintPV.Key.Address = tendermintPV.Key.PubKey.Address()
 		tendermintPV.Save()
 	}
 
@@ -551,9 +552,7 @@ func New(dataDir string, identity *identity.Identity) service.TendermintService 
 func initDataDir(dataDir string) error {
 	subDirs := []string{
 		configDir,
-
-		// This *could* also create "data", but both the built in and
-		// BoltDB providers handle it being missing gracefully.
+		"data", // Required by `tendermint/privval/FilePV.Save()`.
 	}
 
 	if err := common.Mkdir(dataDir); err != nil {
