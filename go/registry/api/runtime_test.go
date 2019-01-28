@@ -13,10 +13,7 @@ func TestSerialization(t *testing.T) {
 	c := Runtime{
 		ID:                       signature.PublicKey(key),
 		Code:                     []byte{0x12, 0x13, 0x14, 0x15, 0x16},
-		MinimumBond:              42,
-		ModeNonDeterministic:     false,
 		FeaturesSGX:              false,
-		AdvertisementRate:        54,
 		ReplicaGroupSize:         63,
 		ReplicaGroupBackupSize:   72,
 		ReplicaAllowedStragglers: 81,

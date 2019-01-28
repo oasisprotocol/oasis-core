@@ -29,19 +29,8 @@ type Runtime struct {
 	// Code is the runtime code body.
 	Code []byte `codec:"code"`
 
-	// MinimumBond is the mimimum stake required by the runtime.
-	MinimumBond uint64 `codec:"minimum_bond"`
-
-	// ModeNonDeterministic indicates if the runtime should be executed
-	// in a non-deterministic manner.
-	ModeNonDeterministic bool `codec:"mode_nondeterministic"`
-
 	// FeaturesSGX indicates if the runtime requires SGX.
 	FeaturesSGX bool `codec:"features_sgx"`
-
-	// AdvertisementRate is the number of tokens/second of runtime
-	// instance advertisement.
-	AdvertisementRate uint64 `codec:"advertisement_rate"`
 
 	// ReplicaGroupSize is the size of the computation group.
 	ReplicaGroupSize uint64 `codec:"replica_group_size"`
@@ -86,20 +75,11 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	}
 
 	c.Code = append([]byte{}, pb.GetCode()...)
-	c.MinimumBond = pb.GetMinimumBond()
-	c.AdvertisementRate = pb.GetAdvertisementRate()
 	c.ReplicaGroupSize = pb.GetReplicaGroupSize()
 	c.ReplicaGroupBackupSize = pb.GetReplicaGroupBackupSize()
 	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
 	c.StorageGroupSize = pb.GetStorageGroupSize()
 	c.RegistrationTime = pb.GetRegistrationTime()
-
-	switch pb.GetMode() {
-	case pbRegistry.Runtime_Nondeterministic:
-		c.ModeNonDeterministic = true
-	default:
-		c.ModeNonDeterministic = false
-	}
 
 	c.FeaturesSGX = pbWantsSGX(pb)
 
@@ -115,20 +95,11 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 		return nil
 	}
 	pb.Code = append([]byte{}, c.Code...)
-	pb.MinimumBond = c.MinimumBond
-	pb.AdvertisementRate = c.AdvertisementRate
 	pb.ReplicaGroupSize = c.ReplicaGroupSize
 	pb.ReplicaGroupBackupSize = c.ReplicaGroupBackupSize
 	pb.ReplicaAllowedStragglers = c.ReplicaAllowedStragglers
 	pb.StorageGroupSize = c.StorageGroupSize
 	pb.RegistrationTime = c.RegistrationTime
-
-	switch c.ModeNonDeterministic {
-	case true:
-		pb.Mode = pbRegistry.Runtime_Nondeterministic
-	case false:
-		pb.Mode = pbRegistry.Runtime_Deterministic
-	}
 
 	if c.FeaturesSGX {
 		pb.Features = append([]pbRegistry.Runtime_Features{}, pbRegistry.Runtime_SGX)
