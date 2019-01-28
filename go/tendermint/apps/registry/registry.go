@@ -274,6 +274,7 @@ func (app *registryApplication) registerEntity(
 			"entity", ent,
 		)
 
+		ctx.EmitTag(api.TagRegistryEntityRegistered, ent.ID)
 		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterEntity: &api.OutputRegisterEntity{
 				Entity: *ent,
@@ -400,12 +401,12 @@ func (app *registryApplication) registerRuntime(
 			"runtime", con,
 		)
 
+		ctx.EmitTag(api.TagRegistryRuntimeRegistered, con.ID)
 		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterRuntime: &api.OutputRegisterRuntime{
 				Runtime: *con,
 			},
 		})
-		ctx.EmitTag(api.TagRegistryRuntimeRegistered, con.ID)
 	}
 
 	return nil

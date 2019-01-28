@@ -357,6 +357,28 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 			}
 
 			r.runtimeNotifier.Broadcast(rt)
+		} else if bytes.Equal(pair.GetKey(), tmapi.TagRegistryEntityRegistered) {
+			var id signature.PublicKey
+			if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
+				r.logger.Error("worker: failed to get entity from tag",
+					"err", err,
+				)
+				continue
+			}
+
+			ent, err := r.GetEntity(context.Background(), id)
+			if err != nil {
+				r.logger.Error("worker: failed to get entity from registry",
+					"err", err,
+					"entity", id,
+				)
+				continue
+			}
+
+			r.entityNotifier.Broadcast(&api.EntityEvent{
+				Entity:         ent,
+				IsRegistration: true,
+			})
 		}
 	}
 }
