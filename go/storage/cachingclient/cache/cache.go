@@ -29,6 +29,13 @@ type entry struct {
 	ref   bool
 }
 
+// KeyValue is a (key, value) tuple.
+type KeyValue struct {
+	Key   api.Key
+	Value []byte
+}
+
+// Cache is a LevelDB-backed CLOCK-Pro cache.
 type Cache struct {
 	sync.Mutex
 
@@ -70,7 +77,9 @@ func New(path string, size int) (*Cache, error) {
 		r := &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key}}
 
 		c.keys[key] = r
-		c.metaAdd(key, r)
+		batch := c.db.NewBatch()
+		c.metaAdd(key, r, batch)
+		batch.Write()
 		c.countCold++
 	}
 
@@ -103,47 +112,60 @@ func (c *Cache) Get(key api.Key) []byte {
 	return nil
 }
 
-func (c *Cache) Set(key api.Key, value []byte) {
+func (c *Cache) SetBatch(values []KeyValue) {
 	c.Lock()
 	defer c.Unlock()
 
-	r := c.keys[key]
+	batch := c.db.NewBatch()
 
-	if r == nil {
-		// No cache entry found, add it.
-		c.db.SetSync(key[:], value)
-		r = &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key}}
-		c.metaAdd(key, r)
-		c.countCold++
-		return
+	for _, item := range values {
+		key := item.Key
+		value := item.Value
+
+		r := c.keys[key]
+
+		if r == nil {
+			// No cache entry found, add it.
+			batch.Set(key[:], value)
+			r = &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key}}
+			c.metaAdd(key, r, batch)
+			c.countCold++
+			continue
+		}
+
+		mentry := r.Value.(*entry)
+
+		val := c.db.Get(key[:])
+
+		if val == nil {
+			// Cache entry was a hot or cold page.
+			batch.Set(key[:], value)
+			mentry.ref = true
+			continue
+		}
+
+		// Cache entry was a test page.
+		if c.memCold < c.memMax {
+			c.memCold++
+		}
+		mentry.ref = false
+		batch.Set(key[:], value)
+		mentry.ptype = ptHot
+		c.countTest--
+		c.metaDel(r, batch)
+		c.metaAdd(key, r, batch)
+		c.countHot++
 	}
 
-	mentry := r.Value.(*entry)
-
-	val := c.db.Get(key[:])
-
-	if val == nil {
-		// Cache entry was a hot or cold page.
-		c.db.SetSync(key[:], value)
-		mentry.ref = true
-		return
-	}
-
-	// Cache entry was a test page.
-	if c.memCold < c.memMax {
-		c.memCold++
-	}
-	mentry.ref = false
-	c.db.SetSync(key[:], value)
-	mentry.ptype = ptHot
-	c.countTest--
-	c.metaDel(r)
-	c.metaAdd(key, r)
-	c.countHot++
+	batch.Write()
 }
 
-func (c *Cache) metaAdd(key api.Key, r *ring.Ring) {
-	c.evict()
+func (c *Cache) Set(key api.Key, value []byte) {
+	c.SetBatch([]KeyValue{KeyValue{key, value}})
+}
+
+func (c *Cache) metaAdd(key api.Key, r *ring.Ring, batch tenderdb.Batch) {
+	c.evict(batch)
 
 	c.keys[key] = r
 	r.Link(c.handHot)
@@ -160,8 +182,8 @@ func (c *Cache) metaAdd(key api.Key, r *ring.Ring) {
 	}
 }
 
-func (c *Cache) metaDel(r *ring.Ring) {
-	c.db.DeleteSync(r.Value.(*entry).key[:])
+func (c *Cache) metaDel(r *ring.Ring, batch tenderdb.Batch) {
+	batch.Delete(r.Value.(*entry).key[:])
 	delete(c.keys, r.Value.(*entry).key)
 
 	if r == c.handHot {
@@ -179,13 +201,13 @@ func (c *Cache) metaDel(r *ring.Ring) {
 	r.Prev().Unlink(1)
 }
 
-func (c *Cache) evict() {
+func (c *Cache) evict(batch tenderdb.Batch) {
 	for c.memMax <= c.countHot+c.countCold {
-		c.runHandCold()
+		c.runHandCold(batch)
 	}
 }
 
-func (c *Cache) runHandCold() {
+func (c *Cache) runHandCold(batch tenderdb.Batch) {
 	mentry := c.handCold.Value.(*entry)
 
 	if mentry.ptype == ptCold {
@@ -197,11 +219,11 @@ func (c *Cache) runHandCold() {
 			c.countHot++
 		} else {
 			mentry.ptype = ptTest
-			c.db.DeleteSync(mentry.key[:])
+			batch.Delete(mentry.key[:])
 			c.countCold--
 			c.countTest++
 			for c.memMax < c.countTest {
-				c.runHandTest()
+				c.runHandTest(batch)
 			}
 		}
 	}
@@ -209,13 +231,13 @@ func (c *Cache) runHandCold() {
 	c.handCold = c.handCold.Next()
 
 	for c.memMax-c.memCold < c.countHot {
-		c.runHandHot()
+		c.runHandHot(batch)
 	}
 }
 
-func (c *Cache) runHandHot() {
+func (c *Cache) runHandHot(batch tenderdb.Batch) {
 	if c.handHot == c.handTest {
-		c.runHandTest()
+		c.runHandTest(batch)
 	}
 
 	mentry := c.handHot.Value.(*entry)
@@ -234,9 +256,9 @@ func (c *Cache) runHandHot() {
 	c.handHot = c.handHot.Next()
 }
 
-func (c *Cache) runHandTest() {
+func (c *Cache) runHandTest(batch tenderdb.Batch) {
 	if c.handTest == c.handCold {
-		c.runHandCold()
+		c.runHandCold(batch)
 	}
 
 	mentry := c.handTest.Value.(*entry)
@@ -244,7 +266,7 @@ func (c *Cache) runHandTest() {
 	if mentry.ptype == ptTest {
 
 		prev := c.handTest.Prev()
-		c.metaDel(c.handTest)
+		c.metaDel(c.handTest, batch)
 		c.handTest = prev
 
 		c.countTest--
