@@ -113,9 +113,11 @@ func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Val
 	// Write-through.
 	err := b.remote.InsertBatch(ctx, values)
 	if err == nil {
+		var kvs []cache.KeyValue
 		for _, value := range values {
-			b.cache.Set(api.HashStorageKey(value.Data), value.Data)
+			kvs = append(kvs, cache.KeyValue{Key: api.HashStorageKey(value.Data), Value: value.Data})
 		}
+		b.cache.SetBatch(kvs)
 	}
 	return err
 }
