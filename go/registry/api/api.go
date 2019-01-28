@@ -60,6 +60,10 @@ var (
 	// with an unknown entity is attempted.
 	ErrBadEntityForNode = errors.New("registry: unknown entity in node registration")
 
+	// ErrBadEntityForRuntime is the error returned when a runtime
+	// registration with an unknown entity is attempted.
+	ErrBadEntityForRuntime = errors.New("registry: unknown entity in runtime registration")
+
 	// ErrNoSuchEntity is the error returned when an entity does not exist.
 	ErrNoSuchEntity = errors.New("registry: no such entity")
 

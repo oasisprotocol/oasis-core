@@ -26,12 +26,12 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 
 	require := require.New(t)
 
-	rt, err := registryTests.NewTestRuntime(seed)
+	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
-	rt.MustRegister(t, registry)
 
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, registry, rt, seed)
+	rt.MustRegister(t, registry)
 
 	ch, sub := backend.WatchCommittees()
 	defer sub.Close()

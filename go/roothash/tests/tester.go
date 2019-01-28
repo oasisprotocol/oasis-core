@@ -60,9 +60,8 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		seed := append([]byte{}, seedBase...)
 		seed = append(seed, byte(i))
 
-		rt, err := registryTests.NewTestRuntime(seed)
+		rt, err := registryTests.NewTestRuntime(seed, nil)
 		require.NoError(err, "NewTestRuntime")
-		rt.MustRegister(t, registry)
 
 		rtStates = append(rtStates, &runtimeState{
 			id: strconv.Itoa(i),
@@ -71,6 +70,9 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		runtimes = append(runtimes, rt)
 	}
 	registryTests.BulkPopulate(t, registry, runtimes, seedBase)
+	for _, rt := range runtimes {
+		rt.MustRegister(t, registry)
+	}
 
 	// Run the various tests. (Ordering matters)
 	for _, v := range rtStates {

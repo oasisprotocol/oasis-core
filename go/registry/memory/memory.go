@@ -314,22 +314,31 @@ func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
 	})
 }
 
-func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
-	con, err := api.VerifyRegisterRuntimeArgs(r.logger, sigCon, false)
+func (r *memoryBackend) RegisterRuntime(ctx context.Context, sigRt *api.SignedRuntime) error {
+	rt, err := api.VerifyRegisterRuntimeArgs(r.logger, sigRt, false)
 	if err != nil {
 		return err
 	}
 
+	ent := sigRt.Signature.PublicKey
+
 	r.state.Lock()
+	if r.state.entities[ent.ToMapKey()] == nil {
+		r.state.Unlock()
+		r.logger.Error("RegisterRuntime: unknown entity in runtime registration",
+			"runtime", rt,
+		)
+		return api.ErrBadEntityForRuntime
+	}
 	// XXX: Should this reject attempts to alter an existing registration?
-	r.state.runtimes[con.ID.ToMapKey()] = con
+	r.state.runtimes[rt.ID.ToMapKey()] = rt
 	r.state.Unlock()
 
 	r.logger.Debug("RegisterRuntime: registered",
-		"runtime", con,
+		"runtime", rt,
 	)
 
-	r.runtimeNotifier.Broadcast(con)
+	r.runtimeNotifier.Broadcast(rt)
 
 	return nil
 }

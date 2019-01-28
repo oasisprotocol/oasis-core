@@ -285,12 +285,21 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 }
 
 func testRegistryRuntime(t *testing.T, backend api.Backend) {
+	seed := []byte("testRegistryRuntime")
+
 	require := require.New(t)
 
 	existingRuntimes, err := backend.GetRuntimes(context.Background())
 	require.NoError(err, "GetRuntimes")
 
-	rt, err := NewTestRuntime([]byte("testRegistryRuntime"))
+	entities, err := NewTestEntities(seed, 1)
+	require.NoError(err, "NewTestEntities()")
+
+	entity := entities[0]
+	err = backend.RegisterEntity(context.Background(), entity.SignedRegistration)
+	require.NoError(err, "RegisterEntity")
+
+	rt, err := NewTestRuntime(seed, entity)
 	require.NoError(err, "NewTestRuntime")
 
 	rt.MustRegister(t, backend)
@@ -302,6 +311,9 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 	//       cannot be deregistered.
 	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
 	require.EqualValues(rt.Runtime, registeredRuntimes[len(registeredRuntimes)-1], "expected runtime is registered")
+
+	err = backend.DeregisterEntity(context.Background(), entity.SignedDeregistration)
+	require.NoError(err, "DeregisterEntity")
 
 	// TODO: Test the various failures.
 
@@ -500,6 +512,11 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 		t.Fatalf("failed to receive entity registration event")
 	}
 
+	for _, v := range runtimes {
+		err = v.generateSignatures(entity)
+		require.NoError(err, "rt.generateSignatures")
+	}
+
 	// For the sake of simplicity, require that all runtimes have the same
 	// number of nodes for now.
 
@@ -536,6 +553,17 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 // TestNodes returns the test runtime's TestNodes.
 func (rt *TestRuntime) TestNodes() []*TestNode {
 	return rt.nodes
+}
+
+func (rt *TestRuntime) generateSignatures(entity *TestEntity) error {
+	rt.PrivateKey = entity.PrivateKey
+	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	if err != nil {
+		return err
+	}
+	rt.SignedRegistration = &api.SignedRuntime{Signed: *signed}
+
+	return nil
 }
 
 // Cleanup deregisteres the entity and nodes for a given TestRuntime.
@@ -580,7 +608,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend) {
 
 // NewTestRuntime returns a pre-generated TestRuntime for use with various
 // tests, generated deterministically from the seed.
-func NewTestRuntime(seed []byte) (*TestRuntime, error) {
+func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	rng, err := drbg.New(crypto.SHA512, hashForDrbg(seed), nil, []byte("TestRuntime"))
 	if err != nil {
 		return nil, err
@@ -590,6 +618,7 @@ func NewTestRuntime(seed []byte) (*TestRuntime, error) {
 	if rt.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
 		return nil, err
 	}
+
 	rt.Runtime = &api.Runtime{
 		ID:                       rt.PrivateKey.Public(),
 		Code:                     []byte("tu ne cede malis, sed contra audentior ito"),
@@ -599,12 +628,11 @@ func NewTestRuntime(seed []byte) (*TestRuntime, error) {
 		StorageGroupSize:         1,
 		RegistrationTime:         uint64(time.Now().Unix()),
 	}
-
-	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)
-	if err != nil {
-		return nil, err
+	if rt.entity = entity; rt.entity != nil {
+		if err = rt.generateSignatures(rt.entity); err != nil {
+			return nil, err
+		}
 	}
-	rt.SignedRegistration = &api.SignedRuntime{Signed: *signed}
 
 	return &rt, nil
 }
