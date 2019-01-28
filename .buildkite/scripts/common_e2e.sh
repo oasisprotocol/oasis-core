@@ -169,7 +169,8 @@ run_compute_node() {
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
         --grpc.log.verbose_debug \
-        --storage.backend client \
+        --storage.backend cachingclient \
+        --storage.cachingclient.file ${data_dir}/storage-cache \
         --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
