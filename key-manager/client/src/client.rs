@@ -51,6 +51,8 @@ pub struct KeyManager {
     get_or_create_secret_keys_cache: HashMap<ContractId, ContractKey>,
     /// Local cache for the get_public_key KeyManager endpoint.
     get_public_key_cache: HashMap<ContractId, PublicKeyPayload>,
+    /// Local cache for the long_term_public_key KeyManager endpoint.
+    long_term_public_key_cache: HashMap<ContractId, PublicKeyPayload>,
 }
 
 /// gRPC client backend configuration
@@ -84,6 +86,7 @@ impl KeyManager {
             backend_config: None,
             get_or_create_secret_keys_cache: HashMap::new(),
             get_public_key_cache: HashMap::new(),
+            long_term_public_key_cache: HashMap::new(),
         }
     }
 
@@ -238,6 +241,40 @@ impl KeyManager {
                 let public_key_payload = PublicKeyPayload {
                     public_key,
                     timestamp,
+                    signature,
+                };
+
+                entry.insert(public_key_payload.clone());
+
+                Ok(public_key_payload)
+            }
+        }
+    }
+
+    pub fn long_term_public_key(&mut self, contract_id: ContractId) -> Result<PublicKeyPayload> {
+        self.connect()?;
+
+        match self.long_term_public_key_cache.entry(contract_id) {
+            Entry::Occupied(entry) => Ok(entry.get().clone()),
+            Entry::Vacant(entry) => {
+                let mut request = key_manager::GetOrCreateKeyRequest::new();
+                request.set_contract_id(contract_id.to_vec());
+                let mut response = match self.client
+                    .as_mut()
+                    .unwrap()
+                    .long_term_public_key(request)
+                    .wait()
+                {
+                    Ok(r) => r,
+                    Err(e) => return Err(Error::new(e.description())),
+                };
+
+                let public_key: PublicKeyType = serde_cbor::from_slice(&response.take_key())?;
+                let signature: B512 = serde_cbor::from_slice(&response.take_signature())?;
+
+                let public_key_payload = PublicKeyPayload {
+                    public_key,
+                    timestamp: 0,
                     signature,
                 };
 

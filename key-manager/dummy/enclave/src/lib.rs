@@ -38,6 +38,8 @@ with_api! {
     create_enclave_rpc!(api);
 }
 
+static MAX_KEY_TIMESTAMP: u64 = (1 << 53) - 1;
+
 pub fn get_or_create_keys(
     request: &Request<GetOrCreateKeyRequest>,
 ) -> Result<GetOrCreateKeyResponse> {
@@ -62,8 +64,8 @@ pub fn get_public_key(request: &Request<GetOrCreateKeyRequest>) -> Result<GetOrC
         let key_store = KeyStore::get();
         let key = key_store.get_public_key(H256::try_from(request.get_contract_id())?)?;
         // Expired keys are not implemented yet, so allow this key to be valid as long as possible.
-        let timestamp = std::u64::MAX;
-        let signature = sign_public_key(key, timestamp)?;
+        let timestamp = MAX_KEY_TIMESTAMP;
+        let signature = sign_public_key(key, Some(timestamp))?;
 
         response.set_key(serde_cbor::to_vec(&key)?);
         response.set_timestamp(timestamp);
@@ -73,15 +75,34 @@ pub fn get_public_key(request: &Request<GetOrCreateKeyRequest>) -> Result<GetOrC
     Ok(response)
 }
 
-fn sign_public_key(public_key: PublicKeyType, timestamp: u64) -> Result<B512> {
+pub fn long_term_public_key(
+    request: &Request<GetOrCreateKeyRequest>,
+) -> Result<GetOrCreateKeyResponse> {
+    let mut response = GetOrCreateKeyResponse::new();
+    {
+        let key_store = KeyStore::get();
+        let key = key_store.get_public_key(H256::try_from(request.get_contract_id())?)?;
+        let signature = sign_public_key(key, None)?;
+
+        response.set_key(serde_cbor::to_vec(&key)?);
+        response.set_signature(serde_cbor::to_vec(&signature)?);
+    }
+    Ok(response)
+}
+
+fn sign_public_key(public_key: PublicKeyType, timestamp: Option<u64>) -> Result<B512> {
     let signer = dummy_signer()?;
     let digest = public_key_digest(public_key, timestamp);
     Ok(signer.sign(&digest))
 }
 
-fn public_key_digest(public_key: PublicKeyType, timestamp: u64) -> H256 {
+fn public_key_digest(public_key: PublicKeyType, timestamp: Option<u64>) -> H256 {
     let mut hash_data = public_key.to_vec();
-    hash_data.write_u64::<BigEndian>(timestamp).unwrap();
+    if timestamp.is_some() {
+        hash_data
+            .write_u64::<BigEndian>(timestamp.unwrap())
+            .unwrap();
+    }
     hash::from_bytes(hash_data.as_slice())
 }
 
@@ -101,6 +122,7 @@ fn dummy_signer() -> Result<InMemorySigner> {
     let pkc8s_input = untrusted::Input::from(&pkc8s);
     let keypair = signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkc8s_input)
         .expect("Should always derive a keypair from the given pkc8s");
+
     Ok(InMemorySigner::new(keypair))
 }
 
@@ -119,19 +141,24 @@ mod tests {
 
     #[test]
     fn test_sign_public_key_zero_timestamp() {
-        test_sign_public_key(TEST_PUBLIC_KEY, 0, true, |_signature: &mut B512| {});
+        test_sign_public_key(TEST_PUBLIC_KEY, Some(0), true, |_signature: &mut B512| {});
     }
 
     #[test]
     fn test_sign_public_key_one_timestamp() {
-        test_sign_public_key(TEST_PUBLIC_KEY, 1, true, |_signature: &mut B512| {});
+        test_sign_public_key(TEST_PUBLIC_KEY, Some(1), true, |_signature: &mut B512| {});
+    }
+
+    #[test]
+    fn test_sign_public_key_no_timestamp() {
+        test_sign_public_key(TEST_PUBLIC_KEY, None, true, |_signature: &mut B512| {});
     }
 
     #[test]
     fn test_sign_public_key_max_timestamp() {
         test_sign_public_key(
             TEST_PUBLIC_KEY,
-            std::u64::MAX,
+            Some(MAX_KEY_TIMESTAMP),
             true,
             |_signature: &mut B512| {},
         );
@@ -141,7 +168,7 @@ mod tests {
     fn test_sign_public_key_failure() {
         test_sign_public_key(
             TEST_PUBLIC_KEY,
-            std::u64::MAX,
+            Some(MAX_KEY_TIMESTAMP),
             false,
             |signature: &mut B512| {
                 // Change a byte of the signature so that the verification fails.
@@ -158,7 +185,7 @@ mod tests {
     /// want to purposefully change the signature to force a failure.
     fn test_sign_public_key(
         public_key: PublicKeyType,
-        timestamp: u64,
+        timestamp: Option<u64>,
         expected_result: bool,
         signature_fn: impl Fn(&mut B512),
     ) {
