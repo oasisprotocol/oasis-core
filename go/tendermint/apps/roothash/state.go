@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
@@ -27,10 +28,10 @@ var (
 
 // RuntimeState is the per-runtime roothash state.
 type RuntimeState struct {
-	ID           signature.PublicKey `codec:"id"`
-	CurrentBlock *block.Block        `codec:"current_block"`
-	Round        *round              `codec:"round"`
-	Timer        abci.Timer          `codec:"timer"`
+	Runtime      *registry.Runtime `codec:"runtime"`
+	CurrentBlock *block.Block      `codec:"current_block"`
+	Round        *round            `codec:"round"`
+	Timer        abci.Timer        `codec:"timer"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -116,7 +117,7 @@ func (s *MutableState) Tree() *iavl.MutableTree {
 // UpdateRuntimeState updates roothash state for given runtime.
 func (s *MutableState) UpdateRuntimeState(state *RuntimeState) {
 	s.tree.Set(
-		[]byte(fmt.Sprintf(stateRuntimeMap, state.ID.String())),
+		[]byte(fmt.Sprintf(stateRuntimeMap, state.Runtime.ID.String())),
 		state.MarshalCBOR(),
 	)
 }
