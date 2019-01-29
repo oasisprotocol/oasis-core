@@ -53,6 +53,8 @@ steps:
   ############
   # Build jobs
   ############
+  # This label needs to be synced with the runtime-ethereum's
+  # .buildkite/scripts/download_common_artifacts.sh.
   - label: Build Go node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -64,6 +66,8 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
+  # This label needs to be synced with the runtime-ethereum's
+  # .buildkite/scripts/download_common_artifacts.sh.
   - label: Build Rust worker, compute node and key manager node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -97,6 +101,7 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
+  # This label needs to be synced with the runtime-ethereum's .buildkite/pipeline.yml.
   - label: Build key manager enclave
     command:
       - .buildkite/scripts/setup_gitconfig.sh
