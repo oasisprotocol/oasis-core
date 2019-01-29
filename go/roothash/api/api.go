@@ -2,11 +2,10 @@
 package api
 
 import (
+	"context"
 	"encoding"
 	"encoding/hex"
 	"errors"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"

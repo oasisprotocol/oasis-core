@@ -2,11 +2,11 @@
 package tests
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"

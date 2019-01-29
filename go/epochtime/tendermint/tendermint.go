@@ -2,11 +2,11 @@
 package tendermint
 
 import (
+	"context"
 	"sync"
 
 	"github.com/eapache/channels"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"

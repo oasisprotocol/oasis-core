@@ -3,6 +3,7 @@ package tendermint
 
 import (
 	"bytes"
+	"context"
 	"sync"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

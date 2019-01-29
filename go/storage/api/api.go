@@ -2,11 +2,10 @@
 package api
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
-
-	"golang.org/x/net/context"
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )

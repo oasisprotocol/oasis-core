@@ -3,13 +3,13 @@ package roothash
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"

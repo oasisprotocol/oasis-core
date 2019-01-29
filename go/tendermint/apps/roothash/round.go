@@ -1,12 +1,11 @@
 package roothash
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/status"
-
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

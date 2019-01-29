@@ -2,13 +2,12 @@
 package tendermint
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"sync"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"

@@ -1,11 +1,11 @@
 package registry
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"

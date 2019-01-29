@@ -1,11 +1,11 @@
 package insecure
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/beacon/tests"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"

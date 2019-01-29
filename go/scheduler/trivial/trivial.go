@@ -2,6 +2,7 @@ package trivial
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"encoding/hex"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/eapache/channels"
-	"golang.org/x/net/context"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"

@@ -3,6 +3,7 @@ package abci
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
@@ -19,7 +20,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	tmlog "github.com/tendermint/tendermint/libs/log"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/json"

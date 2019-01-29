@@ -4,12 +4,11 @@
 package insecure
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"

@@ -3,6 +3,7 @@ package leveldb
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -11,7 +12,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"

@@ -1,12 +1,12 @@
 package cachingclient
 
 import (
+	"context"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"

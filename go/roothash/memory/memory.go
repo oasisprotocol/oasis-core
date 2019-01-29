@@ -2,13 +2,13 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/eapache/channels"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

@@ -2,11 +2,11 @@
 package memory
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/eapache/channels"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"

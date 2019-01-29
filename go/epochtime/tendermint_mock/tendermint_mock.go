@@ -2,12 +2,12 @@
 package tendermintmock
 
 import (
+	"context"
 	"sync"
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"

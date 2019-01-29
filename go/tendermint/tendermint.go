@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
@@ -23,7 +24,6 @@ import (
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
