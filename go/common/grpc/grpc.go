@@ -265,22 +265,30 @@ func (s *grpcStreamLogger) SendMsg(m interface{}) error {
 type Server struct {
 	service.BaseBackgroundService
 
-	listener net.Listener
-	server   *grpc.Server
+	listeners []net.Listener
+	server    *grpc.Server
+	errCh     chan error
 
-	errCh chan error
+	unsafeDebug bool
 }
 
 // Start starts the Server.
 func (s *Server) Start() error {
 	s.Logger.Info("starting gRPC server")
+	if s.unsafeDebug {
+		s.Logger.Warn("The debug gRPC port is NOT FOR PRODUCTION USE.")
+	}
 
-	go func() {
-		if err := s.server.Serve(s.listener); err != nil {
-			s.BaseBackgroundService.Stop()
-			s.errCh <- err
-		}
-	}()
+	for _, v := range s.listeners {
+		ln := v
+		go func() {
+			if err := s.server.Serve(ln); err != nil {
+				s.BaseBackgroundService.Stop()
+				s.errCh <- err
+			}
+		}()
+	}
+
 	return nil
 }
 
@@ -289,24 +297,25 @@ func (s *Server) Stop() {
 	if s.server != nil {
 		select {
 		case err := <-s.errCh:
+			// Only the first error will get logged, probably ok?
 			if err != nil {
 				s.Logger.Error("gRPC Server terminated uncleanly",
 					"err", err,
 				)
 			}
 		default:
-			s.server.GracefulStop()
 		}
+		s.server.GracefulStop() // Repeated calls are ok.
 		s.server = nil
 	}
 }
 
 // Cleanup cleans up after the Server.
 func (s *Server) Cleanup() {
-	if s.listener != nil {
-		_ = s.listener.Close()
-		s.listener = nil
+	for _, v := range s.listeners {
+		_ = v.Close()
 	}
+	s.listeners = nil
 }
 
 // Server returns the underlying gRPC server instance.
@@ -325,27 +334,59 @@ func NewServerTCP(name string, port uint16, cert *tls.Certificate) (*Server, err
 		return nil, err
 	}
 
-	return newServer(name, ln, cert)
+	return newServer(name, []net.Listener{ln}, cert, false)
 }
 
 // NewServerLocal constructs a new gRPC server service listening on
-// a specific AF_LOCAL socket.
+// a specific AF_LOCAL socket.  Iff the optional debugPort is non-zero
+// the server will *also* listen on `:debugPort`.
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerLocal(name, path string) (*Server, error) {
+func NewServerLocal(name, path string, debugPort uint16) (*Server, error) {
 	// Remove any existing socket files first.
 	_ = os.Remove(path)
 
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		return nil, err
+	type addr struct {
+		net, addr string
 	}
 
-	return newServer(name, ln, nil)
+	var addrs = []addr{
+		{"unix", path},
+	}
+	if debugPort != 0 {
+		addrs = append(addrs, addr{"tcp", ":" + strconv.Itoa(int(debugPort))})
+	}
+
+	var (
+		lns []net.Listener
+		ok  bool
+	)
+	defer func() {
+		if !ok {
+			for _, v := range lns {
+				_ = v.Close()
+			}
+		}
+	}()
+
+	for _, v := range addrs {
+		ln, err := net.Listen(v.net, v.addr)
+		if err != nil {
+			return nil, err
+		}
+		lns = append(lns, ln)
+	}
+
+	srv, err := newServer(name, lns, nil, debugPort != 0)
+	if err == nil {
+		ok = true
+	}
+
+	return srv, err
 }
 
-func newServer(name string, listener net.Listener, cert *tls.Certificate) (*Server, error) {
+func newServer(name string, listeners []net.Listener, cert *tls.Certificate, unsafeDebug bool) (*Server, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
 	})
@@ -367,9 +408,10 @@ func newServer(name string, listener net.Listener, cert *tls.Certificate) (*Serv
 
 	return &Server{
 		BaseBackgroundService: svc,
-		listener:              listener,
+		listeners:             listeners,
 		server:                grpc.NewServer(sOpts...),
-		errCh:                 make(chan error),
+		errCh:                 make(chan error, len(listeners)),
+		unsafeDebug:           unsafeDebug,
 	}, nil
 }
 
