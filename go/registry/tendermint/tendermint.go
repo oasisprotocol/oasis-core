@@ -46,6 +46,7 @@ type tendermintBackend struct {
 	cached struct {
 		sync.Mutex
 		nodeLists map[epochtime.EpochTime]*api.NodeList
+		runtimes  map[epochtime.EpochTime][]*api.Runtime
 	}
 	lastEpoch epochtime.EpochTime
 
@@ -271,6 +272,15 @@ func (r *tendermintBackend) GetRuntimes(ctx context.Context) ([]*api.Runtime, er
 	return runtimes, nil
 }
 
+func (r *tendermintBackend) GetBlockRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
+	epoch, err := r.timeSource.GetBlockEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.getRuntimes(ctx, epoch)
+}
+
 func (r *tendermintBackend) workerEvents() {
 	defer r.closedWg.Done()
 
@@ -466,9 +476,23 @@ func (r *tendermintBackend) workerPerEpochList() {
 			"newEpoch", newEpoch,
 			"nodes", nl.Nodes,
 		)
-
 		r.nodeListNotifier.Broadcast(nl)
-		r.sweepNodeLists(newEpoch)
+
+		rl, err := r.getRuntimes(context.Background(), newEpoch)
+		if err != nil {
+			r.logger.Error("worker: failed to generate runtime list for epoch",
+				"err", err,
+				"epoch", newEpoch,
+			)
+			continue
+		}
+
+		r.logger.Debug("worker: built runtime list",
+			"newEpoch", newEpoch,
+			"runtimes", rl,
+		)
+
+		r.sweepCache(newEpoch)
 		r.lastEpoch = newEpoch
 	}
 }
@@ -517,7 +541,38 @@ func (r *tendermintBackend) getNodeList(ctx context.Context, epoch epochtime.Epo
 	return nl, nil
 }
 
-func (r *tendermintBackend) sweepNodeLists(epoch epochtime.EpochTime) {
+func (r *tendermintBackend) getRuntimes(ctx context.Context, epoch epochtime.EpochTime) ([]*api.Runtime, error) {
+	r.cached.Lock()
+	defer r.cached.Unlock()
+
+	// Service the request from the cache if possible.
+	rl, ok := r.cached.runtimes[epoch]
+	if ok {
+		return rl, nil
+	}
+
+	// Generate the runtime list.
+	height, err := r.timeSource.GetEpochBlock(ctx, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: failed to query block height")
+	}
+
+	response, err := r.service.Query(tmapi.QueryRegistryGetRuntimes, nil, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: failed to query runtimes")
+	}
+
+	var runtimes []*api.Runtime
+	if err := cbor.Unmarshal(response, &runtimes); err != nil {
+		return nil, errors.Wrap(err, "registry: get runtimes malformed response")
+	}
+
+	r.cached.runtimes[epoch] = runtimes
+
+	return runtimes, nil
+}
+
+func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 	const nrKept = 3
 
 	if epoch < nrKept {
@@ -530,6 +585,11 @@ func (r *tendermintBackend) sweepNodeLists(epoch epochtime.EpochTime) {
 	for k := range r.cached.nodeLists {
 		if k < epoch-nrKept {
 			delete(r.cached.nodeLists, k)
+		}
+	}
+	for k := range r.cached.runtimes {
+		if k < epoch-nrKept {
+			delete(r.cached.runtimes, k)
 		}
 	}
 }
@@ -559,6 +619,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 		closeCh:          make(chan struct{}),
 	}
 	r.cached.nodeLists = make(map[epochtime.EpochTime]*api.NodeList)
+	r.cached.runtimes = make(map[epochtime.EpochTime][]*api.Runtime)
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
 		runtimes, err := r.GetRuntimes(context.Background())

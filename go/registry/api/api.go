@@ -178,6 +178,10 @@ type BlockBackend interface {
 
 	// GetBlockNodeList returns the NodeList at the specified block height.
 	GetBlockNodeList(context.Context, int64) (*NodeList, error)
+
+	// GetBlockRuntimes returns the registered Runtimes at the specified
+	// block height.
+	GetBlockRuntimes(context.Context, int64) ([]*Runtime, error)
 }
 
 type Timestamp uint64
