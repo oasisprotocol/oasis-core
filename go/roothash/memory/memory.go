@@ -47,8 +47,9 @@ type commitCmd struct {
 type runtimeState struct {
 	sync.RWMutex
 
-	logger  *logging.Logger
-	storage storage.Backend
+	logger   *logging.Logger
+	storage  storage.Backend
+	registry registry.Backend
 
 	runtime *registry.Runtime
 	round   *round
@@ -112,6 +113,16 @@ func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
 	// Emit an empty epoch transition block in the new round. This is required so that
 	// the clients can be sure what state is final when an epoch transition occurs.
 	s.emitEmptyBlock(blk, block.EpochTransition)
+
+	// Update the runtime.
+	rtID := s.runtime.ID
+	if s.runtime, err = s.registry.GetRuntime(context.Background(), s.runtime.ID); err != nil {
+		s.logger.Error("worker: new committee, failed to update runtime",
+			"err", err,
+			"runtime", rtID,
+		)
+		panic(err)
+	}
 }
 
 func (s *runtimeState) emitEmptyBlock(blk *block.Block, hdrType block.HeaderType) {
@@ -324,6 +335,7 @@ type memoryRootHash struct {
 	logger    *logging.Logger
 	scheduler scheduler.Backend
 	storage   storage.Backend
+	registry  registry.Backend
 
 	runtimes map[signature.MapKey]*runtimeState
 
@@ -496,6 +508,7 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error 
 	s := &runtimeState{
 		logger:        r.logger.With("runtime_id", runtime.ID),
 		storage:       r.storage,
+		registry:      r.registry,
 		runtime:       runtime,
 		blocks:        append([]*block.Block{}, genesisBlock),
 		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
@@ -509,10 +522,14 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error 
 
 	r.runtimes[k] = s
 
+	r.logger.Debug("worker: runtime registered",
+		"runtime_id", runtime.ID,
+	)
+
 	return nil
 }
 
-func (r *memoryRootHash) worker(registryBackend registry.Backend) {
+func (r *memoryRootHash) worker() {
 	defer func() {
 		close(r.closedCh)
 		for _, v := range r.runtimes {
@@ -520,33 +537,20 @@ func (r *memoryRootHash) worker(registryBackend registry.Backend) {
 		}
 	}()
 
-	ch, sub := registryBackend.WatchRuntimes()
-	defer sub.Close()
+	regCh, regSub := r.registry.WatchRuntimes()
+	defer regSub.Close()
 
 	for {
-		var runtime *registry.Runtime
-		var ok bool
 		select {
-		case runtime, ok = <-ch:
+		case runtime, ok := <-regCh:
 			if !ok {
 				return
 			}
+
+			_ = r.onRuntimeRegistration(runtime)
 		case <-r.closeCh:
 			return
 		}
-
-		err := r.onRuntimeRegistration(runtime)
-		if err != nil {
-			r.logger.Error("worker: runtime registration failed",
-				"err", err,
-				"runtime_id", runtime.ID,
-			)
-			continue
-		}
-
-		r.logger.Debug("worker: runtime registered",
-			"runtime_id", runtime.ID,
-		)
 	}
 }
 
@@ -562,6 +566,7 @@ func New(
 		logger:           logging.GetLogger("roothash/memory"),
 		scheduler:        scheduler,
 		storage:          storage,
+		registry:         registry,
 		runtimes:         make(map[signature.MapKey]*runtimeState),
 		genesisBlocks:    genesisBlocks,
 		allBlockNotifier: pubsub.NewBroker(false),
@@ -569,7 +574,7 @@ func New(
 		closedCh:         make(chan struct{}),
 		roundTimeout:     roundTimeout,
 	}
-	go r.worker(registry)
+	go r.worker()
 
 	return r
 }
