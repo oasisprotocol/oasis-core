@@ -179,6 +179,7 @@ impl KeyManager {
     pub fn clear_cache(&mut self) {
         self.get_or_create_secret_keys_cache.clear();
         self.get_public_key_cache.clear();
+        self.long_term_public_key_cache.clear();
     }
 
     /// Get or create named key.

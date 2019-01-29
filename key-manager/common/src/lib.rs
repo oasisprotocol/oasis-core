@@ -5,8 +5,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-pub mod confidential;
-
 use ekiden_core::bytes::{B512, H256};
 use serde::{
     de::{Deserialize, Deserializer, Error, SeqAccess, Visitor},
