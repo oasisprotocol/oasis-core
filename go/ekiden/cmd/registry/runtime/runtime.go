@@ -139,7 +139,7 @@ func doRegister(cmd *cobra.Command, args []string) {
 	}
 
 	nrRetries := cmdFlags.Retries()
-	for i := 0; i < nrRetries; {
+	for i := 0; i <= nrRetries; {
 		if err := actuallyRegister(cmd, rt, privKey); err == nil {
 			return
 		}
