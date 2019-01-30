@@ -2,6 +2,7 @@
 package roothash
 
 import (
+	"bytes"
 	"encoding/hex"
 	"time"
 
@@ -55,10 +56,9 @@ type rootHashApplication struct {
 	scheduler  scheduler.BlockBackend
 	storage    storage.Backend
 
-	// If a runtime with one of these IDs would be initialized,
-	// start with the given block as the genesis block. For other
-	// runtime, generate an "empty" genesis block.
-	genesisBlocks map[signature.MapKey]*block.Block
+	// The old and busted way of importing genesis state.
+	// TODO: Remove once tooling for the new way is present.
+	cfgGenesisBlocks map[signature.MapKey]*block.Block
 
 	roundTimeout time.Duration
 }
@@ -142,14 +142,10 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 	if len(st.Blocks) != 0 {
 		// XXX: Either deprecate the command line option, or figure
 		// out a nice way to merge the two.  Probably the former.
-		if len(app.genesisBlocks) != 0 {
+		if len(app.cfgGenesisBlocks) != 0 {
 			app.logger.Error("InitChain: genesis blocks already exist")
 			panic("roothash: genesis blocks already exist")
 		}
-
-		// Note: Entries from the genesis blocks doesn't actually
-		// appear on-chain till actual blocks start happening.
-		app.genesisBlocks = st.Blocks
 	}
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
@@ -167,7 +163,7 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 		app.logger.Info("InitChain: allocating per-runtime state",
 			"runtime", v.ID,
 		)
-		app.onNewRuntime(ctx, tree, v)
+		app.onNewRuntime(ctx, tree, v, &st)
 	}
 
 	return types.ResponseInitChain{}
@@ -310,30 +306,52 @@ func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 }
 
 func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+	var st *api.GenesisRootHashState
+	ensureGenesis := func() error {
+		var err error
+
+		if st == nil {
+			st = new(api.GenesisRootHashState)
+			if err = app.state.Genesis().UnmarshalAppState(app.Name(), st); err != nil {
+				st = nil
+			}
+		}
+
+		return err
+	}
+
 	switch other.Name() {
 	case api.RegistryAppName:
-		if runtime := ctx.GetTag(api.TagRegistryRuntimeRegistered); runtime != nil {
-			app.logger.Debug("ForeignDeliverTx: new runtime",
-				"runtime", hex.EncodeToString(runtime),
-			)
+		for _, pair := range ctx.Tags() {
+			if bytes.Equal(pair.GetKey(), api.TagRegistryRuntimeRegistered) {
+				runtime := pair.GetValue()
 
-			tree := app.state.DeliverTxTree()
+				app.logger.Debug("ForeignDeliverTx: new runtime",
+					"runtime", hex.EncodeToString(runtime),
+				)
 
-			// New runtime has been registered, create its roothash state.
-			regState := registryapp.NewMutableState(tree)
-			runtime, err := regState.GetRuntime(runtime)
-			if err != nil {
-				return errors.Wrap(err, "roothash: failed to fetch new runtime")
+				tree := app.state.DeliverTxTree()
+
+				// New runtime has been registered, create its roothash state.
+				regState := registryapp.NewMutableState(tree)
+				rt, err := regState.GetRuntime(runtime)
+				if err != nil {
+					return errors.Wrap(err, "roothash: failed to fetch new runtime")
+				}
+
+				if err = ensureGenesis(); err != nil {
+					return errors.Wrap(err, "roothash: failed to fetch genesis blocks")
+				}
+
+				app.onNewRuntime(ctx, tree, rt, st)
 			}
-
-			app.onNewRuntime(ctx, tree, runtime)
 		}
 	}
 
 	return nil
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime) {
+func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *api.GenesisRootHashState) {
 	state := NewMutableState(tree)
 
 	// Check if state already exists for the given runtime.
@@ -347,7 +365,12 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	}
 
 	// Create genesis block.
-	genesisBlock := app.genesisBlocks[runtime.ID.ToMapKey()]
+	var genesisBlock *block.Block
+	if app.cfgGenesisBlocks != nil {
+		genesisBlock = app.cfgGenesisBlocks[runtime.ID.ToMapKey()]
+	} else {
+		genesisBlock = genesis.Blocks[runtime.ID.ToMapKey()]
+	}
 	if genesisBlock == nil {
 		now := ctx.Now().Unix()
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
@@ -659,11 +682,11 @@ func New(
 	roundTimeout time.Duration,
 ) abci.Application {
 	return &rootHashApplication{
-		logger:        logging.GetLogger("tendermint/roothash"),
-		timeSource:    timeSource,
-		scheduler:     scheduler,
-		storage:       storage,
-		genesisBlocks: genesisBlocks,
-		roundTimeout:  roundTimeout,
+		logger:           logging.GetLogger("tendermint/roothash"),
+		timeSource:       timeSource,
+		scheduler:        scheduler,
+		storage:          storage,
+		cfgGenesisBlocks: genesisBlocks,
+		roundTimeout:     roundTimeout,
 	}
 }

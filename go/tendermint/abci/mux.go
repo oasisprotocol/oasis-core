@@ -779,6 +779,29 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.BlockBackend) (bool
 	return true, currentEpoch
 }
 
+// Genesis returns the ABCI genesis state.
+func (s *ApplicationState) Genesis() *api.GenesisAppState {
+	_, b := s.checkTxTree.Get([]byte(stateKeyGenesisRequest))
+
+	var req types.RequestInitChain
+	if err := req.Unmarshal(b); err != nil {
+		s.logger.Error("Genesis: corrupted defered genesis state",
+			"err", err,
+		)
+		panic("Genesis: invalid defered genesis application state")
+	}
+
+	st, err := parseGenesisAppState(req)
+	if err != nil {
+		s.logger.Error("failed to unmarshal genesis application state",
+			"err", err,
+		)
+		panic("Genesis: invalid genesis application state")
+	}
+
+	return st
+}
+
 func (s *ApplicationState) doCommit() error {
 	// Save the new version of the persistent tree.
 	blockHash, blockHeight, err := s.deliverTxTree.SaveVersion()
@@ -931,7 +954,7 @@ func isP2PFilterQuery(s string) bool {
 	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
 }
 
-// UnmarshalGenesisAppState deserializes the specific application's gensis state
+// UnmarshalGenesisAppState deserializes the specific application's genesis state
 // from the provided RequestInitChain.
 func UnmarshalGenesisAppState(req types.RequestInitChain, app Application, v interface{}) error {
 	// This is redundant, the application interface could toss the map around,
@@ -942,13 +965,7 @@ func UnmarshalGenesisAppState(req types.RequestInitChain, app Application, v int
 		return err
 	}
 
-	b, ok := st.ABCIAppState[app.Name()]
-	if !ok {
-		// No state for the app is treated as a success.
-		return nil
-	}
-
-	return cbor.Unmarshal(b, v)
+	return st.UnmarshalAppState(app.Name(), v)
 }
 
 func parseGenesisAppState(req types.RequestInitChain) (*api.GenesisAppState, error) {
