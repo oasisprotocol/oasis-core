@@ -20,13 +20,13 @@ type grpcServer struct {
 }
 
 func (s *grpcServer) SubmitTx(ctx context.Context, req *pb.SubmitTxRequest) (*pb.SubmitTxResponse, error) {
-	var runtimeID signature.MapKey
-	if len(req.GetRuntimeId()) != signature.PublicKeySize {
-		return nil, errors.New("invalid runtime identifier")
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
 	}
-	copy(runtimeID[:], req.GetRuntimeId())
+	mapKey := id.ToMapKey()
 
-	runtime, ok := s.worker.runtimes[runtimeID]
+	runtime, ok := s.worker.runtimes[mapKey]
 	if !ok {
 		return nil, errors.New("unknown runtime")
 	}

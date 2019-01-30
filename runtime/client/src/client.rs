@@ -1,9 +1,6 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{error::Error as StdError, time::Duration};
 
-use grpcio::{self, RpcStatus, RpcStatusCode};
+use grpcio::Channel;
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
 use serde::{de::DeserializeOwned, Serialize};
@@ -11,65 +8,71 @@ use serde_cbor;
 
 use ekiden_common::{
     bytes::B256,
-    environment::Environment,
     error::{Error, Result},
-    futures::{prelude::*, retry_until_ok, sync::oneshot},
-    hash::EncodedHash,
+    futures::prelude::*,
 };
 use ekiden_runtime_common::call::{RuntimeCall, RuntimeOutput};
 use ekiden_tracing::inject_to_options;
 
 mod api {
-    pub use crate::generated::{runtime::*, runtime_grpc::*};
+    pub use crate::generated::{client::*, client_grpc::*};
 }
 
-/// Runtime client.
+/// Interface for the node's client interface.
 pub struct RuntimeClient {
-    /// Underlying gRPC client.
-    rpc: Arc<api::RuntimeClient>,
-    /// Shared service for waiting for runtime calls.
-    call_wait_manager: Arc<super::callwait::Manager>,
-    /// Optional call timeout.
-    timeout: Option<Duration>,
-    /// Shutdown signal (receiver).
-    shutdown_receiver: future::Shared<oneshot::Receiver<&'static str>>,
-    /// Shutdown signal (sender).
-    shutdown_sender: Mutex<Option<oneshot::Sender<&'static str>>>,
-    /// Environment.
-    environment: Arc<Environment>,
+    /// The underlying RPC interface.
+    client: api::RuntimeClient,
     /// Runtime identifier.
     runtime_id: B256,
+    /// RPC timeout
+    timeout: Option<Duration>,
 }
 
 impl RuntimeClient {
-    pub const SHUTDOWN_REASON_TRANSITION: &'static str = "transitioning to new leader";
-
-    /// Create new client instance.
-    pub fn new(
-        environment: Arc<Environment>,
-        rpc: api::RuntimeClient,
-        call_wait_manager: Arc<super::callwait::Manager>,
-        timeout: Option<Duration>,
-        runtime_id: B256,
-    ) -> Self {
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-
+    /// Create a new client interface.
+    pub fn new(channel: Channel, runtime_id: B256, timeout: Option<Duration>) -> Self {
         RuntimeClient {
-            rpc: Arc::new(rpc),
-            call_wait_manager,
-            timeout,
-            shutdown_receiver: shutdown_receiver.shared(),
-            shutdown_sender: Mutex::new(Some(shutdown_sender)),
-            environment,
-            runtime_id,
+            client: api::RuntimeClient::new(channel),
+            runtime_id: runtime_id.clone(),
+            timeout: timeout,
         }
     }
 
-    /// Queue a raw runtime call.
-    pub fn call_raw<C>(&self, call: C, sh: SpanHandle) -> BoxFuture<Vec<u8>>
+    /// Call a remote method.
+    pub fn call<C, O>(&self, method: &'static str, arguments: C) -> BoxFuture<O>
+    where
+        C: Serialize,
+        O: DeserializeOwned + Send + 'static,
+    {
+        let span = ekiden_tracing::get_tracer()
+            .span("client_call")
+            .tag(tag::Tag::new("ekiden.runtime_method", method))
+            .tag(tag::StdTag::span_kind("client"))
+            .start();
+
+        let call = RuntimeCall {
+            method: method.to_owned(),
+            arguments,
+        };
+
+        self.submit_tx_raw(&call, span.handle())
+            .and_then(|out| {
+                drop(span);
+                parse_call_output(out)
+            })
+            .into_box()
+    }
+
+    /// Dispatch a raw call to the node.
+    pub fn submit_tx_raw<C>(&self, call: C, sh: SpanHandle) -> BoxFuture<Vec<u8>>
     where
         C: Serialize,
     {
+        let mut options = grpcio::CallOption::default();
+        if let Some(timeout) = self.timeout {
+            options = options.timeout(timeout);
+        }
+
         let mut request = api::SubmitTxRequest::new();
         request.set_runtime_id(self.runtime_id.to_vec());
         match serde_cbor::to_vec(&call) {
@@ -77,109 +80,21 @@ impl RuntimeClient {
             Err(_) => return future::err(Error::new("call serialize failed")).into_box(),
         }
 
-        // Subscribe to runtime call so we will know when the call is done.
-        let call_wait = self.call_wait_manager.create_wait();
-        let call_id = request.get_data().get_encoded_hash();
+        let span = sh.child("submit_tx_async_opt", |opts| {
+            opts.tag(tag::StdTag::span_kind("client")).start()
+        });
+        options = inject_to_options(options, span.context());
 
-        let rpc_timeout = self.timeout.clone();
-        let rpc = self.rpc.clone();
-        let rpc_call = retry_until_ok(
-            "RuntimeClient submit_tx",
-            move || {
-                // Set timeout if configured.
-                let mut options = grpcio::CallOption::default();
-                if let Some(timeout) = rpc_timeout {
-                    options = options.timeout(timeout);
-                }
-
-                let span = sh.child("submit_tx_async_opt", |opts| {
-                    opts.tag(tag::StdTag::span_kind("client")).start()
-                });
-                options = inject_to_options(options, span.context());
-
-                match rpc.submit_tx_async_opt(&request.clone(), options) {
-                    Ok(call) => call
-                        .then(|result| {
-                            drop(span);
-                            result
-                        })
-                        .into_box(),
-                    Err(error) => future::err(error.into()).into_box(),
-                }
-            },
-            |error| {
-                match error {
-                    // If the compute node returns that it is Unavailable, this may be because it
-                    // does not yet consider itself leader. In this case, we need to retry.
-                    grpcio::Error::RpcFailure(RpcStatus {
-                        status: RpcStatusCode::Unavailable,
-                        ..
-                    }) => false,
-                    // Consider all other errors permanent.
-                    _ => true,
-                }
-            },
-        )
-        .map_err(|error| error.into())
-        .and_then(move |_| {
-            call_wait.wait_for(call_id).and_then(|output| {
-                // TODO: Submit proof of publication, get decryption.
-                Ok(output)
-            })
-        })
-        .select(
-            self.shutdown_receiver
-                .clone()
-                .then(|result| -> BoxFuture<Vec<u8>> {
-                    let reason = match result {
-                        Ok(reason_shared) => *reason_shared,
-                        Err(_canceled) => "client is being dropped",
-                    };
-                    // However the shutdown receiver future completes, we need to abort as
-                    // it has either been dropped or an explicit shutdown signal was sent.
-                    future::err(Error::new(reason)).into_box()
-                }),
-        )
-        .map(|(result, _)| result)
-        .map_err(|(error, _)| error)
-        .into_box();
-
-        // Spawn background task which handles the call.
-        let (response_tx, response_rx) = oneshot::channel();
-        self.environment
-            .spawn(rpc_call.then(|result| response_tx.send(result)).discard());
-
-        response_rx
-            .map_err(|error| error.into())
-            .and_then(|result| result)
-            .into_box()
-    }
-
-    /// Queue a runtime call.
-    pub fn call<C, O>(&self, method: &str, arguments: C, sh: SpanHandle) -> BoxFuture<O>
-    where
-        C: Serialize,
-        O: DeserializeOwned + Send + 'static,
-    {
-        let call = RuntimeCall {
-            method: method.to_owned(),
-            arguments,
-        };
-
-        self.call_raw(call, sh)
-            .and_then(|output| parse_call_output(output))
-            .into_box()
-    }
-
-    /// Cancel all pending runtime calls.
-    pub fn shutdown(&self, reason: &'static str) {
-        let shutdown_sender = self
-            .shutdown_sender
-            .lock()
-            .unwrap()
-            .take()
-            .expect("shutdown already called");
-        drop(shutdown_sender.send(reason));
+        match self.client.submit_tx_async_opt(&request, options) {
+            Ok(resp) => Box::new(
+                resp.map(|r| {
+                    drop(span);
+                    r.result
+                })
+                .map_err(|err| Error::new(err.description())),
+            ),
+            Err(e) => Box::new(future::err(Error::new(e.description()))),
+        }
     }
 }
 
