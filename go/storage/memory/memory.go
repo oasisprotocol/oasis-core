@@ -73,7 +73,7 @@ func (b *memoryBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte,
 	return values, nil
 }
 
-func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
+func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
 	epoch := b.sweeper.GetEpoch()
 	if epoch == epochtime.EpochInvalid {
 		return api.ErrIncoherentTime
@@ -106,10 +106,10 @@ func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uin
 	return nil
 }
 
-func (b *memoryBackend) InsertBatch(ctx context.Context, values []api.Value) error {
+func (b *memoryBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
 	// No atomicity for in-memory backend, we just repeatedly insert.
 	for _, value := range values {
-		if err := b.Insert(ctx, value.Data, value.Expiration); err != nil {
+		if err := b.Insert(ctx, value.Data, value.Expiration, opts); err != nil {
 			return err
 		}
 	}

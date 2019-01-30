@@ -97,9 +97,9 @@ func (w *metricsWrapper) GetBatch(ctx context.Context, keys []api.Key) ([][]byte
 	return values, err
 }
 
-func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration uint64) error {
+func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
 	start := time.Now()
-	err := w.Backend.Insert(ctx, value, expiration)
+	err := w.Backend.Insert(ctx, value, expiration, opts)
 	storageLatency.With(labelInsert).Observe(time.Since(start).Seconds())
 	storageValueSize.With(labelInsert).Observe(float64(len(value)))
 	if err != nil {
@@ -111,9 +111,9 @@ func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration ui
 	return err
 }
 
-func (w *metricsWrapper) InsertBatch(ctx context.Context, values []api.Value) error {
+func (w *metricsWrapper) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
 	start := time.Now()
-	err := w.Backend.InsertBatch(ctx, values)
+	err := w.Backend.InsertBatch(ctx, values, opts)
 	storageLatency.With(labelInsertBatch).Observe(time.Since(start).Seconds())
 
 	var size int

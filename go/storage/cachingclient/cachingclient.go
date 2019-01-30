@@ -100,16 +100,19 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 	return values, nil
 }
 
-func (b *cachingClientBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
+func (b *cachingClientBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
 	// Write-through.
-	err := b.remote.Insert(ctx, value, expiration)
+	var err error
+	if !opts.LocalOnly {
+		err = b.remote.Insert(ctx, value, expiration, opts)
+	}
 	if err == nil {
 		b.cache.Set(api.HashStorageKey(value), value)
 	}
 	return err
 }
 
-func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Value) error {
+func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
 	// Write-through. Since storage insert operations are currently idempotent, we can
 	// parallelize remote insert and cache insert.
 	ch := make(chan struct{})
@@ -122,7 +125,10 @@ func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Val
 		close(ch)
 	}()
 
-	err := b.remote.InsertBatch(ctx, values)
+	var err error
+	if !opts.LocalOnly {
+		err = b.remote.InsertBatch(ctx, values, opts)
+	}
 	<-ch
 	return err
 }
