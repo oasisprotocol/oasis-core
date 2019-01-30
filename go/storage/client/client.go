@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -30,6 +31,10 @@ type storageClientBackend struct {
 	logger *logging.Logger
 	client storage.StorageClient
 	conn   *grpc.ClientConn
+
+	haltCtx  context.Context
+	cancelFn context.CancelFunc
+	initCh   chan struct{}
 }
 
 func (b *storageClientBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
@@ -126,18 +131,43 @@ func (b *storageClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo
 }
 
 func (b *storageClientBackend) Cleanup() {
+	b.cancelFn()
 	b.conn.Close()
 }
 
 func (b *storageClientBackend) Initialized() <-chan struct{} {
-	initCh := make(chan struct{})
-	close(initCh)
-	return initCh
+	return b.initCh
+}
+
+func (b *storageClientBackend) initWorker() {
+	defer close(b.initCh)
+
+	// HACK/#1380: The roothash backend currently touches remote storage.
+	// This can potentially lead to non-determinism durring block replay,
+	// for example if storage is unavailable.
+	//
+	// This can be reverted once none of the ABCI applications interact
+	// with storage at all.
+	for {
+		st := b.conn.GetState()
+		switch st {
+		case connectivity.Shutdown:
+			b.logger.Debug("initWorker: connection torn down")
+			return
+		case connectivity.Ready:
+			b.logger.Debug("initWorker: connection is ready")
+			return
+		default:
+		}
+
+		if !b.conn.WaitForStateChange(b.haltCtx, st) {
+			b.logger.Debug("initWorker: canceled by context")
+		}
+	}
 }
 
 func New() (api.Backend, error) {
 	conn, err := grpc.Dial(viper.GetString(cfgClientAddress), grpc.WithInsecure())
-
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +178,13 @@ func New() (api.Backend, error) {
 		logger: logging.GetLogger("storage/client"),
 		client: client,
 		conn:   conn,
+		initCh: make(chan struct{}),
 	}
+
+	// TODO/#1363: Use a different parent context.
+	b.haltCtx, b.cancelFn = context.WithCancel(context.Background())
+
+	go b.initWorker()
 
 	return b, nil
 }
