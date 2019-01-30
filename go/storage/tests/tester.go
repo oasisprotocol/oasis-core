@@ -38,7 +38,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	}
 
 	for i, v := range testValues {
-		err := backend.Insert(context.Background(), v, 1)
+		err := backend.Insert(context.Background(), v, 1, api.InsertOptions{})
 		require.NoError(t, err, "Insert(%d)", i)
 	}
 
@@ -55,7 +55,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 		batchValues = append(batchValues, api.Value{Data: v, Expiration: 1})
 	}
 
-	err := backend.InsertBatch(context.Background(), batchValues)
+	err := backend.InsertBatch(context.Background(), batchValues, api.InsertOptions{})
 	require.NoError(t, err, "InsertBatch(testValuesBatch)")
 
 	v, err := backend.GetBatch(context.Background(), hashes)

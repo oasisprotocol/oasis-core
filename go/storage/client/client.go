@@ -61,7 +61,7 @@ func (b *storageClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 	return resp.GetData(), nil
 }
 
-func (b *storageClientBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
+func (b *storageClientBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
 	var req storage.InsertRequest
 
 	req.Data = value
@@ -71,7 +71,7 @@ func (b *storageClientBackend) Insert(ctx context.Context, value []byte, expirat
 	return err
 }
 
-func (b *storageClientBackend) InsertBatch(ctx context.Context, values []api.Value) error {
+func (b *storageClientBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
 	var req storage.InsertBatchRequest
 
 	req.Items = make([]*storage.InsertRequest, 0, len(values))

@@ -346,7 +346,7 @@ func mustGetCommittee(t *testing.T, rt *registryTests.TestRuntime, epoch epochti
 func mustStore(t *testing.T, store storage.Backend, value []byte) hash.Hash {
 	require := require.New(t)
 
-	err := store.Insert(context.Background(), value, uint64(1)<<63)
+	err := store.Insert(context.Background(), value, uint64(1)<<63, storage.InsertOptions{})
 	require.NoError(err, "Insert")
 
 	key := storage.HashStorageKey(value)

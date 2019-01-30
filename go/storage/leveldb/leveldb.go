@@ -89,11 +89,11 @@ func (b *leveldbBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte
 	return values, nil
 }
 
-func (b *leveldbBackend) Insert(ctx context.Context, value []byte, expiration uint64) error {
-	return b.InsertBatch(ctx, []api.Value{api.Value{Data: value, Expiration: expiration}})
+func (b *leveldbBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
+	return b.InsertBatch(ctx, []api.Value{api.Value{Data: value, Expiration: expiration}}, opts)
 }
 
-func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value) error {
+func (b *leveldbBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
 	b.logger.Debug("InsertBatch",
 		"values", values,
 	)
