@@ -1,6 +1,7 @@
 package trivial
 
 import (
+	"context"
 	"testing"
 
 	"github.com/oasislabs/ekiden/go/beacon/insecure"
@@ -10,12 +11,14 @@ import (
 )
 
 func TestSchedulerTrivial(t *testing.T) {
+	ctx := context.Background()
+
 	timeSource := mock.New()
-	beacon := insecure.New(timeSource)
-	registry := memory.New(timeSource)
+	beacon := insecure.New(ctx, timeSource)
+	registry := memory.New(ctx, timeSource)
 	defer registry.Cleanup()
 
-	backend := New(timeSource, registry, beacon, nil)
+	backend := New(ctx, timeSource, registry, beacon, nil)
 
 	tests.SchedulerImplementationTests(t, backend, timeSource, registry)
 }

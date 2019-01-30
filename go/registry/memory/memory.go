@@ -244,7 +244,7 @@ func (r *memoryBackend) getNodesForEntryLocked(id signature.PublicKey) []*node.N
 	return ret
 }
 
-func (r *memoryBackend) worker(timeSource epochtime.Backend) {
+func (r *memoryBackend) worker(ctx context.Context, timeSource epochtime.Backend) {
 	defer close(r.closedCh)
 
 	epochEvents, sub := timeSource.WatchEpochs()
@@ -273,7 +273,7 @@ func (r *memoryBackend) worker(timeSource epochtime.Backend) {
 		}
 
 		r.sweepNodeList(newEpoch)
-		r.buildNodeList(newEpoch)
+		r.buildNodeList(ctx, newEpoch)
 		r.lastEpoch = newEpoch
 	}
 }
@@ -295,8 +295,8 @@ func (r *memoryBackend) sweepNodeList(newEpoch epochtime.EpochTime) {
 	}
 }
 
-func (r *memoryBackend) buildNodeList(newEpoch epochtime.EpochTime) {
-	nodes, err := r.GetNodes(context.Background())
+func (r *memoryBackend) buildNodeList(ctx context.Context, newEpoch epochtime.EpochTime) {
+	nodes, err := r.GetNodes(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -383,7 +383,7 @@ func (r *memoryBackend) Cleanup() {
 }
 
 // New constructs a new memory backed registry Backend instance.
-func New(timeSource epochtime.Backend) api.Backend {
+func New(ctx context.Context, timeSource epochtime.Backend) api.Backend {
 	r := &memoryBackend{
 		logger: logging.GetLogger("registry/memory"),
 		state: memoryBackendState{
@@ -408,7 +408,7 @@ func New(timeSource epochtime.Backend) api.Backend {
 		}
 	})
 
-	go r.worker(timeSource)
+	go r.worker(ctx, timeSource)
 
 	return r
 }

@@ -2,6 +2,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -18,7 +19,7 @@ import (
 const cfgBackend = "registry.backend"
 
 // New constructs a new Backend based on the configuration flags.
-func New(timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 
 	var impl api.Backend
@@ -26,9 +27,9 @@ func New(timeSource epochtime.Backend, tmService service.TendermintService) (api
 
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(timeSource)
+		impl = memory.New(ctx, timeSource)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(timeSource, tmService)
+		impl, err = tendermint.New(ctx, timeSource, tmService)
 	default:
 		return nil, fmt.Errorf("registry: unsupported backend: '%v'", backend)
 	}
@@ -36,7 +37,7 @@ func New(timeSource epochtime.Backend, tmService service.TendermintService) (api
 		return nil, err
 	}
 
-	return newMetricsWrapper(impl), nil
+	return newMetricsWrapper(ctx, impl), nil
 }
 
 // RegisterFlags registers the configuration flags with the provided

@@ -3,6 +3,7 @@
 package background
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,7 +14,9 @@ import (
 
 // ServiceManager manages a group of background services.
 type ServiceManager struct {
-	logger *logging.Logger
+	Ctx      context.Context
+	cancelFn context.CancelFunc
+	logger   *logging.Logger
 
 	services []service.BackgroundService
 	termCh   chan service.BackgroundService
@@ -54,6 +57,9 @@ func (m *ServiceManager) Wait() {
 		m.logger.Info("user requested termination")
 	}
 
+	// Cancel the context before stopping the services.
+	m.cancelFn()
+
 	for _, svc := range m.services {
 		if svc != m.termSvc {
 			svc.Stop()
@@ -82,9 +88,13 @@ func (m *ServiceManager) Cleanup() {
 
 // NewServiceManager creates a new ServiceManager with the provided logger.
 func NewServiceManager(logger *logging.Logger) *ServiceManager {
+	ctx, cancelFn := context.WithCancel(context.Background())
+
 	return &ServiceManager{
-		logger: logger,
-		termCh: make(chan service.BackgroundService),
-		stopCh: make(chan struct{}),
+		Ctx:      ctx,
+		cancelFn: cancelFn,
+		logger:   logger,
+		termCh:   make(chan service.BackgroundService),
+		stopCh:   make(chan struct{}),
 	}
 }

@@ -23,6 +23,7 @@ type pprofService struct {
 	listener net.Listener
 	server   *http.Server
 
+	ctx   context.Context
 	errCh chan error
 }
 
@@ -72,7 +73,7 @@ func (p *pprofService) Stop() {
 				)
 			}
 		default:
-			_ = p.server.Shutdown(context.Background())
+			_ = p.server.Shutdown(p.ctx)
 		}
 		p.server = nil
 	}
@@ -86,12 +87,13 @@ func (p *pprofService) Cleanup() {
 }
 
 // New constructs a new pprof service.
-func New() (service.BackgroundService, error) {
+func New(ctx context.Context) (service.BackgroundService, error) {
 	address := viper.GetString(cfgPprofBind)
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),
 		address:               address,
+		ctx:                   ctx,
 		errCh:                 make(chan error),
 	}, nil
 }

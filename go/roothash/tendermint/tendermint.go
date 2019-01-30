@@ -54,6 +54,7 @@ type runtimeBrokers struct {
 type tendermintBackend struct {
 	sync.Mutex
 
+	ctx    context.Context
 	logger *logging.Logger
 
 	service         service.TendermintService
@@ -316,7 +317,7 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 	notifiers := r.runtimeNotifiers[k]
 	if notifiers == nil {
 		// Fetch the latest block.
-		block, _ := r.GetLatestBlock(context.Background(), id)
+		block, _ := r.GetLatestBlock(r.ctx, id)
 
 		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),
@@ -338,26 +339,16 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 func (r *tendermintBackend) worker() { // nolint: gocyclo
 	defer close(r.closedCh)
 
-	// Create a context that gets cancelled when the backend is stopped. If
-	// this wouldn't be the case, the backend would hang in Cleanup when we
-	// were still in the middle of the subscribe (and the subscribe could not
-	// happen due to Tendermint not yet being initialized).
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-r.closeCh
-		cancel()
-	}()
-
 	// Subscribe to transactions which modify state.
 	txChannel := make(chan interface{})
 
-	if err := r.service.Subscribe(ctx, "roothash-worker", tmapi.QueryRootHashUpdate, txChannel); err != nil {
+	if err := r.service.Subscribe(r.ctx, "roothash-worker", tmapi.QueryRootHashUpdate, txChannel); err != nil {
 		r.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer r.service.Unsubscribe(ctx, "roothash-worker", tmapi.QueryRootHashUpdate) // nolint: errcheck
+	defer r.service.Unsubscribe(r.ctx, "roothash-worker", tmapi.QueryRootHashUpdate) // nolint: errcheck
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
@@ -439,6 +430,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 
 // New constructs a new tendermint-based root hash backend.
 func New(
+	ctx context.Context,
 	timeSource epochtime.Backend,
 	sched scheduler.Backend,
 	storage storage.Backend,
@@ -462,12 +454,13 @@ func New(
 	<-storage.Initialized()
 
 	// Initialize and register the tendermint service component.
-	app := tmroothash.New(blockTimeSource, blockScheduler, storage, genesisBlocks, roundTimeout)
+	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, storage, genesisBlocks, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
 
 	r := &tendermintBackend{
+		ctx:              ctx,
 		logger:           logging.GetLogger("roothash/tendermint"),
 		service:          service,
 		allBlockNotifier: pubsub.NewBroker(false),

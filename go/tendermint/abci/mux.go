@@ -196,12 +196,12 @@ func (a *ApplicationServer) Register(app Application) error {
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(dataDir string, pruneCfg *PruneConfig) (*ApplicationServer, error) {
+func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(dataDir, pruneCfg)
+	mux, err := newABCIMux(ctx, dataDir, pruneCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -624,8 +624,8 @@ func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
 	return app, nil
 }
 
-func newABCIMux(dataDir string, pruneCfg *PruneConfig) (*abciMux, error) {
-	state, err := newApplicationState(dataDir, pruneCfg)
+func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*abciMux, error) {
+	state, err := newApplicationState(ctx, dataDir, pruneCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -700,6 +700,7 @@ func (a *LogAdapter) Debug(msg string, keyvals ...interface{}) {
 type ApplicationState struct {
 	logger *logging.Logger
 
+	ctx           context.Context
 	db            dbm.DB
 	deliverTxTree *iavl.MutableTree
 	checkTxTree   *iavl.MutableTree
@@ -752,14 +753,14 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.BlockBackend) (bool
 		return false, epochtime.EpochInvalid
 	}
 
-	previousEpoch, err := timeSource.GetBlockEpoch(context.Background(), blockHeight-1)
+	previousEpoch, err := timeSource.GetBlockEpoch(s.ctx, blockHeight-1)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
 		return false, epochtime.EpochInvalid
 	}
-	currentEpoch, err := timeSource.GetBlockEpoch(context.Background(), blockHeight)
+	currentEpoch, err := timeSource.GetBlockEpoch(s.ctx, blockHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
@@ -900,7 +901,7 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
+func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
 	db, err := bolt.New(filepath.Join(dataDir, "abci-mux-state.bolt.db"))
 	if err != nil {
 		return nil, err
@@ -936,6 +937,7 @@ func newApplicationState(dataDir string, pruneCfg *PruneConfig) (*ApplicationSta
 
 	s := &ApplicationState{
 		logger:          logging.GetLogger("abci-mux/state"),
+		ctx:             ctx,
 		db:              db,
 		deliverTxTree:   deliverTxTree,
 		checkTxTree:     checkTxTree,

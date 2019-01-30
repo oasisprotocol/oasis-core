@@ -92,9 +92,8 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 	return nil
 }
 
-func (t *tendermintMockBackend) worker() {
+func (t *tendermintMockBackend) worker(ctx context.Context) {
 	// Subscribe to transactions which advance the epoch.
-	ctx := context.Background()
 	txChannel := make(chan interface{})
 
 	if err := t.service.Subscribe(ctx, "epochtime-worker", tmapi.QueryEpochTimeMockApp, txChannel); err != nil {
@@ -163,7 +162,7 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 }
 
 // New constructs a new mock tendermint backed epochtime Backend instance.
-func New(service service.TendermintService) (api.SetableBackend, error) {
+func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
 	// Initialze and register the tendermint service component.
 	app := tmepochtime_mock.New()
 	if err := service.RegisterApplication(app); err != nil {
@@ -183,7 +182,7 @@ func New(service service.TendermintService) (api.SetableBackend, error) {
 		}
 	})
 
-	go r.worker()
+	go r.worker(ctx)
 
 	return r, nil
 }

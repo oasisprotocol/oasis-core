@@ -61,7 +61,7 @@ func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscri
 	return typedCh, sub
 }
 
-func (t *tendermintBackend) worker() {
+func (t *tendermintBackend) worker(ctx context.Context) {
 	ch, sub := t.service.WatchBlocks()
 	defer sub.Close()
 
@@ -71,18 +71,18 @@ func (t *tendermintBackend) worker() {
 			return
 		}
 
-		if t.updateCached(block) {
+		if t.updateCached(ctx, block) {
 			// Safe to look at `t.epoch`, only mutator is the line above.
 			t.notifier.Broadcast(t.epoch)
 		}
 	}
 }
 
-func (t *tendermintBackend) updateCached(block *tmtypes.Block) bool {
+func (t *tendermintBackend) updateCached(ctx context.Context, block *tmtypes.Block) bool {
 	t.Lock()
 	defer t.Unlock()
 
-	epoch, _ := t.GetBlockEpoch(context.Background(), block.Header.Height)
+	epoch, _ := t.GetBlockEpoch(ctx, block.Header.Height)
 
 	t.epoch = epoch
 
@@ -99,7 +99,7 @@ func (t *tendermintBackend) updateCached(block *tmtypes.Block) bool {
 
 // New constructs a new tendermint backed epochtime Backend instance,
 // with the specified epoch interval.
-func New(service service.TendermintService, interval int64) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService, interval int64) (api.Backend, error) {
 	if err := service.ForceInitialize(); err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func New(service service.TendermintService, interval int64) (api.Backend, error)
 		}
 	})
 
-	go r.worker()
+	go r.worker(ctx)
 
 	return r, nil
 }

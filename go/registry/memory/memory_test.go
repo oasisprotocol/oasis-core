@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"testing"
 
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
@@ -8,8 +9,10 @@ import (
 )
 
 func TestRegistryMemory(t *testing.T) {
+	ctx := context.Background()
+
 	timeSource := mock.New()
-	backend := New(timeSource)
+	backend := New(ctx, timeSource)
 	defer backend.Cleanup()
 
 	tests.RegistryImplementationTests(t, backend, timeSource)

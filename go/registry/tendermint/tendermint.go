@@ -281,18 +281,8 @@ func (r *tendermintBackend) GetBlockRuntimes(ctx context.Context, height int64) 
 	return r.getRuntimes(ctx, epoch)
 }
 
-func (r *tendermintBackend) workerEvents() {
+func (r *tendermintBackend) workerEvents(ctx context.Context) {
 	defer r.closedWg.Done()
-
-	// Create a context that gets cancelled when the backend is stopped. If
-	// this wouldn't be the case, the backend would hang in Cleanup when we
-	// were still in the middle of the subscribe (and the subscribe could not
-	// happen due to Tendermint not yet being initialized).
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-r.closeCh
-		cancel()
-	}()
 
 	// Subscribe to transactions which modify state.
 	txChannel := make(chan interface{})
@@ -321,7 +311,7 @@ func (r *tendermintBackend) workerEvents() {
 
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
-			r.onEventDataNewBlock(ev)
+			r.onEventDataNewBlock(ctx, ev)
 		case tmtypes.EventDataTx:
 			r.onEventDataTx(ev)
 		default:
@@ -329,7 +319,7 @@ func (r *tendermintBackend) workerEvents() {
 	}
 }
 
-func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
+func (r *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
 	tags := ev.ResultBeginBlock.GetTags()
 	tags = append(tags, ev.ResultEndBlock.GetTags()...)
 
@@ -357,7 +347,7 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 				continue
 			}
 
-			rt, err := r.GetRuntime(context.Background(), id)
+			rt, err := r.GetRuntime(ctx, id)
 			if err != nil {
 				r.logger.Error("worker: failed to get runtime from registry",
 					"err", err,
@@ -376,7 +366,7 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 				continue
 			}
 
-			ent, err := r.GetEntity(context.Background(), id)
+			ent, err := r.GetEntity(ctx, id)
 			if err != nil {
 				r.logger.Error("worker: failed to get entity from registry",
 					"err", err,
@@ -435,7 +425,7 @@ func (r *tendermintBackend) onEventDataTx(tx tmtypes.EventDataTx) {
 	}
 }
 
-func (r *tendermintBackend) workerPerEpochList() {
+func (r *tendermintBackend) workerPerEpochList(ctx context.Context) {
 	defer r.closedWg.Done()
 
 	epochEvents, sub := r.timeSource.WatchEpochs()
@@ -463,7 +453,7 @@ func (r *tendermintBackend) workerPerEpochList() {
 			continue
 		}
 
-		nl, err := r.getNodeList(context.Background(), newEpoch)
+		nl, err := r.getNodeList(ctx, newEpoch)
 		if err != nil {
 			r.logger.Error("worker: failed to generate node list for epoch",
 				"err", err,
@@ -478,7 +468,7 @@ func (r *tendermintBackend) workerPerEpochList() {
 		)
 		r.nodeListNotifier.Broadcast(nl)
 
-		rl, err := r.getRuntimes(context.Background(), newEpoch)
+		rl, err := r.getRuntimes(ctx, newEpoch)
 		if err != nil {
 			r.logger.Error("worker: failed to generate runtime list for epoch",
 				"err", err,
@@ -595,7 +585,7 @@ func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
 	// We can only work with a block-based epochtime.
 	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
 	if !ok {
@@ -622,7 +612,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	r.cached.runtimes = make(map[epochtime.EpochTime][]*api.Runtime)
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
-		runtimes, err := r.GetRuntimes(context.Background())
+		runtimes, err := r.GetRuntimes(ctx)
 		if err != nil {
 			r.logger.Error("runtime notifier: unable to get a list of runtimes",
 				"err", err,
@@ -636,8 +626,8 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	})
 
 	r.closedWg.Add(2)
-	go r.workerEvents()
-	go r.workerPerEpochList()
+	go r.workerEvents(ctx)
+	go r.workerPerEpochList(ctx)
 
 	return r, nil
 }

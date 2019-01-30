@@ -89,17 +89,17 @@ func (n *Node) initBackends() error {
 	var err error
 
 	// Initialize the various backends.
-	if n.Epochtime, err = epochtime.New(n.svcTmnt); err != nil {
+	if n.Epochtime, err = epochtime.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Beacon, err = beacon.New(n.Epochtime, n.svcTmnt); err != nil {
+	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Registry, err = registry.New(n.Epochtime, n.svcTmnt); err != nil {
+	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
-	if n.Scheduler, err = scheduler.New(n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
+	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
@@ -107,7 +107,7 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
-	if n.RootHash, err = roothash.New(n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
+	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
@@ -139,6 +139,7 @@ func NewNode() (*Node, error) {
 	var startOk bool
 	defer func() {
 		if !startOk {
+			node.svcMgr.Stop()
 			node.Cleanup()
 		}
 	}()
@@ -194,7 +195,7 @@ func NewNode() (*Node, error) {
 	node.svcMgr.Register(node.grpcSrv)
 
 	// Initialize the metrics server.
-	metrics, err := metrics.New()
+	metrics, err := metrics.New(node.svcMgr.Ctx)
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
@@ -204,7 +205,7 @@ func NewNode() (*Node, error) {
 	node.svcMgr.Register(metrics)
 
 	// Initialize the profiling server.
-	profiling, err := pprof.New()
+	profiling, err := pprof.New(node.svcMgr.Ctx)
 	if err != nil {
 		logger.Error("failed to initialize pprof server",
 			"err", err,
@@ -222,7 +223,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize tendermint.
-	node.svcTmnt = tendermint.New(dataDir, node.Identity)
+	node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity)
 	node.svcMgr.Register(node.svcTmnt)
 
 	// Initialize the varous node backends.

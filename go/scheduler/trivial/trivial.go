@@ -201,7 +201,7 @@ func (s *trivialSchedulerState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
-func (s *trivialSchedulerState) updateRuntimes(epoch epochtime.EpochTime, ts epochtime.Backend, reg registry.Backend) error {
+func (s *trivialSchedulerState) updateRuntimes(ctx context.Context, epoch epochtime.EpochTime, ts epochtime.Backend, reg registry.Backend) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -221,14 +221,14 @@ func (s *trivialSchedulerState) updateRuntimes(epoch epochtime.EpochTime, ts epo
 		}
 
 		var height int64
-		height, err = blkTs.GetEpochBlock(context.Background(), epoch)
+		height, err = blkTs.GetEpochBlock(ctx, epoch)
 		if err != nil {
 			return err
 		}
 
-		runtimes, err = blkReg.GetBlockRuntimes(context.Background(), height)
+		runtimes, err = blkReg.GetBlockRuntimes(ctx, height)
 	} else {
-		runtimes, err = reg.GetRuntimes(context.Background())
+		runtimes, err = reg.GetRuntimes(ctx)
 	}
 	if err != nil {
 		return err
@@ -397,7 +397,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 			return nil, err
 		}
 		var ts time.Time
-		ts, err = s.getEpochTransitionTime(epoch)
+		ts, err = s.getEpochTransitionTime(ctx, epoch)
 		if err != nil {
 			return nil, err
 		}
@@ -430,7 +430,7 @@ func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
 	s.state.lastElect = s.state.epoch
 }
 
-func (s *trivialScheduler) worker() { //nolint:gocyclo
+func (s *trivialScheduler) worker(ctx context.Context) { //nolint:gocyclo
 	defer close(s.closedCh)
 
 	timeCh, sub := s.timeSource.WatchEpochs()
@@ -462,7 +462,7 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 			//
 			// Omitting the check is mostly harmess, since a changing
 			// node list within an epoch is an invariant violation.
-			ts, err := s.getEpochTransitionTime(ev.Epoch)
+			ts, err := s.getEpochTransitionTime(ctx, ev.Epoch)
 			if err != nil {
 				// Attestation validations will fail till after the epoch transition.
 				s.logger.Error("worker: failed to get epoch transition time",
@@ -477,7 +477,7 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 
 			// If this fails, no elections will happen till the next epoch,
 			// unless forced by GetBlockCommittees.
-			if err = s.state.updateRuntimes(ev.Epoch, s.timeSource, s.registry); err != nil {
+			if err = s.state.updateRuntimes(ctx, ev.Epoch, s.timeSource, s.registry); err != nil {
 				s.logger.Error("worker: failed to update runtime list for epoch",
 					"err", err,
 				)
@@ -518,7 +518,7 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 	}
 }
 
-func (s *trivialScheduler) getEpochTransitionTime(epoch epochtime.EpochTime) (time.Time, error) {
+func (s *trivialScheduler) getEpochTransitionTime(ctx context.Context, epoch epochtime.EpochTime) (time.Time, error) {
 	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
 	if !ok || s.service == nil {
 		// Incompatible time backend, no BFT time available.  This
@@ -533,7 +533,7 @@ func (s *trivialScheduler) getEpochTransitionTime(epoch epochtime.EpochTime) (ti
 		return time.Now(), nil
 	}
 
-	blockHeight, err := timeSource.GetEpochBlock(context.Background(), epoch)
+	blockHeight, err := timeSource.GetEpochBlock(ctx, epoch)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -553,7 +553,7 @@ func (s *trivialScheduler) getEpochTransitionTime(epoch epochtime.EpochTime) (ti
 }
 
 // New constracts a new trivial scheduler Backend instance.
-func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon beacon.Backend, service service.TendermintService) api.Backend {
+func New(ctx context.Context, timeSource epochtime.Backend, registryBackend registry.Backend, beacon beacon.Backend, service service.TendermintService) api.Backend {
 	s := &trivialScheduler{
 		logger:     logging.GetLogger("scheduler/trivial"),
 		timeSource: timeSource,
@@ -600,7 +600,7 @@ func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon 
 		}
 	})
 
-	go s.worker()
+	go s.worker(ctx)
 
 	return s
 }

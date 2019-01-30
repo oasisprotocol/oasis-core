@@ -79,7 +79,7 @@ func (s *runtimeState) getLatestBlockImpl() (*block.Block, error) {
 	return s.blocks[nBlocks-1], nil
 }
 
-func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
+func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.Committee) {
 	// If the committee is the "same", ignore this.
 	//
 	// TODO: Use a better check to allow for things like rescheduling.
@@ -108,7 +108,7 @@ func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
 	}
 	s.timer.Reset(infiniteTimeout)
 
-	s.round = newRound(s.storage, s.runtime, committee, blk)
+	s.round = newRound(ctx, s.storage, s.runtime, committee, blk)
 
 	// Emit an empty epoch transition block in the new round. This is required so that
 	// the clients can be sure what state is final when an epoch transition occurs.
@@ -116,7 +116,7 @@ func (s *runtimeState) onNewCommittee(committee *scheduler.Committee) {
 
 	// Update the runtime.
 	rtID := s.runtime.ID
-	if s.runtime, err = s.registry.GetRuntime(context.Background(), s.runtime.ID); err != nil {
+	if s.runtime, err = s.registry.GetRuntime(ctx, s.runtime.ID); err != nil {
 		s.logger.Error("worker: new committee, failed to update runtime",
 			"err", err,
 			"runtime", rtID,
@@ -246,7 +246,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 	s.emitEmptyBlock(latestBlock, block.RoundFailed)
 }
 
-func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
+func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { // nolint: gocyclo
 	defer s.rootHash.closedWg.Done()
 
 	schedCh, sub := sched.WatchCommittees()
@@ -275,7 +275,7 @@ func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
 			if committee.Kind != scheduler.Compute {
 				continue
 			}
-			s.onNewCommittee(committee)
+			s.onNewCommittee(ctx, committee)
 		case cmd, ok := <-s.cmdCh:
 			if !ok {
 				return
@@ -304,7 +304,7 @@ func (s *runtimeState) worker(sched scheduler.Backend) { // nolint: gocyclo
 					"round", blockNr,
 				)
 
-				s.round = newRound(s.storage, s.runtime, s.round.roundState.committee, latestBlock)
+				s.round = newRound(ctx, s.storage, s.runtime, s.round.roundState.committee, latestBlock)
 			}
 
 			// Add the commitment.
@@ -488,7 +488,7 @@ func (r *memoryRootHash) getRuntimeState(id signature.PublicKey) (*runtimeState,
 	return s, nil
 }
 
-func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error {
+func (r *memoryRootHash) onRuntimeRegistration(ctx context.Context, runtime *registry.Runtime) error {
 	k := runtime.ID.ToMapKey()
 
 	r.Lock()
@@ -518,7 +518,7 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error 
 	}
 
 	r.closedWg.Add(1)
-	go s.worker(r.scheduler)
+	go s.worker(ctx, r.scheduler)
 
 	r.runtimes[k] = s
 
@@ -529,7 +529,7 @@ func (r *memoryRootHash) onRuntimeRegistration(runtime *registry.Runtime) error 
 	return nil
 }
 
-func (r *memoryRootHash) worker() {
+func (r *memoryRootHash) worker(ctx context.Context) {
 	defer func() {
 		close(r.closedCh)
 		for _, v := range r.runtimes {
@@ -547,7 +547,7 @@ func (r *memoryRootHash) worker() {
 				return
 			}
 
-			_ = r.onRuntimeRegistration(runtime)
+			_ = r.onRuntimeRegistration(ctx, runtime)
 		case <-r.closeCh:
 			return
 		}
@@ -556,6 +556,7 @@ func (r *memoryRootHash) worker() {
 
 // New constructs a new in-memory (centralized) root hash backend.
 func New(
+	ctx context.Context,
 	scheduler scheduler.Backend,
 	storage storage.Backend,
 	registry registry.Backend,
@@ -574,7 +575,7 @@ func New(
 		closedCh:         make(chan struct{}),
 		roundTimeout:     roundTimeout,
 	}
-	go r.worker()
+	go r.worker(ctx)
 
 	return r
 }

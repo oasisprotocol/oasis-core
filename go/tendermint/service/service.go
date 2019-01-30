@@ -55,9 +55,11 @@ type TendermintService interface {
 	Query(path string, query interface{}, height int64) ([]byte, error)
 
 	// Subscribe subscribes to tendermint events.
+	// TODO: ctx should be removed from API since we use tendermintService.ctx now -Matevz
 	Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error
 
 	// Unsubscribe unsubscribes from tendermint events.
+	// TODO: ctx should be removed from API since we use tendermintService.ctx now -Matevz
 	Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error
 
 	// Genesis returns the tendermint genesis block information.

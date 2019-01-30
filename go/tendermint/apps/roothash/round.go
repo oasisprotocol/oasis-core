@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/grpc/status"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -16,6 +15,7 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -81,7 +81,7 @@ type round struct {
 	DidTimeout bool        `codec:"did_timeout"`
 }
 
-func (r *round) addCommitment(store storage.Backend, commitment *commitment.Commitment) error {
+func (r *round) addCommitment(ctx context.Context, store storage.Backend, commitment *commitment.Commitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -115,7 +115,7 @@ func (r *round) addCommitment(store storage.Backend, commitment *commitment.Comm
 
 	// Check if the header refers to hashes in storage.
 	if role == scheduler.Leader || role == scheduler.BackupWorker {
-		if err := r.ensureHashesInStorage(store, header); err != nil {
+		if err := r.ensureHashesInStorage(ctx, store, header); err != nil {
 			return err
 		}
 	}
@@ -273,7 +273,7 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 	return nil, errInsufficientVotes
 }
 
-func (r *round) ensureHashesInStorage(store storage.Backend, header *block.Header) error {
+func (r *round) ensureHashesInStorage(ctx context.Context, store storage.Backend, header *block.Header) error {
 	for _, h := range []struct {
 		hash  hash.Hash
 		descr string
@@ -288,7 +288,7 @@ func (r *round) ensureHashesInStorage(store storage.Backend, header *block.Heade
 
 		var key storage.Key
 		copy(key[:], h.hash[:])
-		if _, err := store.Get(context.Background(), key); err != nil {
+		if _, err := store.Get(ctx, key); err != nil {
 			// HACK/#1380: Forward gRPC sourced failures.
 			if _, ok := status.FromError(err); ok {
 				return err
