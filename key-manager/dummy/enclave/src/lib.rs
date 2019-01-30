@@ -38,6 +38,9 @@ with_api! {
     create_enclave_rpc!(api);
 }
 
+// We have not implemented key-expiry yet. So give all keys the maximum expiry of 2^53-1
+// because (as a convenience) that is the maximum safe number to use in JavaScript and its
+// more than enough to account for enough time.
 static MAX_KEY_TIMESTAMP: u64 = (1 << 53) - 1;
 
 pub fn get_or_create_keys(
