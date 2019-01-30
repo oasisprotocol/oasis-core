@@ -35,7 +35,7 @@ var (
 		key   string
 		value interface{}
 	}{
-		{"log.level", "DEBUG"},
+		{"log.level.default", "DEBUG"},
 		{"epochtime.backend", "tendermint_mock"},
 		{"beacon.backend", "tendermint"},
 		{"registry.backend", "tendermint"},

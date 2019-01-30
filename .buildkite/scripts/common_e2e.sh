@@ -100,11 +100,13 @@ run_backend_tendermint_committee() {
         local datadir=${base_datadir}-${idx}
 
         let tm_port=(idx-1)+26656
+        let grpc_debug_port=tm_port+36656
 
         ${WORKDIR}/go/ekiden/ekiden \
             --log.level debug \
             --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.log.verbose_debug \
+            --grpc.debug.port ${grpc_debug_port} \
             --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
             --beacon.backend tendermint \
@@ -169,7 +171,8 @@ run_compute_node() {
     ${WORKDIR}/go/ekiden/ekiden \
         --log.level debug \
         --grpc.log.verbose_debug \
-        --storage.backend client \
+        --storage.backend cachingclient \
+        --storage.cachingclient.file ${data_dir}/storage-cache \
         --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \

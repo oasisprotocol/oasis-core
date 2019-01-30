@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	cfgGRPCPort = "grpc.port"
+	cfgGRPCPort  = "grpc.port"
+	cfgDebugPort = "grpc.debug.port"
+	cfgAddress   = "address"
 
-	cfgAddress     = "address"
-	defaultAddress = "127.0.0.1:42261"
-
+	defaultAddress      = "127.0.0.1:42261"
 	localSocketFilename = "internal.sock"
 )
 
@@ -44,8 +44,10 @@ func NewServerLocal() (*cmnGrpc.Server, error) {
 		return nil, errors.New("data directory must be set")
 	}
 
+	debugPort := uint16(viper.GetInt(cfgDebugPort))
+
 	path := filepath.Join(dataDir, localSocketFilename)
-	return cmnGrpc.NewServerLocal("internal", path)
+	return cmnGrpc.NewServerLocal("internal", path, debugPort)
 }
 
 // RegisterServerTCPFlags registers the flags used by the gRPC server.
@@ -66,6 +68,16 @@ func RegisterServerTCPFlags(cmd *cobra.Command) {
 // RegisterServerLocalFlags registers the flags used by the gRPC server.
 func RegisterServerLocalFlags(cmd *cobra.Command) {
 	cmnGrpc.RegisterServerFlags(cmd)
+
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Uint16(cfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
+	}
+
+	for _, v := range []string{
+		cfgDebugPort,
+	} {
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
 }
 
 // RegisterClientFlags registers the flags for a gRPC client.

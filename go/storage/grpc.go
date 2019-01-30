@@ -55,7 +55,7 @@ func (s *grpcServer) GetBatch(ctx context.Context, req *pb.GetBatchRequest) (*pb
 }
 
 func (s *grpcServer) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
-	if err := s.backend.Insert(ctx, req.GetData(), req.GetExpiry()); err != nil {
+	if err := s.backend.Insert(ctx, req.GetData(), req.GetExpiry(), api.InsertOptions{}); err != nil {
 		return nil, err
 	}
 	return &pb.InsertResponse{}, nil
@@ -70,7 +70,7 @@ func (s *grpcServer) InsertBatch(ctx context.Context, req *pb.InsertBatchRequest
 		})
 	}
 
-	if err := s.backend.InsertBatch(ctx, values); err != nil {
+	if err := s.backend.InsertBatch(ctx, values, api.InsertOptions{}); err != nil {
 		return nil, err
 	}
 

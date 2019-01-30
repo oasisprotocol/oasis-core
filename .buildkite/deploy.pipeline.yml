@@ -11,6 +11,8 @@ steps:
     branches: master
     command:
       - .buildkite/scripts/build_tag_push_deployment_image.sh
+    agents:
+      buildkite_agent_size: large
 
   - block: Human approval required to deploy docker image
     branches: "*"

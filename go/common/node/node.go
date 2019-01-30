@@ -218,6 +218,31 @@ const (
 	TEEHardwareIntelSGX TEEHardware = 1
 )
 
+// FromProto deserializes a protobuf into a TEEHardware.
+func (h *TEEHardware) FromProto(pb pbCommon.CapabilitiesTEE_Hardware) error {
+	switch pb {
+	case pbCommon.CapabilitiesTEE_Invalid:
+		*h = TEEHardwareInvalid
+	case pbCommon.CapabilitiesTEE_IntelSGX:
+		*h = TEEHardwareIntelSGX
+	default:
+		return ErrInvalidTEEHardware
+	}
+	return nil
+}
+
+// ToProto serializes a TEEHardware into a protobuf.
+func (h *TEEHardware) ToProto() (pbCommon.CapabilitiesTEE_Hardware, error) {
+	switch *h {
+	case TEEHardwareInvalid:
+		return pbCommon.CapabilitiesTEE_Invalid, nil
+	case TEEHardwareIntelSGX:
+		return pbCommon.CapabilitiesTEE_IntelSGX, nil
+	default:
+		return pbCommon.CapabilitiesTEE_Invalid, ErrInvalidTEEHardware
+	}
+}
+
 // CapabilityTEE represents the node's TEE capability.
 type CapabilityTEE struct {
 	// TEE hardware type.
@@ -235,11 +260,8 @@ func (c *CapabilityTEE) fromProto(pb *pbCommon.CapabilitiesTEE) error {
 		return ErrNilProtobuf
 	}
 
-	switch pb.GetHardware() {
-	case pbCommon.CapabilitiesTEE_IntelSGX:
-		c.Hardware = TEEHardwareIntelSGX
-	default:
-		return ErrInvalidTEEHardware
+	if err := c.Hardware.FromProto(pb.GetHardware()); err != nil {
+		return err
 	}
 
 	if err := c.RAK.UnmarshalBinary(pb.GetRak()); err != nil {
@@ -254,11 +276,9 @@ func (c *CapabilityTEE) fromProto(pb *pbCommon.CapabilitiesTEE) error {
 func (c *CapabilityTEE) toProto() *pbCommon.CapabilitiesTEE {
 	pb := new(pbCommon.CapabilitiesTEE)
 
-	switch c.Hardware {
-	case TEEHardwareIntelSGX:
-		pb.Hardware = pbCommon.CapabilitiesTEE_IntelSGX
-	default:
-		panic(ErrInvalidTEEHardware)
+	var err error
+	if pb.Hardware, err = c.Hardware.ToProto(); err != nil {
+		panic(err)
 	}
 
 	pb.Rak, _ = c.RAK.MarshalBinary()

@@ -538,35 +538,39 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	blk.Header.OutputHash.From(batch.Outputs)
 	blk.Header.StateRoot = batch.NewStateRoot
 
-	// Commit outputs and state to storage.
-	if epoch.IsLeader() || epoch.IsBackupWorker() {
-		start := time.Now()
-		err := func() error {
-			ctx, cancel := context.WithTimeout(n.ctx, n.cfg.StorageCommitTimeout)
-			defer cancel()
+	// Commit outputs and state to storage. If we are a regular worker, then we only
+	// insert into local cache.
+	var opts storage.InsertOptions
+	if !epoch.IsLeader() && !epoch.IsBackupWorker() {
+		opts.LocalOnly = true
+	}
 
-			if err := n.storage.InsertBatch(ctx, batch.StorageInserts); err != nil {
-				n.logger.Error("failed to commit state to storage",
-					"err", err,
-				)
-				return err
-			}
+	start := time.Now()
+	err := func() error {
+		ctx, cancel := context.WithTimeout(n.ctx, n.cfg.StorageCommitTimeout)
+		defer cancel()
 
-			if err := n.storage.Insert(ctx, batch.Outputs.MarshalCBOR(), 2); err != nil {
-				n.logger.Error("failed to commit outputs to storage",
-					"err", err,
-				)
-				return err
-			}
-
-			return nil
-		}()
-		storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
-
-		if err != nil {
-			n.abortBatch(err)
-			return
+		if err := n.storage.InsertBatch(ctx, batch.StorageInserts, opts); err != nil {
+			n.logger.Error("failed to commit state to storage",
+				"err", err,
+			)
+			return err
 		}
+
+		if err := n.storage.Insert(ctx, batch.Outputs.MarshalCBOR(), 2, opts); err != nil {
+			n.logger.Error("failed to commit outputs to storage",
+				"err", err,
+			)
+			return err
+		}
+
+		return nil
+	}()
+	storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+
+	if err != nil {
+		n.abortBatch(err)
+		return
 	}
 
 	// Commit header.
@@ -654,7 +658,7 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}()
 
 	// Commit batch to storage.
-	if err := n.storage.Insert(n.ctx, batch.MarshalCBOR(), 2); err != nil {
+	if err := n.storage.Insert(n.ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
 		n.logger.Error("failed to commit input batch to storage",
 			"err", err,
 		)

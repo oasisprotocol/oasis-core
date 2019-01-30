@@ -8,6 +8,7 @@ package logging
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 
@@ -18,8 +19,8 @@ import (
 
 var (
 	backend = logBackend{
-		baseLogger: log.NewNopLogger(),
-		level:      LevelError,
+		baseLogger:   log.NewNopLogger(),
+		defaultLevel: LevelError,
 	}
 
 	_ pflag.Value = (*Level)(nil)
@@ -56,7 +57,7 @@ func (f *Format) Set(s string) error {
 	case "JSON":
 		*f = FmtJSON
 	default:
-		return fmt.Errorf("logging: invalid log format: '%v'" + s)
+		return fmt.Errorf("logging: invalid log format: '%s'", s)
 	}
 
 	return nil
@@ -138,11 +139,12 @@ func (l *Level) Type() string {
 // Logger is a logger instance.
 type Logger struct {
 	logger log.Logger
+	level  Level
 }
 
 // Debug logs the message and key value pairs at the Debug log level.
 func (l *Logger) Debug(msg string, keyvals ...interface{}) {
-	if backend.level > LevelDebug {
+	if l.level > LevelDebug {
 		return
 	}
 	keyvals = append([]interface{}{"msg", msg}, keyvals...)
@@ -151,7 +153,7 @@ func (l *Logger) Debug(msg string, keyvals ...interface{}) {
 
 // Info logs the message and key value pairs at the Info log level.
 func (l *Logger) Info(msg string, keyvals ...interface{}) {
-	if backend.level > LevelInfo {
+	if l.level > LevelInfo {
 		return
 	}
 	keyvals = append([]interface{}{"msg", msg}, keyvals...)
@@ -160,7 +162,7 @@ func (l *Logger) Info(msg string, keyvals ...interface{}) {
 
 // Warn logs the message and key value pairs at the Warn log level.
 func (l *Logger) Warn(msg string, keyvals ...interface{}) {
-	if backend.level > LevelWarn {
+	if l.level > LevelWarn {
 		return
 	}
 	keyvals = append([]interface{}{"msg", msg}, keyvals...)
@@ -169,7 +171,7 @@ func (l *Logger) Warn(msg string, keyvals ...interface{}) {
 
 // Error logs the message and key value pairs at the Error log level.
 func (l *Logger) Error(msg string, keyvals ...interface{}) {
-	if backend.level > LevelError {
+	if l.level > LevelError {
 		return
 	}
 	keyvals = append([]interface{}{"msg", msg}, keyvals...)
@@ -181,12 +183,13 @@ func (l *Logger) Error(msg string, keyvals ...interface{}) {
 func (l *Logger) With(keyvals ...interface{}) *Logger {
 	return &Logger{
 		logger: log.With(l.logger, keyvals...),
+		level:  l.level,
 	}
 }
 
 // GetLevel returns the curent global log level.
 func GetLevel() Level {
-	return backend.level
+	return backend.defaultLevel
 }
 
 // GetLogger creates a new logger instance with the specified module.
@@ -209,9 +212,10 @@ func GetLoggerEx(module string, extraUnwind uint) *Logger {
 }
 
 // Initialize initializes the logging backend to write to the provided
-// Writer with the default log level and format.  If the Writer is nil,
-// all log output will be silently discarded.
-func Initialize(w io.Writer, lvl Level, format Format) error {
+// Writer with the given format and log levels specified for each
+// module. If the requested module is not given, default level is
+// taken. If the Writer is nil, all log output will be silently discarded.
+func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[string]Level) error {
 	backend.Lock()
 	defer backend.Unlock()
 
@@ -234,11 +238,12 @@ func Initialize(w io.Writer, lvl Level, format Format) error {
 		}
 	}
 
-	logger = level.NewFilter(logger, lvl.toOption())
+	logger = level.NewFilter(logger, defaultLvl.toOption())
 	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 
 	backend.baseLogger = logger
-	backend.level = lvl
+	backend.moduleLevels = moduleLvls
+	backend.defaultLevel = defaultLvl
 	backend.initialized = true
 
 	// Swap all the early loggers to the initialized backend.
@@ -255,14 +260,15 @@ type logBackend struct {
 
 	baseLogger   log.Logger
 	earlyLoggers []*log.SwapLogger
-	level        Level
+	defaultLevel Level
+	moduleLevels map[string]Level
 
 	initialized bool
 }
 
 func (b *logBackend) getLogger(module string, extraUnwind uint) *Logger {
 	// The default unwind depth is as log.DefaultCaller, with an
-	// addiitonal level of stack unwinding due to this module's
+	// additional level of stack unwinding due to this module's
 	// leveling wrapper.
 	const defaultUnwind = 4
 
@@ -274,9 +280,27 @@ func (b *logBackend) getLogger(module string, extraUnwind uint) *Logger {
 		logger = &log.SwapLogger{}
 	}
 
+	// Check, whether there is a specific logging level set for the module.
+	// The longest prefix match of the module name provided in the config file will be taken.
+	// Otherwise, fallback to level defined by "default" key.
+	modulePrefixes := make([]string, 0, len(backend.moduleLevels))
+	for k := range backend.moduleLevels {
+		modulePrefixes = append(modulePrefixes, k)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(modulePrefixes)))
+
+	lvl := backend.defaultLevel
+	for _, k := range modulePrefixes {
+		if strings.HasPrefix(module, k) {
+			lvl = backend.moduleLevels[k]
+			break
+		}
+	}
+
 	unwind := defaultUnwind + int(extraUnwind)
 	l := &Logger{
 		logger: log.WithPrefix(logger, "module", module, "caller", log.Caller(unwind)),
+		level:  lvl,
 	}
 
 	if !b.initialized {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ed25519"
 )
@@ -13,10 +14,7 @@ func TestSerialization(t *testing.T) {
 	c := Runtime{
 		ID:                       signature.PublicKey(key),
 		Code:                     []byte{0x12, 0x13, 0x14, 0x15, 0x16},
-		MinimumBond:              42,
-		ModeNonDeterministic:     false,
-		FeaturesSGX:              false,
-		AdvertisementRate:        54,
+		TEEHardware:              node.TEEHardwareIntelSGX,
 		ReplicaGroupSize:         63,
 		ReplicaGroupBackupSize:   72,
 		ReplicaAllowedStragglers: 81,

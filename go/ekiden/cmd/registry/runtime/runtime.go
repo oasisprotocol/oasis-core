@@ -139,7 +139,7 @@ func doRegister(cmd *cobra.Command, args []string) {
 	}
 
 	nrRetries := cmdFlags.Retries()
-	for i := 0; i < nrRetries; {
+	for i := 0; i <= nrRetries; {
 		if err := actuallyRegister(cmd, rt, privKey); err == nil {
 			return
 		}
@@ -250,7 +250,7 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 	return &registry.Runtime{
 		ID:                       id,
 		Code:                     nil, // TBD
-		FeaturesSGX:              teeHardware == node.TEEHardwareIntelSGX,
+		TEEHardware:              teeHardware,
 		ReplicaGroupSize:         uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:   uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
 		ReplicaAllowedStragglers: uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),

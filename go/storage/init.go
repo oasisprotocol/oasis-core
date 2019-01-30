@@ -15,7 +15,6 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/client"
 	"github.com/oasislabs/ekiden/go/storage/leveldb"
 	"github.com/oasislabs/ekiden/go/storage/memory"
-	"github.com/oasislabs/ekiden/go/storage/pgx"
 )
 
 const cfgBackend = "storage.backend"
@@ -32,8 +31,6 @@ func New(timeSource epochtime.Backend, dataDir string) (api.Backend, error) {
 	case leveldb.BackendName:
 		fn := filepath.Join(dataDir, leveldb.DBFile)
 		impl, err = leveldb.New(fn, timeSource)
-	case pgx.BackendName:
-		impl, err = pgx.New(timeSource)
 	case client.BackendName:
 		impl, err = client.New()
 	case cachingclient.BackendName:
@@ -61,7 +58,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
 	}
 
-	pgx.RegisterFlags(cmd)
 	client.RegisterFlags(cmd)
 	cachingclient.RegisterFlags(cmd)
 }

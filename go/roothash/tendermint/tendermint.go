@@ -458,6 +458,9 @@ func New(
 		return nil, errors.New("roothash/tendermint: need a block-based scheduler backend")
 	}
 
+	// HACK/#1380: Wait for storage to actually be fully initialized.
+	<-storage.Initialized()
+
 	// Initialize and register the tendermint service component.
 	app := tmroothash.New(blockTimeSource, blockScheduler, storage, genesisBlocks, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {

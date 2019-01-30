@@ -85,7 +85,7 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 				_, _ = io.ReadFull(rand.Reader, buf)
 				b.StartTimer()
 
-				if err = storage.Insert(context.Background(), buf, 9001); err != nil {
+				if err = storage.Insert(context.Background(), buf, 9001, storageAPI.InsertOptions{}); err != nil {
 					b.Fatalf("failed to Insert(): %v", err)
 				}
 			}

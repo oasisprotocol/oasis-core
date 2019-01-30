@@ -53,6 +53,8 @@ steps:
   ############
   # Build jobs
   ############
+  # This label needs to be synced with runtime-ethereum's
+  # .buildkite/scripts/download_common_artifacts.sh.
   - label: Build Go node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -64,6 +66,8 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
+  # This label needs to be synced with runtime-ethereum's
+  # .buildkite/scripts/download_common_artifacts.sh.
   - label: Build Rust worker, compute node and key manager node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -79,6 +83,8 @@ steps:
       - buildkite-agent artifact upload test-long-term-client
       - buildkite-agent artifact upload simple-keyvalue-client
       - buildkite-agent artifact upload test-logger-client
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -94,9 +100,13 @@ steps:
       - cd /tmp/artifacts/enclave
       - buildkite-agent artifact upload simple-keyvalue.so
       - buildkite-agent artifact upload simple-keyvalue.mrenclave
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
+  # This label needs to be synced with runtime-ethereum's 
+  # .buildkite/rust/build_and_test_runtime.sh and .buildkite/scripts/download_common_artifacts.sh.
   - label: Build key manager enclave
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -106,6 +116,8 @@ steps:
       - cd /tmp/artifacts/enclave
       - buildkite-agent artifact upload ekiden-keymanager-trusted.so
       - buildkite-agent artifact upload ekiden-keymanager-trusted.mrenclave
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -118,6 +130,8 @@ steps:
       - cd /tmp/artifacts/enclave
       - buildkite-agent artifact upload test-db-encryption.so
       - buildkite-agent artifact upload test-db-encryption.mrenclave
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -130,6 +144,8 @@ steps:
       - cd /tmp/artifacts/enclave
       - buildkite-agent artifact upload test-logger.so
       - buildkite-agent artifact upload test-logger.mrenclave
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -140,6 +156,8 @@ steps:
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/rust/test_generic.sh .
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -166,6 +184,8 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -174,6 +194,8 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
@@ -186,6 +208,8 @@ steps:
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/rust/coverage.sh
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
