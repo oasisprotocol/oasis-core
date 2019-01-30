@@ -9,6 +9,7 @@ import (
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -484,6 +485,15 @@ func (app *rootHashApplication) commit(
 			"err", err,
 			"round", blockNr,
 		)
+
+		// HACK/#1380: Transient storage failures result in non-deterministic behavior.
+		if _, ok := status.FromError(err); ok {
+			app.logger.Error("BUG: gRPC failure, CRASHING TO PROTECT STATE",
+				"err", err,
+			)
+			panic("BUG: gRPC failure, CRASHING TO PROTECT STATE: " + err.Error())
+		}
+
 		return err
 	}
 

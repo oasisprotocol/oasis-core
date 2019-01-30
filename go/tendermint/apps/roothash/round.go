@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -289,6 +290,11 @@ func (r *round) ensureHashesInStorage(store storage.Backend, header *block.Heade
 		var key storage.Key
 		copy(key[:], h.hash[:])
 		if _, err := store.Get(context.Background(), key); err != nil {
+			// HACK/#1380: Forward gRPC sourced failures.
+			if _, ok := status.FromError(err); ok {
+				return err
+			}
+
 			return fmt.Errorf("tendermint/roothash: failed to retreive %v: %v", h.descr, err)
 		}
 	}
