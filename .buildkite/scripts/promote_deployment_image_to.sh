@@ -30,15 +30,16 @@ deployment_image_tag=$(buildkite-agent meta-data \
                        get \
                        "deployment_image_tag"
                      )
+tag_suffix=${DEPLOYMENT_VARIANT:+-$DEPLOYMENT_VARIANT}
 
 ##############################################
 # Add the provided tag to the deployment image
 ##############################################
 
-docker pull "${docker_image_name}:${deployment_image_tag}"
+docker pull "${docker_image_name}:${deployment_image_tag}${tag_suffix}"
 
 docker tag \
-  "${docker_image_name}:${deployment_image_tag}" \
+  "${docker_image_name}:${deployment_image_tag}${tag_suffix}" \
   "${docker_image_name}:${new_image_tag}"
 
 docker push "${docker_image_name}:${new_image_tag}"

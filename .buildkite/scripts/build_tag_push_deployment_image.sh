@@ -21,7 +21,8 @@ deployment_image_tag=$(buildkite-agent meta-data \
                        get \
                        "deployment_image_tag"
                      )
+tag_suffix=${DEPLOYMENT_VARIANT:+-$DEPLOYMENT_VARIANT}
 
 docker/deployment/docker_build_and_push.sh \
   ${BUILDKITE_COMMIT} \
-  ${deployment_image_tag}
+  ${deployment_image_tag}${tag_suffix}

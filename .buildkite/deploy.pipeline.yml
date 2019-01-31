@@ -14,6 +14,14 @@ steps:
     agents:
       buildkite_agent_size: large
 
+  - label: Build hardware docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/build_tag_push_deployment_image.sh
+    env:
+      SGX_MODE: HW
+      DEPLOYMENT_VARIANT: hw
+
   - block: Human approval required to deploy docker image
     branches: "*"
     prompt: |
@@ -28,3 +36,10 @@ steps:
     branches: master
     command:
       - .buildkite/scripts/promote_deployment_image_to.sh latest
+
+  - label: Deploy hardware docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/promote_deployment_image_to.sh latest-hw
+    env:
+      DEPLOYMENT_VARIANT: hw
