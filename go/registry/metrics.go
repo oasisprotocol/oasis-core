@@ -151,6 +151,10 @@ func (w *blockMetricsWrapper) GetBlockNodeList(ctx context.Context, height int64
 	return w.blockBackend.GetBlockNodeList(ctx, height)
 }
 
+func (w *blockMetricsWrapper) GetBlockRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
+	return w.blockBackend.GetBlockRuntimes(ctx, height)
+}
+
 func newMetricsWrapper(base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registeryCollectors...)

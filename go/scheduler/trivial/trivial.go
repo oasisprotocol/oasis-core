@@ -63,7 +63,7 @@ type trivialSchedulerState struct {
 
 	nodeLists  map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
 	beacons    map[epochtime.EpochTime][]byte
-	runtimes   map[signature.MapKey]*registry.Runtime
+	runtimes   map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
 	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
 
 	epoch     epochtime.EpochTime
@@ -74,7 +74,7 @@ func (s *trivialSchedulerState) canElect() bool {
 	return s.nodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil
 }
 
-func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
+func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
 	var committees []*api.Committee
 
 	maybeBroadcast := func() {
@@ -92,13 +92,13 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 	comMap := s.committees[epoch]
 
 	// This may be cached due to an external entity polling for this.
-	conID := con.ID.ToMapKey()
-	if committees = comMap[conID]; committees != nil {
+	rtID := rt.ID.ToMapKey()
+	if committees = comMap[rtID]; committees != nil {
 		maybeBroadcast()
 		return committees, nil
 	}
 
-	nodeList := s.nodeLists[epoch][conID][con.TEEHardware]
+	nodeList := s.nodeLists[epoch][rtID][rt.TEEHardware]
 	beacon := s.beacons[epoch]
 	nrNodes := len(nodeList)
 
@@ -107,10 +107,10 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 		var ctx []byte
 		switch kind {
 		case api.Compute:
-			sz = int(con.ReplicaGroupSize + con.ReplicaGroupBackupSize)
+			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
 			ctx = rngContextCompute
 		case api.Storage:
-			sz = int(con.StorageGroupSize)
+			sz = int(rt.StorageGroupSize)
 			ctx = rngContextStorage
 		default:
 			return nil, fmt.Errorf("scheduler: invalid committee type: %v", kind)
@@ -123,7 +123,7 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 			return nil, fmt.Errorf("scheduler: committee size exceeds available nodes")
 		}
 
-		drbg, err := drbg.New(crypto.SHA512, beacon, con.ID[:], ctx)
+		drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +133,7 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 
 		committee := &api.Committee{
 			Kind:      kind,
-			RuntimeID: con.ID,
+			RuntimeID: rt.ID,
 			ValidFor:  epoch,
 		}
 
@@ -142,7 +142,7 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 			switch {
 			case i == 0:
 				role = api.Leader
-			case i >= int(con.ReplicaGroupSize):
+			case i >= int(rt.ReplicaGroupSize):
 				role = api.BackupWorker
 			default:
 				role = api.Worker
@@ -156,7 +156,7 @@ func (s *trivialSchedulerState) elect(con *registry.Runtime, epoch epochtime.Epo
 		committees = append(committees, committee)
 	}
 
-	comMap[conID] = committees
+	comMap[rtID] = committees
 	maybeBroadcast()
 
 	return committees, nil
@@ -178,6 +178,11 @@ func (s *trivialSchedulerState) prune() {
 			delete(s.beacons, epoch)
 		}
 	}
+	for epoch := range s.runtimes {
+		if epoch < pruneBefore {
+			delete(s.runtimes, epoch)
+		}
+	}
 
 	s.Lock()
 	defer s.Unlock()
@@ -196,6 +201,48 @@ func (s *trivialSchedulerState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
+func (s *trivialSchedulerState) updateRuntimes(epoch epochtime.EpochTime, ts epochtime.Backend, reg registry.Backend) error {
+	s.Lock()
+	defer s.Unlock()
+
+	// Runtimes per epoch are an invariant.
+	if s.runtimes[epoch] != nil {
+		return nil
+	}
+
+	var (
+		runtimes []*registry.Runtime
+		err      error
+	)
+	if blkReg, ok := reg.(registry.BlockBackend); ok {
+		blkTs, ok := ts.(epochtime.BlockBackend)
+		if !ok {
+			return errIncompatibleBackends
+		}
+
+		var height int64
+		height, err = blkTs.GetEpochBlock(context.Background(), epoch)
+		if err != nil {
+			return err
+		}
+
+		runtimes, err = blkReg.GetBlockRuntimes(context.Background(), height)
+	} else {
+		runtimes, err = reg.GetRuntimes(context.Background())
+	}
+	if err != nil {
+		return err
+	}
+
+	m := make(map[signature.MapKey]*registry.Runtime)
+	for _, v := range runtimes {
+		m[v.ID.ToMapKey()] = v
+	}
+	s.runtimes[epoch] = m
+
+	return nil
+}
+
 func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, nodes []*node.Node, ts time.Time) {
 	// Invariant: s.Lock() held already.
 
@@ -206,7 +253,7 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 	}
 
 	m := make(map[signature.MapKey]map[node.TEEHardware][]*node.Node)
-	for id := range s.runtimes {
+	for id := range s.runtimes[epoch] {
 		m[id] = make(map[node.TEEHardware][]*node.Node)
 	}
 
@@ -297,14 +344,14 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		return nil, err
 	}
 
-	conID := id.ToMapKey()
+	rtID := id.ToMapKey()
 
 	s.state.Lock()
 	defer s.state.Unlock()
 
 	// Service the request from the cache if possible.
 	if comMap := s.state.committees[epoch]; comMap != nil {
-		if committees := comMap[conID]; committees != nil {
+		if committees := comMap[rtID]; committees != nil {
 			return committees, nil
 		}
 	}
@@ -324,6 +371,25 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		s.state.beacons[epoch] = b
 	}
 
+	if runtimes := s.state.runtimes[epoch]; runtimes == nil {
+		var runtimes []*registry.Runtime
+		runtimes, err = reg.GetBlockRuntimes(ctx, height)
+		if err != nil {
+			return nil, err
+		}
+
+		m := make(map[signature.MapKey]*registry.Runtime)
+		for _, v := range runtimes {
+			m[v.ID.ToMapKey()] = v
+		}
+		s.state.runtimes[epoch] = m
+	}
+
+	rt := s.state.runtimes[epoch][rtID]
+	if rt == nil {
+		return nil, registry.ErrNoSuchRuntime
+	}
+
 	if nodeList := s.state.nodeLists[epoch]; nodeList == nil {
 		var nl *registry.NodeList
 		nl, err = reg.GetBlockNodeList(ctx, height)
@@ -338,38 +404,14 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		s.state.updateNodeListLocked(epoch, nl.Nodes, ts)
 	}
 
-	con, err := reg.GetRuntime(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.state.elect(con, epoch, nil)
-}
-
-func (s *trivialScheduler) electSingle(con *registry.Runtime, notifier *pubsub.Broker) {
-	s.state.Lock()
-	defer s.state.Unlock()
-
-	committees, err := s.state.elect(con, s.state.epoch, s.notifier)
-	if err != nil {
-		s.logger.Debug("worker: failed to elect (single)",
-			"runtime", con,
-			"err", err,
-		)
-		return
-	}
-
-	s.logger.Debug("worker: election (single)",
-		"runtime", con,
-		"committees", committees,
-	)
+	return s.state.elect(rt, epoch, nil)
 }
 
 func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
 	s.state.Lock()
 	defer s.state.Unlock()
 
-	for _, v := range s.state.runtimes {
+	for _, v := range s.state.runtimes[s.state.epoch] {
 		committees, err := s.state.elect(v, s.state.epoch, s.notifier)
 		if err != nil {
 			s.logger.Debug("worker: failed to elect",
@@ -392,9 +434,6 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 	defer close(s.closedCh)
 
 	timeCh, sub := s.timeSource.WatchEpochs()
-	defer sub.Close()
-
-	runtimeCh, sub := s.registry.WatchRuntimes()
 	defer sub.Close()
 
 	nodeListCh, sub := s.registry.WatchNodeList()
@@ -436,6 +475,15 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 				"transition_at", ts,
 			)
 
+			// If this fails, no elections will happen till the next epoch,
+			// unless forced by GetBlockCommittees.
+			if err = s.state.updateRuntimes(ev.Epoch, s.timeSource, s.registry); err != nil {
+				s.logger.Error("worker: failed to update runtime list for epoch",
+					"err", err,
+				)
+				continue
+			}
+
 			s.state.Lock()
 			s.state.updateNodeListLocked(ev.Epoch, ev.Nodes, ts)
 			s.state.Unlock()
@@ -455,22 +503,6 @@ func (s *trivialScheduler) worker() { //nolint:gocyclo
 				"beacon", hex.EncodeToString(ev.Beacon),
 			)
 			s.state.beacons[ev.Epoch] = ev.Beacon
-		case runtime := <-runtimeCh:
-			mk := runtime.ID.ToMapKey()
-			if con := s.state.runtimes[mk]; con != nil {
-				s.logger.Error("worker: runtime registration ID conflict",
-					"runtime", con,
-					"new_runtime", runtime,
-				)
-				continue
-			}
-			s.state.runtimes[mk] = runtime
-			if s.state.epoch == s.state.lastElect && s.state.canElect() {
-				// Attempt to elect the committee if possible, since
-				// the election for the epoch happened already.
-				s.electSingle(runtime, s.notifier)
-			}
-			continue
 		}
 
 		if s.state.epoch == s.state.lastElect || !s.state.canElect() {
@@ -530,7 +562,7 @@ func New(timeSource epochtime.Backend, registryBackend registry.Backend, beacon 
 		state: &trivialSchedulerState{
 			nodeLists:  make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
 			beacons:    make(map[epochtime.EpochTime][]byte),
-			runtimes:   make(map[signature.MapKey]*registry.Runtime),
+			runtimes:   make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
 			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
 			epoch:      epochtime.EpochInvalid,
 			lastElect:  epochtime.EpochInvalid,

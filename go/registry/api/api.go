@@ -60,6 +60,10 @@ var (
 	// with an unknown entity is attempted.
 	ErrBadEntityForNode = errors.New("registry: unknown entity in node registration")
 
+	// ErrBadEntityForRuntime is the error returned when a runtime
+	// registration with an unknown entity is attempted.
+	ErrBadEntityForRuntime = errors.New("registry: unknown entity in runtime registration")
+
 	// ErrNoSuchEntity is the error returned when an entity does not exist.
 	ErrNoSuchEntity = errors.New("registry: no such entity")
 
@@ -174,6 +178,10 @@ type BlockBackend interface {
 
 	// GetBlockNodeList returns the NodeList at the specified block height.
 	GetBlockNodeList(context.Context, int64) (*NodeList, error)
+
+	// GetBlockRuntimes returns the registered Runtimes at the specified
+	// block height.
+	GetBlockRuntimes(context.Context, int64) ([]*Runtime, error)
 }
 
 type Timestamp uint64

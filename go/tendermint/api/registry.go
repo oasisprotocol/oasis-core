@@ -21,6 +21,10 @@ var (
 	// runtime registrations (value is runtime id).
 	TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
 
+	// TagRegistryEntityRegistered is an ABCI transaction tag for new
+	// entity registrations (value is entity id).
+	TagRegistryEntityRegistered = []byte("registry.entity.registered")
+
 	// TagRegistryNodesExpired is an ABCI transaction tag for node
 	// deregistrations due to expiration (value is a CBOR serialized
 	//  vector of node descriptors).

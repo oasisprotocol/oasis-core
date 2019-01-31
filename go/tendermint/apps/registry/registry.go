@@ -274,6 +274,7 @@ func (app *registryApplication) registerEntity(
 			"entity", ent,
 		)
 
+		ctx.EmitTag(api.TagRegistryEntityRegistered, ent.ID)
 		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterEntity: &api.OutputRegisterEntity{
 				Entity: *ent,
@@ -375,37 +376,44 @@ func (app *registryApplication) registerNode(
 func (app *registryApplication) registerRuntime(
 	ctx *abci.Context,
 	state *MutableState,
-	sigCon *registry.SignedRuntime,
+	sigRt *registry.SignedRuntime,
 ) error {
-	con, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigCon, ctx.IsInitChain())
+	rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigRt, ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
 
 	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(con.RegistrationTime, uint64(ctx.Now().Unix()))
+		err = registry.VerifyTimestamp(rt.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterRuntime: INVALID TIMESTAMP",
-				"runtime_timestamp", con.RegistrationTime,
+				"runtime_timestamp", rt.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
 			)
 			return err
 		}
 	}
 
-	state.CreateRuntime(con)
+	if err = state.CreateRuntime(rt, sigRt.Signature.PublicKey); err != nil {
+		app.logger.Error("RegisterRuntime: failed to create runtime",
+			"err", err,
+			"runtime", rt,
+			"entity", sigRt.Signature.PublicKey,
+		)
+		return registry.ErrBadEntityForRuntime
+	}
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterRuntime: registered",
-			"runtime", con,
+			"runtime", rt,
 		)
 
+		ctx.EmitTag(api.TagRegistryRuntimeRegistered, rt.ID)
 		ctx.EmitData(&api.OutputRegistry{
 			OutputRegisterRuntime: &api.OutputRegisterRuntime{
-				Runtime: *con,
+				Runtime: *rt,
 			},
 		})
-		ctx.EmitTag(api.TagRegistryRuntimeRegistered, con.ID)
 	}
 
 	return nil

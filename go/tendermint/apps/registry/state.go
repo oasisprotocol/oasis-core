@@ -295,9 +295,16 @@ func (s *MutableState) RemoveNode(node *node.Node) {
 }
 
 // CreateRuntime creates a new runtime.
-func (s *MutableState) CreateRuntime(con *registry.Runtime) {
+func (s *MutableState) CreateRuntime(con *registry.Runtime, entID signature.PublicKey) error {
+	ent, err := s.GetEntityRaw(entID)
+	if ent == nil || err != nil {
+		return errEntityNotFound
+	}
+
 	s.tree.Set(
 		[]byte(fmt.Sprintf(stateRuntimeMap, con.ID.String())),
 		con.MarshalCBOR(),
 	)
+
+	return nil
 }

@@ -26,12 +26,12 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 
 	require := require.New(t)
 
-	rt, err := registryTests.NewTestRuntime(seed)
+	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
-	rt.MustRegister(t, registry)
 
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, registry, rt, seed)
+	rt.MustRegister(t, registry)
 
 	ch, sub := backend.WatchCommittees()
 	defer sub.Close()
@@ -39,54 +39,67 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	// Advance the epoch.
 	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	var compute, storage *api.Committee
-	var seen int
-	for seen < 2 {
-		select {
-		case committee := <-ch:
-			if committee.ValidFor < epoch {
-				continue
-			}
-			if !rt.Runtime.ID.Equal(committee.RuntimeID) {
-				continue
-			}
+	ensureValidCommittees := func(expectedCompute int) {
+		var compute, storage *api.Committee
+		var seen int
+		for seen < 2 {
+			select {
+			case committee := <-ch:
+				if committee.ValidFor < epoch {
+					continue
+				}
+				if !rt.Runtime.ID.Equal(committee.RuntimeID) {
+					continue
+				}
 
+				switch committee.Kind {
+				case api.Compute:
+					require.Nil(compute, "haven't seen a compute committee yet")
+					compute = committee
+					require.Len(committee.Members, expectedCompute, "committee has all nodes")
+				case api.Storage:
+					require.Nil(storage, "haven't seen a storage committee yet")
+					require.Len(committee.Members, 1, "committee has one node")
+					storage = committee
+				}
+
+				requireValidCommitteeMembers(t, committee, rt.Runtime, nodes)
+				require.Equal(rt.Runtime.ID, committee.RuntimeID, "committee is for the correct runtime") // Redundant
+				require.Equal(epoch, committee.ValidFor, "committee is for current epoch")
+
+				seen++
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to receive committee event")
+			}
+		}
+
+		committees, err := backend.GetCommittees(context.Background(), rt.Runtime.ID)
+		require.NoError(err, "GetCommittees")
+		for _, committee := range committees {
 			switch committee.Kind {
 			case api.Compute:
-				require.Nil(compute, "haven't seen a compute committee yet")
-				compute = committee
-				require.Len(committee.Members, len(nodes), "committee has all nodes")
+				require.EqualValues(compute, committee, "fetched compute committee is identical")
+				compute = nil
 			case api.Storage:
-				require.Nil(storage, "haven't seen a storage committee yet")
-				require.Len(committee.Members, 1, "committee has one node")
-				storage = committee
+				require.EqualValues(storage, committee, "fetched storage committee is identical")
+				storage = nil
 			}
-
-			requireValidCommitteeMembers(t, committee, rt.Runtime, nodes)
-			require.Equal(rt.Runtime.ID, committee.RuntimeID, "committee is for the correct runtime") // Redundant
-			require.Equal(epoch, committee.ValidFor, "committee is for current epoch")
-
-			seen++
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive committee event")
 		}
+
+		require.Nil(compute, "fetched a compute committee")
+		require.Nil(storage, "fetched a storage committee")
 	}
 
-	committees, err := backend.GetCommittees(context.Background(), rt.Runtime.ID)
-	require.NoError(err, "GetCommittees")
-	for _, committee := range committees {
-		switch committee.Kind {
-		case api.Compute:
-			require.EqualValues(compute, committee, "fetched compute committee is identical")
-			compute = nil
-		case api.Storage:
-			require.EqualValues(storage, committee, "fetched storage committee is identical")
-			storage = nil
-		}
-	}
+	ensureValidCommittees(len(nodes))
 
-	require.Nil(compute, "fetched a compute committee")
-	require.Nil(storage, "fetched a storage committee")
+	// Re-register the runtime with less nodes.
+	rt.Runtime.ReplicaGroupSize = 2
+	rt.Runtime.ReplicaGroupBackupSize = 1
+	rt.MustRegister(t, registry)
+
+	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+
+	ensureValidCommittees(3)
 
 	// Cleanup the registry.
 	rt.Cleanup(t, registry)

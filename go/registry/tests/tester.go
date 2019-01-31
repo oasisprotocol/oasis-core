@@ -285,12 +285,21 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 }
 
 func testRegistryRuntime(t *testing.T, backend api.Backend) {
+	seed := []byte("testRegistryRuntime")
+
 	require := require.New(t)
 
 	existingRuntimes, err := backend.GetRuntimes(context.Background())
 	require.NoError(err, "GetRuntimes")
 
-	rt, err := NewTestRuntime([]byte("testRegistryRuntime"))
+	entities, err := NewTestEntities(seed, 1)
+	require.NoError(err, "NewTestEntities()")
+
+	entity := entities[0]
+	err = backend.RegisterEntity(context.Background(), entity.SignedRegistration)
+	require.NoError(err, "RegisterEntity")
+
+	rt, err := NewTestRuntime(seed, entity)
 	require.NoError(err, "NewTestRuntime")
 
 	rt.MustRegister(t, backend)
@@ -302,6 +311,9 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 	//       cannot be deregistered.
 	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
 	require.EqualValues(rt.Runtime, registeredRuntimes[len(registeredRuntimes)-1], "expected runtime is registered")
+
+	err = backend.DeregisterEntity(context.Background(), entity.SignedDeregistration)
+	require.NoError(err, "DeregisterEntity")
 
 	// TODO: Test the various failures.
 
@@ -435,10 +447,10 @@ type TestRuntime struct {
 	Runtime    *api.Runtime
 	PrivateKey signature.PrivateKey
 
-	SignedRegistration *api.SignedRuntime
-
 	entity *TestEntity
 	nodes  []*TestNode
+
+	didRegister bool
 }
 
 // MustRegister registers the TestRuntime with the provided registry.
@@ -448,17 +460,30 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend) {
 	ch, sub := backend.WatchRuntimes()
 	defer sub.Close()
 
-	err := backend.RegisterRuntime(context.Background(), rt.SignedRegistration)
+	rt.Runtime.RegistrationTime = uint64(time.Now().Unix())
+	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	require.NoError(err, "signed runtime descriptor")
+
+	err = backend.RegisterRuntime(context.Background(), &api.SignedRuntime{Signed: *signed})
 	require.NoError(err, "RegisterRuntime")
 
+	var seen int
 	for {
 		select {
 		case v := <-ch:
 			if !rt.Runtime.ID.Equal(v.ID) {
 				continue
 			}
-			require.EqualValues(rt.Runtime, v, "registered runtime")
-			return
+
+			// If the runtime is expected to already be in the registry
+			// (this is a re-registration), skip the event emitted
+			// corresponding to the pre-existing entry.
+			if seen > 0 || !rt.didRegister {
+				require.EqualValues(rt.Runtime, v, "registered runtime")
+				rt.didRegister = true
+				return
+			}
+			seen++
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive runtime registration event")
 		}
@@ -498,6 +523,10 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 		require.True(ev.IsRegistration, "event is registration")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive entity registration event")
+	}
+
+	for _, v := range runtimes {
+		v.PrivateKey = entity.PrivateKey
 	}
 
 	// For the sake of simplicity, require that all runtimes have the same
@@ -580,7 +609,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend) {
 
 // NewTestRuntime returns a pre-generated TestRuntime for use with various
 // tests, generated deterministically from the seed.
-func NewTestRuntime(seed []byte) (*TestRuntime, error) {
+func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	rng, err := drbg.New(crypto.SHA512, hashForDrbg(seed), nil, []byte("TestRuntime"))
 	if err != nil {
 		return nil, err
@@ -590,6 +619,7 @@ func NewTestRuntime(seed []byte) (*TestRuntime, error) {
 	if rt.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
 		return nil, err
 	}
+
 	rt.Runtime = &api.Runtime{
 		ID:                       rt.PrivateKey.Public(),
 		Code:                     []byte("tu ne cede malis, sed contra audentior ito"),
@@ -597,14 +627,10 @@ func NewTestRuntime(seed []byte) (*TestRuntime, error) {
 		ReplicaGroupBackupSize:   5,
 		ReplicaAllowedStragglers: 1,
 		StorageGroupSize:         1,
-		RegistrationTime:         uint64(time.Now().Unix()),
 	}
-
-	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)
-	if err != nil {
-		return nil, err
+	if entity != nil {
+		rt.PrivateKey = entity.PrivateKey
 	}
-	rt.SignedRegistration = &api.SignedRuntime{Signed: *signed}
 
 	return &rt, nil
 }

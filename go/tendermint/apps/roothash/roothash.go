@@ -2,6 +2,7 @@
 package roothash
 
 import (
+	"bytes"
 	"encoding/hex"
 	"time"
 
@@ -55,10 +56,9 @@ type rootHashApplication struct {
 	scheduler  scheduler.BlockBackend
 	storage    storage.Backend
 
-	// If a runtime with one of these IDs would be initialized,
-	// start with the given block as the genesis block. For other
-	// runtime, generate an "empty" genesis block.
-	genesisBlocks map[signature.MapKey]*block.Block
+	// The old and busted way of importing genesis state.
+	// TODO: Remove once tooling for the new way is present.
+	cfgGenesisBlocks map[signature.MapKey]*block.Block
 
 	roundTimeout time.Duration
 }
@@ -142,14 +142,10 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 	if len(st.Blocks) != 0 {
 		// XXX: Either deprecate the command line option, or figure
 		// out a nice way to merge the two.  Probably the former.
-		if len(app.genesisBlocks) != 0 {
+		if len(app.cfgGenesisBlocks) != 0 {
 			app.logger.Error("InitChain: genesis blocks already exist")
 			panic("roothash: genesis blocks already exist")
 		}
-
-		// Note: Entries from the genesis blocks doesn't actually
-		// appear on-chain till actual blocks start happening.
-		app.genesisBlocks = st.Blocks
 	}
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
@@ -167,7 +163,7 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 		app.logger.Info("InitChain: allocating per-runtime state",
 			"runtime", v.ID,
 		)
-		app.onNewRuntime(ctx, tree, v)
+		app.onNewRuntime(ctx, tree, v, &st)
 	}
 
 	return types.ResponseInitChain{}
@@ -181,14 +177,25 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 }
 
 func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: gocyclo
-	state := NewMutableState(app.state.DeliverTxTree())
+	tree := app.state.DeliverTxTree()
+	state := NewMutableState(tree)
 
-	for _, runtime := range state.GetRuntimes() {
-		committees, err := app.scheduler.GetBlockCommittees(context.Background(), runtime.ID, app.state.BlockHeight())
+	// Query the updated runtime list.
+	regState := registryapp.NewMutableState(tree)
+	runtimes, _ := regState.GetRuntimes()
+	newDescriptors := make(map[signature.MapKey]*registry.Runtime)
+	for _, v := range runtimes {
+		newDescriptors[v.ID.ToMapKey()] = v
+	}
+
+	for _, runtimeState := range state.GetRuntimes() {
+		rtID := runtimeState.Runtime.ID
+
+		committees, err := app.scheduler.GetBlockCommittees(context.Background(), rtID, app.state.BlockHeight())
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,
-				"runtime", runtime.ID,
+				"runtime", rtID,
 			)
 			continue
 		}
@@ -202,45 +209,71 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 		}
 		if committee == nil {
 			app.logger.Error("checkCommittees: scheduler did not give us a compute committee",
-				"runtime", runtime.ID,
+				"runtime", rtID,
 			)
 			continue
 		}
 
 		app.logger.Debug("checkCommittees: updating committee for runtime",
-			"runtime", runtime.ID,
+			"runtime", rtID,
 		)
 
 		// If the committee is the "same", ignore this.
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
-		round := runtime.Round
+		round := runtimeState.Round
 		if round != nil && round.RoundState.Committee.ValidFor == committee.ValidFor {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
-				"runtime", runtime.ID,
+				"runtime", rtID,
 				"epoch", committee.ValidFor,
 			)
+			mk := rtID.ToMapKey()
+			if _, ok := newDescriptors[mk]; ok {
+				delete(newDescriptors, rtID.ToMapKey())
+			}
 			continue
 		}
 
 		// Transition the round.
-		blk := runtime.CurrentBlock
+		blk := runtimeState.CurrentBlock
 		blockNr, _ := blk.Header.Round.ToU64()
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
-			"runtime", runtime.ID,
+			"runtime", rtID,
 			"epoch", committee.ValidFor,
 			"round", blockNr,
 		)
 
-		runtime.Timer.Stop(ctx)
-		runtime.Round = newRound(committee, blk)
+		runtimeState.Timer.Stop(ctx)
+		runtimeState.Round = newRound(committee, blk)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.
-		app.emitEmptyBlock(ctx, runtime, block.EpochTransition)
+		app.emitEmptyBlock(ctx, runtimeState, block.EpochTransition)
 
-		state.UpdateRuntimeState(runtime)
+		mk := rtID.ToMapKey()
+		if rt, ok := newDescriptors[mk]; ok {
+			// Update the runtime descriptor to the latest per-epoch value.
+			runtimeState.Runtime = rt
+			delete(newDescriptors, mk)
+		}
+
+		state.UpdateRuntimeState(runtimeState)
+	}
+
+	// Just because a runtime didn't have committees, it doesn't mean that
+	// it's state does not need to be updated. Do so now where possible.
+	for _, v := range newDescriptors {
+		runtimeState, err := state.GetRuntimeState(v.ID)
+		if err != nil {
+			app.logger.Warn("onEpochChange: unknown runtime in update pass",
+				"runtime", v,
+			)
+			continue
+		}
+
+		runtimeState.Runtime = v
+		state.UpdateRuntimeState(runtimeState)
 	}
 }
 
@@ -254,7 +287,7 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *Runti
 
 	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
 	tagV := api.ValueRootHashFinalized{
-		ID:    runtime.ID,
+		ID:    runtime.Runtime.ID,
 		Round: roundNr,
 	}
 	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
@@ -273,35 +306,57 @@ func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 }
 
 func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+	var st *api.GenesisRootHashState
+	ensureGenesis := func() error {
+		var err error
+
+		if st == nil {
+			st = new(api.GenesisRootHashState)
+			if err = app.state.Genesis().UnmarshalAppState(app.Name(), st); err != nil {
+				st = nil
+			}
+		}
+
+		return err
+	}
+
 	switch other.Name() {
 	case api.RegistryAppName:
-		if runtime := ctx.GetTag(api.TagRegistryRuntimeRegistered); runtime != nil {
-			app.logger.Debug("ForeignDeliverTx: new runtime",
-				"runtime", hex.EncodeToString(runtime),
-			)
+		for _, pair := range ctx.Tags() {
+			if bytes.Equal(pair.GetKey(), api.TagRegistryRuntimeRegistered) {
+				runtime := pair.GetValue()
 
-			tree := app.state.DeliverTxTree()
+				app.logger.Debug("ForeignDeliverTx: new runtime",
+					"runtime", hex.EncodeToString(runtime),
+				)
 
-			// New runtime has been registered, create its roothash state.
-			regState := registryapp.NewMutableState(tree)
-			runtime, err := regState.GetRuntime(runtime)
-			if err != nil {
-				return errors.Wrap(err, "roothash: failed to fetch new runtime")
+				tree := app.state.DeliverTxTree()
+
+				// New runtime has been registered, create its roothash state.
+				regState := registryapp.NewMutableState(tree)
+				rt, err := regState.GetRuntime(runtime)
+				if err != nil {
+					return errors.Wrap(err, "roothash: failed to fetch new runtime")
+				}
+
+				if err = ensureGenesis(); err != nil {
+					return errors.Wrap(err, "roothash: failed to fetch genesis blocks")
+				}
+
+				app.onNewRuntime(ctx, tree, rt, st)
 			}
-
-			app.onNewRuntime(ctx, tree, runtime)
 		}
 	}
 
 	return nil
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime) {
+func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *api.GenesisRootHashState) {
 	state := NewMutableState(tree)
 
 	// Check if state already exists for the given runtime.
-	cs, _ := state.GetRuntimeState(runtime.ID)
-	if cs != nil {
+	runtimeState, _ := state.GetRuntimeState(runtime.ID)
+	if runtimeState != nil {
 		// Do not propagate the error as this would fail the transaction.
 		app.logger.Warn("onNewRuntime: state for runtime already exists",
 			"runtime", runtime,
@@ -310,7 +365,12 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	}
 
 	// Create genesis block.
-	genesisBlock := app.genesisBlocks[runtime.ID.ToMapKey()]
+	var genesisBlock *block.Block
+	if app.cfgGenesisBlocks != nil {
+		genesisBlock = app.cfgGenesisBlocks[runtime.ID.ToMapKey()]
+	} else {
+		genesisBlock = genesis.Blocks[runtime.ID.ToMapKey()]
+	}
 	if genesisBlock == nil {
 		now := ctx.Now().Unix()
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
@@ -321,7 +381,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	// Create new state containing the genesis block.
 	timerCtx := &timerContext{ID: runtime.ID}
 	state.UpdateRuntimeState(&RuntimeState{
-		ID:           runtime.ID,
+		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
 	})
@@ -352,24 +412,16 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 	tree := app.state.DeliverTxTree()
 	state := NewMutableState(tree)
-	cs, err := state.GetRuntimeState(tCtx.ID)
+	runtimeState, err := state.GetRuntimeState(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
 		)
 		panic(err)
 	}
+	runtime := runtimeState.Runtime
 
-	regState := registryapp.NewMutableState(tree)
-	runtime, err := regState.GetRuntime(tCtx.ID)
-	if err != nil {
-		app.logger.Error("FireTimer: failed to fetch runtime",
-			"err", err,
-		)
-		panic(err)
-	}
-
-	latestBlock := cs.CurrentBlock
+	latestBlock := runtimeState.CurrentBlock
 	if blockNr, _ := latestBlock.Header.Round.ToU64(); blockNr != tCtx.Round {
 		// Note: This should NEVER happen, but it does and causes massive
 		// problems (#1047).
@@ -381,12 +433,12 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 		timer.Stop(ctx)
 
-		// WARNING: `timer` != cs.Timer, while the ID shouldn't change
-		// and the difference in structs should be harmless, be extra
-		// defensive till we root cause and fix the timer problems.
+		// WARNING: `timer` != runtimeState.Timer, while the ID shouldn't
+		// change and the difference in structs should be harmless, there
+		// is nothing lost with being extra defensive.
 
-		var csCtx timerContext
-		if err := csCtx.UnmarshalCBOR(cs.Timer.Data()); err != nil {
+		var rsCtx timerContext
+		if err := rsCtx.UnmarshalCBOR(runtimeState.Timer.Data()); err != nil {
 			app.logger.Error("FireTimer: Failed to unmarshal runtime state timer",
 				"err", err,
 			)
@@ -394,12 +446,12 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		}
 
 		app.logger.Error("FireTimer: runtime state timer",
-			"runtime", csCtx.ID,
-			"timer_round", csCtx.Round,
+			"runtime", rsCtx.ID,
+			"timer_round", rsCtx.Round,
 		)
 
-		cs.Timer.Stop(ctx)
-		state.UpdateRuntimeState(cs)
+		runtimeState.Timer.Stop(ctx)
+		state.UpdateRuntimeState(runtimeState)
 
 		return
 	}
@@ -409,9 +461,9 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		"timer_round", tCtx.Round,
 	)
 
-	defer state.UpdateRuntimeState(cs)
-	cs.Round.DidTimeout = true
-	app.tryFinalize(ctx, runtime, cs, true)
+	defer state.UpdateRuntimeState(runtimeState)
+	runtimeState.Round.DidTimeout = true
+	app.tryFinalize(ctx, runtime, runtimeState, true)
 }
 
 func (app *rootHashApplication) executeTx(
@@ -440,12 +492,7 @@ func (app *rootHashApplication) commit(
 	if runtimeState == nil {
 		return errNoSuchRuntime
 	}
-
-	regState := registryapp.NewMutableState(state.Tree())
-	runtime, err := regState.GetRuntime(id)
-	if err != nil {
-		return errors.Wrap(err, "roothash: failed to fetch runtime")
-	}
+	runtime := runtimeState.Runtime
 
 	var c commitment.Commitment
 	if err = c.FromOpaqueCommitment(commit); err != nil {
@@ -635,11 +682,11 @@ func New(
 	roundTimeout time.Duration,
 ) abci.Application {
 	return &rootHashApplication{
-		logger:        logging.GetLogger("tendermint/roothash"),
-		timeSource:    timeSource,
-		scheduler:     scheduler,
-		storage:       storage,
-		genesisBlocks: genesisBlocks,
-		roundTimeout:  roundTimeout,
+		logger:           logging.GetLogger("tendermint/roothash"),
+		timeSource:       timeSource,
+		scheduler:        scheduler,
+		storage:          storage,
+		cfgGenesisBlocks: genesisBlocks,
+		roundTimeout:     roundTimeout,
 	}
 }
