@@ -6,7 +6,7 @@
 #       a storage node and an Ekiden worker at the same time. In
 #       actual deployments these nodes will likely run separately.
 #
-datadir: /tmp/ekiden-node-data
+datadir: /tmp/ekiden-single-node
 
 # Logging.
 # Per-module log levels are defined below. If you prefer just one unified log level, you can use:
@@ -31,8 +31,6 @@ worker:
   runtime:
     id: "0000000000000000000000000000000000000000000000000000000000000000"
     binary: /code/target/enclave/simple-keyvalue.so
-    replica_group_size: 1
-    replica_group_backup_size: 0
   client:
     port: 9200
     addresses:
@@ -72,5 +70,7 @@ roothash:
 
 # Tendermint backend configuration.
 tendermint:
+  core:
+    genesis_file: /code/configs/single_node/genesis.json
   consensus:
     timeout_commit: 1s
