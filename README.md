@@ -74,6 +74,17 @@ protected enclave:
     --enclave target/enclave/ekiden-keymanager-trusted.so
 ```
 
+Before we can launch an Ekiden node, we need to copy over the identity keys
+that are configured in the genesis file (instead of doing this, you could
+also generate your own keys):
+```
+# cp -a configs/single_node /tmp/ekiden-single-node/
+```
+Ekiden node stores data in `/tmp/ekiden-single-node` regardless of the loaded
+runtime. In case you restart it, you may need to remove this directory first
+and repeat the above steps for copying over the identity keys. More information
+on the Ekiden node is available [here](go/README.md).
+
 Second, we launch a single Ekiden node with an example `simple-keyvalue`
 runtime loaded to trusted enclave as defined in `configs/single_node.yml`:
 ```
@@ -85,10 +96,6 @@ and supports reading, writing, and fetching string values associated with the
 given key. To learn how to create your own runtime, see the sources of the
 example [here](tests/runtimes/simple-keyvalue).
 
-Ekiden node stores data in `/tmp/ekiden-node-data` regardless the loaded
-runtime. In case you restart it, you may need to remove this directory first.
-More information on Ekiden node is available [here](go/README.md).
-
 Finally, to test Ekiden node, we will run a test client written specifically
 for the `simple-keyvalue` runtime. The client sends a few keys with associated
 values and fetches them back over RPC defined in the runtime's API. Execute the
@@ -97,7 +104,7 @@ client as follows:
 # ./target/debug/simple-keyvalue-client \
     --mr-enclave $(cat target/enclave/simple-keyvalue.mrenclave) \
     --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-    --node-address unix:/tmp/ekiden-node-data/internal.sock
+    --node-address unix:/tmp/ekiden-single-node/internal.sock
 ```
 
 By default, Ekiden node is configured with a 30-second epoch, so you may
