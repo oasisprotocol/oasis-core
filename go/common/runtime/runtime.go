@@ -13,7 +13,7 @@ var (
 type Batch [][]byte
 
 // String returns a string representation of a batch.
-func (b *Batch) String() string {
+func (b Batch) String() string {
 	return "<Batch>"
 }
 
