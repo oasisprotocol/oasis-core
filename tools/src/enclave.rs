@@ -256,15 +256,18 @@ impl<'a> EnclaveBuilder<'a> {
             .env("RUST_TARGET_PATH", &self.build_path)
             .env("CARGO_TARGET_DIR", &self.target_path)
             .current_dir(&self.build_path)
-            .status()?;
-        if !xargo_status.success() {
-            return Err(format!(
+            .status();
+        match xargo_status {
+            Err(ref err) if err.kind() == std::io::ErrorKind::NotFound => {
+                Err("`xargo` not found. Try running `cargo install xargo`".into())
+            }
+            Err(err) => Err(err.into()),
+            Ok(status) if !status.success() => Err(format!(
                 "failed to build, xargo exited with status {}!",
-                xargo_status.code().unwrap()
-            ).into());
+                status.code().unwrap()
+            ).into()),
+            _ => Ok(()),
         }
-
-        Ok(())
     }
 
     /// Link the generated static library with SGX libraries.
