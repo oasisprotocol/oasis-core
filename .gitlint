@@ -11,5 +11,8 @@ line-length=72
 [B1]
 line-length=80
 
+[B5]
+min-length=0
+
 [title-must-not-contain-word]
 words=wip
