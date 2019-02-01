@@ -91,6 +91,13 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	batchProcessingTime = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_batch_processing_time",
+			Help: "Time it takes for a batch to finalize",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		incomingQueueSize,
 		discrepancyDetectedCount,
@@ -99,6 +106,7 @@ var (
 		epochTransitionCount,
 		abortedBatchCount,
 		storageCommitLatency,
+		batchProcessingTime,
 	}
 
 	metricsOnce sync.Once
@@ -151,8 +159,9 @@ type Node struct {
 
 	// No locking required, the variables in the next group are only accessed
 	// and modified from the worker goroutine.
-	state        NodeState
-	currentBlock *block.Block
+	state          NodeState
+	currentBlock   *block.Block
+	batchStartTime time.Time
 
 	stateTransitions *pubsub.Broker
 
@@ -414,6 +423,10 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		// A new block means the round has been finalized.
 		n.logger.Info("considering the round finalized")
 		n.transition(StateWaitingForBatch{})
+
+		// Record time taken for successfully processing a batch.
+		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.batchStartTime).Seconds())
+		n.batchStartTime = time.Time{}
 	}
 }
 
@@ -436,6 +449,8 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 			Block: *n.currentBlock,
 		},
 	}
+
+	n.batchStartTime = time.Now()
 
 	n.transition(StateProcessingBatch{batch, cancel, done})
 
