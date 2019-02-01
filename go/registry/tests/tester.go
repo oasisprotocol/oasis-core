@@ -2,13 +2,13 @@
 package tests
 
 import (
+	"context"
 	"crypto"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

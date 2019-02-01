@@ -3,11 +3,10 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"sort"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

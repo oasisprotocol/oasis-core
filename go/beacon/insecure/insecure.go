@@ -4,12 +4,11 @@
 package insecure
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -72,7 +71,7 @@ func (r *insecureDummy) GetBlockBeacon(ctx context.Context, height int64) ([]byt
 	return r.GetBeacon(ctx, epoch)
 }
 
-func (r *insecureDummy) worker() {
+func (r *insecureDummy) worker(ctx context.Context) {
 	epochEvents, sub := r.timeSource.WatchEpochs()
 	defer sub.Close()
 	for {
@@ -91,7 +90,7 @@ func (r *insecureDummy) worker() {
 			continue
 		}
 
-		b, _ := r.GetBeacon(context.Background(), newEpoch)
+		b, _ := r.GetBeacon(ctx, newEpoch)
 
 		r.logger.Debug("worker: generated beacon",
 			"epoch", newEpoch,
@@ -111,7 +110,7 @@ func (r *insecureDummy) worker() {
 //
 // Returned values are totally deterministc and MUST NOT be used in a
 // production setting.
-func New(timeSource epochtime.Backend) api.Backend {
+func New(ctx context.Context, timeSource epochtime.Backend) api.Backend {
 	r := &insecureDummy{
 		logger:     logging.GetLogger("beacon/insecure"),
 		notifier:   pubsub.NewBroker(true),
@@ -119,7 +118,7 @@ func New(timeSource epochtime.Backend) api.Backend {
 		lastEpoch:  epochtime.EpochInvalid,
 	}
 
-	go r.worker()
+	go r.worker(ctx)
 
 	return r
 }

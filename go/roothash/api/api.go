@@ -2,11 +2,10 @@
 package api
 
 import (
+	"context"
 	"encoding"
 	"encoding/hex"
 	"errors"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -63,6 +62,7 @@ type Backend interface {
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
+	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
 	GetLatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
 
 	// WatchBlocks returns a channel that produces a stream of blocks.
@@ -84,6 +84,7 @@ type Backend interface {
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
 
 	// Commit commits to a result of processing a batch of runtime invocations.
+	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
 	Commit(context.Context, signature.PublicKey, *OpaqueCommitment) error
 
 	// Cleanup cleans up the roothash backend.

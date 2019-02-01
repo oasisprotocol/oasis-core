@@ -1,7 +1,8 @@
 package registry
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

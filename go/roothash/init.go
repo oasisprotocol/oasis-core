@@ -2,6 +2,7 @@
 package roothash
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -32,6 +33,7 @@ const (
 
 // New constructs a new Backend based on the configuration flags.
 func New(
+	ctx context.Context,
 	timeSource epochtime.Backend,
 	scheduler scheduler.Backend,
 	storage storage.Backend,
@@ -71,9 +73,9 @@ func New(
 
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(scheduler, storage, registry, genesisBlocks, roundTimeout)
+		impl = memory.New(ctx, scheduler, storage, registry, genesisBlocks, roundTimeout)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(timeSource, scheduler, storage, tmService, genesisBlocks, roundTimeout)
+		impl, err = tendermint.New(ctx, timeSource, scheduler, storage, tmService, genesisBlocks, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}

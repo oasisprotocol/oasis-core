@@ -2,13 +2,12 @@
 package tendermint
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"sync"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -169,7 +168,7 @@ func (t *tendermintBackend) updateCached(epoch epochtime.EpochTime, beacon []byt
 	})
 }
 
-func (t *tendermintBackend) worker() {
+func (t *tendermintBackend) worker(ctx context.Context) {
 	// Wait for the node to be running, so that it is possible to
 	// query for blocks.
 	<-t.service.Started()
@@ -183,7 +182,7 @@ func (t *tendermintBackend) worker() {
 			return
 		}
 
-		beacon, err := t.GetBeacon(context.Background(), epoch)
+		beacon, err := t.GetBeacon(ctx, epoch)
 		if err != nil {
 			t.logger.Error("failed to generate beacon for epoch",
 				"err", err,
@@ -197,7 +196,7 @@ func (t *tendermintBackend) worker() {
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
-func New(timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
 	if err := service.ForceInitialize(); err != nil {
 		return nil, err
 	}
@@ -215,7 +214,7 @@ func New(timeSource epochtime.Backend, service service.TendermintService) (api.B
 	}
 	t.cached.epoch = epochtime.EpochInvalid
 
-	go t.worker()
+	go t.worker(ctx)
 
 	return t, nil
 }

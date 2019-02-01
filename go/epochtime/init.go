@@ -2,6 +2,7 @@
 package epochtime
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -21,16 +22,16 @@ const (
 )
 
 // New constructs a new Backend based on the configuration flags.
-func New(tmService service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, tmService service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case mock.BackendName:
 		return mock.New(), nil
 	case tendermint.BackendName:
 		interval := viper.GetInt64(cfgTendermintInterval)
-		return tendermint.New(tmService, interval)
+		return tendermint.New(ctx, tmService, interval)
 	case tendermintmock.BackendName:
-		return tendermintmock.New(tmService)
+		return tendermintmock.New(ctx, tmService)
 	default:
 		return nil, fmt.Errorf("epochtime: unsupported backend: '%v'", backend)
 	}

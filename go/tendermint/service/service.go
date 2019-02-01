@@ -2,10 +2,11 @@
 package service
 
 import (
+	"context"
+
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -54,9 +55,11 @@ type TendermintService interface {
 	Query(path string, query interface{}, height int64) ([]byte, error)
 
 	// Subscribe subscribes to tendermint events.
+	// TODO: ctx should be removed from API since we use tendermintService.ctx now -Matevz
 	Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error
 
 	// Unsubscribe unsubscribes from tendermint events.
+	// TODO: ctx should be removed from API since we use tendermintService.ctx now -Matevz
 	Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error
 
 	// Genesis returns the tendermint genesis block information.

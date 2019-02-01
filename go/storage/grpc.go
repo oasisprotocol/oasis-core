@@ -1,9 +1,9 @@
 package storage
 
 import (
+	"context"
 	"errors"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/storage/api"

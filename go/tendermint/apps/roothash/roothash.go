@@ -3,13 +3,13 @@ package roothash
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -49,6 +49,7 @@ func (ctx *timerContext) UnmarshalCBOR(data []byte) error {
 }
 
 type rootHashApplication struct {
+	ctx    context.Context
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
@@ -191,7 +192,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 	for _, runtimeState := range state.GetRuntimes() {
 		rtID := runtimeState.Runtime.ID
 
-		committees, err := app.scheduler.GetBlockCommittees(context.Background(), rtID, app.state.BlockHeight())
+		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight())
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,
@@ -527,7 +528,7 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Add the commitment.
-	if err = runtimeState.Round.addCommitment(app.storage, &c); err != nil {
+	if err = runtimeState.Round.addCommitment(app.ctx, app.storage, &c); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,
@@ -675,6 +676,7 @@ func (app *rootHashApplication) tryFinalize(
 
 // New constructs a new roothash application instance.
 func New(
+	ctx context.Context,
 	timeSource epochtime.BlockBackend,
 	scheduler scheduler.BlockBackend,
 	storage storage.Backend,
@@ -682,6 +684,7 @@ func New(
 	roundTimeout time.Duration,
 ) abci.Application {
 	return &rootHashApplication{
+		ctx:              ctx,
 		logger:           logging.GetLogger("tendermint/roothash"),
 		timeSource:       timeSource,
 		scheduler:        scheduler,

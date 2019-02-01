@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
@@ -23,7 +24,6 @@ import (
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -72,6 +72,7 @@ type tendermintService struct {
 
 	cmservice.BaseBackgroundService
 
+	ctx           context.Context
 	mux           *abci.ApplicationServer
 	node          *tmnode.Node
 	client        tmcli.Client
@@ -199,7 +200,7 @@ func (t *tendermintService) Query(path string, query interface{}, height int64) 
 
 func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error {
 	subFn := func() error {
-		return t.node.EventBus().Subscribe(ctx, subscriber, query, out)
+		return t.node.EventBus().Subscribe(t.ctx, subscriber, query, out)
 	}
 
 	if t.started() {
@@ -225,7 +226,7 @@ func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, qu
 
 func (t *tendermintService) Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error {
 	if t.started() {
-		return t.node.EventBus().Unsubscribe(ctx, subscriber, query)
+		return t.node.EventBus().Unsubscribe(t.ctx, subscriber, query)
 	}
 
 	return errors.New("tendermint: unsubscribe called with no backing service")
@@ -321,7 +322,7 @@ func (t *tendermintService) lazyInit() error {
 	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
 	pruneCfg.NumKept = pruneNumKept
 
-	t.mux, err = abci.NewApplicationServer(t.dataDir, &pruneCfg)
+	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg)
 	if err != nil {
 		return err
 	}
@@ -518,7 +519,7 @@ func (t *tendermintService) worker() {
 	// Subscribe to other events here as needed, no need to spawn additional
 	// workers.
 	evCh := make(chan interface{})
-	if err := t.client.Subscribe(context.Background(), "tendermint/worker", tmtypes.EventQueryNewBlock, evCh); err != nil {
+	if err := t.client.Subscribe(t.ctx, "tendermint/worker", tmtypes.EventQueryNewBlock, evCh); err != nil {
 		t.Logger.Error("worker: failed to subscribe to new block events",
 			"err", err,
 		)
@@ -541,11 +542,12 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(dataDir string, identity *identity.Identity) service.TendermintService {
+func New(ctx context.Context, dataDir string, identity *identity.Identity) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
 		validatorKey:          identity.NodeKey,
+		ctx:                   ctx,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 	}

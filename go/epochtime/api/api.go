@@ -2,7 +2,7 @@
 package api
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 )

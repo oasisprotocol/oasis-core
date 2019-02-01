@@ -2,11 +2,11 @@
 package dummy
 
 import (
+	"context"
 	"os"
 
 	"github.com/cenkalti/backoff"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

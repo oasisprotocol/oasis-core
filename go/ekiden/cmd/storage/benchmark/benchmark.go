@@ -3,6 +3,7 @@ package benchmark
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -11,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"

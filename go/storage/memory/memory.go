@@ -2,11 +2,11 @@
 package memory
 
 import (
+	"context"
 	"encoding/hex"
 	"sync"
 
 	"github.com/opentracing/opentracing-go"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"

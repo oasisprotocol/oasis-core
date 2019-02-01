@@ -1,11 +1,10 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -69,6 +68,7 @@ func (s *roundState) reset() {
 }
 
 type round struct {
+	ctx        context.Context
 	roundState *roundState
 	storage    storage.Backend
 	didTimeout bool
@@ -273,7 +273,7 @@ func (r *round) ensureHashesInStorage(header *block.Header) error {
 
 		var key storage.Key
 		copy(key[:], h.hash[:])
-		if _, err := r.storage.Get(context.Background(), key); err != nil {
+		if _, err := r.storage.Get(r.ctx, key); err != nil {
 			return fmt.Errorf("roothash/memory: failed to retreive %v: %v", h.descr, err)
 		}
 	}
@@ -318,7 +318,7 @@ func (r *round) checkCommitments() error {
 	return nil
 }
 
-func newRound(storage storage.Backend, runtime *registry.Runtime, committee *scheduler.Committee, block *block.Block) *round {
+func newRound(ctx context.Context, storage storage.Backend, runtime *registry.Runtime, committee *scheduler.Committee, block *block.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
 	}
@@ -337,6 +337,7 @@ func newRound(storage storage.Backend, runtime *registry.Runtime, committee *sch
 	state.reset()
 
 	return &round{
+		ctx:        ctx,
 		roundState: state,
 		storage:    storage,
 	}

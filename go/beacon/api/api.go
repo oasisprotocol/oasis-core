@@ -2,9 +2,8 @@
 package api
 
 import (
+	"context"
 	"errors"
-
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"

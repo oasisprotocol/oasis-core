@@ -64,7 +64,7 @@ func doNode(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(env.grpcSrv)
 
 	// Initialize the metrics server.
-	metrics, err := metrics.New()
+	metrics, err := metrics.New(env.svcMgr.Ctx)
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
@@ -74,7 +74,7 @@ func doNode(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize the profiling server.
-	profiling, err := pprof.New()
+	profiling, err := pprof.New(env.svcMgr.Ctx)
 	if err != nil {
 		logger.Error("failed to initialize pprof server",
 			"err", err,

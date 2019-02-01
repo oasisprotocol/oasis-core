@@ -2,6 +2,7 @@
 package beacon
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -18,13 +19,13 @@ import (
 const cfgBackend = "beacon.backend"
 
 // New constructs a new Backend based on the configuration flags.
-func New(timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case insecure.BackendName:
-		return insecure.New(timeSource), nil
+		return insecure.New(ctx, timeSource), nil
 	case tendermint.BackendName:
-		return tendermint.New(timeSource, tmService)
+		return tendermint.New(ctx, timeSource, tmService)
 	default:
 		return nil, fmt.Errorf("beacon: unsupported backend: '%v'", backend)
 	}

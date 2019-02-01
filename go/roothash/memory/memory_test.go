@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -13,15 +14,17 @@ import (
 )
 
 func TestRootHashMemory(t *testing.T) {
+	ctx := context.Background()
+
 	timeSource := mock.New()
-	beacon := insecure.New(timeSource)
-	registry := registry.New(timeSource)
+	beacon := insecure.New(ctx, timeSource)
+	registry := registry.New(ctx, timeSource)
 	defer registry.Cleanup()
-	scheduler := trivial.New(timeSource, registry, beacon, nil)
+	scheduler := trivial.New(ctx, timeSource, registry, beacon, nil)
 	storage := storage.New(timeSource)
 	defer storage.Cleanup()
 
-	backend := New(scheduler, storage, registry, nil, 10*time.Second)
+	backend := New(ctx, scheduler, storage, registry, nil, 10*time.Second)
 
 	tests.RootHashImplementationTests(t, backend, timeSource, scheduler, storage, registry)
 }

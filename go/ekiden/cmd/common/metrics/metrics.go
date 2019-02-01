@@ -81,6 +81,7 @@ type pullService struct {
 	ln net.Listener
 	s  *http.Server
 
+	ctx   context.Context
 	errCh chan error
 }
 
@@ -104,7 +105,7 @@ func (s *pullService) Stop() {
 				)
 			}
 		default:
-			_ = s.s.Shutdown(context.Background())
+			_ = s.s.Shutdown(s.ctx)
 		}
 		s.s = nil
 	}
@@ -117,7 +118,7 @@ func (s *pullService) Cleanup() {
 	}
 }
 
-func newPullService() (service.BackgroundService, error) {
+func newPullService(ctx context.Context) (service.BackgroundService, error) {
 	addr := viper.GetString(cfgMetricsAddr)
 
 	svc := *service.NewBaseBackgroundService("metrics")
@@ -134,6 +135,7 @@ func newPullService() (service.BackgroundService, error) {
 
 	return &pullService{
 		BaseBackgroundService: svc,
+		ctx:                   ctx,
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler()},
 		errCh:                 make(chan error),
@@ -204,13 +206,13 @@ func newPushService() (service.BackgroundService, error) {
 }
 
 // New constructs a new metrics service.
-func New() (service.BackgroundService, error) {
+func New(ctx context.Context) (service.BackgroundService, error) {
 	mode := viper.GetString(cfgMetricsMode)
 	switch strings.ToLower(mode) {
 	case metricsModeNone:
 		return newStubService()
 	case metricsModePull:
-		return newPullService()
+		return newPullService(ctx)
 	case metricsModePush:
 		return newPushService()
 	default:

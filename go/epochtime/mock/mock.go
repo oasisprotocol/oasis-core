@@ -2,10 +2,10 @@
 package mock
 
 import (
+	"context"
 	"sync"
 
 	"github.com/eapache/channels"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"

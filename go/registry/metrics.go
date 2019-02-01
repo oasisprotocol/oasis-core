@@ -1,11 +1,11 @@
 package registry
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
@@ -107,7 +107,7 @@ func (w *metricsWrapper) Cleanup() {
 	w.Backend.Cleanup()
 }
 
-func (w *metricsWrapper) worker() {
+func (w *metricsWrapper) worker(ctx context.Context) {
 	defer close(w.closedCh)
 
 	t := time.NewTicker(metricsUpdateInterval)
@@ -126,17 +126,17 @@ func (w *metricsWrapper) worker() {
 		case <-t.C:
 		}
 
-		w.updatePeriodicMetrics()
+		w.updatePeriodicMetrics(ctx)
 	}
 }
 
-func (w *metricsWrapper) updatePeriodicMetrics() {
-	nodes, err := w.Backend.GetNodes(context.Background())
+func (w *metricsWrapper) updatePeriodicMetrics(ctx context.Context) {
+	nodes, err := w.Backend.GetNodes(ctx)
 	if err == nil {
 		registryNodes.Set(float64(len(nodes)))
 	}
 
-	entities, err := w.Backend.GetEntities(context.Background())
+	entities, err := w.Backend.GetEntities(ctx)
 	if err == nil {
 		registryEntities.Set(float64(len(entities)))
 	}
@@ -155,7 +155,7 @@ func (w *blockMetricsWrapper) GetBlockRuntimes(ctx context.Context, height int64
 	return w.blockBackend.GetBlockRuntimes(ctx, height)
 }
 
-func newMetricsWrapper(base api.Backend) api.Backend {
+func newMetricsWrapper(ctx context.Context, base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registeryCollectors...)
 	})
@@ -169,8 +169,8 @@ func newMetricsWrapper(base api.Backend) api.Backend {
 		closedCh: make(chan struct{}),
 	}
 
-	wrapper.updatePeriodicMetrics()
-	go wrapper.worker()
+	wrapper.updatePeriodicMetrics(ctx)
+	go wrapper.worker(ctx)
 
 	blockBackend, ok := base.(api.BlockBackend)
 	if ok {

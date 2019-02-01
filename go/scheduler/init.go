@@ -2,6 +2,7 @@
 package scheduler
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -19,11 +20,11 @@ import (
 const cfgBackend = "scheduler.backend"
 
 // New constructs a new Backend based on the configuration flags.
-func New(timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend, service service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case trivial.BackendName:
-		return trivial.New(timeSource, reg, beacon, service), nil
+		return trivial.New(ctx, timeSource, reg, beacon, service), nil
 	default:
 		return nil, fmt.Errorf("scheduler: unsupported backend: '%v'", backend)
 	}
