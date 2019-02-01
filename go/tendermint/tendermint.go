@@ -59,7 +59,8 @@ const (
 	cfgDebugBootstrapAddress       = "tendermint.debug.bootstrap.address"
 	cfgDebugBootstrapNodeAddr      = "tendermint.debug.bootstrap.node_addr"
 	cfgDebugBootstrapNodeName      = "tendermint.debug.bootstrap.node_name"
-	cfgDebugConsensusBlockTimeIota = "tenderming.debug.block_time_iota"
+	cfgDebugConsensusBlockTimeIota = "tendermint.debug.block_time_iota"
+	cfgDebugP2PAddrBookLenient     = "tendermint.debug.addr_book_lenient"
 )
 
 var (
@@ -361,6 +362,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
 	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
+	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
@@ -594,6 +596,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
 		cmd.Flags().Duration(cfgDebugConsensusBlockTimeIota, 0*time.Second, "tendermint block time iota")
+		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	}
 
 	for _, v := range []string{
@@ -609,6 +612,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgDebugBootstrapNodeAddr,
 		cfgDebugBootstrapNodeName,
 		cfgDebugConsensusBlockTimeIota,
+		cfgDebugP2PAddrBookLenient,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
