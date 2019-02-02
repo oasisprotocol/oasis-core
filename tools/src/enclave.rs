@@ -316,9 +316,10 @@ impl<'a> EnclaveBuilder<'a> {
             // Enclave library group.
             .arg("-Wl,--start-group")
             .arg("-lsgx_tstdc")
-            .arg("-lsgx_tstdcxx")
+            .arg("-lsgx_tcxx")
             .arg("-lsgx_tcrypto")
             .arg("-lsgx_tkey_exchange")
+            .arg("-lsgx_tprotected_fs")
             .arg(&format!("-l{}", service_library_name))
             .arg("-lekiden_enclave")
             .arg("-Wl,--end-group")

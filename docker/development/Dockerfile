@@ -16,8 +16,8 @@ RUN mkdir /root/.ssh/
 COPY deploy_key /root/.ssh/id_rsa
 RUN chmod 600 /root/.ssh/id_rsa && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts && \
-    git clone --depth 1 -b ekiden git@github.com:oasislabs/linux-sgx.git && \
-    cd linux-sgx && \
+    git clone --depth 1 -b ekiden-next git@github.com:oasislabs/linux-sgx.git && \
+    cd linux-sgx && git fetch --tags && git checkout v2.4-ekiden1 \
     ./download_prebuilt.sh && make -j sdk && make -j sdk_install_pkg && \
     ./linux/installer/bin/sgx_linux_x64_sdk_*.bin --prefix /opt && \
     cd -
@@ -70,7 +70,7 @@ RUN echo "source /opt/sgxsdk/environment" >> /root/.bashrc
 
 # install rust version supported by rust-sgx-sdk
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
-    sh rustup.sh -y --default-toolchain nightly-2018-10-01 && \
+    sh rustup.sh -y --default-toolchain nightly-2018-01-28 && \
     rustup component add rust-src && \
     # rustfmt-nightly is crazily unstable, with no versions appearing to exist that
     # work with the 3-16 nightly.
