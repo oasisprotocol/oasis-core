@@ -11,18 +11,21 @@ extern crate ekiden_tracing;
 extern crate ekiden_worker;
 extern crate ekiden_worker_api;
 
-use std::path::Path;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use clap::{App, Arg};
 use log::{info, LevelFilter};
 
-use ekiden_core::environment::{Environment, GrpcEnvironment};
-use ekiden_core::futures::block_on;
+use ekiden_core::{
+    environment::{Environment, GrpcEnvironment},
+    futures::block_on,
+};
 use ekiden_worker_api::WorkerHandler;
 
-use ekiden_worker::protocol::ProtocolHandler;
-use ekiden_worker::worker::{Worker, WorkerConfiguration};
+use ekiden_worker::{
+    protocol::ProtocolHandler,
+    worker::{Worker, WorkerConfiguration},
+};
 
 mod proxy;
 
@@ -88,7 +91,8 @@ fn main() {
         tokio_uds::UnixStream::connect(
             value_t!(matches, "host-socket", String).unwrap_or_else(|e| e.exit()),
         ),
-    ).expect("connect to host must succeed");
+    )
+    .expect("connect to host must succeed");
 
     // Create protocol instance.
     let protocol_handler = Arc::new(WorkerHandler(ProtocolHandler::new()));

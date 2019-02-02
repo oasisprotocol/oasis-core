@@ -1,6 +1,5 @@
 //! Secure channel handling.
-use protobuf;
-use protobuf::Message;
+use protobuf::{self, Message};
 use sodalite;
 
 use std::collections::HashMap;
@@ -11,15 +10,19 @@ use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
 
-use ekiden_common::error::{Error, Result};
-use ekiden_common::random;
-use ekiden_enclave_common;
-use ekiden_enclave_common::quote::MrEnclave;
-use ekiden_enclave_trusted;
-use ekiden_enclave_trusted::crypto::{SecretSeed, SECRET_SEED_LEN};
-use ekiden_rpc_common::api;
-use ekiden_rpc_common::secure_channel::{self, MonotonicNonceGenerator, RandomNonceGenerator,
-                                        SessionState};
+use ekiden_common::{
+    error::{Error, Result},
+    random,
+};
+use ekiden_enclave_common::{self, quote::MrEnclave};
+use ekiden_enclave_trusted::{
+    self,
+    crypto::{SecretSeed, SECRET_SEED_LEN},
+};
+use ekiden_rpc_common::{
+    api,
+    secure_channel::{self, MonotonicNonceGenerator, RandomNonceGenerator, SessionState},
+};
 
 use super::request::Request;
 

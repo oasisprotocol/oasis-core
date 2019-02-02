@@ -1,7 +1,4 @@
-use std::cmp::Eq;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::sync::Arc;
+use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 
 /// UsizeIterableHashSet implements the basic operations of a HashSet
 /// (insert, remove, contains) and adds an iterator scheme that uses a

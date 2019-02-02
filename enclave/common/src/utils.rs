@@ -1,6 +1,8 @@
 //! Enclave utilities.
-use std::io::Cursor;
-use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::{
+    io::Cursor,
+    slice::{from_raw_parts, from_raw_parts_mut},
+};
 
 use serde::{Deserialize, Serialize};
 use serde_cbor;

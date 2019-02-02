@@ -1,8 +1,10 @@
 //! Cargo-specific structures.
-use std::env;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    fs::File,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 
 use toml;
 
@@ -166,7 +168,8 @@ impl ProjectRoot {
                                     current_dir.to_str().unwrap(),
                                     path.strip_prefix(current_dir).unwrap().to_str().unwrap(),
                                     manifest_path.to_str().unwrap()
-                                ).into());
+                                )
+                                .into());
                             }
 
                             break current_dir.to_owned();

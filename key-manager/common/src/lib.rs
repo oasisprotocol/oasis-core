@@ -8,11 +8,12 @@ extern crate serde_derive;
 pub mod confidential;
 
 use ekiden_core::bytes::{B512, H256};
-use serde::de::{Deserialize, Deserializer, Error, SeqAccess, Visitor};
-use serde::ser::{Serialize, SerializeTuple, Serializer};
+use serde::{
+    de::{Deserialize, Deserializer, Error, SeqAccess, Visitor},
+    ser::{Serialize, SerializeTuple, Serializer},
+};
 use sodalite::*;
-use std::fmt;
-use std::marker::PhantomData;
+use std::{fmt, marker::PhantomData};
 
 /// Workaround for serializing and deserializing large arrays
 /// (from https://github.com/serde-rs/serde/issues/631#issuecomment-322677033).

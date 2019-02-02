@@ -1,7 +1,6 @@
 use std::slice::from_raw_parts;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::futures::Future;
+use ekiden_common::{bytes::H256, futures::Future};
 use ekiden_storage_base::InsertOptions;
 
 use super::enclave::{current_storage, with_transfer_buffer};

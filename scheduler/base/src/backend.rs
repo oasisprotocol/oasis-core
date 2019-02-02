@@ -1,12 +1,9 @@
 //! Scheduler interface.
 use std::convert::TryFrom;
 
-use serde::ser::SerializeStruct;
-use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{self, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
-use ekiden_common::bytes::B256;
-use ekiden_common::error::Error;
-use ekiden_common::futures::BoxFuture;
+use ekiden_common::{bytes::B256, error::Error, futures::BoxFuture};
 use ekiden_scheduler_api as api;
 
 /// The role a given Node plays in a committee.

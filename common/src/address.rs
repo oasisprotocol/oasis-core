@@ -1,8 +1,10 @@
 //! Address defintion and helpers.
-use std;
-use std::convert::TryFrom;
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::{
+    self,
+    convert::TryFrom,
+    fmt,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+};
 
 use super::error::Error;
 

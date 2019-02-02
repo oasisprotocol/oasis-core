@@ -1,11 +1,12 @@
 //! Batch storage backend.
-use std;
-use std::collections::HashMap;
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    self,
+    collections::HashMap,
+    ops::DerefMut,
+    sync::{Arc, Mutex, RwLock},
+};
 
-use ekiden_common::bytes::H256;
-use ekiden_common::futures::prelude::*;
+use ekiden_common::{bytes::H256, futures::prelude::*};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct Inner {
@@ -48,7 +49,8 @@ impl BatchStorageBackend {
 
     /// Take the current batch.
     pub fn take_batch(&self) -> Vec<(Vec<u8>, u64)> {
-        let inner = self.inner
+        let inner = self
+            .inner
             .write()
             .unwrap()
             .take()
@@ -66,7 +68,8 @@ impl BatchStorageBackend {
     /// Batches will contain a maximum of `max_chunk_size` elements. If set to zero,
     /// all elements will be inserted in one batch.
     pub fn commit(&self, max_chunk_size: usize, opts: InsertOptions) -> BoxFuture<()> {
-        let inner = self.inner
+        let inner = self
+            .inner
             .write()
             .unwrap()
             .take()
@@ -132,8 +135,7 @@ impl StorageBackend for BatchStorageBackend {
 mod test {
     use std::sync::Arc;
 
-    use ekiden_common;
-    use ekiden_common::futures::Future;
+    use ekiden_common::{self, futures::Future};
     use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
     use ekiden_storage_dummy::DummyStorageBackend;
     extern crate grpcio;

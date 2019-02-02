@@ -1,21 +1,23 @@
 //! Protocol trait implementations.
 use sgx_types;
 
-use ekiden_core::bytes::{B256, H256};
-use ekiden_core::enclave::api as identity_api;
-use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::block_on;
-use ekiden_core::futures::prelude::*;
-use ekiden_core::rpc::client::ClientEndpoint;
-use ekiden_core::runtime::batch::CallBatch;
+use ekiden_core::{
+    bytes::{B256, H256},
+    enclave::api as identity_api,
+    error::{Error, Result},
+    futures::{block_on, prelude::*},
+    rpc::client::ClientEndpoint,
+    runtime::batch::CallBatch,
+};
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
-use ekiden_untrusted::enclave::identity::IAS;
-use ekiden_untrusted::rpc::router::Handler as EnclaveRpcHandler;
+use ekiden_untrusted::{enclave::identity::IAS, rpc::router::Handler as EnclaveRpcHandler};
 
-use super::protocol::Handler;
-use super::types::{Body, ComputedBatch};
-use super::{Host, Protocol, Worker};
+use super::{
+    protocol::Handler,
+    types::{Body, ComputedBatch},
+    Host, Protocol, Worker,
+};
 
 impl Worker for Protocol {
     fn worker_shutdown(&self) -> BoxFuture<()> {
@@ -55,13 +57,12 @@ impl Worker for Protocol {
             quote_type,
             spid: spid.to_vec(),
             sig_rl,
-        }).and_then(|body| match body {
-                Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote } => {
-                    Ok((rak_pub, quote))
-                }
-                _ => Err(Error::new("malformed response")),
-            })
-            .into_box()
+        })
+        .and_then(|body| match body {
+            Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote } => Ok((rak_pub, quote)),
+            _ => Err(Error::new("malformed response")),
+        })
+        .into_box()
     }
 
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
@@ -240,11 +241,13 @@ impl<T: Worker> Handler for WorkerHandler<T> {
             Body::WorkerShutdownRequest {} => {
                 self.0.worker_shutdown().map(|_| Body::Empty {}).into_box()
             }
-            Body::WorkerAbortRequest {} => self.0
+            Body::WorkerAbortRequest {} => self
+                .0
                 .worker_abort()
                 .map(|_| Body::WorkerAbortResponse {})
                 .into_box(),
-            Body::WorkerCapabilityTEEGidRequest {} => self.0
+            Body::WorkerCapabilityTEEGidRequest {} => self
+                .0
                 .capabilitytee_gid()
                 .map(|gid| Body::WorkerCapabilityTEEGidResponse { gid })
                 .into_box(),
@@ -270,11 +273,13 @@ impl<T: Worker> Handler for WorkerHandler<T> {
                     )
                     .into_box()
             }
-            Body::WorkerRPCCallRequest { request } => self.0
+            Body::WorkerRPCCallRequest { request } => self
+                .0
                 .rpc_call(request)
                 .map(|response| Body::WorkerRPCCallResponse { response })
                 .into_box(),
-            Body::WorkerRuntimeCallBatchRequest { calls, block } => self.0
+            Body::WorkerRuntimeCallBatchRequest { calls, block } => self
+                .0
                 .runtime_call_batch(calls, block)
                 .map(|batch| Body::WorkerRuntimeCallBatchResponse { batch })
                 .into_box(),
@@ -286,27 +291,32 @@ impl<T: Worker> Handler for WorkerHandler<T> {
 impl<T: Host> Handler for HostHandler<T> {
     fn handle(&self, body: Body) -> BoxFuture<Body> {
         match body {
-            Body::HostRPCCallRequest { endpoint, request } => self.0
+            Body::HostRPCCallRequest { endpoint, request } => self
+                .0
                 .rpc_call(endpoint, request)
                 .map(|response| Body::HostRPCCallResponse { response })
                 .into_box(),
-            Body::HostIasGetSpidRequest {} => self.0
+            Body::HostIasGetSpidRequest {} => self
+                .0
                 .ias_get_spid()
                 .map(|spid| Body::HostIasGetSpidResponse {
                     spid: spid.id.to_vec(),
                 })
                 .into_box(),
-            Body::HostIasGetQuoteTypeRequest {} => self.0
+            Body::HostIasGetQuoteTypeRequest {} => self
+                .0
                 .ias_get_quote_type()
                 .map(|quote_type| Body::HostIasGetQuoteTypeResponse {
                     quote_type: quote_type as u32,
                 })
                 .into_box(),
-            Body::HostIasSigRlRequest { gid } => self.0
+            Body::HostIasSigRlRequest { gid } => self
+                .0
                 .ias_sigrl(&gid)
                 .map(|sigrl| Body::HostIasSigRlResponse { sigrl })
                 .into_box(),
-            Body::HostIasReportRequest { quote } => self.0
+            Body::HostIasReportRequest { quote } => self
+                .0
                 .ias_report(quote)
                 .map(|mut report| Body::HostIasReportResponse {
                     avr: report.take_body(),
@@ -314,11 +324,13 @@ impl<T: Host> Handler for HostHandler<T> {
                     certificates: report.take_certificates(),
                 })
                 .into_box(),
-            Body::HostStorageGetRequest { key } => self.0
+            Body::HostStorageGetRequest { key } => self
+                .0
                 .storage_get(key)
                 .map(|value| Body::HostStorageGetResponse { value })
                 .into_box(),
-            Body::HostStorageGetBatchRequest { keys } => self.0
+            Body::HostStorageGetBatchRequest { keys } => self
+                .0
                 .storage_get_batch(keys)
                 .map(|values| Body::HostStorageGetBatchResponse {
                     values: values

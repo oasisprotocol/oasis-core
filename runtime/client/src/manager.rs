@@ -1,17 +1,18 @@
 //! Manager for runtime clients.
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex, RwLock},
+    time::Duration,
+};
 
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
-use ekiden_common::bytes::B256;
-use ekiden_common::environment::Environment;
-use ekiden_common::futures::prelude::*;
-use ekiden_common::futures::retry_until_ok_or_max;
-use ekiden_common::futures::sync::oneshot;
+use ekiden_common::{
+    bytes::B256,
+    environment::Environment,
+    futures::{prelude::*, retry_until_ok_or_max, sync::oneshot},
+};
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_registry_base::EntityRegistryBackend;
 use ekiden_roothash_base::backend::RootHashBackend;
@@ -19,8 +20,7 @@ use ekiden_scheduler_base::{CommitteeType, Role, Scheduler};
 use ekiden_storage_base::backend::StorageBackend;
 use ekiden_tracing;
 
-use crate::client::RuntimeClient;
-use crate::generated::runtime_grpc as api;
+use crate::{client::RuntimeClient, generated::runtime_grpc as api};
 
 /// Computation group leader.
 struct Leader {
@@ -244,10 +244,11 @@ impl RuntimeClientManager {
             // interrupted, so one retry is sufficient. If not, then a retry is not likely to
             // succeed either.
             1,
-        ).then(|result| {
+        )
+        .then(|result| {
             drop(span);
             result
         })
-            .into_box()
+        .into_box()
     }
 }

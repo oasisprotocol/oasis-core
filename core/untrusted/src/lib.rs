@@ -4,8 +4,7 @@ extern crate ekiden_rpc_untrusted;
 extern crate ekiden_runtime_untrusted;
 
 pub use ekiden_db_untrusted::EnclaveDb;
-pub use ekiden_enclave_untrusted::identity::EnclaveIdentity;
-pub use ekiden_enclave_untrusted::Enclave;
+pub use ekiden_enclave_untrusted::{identity::EnclaveIdentity, Enclave};
 pub use ekiden_rpc_untrusted::EnclaveRpc;
 pub use ekiden_runtime_untrusted::EnclaveRuntime;
 

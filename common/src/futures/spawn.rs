@@ -1,7 +1,9 @@
 pub use tokio::spawn;
 
-use super::killable::KillHandle;
-use super::{killable, Future};
+use super::{
+    killable::{killable, KillHandle},
+    Future,
+};
 
 /// Convenience method for combining `spawn` with `killable`.
 pub fn spawn_killable<F>(f: F) -> KillHandle

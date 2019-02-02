@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use grpcio;
 
-use ekiden_common::address::Address;
-use ekiden_common::bytes::B256;
-use ekiden_common::environment::Environment;
-use ekiden_common::futures::BoxFuture;
-use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
+use ekiden_common::{
+    address::Address,
+    bytes::B256,
+    environment::Environment,
+    futures::BoxFuture,
+    x509::{Certificate, CERTIFICATE_COMMON_NAME},
+};
 
 /// Registry backend implementing the Ekiden registry interface.
 pub trait EntityRegistryBackend: Send + Sync {

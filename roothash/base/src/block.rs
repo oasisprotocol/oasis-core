@@ -1,10 +1,12 @@
 //! Block type.
 use std::convert::TryFrom;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Error;
-use ekiden_common::hash::{empty_hash, EncodedHash};
-use ekiden_common::uint::U256;
+use ekiden_common::{
+    bytes::H256,
+    error::Error,
+    hash::{empty_hash, EncodedHash},
+    uint::U256,
+};
 
 use ekiden_roothash_api as api;
 

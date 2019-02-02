@@ -7,19 +7,14 @@ use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
 
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor;
 
-use ekiden_common::error::Result;
-use ekiden_common::profile_block;
+use ekiden_common::{error::Result, profile_block};
 use ekiden_enclave_common::utils::{read_enclave_request, write_enclave_response};
-use ekiden_rpc_common::api;
-use ekiden_rpc_common::reflection::ApiMethodDescriptor;
+use ekiden_rpc_common::{api, reflection::ApiMethodDescriptor};
 
-use super::error::DispatchError;
-use super::secure_channel::open_request_box;
-use super::{request, response};
+use super::{error::DispatchError, request, response, secure_channel::open_request_box};
 
 /// List of methods that allow plain requests. All other requests must be done over
 /// a secure channel.
@@ -84,7 +79,7 @@ where
                     &request,
                     api::PlainClientResponse_Code::ERROR_BAD_REQUEST,
                     "Unable to parse request payload",
-                )
+                );
             }
         };
 
@@ -96,7 +91,7 @@ where
                     &request,
                     api::PlainClientResponse_Code::ERROR,
                     error.message.as_str(),
-                )
+                );
             }
         };
 
@@ -108,7 +103,7 @@ where
                     &request,
                     api::PlainClientResponse_Code::ERROR,
                     "Unable to serialize response payload",
-                )
+                );
             }
         };
 

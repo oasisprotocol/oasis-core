@@ -1,7 +1,5 @@
 //! Root hash backend interface.
-use ekiden_common::bytes::B256;
-use ekiden_common::futures::BoxStream;
-use ekiden_common::uint::U256;
+use ekiden_common::{bytes::B256, futures::BoxStream, uint::U256};
 
 use super::Block;
 

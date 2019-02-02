@@ -5,12 +5,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(not(target_env = "sgx"))]
 use std::sync::Arc;
 
-use super::super::error::Error;
 #[cfg(not(target_env = "sgx"))]
 use super::streamfollow;
 #[cfg(not(target_env = "sgx"))]
 use super::Stream;
-use super::{future, BoxFuture, Future, FutureExt};
+use super::{super::error::Error, future, BoxFuture, Future, FutureExt};
 
 /// Retry a future up to maximum number of retries.
 ///
@@ -33,7 +32,8 @@ where
 
                 Ok(future::Loop::Continue(retries - 1))
             })
-    }).into_box()
+    })
+    .into_box()
 }
 
 /// Retry a future until success or a permanent error.
@@ -58,9 +58,10 @@ where
         // Bookmark item is irelevant as there is always just a single item.
         |_item: &R::Item| "<retry_until_ok>",
         error_is_permanent,
-    ).into_future()
-        .map_err(|(error, _)| error)
-        .map(|(result, _)| result.expect("item to be some"))
+    )
+    .into_future()
+    .map_err(|(error, _)| error)
+    .map(|(result, _)| result.expect("item to be some"))
 }
 
 /// Retry a future until success or a permanent error or a maximum number of retries.

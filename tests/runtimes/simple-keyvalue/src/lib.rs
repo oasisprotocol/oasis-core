@@ -9,10 +9,11 @@ extern crate simple_keyvalue_api;
 use log::info;
 
 use ekiden_core::error::Result;
-use ekiden_trusted::db::database_schema;
-use ekiden_trusted::enclave::enclave_init;
-use ekiden_trusted::runtime::create_runtime;
-use ekiden_trusted::runtime::dispatcher::RuntimeCallContext;
+use ekiden_trusted::{
+    db::database_schema,
+    enclave::enclave_init,
+    runtime::{create_runtime, dispatcher::RuntimeCallContext},
+};
 use simple_keyvalue_api::{with_api, KeyValue};
 
 enclave_init!();

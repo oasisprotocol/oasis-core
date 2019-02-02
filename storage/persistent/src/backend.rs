@@ -1,14 +1,13 @@
 //! Ekiden storage interface.
-use std::path::Path;
-use std::sync::Arc;
-use std::thread;
+use std::{path::Path, sync::Arc, thread};
 
 use exonum_rocksdb::{IteratorMode, WriteBatch, DB};
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::futures;
-use ekiden_common::futures::prelude::*;
+use ekiden_common::{
+    bytes::H256,
+    error::{Error, Result},
+    futures::{self, prelude::*},
+};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 const KEYS_CHANNEL_LIMIT: usize = 1000;
@@ -41,7 +40,8 @@ impl StorageBackend for PersistentStorageBackend {
         future::lazy(move || match inner.db.get(&key) {
             Ok(Some(vec)) => Ok(vec.to_vec()),
             _ => Err(Error::new("no key found")),
-        }).into_box()
+        })
+        .into_box()
     }
 
     fn get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
@@ -58,7 +58,8 @@ impl StorageBackend for PersistentStorageBackend {
             }
 
             Ok(results)
-        }).into_box()
+        })
+        .into_box()
     }
 
     fn insert(&self, value: Vec<u8>, _expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
@@ -69,7 +70,8 @@ impl StorageBackend for PersistentStorageBackend {
             inner.db.put(&key, &value)?;
 
             Ok(())
-        }).into_box()
+        })
+        .into_box()
     }
 
     fn insert_batch(&self, values: Vec<(Vec<u8>, u64)>, _opts: InsertOptions) -> BoxFuture<()> {
@@ -85,7 +87,8 @@ impl StorageBackend for PersistentStorageBackend {
             inner.db.write(batch)?;
 
             Ok(())
-        }).into_box()
+        })
+        .into_box()
     }
 
     fn get_keys(&self) -> BoxStream<(H256, u64)> {
@@ -95,12 +98,13 @@ impl StorageBackend for PersistentStorageBackend {
             drop(
                 stream::iter_ok::<_, futures::sync::mpsc::SendError<_>>(
                     inner.db.iterator(IteratorMode::Start),
-                ).map(|entry| {
+                )
+                .map(|entry| {
                     let key = H256::from(&*entry.0);
                     (key, 0)
                 })
-                    .forward(tx)
-                    .wait(),
+                .forward(tx)
+                .wait(),
             );
         });
         rx.map_err(|()| unreachable!()).into_box()

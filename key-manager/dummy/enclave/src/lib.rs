@@ -16,15 +16,18 @@ extern crate untrusted;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use ekiden_core::{bytes::{B512, H256},
-                  error::{Error, Result},
-                  hash,
-                  signature::{InMemorySigner, Signer}};
+use ekiden_core::{
+    bytes::{B512, H256},
+    error::{Error, Result},
+    hash,
+    signature::{InMemorySigner, Signer},
+};
 use ekiden_keymanager_api::{with_api, GetOrCreateKeyRequest, GetOrCreateKeyResponse};
 use ekiden_keymanager_common::PublicKeyType;
-use ekiden_trusted::enclave::enclave_init;
-use ekiden_trusted::rpc::create_enclave_rpc;
-use ekiden_trusted::rpc::request::Request;
+use ekiden_trusted::{
+    enclave::enclave_init,
+    rpc::{create_enclave_rpc, request::Request},
+};
 
 mod key_store;
 use key_store::KeyStore;

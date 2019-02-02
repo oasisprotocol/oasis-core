@@ -36,8 +36,7 @@ pub mod patricia_trie;
 #[macro_use]
 pub mod schema;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Result;
+use ekiden_common::{bytes::H256, error::Result};
 use ekiden_keymanager_common::{ContractId, StateKeyType};
 
 /// Database interface exposed to contracts.

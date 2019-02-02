@@ -9,9 +9,10 @@ extern crate serde_json;
 extern crate test_logger_api;
 
 use ekiden_core::error::Result;
-use ekiden_trusted::enclave::enclave_init;
-use ekiden_trusted::runtime::create_runtime;
-use ekiden_trusted::runtime::dispatcher::RuntimeCallContext;
+use ekiden_trusted::{
+    enclave::enclave_init,
+    runtime::{create_runtime, dispatcher::RuntimeCallContext},
+};
 use test_logger_api::with_api;
 
 enclave_init!();

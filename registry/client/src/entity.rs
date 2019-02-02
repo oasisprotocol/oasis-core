@@ -1,14 +1,15 @@
 //! Entity registry gRPC client.
-use std::convert::TryFrom;
-use std::error::Error as StdError;
+use std::{convert::TryFrom, error::Error as StdError};
 
 use grpcio::Channel;
 
-use ekiden_common::address::Address;
-use ekiden_common::bytes::B256;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::prelude::*;
-use ekiden_common::x509::Certificate;
+use ekiden_common::{
+    address::Address,
+    bytes::B256,
+    error::{Error, Result},
+    futures::prelude::*,
+    x509::Certificate,
+};
 use ekiden_registry_api as api;
 use ekiden_registry_base::{EntityRegistryBackend, NodeTransport};
 

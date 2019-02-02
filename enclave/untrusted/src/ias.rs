@@ -1,15 +1,15 @@
 use sgx_types;
 
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
+use std::{collections::HashMap, fs::File, io::Read};
 
 use base64;
 use reqwest;
 
-use ekiden_core::bytes::H128;
-use ekiden_core::enclave::api as identity_api;
-use ekiden_core::error::{Error, Result};
+use ekiden_core::{
+    bytes::H128,
+    enclave::api as identity_api,
+    error::{Error, Result},
+};
 
 use super::identity;
 
@@ -109,7 +109,8 @@ impl IAS {
                 format!(
                     "{{\"isvEnclaveQuoteStatus\": \"OK\", \"isvEnclaveQuoteBody\": \"{}\"}}",
                     base64::encode(&quote)
-                ).into_bytes(),
+                )
+                .into_bytes(),
             );
 
             return Ok(av_report);

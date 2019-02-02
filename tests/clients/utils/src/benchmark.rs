@@ -1,6 +1,7 @@
-use std::cell::RefCell;
-use std::sync::mpsc::channel;
-use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    sync::{mpsc::channel, Arc},
+};
 
 use histogram::Histogram;
 use serde_json;
@@ -300,7 +301,7 @@ where
             let runs = self.runs;
 
             self.pool.execute(move || {
-                thread_local!{
+                thread_local! {
                     static RUNTIME: RefCell<Runtime> = RefCell::new(Runtime::new().unwrap());
                 }
 

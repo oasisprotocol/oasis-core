@@ -1,16 +1,19 @@
 //! Network enclave RPC client backend.
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use grpcio;
 
-use protobuf;
-use protobuf::Message;
+use protobuf::{self, Message};
 
-use ekiden_common::environment::Environment;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::prelude::*;
-use ekiden_common::x509::{Certificate, CERTIFICATE_COMMON_NAME};
+use ekiden_common::{
+    environment::Environment,
+    error::{Error, Result},
+    futures::prelude::*,
+    x509::{Certificate, CERTIFICATE_COMMON_NAME},
+};
 use ekiden_rpc_api::{CallEnclaveRequest, EnclaveRpcClient};
 use ekiden_rpc_common::api;
 
@@ -235,14 +238,16 @@ impl RpcClientBackend for NetworkRpcClientBackend {
     }
 
     fn call(&self, client_request: api::ClientRequest) -> BoxFuture<api::ClientResponse> {
-        let result = self.call_raw(match client_request.write_to_bytes() {
-            Ok(request) => request,
-            _ => return Box::new(future::err(Error::new("Failed to serialize request"))),
-        }).and_then(|response| {
-            let client_response: api::ClientResponse = protobuf::parse_from_bytes(&response)?;
+        let result = self
+            .call_raw(match client_request.write_to_bytes() {
+                Ok(request) => request,
+                _ => return Box::new(future::err(Error::new("Failed to serialize request"))),
+            })
+            .and_then(|response| {
+                let client_response: api::ClientResponse = protobuf::parse_from_bytes(&response)?;
 
-            Ok(client_response)
-        });
+                Ok(client_response)
+            });
 
         Box::new(result)
     }
@@ -252,9 +257,12 @@ impl RpcClientBackend for NetworkRpcClientBackend {
         rpc_request.set_payload(client_request);
         let timeout = self.timeout;
 
-        Box::new(self.call_available_node(move |client| {
-            client.call_enclave_async_opt(&rpc_request, create_call_opt(timeout))
-        }).map(|mut response| response.take_payload()))
+        Box::new(
+            self.call_available_node(move |client| {
+                client.call_enclave_async_opt(&rpc_request, create_call_opt(timeout))
+            })
+            .map(|mut response| response.take_payload()),
+        )
     }
 
     fn get_credentials(&self) -> Option<RpcClientCredentials> {

@@ -12,16 +12,15 @@ extern crate ekiden_keymanager_client;
 extern crate ekiden_keymanager_common;
 extern crate ekiden_rpc_client;
 
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{process::exit, str::FromStr, sync::Arc, time::Duration};
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_common::environment::{Environment, GrpcEnvironment};
-use ekiden_common::x509;
+use ekiden_common::{
+    environment::{Environment, GrpcEnvironment},
+    x509,
+};
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_keymanager_client::{KeyManager, NetworkRpcClientBackendConfig};
 use ekiden_keymanager_common::ContractId;
@@ -76,9 +75,9 @@ fn main() {
         value_t!(matches.value_of("enclave"), MrEnclave).unwrap_or_else(|e| e.exit());
 
     // Load TLS certificate.
-    let tls_certificate = x509::load_certificate_pem(
-        matches.value_of("tls-certificate").expect("is required"),
-    ).expect("TLS credentials load must succeed");
+    let tls_certificate =
+        x509::load_certificate_pem(matches.value_of("tls-certificate").expect("is required"))
+            .expect("TLS credentials load must succeed");
 
     let environment: Arc<Environment> = Arc::new(GrpcEnvironment::default());
 

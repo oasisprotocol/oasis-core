@@ -74,7 +74,8 @@ pub extern "C" fn identity_create(
         0xF0000000,
         &[],
         &export,
-    ).expect("SgxSealedData::seal_data_ex");
+    )
+    .expect("SgxSealedData::seal_data_ex");
     let raw_data_len = SgxSealedData::<IdentityExport>::calc_raw_sealed_data_size(
         sealed_data.get_add_mac_txt_len(),
         sealed_data.get_encrypt_txt_len(),
@@ -114,7 +115,8 @@ pub extern "C" fn identity_restore(
             sealed_identity,
             sealed_identity_length as u32,
         )
-    }.expect("SgxSealedData::from_raw_sealed_data_t");
+    }
+    .expect("SgxSealedData::from_raw_sealed_data_t");
     let unsealed_data = sealed_data
         .unseal_data()
         .expect("SgxSealedData::unseal_data");

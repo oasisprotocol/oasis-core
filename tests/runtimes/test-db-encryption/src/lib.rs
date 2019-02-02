@@ -14,17 +14,17 @@ use std::sync::Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 
-use test_db_encryption_api::{with_api, FetchEncryptedRequest, FetchEncryptedResponse,
-                             SetKMEnclaveRequest, SetKMEnclaveResponse, StoreEncryptedRequest,
-                             StoreEncryptedResponse};
+use test_db_encryption_api::{
+    with_api, FetchEncryptedRequest, FetchEncryptedResponse, SetKMEnclaveRequest,
+    SetKMEnclaveResponse, StoreEncryptedRequest, StoreEncryptedResponse,
+};
 
-use ekiden_core::bytes::H256;
-use ekiden_core::enclave::quote::MrEnclave;
-use ekiden_core::error::Result;
-use ekiden_trusted::db::{DBKeyManagerConfig, Database, DatabaseHandle};
-use ekiden_trusted::enclave::enclave_init;
-use ekiden_trusted::runtime::create_runtime;
-use ekiden_trusted::runtime::dispatcher::RuntimeCallContext;
+use ekiden_core::{bytes::H256, enclave::quote::MrEnclave, error::Result};
+use ekiden_trusted::{
+    db::{DBKeyManagerConfig, Database, DatabaseHandle},
+    enclave::enclave_init,
+    runtime::{create_runtime, dispatcher::RuntimeCallContext},
+};
 
 enclave_init!();
 

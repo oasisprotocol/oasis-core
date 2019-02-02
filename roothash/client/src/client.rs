@@ -3,9 +3,7 @@ use std::convert::TryFrom;
 
 use grpcio::Channel;
 
-use ekiden_common::bytes::B256;
-use ekiden_common::futures::prelude::*;
-use ekiden_common::uint::U256;
+use ekiden_common::{bytes::B256, futures::prelude::*, uint::U256};
 use ekiden_roothash_api as api;
 use ekiden_roothash_base::{Block, RootHashBackend};
 

@@ -52,7 +52,8 @@ pub trait FutureExt: Future {
             }
 
             future::ok(())
-        }).into_box()
+        })
+        .into_box()
     }
 
     /// Discard item and error, returning a new future.
@@ -112,7 +113,8 @@ pub trait StreamExt: Stream {
                 .map_err(|()| -> Self::Error {
                     unreachable!();
                 })
-        }).log_errors_and_discard(log_target, log_message)
+        })
+        .log_errors_and_discard(log_target, log_message)
     }
 }
 
@@ -120,12 +122,14 @@ impl<S: Stream> StreamExt for S {}
 
 #[cfg(not(target_env = "sgx"))]
 pub use self::block_on::block_on;
-pub use self::killable::{killable, KillHandle};
-pub use self::retry::retry;
 #[cfg(not(target_env = "sgx"))]
 pub use self::retry::{retry_until_ok, retry_until_ok_or_max};
 #[cfg(not(target_env = "sgx"))]
 pub use self::spawn::*;
+pub use self::{
+    killable::{killable, KillHandle},
+    retry::retry,
+};
 
 pub mod stream {
     pub use super::extern_futures::stream::*;
@@ -141,8 +145,10 @@ pub mod stream {
 /// use ekiden_common::futures::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::{future, stream, BoxFuture, BoxStream, Future, FutureExt, KillHandle, Sink,
-                    Stream, StreamExt};
+    pub use super::{
+        future, stream, BoxFuture, BoxStream, Future, FutureExt, KillHandle, Sink, Stream,
+        StreamExt,
+    };
 
     #[cfg(not(target_env = "sgx"))]
     pub use super::{spawn, spawn_killable};

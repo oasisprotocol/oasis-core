@@ -1,13 +1,14 @@
 //! Storage backend that talks to an external backend outside the enclave.
-use std::slice::from_raw_parts_mut;
-use std::sync::SgxMutex as Mutex;
+use std::{slice::from_raw_parts_mut, sync::SgxMutex as Mutex};
 
 use sgx_trts::trts::rsgx_raw_is_outside_enclave;
 use sgx_types::*;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Error;
-use ekiden_common::futures::{future, BoxFuture, BoxStream};
+use ekiden_common::{
+    bytes::H256,
+    error::Error,
+    futures::{future, BoxFuture, BoxStream},
+};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 /// OCALLs defined by the Ekiden enclave specification.

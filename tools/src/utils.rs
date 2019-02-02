@@ -1,10 +1,10 @@
 //! Ekiden build utilities.
-use std::env;
-use std::fs;
-use std::io;
-use std::io::prelude::*;
-use std::path::Path;
-use std::process::Command;
+use std::{
+    env, fs,
+    io::{self, prelude::*},
+    path::Path,
+    process::Command,
+};
 
 use cc;
 use filebuffer::FileBuffer;
@@ -12,7 +12,6 @@ use mktemp;
 use protobuf;
 use protoc_rust;
 use regex::bytes::Regex;
-use sgx_edl::EDL;
 
 use super::error::Result;
 
@@ -76,32 +75,12 @@ fn edger8r(
     config: &BuildConfiguration,
     part: BuildPart,
     output: &str,
-    edl: &Vec<EDL>,
+    edls: &sgx_edl::EDLs,
 ) -> io::Result<()> {
+    let edl_filename = Path::new(&output).join("_enclave.edl");
     let edger8r_bin = Path::new(&config.intel_sdk_dir).join(EDGER8R_PATH);
-
-    // Create temporary files with all EDLs and import all of them in the core EDL.
-    let edl_filename = Path::new(&output).join("enclave.edl");
-    {
-        let mut enclave_edl_file = fs::File::create(&edl_filename)?;
-        writeln!(&mut enclave_edl_file, "enclave {{").unwrap();
-
-        for ref edl_item in edl {
-            let edl_item_filename =
-                Path::new(&output).join(format!("{}_{}", edl_item.namespace, edl_item.name));
-            let mut edl_file = fs::File::create(&edl_item_filename)?;
-            edl_file.write_all(edl_item.data.as_bytes())?;
-            writeln!(
-                &mut enclave_edl_file,
-                "from \"{}_{}\" import *;",
-                edl_item.namespace, edl_item.name
-            ).unwrap();
-        }
-
-        writeln!(&mut enclave_edl_file, "}};").unwrap();
-    }
-
-    let status = Command::new(edger8r_bin.to_str().unwrap())
+    let mut edger8 = Command::new(edger8r_bin.to_str().unwrap());
+    edger8
         .args(&["--search-path", output])
         .args(&[
             "--search-path",
@@ -114,9 +93,28 @@ fn edger8r(
             BuildPart::Untrusted => ["--untrusted", "--untrusted-dir", &output],
             BuildPart::Trusted => ["--trusted", "--trusted-dir", &output],
         })
-        .arg(edl_filename.to_str().unwrap())
-        .status()?;
-    if !status.success() {
+        .arg(edl_filename.to_str().unwrap());
+    for search_path in edls.search_paths.iter() {
+        edger8.args(&["--search-path", search_path.to_str().unwrap()]);
+    }
+
+    // Create temporary files with all sgx_edl::EDLs and import all of them in the core EDL.
+    {
+        let mut enclave_edl_file = fs::File::create(&edl_filename)?;
+        writeln!(&mut enclave_edl_file, "enclave {{").unwrap();
+        for ref edl_path in edls.edl_paths.iter() {
+            writeln!(
+                &mut enclave_edl_file,
+                "from \"{}\" import *;",
+                edl_path.file_name().unwrap().to_str().unwrap()
+            )
+            .unwrap();
+        }
+
+        writeln!(&mut enclave_edl_file, "}};").unwrap();
+    }
+
+    if !edger8.status()?.success() {
         panic!("edger8r did not execute successfully.");
     }
 
@@ -150,7 +148,7 @@ pub fn find_untrusted_libs() {
 }
 
 /// Build the untrusted part of an Ekiden enclave.
-pub fn build_untrusted(edl: Vec<EDL>) {
+pub fn build_untrusted(edls: sgx_edl::EDLs) {
     let config = get_build_configuration();
 
     // Create temporary directory to hold the built libraries.
@@ -159,25 +157,30 @@ pub fn build_untrusted(edl: Vec<EDL>) {
     let temp_dir_name = temp_dir_path.to_str().unwrap();
 
     // Generate proxy for untrusted part.
-    edger8r(&config, BuildPart::Untrusted, &temp_dir_name, &edl).expect("Failed to run edger8r");
+    edger8r(&config, BuildPart::Untrusted, &temp_dir_name, &edls).expect("Failed to run edger8r");
 
     // Build proxy.
-    cc::Build::new()
-        .file(temp_dir_path.join("enclave_u.c"))
+    let mut builder = cc::Build::new();
+    builder
+        .file(temp_dir_path.join("_enclave_u.c"))
         .flag_if_supported("-m64")
-        .flag_if_supported("-O2")  // TODO: Should be based on debug/release builds.
+        .flag_if_supported("-O2") // TODO: Should be based on debug/release builds.
         .flag_if_supported("-fPIC")
-        .flag_if_supported("-Wno-attributes")
+        .flag_if_supported("-Wno-attributes");
+    for search_path in edls.search_paths.iter() {
+        builder.include(search_path);
+    }
+    builder
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_INCLUDE_PATH))
         .include(&temp_dir_name)
-        .compile("enclave_u");
+        .compile("_enclave_u");
 
-    println!("cargo:rustc-link-lib=static=enclave_u");
+    println!("cargo:rustc-link-lib=static=_enclave_u");
     find_untrusted_libs();
 }
 
 /// Build the trusted Ekiden SGX enclave.
-pub fn build_trusted(edl: Vec<EDL>) {
+pub fn build_trusted(edls: sgx_edl::EDLs) {
     let config = get_build_configuration();
 
     // Create temporary directory to hold the built libraries.
@@ -186,25 +189,30 @@ pub fn build_trusted(edl: Vec<EDL>) {
     let temp_dir_name = temp_dir_path.to_str().unwrap();
 
     // Generate proxy for trusted part.
-    edger8r(&config, BuildPart::Trusted, &temp_dir_name, &edl).expect("Failed to run edger8r");
+    edger8r(&config, BuildPart::Trusted, &temp_dir_name, &edls).expect("Failed to run edger8r");
 
     // Build proxy.
-    cc::Build::new()
-        .file(temp_dir_path.join("enclave_t.c"))
+    let mut builder = cc::Build::new();
+    builder
+        .file(temp_dir_path.join("_enclave_t.c"))
         .flag_if_supported("-m64")
-        .flag_if_supported("-O2")  // TODO: Should be based on debug/release builds.
+        .flag_if_supported("-O2") // TODO: Should be based on debug/release builds.
         .flag_if_supported("-nostdinc")
         .flag_if_supported("-fvisibility=hidden")
         .flag_if_supported("-fpie")
-        .flag_if_supported("-fstack-protector")
+        .flag_if_supported("-fstack-protector");
+    for search_path in edls.search_paths.iter() {
+        builder.include(search_path);
+    }
+    builder
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_INCLUDE_PATH))
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_TLIBC_INCLUDE_PATH))
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_STLPORT_INCLUDE_PATH))
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_EPID_INCLUDE_PATH))
-        .include(&temp_dir_name)
-        .compile("enclave_t");
+        .include(&temp_dir_name);
+    builder.compile("_enclave_t");
 
-    println!("cargo:rustc-link-lib=static=enclave_t");
+    println!("cargo:rustc-link-lib=static=_enclave_t");
 }
 
 /// Generate Rust code for Protocol Buffer messages.
@@ -215,7 +223,8 @@ pub fn protoc(args: ProtocArgs) {
         includes: args.includes,
         input: args.input,
         customize: protoc_rust::Customize::default(),
-    }).expect("Failed to run protoc");
+    })
+    .expect("Failed to run protoc");
 
     // Output descriptor of the generated files into a temporary file.
     let temp_dir = mktemp::Temp::new_dir().expect("Failed to create temporary directory");
@@ -257,7 +266,8 @@ pub fn protoc(args: ProtocArgs) {
                     &mut out_file,
                     "impl_serde_for_protobuf!({});",
                     message_type.get_name()
-                ).unwrap();
+                )
+                .unwrap();
             }
         }
     }
@@ -310,9 +320,9 @@ pub fn generate_mod_with_imports(output_dir: &str, imports: &[&str], modules: &[
 /// Extract enclave identity from a compiled enclave.
 pub fn get_enclave_identity<P: AsRef<Path>>(enclave: P) -> Result<Vec<u8>> {
     // Sigstruct headers in bundled enclave.
-    let sigstruct_header_1 = Regex::new(
-        r"(?-u)\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00",
-    ).unwrap();
+    let sigstruct_header_1 =
+        Regex::new(r"(?-u)\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00")
+            .unwrap();
     let sigstruct_header_2 = b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
 
     let enclave_file = FileBuffer::open(enclave)?;

@@ -1,10 +1,14 @@
 //! Storage backend interface.
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Error;
-use ekiden_common::futures::{future, stream, BoxFuture, BoxStream, StreamExt};
+use ekiden_common::{
+    bytes::H256,
+    error::Error,
+    futures::{future, stream, BoxFuture, BoxStream, StreamExt},
+};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 
 struct DummyStorageBackendInner {

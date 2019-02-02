@@ -6,13 +6,11 @@ extern crate ekiden_storage_persistent;
 
 extern crate test;
 
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
 use test::Bencher;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::futures::Future;
+use ekiden_common::{bytes::H256, futures::Future};
 use ekiden_storage_base::{hash_storage_key, InsertOptions, StorageBackend};
 use ekiden_storage_persistent::PersistentStorageBackend;
 
@@ -38,15 +36,13 @@ fn test_persistent_backend() {
 
     let key_foo = hash_storage_key(b"foo");
     let key_bar = hash_storage_key(b"bar");
-    assert!(
-        backend
-            .insert_batch(
-                vec![(b"foo".to_vec(), 10), (b"bar".to_vec(), 10)],
-                InsertOptions::default(),
-            )
-            .wait()
-            .is_ok(),
-    );
+    assert!(backend
+        .insert_batch(
+            vec![(b"foo".to_vec(), 10), (b"bar".to_vec(), 10)],
+            InsertOptions::default(),
+        )
+        .wait()
+        .is_ok(),);
     assert_eq!(
         backend.get_batch(vec![key_foo, key_bar]).wait(),
         Ok(vec![Some(b"foo".to_vec()), Some(b"bar".to_vec())]),

@@ -5,21 +5,18 @@ use std::sync::Mutex;
 use std::sync::SgxMutex as Mutex;
 
 use protobuf;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor;
 
-use ekiden_common::error::Error;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::error::Result;
-use ekiden_common::futures::prelude::*;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::futures::sync::{mpsc, oneshot};
+use ekiden_common::{error::Error, futures::prelude::*};
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_rpc_common::api;
 
-use super::backend::RpcClientBackend;
-use super::secure_channel::SecureChannelContext;
+use super::{backend::RpcClientBackend, secure_channel::SecureChannelContext};
 
 /// Commands sent to the processing task.
 #[cfg(not(target_env = "sgx"))]
@@ -116,13 +113,12 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
                 let mut client_request = api::ClientRequest::new();
                 if context.secure_channel.must_encrypt() {
                     // Encrypt request.
-                    client_request.set_encrypted_request(match context
-                        .secure_channel
-                        .create_request_box(&plain_request)
-                    {
-                        Ok(request) => request,
-                        Err(error) => return Box::new(future::err(error)),
-                    });
+                    client_request.set_encrypted_request(
+                        match context.secure_channel.create_request_box(&plain_request) {
+                            Ok(request) => request,
+                            Err(error) => return Box::new(future::err(error)),
+                        },
+                    );
                 } else {
                     // Plain-text request.
                     client_request.set_plain_request(plain_request);
@@ -362,7 +358,8 @@ impl<Backend: RpcClientBackend + 'static> RpcClientContext<Backend> {
                 shared_context.clone(),
                 api::METHOD_CHANNEL_CLOSE,
                 request,
-            ).and_then(move |_| {
+            )
+            .and_then(move |_| {
                 let mut context = shared_context.lock().unwrap();
 
                 // Close local part of the secure channel.
@@ -450,7 +447,8 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
             Err(_) => return Box::new(future::err(Error::new("payload serialize failed"))),
         }
 
-        if let Err(_) = self.request_tx
+        if let Err(_) = self
+            .request_tx
             .unbounded_send(Command::Call(plain_request, call_tx))
         {
             return Box::new(future::err(Error::new("Command channel closed")));
@@ -484,7 +482,8 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     pub fn init_secure_channel(&self) -> BoxFuture<()> {
         let (call_tx, call_rx) = oneshot::channel();
 
-        if let Err(_) = self.request_tx
+        if let Err(_) = self
+            .request_tx
             .unbounded_send(Command::InitSecureChannel(call_tx))
         {
             return Box::new(future::err(Error::new("Command channel closed")));
@@ -515,7 +514,8 @@ impl<Backend: RpcClientBackend + 'static> RpcClient<Backend> {
     pub fn close_secure_channel(&self) -> BoxFuture<()> {
         let (call_tx, call_rx) = oneshot::channel();
 
-        if let Err(_) = self.request_tx
+        if let Err(_) = self
+            .request_tx
             .unbounded_send(Command::CloseSecureChannel(call_tx))
         {
             return Box::new(future::err(Error::new("Command channel closed")));

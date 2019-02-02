@@ -1,7 +1,4 @@
-use std::cmp::Eq;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::sync::Arc;
+use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 
 /// UsizeIterableHashMap implements the basic operations of a HashMap
 /// (insert, get, remove) and adds an iterator scheme that uses a

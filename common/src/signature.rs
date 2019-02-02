@@ -1,19 +1,19 @@
 //! Signature interface.
-use std;
-use std::convert::TryFrom;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use std::{self, convert::TryFrom, marker::PhantomData, sync::Arc};
 
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_bytes;
 use serde_cbor;
 
-use super::bytes::{B256, B512, B64, H256};
-use super::error::{Error, Result};
-use super::ring::signature::KeyPair;
-use super::ring::{digest, signature};
-use super::untrusted;
+use super::{
+    bytes::{B256, B512, B64, H256},
+    error::{Error, Result},
+    ring::{
+        digest,
+        signature::{self, KeyPair},
+    },
+    untrusted,
+};
 
 use ekiden_common_api as api;
 
@@ -132,7 +132,8 @@ impl<'a> Verifier for PublicKeyVerifier<'a> {
             untrusted::Input::from(self.public_key),
             untrusted::Input::from(&data),
             untrusted::Input::from(&signature),
-        ).is_ok()
+        )
+        .is_ok()
     }
 }
 

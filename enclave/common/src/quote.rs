@@ -1,21 +1,27 @@
 //! A portable system for parsing and verifying enclave identity proofs.
 
-use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::result::Result as StdResult;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    io::{Cursor, Read, Seek, SeekFrom},
+    result::Result as StdResult,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
-use pem_iterator::body::Single;
-use pem_iterator::boundary::{BoundaryParser, BoundaryType, LabelMatcher};
+use pem_iterator::{
+    body::Single,
+    boundary::{BoundaryParser, BoundaryType, LabelMatcher},
+};
 use percent_encoding;
 use serde_json;
 use webpki;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::untrusted;
+use ekiden_common::{
+    bytes::H256,
+    error::{Error, Result},
+    untrusted,
+};
 
 use super::api::IdentityProof;
 
@@ -235,7 +241,7 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
         None => {
             return Err(Error::new(
                 "AV report body did not contain isvEnclaveQuoteBody",
-            ))
+            ));
         }
     };
 
@@ -307,7 +313,7 @@ fn validate_avr_signature(
             return Err(Error::new(format!(
                 "Failed to validate AVR signature: {:?}",
                 err
-            )))
+            )));
         }
     }
 }

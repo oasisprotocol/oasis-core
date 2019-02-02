@@ -28,6 +28,6 @@ shift
 #########################
 pushd $src_dir
   cargo build
-  cargo fmt -- --write-mode=check
+  cargo fmt -- --check
   cargo test --all --exclude ekiden-storage-dynamodb
 popd

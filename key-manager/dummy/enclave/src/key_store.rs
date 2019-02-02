@@ -8,11 +8,15 @@ use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
 
-use ekiden_core::error::{Error, Result};
-use ekiden_core::random;
+use ekiden_core::{
+    error::{Error, Result},
+    random,
+};
 
-use ekiden_keymanager_common::{ContractId, ContractKey, PublicKeyType, StateKeyType,
-                               EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY, EMPTY_STATE_KEY};
+use ekiden_keymanager_common::{
+    ContractId, ContractKey, PublicKeyType, StateKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY,
+    EMPTY_STATE_KEY,
+};
 use ekiden_trusted::db::{Database, DatabaseHandle};
 
 /// Key store, which actually stores the key manager keys.

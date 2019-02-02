@@ -1,22 +1,27 @@
 //! Tool subcommand for building enclaves.
 extern crate clap;
 
-use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use self::clap::ArgMatches;
 
-use super::cargo;
-use super::enclave::{EnclaveBuilder, TARGET_ENCLAVE_DIR};
-use super::error::Result;
+use super::{
+    cargo,
+    enclave::{EnclaveBuilder, TARGET_ENCLAVE_DIR},
+    error::Result,
+};
 
 use utils::{get_enclave_identity, SgxMode};
 
 /// Build an Ekiden enclave.
 pub fn build_enclave(args: &ArgMatches) -> Result<()> {
-    let cargo_addendum = args.value_of("cargo-addendum")
+    let cargo_addendum = args
+        .value_of("cargo-addendum")
         .map(|path| PathBuf::from(path));
 
     let mut builder = match args.value_of("enclave-crate") {
@@ -65,7 +70,8 @@ pub fn build_enclave(args: &ArgMatches) -> Result<()> {
                     "manifest path `{}` is a virtual manifest, but this command requires running \
                      against an actual package in this workspace",
                     project.get_config_path().to_str().unwrap()
-                ).into())
+                )
+                    .into());
                 }
             };
 

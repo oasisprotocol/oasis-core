@@ -36,11 +36,9 @@ impl RemoteNode {
 
 /// Create a Vec of args for App::args(&...) with configuration options for the remote node.
 pub fn get_arguments<'a, 'b>() -> Vec<Arg<'a, 'b>> {
-    vec![
-        Arg::with_name("node-address")
-            .long("node-address")
-            .help("Remote node hostname:port that the client should connect to")
-            .takes_value(true)
-            .default_value("127.0.0.1:42261"),
-    ]
+    vec![Arg::with_name("node-address")
+        .long("node-address")
+        .help("Remote node hostname:port that the client should connect to")
+        .takes_value(true)
+        .default_value("127.0.0.1:42261")]
 }

@@ -1,6 +1,3 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::sync::Arc;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
@@ -9,14 +6,20 @@ use std::sync::SgxMutexGuard as MutexGuard;
 use std::sync::{Mutex, MutexGuard};
 #[cfg(not(target_env = "sgx"))]
 use std::time::Duration;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
-use ekiden_common::bytes::B512;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::environment::Environment;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::prelude::*;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::x509::Certificate;
+use ekiden_common::{
+    bytes::B512,
+    error::{Error, Result},
+    futures::prelude::*,
+};
 use ekiden_enclave_common::quote::MrEnclave;
 use ekiden_keymanager_api::with_api;
 #[cfg(not(target_env = "sgx"))]
@@ -27,8 +30,9 @@ use ekiden_rpc_common::client::ClientEndpoint;
 #[cfg(target_env = "sgx")]
 use ekiden_rpc_trusted::client::OcallRpcClientBackend;
 
-use ekiden_keymanager_common::{ContractId, ContractKey, PrivateKeyType, PublicKeyPayload,
-                               PublicKeyType, StateKeyType};
+use ekiden_keymanager_common::{
+    ContractId, ContractKey, PrivateKeyType, PublicKeyPayload, PublicKeyType, StateKeyType,
+};
 use serde_cbor;
 
 // Create API client for the key manager.
@@ -107,7 +111,7 @@ impl KeyManager {
             None => {
                 return Err(Error::new(
                     "Tried to call key manager without known manager identity",
-                ))
+                ));
             }
         };
 
@@ -200,7 +204,8 @@ impl KeyManager {
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
                 request.set_contract_id(contract_id.to_vec());
                 // make a RPC
-                let mut response = match self.client
+                let mut response = match self
+                    .client
                     .as_mut()
                     .unwrap()
                     .get_or_create_keys(request)
@@ -259,7 +264,8 @@ impl KeyManager {
             Entry::Vacant(entry) => {
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
                 request.set_contract_id(contract_id.to_vec());
-                let mut response = match self.client
+                let mut response = match self
+                    .client
                     .as_mut()
                     .unwrap()
                     .long_term_public_key(request)

@@ -1,18 +1,16 @@
 //! Read-only database access with best-effort freshness.
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use ekiden_core;
-use ekiden_core::bytes::B256;
-use ekiden_core::bytes::H256;
-use ekiden_core::environment::Environment;
-use ekiden_core::error::Result;
-use ekiden_core::futures::prelude::*;
-use ekiden_core::futures::streamfollow;
-use ekiden_core::hash::empty_hash;
-use ekiden_core::uint::U256;
-use ekiden_db_trusted::patricia_trie::PatriciaTrie;
-use ekiden_db_trusted::{Database, DatabaseHandle};
+use ekiden_core::{
+    self,
+    bytes::{B256, H256},
+    environment::Environment,
+    error::Result,
+    futures::{prelude::*, streamfollow},
+    hash::empty_hash,
+    uint::U256,
+};
+use ekiden_db_trusted::{patricia_trie::PatriciaTrie, Database, DatabaseHandle};
 use ekiden_keymanager_common::StateKeyType;
 use ekiden_roothash_base::{Block, RootHashBackend};
 use ekiden_storage_base::StorageMapper;
@@ -109,7 +107,8 @@ impl Manager {
                 move |round: &U256| root_hash_resume.get_blocks_since(runtime_id, round.clone()),
                 |block: &Block| block.header.round,
                 |_err| false,
-            ).for_each(move |block: Block| {
+            )
+            .for_each(move |block: Block| {
                 let mut guard = root_hash.lock().unwrap();
                 *guard = Some(block.header.state_root);
                 Ok(())
@@ -155,24 +154,23 @@ impl Drop for Manager {
 
 #[cfg(test)]
 mod tests {
-    use std;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-    use std::time::Duration;
+    use std::{
+        self,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     extern crate grpcio;
 
-    use ekiden_core;
-    use ekiden_core::bytes::B256;
-    use ekiden_core::environment::GrpcEnvironment;
-    use ekiden_core::futures::BoxStream;
-    use ekiden_core::futures::Stream;
-    use ekiden_core::uint::U256;
-    use ekiden_db_trusted::patricia_trie::PatriciaTrie;
-    use ekiden_db_trusted::Database;
-    use ekiden_roothash_base::backend::RootHashBackend;
-    use ekiden_roothash_base::block::Block;
-    use ekiden_roothash_base::header::Header;
+    use ekiden_core::{
+        self,
+        bytes::B256,
+        environment::GrpcEnvironment,
+        futures::{BoxStream, Stream},
+        uint::U256,
+    };
+    use ekiden_db_trusted::{patricia_trie::PatriciaTrie, Database};
+    use ekiden_roothash_base::{backend::RootHashBackend, block::Block, header::Header};
     use ekiden_storage_base::mapper::BackendIdentityMapper;
     extern crate ekiden_storage_dummy;
     use self::ekiden_storage_dummy::DummyStorageBackend;

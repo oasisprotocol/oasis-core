@@ -1,26 +1,26 @@
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use grpcio::{self, RpcStatus, RpcStatusCode};
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor;
 
-use ekiden_common::bytes::B256;
-use ekiden_common::environment::Environment;
-use ekiden_common::error::{Error, Result};
-use ekiden_common::futures::prelude::*;
-use ekiden_common::futures::retry_until_ok;
-use ekiden_common::futures::sync::oneshot;
-use ekiden_common::hash::EncodedHash;
+use ekiden_common::{
+    bytes::B256,
+    environment::Environment,
+    error::{Error, Result},
+    futures::{prelude::*, retry_until_ok, sync::oneshot},
+    hash::EncodedHash,
+};
 use ekiden_runtime_common::call::{RuntimeCall, RuntimeOutput};
 use ekiden_tracing::inject_to_options;
 
 mod api {
-    pub use crate::generated::runtime::*;
-    pub use crate::generated::runtime_grpc::*;
+    pub use crate::generated::{runtime::*, runtime_grpc::*};
 }
 
 /// Runtime client.
@@ -98,10 +98,12 @@ impl RuntimeClient {
                 options = inject_to_options(options, span.context());
 
                 match rpc.submit_tx_async_opt(&request.clone(), options) {
-                    Ok(call) => call.then(|result| {
-                        drop(span);
-                        result
-                    }).into_box(),
+                    Ok(call) => call
+                        .then(|result| {
+                            drop(span);
+                            result
+                        })
+                        .into_box(),
                     Err(error) => future::err(error.into()).into_box(),
                 }
             },
@@ -117,29 +119,30 @@ impl RuntimeClient {
                     _ => true,
                 }
             },
-        ).map_err(|error| error.into())
-            .and_then(move |_| {
-                call_wait.wait_for(call_id).and_then(|output| {
-                    // TODO: Submit proof of publication, get decryption.
-                    Ok(output)
-                })
+        )
+        .map_err(|error| error.into())
+        .and_then(move |_| {
+            call_wait.wait_for(call_id).and_then(|output| {
+                // TODO: Submit proof of publication, get decryption.
+                Ok(output)
             })
-            .select(
-                self.shutdown_receiver
-                    .clone()
-                    .then(|result| -> BoxFuture<Vec<u8>> {
-                        let reason = match result {
-                            Ok(reason_shared) => *reason_shared,
-                            Err(_canceled) => "client is being dropped",
-                        };
-                        // However the shutdown receiver future completes, we need to abort as
-                        // it has either been dropped or an explicit shutdown signal was sent.
-                        future::err(Error::new(reason)).into_box()
-                    }),
-            )
-            .map(|(result, _)| result)
-            .map_err(|(error, _)| error)
-            .into_box();
+        })
+        .select(
+            self.shutdown_receiver
+                .clone()
+                .then(|result| -> BoxFuture<Vec<u8>> {
+                    let reason = match result {
+                        Ok(reason_shared) => *reason_shared,
+                        Err(_canceled) => "client is being dropped",
+                    };
+                    // However the shutdown receiver future completes, we need to abort as
+                    // it has either been dropped or an explicit shutdown signal was sent.
+                    future::err(Error::new(reason)).into_box()
+                }),
+        )
+        .map(|(result, _)| result)
+        .map_err(|(error, _)| error)
+        .into_box();
 
         // Spawn background task which handles the call.
         let (response_tx, response_rx) = oneshot::channel();
@@ -170,7 +173,8 @@ impl RuntimeClient {
 
     /// Cancel all pending runtime calls.
     pub fn shutdown(&self, reason: &'static str) {
-        let shutdown_sender = self.shutdown_sender
+        let shutdown_sender = self
+            .shutdown_sender
             .lock()
             .unwrap()
             .take()

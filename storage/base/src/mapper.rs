@@ -1,9 +1,11 @@
 //! Storage mapper interface.
 use std::sync::Arc;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Result;
-use ekiden_common::futures::{future, BoxFuture, Future};
+use ekiden_common::{
+    bytes::H256,
+    error::Result,
+    futures::{future, BoxFuture, Future},
+};
 
 use super::backend::{hash_storage_key, InsertOptions, StorageBackend};
 
