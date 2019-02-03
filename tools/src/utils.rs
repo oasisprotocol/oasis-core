@@ -77,8 +77,7 @@ fn edger8r(
     output: &str,
     edls: &sgx_edl::EDLs,
 ) -> io::Result<()> {
-    println!("{:?}", edls);
-    let edl_filename = Path::new(&output).join("enclave.edl");
+    let edl_filename = Path::new(&output).join("__enclave__.edl");
     let edger8r_bin = Path::new(&config.intel_sdk_dir).join(EDGER8R_PATH);
     let mut edger8 = Command::new(edger8r_bin.to_str().unwrap());
     edger8
