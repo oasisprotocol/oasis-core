@@ -3,7 +3,7 @@
 ################
 docker_plugin: &docker_plugin_configuration
   oasislabs/docker#v2.1.0-oasis4:
-    image: "oasislabs/testing:0.2.0"
+    image: "oasislabs/testing:latest"
     always_pull: true
     workdir: /workdir
     volumes:
