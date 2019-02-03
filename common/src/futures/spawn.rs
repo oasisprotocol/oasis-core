@@ -1,7 +1,7 @@
 pub use tokio::spawn;
 
 use super::{
-    killable::{self, KillHandle},
+    killable::{killable, KillHandle},
     Future,
 };
 
