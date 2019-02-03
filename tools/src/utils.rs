@@ -77,7 +77,7 @@ fn edger8r(
     output: &str,
     edls: &sgx_edl::EDLs,
 ) -> io::Result<()> {
-    let edl_filename = Path::new(&output).join("__enclave__.edl");
+    let edl_filename = Path::new(&output).join("_enclave.edl");
     let edger8r_bin = Path::new(&config.intel_sdk_dir).join(EDGER8R_PATH);
     let mut edger8 = Command::new(edger8r_bin.to_str().unwrap());
     edger8
@@ -162,7 +162,7 @@ pub fn build_untrusted(edls: sgx_edl::EDLs) {
     // Build proxy.
     let mut builder = cc::Build::new();
     builder
-        .file(temp_dir_path.join("enclave_u.c"))
+        .file(temp_dir_path.join("_enclave_u.c"))
         .flag_if_supported("-m64")
         .flag_if_supported("-O2") // TODO: Should be based on debug/release builds.
         .flag_if_supported("-fPIC")
@@ -173,9 +173,9 @@ pub fn build_untrusted(edls: sgx_edl::EDLs) {
     builder
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_INCLUDE_PATH))
         .include(&temp_dir_name)
-        .compile("enclave_u");
+        .compile("_enclave_u");
 
-    println!("cargo:rustc-link-lib=static=enclave_u");
+    println!("cargo:rustc-link-lib=static=_enclave_u");
     find_untrusted_libs();
 }
 
@@ -194,7 +194,7 @@ pub fn build_trusted(edls: sgx_edl::EDLs) {
     // Build proxy.
     let mut builder = cc::Build::new();
     builder
-        .file(temp_dir_path.join("enclave_t.c"))
+        .file(temp_dir_path.join("_enclave_t.c"))
         .flag_if_supported("-m64")
         .flag_if_supported("-O2") // TODO: Should be based on debug/release builds.
         .flag_if_supported("-nostdinc")
@@ -210,9 +210,9 @@ pub fn build_trusted(edls: sgx_edl::EDLs) {
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_STLPORT_INCLUDE_PATH))
         .include(Path::new(&config.intel_sdk_dir).join(SGX_SDK_EPID_INCLUDE_PATH))
         .include(&temp_dir_name);
-    builder.compile("enclave_t");
+    builder.compile("_enclave_t");
 
-    println!("cargo:rustc-link-lib=static=enclave_t");
+    println!("cargo:rustc-link-lib=static=_enclave_t");
 }
 
 /// Generate Rust code for Protocol Buffer messages.
