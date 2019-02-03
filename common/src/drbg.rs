@@ -8,8 +8,10 @@ use rand::Rng;
 #[cfg(target_env = "sgx")]
 use sgx_rand::Rng;
 
-use super::error::{Error, Result};
-use super::ring::{digest, hmac};
+use super::{
+    error::{Error, Result},
+    ring::{digest, hmac},
+};
 
 /// The maximum length of the input entropy, personalization string, and
 /// additional input, in bytes.
@@ -248,8 +250,10 @@ mod tests {
     extern crate rustc_hex;
     extern crate serde_json;
 
-    use self::rustc_hex::{FromHex, ToHex};
-    use self::serde_json::Value;
+    use self::{
+        rustc_hex::{FromHex, ToHex},
+        serde_json::Value,
+    };
     use super::*;
 
     // Compare against example output from NIST.
@@ -341,9 +345,11 @@ mod tests {
             let key = test_vector["Key"].as_str().unwrap().from_hex().unwrap();
 
             let mut drbg = HmacDrbg::new(&entropy_input, &nonce).unwrap();
-            let _ = drbg.generate(RETURNED_BITS_LEN, Some(&additional_input))
+            let _ = drbg
+                .generate(RETURNED_BITS_LEN, Some(&additional_input))
                 .unwrap();
-            let rnd_val = drbg.generate(RETURNED_BITS_LEN, Some(&additional_input_2))
+            let rnd_val = drbg
+                .generate(RETURNED_BITS_LEN, Some(&additional_input_2))
                 .unwrap();
 
             assert_eq!(rnd_val, returned_bits);

@@ -1,16 +1,17 @@
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use clap;
 use log::error;
 use tokio_uds::{UnixDatagram, UnixStream};
 
-use ekiden_core::environment::Environment;
-use ekiden_core::futures::prelude::*;
-use ekiden_core::futures::{Async, Future, Poll};
-use ekiden_core::tokio::io::{copy, shutdown, AsyncRead};
-use ekiden_core::tokio::net::{TcpListener, UdpSocket};
+use ekiden_core::{
+    environment::Environment,
+    futures::{prelude::*, Async, Future, Poll},
+    tokio::{
+        io::{copy, shutdown, AsyncRead},
+        net::{TcpListener, UdpSocket},
+    },
+};
 
 macro_rules! try_poll {
     ($e:expr) => {
@@ -108,10 +109,9 @@ impl Future for DgramProxy {
         loop {
             match self.packet_size {
                 Some(n) => {
-                    try_poll!(
-                        self.sink
-                            .poll_send_to(&self.buf[..n], self.common.remote_addr.as_path())
-                    );
+                    try_poll!(self
+                        .sink
+                        .poll_send_to(&self.buf[..n], self.common.remote_addr.as_path()));
                     self.packet_size = None;
                 }
                 None => {
@@ -125,14 +125,12 @@ impl Future for DgramProxy {
 
 /// Return the command line argument specification.
 pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
-    vec![
-        clap::Arg::with_name("proxy-bind")
-            .long("proxy-bind")
-            .takes_value(true)
-            .multiple(true)
-            .number_of_values(4)
-            .use_delimiter(true),
-    ]
+    vec![clap::Arg::with_name("proxy-bind")
+        .long("proxy-bind")
+        .takes_value(true)
+        .multiple(true)
+        .number_of_values(4)
+        .use_delimiter(true)]
 }
 
 /// Run the proxy servers for prometheus and tracing.

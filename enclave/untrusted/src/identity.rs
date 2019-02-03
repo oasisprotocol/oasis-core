@@ -1,11 +1,8 @@
-use std;
-use std::path::Path;
-use std::sync::Arc;
+use std::{self, path::Path, sync::Arc};
 
 use sgx_types;
 
-use protobuf;
-use protobuf::Message;
+use protobuf::{self, Message};
 
 use ekiden_common::error::{Error, Result};
 use ekiden_enclave_common::api;

@@ -1,6 +1,8 @@
 //! Untrusted router for RPC requests coming outside enclaves.
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use ekiden_common::error::Result;
 use ekiden_rpc_common::client::ClientEndpoint;

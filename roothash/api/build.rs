@@ -11,7 +11,8 @@ fn main() {
         &["../../go/grpc/roothash/roothash.proto"],
         &["../../go/grpc"],
         "src/generated",
-    ).expect("failed to compile gRPC definitions");
+    )
+    .expect("failed to compile gRPC definitions");
 
     println!(
         "cargo:rerun-if-changed={}",

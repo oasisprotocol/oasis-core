@@ -1,17 +1,16 @@
 //! Ekiden enclave builder.
-use std;
-use std::env;
-use std::fs::{DirBuilder, File, OpenOptions};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    self, env,
+    fs::{DirBuilder, File, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use ansi_term::Colour::Green;
 use mktemp::Temp;
 
-use super::cargo;
-use super::error::Result;
-use super::utils::SgxMode;
+use super::{cargo, error::Result, utils::SgxMode};
 
 /// Xargo configuration file.
 static XARGO_CONFIG: &'static str = include_str!("../../xargo/Xargo.toml.template");
@@ -88,11 +87,13 @@ impl<'a> EnclaveBuilder<'a> {
                 Err(_) => None,
             },
             sgx_mode: match env::var("SGX_MODE") {
-                Ok(ref value) => if value == "HW" {
-                    SgxMode::Hardware
-                } else {
-                    SgxMode::Simulation
-                },
+                Ok(ref value) => {
+                    if value == "HW" {
+                        SgxMode::Hardware
+                    } else {
+                        SgxMode::Simulation
+                    }
+                }
                 _ => SgxMode::Simulation,
             },
             signing_key: None,
@@ -265,7 +266,8 @@ impl<'a> EnclaveBuilder<'a> {
             Ok(status) if !status.success() => Err(format!(
                 "failed to build, xargo exited with status {}!",
                 status.code().unwrap()
-            ).into()),
+            )
+            .into()),
             _ => Ok(()),
         }
     }
@@ -332,18 +334,26 @@ impl<'a> EnclaveBuilder<'a> {
             // Require __ekiden_enclave symbol to be defined.
             .arg("-Wl,--require-defined,__ekiden_enclave")
             .arg("-Wl,--gc-sections")
-            .arg(&format!("-Wl,--version-script={}", enclave_lds_path.to_str().unwrap()))
+            .arg(&format!(
+                "-Wl,--version-script={}",
+                enclave_lds_path.to_str().unwrap()
+            ))
             .arg("-O2")
             .arg("-o")
-            .arg(self.get_enclave_target_path()
-                .join(format!("{}.unsigned.so", self.crate_name)).to_str().unwrap())
+            .arg(
+                self.get_enclave_target_path()
+                    .join(format!("{}.unsigned.so", self.crate_name))
+                    .to_str()
+                    .unwrap(),
+            )
             .current_dir(&self.build_path)
             .status()?;
         if !gcc_status.success() {
             return Err(format!(
                 "failed to link, g++ exited with status {}!",
                 gcc_status.code().unwrap()
-            ).into());
+            )
+            .into());
         }
 
         Ok(())
@@ -378,15 +388,20 @@ impl<'a> EnclaveBuilder<'a> {
         };
 
         // Ensure enclave output path is available.
-        DirBuilder::new().recursive(true).create(&self.output_path)?;
+        DirBuilder::new()
+            .recursive(true)
+            .create(&self.output_path)?;
 
         let signer_status = Command::new(signer_path)
             .arg("sign")
             .arg("-key")
             .arg(&key_path)
             .arg("-enclave")
-            .arg(&self.get_enclave_target_path()
-                .join(format!("{}.unsigned.so", self.crate_name)))
+            .arg(
+                &self
+                    .get_enclave_target_path()
+                    .join(format!("{}.unsigned.so", self.crate_name)),
+            )
             .arg("-out")
             .arg(&self.output_path.join(format!("{}.so", self.crate_name)))
             .arg("-config")
@@ -396,7 +411,8 @@ impl<'a> EnclaveBuilder<'a> {
             return Err(format!(
                 "failed to sign, sgx_sign exited with status {}!",
                 signer_status.code().unwrap()
-            ).into());
+            )
+            .into());
         }
 
         Ok(())

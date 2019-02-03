@@ -1,11 +1,12 @@
 //! Enclave database interface.
-use std::cell::RefCell;
-use std::sync::Arc;
+use std::{cell::RefCell, sync::Arc};
 
 use sgx_types::*;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::{Error, Result};
+use ekiden_common::{
+    bytes::H256,
+    error::{Error, Result},
+};
 use ekiden_enclave_untrusted::Enclave;
 use ekiden_storage_base::StorageBackend;
 

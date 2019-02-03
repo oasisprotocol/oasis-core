@@ -1,5 +1,4 @@
-use std::net::ToSocketAddrs;
-use std::sync::Mutex;
+use std::{net::ToSocketAddrs, sync::Mutex};
 
 extern crate clap;
 use clap::value_t_or_exit;
@@ -12,8 +11,7 @@ extern crate rustracing;
 extern crate rustracing_jaeger;
 use rustracing_jaeger::Tracer;
 extern crate trackable;
-use trackable::error::ErrorKindExt;
-use trackable::track;
+use trackable::{error::ErrorKindExt, track};
 
 /// Create a Vec of args for App::args(&...) with configuration options for tracing.
 pub fn get_arguments<'a, 'b>() -> Vec<clap::Arg<'a, 'b>> {
@@ -44,7 +42,8 @@ pub fn report_forever(service_name: &str, matches: &clap::ArgMatches) {
                 matches,
                 "tracing-sample-probability",
                 f64
-            )).expect("sampler creation must succeed"),
+            ))
+            .expect("sampler creation must succeed"),
         );
         let agent_addr = matches
             .value_of("tracing-agent-addr")
@@ -90,11 +89,10 @@ pub struct MetadataBuilderCarrier(pub grpcio::MetadataBuilder);
 
 impl rustracing::carrier::SetHttpHeaderField for MetadataBuilderCarrier {
     fn set_http_header_field(&mut self, name: &str, value: &str) -> rustracing::Result<()> {
-        track!(
-            self.0
-                .add_str(name, value)
-                .map_err(|error| rustracing::ErrorKind::InvalidInput.cause(error))
-        )?;
+        track!(self
+            .0
+            .add_str(name, value)
+            .map_err(|error| rustracing::ErrorKind::InvalidInput.cause(error)))?;
         Ok(())
     }
 }

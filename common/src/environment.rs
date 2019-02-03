@@ -1,7 +1,9 @@
 //! Ekiden environment.
-use std::env;
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{
+    env,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 use grpcio;
 use tokio;

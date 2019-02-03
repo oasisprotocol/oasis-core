@@ -2,8 +2,7 @@
 use serde::Serialize;
 use serde_cbor;
 
-use super::bytes::H256;
-use super::ring::digest;
+use super::{bytes::H256, ring::digest};
 
 /// Compute hashes of CBOR-encoded types.
 pub trait EncodedHash {

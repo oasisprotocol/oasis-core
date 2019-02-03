@@ -2,17 +2,17 @@ use std::sync::Arc;
 
 use bincode;
 
-use ekiden_common::bytes::H256;
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::futures::Future;
 #[cfg(target_env = "sgx")]
 use ekiden_common::futures::FutureExt;
-use ekiden_common::hash::empty_hash;
-use ekiden_common::ring::digest;
+use ekiden_common::{bytes::H256, hash::empty_hash, ring::digest};
 use ekiden_storage_base::{InsertOptions, StorageMapper};
 
-use super::nibble::NibbleVec;
-use super::node::{Node, NodePointer};
+use super::{
+    nibble::NibbleVec,
+    node::{Node, NodePointer},
+};
 
 /// A merkle patricia tree backed by storage.
 pub struct PatriciaTrie {
@@ -48,7 +48,8 @@ impl PatriciaTrie {
         match pointer {
             NodePointer::Null => None,
             NodePointer::Pointer(pointer) => {
-                let node = self.storage
+                let node = self
+                    .storage
                     .get(pointer)
                     .wait()
                     .expect("failed to fetch from storage");
@@ -124,7 +125,8 @@ impl PatriciaTrie {
         match pointer {
             NodePointer::Null => panic!("null node pointer dereference"),
             NodePointer::Pointer(pointer) => {
-                let node = self.storage
+                let node = self
+                    .storage
                     .get(pointer)
                     .wait()
                     .expect("failed to fetch from storage");
@@ -374,10 +376,9 @@ impl PatriciaTrie {
                 } else {
                     let child_index = path[0] as usize;
 
-                    match self.remove_path_by_pointer(
-                        path[1..].into(),
-                        children[child_index].clone(),
-                    ) {
+                    match self
+                        .remove_path_by_pointer(path[1..].into(), children[child_index].clone())
+                    {
                         Some(node) => {
                             children[child_index] = self.insert_node(node);
                             collapse = false;
@@ -395,7 +396,8 @@ impl PatriciaTrie {
                     let child_count = children
                         .iter()
                         .filter(|child| child != &&NodePointer::Null)
-                        .count() + node_value.iter().count();
+                        .count()
+                        + node_value.iter().count();
 
                     match child_count {
                         // If there are no children, we can simply remove this branch.

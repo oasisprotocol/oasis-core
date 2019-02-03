@@ -1,7 +1,5 @@
 //! Prometheus metric push.
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
+use std::{sync::Arc, thread, time::Duration};
 
 use prometheus;
 
@@ -11,14 +9,15 @@ use ekiden_common::environment::Environment;
 pub fn push_metrics(address: &str, job_name: &str, instance_name: &str) {
     prometheus::push_metrics(
         job_name,
-        labels!{"instance".to_owned() => instance_name.to_owned(),},
+        labels! {"instance".to_owned() => instance_name.to_owned(),},
         address,
         prometheus::gather(),
-    ).or_else::<prometheus::Error, _>(|err| {
+    )
+    .or_else::<prometheus::Error, _>(|err| {
         warn!("Cannot push prometheus metrics: {}", err);
         Ok(())
     })
-        .unwrap();
+    .unwrap();
 }
 
 /// Start a thread for pushing Prometheus metrics.

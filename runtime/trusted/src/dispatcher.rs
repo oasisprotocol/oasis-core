@@ -1,21 +1,21 @@
 //! Runtime call batch dispatcher.
-use std::any::Any;
-use std::collections::HashMap;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutex as Mutex;
 #[cfg(target_env = "sgx")]
 use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
+use std::{any::Any, collections::HashMap};
 
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor;
 
 use ekiden_common::error::Result;
 use ekiden_roothash_base::header::Header;
-use ekiden_runtime_common::batch::{CallBatch, OutputBatch};
-use ekiden_runtime_common::call::{Generic, RuntimeCall, RuntimeOutput};
+use ekiden_runtime_common::{
+    batch::{CallBatch, OutputBatch},
+    call::{Generic, RuntimeCall, RuntimeOutput},
+};
 
 /// Custom batch handler.
 ///
@@ -225,11 +225,13 @@ impl Dispatcher {
                 Some(method_dispatch) => method_dispatch.dispatch(call, ctx),
                 None => serde_cbor::to_vec(&RuntimeOutput::Error::<Generic>(
                     "method not found".to_owned(),
-                )).unwrap(),
+                ))
+                .unwrap(),
             },
             Err(_) => serde_cbor::to_vec(&RuntimeOutput::Error::<Generic>(
                 "unable to parse call".to_owned(),
-            )).unwrap(),
+            ))
+            .unwrap(),
         }
     }
 }

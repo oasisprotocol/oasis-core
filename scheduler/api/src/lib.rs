@@ -5,5 +5,4 @@ extern crate protobuf;
 
 mod generated;
 
-pub use generated::scheduler::*;
-pub use generated::scheduler_grpc::*;
+pub use generated::{scheduler::*, scheduler_grpc::*};

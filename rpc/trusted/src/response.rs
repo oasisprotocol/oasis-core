@@ -5,8 +5,7 @@ use protobuf::Message;
 
 use ekiden_rpc_common::api;
 
-use super::request::Request;
-use super::secure_channel::create_response_box;
+use super::{request::Request, secure_channel::create_response_box};
 
 /// Wrapper for responses.
 pub struct Response {

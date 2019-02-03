@@ -2,18 +2,20 @@
 pub use log::LevelFilter;
 pub use pretty_env_logger::formatted_builder;
 
-pub use ekiden_core::bytes::B256;
-pub use ekiden_core::enclave::quote::MrEnclave;
-pub use ekiden_core::environment::{Environment, GrpcEnvironment};
-pub use ekiden_core::remote_node;
-pub use ekiden_instrumentation_prometheus::get_arguments as get_instrumentation_arguments;
-pub use ekiden_instrumentation_prometheus::init_from_args as instrumentation_init;
+pub use ekiden_core::{
+    bytes::B256,
+    enclave::quote::MrEnclave,
+    environment::{Environment, GrpcEnvironment},
+    remote_node,
+};
+pub use ekiden_instrumentation_prometheus::{
+    get_arguments as get_instrumentation_arguments, init_from_args as instrumentation_init,
+};
 pub use ekiden_registry_client::EntityRegistryClient;
 pub use ekiden_roothash_client::RootHashClient;
 pub use ekiden_scheduler_client::SchedulerClient;
 pub use ekiden_storage_client::StorageClient;
-pub use ekiden_tracing::get_arguments as get_tracing_arguments;
-pub use ekiden_tracing::report_forever;
+pub use ekiden_tracing::{get_arguments as get_tracing_arguments, report_forever};
 
 #[macro_export]
 macro_rules! default_app {

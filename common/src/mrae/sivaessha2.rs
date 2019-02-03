@@ -6,14 +6,14 @@ use rand::{OsRng as TheRng, Rng};
 #[cfg(target_env = "sgx")]
 use sgx_rand::{Rng, SgxRng as TheRng};
 
-use super::aes::block_cipher_trait::generic_array::GenericArray;
-use super::aes::Aes128;
-use super::block_modes::block_padding::ZeroPadding;
-use super::block_modes::{BlockMode, BlockModeIv, Ctr128};
-use super::crypto_ops::{fixed_time_eq, secure_memset};
-use super::error::{Error, Result};
-use super::ring::{digest, hmac};
-use super::sodalite::{scalarmult, scalarmult_base};
+use super::{
+    aes::{block_cipher_trait::generic_array::GenericArray, Aes128},
+    block_modes::{block_padding::ZeroPadding, BlockMode, BlockModeIv, Ctr128},
+    crypto_ops::{fixed_time_eq, secure_memset},
+    error::{Error, Result},
+    ring::{digest, hmac},
+    sodalite::{scalarmult, scalarmult_base},
+};
 
 /// Size of the expanded SIV_CTR-AES128_HMAC-SHA256-128 key in bytes.
 pub const KEY_SIZE: usize = 48;
@@ -107,7 +107,8 @@ impl SivAesSha2 {
         let mut ctr = Ctr128::<Aes128, ZeroPadding>::new_varkey(
             &self.ctr_key.as_slice(),
             GenericArray::from_slice(siv),
-        ).unwrap();
+        )
+        .unwrap();
         let mut c: Vec<u8> = plaintext.clone();
 
         // The block_modes CTR mode requires things to be aligned to block sizes!
@@ -155,7 +156,8 @@ impl SivAesSha2 {
         let mut ctr = Ctr128::<Aes128, ZeroPadding>::new_varkey(
             &self.ctr_key.as_slice(),
             GenericArray::from_slice(siv),
-        ).unwrap();
+        )
+        .unwrap();
         let mut p: Vec<u8> = ciphertext.to_vec();
 
         // The block_modes crate requires things to be aligned to block sizes.
@@ -280,11 +282,12 @@ mod tests {
     extern crate serde_json;
     extern crate test;
 
-    use self::base64::decode;
-    use self::serde_json::{Map, Value};
-    use self::test::{black_box, Bencher};
-    use super::super::nonce::NONCE_SIZE;
-    use super::*;
+    use self::{
+        base64::decode,
+        serde_json::{Map, Value},
+        test::{black_box, Bencher},
+    };
+    use super::{super::nonce::NONCE_SIZE, *};
 
     #[test]
     fn test_mrae_basic() {
@@ -368,11 +371,13 @@ mod tests {
             let tag = decode(v["Tag"].as_str().unwrap()).unwrap().to_vec();
             let length: usize = v["Length"].as_u64().unwrap() as usize;
 
-            let ct = siv.seal(
-                nonce.clone(),
-                msg[..length].to_vec(),
-                aad[..length].to_vec(),
-            ).unwrap();
+            let ct = siv
+                .seal(
+                    nonce.clone(),
+                    msg[..length].to_vec(),
+                    aad[..length].to_vec(),
+                )
+                .unwrap();
 
             assert_eq!(ct.len(), length + TAG_SIZE);
 

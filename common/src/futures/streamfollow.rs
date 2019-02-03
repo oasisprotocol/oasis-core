@@ -1,16 +1,13 @@
-use std;
-use std::fmt::Debug;
-use std::time::Duration;
-use std::time::Instant;
+use std::{
+    self,
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
-use rand;
-use rand::Rng;
+use rand::{self, Rng};
 use tokio;
 
-use futures::Async;
-use futures::Future;
-use futures::Poll;
-use futures::Stream;
+use futures::{Async, Future, Poll, Stream};
 
 struct Backoff {
     range_ms: u64,
@@ -386,8 +383,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use futures;
-    use futures::Stream;
+    use futures::{self, Stream};
     use tokio;
 
     #[test]
@@ -437,7 +433,8 @@ mod tests {
             vec![Ok(2), Err(())],
             vec![Ok(2), Ok(3), Err(())],
             vec![Ok(5)],
-        ].into_iter();
+        ]
+        .into_iter();
         let s = super::follow_skip(
             "follow_skip",
             move || futures::stream::iter_result(inits.next().unwrap()),

@@ -1,9 +1,11 @@
 // This is re-exported here only so it can be used in macros under a common name.
 pub use rustracing_jaeger::Tracer;
 
-pub use ekiden_common::bytes::B256;
-pub use ekiden_common::environment::Environment;
-pub use ekiden_common::futures::{BoxFuture, Future};
+pub use ekiden_common::{
+    bytes::B256,
+    environment::Environment,
+    futures::{BoxFuture, Future},
+};
 pub use ekiden_enclave_common::quote;
 pub use ekiden_registry_base::EntityRegistryBackend;
 pub use ekiden_roothash_base::backend::RootHashBackend;

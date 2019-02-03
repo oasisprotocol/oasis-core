@@ -1,8 +1,9 @@
 use sgx_types;
 
-use ekiden_common::bytes::B256;
-use ekiden_common::error::Error;
-use ekiden_common::error::Result;
+use ekiden_common::{
+    bytes::B256,
+    error::{Error, Result},
+};
 
 use super::enclave::Enclave;
 

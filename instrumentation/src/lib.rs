@@ -114,7 +114,7 @@ impl<'a> Metric<'a> {
                 Some(MetricValue::Histogram(_)) => {
                     return Some(MetricConfig::Histogram {
                         buckets: HISTOGRAM_DEFAULT_BUCKETS.to_vec(),
-                    })
+                    });
                 }
                 None => {}
             }

@@ -24,16 +24,22 @@ extern crate clap;
 extern crate ekiden_storage_persistent;
 extern crate pretty_env_logger;
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use clap::{App, Arg};
 use log::LevelFilter;
 
-use ekiden_common::environment::{Environment, GrpcEnvironment};
-use ekiden_common::x509;
-use ekiden_keymanager_untrusted::backend;
-use ekiden_keymanager_untrusted::node::{KeyManagerConfiguration, KeyManagerNode};
+use ekiden_common::{
+    environment::{Environment, GrpcEnvironment},
+    x509,
+};
+use ekiden_keymanager_untrusted::{
+    backend,
+    node::{KeyManagerConfiguration, KeyManagerNode},
+};
 
 fn main() {
     let matches = App::new("Ekiden Key Manager Node")
@@ -98,7 +104,8 @@ fn main() {
     let (tls_certificate, tls_private_key) = x509::load_or_generate_certificate(
         matches.value_of("tls-certificate").expect("is required"),
         matches.value_of("tls-key").expect("is required"),
-    ).expect("TLS credentials load must succeed");
+    )
+    .expect("TLS credentials load must succeed");
 
     // Setup a key manager node.
     let mut node = KeyManagerNode::new(KeyManagerConfiguration {
@@ -125,7 +132,8 @@ fn main() {
         environment: environment.grpc(),
         tls_certificate,
         tls_private_key,
-    }).expect("failed to initialize compute node");
+    })
+    .expect("failed to initialize compute node");
 
     // Start the key manager.
     node.start();

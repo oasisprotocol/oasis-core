@@ -1,26 +1,19 @@
-use std;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{self, collections::HashMap, sync::Arc};
 
 use serde_cbor;
 
-use ekiden_common;
-use ekiden_common::bytes::B256;
-use ekiden_common::bytes::H256;
-use ekiden_common::environment::Environment;
-use ekiden_common::error::Error;
-use ekiden_common::futures::BoxFuture;
-use ekiden_common::futures::BoxStream;
-use ekiden_common::futures::Future;
-use ekiden_common::futures::Stream;
-use ekiden_common::hash::EncodedHash;
-use ekiden_common::subscribers::StreamSubscribers;
-use ekiden_common::uint::U256;
-use ekiden_roothash_base::backend::RootHashBackend;
-use ekiden_roothash_base::block::Block;
-use ekiden_roothash_base::header::HeaderType;
-use ekiden_runtime_common::batch::CallBatch;
-use ekiden_runtime_common::batch::OutputBatch;
+use ekiden_common::{
+    self,
+    bytes::{B256, H256},
+    environment::Environment,
+    error::Error,
+    futures::{BoxFuture, BoxStream, Future, Stream},
+    hash::EncodedHash,
+    subscribers::StreamSubscribers,
+    uint::U256,
+};
+use ekiden_roothash_base::{backend::RootHashBackend, block::Block, header::HeaderType};
+use ekiden_runtime_common::batch::{CallBatch, OutputBatch};
 use ekiden_storage_base::backend::StorageBackend;
 
 type SharedCommitInfo = Arc<HashMap<H256, Vec<u8>>>;
@@ -81,7 +74,8 @@ impl Manager {
                 |block: &Block| block.header.round,
                 // TODO: detect permanent errors?
                 |_e| false,
-            ).for_each(move |block: Block| {
+            )
+            .for_each(move |block: Block| {
                 // Check if this is an epoch transition notification.
                 if block.header.header_type == HeaderType::EpochTransition {
                     epoch_transition_sub_blocks.notify(&block);

@@ -2,9 +2,13 @@
 //! Wraps the ekiden_core::mrae::sivaessha2 primitives with a set of encryption
 //! methods that transparently encodes/decodes the Web3(c) wire format.
 
-use ekiden_core::error::{Error, Result};
-use ekiden_core::mrae::{nonce::{Nonce, NONCE_SIZE},
-                        sivaessha2};
+use ekiden_core::{
+    error::{Error, Result},
+    mrae::{
+        nonce::{Nonce, NONCE_SIZE},
+        sivaessha2,
+    },
+};
 
 use super::{PrivateKeyType, PublicKeyType, EMPTY_PUBLIC_KEY};
 

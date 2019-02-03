@@ -11,9 +11,7 @@ extern crate ekiden_runtime_client;
 extern crate test_db_encryption_api;
 
 use clap::{App, Arg};
-use std::env::current_exe;
-use std::fs::File;
-use std::io::prelude::*;
+use std::{env::current_exe, fs::File, io::prelude::*};
 
 use ekiden_core::tokio;
 use ekiden_runtime_client::create_runtime_client;

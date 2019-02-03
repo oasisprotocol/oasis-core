@@ -1,10 +1,11 @@
 //! Storage backend interface.
 use std::sync::Arc;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::futures::BoxFuture;
-use ekiden_common::futures::BoxStream;
-use ekiden_common::ring::digest;
+use ekiden_common::{
+    bytes::H256,
+    futures::{BoxFuture, BoxStream},
+    ring::digest,
+};
 
 /// Insert options for the storage backend which can be passed as an
 /// argument to the `insert` and `insert_batch` calls.

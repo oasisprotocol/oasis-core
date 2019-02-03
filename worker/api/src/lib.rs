@@ -16,11 +16,13 @@ extern crate ekiden_roothash_base;
 extern crate ekiden_storage_base;
 extern crate ekiden_untrusted;
 
-use ekiden_core::bytes::{B256, H256};
-use ekiden_core::enclave::api as identity_api;
-use ekiden_core::futures::prelude::*;
-use ekiden_core::rpc::client::ClientEndpoint;
-use ekiden_core::runtime::batch::CallBatch;
+use ekiden_core::{
+    bytes::{B256, H256},
+    enclave::api as identity_api,
+    futures::prelude::*,
+    rpc::client::ClientEndpoint,
+    runtime::batch::CallBatch,
+};
 use ekiden_roothash_base::Block;
 
 pub mod codec;
@@ -28,8 +30,7 @@ pub mod impls;
 pub mod protocol;
 pub mod types;
 
-pub use self::impls::*;
-pub use self::protocol::Protocol;
+pub use self::{impls::*, protocol::Protocol};
 
 use self::types::ComputedBatch;
 

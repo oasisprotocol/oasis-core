@@ -1,15 +1,20 @@
 //! Low-level key-value database interface.
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::{Mutex, MutexGuard};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Result;
-use ekiden_common::hash::empty_hash;
-use ekiden_common::mrae::{nonce::NONCE_SIZE,
-                          sivaessha2::{SivAesSha2, KEY_SIZE}};
 #[cfg(test)]
 use ekiden_common::ring::digest;
+use ekiden_common::{
+    bytes::H256,
+    error::Result,
+    hash::empty_hash,
+    mrae::{
+        nonce::NONCE_SIZE,
+        sivaessha2::{SivAesSha2, KEY_SIZE},
+    },
+};
 use ekiden_enclave_common::quote::MrEnclave;
 #[cfg(not(test))]
 use ekiden_keymanager_client::KeyManager;
@@ -17,16 +22,14 @@ use ekiden_keymanager_client::KeyManager;
 #[cfg(not(test))]
 use ekiden_keymanager_client::NetworkRpcClientBackendConfig;
 use ekiden_keymanager_common::{ContractId, StateKeyType};
-use ekiden_storage_base::mapper::BackendIdentityMapper;
-use ekiden_storage_base::StorageBackend;
+use ekiden_storage_base::{mapper::BackendIdentityMapper, StorageBackend};
 #[cfg(not(target_env = "sgx"))]
 use ekiden_storage_dummy::DummyStorageBackend;
 use ekiden_storage_lru::LruCacheStorageBackend;
 
-use super::patricia_trie::PatriciaTrie;
 #[cfg(target_env = "sgx")]
 use super::untrusted::UntrustedStorageBackend;
-use super::Database;
+use super::{patricia_trie::PatriciaTrie, Database};
 
 /// Encryption context.
 ///
@@ -238,7 +241,8 @@ impl Database for DatabaseHandle {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
-            Some(ref ctx) => ctx.mrae_ctx
+            Some(ref ctx) => ctx
+                .mrae_ctx
                 .seal(ctx.nonce.clone(), key.to_vec(), vec![])
                 .unwrap(),
             None => key.to_vec(),
@@ -279,7 +283,8 @@ impl Database for DatabaseHandle {
 
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
-            Some(ref ctx) => ctx.mrae_ctx
+            Some(ref ctx) => ctx
+                .mrae_ctx
                 .seal(ctx.nonce.clone(), key.to_vec(), vec![])
                 .unwrap(),
             None => key.to_vec(),
@@ -296,7 +301,8 @@ impl Database for DatabaseHandle {
 
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
-            Some(ref ctx) => ctx.mrae_ctx
+            Some(ref ctx) => ctx
+                .mrae_ctx
                 .seal(ctx.nonce.clone(), key.to_vec(), vec![])
                 .unwrap(),
             None => key.to_vec(),
@@ -389,8 +395,7 @@ impl Database for DatabaseHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-    use std::sync::Arc;
+    use std::{str::FromStr, sync::Arc};
 
     use ekiden_common::hash::empty_hash;
     use ekiden_enclave_common::quote::MrEnclave;

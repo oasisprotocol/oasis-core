@@ -1,9 +1,10 @@
 // Taken from https://github.com/rust-lang-nursery/futures-rs/pull/696.
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
-use super::task::AtomicTask;
-use super::{Async, Future, Poll};
+use super::{task::AtomicTask, Async, Future, Poll};
 
 /// A future which can be cancelled using a `KillHandle`.
 #[derive(Debug, Clone)]

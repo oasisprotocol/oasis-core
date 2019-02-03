@@ -3,9 +3,11 @@ use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::{self, ByteBuf};
 use sgx_types;
 
-use ekiden_core::bytes::{B256, H256};
-use ekiden_core::rpc::client::ClientEndpoint;
-use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
+use ekiden_core::{
+    bytes::{B256, H256},
+    rpc::client::ClientEndpoint,
+    runtime::batch::{CallBatch, OutputBatch},
+};
 use ekiden_roothash_base::Block;
 
 /// Computed batch.

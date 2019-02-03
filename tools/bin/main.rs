@@ -9,8 +9,10 @@ use ansi_term::Colour::Red;
 use clap::{App, Arg, SubCommand};
 use std::process::exit;
 
-use ekiden_tools::command_buildenclave::build_enclave;
-use ekiden_tools::command_shell::{cleanup_shell, shell};
+use ekiden_tools::{
+    command_buildenclave::build_enclave,
+    command_shell::{cleanup_shell, shell},
+};
 
 fn main() {
     let matches = App::new("cargo")

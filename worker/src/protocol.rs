@@ -3,12 +3,9 @@ use std::sync::{Condvar, Mutex};
 
 use rustracing_jaeger::Span;
 
-use ekiden_core::bytes::B256;
-use ekiden_core::futures::prelude::*;
-use ekiden_core::runtime::batch::CallBatch;
+use ekiden_core::{bytes::B256, futures::prelude::*, runtime::batch::CallBatch};
 use ekiden_roothash_base::Block;
-use ekiden_worker_api;
-use ekiden_worker_api::types::ComputedBatch;
+use ekiden_worker_api::{self, types::ComputedBatch};
 
 use super::worker::Worker;
 

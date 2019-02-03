@@ -1,10 +1,8 @@
 //! OCALL-based RPC client backend used inside enclaves.
-use ekiden_common::error::Result;
-use ekiden_common::futures::prelude::*;
+use ekiden_common::{error::Result, futures::prelude::*};
 use ekiden_enclave_trusted::identity;
 use ekiden_rpc_client::backend::{RpcClientBackend, RpcClientCredentials};
-use ekiden_rpc_common::api;
-use ekiden_rpc_common::client::ClientEndpoint;
+use ekiden_rpc_common::{api, client::ClientEndpoint};
 
 use super::untrusted;
 

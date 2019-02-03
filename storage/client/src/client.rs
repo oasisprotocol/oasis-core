@@ -2,16 +2,16 @@
 use grpcio::{CallOption, Channel};
 use rustracing::tag;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::error::Error;
-use ekiden_common::futures::prelude::*;
-use ekiden_common::futures::IntoFuture;
+use ekiden_common::{
+    bytes::H256,
+    error::Error,
+    futures::{prelude::*, IntoFuture},
+};
 use ekiden_storage_base::{InsertOptions, StorageBackend};
 use ekiden_tracing::{self, inject_to_options};
 
 mod api {
-    pub use crate::generated::storage::*;
-    pub use crate::generated::storage_grpc::*;
+    pub use crate::generated::{storage::*, storage_grpc::*};
 }
 
 /// Storage client implements the storage interface.  It exposes storage calls across a gRPC channel.
@@ -40,13 +40,17 @@ impl StorageBackend for StorageClient {
         let mut req = api::GetBatchRequest::new();
         req.set_ids(keys.iter().map(|k| k.to_vec()).collect());
         match self.0.get_batch_async(&req) {
-            Ok(f) => Box::new(f.map(|mut resp| -> Vec<Option<Vec<u8>>> {
-                let mut data = resp.take_data().to_vec();
-                let items = data.drain(..)
-                    .map(|item| if item.is_empty() { None } else { Some(item) })
-                    .collect();
-                items
-            }).map_err(|error| Error::new(format!("{:?}", error)))),
+            Ok(f) => Box::new(
+                f.map(|mut resp| -> Vec<Option<Vec<u8>>> {
+                    let mut data = resp.take_data().to_vec();
+                    let items = data
+                        .drain(..)
+                        .map(|item| if item.is_empty() { None } else { Some(item) })
+                        .collect();
+                    items
+                })
+                .map_err(|error| Error::new(format!("{:?}", error))),
+            ),
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
     }
@@ -68,8 +72,9 @@ impl StorageBackend for StorageClient {
                 f.then(|result| {
                     drop(span);
                     result
-                }).map(|_r| ())
-                    .map_err(|error| Error::new(format!("{:?}", error))),
+                })
+                .map(|_r| ())
+                .map_err(|error| Error::new(format!("{:?}", error))),
             ),
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }
@@ -96,8 +101,9 @@ impl StorageBackend for StorageClient {
                 f.then(|result| {
                     drop(span);
                     result
-                }).map(|_r| ())
-                    .map_err(|error| Error::new(format!("{:?}", error))),
+                })
+                .map(|_r| ())
+                .map_err(|error| Error::new(format!("{:?}", error))),
             ),
             Err(error) => Box::new(future::err(Error::new(format!("{:?}", error)))),
         }

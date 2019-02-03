@@ -1,17 +1,20 @@
 use sodalite;
 
-use protobuf;
-use protobuf::Message;
+use protobuf::{self, Message};
 
-use ekiden_common::error::{Error, Result};
-use ekiden_common::random;
+use ekiden_common::{
+    error::{Error, Result},
+    random,
+};
 use ekiden_enclave_common;
-use ekiden_rpc_common::api;
-use ekiden_rpc_common::secure_channel::{create_box, open_box, MonotonicNonceGenerator,
-                                        NonceGenerator, RandomNonceGenerator, SessionState,
-                                        NONCE_CONTEXT_AUTHIN, NONCE_CONTEXT_AUTHOUT,
-                                        NONCE_CONTEXT_INIT, NONCE_CONTEXT_REQUEST,
-                                        NONCE_CONTEXT_RESPONSE};
+use ekiden_rpc_common::{
+    api,
+    secure_channel::{
+        create_box, open_box, MonotonicNonceGenerator, NonceGenerator, RandomNonceGenerator,
+        SessionState, NONCE_CONTEXT_AUTHIN, NONCE_CONTEXT_AUTHOUT, NONCE_CONTEXT_INIT,
+        NONCE_CONTEXT_REQUEST, NONCE_CONTEXT_RESPONSE,
+    },
+};
 
 // Secret seed used for generating private and public keys.
 const SECRET_SEED_LEN: usize = 32;
@@ -104,7 +107,8 @@ impl SecureChannelContext {
         }
 
         // Cache shared channel key.
-        let mut key = self.shared_key
+        let mut key = self
+            .shared_key
             .get_or_insert([0u8; sodalite::SECRETBOX_KEY_LEN]);
         sodalite::box_beforenm(
             &mut key,

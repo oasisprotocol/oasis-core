@@ -1,29 +1,33 @@
-use std::borrow::Borrow;
-use std::fmt::Write;
-use std::ops::Deref;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::{
+    borrow::Borrow,
+    fmt::Write,
+    ops::Deref,
+    path::{Path, PathBuf},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex,
+    },
+    thread,
+    time::Duration,
+};
 
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
-use protobuf;
-use protobuf::Message;
+use protobuf::{self, Message};
 use thread_local::ThreadLocal;
 
-use ekiden_common::bytes::H256;
-use ekiden_common::{error::Result, hash::empty_hash};
-use ekiden_core::enclave::api::IdentityProof;
-use ekiden_core::enclave::quote;
-use ekiden_core::error::Error;
-use ekiden_core::futures::sync::oneshot;
-use ekiden_core::futures::{BoxFuture, Future, FutureExt};
-use ekiden_core::rpc::api;
+use ekiden_common::{bytes::H256, error::Result, hash::empty_hash};
+use ekiden_core::{
+    enclave::{api::IdentityProof, quote},
+    error::Error,
+    futures::{sync::oneshot, BoxFuture, Future, FutureExt},
+    rpc::api,
+};
 use ekiden_rpc_api::{CallEnclaveRequest, CallEnclaveResponse, EnclaveRpc as EnclaveRpcAPI};
 use ekiden_storage_base::StorageBackend;
-use ekiden_untrusted::enclave::ias::{IASConfiguration, IAS};
-use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc};
+use ekiden_untrusted::{
+    enclave::ias::{IASConfiguration, IAS},
+    Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc,
+};
 
 use exonum_rocksdb::DB;
 
@@ -81,8 +85,9 @@ impl KeyManagerInner {
                 config.saved_identity_path,
                 config.storage_backend,
                 config.root_hash_path,
-            ).unwrap()
-                .run(command_receiver);
+            )
+            .unwrap()
+            .run(command_receiver);
         });
 
         Self {
@@ -257,7 +262,8 @@ impl KeyManagerEnclave {
         enclave_request: api::EnclaveRequest,
     ) -> Result<api::EnclaveResponse> {
         // Read the current root hash so that we can access the enclave's database.
-        let root_hash = self.root_hash_db
+        let root_hash = self
+            .root_hash_db
             .get(ROOT_HASH_KEY)
             .map_err(|e| Error::new(e.to_string()))
             .map(|result| match result {
@@ -265,11 +271,11 @@ impl KeyManagerEnclave {
                 None => empty_hash(),
             })?;
 
-        let enclave_response = self.enclave.with_storage(
-            self.storage_backend.clone(),
-            &root_hash,
-            || self.enclave.call(enclave_request),
-        )?;
+        let enclave_response =
+            self.enclave
+                .with_storage(self.storage_backend.clone(), &root_hash, || {
+                    self.enclave.call(enclave_request)
+                })?;
 
         // Update the root hash so that we read the updated database on the next rpc call.
         self.root_hash_db.put(ROOT_HASH_KEY, &enclave_response.0)?;

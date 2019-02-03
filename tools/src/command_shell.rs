@@ -3,12 +3,13 @@ extern crate clap;
 
 use self::clap::ArgMatches;
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::process::{Child, Command};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    process::{Child, Command},
+};
 
-use super::cargo;
-use super::error::Result;
+use super::{cargo, error::Result};
 
 /// Determine if a given docker image is available.
 fn docker_has(args: Vec<&str>) -> Result<()> {

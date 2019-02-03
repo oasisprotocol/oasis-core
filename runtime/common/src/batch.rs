@@ -1,12 +1,16 @@
 //! Batch type.
-use std::collections::VecDeque;
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::VecDeque,
+    ops::{Deref, DerefMut},
+};
 
 /// Internal module to efficiently serialize batches.
 mod batch_serialize {
-    use serde::{de::Deserializer,
-                ser::{SerializeSeq, Serializer},
-                Deserialize};
+    use serde::{
+        de::Deserializer,
+        ser::{SerializeSeq, Serializer},
+        Deserialize,
+    };
     use serde_bytes::{ByteBuf, Bytes};
 
     pub fn serialize<S>(batch: &Vec<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>

@@ -1,5 +1,7 @@
-use std::convert::From;
-use std::ops::{Deref, DerefMut, Index};
+use std::{
+    convert::From,
+    ops::{Deref, DerefMut, Index},
+};
 
 /// Nibble (half-byte) type.
 // TODO: Should we use an enum with 16 options instead of u8?
@@ -29,7 +31,8 @@ impl NibbleVec {
 
     /// Compute the common prefix of two nibbles.
     pub fn common_prefix<'a>(&'a self, other: &NibbleVec) -> &'a [Nibble] {
-        let length = self.0
+        let length = self
+            .0
             .iter()
             .zip(other.iter())
             .take_while(|&(a, b)| a == b)

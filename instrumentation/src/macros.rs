@@ -4,13 +4,15 @@
 #[macro_export]
 macro_rules! measure {
     ($name:expr, $value:expr) => {
-        $crate::metric_collector().collect(&$crate::Metric::builder()
-            .name($name)
-            .value(Some($value))
-            .module_path(Some(module_path!()))
-            .file(Some(file!()))
-            .line(Some(line!()))
-            .build());
+        $crate::metric_collector().collect(
+            &$crate::Metric::builder()
+                .name($name)
+                .value(Some($value))
+                .module_path(Some(module_path!()))
+                .file(Some(file!()))
+                .line(Some(line!()))
+                .build(),
+        );
     };
 }
 
@@ -33,14 +35,16 @@ macro_rules! measure_configure {
     ($name:expr, $description:expr, $config:expr) => {{
         use $crate::MetricConfig;
 
-        $crate::metric_collector().collect(&$crate::Metric::builder()
-            .name($name)
-            .description(Some($description))
-            .config(Some($config))
-            .module_path(Some(module_path!()))
-            .file(Some(file!()))
-            .line(Some(line!()))
-            .build());
+        $crate::metric_collector().collect(
+            &$crate::Metric::builder()
+                .name($name)
+                .description(Some($description))
+                .config(Some($config))
+                .module_path(Some(module_path!()))
+                .file(Some(file!()))
+                .line(Some(line!()))
+                .build(),
+        );
     }};
 }
 

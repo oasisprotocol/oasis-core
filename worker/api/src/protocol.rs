@@ -1,21 +1,31 @@
 //! Worker-host IPC protocol.
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
 
 use log::{error, warn};
 use tokio_codec::Decoder;
 use tokio_io::{AsyncRead, AsyncWrite};
 
-use ekiden_core::environment::Environment;
-use ekiden_core::error::Error;
-use ekiden_core::futures::prelude::*;
-use ekiden_core::futures::sync::{mpsc, oneshot};
-use ekiden_core::tokio::timer::Interval;
+use ekiden_core::{
+    environment::Environment,
+    error::Error,
+    futures::{
+        prelude::*,
+        sync::{mpsc, oneshot},
+    },
+    tokio::timer::Interval,
+};
 
-use super::codec::Codec;
-use super::types::{Body, Message, MessageType};
+use super::{
+    codec::Codec,
+    types::{Body, Message, MessageType},
+};
 
 /// Keep-alive interval for connections (in seconds).
 const PROTOCOL_KEEPALIVE_INTERVAL: u64 = 1;
@@ -245,15 +255,17 @@ mod tests {
     extern crate grpcio;
     extern crate tokio_uds;
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
 
-    use ekiden_core::environment::GrpcEnvironment;
-    use ekiden_core::futures::block_on;
-    use ekiden_core::futures::prelude::*;
+    use ekiden_core::{
+        environment::GrpcEnvironment,
+        futures::{block_on, prelude::*},
+    };
 
-    use super::super::types::Body;
-    use super::{Handler, Protocol};
+    use super::{super::types::Body, Handler, Protocol};
 
     struct EchoHandler {
         calls: AtomicUsize,

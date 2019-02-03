@@ -1,10 +1,8 @@
 //! Field descriptors used in the schema-based interface.
-use std::borrow::Borrow;
-use std::marker::PhantomData;
+use std::{borrow::Borrow, marker::PhantomData};
 
 use bincode;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
 use super::super::{Database, DatabaseHandle};
 

@@ -2,9 +2,11 @@
 // TODO: Remove this when it is no longer being used by the key manager node.
 use std::convert::TryFrom;
 #[cfg(not(target_env = "sgx"))]
-use std::{fs::File,
-          io::{Read, Write},
-          path::Path};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+};
 
 use ekiden_common_api as api;
 
@@ -59,15 +61,21 @@ impl Certificate {
     /// A new NIST P-256 EC key pair is generated for use in this certificate.
     #[cfg(not(target_env = "sgx"))]
     pub fn generate() -> Result<(Certificate, PrivateKey)> {
-        use openssl::asn1::Asn1Time;
-        use openssl::bn::{BigNum, MsbOption};
-        use openssl::ec::{Asn1Flag, EcGroup, EcKey};
-        use openssl::hash::MessageDigest;
-        use openssl::nid::Nid;
-        use openssl::pkey::PKey;
-        use openssl::x509::extension::{AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage,
-                                       KeyUsage, SubjectAlternativeName, SubjectKeyIdentifier};
-        use openssl::x509::{X509, X509Name};
+        use openssl::{
+            asn1::Asn1Time,
+            bn::{BigNum, MsbOption},
+            ec::{Asn1Flag, EcGroup, EcKey},
+            hash::MessageDigest,
+            nid::Nid,
+            pkey::PKey,
+            x509::{
+                extension::{
+                    AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage,
+                    SubjectAlternativeName, SubjectKeyIdentifier,
+                },
+                X509Name, X509,
+            },
+        };
 
         // Generate key pair used for the X509 certificate.
         let mut group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
@@ -100,7 +108,10 @@ impl Certificate {
             .key_cert_sign()
             .build()?;
         builder.append_extension(key_usage)?;
-        let ext_key_usage = ExtendedKeyUsage::new().client_auth().server_auth().build()?;
+        let ext_key_usage = ExtendedKeyUsage::new()
+            .client_auth()
+            .server_auth()
+            .build()?;
         builder.append_extension(ext_key_usage)?;
         let subject_key_identifier =
             SubjectKeyIdentifier::new().build(&builder.x509v3_context(None, None))?;

@@ -26,14 +26,18 @@ pub mod server;
 #[macro_use]
 pub mod push;
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use ekiden_common::environment::Environment;
-use ekiden_instrumentation::{set_boxed_metric_collector, Metric, MetricCollector,
-                             MetricCollectorError, MetricConfig, MetricValue};
+use ekiden_instrumentation::{
+    set_boxed_metric_collector, Metric, MetricCollector, MetricCollectorError, MetricConfig,
+    MetricValue,
+};
 
 const PROMETHEUS_MODE_PULL: &'static str = "pull";
 const PROMETHEUS_MODE_PUSH: &'static str = "push";
@@ -136,7 +140,8 @@ fn create_metric(metric: &Metric) -> PrometheusMetric {
         MetricConfig::Histogram { buckets } => PrometheusMetric::Histogram(
             prometheus::Histogram::with_opts(
                 prometheus::HistogramOpts::new(name, help).buckets(buckets),
-            ).unwrap(),
+            )
+            .unwrap(),
         ),
     }
 }

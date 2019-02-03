@@ -1,36 +1,38 @@
 //! Ekiden SGX worker thread implementation.
-use std::borrow::Borrow;
-use std::fmt::Write;
-use std::ops::Deref;
-use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{
+    borrow::Borrow,
+    fmt::Write,
+    ops::Deref,
+    path::PathBuf,
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex,
+    },
+    thread,
+};
 
-use protobuf;
-use protobuf::Message;
+use protobuf::{self, Message};
 use rustracing::tag;
 use rustracing_jaeger::span::SpanHandle;
 use thread_local::ThreadLocal;
 
-use ekiden_core::bytes::B256;
-use ekiden_core::bytes::H256;
-use ekiden_core::enclave::api::IdentityProof;
-use ekiden_core::enclave::quote;
-use ekiden_core::error::{Error, Result};
-use ekiden_core::futures::prelude::*;
-use ekiden_core::futures::sync::oneshot;
-use ekiden_core::rpc::api;
-use ekiden_core::runtime::batch::{CallBatch, OutputBatch};
+use ekiden_core::{
+    bytes::{B256, H256},
+    enclave::{api::IdentityProof, quote},
+    error::{Error, Result},
+    futures::{prelude::*, sync::oneshot},
+    rpc::api,
+    runtime::batch::{CallBatch, OutputBatch},
+};
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::StorageBackend;
 use ekiden_storage_batch::BatchStorageBackend;
-use ekiden_untrusted::enclave::capabilitytee::EnclaveCapabilityTEE;
-use ekiden_untrusted::enclave::identity::IAS;
-use ekiden_untrusted::rpc::router::RpcRouter;
-use ekiden_untrusted::{Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime};
-use ekiden_worker_api::types::ComputedBatch;
-use ekiden_worker_api::Protocol;
+use ekiden_untrusted::{
+    enclave::{capabilitytee::EnclaveCapabilityTEE, identity::IAS},
+    rpc::router::RpcRouter,
+    Enclave, EnclaveDb, EnclaveIdentity, EnclaveRpc, EnclaveRuntime,
+};
+use ekiden_worker_api::{types::ComputedBatch, Protocol};
 
 /// Command sent to the worker thread.
 enum Command {

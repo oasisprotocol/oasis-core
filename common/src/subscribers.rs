@@ -1,11 +1,16 @@
 //! A common structure for handling lists of subscribers.
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::RwLock;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        RwLock,
+    },
+};
 
-use super::error::Error;
-use super::futures::sync::mpsc;
-use super::futures::{BoxStream, Stream};
+use super::{
+    error::Error,
+    futures::{sync::mpsc, BoxStream, Stream},
+};
 
 /// Structure for keeping track of subscribers to a `Stream`.
 pub struct StreamSubscribers<T> {

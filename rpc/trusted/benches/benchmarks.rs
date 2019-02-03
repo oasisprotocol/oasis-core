@@ -14,18 +14,21 @@ extern crate ekiden_rpc_trusted;
 use test::Bencher;
 
 use protobuf::Message;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
-use ekiden_common::error::Result;
-use ekiden_common::random;
-use ekiden_rpc_common::api;
-use ekiden_rpc_common::reflection::ApiMethodDescriptor;
-use ekiden_rpc_common::secure_channel::{create_box, open_box, MonotonicNonceGenerator,
-                                        RandomNonceGenerator, NONCE_CONTEXT_INIT,
-                                        NONCE_CONTEXT_REQUEST, NONCE_CONTEXT_RESPONSE};
-use ekiden_rpc_trusted::dispatcher::{rpc_call, Dispatcher, EnclaveMethod};
-use ekiden_rpc_trusted::request::Request;
+use ekiden_common::{error::Result, random};
+use ekiden_rpc_common::{
+    api,
+    reflection::ApiMethodDescriptor,
+    secure_channel::{
+        create_box, open_box, MonotonicNonceGenerator, RandomNonceGenerator, NONCE_CONTEXT_INIT,
+        NONCE_CONTEXT_REQUEST, NONCE_CONTEXT_RESPONSE,
+    },
+};
+use ekiden_rpc_trusted::{
+    dispatcher::{rpc_call, Dispatcher, EnclaveMethod},
+    request::Request,
+};
 
 /// Dummy type for tests.
 type Dummy = u32;
@@ -99,7 +102,8 @@ fn init_secure_channel(
             .rpc_key_e_pub,
         private_key,
         &mut None,
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut short_term_public_key = [0u8; 32];
     short_term_public_key.copy_from_slice(&stpk_vec);
@@ -133,7 +137,8 @@ where
         &enclave_public_key,
         &private_key,
         &mut shared_key,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Set public key so the enclave knows which client this is.
     crypto_box.set_public_key(public_key.to_vec());
@@ -177,7 +182,8 @@ where
         &enclave_public_key,
         &private_key,
         &mut shared_key,
-    ).unwrap();
+    )
+    .unwrap();
 
     let plain_response: api::PlainClientResponse =
         protobuf::parse_from_bytes(&plain_response).unwrap();

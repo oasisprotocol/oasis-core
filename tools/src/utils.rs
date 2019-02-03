@@ -1,10 +1,10 @@
 //! Ekiden build utilities.
-use std::env;
-use std::fs;
-use std::io;
-use std::io::prelude::*;
-use std::path::Path;
-use std::process::Command;
+use std::{
+    env, fs,
+    io::{self, prelude::*},
+    path::Path,
+    process::Command,
+};
 
 use cc;
 use filebuffer::FileBuffer;
@@ -165,7 +165,7 @@ pub fn build_untrusted(edls: sgx_edl::EDLs) {
     builder
         .file(temp_dir_path.join("enclave_u.c"))
         .flag_if_supported("-m64")
-        .flag_if_supported("-O2")  // TODO: Should be based on debug/release builds.
+        .flag_if_supported("-O2") // TODO: Should be based on debug/release builds.
         .flag_if_supported("-fPIC")
         .flag_if_supported("-Wno-attributes");
     for search_path in edls.search_paths.iter() {
@@ -197,7 +197,7 @@ pub fn build_trusted(edls: sgx_edl::EDLs) {
     builder
         .file(temp_dir_path.join("enclave_t.c"))
         .flag_if_supported("-m64")
-        .flag_if_supported("-O2")  // TODO: Should be based on debug/release builds.
+        .flag_if_supported("-O2") // TODO: Should be based on debug/release builds.
         .flag_if_supported("-nostdinc")
         .flag_if_supported("-fvisibility=hidden")
         .flag_if_supported("-fpie")
@@ -224,7 +224,8 @@ pub fn protoc(args: ProtocArgs) {
         includes: args.includes,
         input: args.input,
         customize: protoc_rust::Customize::default(),
-    }).expect("Failed to run protoc");
+    })
+    .expect("Failed to run protoc");
 
     // Output descriptor of the generated files into a temporary file.
     let temp_dir = mktemp::Temp::new_dir().expect("Failed to create temporary directory");
@@ -266,7 +267,8 @@ pub fn protoc(args: ProtocArgs) {
                     &mut out_file,
                     "impl_serde_for_protobuf!({});",
                     message_type.get_name()
-                ).unwrap();
+                )
+                .unwrap();
             }
         }
     }
@@ -319,9 +321,9 @@ pub fn generate_mod_with_imports(output_dir: &str, imports: &[&str], modules: &[
 /// Extract enclave identity from a compiled enclave.
 pub fn get_enclave_identity<P: AsRef<Path>>(enclave: P) -> Result<Vec<u8>> {
     // Sigstruct headers in bundled enclave.
-    let sigstruct_header_1 = Regex::new(
-        r"(?-u)\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00",
-    ).unwrap();
+    let sigstruct_header_1 =
+        Regex::new(r"(?-u)\x06\x00\x00\x00\xe1\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00")
+            .unwrap();
     let sigstruct_header_2 = b"\x01\x01\x00\x00\x60\x00\x00\x00\x60\x00\x00\x00\x01\x00\x00\x00";
 
     let enclave_file = FileBuffer::open(enclave)?;

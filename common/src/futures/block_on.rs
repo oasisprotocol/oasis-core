@@ -1,7 +1,6 @@
 use std::{self, sync::Arc};
 
-use super::super::environment::Environment;
-use super::future::Future;
+use super::{super::environment::Environment, future::Future};
 
 /// Spawn a future in our environment and wait for its result.
 pub fn block_on<F, R, E>(environment: Arc<Environment>, future: F) -> Result<R, E>

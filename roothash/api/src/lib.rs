@@ -5,5 +5,4 @@ extern crate protobuf;
 
 mod generated;
 
-pub use generated::roothash::*;
-pub use generated::roothash_grpc::*;
+pub use generated::{roothash::*, roothash_grpc::*};

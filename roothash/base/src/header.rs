@@ -2,17 +2,18 @@
 #[cfg(not(target_env = "sgx"))]
 use std::convert::TryFrom;
 
-use serde::ser::SerializeStruct;
-use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{self, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(not(target_env = "sgx"))]
 use ekiden_roothash_api as api;
 
-use ekiden_common::bytes::{B256, H256};
 #[cfg(not(target_env = "sgx"))]
 use ekiden_common::error::Error;
-use ekiden_common::hash::EncodedHash;
-use ekiden_common::uint::U256;
+use ekiden_common::{
+    bytes::{B256, H256},
+    hash::EncodedHash,
+    uint::U256,
+};
 
 /// Type of header
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -1,10 +1,14 @@
 //! Common big unsigned integer types.
-use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub};
+use std::{
+    fmt,
+    ops::{Add, BitAnd, BitOr, BitXor, Deref, DerefMut, Div, Mul, Not, Rem, Shl, Shr, Sub},
+};
 
 use bigint::uint;
-use serde::de::{self, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 /// Implement binary operator for uint type wrapper.
 macro_rules! impl_op_for_wrapper {
@@ -42,7 +46,10 @@ macro_rules! wrap_uint_type {
             }
 
             pub fn to_vec_big_endian_compact(&self) -> Vec<u8> {
-                self.to_vec_big_endian().into_iter().skip_while(|x| x == &0x00).collect()
+                self.to_vec_big_endian()
+                    .into_iter()
+                    .skip_while(|x| x == &0x00)
+                    .collect()
             }
 
             pub fn from_little_endian(slice: &[u8]) -> Self {
@@ -53,10 +60,11 @@ macro_rules! wrap_uint_type {
             // TODO: Currently this cannot implement the TryFrom trait as it already implements From.
             pub fn try_from<'a>(bytes: &'a [u8]) -> super::error::Result<Self> {
                 if bytes.len() > $size {
-                    Err(super::error::Error::new(
-                            format!("Cannot convert slice with length {} to {}",
-                                    bytes.len(),
-                                    stringify!($name))))
+                    Err(super::error::Error::new(format!(
+                        "Cannot convert slice with length {} to {}",
+                        bytes.len(),
+                        stringify!($name)
+                    )))
                 } else {
                     Ok($name::from(bytes))
                 }

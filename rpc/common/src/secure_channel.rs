@@ -3,8 +3,10 @@ use byteorder::{ByteOrder, LittleEndian};
 
 use sodalite;
 
-use ekiden_common::error::{Error, Result};
-use ekiden_common::random;
+use ekiden_common::{
+    error::{Error, Result},
+    random,
+};
 
 use super::api;
 
@@ -192,7 +194,7 @@ impl SessionState {
                 return Err(Error::new(format!(
                     "Invalid secure channel state transition: {:?}",
                     transition
-                )))
+                )));
             }
         }
 

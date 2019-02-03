@@ -1,7 +1,9 @@
 use std::fmt::{self, Debug};
 
-use super::stream::{FuturesUnordered, StreamFuture};
-use super::{Async, Poll, Stream};
+use super::{
+    stream::{FuturesUnordered, StreamFuture},
+    Async, Poll, Stream,
+};
 
 /// An unbounded set of streams
 ///
