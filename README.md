@@ -76,9 +76,10 @@ protected enclave:
 
 Before we can launch an Ekiden node, we need to copy over the identity keys
 that are configured in the genesis file (instead of doing this, you could
-also generate your own keys):
+also generate your own keys) and set correct permissions:
 ```
 # cp -a configs/single_node /tmp/ekiden-single-node/
+# chmod -R go-rwx /tmp/ekiden-single-node
 ```
 Ekiden node stores data in `/tmp/ekiden-single-node` regardless of the loaded
 runtime. In case you restart it, you may need to remove this directory first
