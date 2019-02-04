@@ -8,6 +8,7 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -32,6 +33,8 @@ type memoryBackend struct {
 	logger  *logging.Logger
 	store   map[api.Key]*memoryEntry
 	sweeper *api.Sweeper
+
+	signingKey *signature.PrivateKey
 }
 
 func (b *memoryBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
@@ -71,6 +74,28 @@ func (b *memoryBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte,
 	}
 
 	return values, nil
+}
+
+func (b *memoryBackend) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
+	if b.signingKey == nil {
+		return nil, api.ErrCantProve
+	}
+
+	if _, err := b.GetBatch(ctx, keys); err != nil {
+		return nil, err
+	}
+
+	receipt := api.Receipt{
+		Keys: keys,
+	}
+	signed, err := signature.SignSigned(*b.signingKey, api.ReceiptSignatureContext, &receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.SignedReceipt{
+		Signed: *signed,
+	}, nil
 }
 
 func (b *memoryBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
@@ -164,10 +189,11 @@ func (b *memoryBackend) Initialized() <-chan struct{} {
 }
 
 // New constructs a new memory backed storage Backend instance.
-func New(timeSource epochtime.Backend) api.Backend {
+func New(timeSource epochtime.Backend, signingKey *signature.PrivateKey) api.Backend {
 	b := &memoryBackend{
-		logger: logging.GetLogger("storage/memory"),
-		store:  make(map[api.Key]*memoryEntry),
+		logger:     logging.GetLogger("storage/memory"),
+		store:      make(map[api.Key]*memoryEntry),
+		signingKey: signingKey,
 	}
 	b.sweeper = api.NewSweeper(b, timeSource)
 

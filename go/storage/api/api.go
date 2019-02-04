@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
@@ -25,6 +27,18 @@ var (
 	// ErrIncoherentTime is the error returned when the timekeeping
 	// is not coherent.
 	ErrIncoherentTime = errors.New("storage: incoherent time")
+
+	// ErrCantProve is the error returned when the backend is incapable
+	// of generating proofs (unsupported, no key, etc).
+	ErrCantProve = errors.New("storage: unable to provide proofs")
+
+	// ReceiptSignatureContext is the signature context used for verifying receipts.
+	ReceiptSignatureContext = []byte("EkStrRec")
+
+	_ cbor.Marshaler   = (*Receipt)(nil)
+	_ cbor.Unmarshaler = (*Receipt)(nil)
+	_ cbor.Marshaler   = (*SignedReceipt)(nil)
+	_ cbor.Unmarshaler = (*SignedReceipt)(nil)
 )
 
 // Key is a storage key.
@@ -60,6 +74,41 @@ func (v Value) String() string {
 	return hex.EncodeToString(v.Data)
 }
 
+// Receipt is a proof that a set of keys exist in storage.
+type Receipt struct {
+	Keys []Key `codec:"keys"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (r *Receipt) MarshalCBOR() []byte {
+	return cbor.Marshal(r)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (r *Receipt) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, r)
+}
+
+// SignedReceipt is a signed proff that a set of keys exist in storage.
+type SignedReceipt struct {
+	signature.Signed
+}
+
+// Open first verifies the blob signature then unmarshals the blob.
+func (s *SignedReceipt) Open(context []byte, receipt *Receipt) error {
+	return s.Signed.Open(context, receipt)
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (s *SignedReceipt) MarshalCBOR() []byte {
+	return s.Signed.MarshalCBOR()
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (s *SignedReceipt) UnmarshalCBOR(data []byte) error {
+	return s.Signed.UnmarshalCBOR(data)
+}
+
 // InsertOptions specify the behavior of insert operations.
 type InsertOptions struct {
 	// LocalOnly specifies that certain backends which support combined
@@ -75,6 +124,10 @@ type Backend interface {
 
 	// Fetch multiple values for specific immutable keys.
 	GetBatch(context.Context, []Key) ([][]byte, error)
+
+	// GetReceipt returns a signed proof that the specific keys are in
+	// storage.
+	GetReceipt(context.Context, []Key) (*SignedReceipt, error)
 
 	// Insert inserts a specific value, which can later be retreived by
 	// it's hash.  The expiration is the number of epochs for which the

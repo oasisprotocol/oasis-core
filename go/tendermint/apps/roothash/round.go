@@ -13,9 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -81,7 +79,7 @@ type round struct {
 	DidTimeout bool        `codec:"did_timeout"`
 }
 
-func (r *round) addCommitment(ctx context.Context, store storage.Backend, commitment *commitment.Commitment) error {
+func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -115,7 +113,7 @@ func (r *round) addCommitment(ctx context.Context, store storage.Backend, commit
 
 	// Check if the header refers to hashes in storage.
 	if role == scheduler.Leader || role == scheduler.BackupWorker {
-		if err := r.ensureHashesInStorage(ctx, store, header); err != nil {
+		if err := r.ensureHashesInStorage(ctx, header); err != nil {
 			return err
 		}
 	}
@@ -204,7 +202,7 @@ func (r *round) forceBackupTransition() error {
 }
 
 func (r *round) tryFinalizeFast() (*block.Header, error) {
-	var header *block.Header
+	var header, leaderHeader *block.Header
 	var discrepancyDetected bool
 
 	for id, node := range r.RoundState.ComputationGroup {
@@ -220,17 +218,20 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		if header == nil {
 			header = commit.Header
 		}
-		if !header.Equal(commit.Header) {
+		if node.Role == scheduler.Leader {
+			leaderHeader = commit.Header
+		}
+		if !header.MostlyEqual(commit.Header) {
 			discrepancyDetected = true
 		}
 	}
 
-	if discrepancyDetected {
+	if leaderHeader == nil || discrepancyDetected {
 		// Activate the backup workers.
 		return nil, r.forceBackupTransition()
 	}
 
-	return header, nil
+	return leaderHeader, nil
 }
 
 func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
@@ -273,32 +274,10 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 	return nil, errInsufficientVotes
 }
 
-func (r *round) ensureHashesInStorage(ctx context.Context, store storage.Backend, header *block.Header) error {
-	for _, h := range []struct {
-		hash  hash.Hash
-		descr string
-	}{
-		{header.InputHash, "inputs"},
-		{header.OutputHash, "outputs"},
-		{header.StateRoot, "state root"}, // TODO: Check against the log.
-	} {
-		if h.hash.IsEmpty() {
-			continue
-		}
-
-		var key storage.Key
-		copy(key[:], h.hash[:])
-		if _, err := store.Get(ctx, key); err != nil {
-			// HACK/#1380: Forward gRPC sourced failures.
-			if _, ok := status.FromError(err); ok {
-				return err
-			}
-
-			return fmt.Errorf("tendermint/roothash: failed to retreive %v: %v", h.descr, err)
-		}
-	}
-
-	return nil
+func (r *round) ensureHashesInStorage(ctx context.Context, header *block.Header) error {
+	// TODO: Ensure that the public key that signs the storage receipt
+	// is the expected one.
+	return header.VerifyStorageReceiptSignature()
 }
 
 func (r *round) checkCommitments(runtime *registry.Runtime) error {

@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"os"
 	"testing"
@@ -56,7 +57,9 @@ func TestSandboxedHost(t *testing.T) {
 	_ = runtimeID.UnmarshalBinary(runtimeIDRaw)
 
 	timeSource := epochtimeMock.New()
-	storage := storageMemory.New(timeSource)
+	storagePrivKey, err := signature.NewPrivateKey(rand.Reader)
+	require.NoError(t, err, "signature.NewPrivateKey")
+	storage := storageMemory.New(timeSource, &storagePrivKey)
 	<-storage.Initialized()
 
 	ias, err := ias.New(nil, "")

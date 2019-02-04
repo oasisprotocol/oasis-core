@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -55,7 +54,7 @@ func (b *storageClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 
 	req.Ids = make([][]byte, 0, len(keys))
 	for _, v := range keys {
-		req.Ids = append(req.Ids, v[:])
+		req.Ids = append(req.Ids, append([]byte{}, v[:]...))
 	}
 
 	resp, err := b.client.GetBatch(ctx, &req)
@@ -64,6 +63,27 @@ func (b *storageClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 	}
 
 	return resp.GetData(), nil
+}
+
+func (b *storageClientBackend) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
+	var req storage.GetReceiptRequest
+
+	req.Ids = make([][]byte, 0, len(keys))
+	for _, v := range keys {
+		req.Ids = append(req.Ids, append([]byte{}, v[:]...))
+	}
+
+	resp, err := b.client.GetReceipt(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	var signed api.SignedReceipt
+	if err = signed.UnmarshalCBOR(resp.GetData()); err != nil {
+		return nil, err
+	}
+
+	return &signed, nil
 }
 
 func (b *storageClientBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
@@ -139,33 +159,6 @@ func (b *storageClientBackend) Initialized() <-chan struct{} {
 	return b.initCh
 }
 
-func (b *storageClientBackend) initWorker() {
-	defer close(b.initCh)
-
-	// HACK/#1380: The roothash backend currently touches remote storage.
-	// This can potentially lead to non-determinism durring block replay,
-	// for example if storage is unavailable.
-	//
-	// This can be reverted once none of the ABCI applications interact
-	// with storage at all.
-	for {
-		st := b.conn.GetState()
-		switch st {
-		case connectivity.Shutdown:
-			b.logger.Debug("initWorker: connection torn down")
-			return
-		case connectivity.Ready:
-			b.logger.Debug("initWorker: connection is ready")
-			return
-		default:
-		}
-
-		if !b.conn.WaitForStateChange(b.haltCtx, st) {
-			b.logger.Debug("initWorker: canceled by context")
-		}
-	}
-}
-
 func New() (api.Backend, error) {
 	conn, err := grpc.Dial(viper.GetString(cfgClientAddress), grpc.WithInsecure())
 	if err != nil {
@@ -184,7 +177,7 @@ func New() (api.Backend, error) {
 	// TODO/#1363: Use a different parent context.
 	b.haltCtx, b.cancelFn = context.WithCancel(context.Background())
 
-	go b.initWorker()
+	close(b.initCh)
 
 	return b, nil
 }

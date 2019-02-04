@@ -18,7 +18,7 @@ func TestStorageLevelDB(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	timeSource := mock.New()
-	backend, err := New(filepath.Join(tmpDir, DBFile), timeSource)
+	backend, err := New(filepath.Join(tmpDir, DBFile), timeSource, nil)
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 

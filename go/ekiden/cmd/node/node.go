@@ -103,11 +103,11 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
-	if n.Storage, err = storage.New(n.Epochtime, dataDir); err != nil {
+	if n.Storage, err = storage.New(n.Epochtime, dataDir, nil); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
-	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, n.Epochtime, n.Scheduler, n.Storage, n.Registry, n.svcTmnt); err != nil {
+	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, n.Epochtime, n.Scheduler, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")

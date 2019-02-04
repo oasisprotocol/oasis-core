@@ -13,7 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
 var (
@@ -70,7 +69,6 @@ func (s *roundState) reset() {
 type round struct {
 	ctx        context.Context
 	roundState *roundState
-	storage    storage.Backend
 	didTimeout bool
 }
 
@@ -189,7 +187,7 @@ func (r *round) forceBackupTransition() error {
 }
 
 func (r *round) tryFinalizeFast() (*block.Header, error) {
-	var header *block.Header
+	var header, leaderHeader *block.Header
 	var discrepancyDetected bool
 
 	for id, node := range r.roundState.computationGroup {
@@ -205,17 +203,20 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		if header == nil {
 			header = commit.Header
 		}
-		if !header.Equal(commit.Header) {
+		if node.Role == scheduler.Leader {
+			leaderHeader = commit.Header
+		}
+		if !header.MostlyEqual(commit.Header) {
 			discrepancyDetected = true
 		}
 	}
 
-	if discrepancyDetected {
+	if leaderHeader == nil || discrepancyDetected {
 		// Activate the backup workers.
 		return nil, r.forceBackupTransition()
 	}
 
-	return header, nil
+	return leaderHeader, nil
 }
 
 func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
@@ -259,26 +260,9 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 }
 
 func (r *round) ensureHashesInStorage(header *block.Header) error {
-	for _, h := range []struct {
-		hash  hash.Hash
-		descr string
-	}{
-		{header.InputHash, "inputs"},
-		{header.OutputHash, "outputs"},
-		{header.StateRoot, "state root"}, // TODO: Check against the log.
-	} {
-		if h.hash.IsEmpty() {
-			continue
-		}
-
-		var key storage.Key
-		copy(key[:], h.hash[:])
-		if _, err := r.storage.Get(r.ctx, key); err != nil {
-			return fmt.Errorf("roothash/memory: failed to retreive %v: %v", h.descr, err)
-		}
-	}
-
-	return nil
+	// TODO: Ensure that the public key that signs the storage receipt
+	// is the expected one.
+	return header.VerifyStorageReceiptSignature()
 }
 
 func (r *round) checkCommitments() error {
@@ -318,7 +302,7 @@ func (r *round) checkCommitments() error {
 	return nil
 }
 
-func newRound(ctx context.Context, storage storage.Backend, runtime *registry.Runtime, committee *scheduler.Committee, block *block.Block) *round {
+func newRound(ctx context.Context, runtime *registry.Runtime, committee *scheduler.Committee, block *block.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
 	}
@@ -339,6 +323,5 @@ func newRound(ctx context.Context, storage storage.Backend, runtime *registry.Ru
 	return &round{
 		ctx:        ctx,
 		roundState: state,
-		storage:    storage,
 	}
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
 const (
@@ -48,7 +47,6 @@ type runtimeState struct {
 	sync.RWMutex
 
 	logger   *logging.Logger
-	storage  storage.Backend
 	registry registry.Backend
 
 	runtime *registry.Runtime
@@ -108,7 +106,7 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 	}
 	s.timer.Reset(infiniteTimeout)
 
-	s.round = newRound(ctx, s.storage, s.runtime, committee, blk)
+	s.round = newRound(ctx, s.runtime, committee, blk)
 
 	// Emit an empty epoch transition block in the new round. This is required so that
 	// the clients can be sure what state is final when an epoch transition occurs.
@@ -304,7 +302,7 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 					"round", blockNr,
 				)
 
-				s.round = newRound(ctx, s.storage, s.runtime, s.round.roundState.committee, latestBlock)
+				s.round = newRound(ctx, s.runtime, s.round.roundState.committee, latestBlock)
 			}
 
 			// Add the commitment.
@@ -334,7 +332,6 @@ type memoryRootHash struct {
 
 	logger    *logging.Logger
 	scheduler scheduler.Backend
-	storage   storage.Backend
 	registry  registry.Backend
 
 	runtimes map[signature.MapKey]*runtimeState
@@ -507,7 +504,6 @@ func (r *memoryRootHash) onRuntimeRegistration(ctx context.Context, runtime *reg
 
 	s := &runtimeState{
 		logger:        r.logger.With("runtime_id", runtime.ID),
-		storage:       r.storage,
 		registry:      r.registry,
 		runtime:       runtime,
 		blocks:        append([]*block.Block{}, genesisBlock),
@@ -558,7 +554,6 @@ func (r *memoryRootHash) worker(ctx context.Context) {
 func New(
 	ctx context.Context,
 	scheduler scheduler.Backend,
-	storage storage.Backend,
 	registry registry.Backend,
 	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
@@ -566,7 +561,6 @@ func New(
 	r := &memoryRootHash{
 		logger:           logging.GetLogger("roothash/memory"),
 		scheduler:        scheduler,
-		storage:          storage,
 		registry:         registry,
 		runtimes:         make(map[signature.MapKey]*runtimeState),
 		genesisBlocks:    genesisBlocks,

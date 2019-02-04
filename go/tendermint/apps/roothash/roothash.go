@@ -10,7 +10,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -22,7 +21,6 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
@@ -55,7 +53,6 @@ type rootHashApplication struct {
 
 	timeSource epochtime.BlockBackend
 	scheduler  scheduler.BlockBackend
-	storage    storage.Backend
 
 	// The old and busted way of importing genesis state.
 	// TODO: Remove once tooling for the new way is present.
@@ -528,20 +525,11 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Add the commitment.
-	if err = runtimeState.Round.addCommitment(app.ctx, app.storage, &c); err != nil {
+	if err = runtimeState.Round.addCommitment(app.ctx, &c); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,
 		)
-
-		// HACK/#1380: Transient storage failures result in non-deterministic behavior.
-		if _, ok := status.FromError(err); ok {
-			app.logger.Error("BUG: gRPC failure, CRASHING TO PROTECT STATE",
-				"err", err,
-			)
-			panic("BUG: gRPC failure, CRASHING TO PROTECT STATE: " + err.Error())
-		}
-
 		return err
 	}
 
@@ -679,7 +667,6 @@ func New(
 	ctx context.Context,
 	timeSource epochtime.BlockBackend,
 	scheduler scheduler.BlockBackend,
-	storage storage.Backend,
 	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
 ) abci.Application {
@@ -688,7 +675,6 @@ func New(
 		logger:           logging.GetLogger("tendermint/roothash"),
 		timeSource:       timeSource,
 		scheduler:        scheduler,
-		storage:          storage,
 		cfgGenesisBlocks: genesisBlocks,
 		roundTimeout:     roundTimeout,
 	}

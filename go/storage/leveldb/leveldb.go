@@ -13,6 +13,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -51,6 +52,8 @@ type leveldbBackend struct {
 	logger *logging.Logger
 	db     *leveldb.DB
 
+	signingKey *signature.PrivateKey
+
 	closeOnce sync.Once
 }
 
@@ -87,6 +90,28 @@ func (b *leveldbBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte
 	}
 
 	return values, nil
+}
+
+func (b *leveldbBackend) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
+	if b.signingKey == nil {
+		return nil, api.ErrCantProve
+	}
+
+	if _, err := b.GetBatch(ctx, keys); err != nil {
+		return nil, err
+	}
+
+	receipt := api.Receipt{
+		Keys: keys,
+	}
+	signed, err := signature.SignSigned(*b.signingKey, api.ReceiptSignatureContext, &receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.SignedReceipt{
+		Signed: *signed,
+	}, nil
 }
 
 func (b *leveldbBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
@@ -202,7 +227,7 @@ func checkVersion(db *leveldb.DB) error {
 
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
-func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
+func New(fn string, timeSource epochtime.Backend, signingKey *signature.PrivateKey) (api.Backend, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(leveldbCollectors...)
 	})
@@ -218,8 +243,9 @@ func New(fn string, timeSource epochtime.Backend) (api.Backend, error) {
 	}
 
 	b := &leveldbBackend{
-		logger: logging.GetLogger("storage/leveldb"),
-		db:     db,
+		logger:     logging.GetLogger("storage/leveldb"),
+		db:         db,
+		signingKey: signingKey,
 	}
 	b.updateMetrics()
 
