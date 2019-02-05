@@ -231,6 +231,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	}
 	parent.Header.GroupHash.From(committee.committee.Members)
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
+	parent.Header.StorageReceipt = mustGetReceipt(t, storage, &parent.Header)
 
 	// Send all the commitments.
 	var toCommit []*registryTests.TestNode
@@ -238,7 +239,11 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	toCommit = append(toCommit, committee.leader)
 	toCommit = append(toCommit, committee.workers...)
 	for _, node := range toCommit {
-		commit, err := commitment.SignCommitment(node.PrivateKey, &parent.Header) // nolint: govet
+		commitHdr := parent.Header
+		if node != committee.leader {
+			commitHdr.StorageReceipt = signature.Signature{}
+		}
+		commit, err := commitment.SignCommitment(node.PrivateKey, &commitHdr) // nolint: govet
 		require.NoError(err, "SignSigned")
 		opaque := commit.ToOpaqueCommitment()
 		err = backend.Commit(context.Background(), rt.Runtime.ID, opaque)
@@ -355,4 +360,13 @@ func mustStore(t *testing.T, store storage.Backend, value []byte) hash.Hash {
 	var h hash.Hash
 	copy(h[:], key[:])
 	return h
+}
+
+func mustGetReceipt(t *testing.T, store storage.Backend, hdr *block.Header) signature.Signature {
+	require := require.New(t)
+
+	signed, err := store.GetReceipt(context.Background(), hdr.KeysForStorageReceipt())
+	require.NoError(err, "GetReceipt")
+
+	return signed.Signature
 }

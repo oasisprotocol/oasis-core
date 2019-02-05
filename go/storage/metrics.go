@@ -50,6 +50,7 @@ var (
 
 	labelGet         = prometheus.Labels{"call": "get"}
 	labelGetBatch    = prometheus.Labels{"call": "get_batch"}
+	labelGetReceipt  = prometheus.Labels{"call": "get_receipt"}
 	labelInsert      = prometheus.Labels{"call": "insert"}
 	labelInsertBatch = prometheus.Labels{"call": "insert_batch"}
 	labelGetKeys     = prometheus.Labels{"call": "get_keys"}
@@ -95,6 +96,19 @@ func (w *metricsWrapper) GetBatch(ctx context.Context, keys []api.Key) ([][]byte
 
 	storageCalls.With(labelGetBatch).Inc()
 	return values, err
+}
+
+func (w *metricsWrapper) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
+	start := time.Now()
+	receipt, err := w.Backend.GetReceipt(ctx, keys)
+	storageLatency.With(labelGetReceipt).Observe(time.Since(start).Seconds())
+	if err != nil {
+		storageFailures.With(labelGetReceipt).Inc()
+		return nil, err
+	}
+
+	storageCalls.With(labelGetReceipt).Inc()
+	return receipt, err
 }
 
 func (w *metricsWrapper) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {

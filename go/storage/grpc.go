@@ -54,6 +54,26 @@ func (s *grpcServer) GetBatch(ctx context.Context, req *pb.GetBatchRequest) (*pb
 	return &pb.GetBatchResponse{Data: values}, nil
 }
 
+func (s *grpcServer) GetReceipt(ctx context.Context, req *pb.GetReceiptRequest) (*pb.GetReceiptResponse, error) {
+	var keys []api.Key
+	for _, id := range req.GetIds() {
+		if len(id) != api.KeySize {
+			return nil, errors.New("storage: malformed key")
+		}
+
+		var k api.Key
+		copy(k[:], id)
+		keys = append(keys, k)
+	}
+
+	signed, err := s.backend.GetReceipt(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetReceiptResponse{Data: signed.MarshalCBOR()}, nil
+}
+
 func (s *grpcServer) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
 	if err := s.backend.Insert(ctx, req.GetData(), req.GetExpiry(), api.InsertOptions{}); err != nil {
 		return nil, err

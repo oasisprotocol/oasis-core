@@ -21,7 +21,6 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/memory"
 	"github.com/oasislabs/ekiden/go/roothash/tendermint"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -36,7 +35,6 @@ func New(
 	ctx context.Context,
 	timeSource epochtime.Backend,
 	scheduler scheduler.Backend,
-	storage storage.Backend,
 	registry registry.Backend,
 	tmService service.TendermintService,
 ) (api.Backend, error) {
@@ -73,9 +71,9 @@ func New(
 
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(ctx, scheduler, storage, registry, genesisBlocks, roundTimeout)
+		impl = memory.New(ctx, scheduler, registry, genesisBlocks, roundTimeout)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, timeSource, scheduler, storage, tmService, genesisBlocks, roundTimeout)
+		impl, err = tendermint.New(ctx, timeSource, scheduler, tmService, genesisBlocks, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}

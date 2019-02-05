@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/common/grpc"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
@@ -28,6 +29,8 @@ var (
 type storageEnv struct {
 	svcMgr  *background.ServiceManager
 	grpcSrv *grpc.Server
+
+	identity *identity.Identity
 }
 
 func doNode(cmd *cobra.Command, args []string) {
@@ -52,6 +55,14 @@ func doNode(cmd *cobra.Command, args []string) {
 	}
 
 	var err error
+
+	env.identity, err = identity.LoadOrGenerate(dataDir)
+	if err != nil {
+		logger.Error("failed to load/generate identity",
+			"err", err,
+		)
+		return
+	}
 
 	// Initialize the gRPC server.
 	env.grpcSrv, err = cmdGrpc.NewServerTCP()
@@ -125,7 +136,7 @@ func doNode(cmd *cobra.Command, args []string) {
 func initStorage(env *storageEnv, dataDir string) error {
 	// Initialize the various backends.
 	timeSource := epochtime.New()
-	store, err := storage.New(timeSource, dataDir)
+	store, err := storage.New(timeSource, dataDir, env.identity.NodeKey)
 	if err != nil {
 		return err
 	}

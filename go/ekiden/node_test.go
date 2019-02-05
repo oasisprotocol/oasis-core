@@ -42,6 +42,7 @@ var (
 		{"roothash.backend", "tendermint"},
 		{"scheduler.backend", "trivial"},
 		{"storage.backend", "leveldb"},
+		{"storage.debug.mock_signing_key", true},
 		{"tendermint.consensus.skip_timeout_commit", true},
 		{"tendermint.debug.block_time_iota", 1 * time.Millisecond},
 		{"worker.backend", "mock"},

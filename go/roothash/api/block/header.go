@@ -11,6 +11,8 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
 
 	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
@@ -194,6 +196,9 @@ type Header struct { // nolint: maligned
 
 	// CommitmentsHash is the Commitments hash.
 	CommitmentsHash hash.Hash `codec:"commitments_hash"`
+
+	// StorageReceipt is the storage receipt for the hashes.
+	StorageReceipt signature.Signature `codec:"storage_receipt"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -202,12 +207,15 @@ func (h *Header) IsParentOf(child *Header) bool {
 	return h.PreviousHash.Equal(&childHash)
 }
 
-// Equal compares vs another header for equality.
-func (h *Header) Equal(cmp *Header) bool {
-	hHash := h.EncodedHash()
-	cmpHash := cmp.EncodedHash()
-
-	return hHash.Equal(&cmpHash)
+// MostlyEqual compares vs another header for equality, omitting the
+// StorageReceipt field as it is not universally guaranteed to be present.
+//
+// Locations where this matter should do the comparison manually.
+func (h *Header) MostlyEqual(cmp *Header) bool {
+	a, b := *h, *cmp
+	a.StorageReceipt, b.StorageReceipt = signature.Signature{}, signature.Signature{}
+	aHash, bHash := a.EncodedHash(), b.EncodedHash()
+	return aHash.Equal(&bHash)
 }
 
 // FromProto deserializes a protobuf into a header.
@@ -249,6 +257,9 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.CommitmentsHash.UnmarshalBinary(pb.GetCommitmentsHash()); err != nil {
 		return err
 	}
+	if err := cbor.Unmarshal(pb.GetStorageReceipt(), &h.StorageReceipt); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -268,6 +279,7 @@ func (h *Header) ToProto() *pbRoothash.Header {
 	pb.OutputHash, _ = h.OutputHash.MarshalBinary()
 	pb.StateRoot, _ = h.StateRoot.MarshalBinary()
 	pb.CommitmentsHash, _ = h.CommitmentsHash.MarshalBinary()
+	pb.StorageReceipt = cbor.Marshal(&h.StorageReceipt)
 
 	return pb
 }
@@ -289,6 +301,63 @@ func (h *Header) EncodedHash() hash.Hash {
 	hh.From(h)
 
 	return hh
+}
+
+// KeysForStorageReceipt gets the storage keys required to request a
+// storage receipt.
+func (h *Header) KeysForStorageReceipt() []storage.Key {
+	keys := make([]storage.Key, 0, 3)
+
+	for _, h := range []hash.Hash{
+		h.InputHash,
+		h.OutputHash,
+		h.StateRoot,
+	} {
+		if h.IsEmpty() {
+			continue
+		}
+		var key storage.Key
+		copy(key[:], h[:])
+		keys = append(keys, key)
+	}
+
+	return keys
+}
+
+// VerifyStorageReceiptSignature validates that the storage receipt
+// signature matches the hashes.
+//
+// Note: Ensuring that the signature is signed by the keypair that is
+// expected is the responsibility of the caller.
+func (h *Header) VerifyStorageReceiptSignature() error {
+	receipt := storage.Receipt{
+		Keys: h.KeysForStorageReceipt(),
+	}
+
+	signed := signature.Signed{
+		Blob:      receipt.MarshalCBOR(),
+		Signature: h.StorageReceipt,
+	}
+
+	var check storage.SignedReceipt
+	return signed.Open(storage.ReceiptSignatureContext, &check)
+}
+
+// VerifyStorageReceipt validates that the provided storage receipt
+// matches the header.
+func (h *Header) VerifyStorageReceipt(receipt *storage.Receipt) error {
+	keys := h.KeysForStorageReceipt()
+	if len(receipt.Keys) != len(keys) {
+		return errors.New("roothash: receipt has unexpected number of keys")
+	}
+
+	for idx, v := range keys {
+		if !bytes.Equal(v[:], receipt.Keys[idx][:]) {
+			return errors.New("roothash: receipt has unexpected keys")
+		}
+	}
+
+	return nil
 }
 
 func memIsZero(b []byte) bool {

@@ -100,6 +100,10 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 	return values, nil
 }
 
+func (b *cachingClientBackend) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
+	return b.remote.GetReceipt(ctx, keys)
+}
+
 func (b *cachingClientBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
 	// Write-through.
 	var err error

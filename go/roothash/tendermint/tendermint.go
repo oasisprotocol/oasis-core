@@ -21,7 +21,6 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	tmroothash "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -433,7 +432,6 @@ func New(
 	ctx context.Context,
 	timeSource epochtime.Backend,
 	sched scheduler.Backend,
-	storage storage.Backend,
 	service service.TendermintService,
 	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
@@ -450,11 +448,8 @@ func New(
 		return nil, errors.New("roothash/tendermint: need a block-based scheduler backend")
 	}
 
-	// HACK/#1380: Wait for storage to actually be fully initialized.
-	<-storage.Initialized()
-
 	// Initialize and register the tendermint service component.
-	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, storage, genesisBlocks, roundTimeout)
+	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, genesisBlocks, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 service Storage {
     rpc Get(GetRequest) returns (GetResponse) {}
     rpc GetBatch(GetBatchRequest) returns (GetBatchResponse) {}
+    rpc GetReceipt(GetReceiptRequest) returns (GetReceiptResponse) {}
     rpc Insert(InsertRequest) returns (InsertResponse) {}
     rpc InsertBatch(InsertBatchRequest) returns (InsertBatchResponse) {}
     rpc GetKeys(GetKeysRequest) returns (stream GetKeysResponse) {}
@@ -24,7 +25,15 @@ message GetBatchRequest {
 }
 
 message GetBatchResponse {
-    repeated bytes data = 2;
+    repeated bytes data = 1;
+}
+
+message GetReceiptRequest {
+    repeated bytes ids = 1;
+}
+
+message GetReceiptResponse {
+    bytes data = 1;
 }
 
 message InsertRequest {

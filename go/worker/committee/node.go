@@ -397,7 +397,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	switch state := n.state.(type) {
 	case StateWaitingForBlock:
 		// Check if this was the block we were waiting for.
-		if header.Equal(state.header) {
+		if header.MostlyEqual(state.header) {
 			n.logger.Info("received block needed for batch processing")
 			n.startProcessingBatch(state.batch)
 			break
@@ -565,6 +565,10 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		ctx, cancel := context.WithTimeout(n.ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
+		batch.StorageInserts = append(batch.StorageInserts, storage.Value{
+			Data:       batch.Outputs.MarshalCBOR(),
+			Expiration: 2,
+		})
 		if err := n.storage.InsertBatch(ctx, batch.StorageInserts, opts); err != nil {
 			n.logger.Error("failed to commit state to storage",
 				"err", err,
@@ -572,12 +576,37 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 			return err
 		}
 
-		if err := n.storage.Insert(ctx, batch.Outputs.MarshalCBOR(), 2, opts); err != nil {
-			n.logger.Error("failed to commit outputs to storage",
+		if opts.LocalOnly {
+			return nil
+		}
+
+		// If we actually write to storage, acquire proof that we did.
+		signedReceipt, err := n.storage.GetReceipt(ctx, blk.Header.KeysForStorageReceipt())
+		if err != nil {
+			n.logger.Error("failed to get storage proof",
 				"err", err,
 			)
 			return err
 		}
+
+		// TODO: Ensure that the receipt is actually signed by the
+		// storage node.  For now accept a signature from anyone.
+		var receipt storage.Receipt
+		if err = signedReceipt.Open(storage.ReceiptSignatureContext, &receipt); err != nil {
+			n.logger.Error("failed to open signed receipt",
+				"err", err,
+			)
+			return err
+		}
+		if err = blk.Header.VerifyStorageReceipt(&receipt); err != nil {
+			n.logger.Error("failed to validate receipt",
+				"err", err,
+			)
+			return err
+		}
+
+		// No need to append the entire blob, just the signature/public key.
+		blk.Header.StorageReceipt = signedReceipt.Signature
 
 		return nil
 	}()
@@ -712,7 +741,7 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 	}
 
 	// Check if we have the correct block -- in this case, start processing the batch.
-	if n.currentBlock.Header.Equal(&batch.header) {
+	if n.currentBlock.Header.MostlyEqual(&batch.header) {
 		n.startProcessingBatch(batch.batch)
 		return nil
 	}
