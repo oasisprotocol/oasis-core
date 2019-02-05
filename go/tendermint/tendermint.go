@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
+	tmpex "github.com/tendermint/tendermint/p2p/pex"
 	tmpriv "github.com/tendermint/tendermint/privval"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
@@ -488,9 +488,10 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 	}
 
 	if !isSingle {
-		// Since validators are static for the moment, just have every
-		// node open persistent connections to all the validators.
-		var addrs []string
+		// So, the "right" thing to do is to use seed nodes, but those are totally
+		// 100% dedicated to just seeding.  PEX works just fine off the validators,
+		// so ensure that the validators exist in the address book, the hard way.
+		var addrs []*tmp2p.NetAddress
 		for _, v := range genDoc.Validators {
 			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
 			vAddr := vPubKey.Address().String() + "@" + v.CoreAddress
@@ -502,9 +503,47 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 				continue
 			}
 
-			addrs = append(addrs, vAddr)
+			tmVAddr, err := tmp2p.NewNetAddressString(vAddr)
+			if err != nil {
+				return nil, errors.Wrap(err, "tendermint: failed to reformat genesis validator address")
+			}
+
+			addrs = append(addrs, tmVAddr)
 		}
-		tenderConfig.P2P.PersistentPeers = strings.Join(addrs, ",")
+
+		addrBook := tmpex.NewAddrBook(tenderConfig.P2P.AddrBookFile(), tenderConfig.P2P.AddrBookStrict)
+		if err := addrBook.Start(); err != nil {
+			return nil, errors.Wrap(err, "tendermint: failed to open address book")
+		}
+		defer func() {
+			// Can't pass tmn.NewNode() an existing address book.
+			ch := addrBook.Quit()
+			_ = addrBook.Stop()
+			<-ch
+		}()
+
+		// Add our address to the address book, just so we can add the genesis
+		// nodes.  This is somewhat silly, but there isn't any error-checking
+		// done with AddOurAddress, so using the P2P ListenAddress as the IP/port
+		// is totally fine.
+		valPubKey := t.validatorKey.Public()
+		ourPubKey := crypto.PublicKeyToTendermint(&valPubKey)
+		ourLaddr, err := common.GetHostPort(tenderConfig.P2P.ListenAddress)
+		if err != nil {
+			return nil, errors.Wrap(err, "tendermint: failed to parse p2p listen address")
+		}
+		ourAddr, err := tmp2p.NewNetAddressString(ourPubKey.Address().String() + "@" + ourLaddr)
+		if err != nil {
+			return nil, errors.Wrap(err, "tendermint: failed to generate our address")
+		}
+		addrBook.AddOurAddress(ourAddr)
+
+		// Populate the address book with the genesis validators.
+		for _, v := range addrs {
+			if err = addrBook.AddAddress(v, ourAddr); err != nil {
+				return nil, errors.Wrap(err, "tendermint: failed to add genesis validator to address book")
+			}
+		}
 	}
 
 	tmGenDoc, err := genDoc.ToTendermint()
