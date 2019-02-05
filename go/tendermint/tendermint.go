@@ -44,8 +44,9 @@ import (
 const (
 	configDir = "config"
 
-	cfgCoreGenesisFile   = "tendermint.core.genesis_file"
-	cfgCoreListenAddress = "tendermint.core.listen_address"
+	cfgCoreGenesisFile     = "tendermint.core.genesis_file"
+	cfgCoreListenAddress   = "tendermint.core.listen_address"
+	cfgCoreExternalAddress = "tendermint.core.external_address"
 
 	cfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
 	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
@@ -57,7 +58,6 @@ const (
 	cfgLogDebug = "tendermint.log.debug"
 
 	cfgDebugBootstrapAddress       = "tendermint.debug.bootstrap.address"
-	cfgDebugBootstrapNodeAddr      = "tendermint.debug.bootstrap.node_addr"
 	cfgDebugBootstrapNodeName      = "tendermint.debug.bootstrap.node_name"
 	cfgDebugConsensusBlockTimeIota = "tendermint.debug.block_time_iota"
 	cfgDebugP2PAddrBookLenient     = "tendermint.debug.addr_book_lenient"
@@ -362,6 +362,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
+	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
 	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
@@ -433,7 +434,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 	if addr := viper.GetString(cfgDebugBootstrapAddress); addr != "" {
 		t.Logger.Warn("The bootstrap provisioning server is NOT FOR PRODUCTION USE.")
 		var (
-			nodeAddr = viper.GetString(cfgDebugBootstrapNodeAddr)
+			nodeAddr = viper.GetString(cfgCoreExternalAddress)
 			nodeName = viper.GetString(cfgDebugBootstrapNodeName)
 			err      error
 		)
@@ -627,6 +628,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
 		cmd.Flags().String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
+		cmd.Flags().String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 		cmd.Flags().Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 		cmd.Flags().Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
 		cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
@@ -634,7 +636,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
-		cmd.Flags().String(cfgDebugBootstrapNodeAddr, "", "debug bootstrap validator node Tendermint core address")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
 		cmd.Flags().Duration(cfgDebugConsensusBlockTimeIota, 0*time.Second, "tendermint block time iota")
 		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
@@ -643,6 +644,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	for _, v := range []string{
 		cfgCoreGenesisFile,
 		cfgCoreListenAddress,
+		cfgCoreExternalAddress,
 		cfgConsensusTimeoutCommit,
 		cfgConsensusSkipTimeoutCommit,
 		cfgConsensusEmptyBlockInterval,
@@ -650,7 +652,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgABCIPruneNumKept,
 		cfgLogDebug,
 		cfgDebugBootstrapAddress,
-		cfgDebugBootstrapNodeAddr,
 		cfgDebugBootstrapNodeName,
 		cfgDebugConsensusBlockTimeIota,
 		cfgDebugP2PAddrBookLenient,
