@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -17,6 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/common/tracing"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -130,6 +132,7 @@ type externalBatch struct {
 	batch  runtime.Batch
 	header block.Header
 	ch     chan<- error
+	span   opentracing.Span
 }
 
 // Node is a committee node.
@@ -162,6 +165,7 @@ type Node struct {
 	state          NodeState
 	currentBlock   *block.Block
 	batchStartTime time.Time
+	batchSpan      opentracing.Span
 
 	stateTransitions *pubsub.Broker
 
@@ -249,11 +253,21 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 		return nil, errIncomatibleHeader
 	}
 
+	batchSpan := opentracing.StartSpan("QueueExternalBatch(batchHash, header)",
+		opentracing.Tag{Key: "batchHash", Value: batchHash},
+		opentracing.Tag{Key: "header", Value: hdr},
+	)
+
 	// Fetch batch from storage.
 	var k storage.Key
 	copy(k[:], batchHash[:])
 
+	span, ctx := tracing.StartSpanWithContext(ctx, "Get(batchHash)",
+		opentracing.Tag{Key: "batchHash", Value: k},
+		opentracing.ChildOf(batchSpan.Context()),
+	)
 	raw, err := n.storage.Get(ctx, k)
+	span.Finish()
 	if err != nil {
 		n.logger.Error("failed to fetch batch from storage",
 			"err", err,
@@ -272,7 +286,7 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 	respCh := make(chan error, 1)
 
 	select {
-	case n.incomingExtBatch <- &externalBatch{batch, hdr, respCh}:
+	case n.incomingExtBatch <- &externalBatch{batch, hdr, respCh, batchSpan}:
 	case <-ctx.Done():
 		return nil, context.Canceled
 	}
@@ -459,6 +473,12 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 	go func() {
 		defer close(done)
 
+		span := opentracing.StartSpan("CallBatch(rq)",
+			opentracing.Tag{Key: "rq", Value: rq},
+			opentracing.ChildOf(n.batchSpan.Context()),
+		)
+		defer span.Finish()
+
 		ch, err := n.workerHost.MakeRequest(ctx, rq)
 		if err != nil {
 			n.logger.Error("error while sending batch processing request to worker host",
@@ -562,7 +582,14 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 
 	start := time.Now()
 	err := func() error {
-		ctx, cancel := context.WithTimeout(n.ctx, n.cfg.StorageCommitTimeout)
+		span, ctx := tracing.StartSpanWithContext(n.ctx, "InsertBatch(outputs, state)",
+			opentracing.Tag{Key: "outputs", Value: batch.Outputs},
+			opentracing.Tag{Key: "storageInserts", Value: batch.StorageInserts},
+			opentracing.ChildOf(n.batchSpan.Context()),
+		)
+		defer span.Finish()
+
+		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
 		batch.StorageInserts = append(batch.StorageInserts, storage.Value{
@@ -629,6 +656,11 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 
 	n.transition(StateWaitingForFinalize{})
 
+	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(n.batchSpan.Context()))
+	// Also close the parent span after roothash.Commit.
+	defer n.batchSpan.Finish()
+	defer span.Finish()
+
 	if err := n.roothash.Commit(n.ctx, n.runtimeID, commit.ToOpaqueCommitment()); err != nil {
 		n.logger.Error("failed to submit commitment",
 			"err", err,
@@ -686,7 +718,6 @@ func (n *Node) checkIncomingQueue(force bool) {
 	if err != nil {
 		return
 	}
-
 	var processOk bool
 	defer func() {
 		if !processOk {
@@ -701,24 +732,43 @@ func (n *Node) checkIncomingQueue(force bool) {
 		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
 	}()
 
+	// Leader node opens a new parent span for batch processing.
+	n.batchSpan = opentracing.StartSpan("TakeBatchFromQueue(batch)",
+		opentracing.Tag{Key: "batch", Value: batch},
+	)
+
+	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Insert(batch)",
+		opentracing.Tag{Key: "batch", Value: batch},
+		opentracing.ChildOf(n.batchSpan.Context()),
+	)
+
 	// Commit batch to storage.
-	if err := n.storage.Insert(n.ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
+	if err := n.storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
+		spanInsert.Finish()
 		n.logger.Error("failed to commit input batch to storage",
 			"err", err,
 		)
 		return
 	}
+	spanInsert.Finish()
 
 	// Dispatch batch to group.
 	var batchID hash.Hash
 	batchID.From(batch)
 
+	spanPublish := opentracing.StartSpan("Publish(batchHash, header)",
+		opentracing.Tag{Key: "batchHash", Value: batchID},
+		opentracing.Tag{Key: "header", Value: n.currentBlock.Header},
+		opentracing.ChildOf(n.batchSpan.Context()),
+	)
 	if err := n.group.PublishBatch(batchID, n.currentBlock.Header); err != nil {
+		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
 		)
 		return
 	}
+	spanPublish.Finish()
 
 	// Start processing the batch locally.
 	n.startProcessingBatch(batch)
@@ -739,6 +789,9 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
 	}
+
+	// Set the Worker node's batchSpan from the obtained external batch.
+	n.batchSpan = batch.span
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.currentBlock.Header.MostlyEqual(&batch.header) {

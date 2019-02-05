@@ -76,3 +76,12 @@ tendermint:
     genesis_file: /code/configs/single_node/genesis.json
   consensus:
     timeout_commit: 1s
+
+# Tracing settings.
+#tracing:
+#  enabled: 1
+#  reporter:
+#    agent_addr: jaeger:6831
+#  sampler:
+#    # Sampling frequency, 100% by default.
+#    param: 1.0
