@@ -438,7 +438,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			nodeName = viper.GetString(cfgDebugBootstrapNodeName)
 			err      error
 		)
-		if nodeAddr == "" && nodeName == "" {
+		if nodeName == "" {
 			genDoc, err = bootstrap.Client(addr)
 			if err != nil {
 				return nil, errors.Wrap(err, "tendermint: client bootstrap failed")
