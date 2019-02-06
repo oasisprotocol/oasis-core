@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ const recvTimeout = 5 * time.Second
 var (
 	envWorkerHostWorkerBinary  = os.Getenv("EKIDEN_TEST_WORKER_HOST_WORKER_BINARY")
 	envWorkerHostRuntimeBinary = os.Getenv("EKIDEN_TEST_WORKER_HOST_RUNTIME_BINARY")
+	envWorkerHostTEE           = os.Getenv("EKIDEN_TEST_WORKER_HOST_TEE")
 )
 
 func skipIfMissingDeps(t *testing.T) {
@@ -62,6 +64,13 @@ func TestSandboxedHost(t *testing.T) {
 	storage := storageMemory.New(timeSource, &storagePrivKey)
 	<-storage.Initialized()
 
+	var tee node.TEEHardware
+	switch strings.ToLower(envWorkerHostTEE) {
+	case "intel-sgx":
+		tee = node.TEEHardwareIntelSGX
+	default:
+	}
+
 	ias, err := ias.New(nil, "")
 	require.NoError(t, err, "ias.New")
 
@@ -72,7 +81,7 @@ func TestSandboxedHost(t *testing.T) {
 		runtimeID,
 		storage,
 		make(map[string]ProxySpecification),
-		node.TEEHardwareIntelSGX,
+		tee,
 		ias,
 		nil,
 		true,
@@ -90,7 +99,7 @@ func TestSandboxedHost(t *testing.T) {
 		runtimeID,
 		storage,
 		make(map[string]ProxySpecification),
-		node.TEEHardwareIntelSGX,
+		tee,
 		ias,
 		nil,
 		false,
@@ -132,8 +141,13 @@ func testWaitForCapabilityTEE(t *testing.T, host Host) {
 
 	cap, err := host.WaitForCapabilityTEE(ctx)
 	require.NoError(t, err, "WaitForCapabilityTEE")
-	require.NotNil(t, cap, "capabilities should not be nil")
-	require.Equal(t, node.TEEHardwareIntelSGX, cap.Hardware, "TEE hardware should be Intel SGX")
+	switch host.(*sandboxedHost).teeHardware {
+	case node.TEEHardwareIntelSGX:
+		require.NotNil(t, cap, "capabilities should not be nil")
+		require.Equal(t, node.TEEHardwareIntelSGX, cap.Hardware, "TEE hardware should be Intel SGX")
+	default:
+		require.Nil(t, cap, "capabilites should be nil")
+	}
 }
 
 func testSimpleRequest(t *testing.T, host Host) {
