@@ -408,7 +408,7 @@ func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<
 	select {
 	case h.requestCh <- &hostRequest{ctx, body, respCh}:
 	case <-ctx.Done():
-		return nil, errors.New("aborted by context")
+		return nil, context.Canceled
 	}
 
 	// Wait for response from the manager goroutine.
@@ -416,7 +416,7 @@ func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<
 	case resp := <-respCh:
 		return resp.ch, resp.err
 	case <-ctx.Done():
-		return nil, errors.New("aborted by context")
+		return nil, context.Canceled
 	}
 }
 
@@ -427,7 +427,7 @@ func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
 	select {
 	case h.interruptCh <- &interruptRequest{ctx, respCh}:
 	case <-ctx.Done():
-		return errors.New("aborted by context")
+		return context.Canceled
 	}
 
 	// Wait for response from the manager goroutine.
@@ -435,7 +435,7 @@ func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
 	case resp := <-respCh:
 		return resp
 	case <-ctx.Done():
-		return errors.New("aborted by context")
+		return context.Canceled
 	}
 }
 
@@ -688,7 +688,7 @@ func (h *sandboxedHost) handleInterruptWorker(ctx context.Context) error {
 	select {
 	case <-h.activeWorker.quitCh:
 	case <-ctx.Done():
-		return errors.New("aborted by context")
+		return context.Canceled
 	}
 
 	// Respawn worker.
