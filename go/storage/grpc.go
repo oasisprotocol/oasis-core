@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/storage/api"
 
@@ -27,7 +29,9 @@ func (s *grpcServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetRespon
 	copy(k[:], id)
 
 	v, err := s.backend.Get(ctx, k)
-	if err != nil {
+	if err == api.ErrKeyNotFound || err == api.ErrKeyExpired {
+		return nil, status.Errorf(codes.NotFound, err.Error())
+	} else if err != nil {
 		return nil, err
 	}
 
