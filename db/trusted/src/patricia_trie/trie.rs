@@ -14,6 +14,16 @@ use super::{
     node::{Node, NodePointer},
 };
 
+/// Merkle patricia trie statistics.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct TrieStats {
+    pub internal_node_count: usize,
+    pub internal_node_size: usize,
+    pub leaf_node_count: usize,
+    pub leaf_node_size: usize,
+    pub depth: usize,
+}
+
 /// A merkle patricia tree backed by storage.
 pub struct PatriciaTrie {
     /// Storage.
@@ -601,6 +611,71 @@ impl PatriciaTrie {
         self.dump_pointer(String::from("root"), max_depth, self.get_root_pointer(root));
         println!("}}");
     }
+
+    fn stats_pointer(
+        &self,
+        stats: &mut TrieStats,
+        pointer: NodePointer,
+        depth: usize,
+        max_depth: usize,
+    ) {
+        match pointer {
+            NodePointer::Null => {}
+            NodePointer::Pointer(_) => {
+                self.stats_node(stats, self.deref_node_pointer(pointer), depth, max_depth);
+            }
+            NodePointer::Embedded(node) => {
+                self.stats_node(stats, node.as_ref().clone(), depth, max_depth)
+            }
+        }
+    }
+
+    fn stats_node(&self, stats: &mut TrieStats, node: Node, depth: usize, max_depth: usize) {
+        if depth >= max_depth {
+            return;
+        }
+
+        if depth > stats.depth {
+            stats.depth = depth;
+        }
+
+        let node_size = bincode::serialize(&node).unwrap().len();
+
+        match node {
+            Node::Branch { children, .. } => {
+                stats.internal_node_count += 1;
+                stats.internal_node_size += node_size;
+
+                for (_index, pointer) in children.iter().enumerate() {
+                    if pointer == &NodePointer::Null {
+                        continue;
+                    }
+
+                    self.stats_pointer(stats, pointer.clone(), depth + 1, max_depth);
+                }
+            }
+
+            Node::Leaf { .. } => {
+                stats.leaf_node_count += 1;
+                stats.leaf_node_size += node_size;
+            }
+
+            Node::Extension { pointer, .. } => {
+                stats.internal_node_count += 1;
+                stats.internal_node_size += node_size;
+
+                self.stats_pointer(stats, pointer, depth + 1, max_depth);
+            }
+        }
+    }
+
+    /// Retrieve trie statistics.
+    pub fn stats(&self, root: Option<H256>, max_depth: usize) -> TrieStats {
+        let mut stats = TrieStats::default();
+        self.stats_pointer(&mut stats, self.get_root_pointer(root), 0, max_depth);
+
+        stats
+    }
 }
 
 #[cfg(test)]
@@ -721,7 +796,19 @@ mod test {
         }
         key_buf[59] = b'4';
         root_hash = Some(tree.insert(root_hash, &key_buf, val));
-        drop(root_hash);
+
+        // Test trie stats.
+        let stats = tree.stats(root_hash, usize::max_value());
+        assert_eq!(
+            stats,
+            TrieStats {
+                internal_node_count: 31,
+                internal_node_size: 6619,
+                leaf_node_count: 82,
+                leaf_node_size: 11528,
+                depth: 4
+            }
+        );
     }
 
     #[bench]
