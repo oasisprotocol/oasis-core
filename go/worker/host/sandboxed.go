@@ -8,7 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,6 +60,9 @@ const (
 	workerMountWorkerBin  = "/worker"
 	workerMountRuntimeBin = "/runtime.so"
 	workerMountLibDir     = "/usr/lib"
+
+	teeIntelSGXDevice = "/dev/isgx"
+	teeIntelSGXSocket = "/var/run/aesmd/aesm.socket"
 )
 
 var (
@@ -143,7 +146,7 @@ func (p *process) worker() {
 	close(p.quitCh)
 }
 
-func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification) ([]string, error) {
+func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) ([]string, error) {
 	// Prepare general arguments.
 	args := []string{
 		// Unshare all possible namespaces.
@@ -203,8 +206,19 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 				mountDir = "/lib64"
 			}
 
-			args = append(args, "--ro-bind", p, path.Join(mountDir, alias))
+			args = append(args, "--ro-bind", p, filepath.Join(mountDir, alias))
 		}
+	}
+
+	// Bind the TEE specific files.
+	switch hardware {
+	case node.TEEHardwareIntelSGX:
+		args = append(args, []string{
+			"--dev-bind", teeIntelSGXDevice, teeIntelSGXDevice,
+			"--dir", filepath.Dir(teeIntelSGXSocket),
+			"--bind", teeIntelSGXSocket, teeIntelSGXSocket,
+		}...)
+	default:
 	}
 
 	// Worker arguments follow.
@@ -441,7 +455,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	defer os.RemoveAll(workerDir)
 
 	// Create unix socket.
-	hostSocket := path.Join(workerDir, "host.sock")
+	hostSocket := filepath.Join(workerDir, "host.sock")
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: hostSocket})
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: failed to create host socket")
@@ -522,7 +536,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 
 	if !h.noSandbox {
 		// Instruct the sandbox how to prepare itself.
-		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.proxies) // nolint: govet
+		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.proxies, h.teeHardware) // nolint: govet
 		if err != nil {
 			return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
 		}
