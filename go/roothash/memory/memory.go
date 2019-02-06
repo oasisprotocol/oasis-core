@@ -448,7 +448,7 @@ func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, com
 
 	select {
 	case <-ctx.Done():
-		return errors.New("roothash/memory: canceled by context")
+		return context.Canceled
 	case err = <-cmd.errCh:
 	}
 

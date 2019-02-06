@@ -65,7 +65,7 @@ func (p *Protocol) Call(ctx context.Context, body *Body) (*Body, error) {
 
 		return resp, nil
 	case <-ctx.Done():
-		return nil, errors.New("aborted by context")
+		return nil, context.Canceled
 	}
 }
 
@@ -92,7 +92,7 @@ func (p *Protocol) MakeRequest(ctx context.Context, body *Body) (<-chan *Body, e
 	case <-p.closeCh:
 		return nil, errors.New("connection closed")
 	case <-ctx.Done():
-		return nil, errors.New("aborted by context")
+		return nil, context.Canceled
 	}
 
 	return ch, nil

@@ -72,7 +72,7 @@ Loop:
 				}
 			}
 		case <-ctx.Done():
-			return nil, errors.New("dummydebug: canceled by context")
+			return nil, context.Canceled
 		}
 	}
 
