@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -43,6 +45,9 @@ func (b *storageClientBackend) Get(ctx context.Context, key api.Key) ([]byte, er
 
 	resp, err := b.client.Get(ctx, &req)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, api.ErrKeyNotFound
+		}
 		return nil, err
 	}
 

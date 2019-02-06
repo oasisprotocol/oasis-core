@@ -40,10 +40,17 @@ var (
 			Help: "Number of cache misses from local cache in caching remote storage client backend.",
 		},
 	)
+	remoteMisses = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "ekiden_storage_cachingclient_remote_misses",
+			Help: "Number of queries for non-existent keys.",
+		},
+	)
 
 	cacheCollectors = []prometheus.Collector{
 		cacheHits,
 		cacheMisses,
+		remoteMisses,
 	}
 
 	metricsOnce sync.Once
@@ -62,7 +69,12 @@ func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, er
 		return cached, nil
 	}
 	cacheMisses.Inc()
-	return b.remote.Get(ctx, key)
+	value, err := b.remote.Get(ctx, key)
+	if err == api.ErrKeyNotFound {
+		remoteMisses.Inc()
+	}
+
+	return value, err
 }
 
 func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte, error) {
