@@ -88,14 +88,14 @@ func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.
 }
 
 func (app *rootHashApplication) GetState(height int64) (interface{}, error) {
-	return NewImmutableState(app.state, height)
+	return newImmutableState(app.state, height)
 }
 
 func (app *rootHashApplication) queryGetLatestBlock(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetLatestBlock)
-	state := s.(*ImmutableState)
+	state := s.(*immutableState)
 
-	runtime, err := state.GetRuntimeState(request.ID)
+	runtime, err := state.getRuntimeState(request.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 
 func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: gocyclo
 	tree := app.state.DeliverTxTree()
-	state := NewMutableState(tree)
+	state := newMutableState(tree)
 
 	// Query the updated runtime list.
 	regState := registryapp.NewMutableState(tree)
@@ -186,8 +186,8 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 		newDescriptors[v.ID.ToMapKey()] = v
 	}
 
-	for _, runtimeState := range state.GetRuntimes() {
-		rtID := runtimeState.Runtime.ID
+	for _, rtState := range state.getRuntimes() {
+		rtID := rtState.Runtime.ID
 
 		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight())
 		if err != nil {
@@ -219,7 +219,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 		// If the committee is the "same", ignore this.
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
-		round := runtimeState.Round
+		round := rtState.Round
 		if round != nil && round.RoundState.Committee.ValidFor == committee.ValidFor {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
 				"runtime", rtID,
@@ -233,7 +233,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 		}
 
 		// Transition the round.
-		blk := runtimeState.CurrentBlock
+		blk := rtState.CurrentBlock
 		blockNr, _ := blk.Header.Round.ToU64()
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
@@ -242,27 +242,27 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 			"round", blockNr,
 		)
 
-		runtimeState.Timer.Stop(ctx)
-		runtimeState.Round = newRound(committee, blk)
+		rtState.Timer.Stop(ctx)
+		rtState.Round = newRound(committee, blk)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.
-		app.emitEmptyBlock(ctx, runtimeState, block.EpochTransition)
+		app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
 
 		mk := rtID.ToMapKey()
 		if rt, ok := newDescriptors[mk]; ok {
 			// Update the runtime descriptor to the latest per-epoch value.
-			runtimeState.Runtime = rt
+			rtState.Runtime = rt
 			delete(newDescriptors, mk)
 		}
 
-		state.UpdateRuntimeState(runtimeState)
+		state.updateRuntimeState(rtState)
 	}
 
 	// Just because a runtime didn't have committees, it doesn't mean that
 	// it's state does not need to be updated. Do so now where possible.
 	for _, v := range newDescriptors {
-		runtimeState, err := state.GetRuntimeState(v.ID)
+		rtState, err := state.getRuntimeState(v.ID)
 		if err != nil {
 			app.logger.Warn("onEpochChange: unknown runtime in update pass",
 				"runtime", v,
@@ -270,12 +270,12 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 			continue
 		}
 
-		runtimeState.Runtime = v
-		state.UpdateRuntimeState(runtimeState)
+		rtState.Runtime = v
+		state.updateRuntimeState(rtState)
 	}
 }
 
-func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *RuntimeState, hdrType block.HeaderType) {
+func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runtimeState, hdrType block.HeaderType) {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
 	runtime.Round.populateFinalizedBlock(blk)
 
@@ -350,11 +350,11 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 }
 
 func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *api.GenesisRootHashState) {
-	state := NewMutableState(tree)
+	state := newMutableState(tree)
 
 	// Check if state already exists for the given runtime.
-	runtimeState, _ := state.GetRuntimeState(runtime.ID)
-	if runtimeState != nil {
+	rtState, _ := state.getRuntimeState(runtime.ID)
+	if rtState != nil {
 		// Do not propagate the error as this would fail the transaction.
 		app.logger.Warn("onNewRuntime: state for runtime already exists",
 			"runtime", runtime,
@@ -378,7 +378,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 
 	// Create new state containing the genesis block.
 	timerCtx := &timerContext{ID: runtime.ID}
-	state.UpdateRuntimeState(&RuntimeState{
+	state.updateRuntimeState(&runtimeState{
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
@@ -409,17 +409,17 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	}
 
 	tree := app.state.DeliverTxTree()
-	state := NewMutableState(tree)
-	runtimeState, err := state.GetRuntimeState(tCtx.ID)
+	state := newMutableState(tree)
+	rtState, err := state.getRuntimeState(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
 		)
 		panic(err)
 	}
-	runtime := runtimeState.Runtime
+	runtime := rtState.Runtime
 
-	latestBlock := runtimeState.CurrentBlock
+	latestBlock := rtState.CurrentBlock
 	if blockNr, _ := latestBlock.Header.Round.ToU64(); blockNr != tCtx.Round {
 		// Note: This should NEVER happen, but it does and causes massive
 		// problems (#1047).
@@ -431,12 +431,12 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 		timer.Stop(ctx)
 
-		// WARNING: `timer` != runtimeState.Timer, while the ID shouldn't
+		// WARNING: `timer` != rtState.Timer, while the ID shouldn't
 		// change and the difference in structs should be harmless, there
 		// is nothing lost with being extra defensive.
 
 		var rsCtx timerContext
-		if err := rsCtx.UnmarshalCBOR(runtimeState.Timer.Data()); err != nil {
+		if err := rsCtx.UnmarshalCBOR(rtState.Timer.Data()); err != nil {
 			app.logger.Error("FireTimer: Failed to unmarshal runtime state timer",
 				"err", err,
 			)
@@ -448,8 +448,8 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 			"timer_round", rsCtx.Round,
 		)
 
-		runtimeState.Timer.Stop(ctx)
-		state.UpdateRuntimeState(runtimeState)
+		rtState.Timer.Stop(ctx)
+		state.updateRuntimeState(rtState)
 
 		return
 	}
@@ -459,9 +459,9 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		"timer_round", tCtx.Round,
 	)
 
-	defer state.UpdateRuntimeState(runtimeState)
-	runtimeState.Round.DidTimeout = true
-	app.tryFinalize(ctx, runtime, runtimeState, true)
+	defer state.updateRuntimeState(rtState)
+	rtState.Round.DidTimeout = true
+	app.tryFinalize(ctx, runtime, rtState, true)
 }
 
 func (app *rootHashApplication) executeTx(
@@ -469,7 +469,7 @@ func (app *rootHashApplication) executeTx(
 	tree *iavl.MutableTree,
 	tx *api.TxRootHash,
 ) error {
-	state := NewMutableState(tree)
+	state := newMutableState(tree)
 
 	if tx.TxCommit != nil {
 		return app.commit(ctx, state, tx.TxCommit.ID, &tx.TxCommit.Commitment)
@@ -479,18 +479,18 @@ func (app *rootHashApplication) executeTx(
 
 func (app *rootHashApplication) commit(
 	ctx *abci.Context,
-	state *MutableState,
+	state *mutableState,
 	id signature.PublicKey,
 	commit *roothash.OpaqueCommitment,
 ) error {
-	runtimeState, err := state.GetRuntimeState(id)
+	rtState, err := state.getRuntimeState(id)
 	if err != nil {
 		return errors.Wrap(err, "roothash: failed to fetch runtime state")
 	}
-	if runtimeState == nil {
+	if rtState == nil {
 		return errNoSuchRuntime
 	}
-	runtime := runtimeState.Runtime
+	runtime := rtState.Runtime
 
 	var c commitment.Commitment
 	if err = c.FromOpaqueCommitment(commit); err != nil {
@@ -503,29 +503,29 @@ func (app *rootHashApplication) commit(
 		return nil
 	}
 
-	if runtimeState.Round == nil {
+	if rtState.Round == nil {
 		app.logger.Error("commit recevied when no round in progress",
 			"err", errNoRound,
 		)
 		return errNoRound
 	}
 
-	latestBlock := runtimeState.CurrentBlock
+	latestBlock := rtState.CurrentBlock
 	blockNr, _ := latestBlock.Header.Round.ToU64()
 
-	defer state.UpdateRuntimeState(runtimeState)
+	defer state.updateRuntimeState(rtState)
 
 	// If the round was finalized, transition.
-	if runtimeState.Round.RoundState.CurrentBlock.Header.Round != latestBlock.Header.Round {
+	if rtState.Round.RoundState.CurrentBlock.Header.Round != latestBlock.Header.Round {
 		app.logger.Debug("round was finalized, transitioning round",
 			"round", blockNr,
 		)
 
-		runtimeState.Round = newRound(runtimeState.Round.RoundState.Committee, latestBlock)
+		rtState.Round = newRound(rtState.Round.RoundState.Committee, latestBlock)
 	}
 
 	// Add the commitment.
-	if err = runtimeState.Round.addCommitment(app.ctx, &c); err != nil {
+	if err = rtState.Round.addCommitment(app.ctx, &c); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,
@@ -534,7 +534,7 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Try to finalize round.
-	app.tryFinalize(ctx, runtime, runtimeState, false)
+	app.tryFinalize(ctx, runtime, rtState, false)
 
 	return nil
 }
@@ -542,10 +542,10 @@ func (app *rootHashApplication) commit(
 func (app *rootHashApplication) tryFinalize(
 	ctx *abci.Context,
 	runtime *registry.Runtime,
-	runtimeState *RuntimeState,
+	rtState *runtimeState,
 	forced bool,
 ) { // nolint: gocyclo
-	latestBlock := runtimeState.CurrentBlock
+	latestBlock := rtState.CurrentBlock
 	blockNr, _ := latestBlock.Header.Round.ToU64()
 
 	var rearmTimer bool
@@ -561,14 +561,14 @@ func (app *rootHashApplication) tryFinalize(
 				ID:    runtime.ID,
 				Round: blockNr,
 			}
-			runtimeState.Timer.Reset(ctx, app.roundTimeout, timerCtx.MarshalCBOR())
+			rtState.Timer.Reset(ctx, app.roundTimeout, timerCtx.MarshalCBOR())
 		case false: // Disarm timer.
 			app.logger.Debug("disarming round timeout")
-			runtimeState.Timer.Stop(ctx)
+			rtState.Timer.Stop(ctx)
 		}
 	}()
 
-	state := runtimeState.Round.RoundState.State
+	state := rtState.Round.RoundState.State
 	id, _ := runtime.ID.MarshalBinary()
 
 	if state == stateFinalized {
@@ -578,7 +578,7 @@ func (app *rootHashApplication) tryFinalize(
 		return
 	}
 
-	blk, err := runtimeState.Round.tryFinalize(ctx, runtime)
+	blk, err := rtState.Round.tryFinalize(ctx, runtime)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -586,7 +586,7 @@ func (app *rootHashApplication) tryFinalize(
 			"round", blockNr,
 		)
 
-		runtimeState.CurrentBlock = blk
+		rtState.CurrentBlock = blk
 
 		roundNr, _ := blk.Header.Round.ToU64()
 
@@ -615,7 +615,7 @@ func (app *rootHashApplication) tryFinalize(
 			app.logger.Error("failed to finalize committee on timeout",
 				"round", blockNr,
 			)
-			err = runtimeState.Round.forceBackupTransition()
+			err = rtState.Round.forceBackupTransition()
 			break
 		}
 
@@ -659,7 +659,7 @@ func (app *rootHashApplication) tryFinalize(
 		"err", err,
 	)
 
-	app.emitEmptyBlock(ctx, runtimeState, block.RoundFailed)
+	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
 }
 
 // New constructs a new roothash application instance.

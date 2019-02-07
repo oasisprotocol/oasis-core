@@ -49,13 +49,13 @@ func (app *epochTimeMockApplication) SetOption(request types.RequestSetOption) t
 }
 
 func (app *epochTimeMockApplication) GetState(height int64) (interface{}, error) {
-	return NewImmutableState(app.state, height)
+	return newImmutableState(app.state, height)
 }
 
 func (app *epochTimeMockApplication) queryGetEpoch(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*ImmutableState)
+	state := s.(*immutableState)
 
-	epoch, height, err := state.GetEpoch()
+	epoch, height, err := state.getEpoch()
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (app *epochTimeMockApplication) executeTx(
 	tree *iavl.MutableTree,
 	tx *api.TxEpochTimeMock,
 ) error {
-	state := NewMutableState(tree)
+	state := newMutableState(tree)
 
 	if tx.TxSetEpoch != nil {
 		return app.setEpoch(ctx, state, tx.TxSetEpoch.Epoch)
@@ -132,14 +132,14 @@ func (app *epochTimeMockApplication) executeTx(
 
 func (app *epochTimeMockApplication) setEpoch(
 	ctx *abci.Context,
-	state *MutableState,
+	state *mutableState,
 	epoch epochtime.EpochTime,
 ) error {
 	app.logger.Info("setting new epoch",
 		"epoch", epoch,
 	)
 
-	state.SetEpoch(epoch, app.state.BlockHeight())
+	state.setEpoch(epoch, app.state.BlockHeight())
 
 	ctx.EmitTag(api.TagEpochTimeMockEpoch, cbor.Marshal(epoch))
 

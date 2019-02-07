@@ -64,40 +64,40 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 }
 
 func (app *registryApplication) GetState(height int64) (interface{}, error) {
-	return NewImmutableState(app.state, height)
+	return newImmutableState(app.state, height)
 }
 
 func (app *registryApplication) queryGetEntity(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*ImmutableState)
-	return state.GetEntityRaw(request.ID)
+	state := s.(*immutableState)
+	return state.getEntityRaw(request.ID)
 }
 
 func (app *registryApplication) queryGetEntities(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*ImmutableState)
-	return state.GetEntitiesRaw()
+	state := s.(*immutableState)
+	return state.getEntitiesRaw()
 }
 
 func (app *registryApplication) queryGetNode(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*ImmutableState)
-	return state.GetNodeRaw(request.ID)
+	state := s.(*immutableState)
+	return state.getNodeRaw(request.ID)
 }
 
 func (app *registryApplication) queryGetNodes(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*ImmutableState)
-	return state.GetNodesRaw()
+	state := s.(*immutableState)
+	return state.getNodesRaw()
 }
 
 func (app *registryApplication) queryGetRuntime(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*ImmutableState)
-	return state.GetRuntimeRaw(request.ID)
+	state := s.(*immutableState)
+	return state.getRuntimeRaw(request.ID)
 }
 
 func (app *registryApplication) queryGetRuntimes(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*ImmutableState)
-	return state.GetRuntimesRaw()
+	state := s.(*immutableState)
+	return state.getRuntimesRaw()
 }
 
 func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
@@ -198,7 +198,7 @@ func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
 func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) {
 	state := NewMutableState(app.state.DeliverTxTree())
 
-	nodes, err := state.GetNodes()
+	nodes, err := state.getNodes()
 	if err != nil {
 		app.logger.Error("onEpochChange: failed to get nodes",
 			"err", err,
@@ -212,7 +212,7 @@ func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 		expiredNodes = append(expiredNodes, node)
-		state.RemoveNode(node)
+		state.removeNode(node)
 	}
 	if len(expiredNodes) == 0 {
 		return
@@ -267,7 +267,7 @@ func (app *registryApplication) registerEntity(
 		}
 	}
 
-	state.CreateEntity(ent)
+	state.createEntity(ent)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterEntity: registered",
@@ -307,7 +307,7 @@ func (app *registryApplication) deregisterEntity(
 		}
 	}
 
-	removedEntity, removedNodes := state.RemoveEntity(id)
+	removedEntity, removedNodes := state.removeEntity(id)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("DeregisterEntity: complete",
@@ -347,7 +347,7 @@ func (app *registryApplication) registerNode(
 		}
 	}
 
-	err = state.CreateNode(node)
+	err = state.createNode(node)
 	if err != nil {
 		app.logger.Error("RegisterNode: failed to create node",
 			"err", err,
@@ -394,7 +394,7 @@ func (app *registryApplication) registerRuntime(
 		}
 	}
 
-	if err = state.CreateRuntime(rt, sigRt.Signature.PublicKey); err != nil {
+	if err = state.createRuntime(rt, sigRt.Signature.PublicKey); err != nil {
 		app.logger.Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
