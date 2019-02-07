@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	pb "github.com/oasislabs/ekiden/go/grpc/roothash"
@@ -36,6 +37,7 @@ func New(
 	timeSource epochtime.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
+	beacon beacon.Backend,
 	tmService service.TendermintService,
 ) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
@@ -73,7 +75,7 @@ func New(
 	case memory.BackendName:
 		impl = memory.New(ctx, scheduler, registry, genesisBlocks, roundTimeout)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, timeSource, scheduler, tmService, genesisBlocks, roundTimeout)
+		impl, err = tendermint.New(ctx, timeSource, scheduler, beacon, tmService, genesisBlocks, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}

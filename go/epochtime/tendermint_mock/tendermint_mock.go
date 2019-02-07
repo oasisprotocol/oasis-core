@@ -2,6 +2,7 @@
 package tendermintmock
 
 import (
+	"bytes"
 	"context"
 	"sync"
 
@@ -67,6 +68,11 @@ func (t *tendermintMockBackend) GetEpochBlock(ctx context.Context, epoch api.Epo
 		return t.currentBlock, nil
 	}
 
+	t.logger.Error("epochtime: attempted to get block for historic epoch",
+		"epoch", epoch,
+		"current_epoch", t.epoch,
+	)
+
 	return 0, errors.New("epochtime: not implemented for historic epochs")
 }
 
@@ -85,11 +91,26 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 		},
 	}
 
+	ch, sub := t.WatchEpochs()
+	defer sub.Close()
+
 	if err := t.service.BroadcastTx(tmapi.EpochTimeMockTransactionTag, tx); err != nil {
 		return errors.Wrap(err, "epochtime: set epoch failed")
 	}
 
-	return nil
+	for {
+		select {
+		case newEpoch, ok := <-ch:
+			if !ok {
+				return context.Canceled
+			}
+			if newEpoch == epoch {
+				return nil
+			}
+		case <-ctx.Done():
+			return context.Canceled
+		}
+	}
 }
 
 func (t *tendermintMockBackend) worker(ctx context.Context) {
@@ -117,28 +138,43 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 	}
 
 	for {
-		event, ok := <-txChannel
-		if !ok {
-			t.logger.Debug("worker: terminating")
+		var event interface{}
+		var ok bool
+
+		select {
+		case event, ok = <-txChannel:
+			if !ok {
+				t.logger.Debug("worker: terminating, txChannel closed")
+				return
+			}
+		case <-ctx.Done():
 			return
 		}
 
-		ev := event.(tmtypes.EventDataTx)
-		rawEpoch := tmapi.GetTag(ev.Result.GetTags(), tmapi.TagEpochTimeMockEpoch)
-		if rawEpoch == nil {
-			t.logger.Error("worker: missing epoch tag in transaction")
-			continue
+		switch ev := event.(type) {
+		case tmtypes.EventDataNewBlock:
+			t.onEventDataNewBlock(ctx, ev)
+		default:
 		}
+	}
+}
 
-		var epoch api.EpochTime
-		if err := cbor.Unmarshal(rawEpoch, &epoch); err != nil {
-			t.logger.Error("worker: malformed epoch tag in transaction")
-			continue
-		}
+func (t *tendermintMockBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
+	tags := ev.ResultBeginBlock.GetTags()
 
-		if t.updateCached(ev.Height, epoch) {
-			// Safe to look at `t.epoch`, only mutator is the line above.
-			t.notifier.Broadcast(t.epoch)
+	for _, pair := range tags {
+		if bytes.Equal(pair.GetKey(), tmapi.TagEpochTimeMockEpoch) {
+			var epoch api.EpochTime
+			if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
+				t.logger.Error("worker: malformed mock epoch",
+					"err", err,
+				)
+				continue
+			}
+
+			if t.updateCached(ev.Block.Header.Height, epoch) {
+				t.notifier.Broadcast(t.epoch)
+			}
 		}
 	}
 }
@@ -154,6 +190,7 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 		t.logger.Debug("epoch transition",
 			"prev_epoch", t.lastNotified,
 			"epoch", epoch,
+			"height", height,
 		)
 		t.lastNotified = t.epoch
 		return true

@@ -11,6 +11,8 @@ import (
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	tmbeacon "github.com/oasislabs/ekiden/go/beacon/tendermint"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -23,6 +25,7 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
 
@@ -53,6 +56,7 @@ type rootHashApplication struct {
 
 	timeSource epochtime.BlockBackend
 	scheduler  scheduler.BlockBackend
+	beacon     beacon.Backend
 
 	// The old and busted way of importing genesis state.
 	// TODO: Remove once tooling for the new way is present.
@@ -169,12 +173,12 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
 	// Only perform checks on epoch changes.
-	if changed, _ := app.state.EpochChanged(app.timeSource); changed {
-		app.onEpochChange(ctx)
+	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+		app.onEpochChange(ctx, epoch)
 	}
 }
 
-func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: gocyclo
+func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) { // nolint: gocyclo
 	tree := app.state.DeliverTxTree()
 	state := newMutableState(tree)
 
@@ -186,10 +190,24 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context) { // nolint: go
 		newDescriptors[v.ID.ToMapKey()] = v
 	}
 
+	// Explicitly query the beacon for the epoch.
+	var getBeaconFn scheduler.GetBeaconFunc
+	switch app.beacon.(type) {
+	case *tmbeacon.Backend:
+		getBeaconFn = func() ([]byte, error) {
+			beaconState := beaconapp.NewMutableState(tree)
+			return beaconState.GetBeacon(epoch)
+		}
+	default:
+		getBeaconFn = func() ([]byte, error) {
+			return app.beacon.GetBeacon(app.ctx, epoch)
+		}
+	}
+
 	for _, rtState := range state.getRuntimes() {
 		rtID := rtState.Runtime.ID
 
-		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight())
+		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,
@@ -667,6 +685,7 @@ func New(
 	ctx context.Context,
 	timeSource epochtime.BlockBackend,
 	scheduler scheduler.BlockBackend,
+	beacon beacon.Backend,
 	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
 ) abci.Application {
@@ -675,6 +694,7 @@ func New(
 		logger:           logging.GetLogger("tendermint/roothash"),
 		timeSource:       timeSource,
 		scheduler:        scheduler,
+		beacon:           beacon,
 		cfgGenesisBlocks: genesisBlocks,
 		roundTimeout:     roundTimeout,
 	}

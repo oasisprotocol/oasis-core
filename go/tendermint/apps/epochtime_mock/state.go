@@ -11,6 +11,7 @@ import (
 const (
 	// Mock epochtime state.
 	stateCurrentEpoch = "epochtime_mock/current"
+	stateFutureEpoch  = "epochtime_mock/future"
 )
 
 var (
@@ -46,6 +47,19 @@ func (s *immutableState) getEpoch() (api.EpochTime, int64, error) {
 	return state.Epoch, state.Height, err
 }
 
+func (s *immutableState) mustGetFutureEpoch() *mockEpochTimeState {
+	_, raw := s.Snapshot.Get([]byte(stateFutureEpoch))
+	if raw == nil {
+		return nil
+	}
+
+	var state mockEpochTimeState
+	if err := state.UnmarshalCBOR(raw); err != nil {
+		panic("epochtime_mock: failed to unmarshal future epoch: " + err.Error())
+	}
+	return &state
+}
+
 func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -68,6 +82,23 @@ func (s *mutableState) setEpoch(epoch api.EpochTime, height int64) {
 		[]byte(stateCurrentEpoch),
 		state.MarshalCBOR(),
 	)
+}
+
+func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) {
+	if s.mustGetFutureEpoch() != nil {
+		panic("epochtime_mock: future epoch already pending")
+	}
+
+	state := mockEpochTimeState{Epoch: epoch, Height: height}
+
+	s.tree.Set(
+		[]byte(stateFutureEpoch),
+		state.MarshalCBOR(),
+	)
+}
+
+func (s *mutableState) clearFutureEpoch() {
+	s.tree.Remove([]byte(stateFutureEpoch))
 }
 
 func newMutableState(tree *iavl.MutableTree) *mutableState {

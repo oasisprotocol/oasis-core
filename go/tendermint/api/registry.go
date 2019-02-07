@@ -13,7 +13,7 @@ const (
 	RegistryTransactionTag byte = 0x01
 
 	// RegistryAppName is the ABCI application name.
-	RegistryAppName string = "registry"
+	RegistryAppName string = "999_registry"
 )
 
 var (
@@ -33,22 +33,22 @@ var (
 
 const (
 	// QueryRegistryGetEntity is a path for GetEntity query.
-	QueryRegistryGetEntity = "registry/entity"
+	QueryRegistryGetEntity = RegistryAppName + "/entity"
 
 	// QueryRegistryGetEntities is a path for GetEntities query.
-	QueryRegistryGetEntities = "registry/entities"
+	QueryRegistryGetEntities = RegistryAppName + "/entities"
 
 	// QueryRegistryGetNode is a path for GetNode query.
-	QueryRegistryGetNode = "registry/node"
+	QueryRegistryGetNode = RegistryAppName + "/node"
 
 	// QueryRegistryGetNodes is a path for GetNodes query.
-	QueryRegistryGetNodes = "registry/nodes"
+	QueryRegistryGetNodes = RegistryAppName + "/nodes"
 
 	// QueryRegistryGetRuntime is a path for GetRuntime query.
-	QueryRegistryGetRuntime = "registry/runtime"
+	QueryRegistryGetRuntime = RegistryAppName + "/runtime"
 
 	// QueryRegistryGetRuntimes is a path for GetRuntimes query.
-	QueryRegistryGetRuntimes = "registry/runtimes"
+	QueryRegistryGetRuntimes = RegistryAppName + "/runtimes"
 )
 
 var (
@@ -124,11 +124,6 @@ type OutputRegisterNode struct {
 type OutputRegisterRuntime struct {
 	// Registered runtime.
 	Runtime registry.Runtime
-}
-
-// QueryGetByIDRequest is a request for fetching things by ids.
-type QueryGetByIDRequest struct {
-	ID signature.PublicKey
 }
 
 // GenesisRegistryState is the registry genesis state.

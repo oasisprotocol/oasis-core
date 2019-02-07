@@ -13,7 +13,7 @@ const (
 	RootHashTransactionTag byte = 0x02
 
 	// RootHashAppName is the ABCI application name.
-	RootHashAppName string = "roothash"
+	RootHashAppName string = "999_roothash"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 
 const (
 	// QueryRootHashGetLatestBlock is a path for GetLatestBlock query.
-	QueryRootHashGetLatestBlock = "roothash/block"
+	QueryRootHashGetLatestBlock = RootHashAppName + "/block"
 )
 
 var (
