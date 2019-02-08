@@ -13,6 +13,7 @@ import (
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -432,6 +433,7 @@ func New(
 	ctx context.Context,
 	timeSource epochtime.Backend,
 	sched scheduler.Backend,
+	beac beacon.Backend,
 	service service.TendermintService,
 	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
@@ -449,7 +451,7 @@ func New(
 	}
 
 	// Initialize and register the tendermint service component.
-	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, genesisBlocks, roundTimeout)
+	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, beac, genesisBlocks, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

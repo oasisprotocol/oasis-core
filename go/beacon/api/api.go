@@ -27,13 +27,6 @@ type Backend interface {
 	WatchBeacons() (<-chan *GenerateEvent, *pubsub.Subscription)
 }
 
-// GenerateEvent is the event that is returned via WatchBeacons to
-// signify beacon generation.
-type GenerateEvent struct {
-	Epoch  epochtime.EpochTime
-	Beacon []byte
-}
-
 // BlockBackend is a Backend that is backed by a blockchain.
 type BlockBackend interface {
 	Backend
@@ -43,4 +36,11 @@ type BlockBackend interface {
 	// notification when an appropriate timesource is used should
 	// be generally safe.
 	GetBlockBeacon(context.Context, int64) ([]byte, error)
+}
+
+// GenerateEvent is the event that is returned via WatchBeacons to
+// signify beacon generation.
+type GenerateEvent struct {
+	Epoch  epochtime.EpochTime `codec:"epoch"`
+	Beacon []byte              `codec:"beacon"`
 }

@@ -11,6 +11,8 @@ import (
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 // Code is a status code for ABCI requests.
@@ -74,6 +76,16 @@ func GetTag(tags []tmcommon.KVPair, tag []byte) []byte {
 // QueryForEvent generates a tmquery.Query for a specific event type.
 func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
 	return tmquery.MustParse(fmt.Sprintf("%s='%s'", eventApp, eventType))
+}
+
+// QueryGetByIDRequest is a request for fetching things by ids.
+type QueryGetByIDRequest struct {
+	ID signature.PublicKey
+}
+
+// QueryGetByEpochRequest is a request for fetching things by epoch.
+type QueryGetByEpochRequest struct {
+	Epoch epochtime.EpochTime
 }
 
 // GenesisAppState is the encoded ABCI mux genesis application state.

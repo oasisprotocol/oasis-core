@@ -10,7 +10,10 @@ const (
 	EpochTimeMockTransactionTag byte = 0x03
 
 	// EpochTimeMockAppName is the ABCI application name.
-	EpochTimeMockAppName string = "epochtime_mock"
+	//
+	// Note: It must be lexographically before any application that
+	// uses time keeping.
+	EpochTimeMockAppName string = "000_epochtime_mock"
 )
 
 // TagEpochTimeMockEpoch is an ABCI transaction tag for specifying the
@@ -18,7 +21,7 @@ const (
 var TagEpochTimeMockEpoch = []byte("epochtime_mock.epoch")
 
 // QueryEpochTimeMockGetEpoch is a path for GetLatestBlock query.
-const QueryEpochTimeMockGetEpoch = "epochtime_mock/epoch"
+const QueryEpochTimeMockGetEpoch = EpochTimeMockAppName + "/epoch"
 
 // QueryEpochTimeMockApp is a query for filtering transactions processed by
 // the mock epochtime application.

@@ -49,21 +49,21 @@ func (app *epochTimeMockApplication) SetOption(request types.RequestSetOption) t
 }
 
 func (app *epochTimeMockApplication) GetState(height int64) (interface{}, error) {
-	return NewImmutableState(app.state, height)
+	return newImmutableState(app.state, height)
 }
 
 func (app *epochTimeMockApplication) queryGetEpoch(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*ImmutableState)
+	state := s.(*immutableState)
 
-	epoch, height, err := state.GetEpoch()
+	var (
+		response api.QueryGetEpochResponse
+		err      error
+	)
+	response.Epoch, response.Height, err = state.getEpoch()
 	if err != nil {
 		return nil, err
 	}
 
-	response := api.QueryGetEpochResponse{
-		Epoch:  epoch,
-		Height: height,
-	}
 	return cbor.Marshal(response), nil
 }
 
@@ -92,6 +92,31 @@ func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.
 }
 
 func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
+	state := newMutableState(app.state.DeliverTxTree())
+
+	future := state.mustGetFutureEpoch()
+	if future == nil {
+		return
+	}
+	defer state.clearFutureEpoch()
+
+	height := app.state.BlockHeight()
+	if future.Height != height {
+		app.logger.Error("BeginBlock: height mismatch in defered set",
+			"height", height,
+			"expected_height", future.Height,
+		)
+		panic("BUG: epochtime_mock: height mismatch in defered set")
+	}
+
+	app.logger.Info("setting epoch",
+		"epoch", future.Epoch,
+		"current_height", height,
+	)
+
+	state.setEpoch(future.Epoch, height)
+	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+	ctx.EmitTag(api.TagEpochTimeMockEpoch, cbor.Marshal(future.Epoch))
 }
 
 func (app *epochTimeMockApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -122,7 +147,7 @@ func (app *epochTimeMockApplication) executeTx(
 	tree *iavl.MutableTree,
 	tx *api.TxEpochTimeMock,
 ) error {
-	state := NewMutableState(tree)
+	state := newMutableState(tree)
 
 	if tx.TxSetEpoch != nil {
 		return app.setEpoch(ctx, state, tx.TxSetEpoch.Epoch)
@@ -132,16 +157,18 @@ func (app *epochTimeMockApplication) executeTx(
 
 func (app *epochTimeMockApplication) setEpoch(
 	ctx *abci.Context,
-	state *MutableState,
+	state *mutableState,
 	epoch epochtime.EpochTime,
 ) error {
-	app.logger.Info("setting new epoch",
+	height := app.state.BlockHeight()
+
+	app.logger.Info("scheduling epoch transition",
 		"epoch", epoch,
+		"current_height", height,
+		"next_height", height+1,
 	)
 
-	state.SetEpoch(epoch, app.state.BlockHeight())
-
-	ctx.EmitTag(api.TagEpochTimeMockEpoch, cbor.Marshal(epoch))
+	state.setFutureEpoch(epoch, height+1)
 
 	return nil
 }

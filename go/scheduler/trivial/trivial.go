@@ -71,6 +71,9 @@ type trivialSchedulerState struct {
 }
 
 func (s *trivialSchedulerState) canElect() bool {
+	s.Lock()
+	defer s.Unlock()
+
 	return s.nodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil
 }
 
@@ -299,6 +302,21 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 	s.nodeLists[epoch] = m
 }
 
+func (s *trivialSchedulerState) updateBeaconLocked(epoch epochtime.EpochTime, beacon []byte) error {
+	// Invariant: s.Lock() held already.
+
+	if oldBeacon, ok := s.beacons[epoch]; ok {
+		if !bytes.Equal(oldBeacon, beacon) {
+			return fmt.Errorf("scheduler/trivial: beacon already exists for epoch")
+		}
+		return nil
+	}
+
+	s.beacons[epoch] = beacon
+
+	return nil
+}
+
 func (s *trivialScheduler) Cleanup() {
 	s.Do(func() {
 		close(s.closeCh)
@@ -325,12 +343,8 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) { // nolint: gocyclo
+func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
 	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errIncompatibleBackends
-	}
-	beacon, ok := s.beacon.(beacon.BlockBackend)
 	if !ok {
 		return nil, errIncompatibleBackends
 	}
@@ -338,7 +352,6 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 	if !ok {
 		return nil, errIncompatibleBackends
 	}
-
 	epoch, err := timeSource.GetBlockEpoch(ctx, height)
 	if err != nil {
 		return nil, err
@@ -364,11 +377,28 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 	// poll the other backends for what we need to elect.
 
 	if b := s.state.beacons[epoch]; b == nil {
-		b, err = beacon.GetBlockBeacon(ctx, height)
+		var newBeacon []byte
+		switch getBeaconFn {
+		case nil:
+			beacon, ok := s.beacon.(beacon.BlockBackend)
+			if !ok {
+				return nil, errIncompatibleBackends
+			}
+			newBeacon, err = beacon.GetBlockBeacon(ctx, height)
+		default:
+			newBeacon, err = getBeaconFn()
+		}
 		if err != nil {
 			return nil, err
 		}
-		s.state.beacons[epoch] = b
+
+		s.logger.Debug("GetBlockCommittees: setting cached beacon",
+			"epoch", epoch,
+			"height", height,
+			"beacon", hex.EncodeToString(newBeacon),
+		)
+
+		_ = s.state.updateBeaconLocked(epoch, newBeacon)
 	}
 
 	if runtimes := s.state.runtimes[epoch]; runtimes == nil {
@@ -488,21 +518,21 @@ func (s *trivialScheduler) worker(ctx context.Context) { //nolint:gocyclo
 			s.state.updateNodeListLocked(ev.Epoch, ev.Nodes, ts)
 			s.state.Unlock()
 		case ev := <-beaconCh:
-			if b := s.state.beacons[ev.Epoch]; b != nil {
-				if !bytes.Equal(b, ev.Beacon) {
-					s.logger.Error("worker: beacon when already received",
-						"epoch", ev.Epoch,
-						"beacon", hex.EncodeToString(b),
-						"new_beacon", hex.EncodeToString(ev.Beacon),
-					)
-					continue
-				}
+			s.state.Lock()
+			err := s.state.updateBeaconLocked(ev.Epoch, ev.Beacon)
+			s.state.Unlock()
+			if err != nil {
+				s.logger.Error("worker: failed to update beacon for epoch",
+					"err", err,
+					"epoch", ev.Epoch,
+					"beacon", ev.Beacon,
+				)
+				continue
 			}
 			s.logger.Debug("worker: beacon for epoch",
 				"epoch", ev.Epoch,
 				"beacon", hex.EncodeToString(ev.Beacon),
 			)
-			s.state.beacons[ev.Epoch] = ev.Beacon
 		}
 
 		if s.state.epoch == s.state.lastElect || !s.state.canElect() {

@@ -140,7 +140,7 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 	var committees []*scheduler.Committee
 	var err error
 	if sched, ok := g.scheduler.(scheduler.BlockBackend); ok {
-		committees, err = sched.GetBlockCommittees(ctx, g.runtimeID, height)
+		committees, err = sched.GetBlockCommittees(ctx, g.runtimeID, height, nil)
 	} else {
 		committees, err = g.scheduler.GetCommittees(ctx, g.runtimeID)
 	}
