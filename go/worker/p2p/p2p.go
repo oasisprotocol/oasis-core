@@ -14,15 +14,17 @@ import (
 	libp2pNet "github.com/libp2p/go-libp2p-net"
 	"github.com/libp2p/go-libp2p-peer"
 	"github.com/libp2p/go-libp2p-peerstore"
+	"github.com/libp2p/go-libp2p-protocol"
 	"github.com/multiformats/go-multiaddr"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/version"
 )
 
-const protocolName = "/p2p/oasislabs.com/committee/compute/1.0.0"
+var protocolName = protocol.ID("/p2p/oasislabs.com/committee/compute/" + version.ComputeCommitteeProtocol.String())
 
 // Handler is a handler for P2P messages.
 type Handler interface {

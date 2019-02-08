@@ -60,7 +60,7 @@ require (
 	github.com/libp2p/go-libp2p-net v3.0.15+incompatible
 	github.com/libp2p/go-libp2p-peer v2.4.1-0.20181212195732-f5c52cebf45b+incompatible
 	github.com/libp2p/go-libp2p-peerstore v2.0.6+incompatible
-	github.com/libp2p/go-libp2p-protocol v1.0.0 // indirect
+	github.com/libp2p/go-libp2p-protocol v1.0.0
 	github.com/libp2p/go-libp2p-routing v2.7.1+incompatible // indirect
 	github.com/libp2p/go-libp2p-secio v2.0.17+incompatible // indirect
 	github.com/libp2p/go-libp2p-swarm v3.0.22+incompatible // indirect

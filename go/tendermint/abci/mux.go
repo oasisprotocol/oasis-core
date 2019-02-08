@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/version"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
@@ -230,6 +231,7 @@ type abciMux struct {
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
+		AppVersion:       version.BackendProtocol.ToU64(),
 		LastBlockHeight:  mux.state.BlockHeight(),
 		LastBlockAppHash: mux.state.BlockHash(),
 	}
