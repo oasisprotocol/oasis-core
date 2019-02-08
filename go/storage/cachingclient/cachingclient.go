@@ -72,6 +72,9 @@ func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, er
 	value, err := b.remote.Get(ctx, key)
 	if err == api.ErrKeyNotFound {
 		remoteMisses.Inc()
+	} else if err == nil {
+		// Update local cache in the background.
+		go b.cache.Set(key, value)
 	}
 
 	return value, err
@@ -104,9 +107,14 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 			return nil, err
 		}
 
+		var kvs []cache.KeyValue
 		for remoteIdx, idx := range missingIdx {
 			values[idx] = remote[remoteIdx]
+			kvs = append(kvs, cache.KeyValue{Key: missingKeys[idx], Value: values[idx]})
 		}
+
+		// Update local cache in the background.
+		go b.cache.SetBatch(kvs)
 	}
 
 	return values, nil
