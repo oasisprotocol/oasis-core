@@ -37,54 +37,15 @@ var (
 	errEntityNotFound = errors.New("registry state: entity not found")
 )
 
-// ImmutableState is an immutable registry state wrapper.
-type ImmutableState struct {
-	snapshot *iavl.ImmutableTree
+type immutableState struct {
+	*abci.ImmutableState
 }
 
-// NewImmutableState creates a new immutable registry state wrapper.
-func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
-	if version <= 0 || version > state.BlockHeight() {
-		version = state.BlockHeight()
-	}
-
-	snapshot, err := state.DeliverTxTree().GetImmutable(version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{snapshot: snapshot}, nil
-}
-
-// GetEntityRaw looks up an entity by its identifier and returns its serialized form.
-func (s *ImmutableState) GetEntityRaw(id signature.PublicKey) ([]byte, error) {
+func (s *immutableState) getEntityRaw(id signature.PublicKey) ([]byte, error) {
 	return s.getByID(stateEntityMap, id.String())
 }
 
-// GetEntity looks up an entity by its identifier and returns it.
-func (s *ImmutableState) GetEntity(id signature.PublicKey) (*entity.Entity, error) {
-	raw, err := s.GetEntityRaw(id)
-	if err != nil {
-		return nil, err
-	}
-
-	var ent entity.Entity
-	err = ent.UnmarshalCBOR(raw)
-	return &ent, err
-}
-
-// GetEntitiesRaw returns a marshalled list of all registered entities.
-func (s *ImmutableState) GetEntitiesRaw() ([]byte, error) {
-	entities, err := s.GetEntities()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(entities), nil
-}
-
-// GetEntities returns a list of all registered entities.
-func (s *ImmutableState) GetEntities() ([]*entity.Entity, error) {
+func (s *immutableState) getEntities() ([]*entity.Entity, error) {
 	items, err := s.getAll(stateEntityMap, &entity.Entity{})
 	if err != nil {
 		return nil, err
@@ -99,35 +60,20 @@ func (s *ImmutableState) GetEntities() ([]*entity.Entity, error) {
 	return entities, nil
 }
 
-// GetNodeRaw looks up a node by its identifier and returns its serialized form.
-func (s *ImmutableState) GetNodeRaw(id signature.PublicKey) ([]byte, error) {
+func (s *immutableState) getEntitiesRaw() ([]byte, error) {
+	entities, err := s.getEntities()
+	if err != nil {
+		return nil, err
+	}
+
+	return cbor.Marshal(entities), nil
+}
+
+func (s *immutableState) getNodeRaw(id signature.PublicKey) ([]byte, error) {
 	return s.getByID(stateNodeMap, id.String())
 }
 
-// GetNode looks up a node by its identifier and returns it.
-func (s *ImmutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
-	raw, err := s.GetNodeRaw(id)
-	if err != nil {
-		return nil, err
-	}
-
-	var node node.Node
-	err = node.UnmarshalCBOR(raw)
-	return &node, err
-}
-
-// GetNodesRaw returns a marshalled list of all registered nodes.
-func (s *ImmutableState) GetNodesRaw() ([]byte, error) {
-	nodes, err := s.GetNodes()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(nodes), nil
-}
-
-// GetNodes returns a list of all registered nodes.
-func (s *ImmutableState) GetNodes() ([]*node.Node, error) {
+func (s *immutableState) getNodes() ([]*node.Node, error) {
 	items, err := s.getAll(stateNodeMap, &node.Node{})
 	if err != nil {
 		return nil, err
@@ -142,14 +88,18 @@ func (s *ImmutableState) GetNodes() ([]*node.Node, error) {
 	return nodes, nil
 }
 
-// GetRuntimeRaw looks up a runtime by its identifier and returns its serialized form.
-func (s *ImmutableState) GetRuntimeRaw(id signature.PublicKey) ([]byte, error) {
-	return s.getByID(stateRuntimeMap, id.String())
+func (s *immutableState) getNodesRaw() ([]byte, error) {
+	nodes, err := s.getNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	return cbor.Marshal(nodes), nil
 }
 
 // GetRuntime looks up a runtime by its identifier and returns it.
-func (s *ImmutableState) GetRuntime(id signature.PublicKey) (*registry.Runtime, error) {
-	raw, err := s.GetRuntimeRaw(id)
+func (s *immutableState) GetRuntime(id signature.PublicKey) (*registry.Runtime, error) {
+	raw, err := s.getRuntimeRaw(id)
 	if err != nil {
 		return nil, err
 	}
@@ -159,18 +109,12 @@ func (s *ImmutableState) GetRuntime(id signature.PublicKey) (*registry.Runtime, 
 	return &con, err
 }
 
-// GetRuntimesRaw returns a marshalled list of all registered runtimes.
-func (s *ImmutableState) GetRuntimesRaw() ([]byte, error) {
-	runtimes, err := s.GetRuntimes()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(runtimes), nil
+func (s *immutableState) getRuntimeRaw(id signature.PublicKey) ([]byte, error) {
+	return s.getByID(stateRuntimeMap, id.String())
 }
 
 // GetRuntimes returns a list of all registered runtimes.
-func (s *ImmutableState) GetRuntimes() ([]*registry.Runtime, error) {
+func (s *immutableState) GetRuntimes() ([]*registry.Runtime, error) {
 	items, err := s.getAll(stateRuntimeMap, &registry.Runtime{})
 	if err != nil {
 		return nil, err
@@ -185,12 +129,21 @@ func (s *ImmutableState) GetRuntimes() ([]*registry.Runtime, error) {
 	return runtimes, nil
 }
 
-func (s *ImmutableState) getAll(
+func (s *immutableState) getRuntimesRaw() ([]byte, error) {
+	runtimes, err := s.GetRuntimes()
+	if err != nil {
+		return nil, err
+	}
+
+	return cbor.Marshal(runtimes), nil
+}
+
+func (s *immutableState) getAll(
 	stateKey string,
 	item common.Cloneable,
 ) ([]interface{}, error) {
 	var items []interface{}
-	s.snapshot.IterateRangeInclusive(
+	s.Snapshot.IterateRangeInclusive(
 		[]byte(fmt.Sprintf(stateKey, "")),
 		[]byte(fmt.Sprintf(stateKey, lastID)),
 		true,
@@ -206,39 +159,36 @@ func (s *ImmutableState) getAll(
 	return items, nil
 }
 
-func (s *ImmutableState) getByID(stateKey string, id string) ([]byte, error) {
-	_, value := s.snapshot.Get([]byte(fmt.Sprintf(stateKey, id)))
+func (s *immutableState) getByID(stateKey string, id string) ([]byte, error) {
+	_, value := s.Snapshot.Get([]byte(fmt.Sprintf(stateKey, id)))
 
 	return value, nil
 }
 
+func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+	inner, err := abci.NewImmutableState(state, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &immutableState{inner}, nil
+}
+
 // MutableState is a mutable registry state wrapper.
 type MutableState struct {
-	ImmutableState
+	*immutableState
 
 	tree *iavl.MutableTree
 }
 
-// NewMutableState creates a new mutable registry state wrapper.
-func NewMutableState(tree *iavl.MutableTree) *MutableState {
-	return &MutableState{
-		ImmutableState: ImmutableState{snapshot: tree.ImmutableTree},
-		tree:           tree,
-	}
-}
-
-// CreateEntity creates a new entity.
-func (s *MutableState) CreateEntity(ent *entity.Entity) {
+func (s *MutableState) createEntity(ent *entity.Entity) {
 	s.tree.Set(
 		[]byte(fmt.Sprintf(stateEntityMap, ent.ID.String())),
 		ent.MarshalCBOR(),
 	)
 }
 
-// RemoveEntity removes an entity and all associated nodes.
-//
-// Returns the removed entity and a list of removed nodes.
-func (s *MutableState) RemoveEntity(id signature.PublicKey) (entity.Entity, []node.Node) {
+func (s *MutableState) removeEntity(id signature.PublicKey) (entity.Entity, []node.Node) {
 	var removedEntity entity.Entity
 	var removedNodes []node.Node
 	data, removed := s.tree.Remove([]byte(fmt.Sprintf(stateEntityMap, id.String())))
@@ -267,10 +217,9 @@ func (s *MutableState) RemoveEntity(id signature.PublicKey) (entity.Entity, []no
 	return removedEntity, removedNodes
 }
 
-// CreateNode creates a new node.
-func (s *MutableState) CreateNode(node *node.Node) error {
+func (s *MutableState) createNode(node *node.Node) error {
 	// Ensure that the entity exists.
-	ent, err := s.GetEntityRaw(node.EntityID)
+	ent, err := s.getEntityRaw(node.EntityID)
 	if ent == nil || err != nil {
 		return errEntityNotFound
 	}
@@ -288,15 +237,13 @@ func (s *MutableState) CreateNode(node *node.Node) error {
 	return nil
 }
 
-// RemoveNode removes a node.
-func (s *MutableState) RemoveNode(node *node.Node) {
+func (s *MutableState) removeNode(node *node.Node) {
 	s.tree.Remove([]byte(fmt.Sprintf(stateNodeMap, node.ID.String())))
 	s.tree.Remove([]byte(fmt.Sprintf(stateNodeByEntityMap, node.EntityID.String(), node.ID.String())))
 }
 
-// CreateRuntime creates a new runtime.
-func (s *MutableState) CreateRuntime(con *registry.Runtime, entID signature.PublicKey) error {
-	ent, err := s.GetEntityRaw(entID)
+func (s *MutableState) createRuntime(con *registry.Runtime, entID signature.PublicKey) error {
+	ent, err := s.getEntityRaw(entID)
 	if ent == nil || err != nil {
 		return errEntityNotFound
 	}
@@ -307,4 +254,14 @@ func (s *MutableState) CreateRuntime(con *registry.Runtime, entID signature.Publ
 	)
 
 	return nil
+}
+
+// NewMutableState creates a new mutable registry state wrapper.
+func NewMutableState(tree *iavl.MutableTree) *MutableState {
+	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
+
+	return &MutableState{
+		immutableState: &immutableState{inner},
+		tree:           tree,
+	}
 }

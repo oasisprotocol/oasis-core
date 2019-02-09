@@ -22,68 +22,57 @@ const (
 )
 
 var (
-	_ cbor.Marshaler   = (*RuntimeState)(nil)
-	_ cbor.Unmarshaler = (*RuntimeState)(nil)
+	_ cbor.Marshaler   = (*runtimeState)(nil)
+	_ cbor.Unmarshaler = (*runtimeState)(nil)
 )
 
-// RuntimeState is the per-runtime roothash state.
-type RuntimeState struct {
+type runtimeState struct {
 	Runtime      *registry.Runtime `codec:"runtime"`
 	CurrentBlock *block.Block      `codec:"current_block"`
 	Round        *round            `codec:"round"`
 	Timer        abci.Timer        `codec:"timer"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *RuntimeState) MarshalCBOR() []byte {
+func (s *runtimeState) MarshalCBOR() []byte {
 	return cbor.Marshal(s)
 }
 
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (s *RuntimeState) UnmarshalCBOR(data []byte) error {
+func (s *runtimeState) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, s)
 }
 
-// ImmutableState is an immutable roothash state wrapper.
-type ImmutableState struct {
-	snapshot *iavl.ImmutableTree
+type immutableState struct {
+	*abci.ImmutableState
 }
 
-// NewImmutableState creates a new immutable roothash state wrapper.
-func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
-	if version <= 0 || version > state.BlockHeight() {
-		version = state.BlockHeight()
-	}
-
-	snapshot, err := state.DeliverTxTree().GetImmutable(version)
+func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImmutableState{snapshot: snapshot}, nil
+	return &immutableState{inner}, nil
 }
 
-// GetRuntimeState returns runtime state for given runtime.
-func (s *ImmutableState) GetRuntimeState(id signature.PublicKey) (*RuntimeState, error) {
-	_, raw := s.snapshot.Get([]byte(fmt.Sprintf(stateRuntimeMap, id.String())))
+func (s *immutableState) getRuntimeState(id signature.PublicKey) (*runtimeState, error) {
+	_, raw := s.Snapshot.Get([]byte(fmt.Sprintf(stateRuntimeMap, id.String())))
 	if raw == nil {
 		return nil, nil
 	}
 
-	var state RuntimeState
+	var state runtimeState
 	err := state.UnmarshalCBOR(raw)
 	return &state, err
 }
 
-// GetRuntimes returns a list of all registered runtime states.
-func (s *ImmutableState) GetRuntimes() []*RuntimeState {
-	var runtimes []*RuntimeState
-	s.snapshot.IterateRangeInclusive(
+func (s *immutableState) getRuntimes() []*runtimeState {
+	var runtimes []*runtimeState
+	s.Snapshot.IterateRangeInclusive(
 		[]byte(fmt.Sprintf(stateRuntimeMap, "")),
 		[]byte(fmt.Sprintf(stateRuntimeMap, lastID)),
 		true,
 		func(key, value []byte, version int64) bool {
-			var state RuntimeState
+			var state runtimeState
 			cbor.MustUnmarshal(value, &state)
 
 			runtimes = append(runtimes, &state)
@@ -94,28 +83,22 @@ func (s *ImmutableState) GetRuntimes() []*RuntimeState {
 	return runtimes
 }
 
-// MutableState is a mutable roothash state wrapper.
-type MutableState struct {
-	ImmutableState
+type mutableState struct {
+	*immutableState
 
 	tree *iavl.MutableTree
 }
 
-// NewMutableState creates a new mutable roothash state wrapper.
-func NewMutableState(tree *iavl.MutableTree) *MutableState {
-	return &MutableState{
-		ImmutableState: ImmutableState{snapshot: tree.ImmutableTree},
+func newMutableState(tree *iavl.MutableTree) *mutableState {
+	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
+
+	return &mutableState{
+		immutableState: &immutableState{inner},
 		tree:           tree,
 	}
 }
 
-// Tree returns the backing mutable tree.
-func (s *MutableState) Tree() *iavl.MutableTree {
-	return s.tree
-}
-
-// UpdateRuntimeState updates roothash state for given runtime.
-func (s *MutableState) UpdateRuntimeState(state *RuntimeState) {
+func (s *mutableState) updateRuntimeState(state *runtimeState) {
 	s.tree.Set(
 		[]byte(fmt.Sprintf(stateRuntimeMap, state.Runtime.ID.String())),
 		state.MarshalCBOR(),
