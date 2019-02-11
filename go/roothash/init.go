@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -51,16 +52,16 @@ func New(
 		}
 		pbGenesisBlocks := &pb.GenesisBlocks{}
 		if err := proto.Unmarshal(genesisBlocksRaw, pbGenesisBlocks); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "roothash: failed to unmarshal genesis blocks")
 		}
 		for _, genesisBlock := range pbGenesisBlocks.GenesisBlocks {
 			var id signature.PublicKey
 			if err := id.UnmarshalBinary(genesisBlock.GetRuntimeId()); err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "roothash: failed to unmarshal genesis runtime ID")
 			}
 			var apiBlock block.Block
 			if err := apiBlock.FromProto(genesisBlock.GetBlock()); err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "roothash: failed to unmarshal genesis block")
 			}
 			genesisBlocks[id.ToMapKey()] = &apiBlock
 		}
