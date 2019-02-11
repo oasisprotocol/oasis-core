@@ -7,9 +7,11 @@ package cache
 
 import (
 	"container/ring"
+	"io"
 	"path/filepath"
 	"sync"
 
+	"github.com/eapache/channels"
 	tenderdb "github.com/tendermint/tendermint/libs/db"
 
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -52,17 +54,25 @@ type Cache struct {
 	countHot  int
 	countCold int
 	countTest int
+
+	writeBackCh chan<- interface{}
+	closeOnce   sync.Once
+	closedCh    chan struct{}
 }
 
-func New(path string, size int) (*Cache, error) {
+func New(path string, size, backlog int) (*Cache, error) {
 	dir, file := filepath.Split(path)
 	db := tenderdb.NewDB(file, tenderdb.LevelDBBackend, dir)
 
+	ch := channels.NewBatchingChannel(channels.BufferCap(backlog))
+
 	c := &Cache{
-		db:      db,
-		memMax:  size,
-		memCold: size,
-		keys:    make(map[api.Key]*ring.Ring),
+		db:          db,
+		memMax:      size,
+		memCold:     size,
+		keys:        make(map[api.Key]*ring.Ring),
+		writeBackCh: ch.In(),
+		closedCh:    make(chan struct{}),
 	}
 
 	// Populate keys from database.
@@ -83,21 +93,36 @@ func New(path string, size int) (*Cache, error) {
 		c.countCold++
 	}
 
+	go c.worker(ch.Out())
+
 	return c, nil
 }
 
 func (c *Cache) Cleanup() {
-	c.db.Close()
+	c.closeOnce.Do(func() {
+		close(c.writeBackCh)
+		<-c.closedCh
+
+		c.Lock()
+		defer c.Unlock()
+
+		c.db.Close()
+		c.db = nil
+	})
 }
 
-func (c *Cache) Get(key api.Key) []byte {
+func (c *Cache) Get(key api.Key) ([]byte, error) {
 	c.Lock()
 	defer c.Unlock()
+
+	if c.db == nil {
+		return nil, io.EOF
+	}
 
 	r := c.keys[key]
 
 	if r == nil {
-		return nil
+		return nil, api.ErrKeyNotFound
 	}
 
 	mentry := r.Value.(*entry)
@@ -106,15 +131,19 @@ func (c *Cache) Get(key api.Key) []byte {
 
 	if val != nil {
 		mentry.ref = true
-		return val
+		return val, nil
 	}
 
-	return nil
+	return nil, api.ErrKeyNotFound
 }
 
 func (c *Cache) SetBatch(values []KeyValue) {
 	c.Lock()
 	defer c.Unlock()
+
+	if c.db == nil {
+		return
+	}
 
 	batch := c.db.NewBatch()
 
@@ -162,6 +191,40 @@ func (c *Cache) SetBatch(values []KeyValue) {
 
 func (c *Cache) Set(key api.Key, value []byte) {
 	c.SetBatch([]KeyValue{KeyValue{key, value}})
+}
+
+func (c *Cache) SetBatchAsync(values []KeyValue) {
+	c.Lock()
+	defer func() {
+		c.Unlock()
+		_ = recover() // c.writeBackCh can be closed (not protected by lock).
+	}()
+
+	if c.db == nil {
+		return
+	}
+
+	c.writeBackCh <- values
+}
+
+func (c *Cache) worker(ch <-chan interface{}) {
+	defer close(c.closedCh)
+
+	for {
+		tmp, ok := <-ch
+		if !ok {
+			return
+		}
+
+		// Combine the writes.
+		var kvs []KeyValue
+		for _, v := range tmp.([]interface{}) {
+			kvs = append(kvs, v.([]KeyValue)...)
+		}
+
+		// And set them all at once.
+		c.SetBatch(kvs)
+	}
 }
 
 func (c *Cache) metaAdd(key api.Key, r *ring.Ring, batch tenderdb.Batch) {

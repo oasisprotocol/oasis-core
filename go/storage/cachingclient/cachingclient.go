@@ -23,6 +23,9 @@ const (
 
 	// Number of cache entries.
 	cfgCacheSize = "storage.cachingclient.cache_size"
+
+	// Maximum async write-back batch backlog.
+	cfgCacheBacklog = "storage.cachingclient.async_backlog"
 )
 
 var (
@@ -58,23 +61,28 @@ var (
 
 type cachingClientBackend struct {
 	logger *logging.Logger
+
 	remote api.Backend
 	cache  *cache.Cache
 }
 
 func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	// Try local cache first, then remote node if missing.
-	if cached := b.cache.Get(key); cached != nil {
+	cached, err := b.cache.Get(key)
+	if cached != nil {
 		cacheHits.Inc()
 		return cached, nil
 	}
+	if err != api.ErrKeyNotFound {
+		return nil, err
+	}
+
 	cacheMisses.Inc()
 	value, err := b.remote.Get(ctx, key)
 	if err == api.ErrKeyNotFound {
 		remoteMisses.Inc()
 	} else if err == nil {
-		// Update local cache in the background.
-		go b.cache.Set(key, value)
+		b.cache.SetBatchAsync([]cache.KeyValue{cache.KeyValue{Key: key, Value: value}})
 	}
 
 	return value, err
@@ -88,15 +96,19 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 
 	// Go through each key and try to retrieve its value from local cache.
 	for _, key := range keys {
-		if cached := b.cache.Get(key); cached != nil {
+		cached, err := b.cache.Get(key)
+		switch err {
+		case nil:
 			cacheHits.Inc()
 			values = append(values, cached)
-		} else {
+		case api.ErrKeyNotFound:
 			// Cache miss, add to batch for remote.
 			cacheMisses.Inc()
 			values = append(values, nil)
 			missingKeys = append(missingKeys, key)
 			missingIdx = append(missingIdx, len(values)-1)
+		default:
+			return nil, err
 		}
 	}
 
@@ -113,8 +125,7 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 			kvs = append(kvs, cache.KeyValue{Key: missingKeys[idx], Value: values[idx]})
 		}
 
-		// Update local cache in the background.
-		go b.cache.SetBatch(kvs)
+		b.cache.SetBatchAsync(kvs)
 	}
 
 	return values, nil
@@ -145,7 +156,9 @@ func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Val
 		for _, value := range values {
 			kvs = append(kvs, cache.KeyValue{Key: api.HashStorageKey(value.Data), Value: value.Data})
 		}
+
 		b.cache.SetBatch(kvs)
+
 		close(ch)
 	}()
 
@@ -153,7 +166,9 @@ func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Val
 	if !opts.LocalOnly {
 		err = b.remote.InsertBatch(ctx, values, opts)
 	}
+
 	<-ch
+
 	return err
 }
 
@@ -187,6 +202,7 @@ func New() (api.Backend, error) {
 	cache, err := cache.New(
 		viper.GetString(cfgCacheFile),
 		viper.GetInt(cfgCacheSize),
+		viper.GetInt(cfgCacheBacklog),
 	)
 	if err != nil {
 		return nil, err
@@ -207,11 +223,13 @@ func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
 		cmd.Flags().Int(cfgCacheSize, 1000000, "Cache size")
+		cmd.Flags().Int(cfgCacheBacklog, 64, "Cache async backlog")
 	}
 
 	for _, v := range []string{
 		cfgCacheFile,
 		cfgCacheSize,
+		cfgCacheBacklog,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
