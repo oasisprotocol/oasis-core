@@ -4,6 +4,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/oasislabs/ekiden/go/common/version"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/ias"
@@ -35,8 +36,20 @@ func Execute() {
 	}
 }
 
+func initVersions() {
+	cobra.AddTemplateFunc("ekidenVersion", func() interface{} { return version.Versions })
+
+	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
+{{- with ekidenVersion }}
+Backend protocol version: {{ .BackendProtocol }}
+Compute committee protocol version: {{ .ComputeCommitteeProtocol }}
+{{ end -}}
+`)
+}
+
 func init() {
 	cobra.OnInitialize(cmdCommon.InitConfig)
+	initVersions()
 
 	cmdCommon.RegisterRootFlags(rootCmd)
 	node.RegisterFlags(rootCmd)
