@@ -71,21 +71,18 @@ test_migration() {
     pkill --echo --full --signal 9 worker.backend
 
     # Export.
-    "$WORKDIR/go/ekiden/ekiden" storage export \
-        --address "127.0.0.1:${EKIDEN_STORAGE_PORT}" \
-        --output_file ${TEST_BASE_DIR}/export-storage.dat
     "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" \
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --output_file ${TEST_BASE_DIR}/export-roothash.dat
 
-    # Stop the validator and storage nodes.
-    pkill --echo --signal 9 ekiden
+    # Stop the validator nodes.
+    ps efh -C ekiden |grep -v "ekiden storage node" | awk '{print $1}' | xargs kill -9
 
     sleep 1
     # 5 sec
 
     # Start the second network.
-    run_backend_tendermint_committee tendermint_mock 2 1 0 \
+    run_backend_tendermint_committee tendermint_mock 2 1 0 false \
         --roothash.genesis_blocks ${TEST_BASE_DIR}/export-roothash.dat
 
     # Replace validator socket.
@@ -93,12 +90,6 @@ test_migration() {
 
     sleep 1
     # 6 sec
-
-    # Import storage.
-    "$WORKDIR/go/ekiden/ekiden" storage import \
-        --address "127.0.0.1:${EKIDEN_STORAGE_PORT}" \
-        --input_file ${TEST_BASE_DIR}/export-storage.dat \
-        --current_epoch 1
 
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
