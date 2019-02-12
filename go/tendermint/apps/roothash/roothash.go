@@ -58,10 +58,6 @@ type rootHashApplication struct {
 	scheduler  scheduler.BlockBackend
 	beacon     beacon.Backend
 
-	// The old and busted way of importing genesis state.
-	// TODO: Remove once tooling for the new way is present.
-	cfgGenesisBlocks map[signature.MapKey]*block.Block
-
 	roundTimeout time.Duration
 }
 
@@ -139,15 +135,6 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 			"err", err,
 		)
 		panic("roothash: invalid genesis state")
-	}
-
-	if len(st.Blocks) != 0 {
-		// XXX: Either deprecate the command line option, or figure
-		// out a nice way to merge the two.  Probably the former.
-		if len(app.cfgGenesisBlocks) != 0 {
-			app.logger.Error("InitChain: genesis blocks already exist")
-			panic("roothash: genesis blocks already exist")
-		}
 	}
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
@@ -381,12 +368,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	}
 
 	// Create genesis block.
-	var genesisBlock *block.Block
-	if app.cfgGenesisBlocks != nil {
-		genesisBlock = app.cfgGenesisBlocks[runtime.ID.ToMapKey()]
-	} else {
-		genesisBlock = genesis.Blocks[runtime.ID.ToMapKey()]
-	}
+	genesisBlock := genesis.Blocks[runtime.ID.ToMapKey()]
 	if genesisBlock == nil {
 		now := ctx.Now().Unix()
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
@@ -686,16 +668,14 @@ func New(
 	timeSource epochtime.BlockBackend,
 	scheduler scheduler.BlockBackend,
 	beacon beacon.Backend,
-	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
 ) abci.Application {
 	return &rootHashApplication{
-		ctx:              ctx,
-		logger:           logging.GetLogger("tendermint/roothash"),
-		timeSource:       timeSource,
-		scheduler:        scheduler,
-		beacon:           beacon,
-		cfgGenesisBlocks: genesisBlocks,
-		roundTimeout:     roundTimeout,
+		ctx:          ctx,
+		logger:       logging.GetLogger("tendermint/roothash"),
+		timeSource:   timeSource,
+		scheduler:    scheduler,
+		beacon:       beacon,
+		roundTimeout: roundTimeout,
 	}
 }

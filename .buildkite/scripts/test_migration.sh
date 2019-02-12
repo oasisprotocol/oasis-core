@@ -73,7 +73,7 @@ test_migration() {
     # Export.
     "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" \
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --output_file ${TEST_BASE_DIR}/export-roothash.dat
+        --output_file ${TEST_BASE_DIR}/export-roothash.json
 
     # Stop the validator nodes.
     ps efh -C ekiden |grep -v "ekiden storage node" | awk '{print $1}' | xargs kill -9
@@ -82,8 +82,7 @@ test_migration() {
     # 5 sec
 
     # Start the second network.
-    run_backend_tendermint_committee tendermint_mock 2 1 0 false \
-        --roothash.genesis_blocks ${TEST_BASE_DIR}/export-roothash.dat
+    run_backend_tendermint_committee tendermint_mock 2 1 0 false "${TEST_BASE_DIR}/export-roothash.json"
 
     # Replace validator socket.
     ln -sf ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}

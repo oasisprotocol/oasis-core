@@ -435,7 +435,6 @@ func New(
 	sched scheduler.Backend,
 	beac beacon.Backend,
 	service service.TendermintService,
-	genesisBlocks map[signature.MapKey]*block.Block,
 	roundTimeout time.Duration,
 ) (api.Backend, error) {
 	// We can only work with a block-based epochtime.
@@ -451,7 +450,7 @@ func New(
 	}
 
 	// Initialize and register the tendermint service component.
-	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, beac, genesisBlocks, roundTimeout)
+	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, beac, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
