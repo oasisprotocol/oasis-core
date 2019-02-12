@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -88,7 +88,7 @@ func doExport(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	var (
-		genesisBlocks []*roothash.GenesisBlock
+		genesisBlocks []*block.Block
 		failed        bool
 	)
 	for _, idHex := range args {
@@ -144,21 +144,7 @@ func doExport(cmd *cobra.Command, args []string) {
 		genesisBlk.Header.Round = latestBlock.Header.Round
 		genesisBlk.Header.StateRoot = latestBlock.Header.StateRoot
 
-		genBlk := &roothash.GenesisBlock{
-			RuntimeId: id,
-			Block:     genesisBlk.ToProto(),
-		}
-		genesisBlocks = append(genesisBlocks, genBlk)
-	}
-
-	raw, err := proto.Marshal(&roothash.GenesisBlocks{
-		GenesisBlocks: genesisBlocks,
-	})
-	if err != nil {
-		logger.Error("failed to serialize genesis blocks",
-			"err", err,
-		)
-		os.Exit(1)
+		genesisBlocks = append(genesisBlocks, genesisBlk)
 	}
 
 	w, shouldClose, err := cmdCommon.GetOutputWriter(cmd, cfgRoothashExportFile)
@@ -172,7 +158,7 @@ func doExport(cmd *cobra.Command, args []string) {
 		defer w.Close()
 	}
 
-	if _, err = w.Write(raw); err != nil {
+	if _, err = w.Write(json.Marshal(genesisBlocks)); err != nil {
 		logger.Error("failed to write genesis blocks",
 			"err", err,
 		)
