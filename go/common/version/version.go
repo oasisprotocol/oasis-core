@@ -33,7 +33,7 @@ var (
 	//
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
-	BackendProtocol = Version{Major: 0, Minor: 0, Patch: 1}
+	BackendProtocol = Version{Major: 0, Minor: 1, Patch: 0}
 )
 
 // Versions contains all known protocol versions.
