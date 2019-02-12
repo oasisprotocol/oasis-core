@@ -21,6 +21,7 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
 #   replica_group_backup_size - runtime replica group backup size (default: 1)
+#   start_storage - start the storage node
 #
 # Any additional arguments are passed to the validator Go node and
 # all compute nodes.
@@ -32,6 +33,8 @@ run_backend_tendermint_committee() {
     local replica_group_size=${1:-2}
     shift || true
     local replica_group_backup_size=${1:-1}
+    shift || true
+    local start_storage=${1:-true}
     shift || true
     local extra_args=$*
 
@@ -86,14 +89,17 @@ run_backend_tendermint_committee() {
     # Run the storage node.
     local storage_datadir=${committee_dir}/storage
     local storage_port=60000
-    rm -Rf ${storage_datadir}
 
-    ${WORKDIR}/go/ekiden/ekiden \
-        storage node \
-        --datadir ${storage_datadir} \
-        --grpc.port ${storage_port} \
-        --log.file ${committee_dir}/storage.log \
-        &
+    if [ "$start_storage" = true ]; then
+        rm -Rf ${storage_datadir}
+
+        ${WORKDIR}/go/ekiden/ekiden \
+            storage node \
+            --datadir ${storage_datadir} \
+            --grpc.port ${storage_port} \
+            --log.file ${committee_dir}/storage.log \
+            &
+    fi
 
     # Run the validator nodes.
     for idx in $(seq 1 $nodes); do
