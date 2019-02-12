@@ -207,7 +207,7 @@ func GetLogger(module string) *Logger {
 // The GetLogger call is equivalent to GetLoggerEx with an extraUnwind
 // of 0.  This routine is primarily intended to facilitate writing
 // additional logging wrappers.
-func GetLoggerEx(module string, extraUnwind uint) *Logger {
+func GetLoggerEx(module string, extraUnwind int) *Logger {
 	return backend.getLogger(module, extraUnwind)
 }
 
@@ -266,7 +266,7 @@ type logBackend struct {
 	initialized bool
 }
 
-func (b *logBackend) getLogger(module string, extraUnwind uint) *Logger {
+func (b *logBackend) getLogger(module string, extraUnwind int) *Logger {
 	// The default unwind depth is as log.DefaultCaller, with an
 	// additional level of stack unwinding due to this module's
 	// leveling wrapper.
@@ -297,9 +297,19 @@ func (b *logBackend) getLogger(module string, extraUnwind uint) *Logger {
 		}
 	}
 
-	unwind := defaultUnwind + int(extraUnwind)
+	var keyvals []interface{}
+	if module != "" {
+		keyvals = append(keyvals, []interface{}{
+			"module",
+			module,
+		}...)
+	}
+	keyvals = append(keyvals, []interface{}{
+		"caller",
+		log.Caller(defaultUnwind + extraUnwind),
+	}...)
 	l := &Logger{
-		logger: log.WithPrefix(logger, "module", module, "caller", log.Caller(unwind)),
+		logger: log.WithPrefix(logger, keyvals...),
 		level:  lvl,
 	}
 
