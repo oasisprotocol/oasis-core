@@ -698,6 +698,14 @@ func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
 	}
 }
 
+func (a *logAdapter) Info(msg string, keyvals ...interface{}) {
+	a.Logger.Info(msg, keyvals...)
+}
+
+func (a *logAdapter) Error(msg string, keyvals ...interface{}) {
+	a.Logger.Error(msg, keyvals...)
+}
+
 func (a *logAdapter) Debug(msg string, keyvals ...interface{}) {
 	if !a.suppressDebug {
 		a.Logger.Debug(msg, keyvals...)
@@ -705,9 +713,14 @@ func (a *logAdapter) Debug(msg string, keyvals ...interface{}) {
 }
 
 func newLogAdapter(suppressDebug bool) tmlog.Logger {
+	// Need an extra level of unwinding because the Debug wrapper
+	// exists.
+	//
+	// This might be able to be replaced with the per-module log
+	// level instead.
 	return &logAdapter{
-		Logger:        logging.GetLogger("tendermint:base"),
-		baseLogger:    logging.GetLogger(""), // Tendermint sets the module, repeatedly.
+		Logger:        logging.GetLoggerEx("tendermint:base", 1),
+		baseLogger:    logging.GetLoggerEx("", 1), // Tendermint sets the module, repeatedly.
 		suppressDebug: suppressDebug,
 	}
 }
