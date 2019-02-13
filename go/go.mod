@@ -15,6 +15,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/eapache/channels v1.1.0
 	github.com/eapache/queue v1.1.0 // indirect
+	github.com/ethereum/go-ethereum v1.8.22 // indirect
 	github.com/fd/go-nat v1.0.0 // indirect
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/go-kit/kit v0.8.0
@@ -94,10 +95,9 @@ require (
 	github.com/spf13/viper v1.3.1
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
-	github.com/tendermint/btcd v0.1.1 // indirect
 	github.com/tendermint/go-amino v0.14.1 // indirect
 	github.com/tendermint/iavl v0.12.0
-	github.com/tendermint/tendermint v0.29.1
+	github.com/tendermint/tendermint v0.30.0
 	github.com/uber-go/atomic v1.3.2 // indirect
 	github.com/uber/jaeger-client-go v2.15.1-0.20190116124224-6733ee486c78+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
