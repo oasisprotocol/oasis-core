@@ -55,6 +55,8 @@ beacon:
 # Storage backend.
 storage:
   backend: memory
+  debug:
+    mock_signing_key: true
 
 # Scheduler backend.
 scheduler:
