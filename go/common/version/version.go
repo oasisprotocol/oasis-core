@@ -1,7 +1,13 @@
 // Package version implements Ekiden protocol versioning.
 package version
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/tendermint/tendermint/version"
+)
 
 // Version is a protocol version.
 type Version struct {
@@ -34,13 +40,41 @@ var (
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
 	BackendProtocol = Version{Major: 0, Minor: 1, Patch: 0}
+
+	// Tendermint exposes the tendermint core version.
+	Tendermint = parseSemVerStr(version.TMCoreSemVer)
+
+	// ABCI is the version of the tendermint ABCI library.
+	ABCI = parseSemVerStr(version.ABCIVersion)
 )
 
 // Versions contains all known protocol versions.
 var Versions = struct {
 	ComputeCommitteeProtocol Version
 	BackendProtocol          Version
+	Tendermint               Version
+	ABCI                     Version
 }{
 	ComputeCommitteeProtocol,
 	BackendProtocol,
+	Tendermint,
+	ABCI,
+}
+
+func parseSemVerStr(s string) Version {
+	split := strings.Split(s, ".")
+	if len(split) != 3 {
+		panic("version: failed to split SemVer")
+	}
+
+	var semVers []uint16
+	for _, v := range split {
+		i, err := strconv.ParseUint(v, 10, 16)
+		if err != nil {
+			panic("version: failed to parse SemVer: " + err.Error())
+		}
+		semVers = append(semVers, uint16(i))
+	}
+
+	return Version{Major: semVers[0], Minor: semVers[1], Patch: semVers[2]}
 }
