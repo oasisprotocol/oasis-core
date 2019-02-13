@@ -8,13 +8,12 @@ require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/Netflix/go-expect v0.0.0-20180928190340-9d1f4485533b // indirect
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
-	github.com/boltdb/bolt v1.3.1 // indirect
-	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d // indirect
-	github.com/btcsuite/btcutil v0.0.0-20190112041146-bf1e1be93589 // indirect
+	github.com/btcsuite/btcd v0.0.0-20190213025234-306aecffea32 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/eapache/channels v1.1.0
 	github.com/eapache/queue v1.1.0 // indirect
+	github.com/ethereum/go-ethereum v1.8.22 // indirect
 	github.com/fd/go-nat v1.0.0 // indirect
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/go-kit/kit v0.8.0
@@ -37,20 +36,19 @@ require (
 	github.com/jbenet/go-temp-err-catcher v0.0.0-20150120210811-aac704a3f4f2 // indirect
 	github.com/jbenet/goprocess v0.0.0-20160826012719-b497e2f366b8 // indirect
 	github.com/jmhodges/levigo v0.0.0-20161115193449-c42d9e0ca023 // indirect
-	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/kr/pty v1.1.3 // indirect
 	github.com/libp2p/go-addr-util v2.0.7+incompatible // indirect
-	github.com/libp2p/go-buffer-pool v0.1.1 // indirect
+	github.com/libp2p/go-buffer-pool v0.1.3 // indirect
 	github.com/libp2p/go-conn-security v0.1.15 // indirect
 	github.com/libp2p/go-conn-security-multistream v0.1.15 // indirect
 	github.com/libp2p/go-flow-metrics v0.2.0 // indirect
 	github.com/libp2p/go-libp2p v6.0.29+incompatible
-	github.com/libp2p/go-libp2p-autonat v0.0.0-20181221182007-93b1787f76de // indirect
+	github.com/libp2p/go-libp2p-autonat v0.0.0-20190207233022-494f7fce997b // indirect
 	github.com/libp2p/go-libp2p-blankhost v0.3.15 // indirect
 	github.com/libp2p/go-libp2p-circuit v2.3.2+incompatible // indirect
-	github.com/libp2p/go-libp2p-crypto v2.0.1-0.20181130162722-b150863d61f7+incompatible
-	github.com/libp2p/go-libp2p-discovery v0.0.0-20181218190140-cc4105e21706 // indirect
+	github.com/libp2p/go-libp2p-crypto v2.0.5+incompatible
+	github.com/libp2p/go-libp2p-discovery v0.0.0-20190212175932-d4858e0322b6 // indirect
 	github.com/libp2p/go-libp2p-host v3.0.15+incompatible
 	github.com/libp2p/go-libp2p-interface-connmgr v0.0.21 // indirect
 	github.com/libp2p/go-libp2p-interface-pnet v3.0.0+incompatible // indirect
@@ -74,34 +72,33 @@ require (
 	github.com/libp2p/go-tcp-transport v2.0.16+incompatible // indirect
 	github.com/libp2p/go-testutil v1.2.10 // indirect
 	github.com/libp2p/go-ws-transport v2.0.15+incompatible // indirect
-	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
-	github.com/minio/sha256-simd v0.0.0-20190117184323-cc1980cb0338 // indirect
+	github.com/mattn/go-colorable v0.1.0 // indirect
+	github.com/minio/sha256-simd v0.0.0-20190131020904-2d45a736cd16 // indirect
 	github.com/multiformats/go-multiaddr v1.4.0
 	github.com/multiformats/go-multibase v0.3.0 // indirect
 	github.com/multiformats/go-multistream v0.3.9 // indirect
 	github.com/opentracing/opentracing-go v1.0.2
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.2
-	github.com/prometheus/client_model v0.0.0-20190115171406-56726106282f // indirect
+	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.2.0 // indirect
-	github.com/prometheus/procfs v0.0.0-20190117184657-bf6a532e95b1 // indirect
+	github.com/prometheus/procfs v0.0.0-20190209105433-f8d8b3f739bd // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a // indirect
 	github.com/rs/cors v1.6.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.0
-	github.com/spf13/afero v1.2.0 // indirect
+	github.com/spf13/afero v1.2.1 // indirect
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.1
 	github.com/stretchr/testify v1.3.0
-	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
-	github.com/tendermint/btcd v0.1.1 // indirect
+	github.com/syndtr/goleveldb v0.0.0-20190203031304-2f17a3356c66
 	github.com/tendermint/go-amino v0.14.1 // indirect
 	github.com/tendermint/iavl v0.12.0
-	github.com/tendermint/tendermint v0.29.1
+	github.com/tendermint/tendermint v0.30.0
 	github.com/uber-go/atomic v1.3.2 // indirect
 	github.com/uber/jaeger-client-go v2.15.1-0.20190116124224-6733ee486c78+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
-	github.com/ugorji/go/codec v0.0.0-20190126102652-8fd0f8d918c8
+	github.com/ugorji/go/codec v0.0.0-20190204201341-e444a5086c43
 	github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc // indirect
 	github.com/whyrusleeping/go-notifier v0.0.0-20170827234753-097c5d47330f // indirect
 	github.com/whyrusleeping/go-smux-multiplex v3.0.16+incompatible // indirect
@@ -109,16 +106,15 @@ require (
 	github.com/whyrusleeping/go-smux-yamux v2.0.8+incompatible // indirect
 	github.com/whyrusleeping/mafmt v1.2.8 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
-	github.com/whyrusleeping/yamux v1.1.2 // indirect
-	go.etcd.io/bbolt v1.3.0
+	github.com/whyrusleeping/yamux v1.1.5 // indirect
+	go.etcd.io/bbolt v1.3.2
 	go.uber.org/atomic v1.3.2 // indirect
-	golang.org/x/crypto v0.0.0-20190123085648-057139ce5d2b
-	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
-	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4 // indirect
-	golang.org/x/sys v0.0.0-20190124100055-b90733256f2e // indirect
+	golang.org/x/crypto v0.0.0-20190211182817-74369b46fc67
+	golang.org/x/net v0.0.0-20190213061140-3a22650c66bd
+	golang.org/x/sys v0.0.0-20190209173611-3b5209105503 // indirect
 	golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2 // indirect
-	google.golang.org/genproto v0.0.0-20190127220909-aa24cbd621fe // indirect
+	google.golang.org/genproto v0.0.0-20190201180003-4b09977fb922 // indirect
 	google.golang.org/grpc v1.18.0
-	gopkg.in/AlecAivazis/survey.v1 v1.8.1
+	gopkg.in/AlecAivazis/survey.v1 v1.8.2
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
