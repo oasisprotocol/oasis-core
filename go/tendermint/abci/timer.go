@@ -146,11 +146,6 @@ func (t *Timer) persist(ctx *Context, state *ApplicationState) {
 		t.pendingState.Data = currentState.Data
 	}
 
-	ctx.timerLogger.Debug("updating timer state",
-		"current_state", fmt.Sprintf("%+v", currentState),
-		"pending_state", fmt.Sprintf("%+v", t.pendingState),
-	)
-
 	tree.Set(t.getMapKey(), t.pendingState.MarshalCBOR())
 
 	// Update deadline state.
@@ -163,9 +158,6 @@ func (t *Timer) persist(ctx *Context, state *ApplicationState) {
 		}
 	}
 	if t.pendingState.Armed {
-		ctx.timerLogger.Debug("adding armed timer to deadline map",
-			"key", t.pendingState.getDeadlineMapKey(),
-		)
 		tree.Set(t.pendingState.getDeadlineMapKey(), []byte(t.ID))
 	}
 
@@ -202,11 +194,6 @@ func fireTimers(ctx *Context, state *ApplicationState, app Application) {
 			if ts.App != app.Name() {
 				return false
 			}
-
-			ctx.timerLogger.Debug("firing timer",
-				"id", ts.ID,
-				"current_state", fmt.Sprintf("%+v", ts),
-			)
 
 			app.FireTimer(ctx, &Timer{
 				ID:           ts.ID,
