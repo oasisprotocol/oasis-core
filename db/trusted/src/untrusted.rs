@@ -1,8 +1,9 @@
 //! Storage backend that talks to an external backend outside the enclave.
 use std::{slice::from_raw_parts_mut, sync::SgxMutex as Mutex};
 
-use sgx_trts::trts::rsgx_raw_is_outside_enclave;
+use sgx_trts::{libc::c_void, trts::rsgx_raw_is_outside_enclave};
 use sgx_types::*;
+use sgx_unwind;
 
 use ekiden_common::{
     bytes::H256,
@@ -32,8 +33,59 @@ impl UntrustedStorageBackend {
     }
 }
 
+const FRAMES_CAPACITY: usize = 5;
+
+struct StoragestudyCookie {
+    frames: [*mut c_void; FRAMES_CAPACITY],
+    size: usize,
+}
+
+extern "C" fn storagestudy_trace(
+    ctx: *mut sgx_unwind::_Unwind_Context,
+    arg: *mut c_void,
+) -> sgx_unwind::_Unwind_Reason_Code {
+    let cookie = unsafe { (arg as *mut StoragestudyCookie).as_mut() }.unwrap();
+    if cookie.size >= FRAMES_CAPACITY {
+        return sgx_unwind::_URC_NORMAL_STOP;
+    }
+
+    // logic taken from rust-sgx-sdk sgx_tstd sys backtrace tracing gcc_s
+    let mut ip_before_insn = 0;
+    let mut ip = unsafe { sgx_unwind::_Unwind_GetIPInfo(ctx, &mut ip_before_insn) } as *mut c_void;
+    if !ip.is_null() && ip_before_insn == 0 {
+        ip = (ip as usize - 1) as *mut c_void;
+    }
+
+    cookie.frames[cookie.size] = ip;
+    cookie.size += 1;
+
+    sgx_unwind::_URC_NO_REASON
+}
+
+fn storagestudy_dump(message: &str) {
+    let mut cookie = StoragestudyCookie {
+        frames: [std::ptr::null_mut(); FRAMES_CAPACITY],
+        size: 0,
+    };
+    let rv = unsafe {
+        sgx_unwind::_Unwind_Backtrace(
+            storagestudy_trace,
+            &mut cookie as *mut StoragestudyCookie as *mut c_void,
+        )
+    };
+    match rv {
+        sgx_unwind::_URC_END_OF_STACK | sgx_unwind::_URC_FATAL_PHASE1_ERROR => {
+            println!("{} at {:?}", message, &cookie.frames[..cookie.size]);
+        }
+        other => {
+            println!("{} backtrace error {:?}", message, other);
+        }
+    }
+}
+
 impl StorageBackend for UntrustedStorageBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
+        storagestudy_dump("%%% storage get");
         Box::new(future::lazy(move || {
             let mut value_length = 0;
             let mut result = 1;
@@ -72,6 +124,7 @@ impl StorageBackend for UntrustedStorageBackend {
     }
 
     fn insert(&self, value: Vec<u8>, expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
+        storagestudy_dump("%%% storage set");
         Box::new(future::lazy(move || {
             // Copy value into untrusted transfer buffer.
             {

@@ -1,10 +1,13 @@
 #![feature(core_intrinsics)]
 #![feature(test)]
+#![feature(panic_unwind)]
 
 #[cfg(target_env = "sgx")]
 extern crate sgx_trts;
 #[cfg(target_env = "sgx")]
 extern crate sgx_types;
+#[cfg(target_env = "sgx")]
+extern crate sgx_unwind;
 
 #[macro_use]
 extern crate lazy_static;
