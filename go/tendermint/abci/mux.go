@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -300,7 +301,7 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
 		mux.logger.Error("CheckTx: failed to de-multiplex",
-			"tx", hex.EncodeToString(tx),
+			"tx", base64.StdEncoding.EncodeToString(tx),
 		)
 		return types.ResponseCheckTx{
 			Code: api.CodeInvalidApplication.ToInt(),
@@ -309,7 +310,7 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 
 	mux.logger.Debug("CheckTx: dispatching",
 		"app", app.Name(),
-		"tx", hex.EncodeToString(tx),
+		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
 	ctx := NewContext(ContextCheckTx, mux.currentTime)
@@ -466,7 +467,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
 		mux.logger.Error("DeliverTx: failed to de-multiplex",
-			"tx", hex.EncodeToString(tx),
+			"tx", base64.StdEncoding.EncodeToString(tx),
 		)
 		return types.ResponseDeliverTx{
 			Code: api.CodeInvalidApplication.ToInt(),
@@ -475,7 +476,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 
 	mux.logger.Debug("DeliverTx: dispatching",
 		"app", app.Name(),
-		"tx", hex.EncodeToString(tx),
+		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
 	// Append application name tag.
