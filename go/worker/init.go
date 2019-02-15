@@ -57,6 +57,12 @@ const (
 	cfgEntityPrivateKey = "worker.entity_private_key"
 )
 
+// Syncable is an interface exposed by consensus backends that expose
+// a way to block on initial synchronization.
+type Syncable interface {
+	Synced() <-chan struct{}
+}
+
 func parseAddressList(addresses []string) ([]node.Address, error) {
 	var output []node.Address
 	for _, rawAddress := range addresses {
@@ -131,6 +137,7 @@ func New(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
+	syncable Syncable,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
@@ -226,7 +233,7 @@ func New(
 		Runtimes:        runtimes,
 	}
 
-	return newWorker(dataDir, identity, entityPrivKey, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
+	return newWorker(dataDir, identity, entityPrivKey, storage, roothash, registry, epochtime, scheduler, syncable, ias, keyManager, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

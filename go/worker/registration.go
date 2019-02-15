@@ -13,6 +13,16 @@ import (
 )
 
 func (w *Worker) doNodeRegistration() {
+	// Delay node registration till after the consensus service has
+	// finished initial synchronization if applicable.
+	if w.syncable != nil {
+		select {
+		case <-w.quitCh:
+			return
+		case <-w.syncable.Synced():
+		}
+	}
+
 	// (re-)register the node on each epoch transition.  This doesn't
 	// need to be strict block-epoch time, since it just serves to
 	// extend the node's expiration.

@@ -77,6 +77,7 @@ type Worker struct {
 	registry      registry.Backend
 	epochtime     epochtime.Backend
 	scheduler     scheduler.Backend
+	syncable      Syncable
 	ias           *ias.IAS
 	keyManager    *enclaverpc.Client
 	p2p           *p2p.P2P
@@ -340,6 +341,7 @@ func newWorker(
 	registryInst registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
+	syncable Syncable,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
 	cfg Config,
@@ -373,6 +375,7 @@ func newWorker(
 		registry:      registryInst,
 		epochtime:     epochtime,
 		scheduler:     scheduler,
+		syncable:      syncable,
 		ias:           ias,
 		keyManager:    keyManager,
 		runtimes:      make(map[signature.MapKey]*Runtime),
