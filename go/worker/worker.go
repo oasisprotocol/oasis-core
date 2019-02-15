@@ -91,6 +91,7 @@ type Worker struct {
 	cancelCtx context.CancelFunc
 	quitCh    chan struct{}
 	initCh    chan struct{}
+	regCh     chan struct{}
 
 	logger *logging.Logger
 }
@@ -135,11 +136,14 @@ func (w *Worker) Start() error {
 		}
 	}
 
-	// Wait for all runtimes to be initialized.
+	// Wait for all runtimes to be initialized and for the node
+	// to be registered for the current epoch.
 	go func() {
 		for _, rt := range w.runtimes {
 			<-rt.node.Initialized()
 		}
+
+		<-w.regCh
 
 		close(w.initCh)
 	}()
@@ -378,6 +382,7 @@ func newWorker(
 		cancelCtx:     cancelCtx,
 		quitCh:        make(chan struct{}),
 		initCh:        make(chan struct{}),
+		regCh:         make(chan struct{}),
 		logger:        logging.GetLogger("worker"),
 	}
 
