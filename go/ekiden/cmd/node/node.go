@@ -243,6 +243,7 @@ func NewNode() (*Node, error) {
 		node.Registry,
 		node.Epochtime,
 		node.Scheduler,
+		node.svcTmnt,
 	)
 	if err != nil {
 		logger.Error("failed to initialize compute worker",
