@@ -84,6 +84,7 @@ type tendermintService struct {
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
+	syncedCh                 chan struct{}
 
 	startFn func() error
 }
@@ -103,21 +104,26 @@ func (t *tendermintService) started() bool {
 }
 
 func (t *tendermintService) Start() error {
-	if !t.initialized() {
-		return nil
+	if t.started() {
+		return errors.New("tendermint: service already started")
 	}
 
-	if err := t.mux.Start(); err != nil {
-		return err
+	switch t.initialized() {
+	case true:
+		if err := t.mux.Start(); err != nil {
+			return err
+		}
+		if err := t.startFn(); err != nil {
+			return err
+		}
+		if err := t.node.Start(); err != nil {
+			return errors.Wrap(err, "tendermint: failed to start service")
+		}
+		go t.syncWorker()
+		go t.worker()
+	case false:
+		close(t.syncedCh)
 	}
-	if err := t.startFn(); err != nil {
-		return err
-	}
-	if err := t.node.Start(); err != nil {
-		return errors.Wrap(err, "tendermint: failed to start service")
-	}
-
-	go t.worker()
 
 	t.Lock()
 	t.isStarted = true
@@ -151,6 +157,10 @@ func (t *tendermintService) Stop() {
 
 func (t *tendermintService) Started() <-chan struct{} {
 	return t.startedCh
+}
+
+func (t *tendermintService) Synced() <-chan struct{} {
+	return t.syncedCh
 }
 
 func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
@@ -552,6 +562,38 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 	return tmGenDoc, nil
 }
 
+func (t *tendermintService) syncWorker() {
+	checkSyncFn := func() (isSyncing bool, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = errors.New("tendermint: node disappeared, terminated?")
+			}
+		}()
+
+		return t.node.ConsensusReactor().FastSync(), nil
+	}
+
+	for {
+		select {
+		case <-t.node.Quit():
+			return
+		case <-time.After(1 * time.Second):
+			isSyncing, err := checkSyncFn()
+			if err != nil {
+				t.Logger.Error("Failed to poll FastSync",
+					"err", err,
+				)
+				return
+			}
+			if !isSyncing {
+				t.Logger.Info("Tendermint Node finished fast-sync")
+				close(t.syncedCh)
+				return
+			}
+		}
+	}
+}
+
 func (t *tendermintService) worker() {
 	// Subscribe to other events here as needed, no need to spawn additional
 	// workers.
@@ -587,6 +629,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity) servi
 		ctx:                   ctx,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
+		syncedCh:              make(chan struct{}),
 	}
 }
 

@@ -22,6 +22,10 @@ type TendermintService interface {
 	// tendermint service has been started.
 	Started() <-chan struct{}
 
+	// Synced returns the channel that will be closed when the
+	// tendermint service finishes fast sync.
+	Synced() <-chan struct{}
+
 	// RegisterApplication registers an ABCI multiplexer application
 	// with this service instance.
 	RegisterApplication(abci.Application) error
