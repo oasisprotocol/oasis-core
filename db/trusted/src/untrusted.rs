@@ -85,6 +85,7 @@ fn storagestudy_dump(message: &str) {
 
 impl StorageBackend for UntrustedStorageBackend {
     fn get(&self, key: H256) -> BoxFuture<Vec<u8>> {
+        panic!("%%% storage get")
         storagestudy_dump("%%% storage get");
         Box::new(future::lazy(move || {
             let mut value_length = 0;
@@ -124,6 +125,7 @@ impl StorageBackend for UntrustedStorageBackend {
     }
 
     fn insert(&self, value: Vec<u8>, expiry: u64, _opts: InsertOptions) -> BoxFuture<()> {
+        panic!("%%% storage set")
         storagestudy_dump("%%% storage set");
         Box::new(future::lazy(move || {
             // Copy value into untrusted transfer buffer.
