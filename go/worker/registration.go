@@ -54,7 +54,9 @@ func (w *Worker) doNodeRegistration() {
 	}
 
 	epoch := <-ch
-	if err := regFn(epoch, true); err != nil {
+	err := regFn(epoch, true)
+	close(w.regCh)
+	if err != nil {
 		// This by definition is a cancelation.
 		return
 	}

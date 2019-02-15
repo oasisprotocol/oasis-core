@@ -209,6 +209,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 		// Remove the expired nodes from the test driver's view of
 		// registered nodes.
+		expiredNode := nodes[0][0]
 		nodes = nodes[1:]
 		numNodes -= expectedDeregEvents
 
@@ -229,6 +230,10 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 				t.Fatalf("failed to recevive node list event")
 			}
 		}
+
+		// Ensure that registering an expired node will fail.
+		err := backend.RegisterNode(context.Background(), expiredNode.SignedRegistration)
+		require.Error(err, "RegisterNode with expired node")
 	})
 
 	t.Run("EntityDeregistration", func(t *testing.T) {

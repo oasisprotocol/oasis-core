@@ -74,6 +74,9 @@ var (
 
 	// ErrInvalidTimestamp is the error returned when a timestamp is invalid.
 	ErrInvalidTimestamp = errors.New("registry: invalid timestamp")
+
+	// ErrNodeExpired is the error returned when a node is expired.
+	ErrNodeExpired = errors.New("registry: node expired")
 )
 
 // Backend is a registry implementation.
