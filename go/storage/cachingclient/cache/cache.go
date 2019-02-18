@@ -7,6 +7,7 @@ package cache
 
 import (
 	"container/ring"
+	"fmt"
 	"io"
 	"path/filepath"
 	"sync"
@@ -29,6 +30,7 @@ type entry struct {
 	ptype pageType
 	key   api.Key
 	ref   bool
+	val   bool
 }
 
 // KeyValue is a (key, value) tuple.
@@ -84,7 +86,7 @@ func New(path string, size, backlog int) (*Cache, error) {
 		var key api.Key
 		copy(key[:], iter.Key()[:])
 
-		r := &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key}}
+		r := &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key, val: true}}
 
 		c.keys[key] = r
 		batch := c.db.NewBatch()
@@ -127,10 +129,12 @@ func (c *Cache) Get(key api.Key) ([]byte, error) {
 
 	mentry := r.Value.(*entry)
 
-	val := c.db.Get(key[:])
-
-	if val != nil {
+	if mentry.val {
 		mentry.ref = true
+		val := c.db.Get(key[:])
+		if val == nil {
+			panic(fmt.Sprintf("cache corruption: %+v", key))
+		}
 		return val, nil
 	}
 
@@ -155,18 +159,16 @@ func (c *Cache) SetBatch(values []KeyValue) {
 
 		if r == nil {
 			// No cache entry found, add it.
-			batch.Set(key[:], value)
-			r = &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key}}
+			r = &ring.Ring{Value: &entry{ref: false, ptype: ptCold, key: key, val: true}}
 			c.metaAdd(key, r, batch)
+			batch.Set(key[:], value)
 			c.countCold++
 			continue
 		}
 
 		mentry := r.Value.(*entry)
 
-		val := c.db.Get(key[:])
-
-		if val == nil {
+		if mentry.val {
 			// Cache entry was a hot or cold page.
 			batch.Set(key[:], value)
 			mentry.ref = true
@@ -178,11 +180,12 @@ func (c *Cache) SetBatch(values []KeyValue) {
 			c.memCold++
 		}
 		mentry.ref = false
-		batch.Set(key[:], value)
+		mentry.val = true
 		mentry.ptype = ptHot
 		c.countTest--
 		c.metaDel(r, batch)
 		c.metaAdd(key, r, batch)
+		batch.Set(key[:], value)
 		c.countHot++
 	}
 
@@ -282,6 +285,7 @@ func (c *Cache) runHandCold(batch tenderdb.Batch) {
 			c.countHot++
 		} else {
 			mentry.ptype = ptTest
+			mentry.val = false
 			batch.Delete(mentry.key[:])
 			c.countCold--
 			c.countTest++
