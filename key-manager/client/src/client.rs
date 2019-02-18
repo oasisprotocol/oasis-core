@@ -259,7 +259,10 @@ impl KeyManager {
         }
     }
 
-    pub fn long_term_public_key(&mut self, contract_id: ContractId) -> Result<Option<PublicKeyPayload>> {
+    pub fn long_term_public_key(
+        &mut self,
+        contract_id: ContractId,
+    ) -> Result<Option<PublicKeyPayload>> {
         self.connect()?;
 
         match self.long_term_public_key_cache.entry(contract_id) {
