@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,7 +15,7 @@ import (
 )
 
 const (
-	cacheSize  = 10
+	cacheSize  = 200
 	extraItems = 1
 	backlog    = 5
 )
@@ -124,5 +126,44 @@ func requireGet(t *testing.T, cache *Cache, key api.Key, expected []byte) bool {
 		require.NoError(t, err, "Get(hit)")
 		require.EqualValues(t, expected, value, "Get() returned expected value")
 		return true
+	}
+}
+
+func TestAlgorithm(t *testing.T) {
+	cache, cacheDir := requireNewCache(t)
+	defer func() {
+		os.RemoveAll(cacheDir)
+		cache.Cleanup()
+	}()
+
+	f, err := os.Open("cache_test_case.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner := bufio.NewScanner(f)
+
+	i := 0
+	for scanner.Scan() {
+		fields := bytes.Fields(scanner.Bytes())
+
+		var key api.Key
+		copy(key[:], fields[0][:])
+		wantHit := fields[1][0] == 'h'
+
+		i++
+
+		var hit bool
+		v, _ := cache.Get(key)
+		if v == nil {
+			cache.Set(key, fields[0])
+		} else {
+			hit = true
+			if !bytes.Equal(v, fields[0]) {
+				t.Errorf("cache returned bad data: got %+v , want %+v\n", v, key)
+			}
+		}
+		if hit != wantHit {
+			t.Errorf("cache hit mismatch: got %v, want %v\n", hit, wantHit)
+		}
 	}
 }
