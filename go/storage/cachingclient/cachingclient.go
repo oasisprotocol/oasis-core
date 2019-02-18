@@ -1,17 +1,23 @@
+// Package cachingclient implements a storage client wrapped with a
+// disk-persisted in-memory local cache.
 package cachingclient
 
 import (
 	"context"
+	"encoding/binary"
+	"os"
+	"path/filepath"
 	"sync"
 
+	"github.com/hashicorp/golang-lru"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	dbm "github.com/tendermint/tendermint/libs/db"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/cachingclient/cache"
-	"github.com/oasislabs/ekiden/go/storage/client"
 )
 
 const (
@@ -24,8 +30,8 @@ const (
 	// Number of cache entries.
 	cfgCacheSize = "storage.cachingclient.cache_size"
 
-	// Maximum async write-back batch backlog.
-	cfgCacheBacklog = "storage.cachingclient.async_backlog"
+	// Maximum value size (bytes).
+	cfgCacheMaxValueSize = "storage.cachingclient.max_value_size"
 )
 
 var (
@@ -63,18 +69,18 @@ type cachingClientBackend struct {
 	logger *logging.Logger
 
 	remote api.Backend
-	cache  *cache.Cache
+	local  *lru.TwoQueueCache
+
+	dbPath       string
+	maxValueSize int
 }
 
 func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	// Try local cache first, then remote node if missing.
-	cached, err := b.cache.Get(key)
-	if cached != nil {
+	cached, ok := b.local.Get(key)
+	if ok {
 		cacheHits.Inc()
-		return cached, nil
-	}
-	if err != api.ErrKeyNotFound {
-		return nil, err
+		return cached.([]byte), nil
 	}
 
 	cacheMisses.Inc()
@@ -82,7 +88,7 @@ func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, er
 	if err == api.ErrKeyNotFound {
 		remoteMisses.Inc()
 	} else if err == nil {
-		b.cache.SetBatchAsync([]cache.KeyValue{cache.KeyValue{Key: key, Value: value}})
+		b.checkedLocalAdd(key, value)
 	}
 
 	return value, err
@@ -96,19 +102,17 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 
 	// Go through each key and try to retrieve its value from local cache.
 	for _, key := range keys {
-		cached, err := b.cache.Get(key)
-		switch err {
-		case nil:
+		cached, ok := b.local.Get(key)
+		switch ok {
+		case true:
 			cacheHits.Inc()
-			values = append(values, cached)
-		case api.ErrKeyNotFound:
+			values = append(values, cached.([]byte))
+		default:
 			// Cache miss, add to batch for remote.
 			cacheMisses.Inc()
 			values = append(values, nil)
 			missingKeys = append(missingKeys, key)
 			missingIdx = append(missingIdx, len(values)-1)
-		default:
-			return nil, err
 		}
 	}
 
@@ -119,13 +123,10 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 			return nil, err
 		}
 
-		var kvs []cache.KeyValue
 		for remoteIdx, idx := range missingIdx {
 			values[idx] = remote[remoteIdx]
-			kvs = append(kvs, cache.KeyValue{Key: missingKeys[idx], Value: values[idx]})
+			b.checkedLocalAdd(missingKeys[idx], values[idx])
 		}
-
-		b.cache.SetBatchAsync(kvs)
 	}
 
 	return values, nil
@@ -142,32 +143,34 @@ func (b *cachingClientBackend) Insert(ctx context.Context, value []byte, expirat
 		err = b.remote.Insert(ctx, value, expiration, opts)
 	}
 	if err == nil {
-		b.cache.Set(api.HashStorageKey(value), value)
+		b.checkedLocalAdd(api.HashStorageKey(value), value)
 	}
 	return err
 }
 
 func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
-	// Write-through. Since storage insert operations are currently idempotent, we can
-	// parallelize remote insert and cache insert.
-	ch := make(chan struct{})
-	go func() {
-		var kvs []cache.KeyValue
+	insertBatchFn := func() {
 		for _, value := range values {
-			kvs = append(kvs, cache.KeyValue{Key: api.HashStorageKey(value.Data), Value: value.Data})
+			b.checkedLocalAdd(api.HashStorageKey(value.Data), value.Data)
 		}
-
-		b.cache.SetBatch(kvs)
-
-		close(ch)
-	}()
-
-	var err error
-	if !opts.LocalOnly {
-		err = b.remote.InsertBatch(ctx, values, opts)
 	}
 
-	<-ch
+	var err error
+	switch opts.LocalOnly {
+	case true:
+		insertBatchFn()
+	default:
+		// Write-through. Since storage insert operations are currently idempotent, we can
+		// parallelize remote insert and cache insert.
+		ch := make(chan struct{})
+		go func() {
+			insertBatchFn()
+			close(ch)
+		}()
+
+		err = b.remote.InsertBatch(ctx, values, opts)
+		<-ch
+	}
 
 	return err
 }
@@ -179,39 +182,123 @@ func (b *cachingClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo
 
 func (b *cachingClientBackend) Cleanup() {
 	b.remote.Cleanup()
-	b.cache.Cleanup()
+	if err := b.save(); err != nil {
+		b.logger.Error("failed to persist cache to disk",
+			"err", err,
+		)
+	}
 }
 
 func (b *cachingClientBackend) Initialized() <-chan struct{} {
 	return b.remote.Initialized()
 }
 
-func New() (api.Backend, error) {
+func (b *cachingClientBackend) checkedLocalAdd(key api.Key, value []byte) bool {
+	if len(value) > b.maxValueSize {
+		b.logger.Debug("ignoring oversized value",
+			"key", key,
+			"size", len(value),
+		)
+		return false
+	}
+
+	b.local.Add(key, value)
+	return true
+}
+
+func (b *cachingClientBackend) load() error {
+	dir, file := filepath.Split(b.dbPath)
+	db := dbm.NewDB(file, dbm.LevelDBBackend, dir)
+	defer db.Close()
+
+	b.logger.Info("loading cache to disk",
+		"path", b.dbPath,
+	)
+
+	var (
+		totalKeys int
+		totalSize int
+	)
+
+	iter := db.Iterator(nil, nil)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		v := iter.Value()
+
+		if b.checkedLocalAdd(api.HashStorageKey(v), append([]byte{}, v...)) {
+			totalKeys++
+			totalSize += len(v)
+		}
+	}
+
+	b.logger.Info("loaded cache from disk",
+		"keys", totalKeys,
+		"bytes_written", totalSize,
+	)
+
+	return nil
+}
+
+func (b *cachingClientBackend) save() error {
+	// Blow away the old cache.
+	if err := os.RemoveAll(b.dbPath); err != nil {
+		return errors.Wrap(err, "failed to remove existing cache")
+	}
+
+	b.logger.Info("persisting cache to disk",
+		"path", b.dbPath,
+	)
+
+	dir, file := filepath.Split(b.dbPath)
+	db := dbm.NewDB(file, dbm.LevelDBBackend, dir)
+	defer db.Close()
+
+	var (
+		batch = db.NewBatch()
+		keys  = b.local.Keys()
+	)
+
+	var totalSize int
+	for i, v := range keys {
+		var dbKey [8]byte
+		binary.BigEndian.PutUint64(dbKey[:], uint64(i))
+		cached, _ := b.local.Get(v)
+		cachedBytes := cached.([]byte)
+		batch.Set(dbKey[:], cachedBytes)
+		totalSize += len(cachedBytes)
+	}
+
+	batch.Write()
+
+	b.logger.Info("persisted cache to disk",
+		"keys", len(keys),
+		"bytes_written", totalSize,
+	)
+
+	return nil
+}
+
+func New(remote api.Backend) (api.Backend, error) {
 	// Register metrics for cache hits and misses.
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(cacheCollectors...)
 	})
 
-	// The remote node address needs to be set with the
-	// "storage.client.address" config parameter.
-	remote, err := client.New()
-	if err != nil {
-		return nil, err
-	}
-
-	cache, err := cache.New(
-		viper.GetString(cfgCacheFile),
-		viper.GetInt(cfgCacheSize),
-		viper.GetInt(cfgCacheBacklog),
-	)
+	local, err := lru.New2Q(viper.GetInt(cfgCacheSize))
 	if err != nil {
 		return nil, err
 	}
 
 	b := &cachingClientBackend{
-		logger: logging.GetLogger("storage/cachingclient"),
-		remote: remote,
-		cache:  cache,
+		logger:       logging.GetLogger("storage/cachingclient"),
+		remote:       remote,
+		local:        local,
+		dbPath:       viper.GetString(cfgCacheFile),
+		maxValueSize: viper.GetInt(cfgCacheMaxValueSize),
+	}
+
+	if err = b.load(); err != nil {
+		return nil, err
 	}
 
 	return b, nil
@@ -223,13 +310,13 @@ func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
 		cmd.Flags().Int(cfgCacheSize, 1000000, "Cache size")
-		cmd.Flags().Int(cfgCacheBacklog, 64, "Cache async backlog")
+		cmd.Flags().Int(cfgCacheMaxValueSize, 1024, "Maximum cached value size")
 	}
 
 	for _, v := range []string{
 		cfgCacheFile,
 		cfgCacheSize,
-		cfgCacheBacklog,
+		cfgCacheMaxValueSize,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

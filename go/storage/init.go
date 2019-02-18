@@ -47,7 +47,11 @@ func New(timeSource epochtime.Backend, dataDir string, signingKey *signature.Pri
 	case client.BackendName:
 		impl, err = client.New()
 	case cachingclient.BackendName:
-		impl, err = cachingclient.New()
+		var remote api.Backend
+		remote, err = client.New()
+		if err == nil {
+			impl, err = cachingclient.New(remote)
+		}
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
