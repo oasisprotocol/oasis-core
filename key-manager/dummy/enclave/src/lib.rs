@@ -18,7 +18,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use ekiden_core::{
     bytes::{B512, H256},
-    error::{Error, Result},
+    error::Result,
     hash,
     signature::{InMemorySigner, Signer},
 };
@@ -63,12 +63,17 @@ pub fn get_or_create_keys(
     Ok(response)
 }
 
-pub fn get_public_key(request: &Request<GetOrCreateKeyRequest>) -> Result<GetOrCreateKeyResponse> {
+pub fn get_public_key(
+    request: &Request<GetOrCreateKeyRequest>,
+) -> Result<Option<GetOrCreateKeyResponse>> {
     let mut response = GetOrCreateKeyResponse::new();
     // Query the key store.
     {
         let key_store = KeyStore::get();
-        let key = key_store.get_public_key(H256::try_from(request.get_contract_id())?)?;
+        let key = match key_store.get_public_key(H256::try_from(request.get_contract_id())?)? {
+            Some(key) => key,
+            None => return Ok(None),
+        };
         // Expired keys are not implemented yet, so allow this key to be valid as long as possible.
         let timestamp = MAX_KEY_TIMESTAMP;
         let signature = sign_public_key(key, Some(timestamp))?;
@@ -78,22 +83,25 @@ pub fn get_public_key(request: &Request<GetOrCreateKeyRequest>) -> Result<GetOrC
         response.set_signature(serde_cbor::to_vec(&signature)?);
     }
 
-    Ok(response)
+    Ok(Some(response))
 }
 
 pub fn long_term_public_key(
     request: &Request<GetOrCreateKeyRequest>,
-) -> Result<GetOrCreateKeyResponse> {
+) -> Result<Option<GetOrCreateKeyResponse>> {
     let mut response = GetOrCreateKeyResponse::new();
     {
         let key_store = KeyStore::get();
-        let key = key_store.get_public_key(H256::try_from(request.get_contract_id())?)?;
+        let key = match key_store.get_public_key(H256::try_from(request.get_contract_id())?)? {
+            Some(key) => key,
+            None => return Ok(None),
+        };
         let signature = sign_public_key(key, None)?;
 
         response.set_key(serde_cbor::to_vec(&key)?);
         response.set_signature(serde_cbor::to_vec(&signature)?);
     }
-    Ok(response)
+    Ok(Some(response))
 }
 
 fn sign_public_key(public_key: PublicKeyType, timestamp: Option<u64>) -> Result<B512> {

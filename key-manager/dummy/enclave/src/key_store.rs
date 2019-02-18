@@ -8,10 +8,7 @@ use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
 
-use ekiden_core::{
-    error::{Error, Result},
-    random,
-};
+use ekiden_core::{error::Result, random};
 
 use ekiden_keymanager_common::{
     ContractId, ContractKey, PublicKeyType, StateKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY,
@@ -59,18 +56,13 @@ impl KeyStore {
     }
 
     /// Get the public part of the key.
-    pub fn get_public_key(&self, contract_id: ContractId) -> Result<PublicKeyType> {
+    pub fn get_public_key(&self, contract_id: ContractId) -> Result<Option<PublicKeyType>> {
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let pk_serialized = db.get(&contract_id);
-            if pk_serialized.is_none() {
-                return Err(Error::new(format!(
-                    "The requested public key doesn't exist for {:?}",
-                    contract_id
-                )));
-            }
-            let pk: ContractKey =
-                bincode::deserialize(&pk_serialized.unwrap()).expect("Corrupted state");
-            Ok(pk.input_keypair.get_pk())
+            let result = pk_serialized
+                .map(|pk| bincode::deserialize(&pk).expect("Corrupted state"))
+                .and_then(|ck: ContractKey| Some(ck.input_keypair.get_pk()));
+            Ok(result)
         })
     }
 
