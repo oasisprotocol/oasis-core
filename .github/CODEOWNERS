@@ -1,0 +1,8 @@
+# Default code owners.
+* @kostko @Yawning
+
+# Ekiden node.
+/go/ @kostko @Yawning
+
+# Key manager interface.
+/key-manager/ @kostko @Yawning @peterjgilbert @armaniferrante
