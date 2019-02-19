@@ -105,7 +105,7 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
-  # This label needs to be synced with runtime-ethereum's 
+  # This label needs to be synced with runtime-ethereum's
   # .buildkite/rust/build_and_test_runtime.sh and .buildkite/scripts/download_common_artifacts.sh.
   - label: Build key manager enclave
     command:
@@ -189,15 +189,15 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
-#  - label: E2E migration tests
-#    timeout_in_minutes: 20
-#    command:
-#      - .buildkite/scripts/download_e2e_test_artifacts.sh
-#      - .buildkite/scripts/test_migration.sh
-#    agents:
-#      buildkite_agent_size: large
-#    plugins:
-#      <<: *docker_plugin_configuration
+  - label: E2E migration tests
+    timeout_in_minutes: 20
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/scripts/test_migration.sh
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin_configuration
 
   ####################################
   # Rust coverage job (only on master)
