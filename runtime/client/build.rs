@@ -4,10 +4,10 @@ extern crate protoc_grpcio;
 fn main() {
     // Generate module file.
     // Must be done first to create src/generated directory
-    ekiden_tools::generate_mod("src/generated", &["runtime", "runtime_grpc"]);
+    ekiden_tools::generate_mod("src/generated", &["client", "client_grpc"]);
 
     protoc_grpcio::compile_grpc_protos(
-        &["../../go/grpc/committee/runtime.proto"],
+        &["../../go/grpc/client/client.proto"],
         &["src", "../../go/grpc"],
         "src/generated",
     )
@@ -15,6 +15,6 @@ fn main() {
 
     println!(
         "cargo:rerun-if-changed={}",
-        "../../go/grpc/committee/runtime.proto"
+        "../../go/grpc/client/client.proto"
     );
 }

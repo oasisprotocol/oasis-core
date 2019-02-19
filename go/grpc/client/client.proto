@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package client;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/client";
+
+service Runtime {
+    // Submit a transaction to leader.
+    rpc SubmitTx (SubmitTxRequest) returns (SubmitTxResponse) {}
+}
+
+message SubmitTxRequest {
+    // Encoded transaction.
+    bytes data = 1;
+    // Runtime identifier.
+    bytes runtime_id = 2;
+}
+
+message SubmitTxResponse {
+	bytes result = 1;
+}

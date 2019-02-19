@@ -23,6 +23,7 @@ extern crate ekiden_registry_base;
 extern crate ekiden_registry_client;
 extern crate ekiden_roothash_base;
 extern crate ekiden_roothash_client;
+extern crate ekiden_runtime_client;
 extern crate ekiden_scheduler_base;
 extern crate ekiden_scheduler_client;
 extern crate ekiden_storage_base;

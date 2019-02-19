@@ -33,6 +33,7 @@ var protoFiles = [][]string{
 	{"scheduler/scheduler.proto"},
 	{"storage/storage.proto"},
 	{"committee/runtime.proto"},
+	{"client/client.proto"},
 	{"enclaverpc/enclaverpc.proto"},
 }
 

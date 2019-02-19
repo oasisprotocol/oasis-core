@@ -8,6 +8,7 @@ import (
 	"errors"
 	"math"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -162,6 +163,17 @@ func (a *Address) FromIP(ip net.IP, port uint16) error {
 	a.Tuple.Port = port
 
 	return nil
+}
+
+// String renders the address into a string containing the IP and port.
+func (a *Address) String() string {
+	netIP := make(net.IP, len(a.Tuple.IP))
+	copy(netIP, a.Tuple.IP)
+	stringIP := netIP.String()
+
+	stringPort := strconv.Itoa(int(a.Tuple.Port))
+
+	return net.JoinHostPort(stringIP, stringPort)
 }
 
 // AddressTuple is an (ip, port) tuple.
