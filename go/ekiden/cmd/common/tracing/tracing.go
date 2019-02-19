@@ -64,7 +64,7 @@ func (l *ekidenTracingLogger) Error(msg string) {
 }
 
 func (l *ekidenTracingLogger) Infof(msg string, args ...interface{}) {
-	l.logger.Info(fmt.Sprintf(msg, args))
+	l.logger.Info(fmt.Sprintf(msg, args...))
 }
 
 // New constructs a new tracing service.
