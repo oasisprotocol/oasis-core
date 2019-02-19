@@ -13,7 +13,7 @@ use std::{
 
 use protobuf::{self, Message};
 use rustracing::tag;
-use rustracing_jaeger::span::SpanHandle;
+use rustracing_jaeger::span::SpanContext;
 use thread_local::ThreadLocal;
 
 use ekiden_core::{
@@ -49,10 +49,10 @@ enum Command {
     RpcCall(Vec<u8>, oneshot::Sender<Result<Vec<u8>>>),
     /// Runtime call batch process request.
     RuntimeCallBatch(
+        Option<SpanContext>,
         CallBatch,
         Block,
         oneshot::Sender<Result<ComputedBatch>>,
-        SpanHandle,
     ),
 }
 
@@ -145,6 +145,7 @@ impl WorkerInner {
 
     fn call_runtime_batch_fallible(
         &mut self,
+        ctx: Option<SpanContext>,
         batch: &CallBatch,
         block: &Block,
     ) -> Result<(OutputBatch, Vec<(Vec<u8>, u64)>, H256)> {
@@ -152,7 +153,6 @@ impl WorkerInner {
 
         // Prepare batch storage.
         let batch_storage = Arc::new(BatchStorageBackend::new(self.storage.clone()));
-
         let root_hash = &block.header.state_root;
 
         let (new_state_root, outputs) = {
@@ -160,7 +160,7 @@ impl WorkerInner {
 
             // Run in storage context.
             self.runtime
-                .with_storage(batch_storage.clone(), root_hash, || {
+                .with_storage(ctx, batch_storage.clone(), root_hash, || {
                     // Execute batch.
                     self.runtime.runtime_call_batch(batch, &block.header)
                 })?
@@ -202,18 +202,28 @@ impl WorkerInner {
     }
 
     /// Handle runtime call batch.
-    /// `sh` is from when we submitted the CallRuntimeBatch command.
+    /// `sc` is from when we submitted the CallRuntimeBatch command.
     fn handle_runtime_batch(
         &mut self,
+        ctx: Option<SpanContext>,
         calls: CallBatch,
         block: Block,
         sender: oneshot::Sender<Result<ComputedBatch>>,
-        sh: SpanHandle,
     ) {
-        let _span = sh.follower("handle_runtime_batch", |opts| {
-            opts.tag(tag::StdTag::span_kind("consumer")).start()
-        });
-        let result = self.call_runtime_batch_fallible(&calls, &block);
+        if let Some(ctx) = &ctx {
+            ekiden_tracing::get_tracer()
+                .span("handle_runtime_batch")
+                .follows_from(ctx)
+                .tag(tag::StdTag::span_kind("consumer"))
+                .start();
+        } else {
+            ekiden_tracing::get_tracer()
+                .span("handle_runtime_batch")
+                .tag(tag::StdTag::span_kind("consumer"))
+                .start();
+        }
+
+        let result = self.call_runtime_batch_fallible(ctx, &calls, &block);
 
         match result {
             Ok((outputs, storage_inserts, new_state_root)) => {
@@ -261,10 +271,10 @@ impl WorkerInner {
 
                     measure_counter_inc!("rpc_call_processed");
                 }
-                Command::RuntimeCallBatch(calls, block, sender, sh) => {
+                Command::RuntimeCallBatch(ctx, calls, block, sender) => {
                     // Process batch of runtime calls.
                     let call_count = calls.len();
-                    self.handle_runtime_batch(calls, block, sender, sh);
+                    self.handle_runtime_batch(ctx, calls, block, sender);
 
                     measure_counter_inc!("runtime_call_processed", call_count);
                 }
@@ -379,22 +389,32 @@ impl Worker {
     /// Returns a receiver that will be used to deliver the response.
     pub fn runtime_call_batch(
         &self,
+        ctx: Option<SpanContext>,
         calls: CallBatch,
         block: Block,
-        sh: SpanHandle,
     ) -> BoxFuture<ComputedBatch> {
         measure_counter_inc!("runtime_call_request");
-        let span = sh.child("send_runtime_call_batch", |opts| {
-            opts.tag(tag::StdTag::span_kind("producer")).start()
-        });
+
+        if let Some(ctx) = &ctx {
+            ekiden_tracing::get_tracer()
+                .span("send_runtime_call_batch")
+                .child_of(ctx)
+                .tag(tag::StdTag::span_kind("producer"))
+                .start();
+        } else {
+            ekiden_tracing::get_tracer()
+                .span("send_runtime_call_batch")
+                .tag(tag::StdTag::span_kind("producer"))
+                .start();
+        }
 
         let (response_sender, response_receiver) = oneshot::channel();
         self.get_command_sender()
             .send(Command::RuntimeCallBatch(
+                ctx,
                 calls,
                 block,
                 response_sender,
-                span.handle(),
             ))
             .unwrap();
 

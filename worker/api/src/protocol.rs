@@ -9,6 +9,8 @@ use std::{
 };
 
 use log::{error, warn};
+use rustracing_jaeger::span::SpanContext;
+use std::io::Cursor;
 use tokio_codec::Decoder;
 use tokio_io::{AsyncRead, AsyncWrite};
 
@@ -33,12 +35,12 @@ const PROTOCOL_KEEPALIVE_INTERVAL: u64 = 1;
 /// Request handler.
 pub trait Handler: Sync + Send {
     /// Handle given request and return a response.
-    fn handle(&self, body: Body) -> BoxFuture<Body>;
+    fn handle(&self, ctx: Option<SpanContext>, body: Body) -> BoxFuture<Body>;
 }
 
 impl<T: ?Sized + Handler> Handler for Arc<T> {
-    fn handle(&self, body: Body) -> BoxFuture<Body> {
-        Handler::handle(&**self, body)
+    fn handle(&self, ctx: Option<SpanContext>, body: Body) -> BoxFuture<Body> {
+        Handler::handle(&**self, ctx, body)
     }
 }
 
@@ -132,6 +134,7 @@ impl Protocol {
                             id: 0,
                             message_type: MessageType::KeepAlive,
                             body: Body::Empty {},
+                            span_context: vec![],
                         })
                         .discard()
                 })
@@ -151,9 +154,20 @@ impl Protocol {
                                 // Incoming request.
                                 let shared_inner = shared_inner.clone();
                                 let id = message.id;
+
+                                // Extract the span context, if it is present in the message.
+                                let mut ctx: Option<SpanContext> = None;
+                                if !message.span_context.is_empty() {
+                                    let mut span_buf = Cursor::new(message.span_context);
+                                    match SpanContext::extract_from_binary(&mut span_buf) {
+                                        Ok(context) => ctx = context,
+                                        Err(_) => warn!("Failed to extract span from binary span {:?}", span_buf),
+                                    };
+                                }
+
                                 return shared_inner
                                     .request_handler
-                                    .handle(message.body)
+                                    .handle(ctx, message.body)
                                     .then(move |result| {
                                         let body = match result {
                                             Ok(value) => value,
@@ -167,6 +181,7 @@ impl Protocol {
                                             id,
                                             message_type: MessageType::Response,
                                             body,
+                                            span_context: vec![],
                                         })
                                     })
                                     .map(|_| ())
@@ -217,12 +232,22 @@ impl Protocol {
         (Protocol { inner }, shutdown_receiver)
     }
 
-    pub(crate) fn make_request(&self, body: Body) -> BoxFuture<Body> {
+    pub(crate) fn make_request(&self, ctx: Option<SpanContext>, body: Body) -> BoxFuture<Body> {
         let id = self.inner.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
+        let mut span_buf: Cursor<Vec<u8>> = Cursor::new(vec![]);
+        match ctx.clone() {
+            Some(sc) => match sc.inject_to_binary(&mut span_buf) {
+                Ok(_) => (),
+                Err(err) => warn!("Error while injecting to binary: {}", err),
+            },
+            None => (),
+        }
+
         let message = Message {
             id,
             body,
             message_type: MessageType::Request,
+            span_context: span_buf.get_ref().to_vec(),
         };
 
         // Create a response channel and register an outstanding pending request.
@@ -255,6 +280,7 @@ mod tests {
     extern crate grpcio;
     extern crate tokio_uds;
 
+    use rustracing_jaeger::span::SpanContext;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -280,7 +306,7 @@ mod tests {
     }
 
     impl Handler for EchoHandler {
-        fn handle(&self, body: Body) -> BoxFuture<Body> {
+        fn handle(&self, _: Option<SpanContext>, body: Body) -> BoxFuture<Body> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             future::ok(body).into_box()
         }
@@ -298,11 +324,19 @@ mod tests {
         let (protocol_a, _) = Protocol::new(environment.clone(), socket_a, handler_a.clone());
         let (protocol_b, _) = Protocol::new(environment.clone(), socket_b, handler_b.clone());
 
-        block_on(environment.clone(), protocol_a.make_request(Body::Empty {})).unwrap();
+        block_on(
+            environment.clone(),
+            protocol_a.make_request(None, Body::Empty {}),
+        )
+        .unwrap();
         assert_eq!(handler_a.calls.load(Ordering::SeqCst), 0);
         assert_eq!(handler_b.calls.load(Ordering::SeqCst), 1);
 
-        block_on(environment.clone(), protocol_b.make_request(Body::Empty {})).unwrap();
+        block_on(
+            environment.clone(),
+            protocol_b.make_request(None, Body::Empty {}),
+        )
+        .unwrap();
         assert_eq!(handler_a.calls.load(Ordering::SeqCst), 1);
         assert_eq!(handler_b.calls.load(Ordering::SeqCst), 1);
     }
@@ -323,7 +357,7 @@ mod tests {
         let request = Body::WorkerRPCCallRequest {
             request: vec![42; 2_000_000],
         };
-        block_on(environment.clone(), protocol_a.make_request(request)).unwrap();
+        block_on(environment.clone(), protocol_a.make_request(None, request)).unwrap();
         assert_eq!(handler_a.calls.load(Ordering::SeqCst), 0);
         assert_eq!(handler_b.calls.load(Ordering::SeqCst), 1);
     }

@@ -477,6 +477,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 			opentracing.Tag{Key: "rq", Value: rq},
 			opentracing.ChildOf(n.batchSpan.Context()),
 		)
+		ctx = opentracing.ContextWithSpan(ctx, span)
 		defer span.Finish()
 
 		ch, err := n.workerHost.MakeRequest(ctx, rq)

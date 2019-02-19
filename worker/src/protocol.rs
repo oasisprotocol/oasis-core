@@ -1,7 +1,7 @@
 //! Protocol handler for worker RPCs.
 use std::sync::{Condvar, Mutex};
 
-use rustracing_jaeger::Span;
+use rustracing_jaeger::span::SpanContext;
 
 use ekiden_core::{bytes::B256, futures::prelude::*, runtime::batch::CallBatch};
 use ekiden_roothash_base::Block;
@@ -75,10 +75,12 @@ impl ekiden_worker_api::Worker for ProtocolHandler {
         self.with_worker(|worker| worker.rpc_call(request))
     }
 
-    fn runtime_call_batch(&self, calls: CallBatch, block: Block) -> BoxFuture<ComputedBatch> {
-        // TODO: Correlate to an event source
-        let sh = Span::inactive().handle();
-
-        self.with_worker(|worker| worker.runtime_call_batch(calls, block, sh))
+    fn runtime_call_batch(
+        &self,
+        ctx: Option<SpanContext>,
+        calls: CallBatch,
+        block: Block,
+    ) -> BoxFuture<ComputedBatch> {
+        self.with_worker(|worker| worker.runtime_call_batch(ctx, calls, block))
     }
 }

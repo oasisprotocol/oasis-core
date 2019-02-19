@@ -45,6 +45,7 @@ type Message struct {
 	ID          uint64      `codec:"id"`
 	MessageType MessageType `codec:"message_type"`
 	Body        Body        `codec:"body"`
+	SpanContext []byte      `codec:"span_context"`
 }
 
 // Body is a protocol message body.

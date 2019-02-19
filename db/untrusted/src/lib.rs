@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+extern crate rustracing_jaeger;
 extern crate sgx_types;
 
 extern crate ekiden_common;

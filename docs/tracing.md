@@ -94,7 +94,7 @@ on what "spans" are in tracing. To obtain a _span context_ to correlate your new
 span with a trace, you either:
 
 * Pass around a span context to different functions.
-* _Inject_ them into RPC messages and _extract_ them.
+* _Inject_ the span context into RPC messages and _extract_ it.
 
 To start a new trace, get the global tracer and create a new span with
 `ekiden_tracing::get_tracer().span(...)` in Rust, and
@@ -104,19 +104,29 @@ To create a new "child" or "follows from" span, pass the parent span's context.
 In Go, you pass it by calling `opentracing.ChildOf()` in the `StartSpan()`
 function.
 ```go
-span := opentracing.StartSpan(ctx, "storage-memory-lock-set", opentracing.Tag{Key: "ekiden.storage_key", Value: key}, opentracing.ChildOf(parentSpan.Context()))
+span := opentracing.StartSpan(
+	        ctx,
+	        "storage-memory-lock-set",
+	        opentracing.Tag{Key: "ekiden.storage_key", Value: key},
+	        opentracing.ChildOf(parentSpan.Context()),
+)
 ```
 
-Note: Using the `StartSpanFromContext()` is not the preferred way anymore since
-the immutable node's context is used in various places and you should not
-replace it each time you make a new span.
+Note: Storing the span in the current context with `StartSpanFromContext()` is
+often not desirable since the immutable node's context is used in various places
+and you might not want to replace it each time you make a new span.
 
-In Rust, the preferred way is by taking the parent span's handle:
+In Rust, the procedure is similar given the parent's span context with slightly
+different syntax:
 ```rust
-let span = parent_span.handle().child("call_contract_batch_enclave", |opts| opts.start());
+let span = ekiden_tracing::get_tracer()
+                .span("handle_runtime_batch")
+                .child_of(span_context)
+                .tag(tag::StdTag::span_kind("consumer"))
+                .start();
 ```
 
-Optionally, add tags, logs, and references to the span. See [OpenTracing's
+Additionally add tags, logs, and references to the span. See [OpenTracing's
 semantic conventions](https://github.com/opentracing/specification/blob/master/semantic_conventions.md)
 on how to represent standard information. For more information on how to add
 these, see Rust's `rustracing` [reference](https://docs.rs/rustracing/0.1.7/rustracing/span/struct.Span.html) 
@@ -124,7 +134,8 @@ and Go's `opentracing-go` [reference](https://godoc.org/github.com/opentracing/o
 
 Note: For Rust, we use [own fork](https://github.com/oasislabs/rustracing_jaeger.git)
 of `rustracing_jaeger` crate which contains a fix for connecting to the agent on
-IP other than localhost. This issue has been reported [here](https://github.com/sile/rustracing_jaeger/issues/10).
+IP other than localhost and implements binary injector and extractor used by
+RPCs.
 
 # Prometheus metrics
 

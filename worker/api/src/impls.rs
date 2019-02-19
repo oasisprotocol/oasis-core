@@ -1,6 +1,8 @@
 //! Protocol trait implementations.
 use sgx_types;
 
+use rustracing_jaeger::span::SpanContext;
+
 use ekiden_core::{
     bytes::{B256, H256},
     enclave::api as identity_api,
@@ -11,7 +13,10 @@ use ekiden_core::{
 };
 use ekiden_roothash_base::Block;
 use ekiden_storage_base::{InsertOptions, StorageBackend};
-use ekiden_untrusted::{enclave::identity::IAS, rpc::router::Handler as EnclaveRpcHandler};
+use ekiden_untrusted::{
+    db::enclave::current_span_context, enclave::identity::IAS,
+    rpc::router::Handler as EnclaveRpcHandler,
+};
 
 use super::{
     protocol::Handler,
@@ -21,7 +26,7 @@ use super::{
 
 impl Worker for Protocol {
     fn worker_shutdown(&self) -> BoxFuture<()> {
-        self.make_request(Body::WorkerShutdownRequest {})
+        self.make_request(None, Body::WorkerShutdownRequest {})
             .and_then(|body| match body {
                 Body::Empty {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
@@ -30,7 +35,7 @@ impl Worker for Protocol {
     }
 
     fn worker_abort(&self) -> BoxFuture<()> {
-        self.make_request(Body::WorkerAbortRequest {})
+        self.make_request(None, Body::WorkerAbortRequest {})
             .and_then(|body| match body {
                 Body::WorkerAbortResponse {} => Ok(()),
                 _ => Err(Error::new("malformed response")),
@@ -39,7 +44,7 @@ impl Worker for Protocol {
     }
 
     fn capabilitytee_gid(&self) -> BoxFuture<[u8; 4]> {
-        self.make_request(Body::WorkerCapabilityTEEGidRequest {})
+        self.make_request(None, Body::WorkerCapabilityTEEGidRequest {})
             .and_then(|body| match body {
                 Body::WorkerCapabilityTEEGidResponse { gid } => Ok(gid),
                 _ => Err(Error::new("malformed response")),
@@ -53,11 +58,14 @@ impl Worker for Protocol {
         spid: [u8; 16],
         sig_rl: Vec<u8>,
     ) -> BoxFuture<(B256, Vec<u8>)> {
-        self.make_request(Body::WorkerCapabilityTEERakQuoteRequest {
-            quote_type,
-            spid: spid.to_vec(),
-            sig_rl,
-        })
+        self.make_request(
+            None,
+            Body::WorkerCapabilityTEERakQuoteRequest {
+                quote_type,
+                spid: spid.to_vec(),
+                sig_rl,
+            },
+        )
         .and_then(|body| match body {
             Body::WorkerCapabilityTEERakQuoteResponse { rak_pub, quote } => Ok((rak_pub, quote)),
             _ => Err(Error::new("malformed response")),
@@ -66,7 +74,7 @@ impl Worker for Protocol {
     }
 
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        self.make_request(Body::WorkerRPCCallRequest { request })
+        self.make_request(None, Body::WorkerRPCCallRequest { request })
             .and_then(|body| match body {
                 Body::WorkerRPCCallResponse { response } => Ok(response),
                 _ => Err(Error::new("malformed response")),
@@ -74,8 +82,13 @@ impl Worker for Protocol {
             .into_box()
     }
 
-    fn runtime_call_batch(&self, calls: CallBatch, block: Block) -> BoxFuture<ComputedBatch> {
-        self.make_request(Body::WorkerRuntimeCallBatchRequest { calls, block })
+    fn runtime_call_batch(
+        &self,
+        ctx: Option<SpanContext>,
+        calls: CallBatch,
+        block: Block,
+    ) -> BoxFuture<ComputedBatch> {
+        self.make_request(ctx, Body::WorkerRuntimeCallBatchRequest { calls, block })
             .and_then(|body| match body {
                 Body::WorkerRuntimeCallBatchResponse { batch } => Ok(batch),
                 _ => Err(Error::new("malformed response")),
@@ -86,7 +99,7 @@ impl Worker for Protocol {
 
 impl Host for Protocol {
     fn rpc_call(&self, endpoint: ClientEndpoint, request: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        self.make_request(Body::HostRPCCallRequest { endpoint, request })
+        self.make_request(None, Body::HostRPCCallRequest { endpoint, request })
             .and_then(|body| match body {
                 Body::HostRPCCallResponse { response } => Ok(response),
                 _ => Err(Error::new("malformed response")),
@@ -95,7 +108,7 @@ impl Host for Protocol {
     }
 
     fn ias_get_spid(&self) -> BoxFuture<sgx_types::sgx_spid_t> {
-        self.make_request(Body::HostIasGetSpidRequest {})
+        self.make_request(None, Body::HostIasGetSpidRequest {})
             .and_then(|body| match body {
                 Body::HostIasGetSpidResponse { spid } => {
                     if spid.len() != 16 {
@@ -113,7 +126,7 @@ impl Host for Protocol {
     }
 
     fn ias_get_quote_type(&self) -> BoxFuture<sgx_types::sgx_quote_sign_type_t> {
-        self.make_request(Body::HostIasGetQuoteTypeRequest {})
+        self.make_request(None, Body::HostIasGetQuoteTypeRequest {})
             .and_then(|body| match body {
                 Body::HostIasGetQuoteTypeResponse { quote_type: 0 } => {
                     Ok(sgx_types::sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE)
@@ -127,7 +140,7 @@ impl Host for Protocol {
     }
 
     fn ias_sigrl(&self, gid: &sgx_types::sgx_epid_group_id_t) -> BoxFuture<Vec<u8>> {
-        self.make_request(Body::HostIasSigRlRequest { gid: gid.clone() })
+        self.make_request(None, Body::HostIasSigRlRequest { gid: gid.clone() })
             .and_then(|body| match body {
                 Body::HostIasSigRlResponse { sigrl } => Ok(sigrl),
                 _ => Err(Error::new("malformed response")),
@@ -136,7 +149,7 @@ impl Host for Protocol {
     }
 
     fn ias_report(&self, quote: Vec<u8>) -> BoxFuture<identity_api::AvReport> {
-        self.make_request(Body::HostIasReportRequest { quote })
+        self.make_request(None, Body::HostIasReportRequest { quote })
             .and_then(|body| match body {
                 Body::HostIasReportResponse {
                     avr,
@@ -155,7 +168,8 @@ impl Host for Protocol {
     }
 
     fn storage_get(&self, key: H256) -> BoxFuture<Vec<u8>> {
-        self.make_request(Body::HostStorageGetRequest { key })
+        let ctx = current_span_context();
+        self.make_request(ctx, Body::HostStorageGetRequest { key })
             .and_then(|body| match body {
                 Body::HostStorageGetResponse { value } => Ok(value),
                 _ => Err(Error::new("malformed response")),
@@ -164,7 +178,8 @@ impl Host for Protocol {
     }
 
     fn storage_get_batch(&self, keys: Vec<H256>) -> BoxFuture<Vec<Option<Vec<u8>>>> {
-        self.make_request(Body::HostStorageGetBatchRequest { keys })
+        let ctx = current_span_context();
+        self.make_request(ctx, Body::HostStorageGetBatchRequest { keys })
             .and_then(|body| match body {
                 Body::HostStorageGetBatchResponse { values } => Ok(values
                     .into_iter()
@@ -235,7 +250,7 @@ pub struct WorkerHandler<T: Worker>(pub T);
 pub struct HostHandler<T: Host>(pub T);
 
 impl<T: Worker> Handler for WorkerHandler<T> {
-    fn handle(&self, body: Body) -> BoxFuture<Body> {
+    fn handle(&self, ctx: Option<SpanContext>, body: Body) -> BoxFuture<Body> {
         match body {
             Body::WorkerPingRequest {} => future::ok(Body::Empty {}).into_box(),
             Body::WorkerShutdownRequest {} => {
@@ -280,7 +295,7 @@ impl<T: Worker> Handler for WorkerHandler<T> {
                 .into_box(),
             Body::WorkerRuntimeCallBatchRequest { calls, block } => self
                 .0
-                .runtime_call_batch(calls, block)
+                .runtime_call_batch(ctx, calls, block)
                 .map(|batch| Body::WorkerRuntimeCallBatchResponse { batch })
                 .into_box(),
             _ => future::err(Error::new("unsupported method")).into_box(),
@@ -289,7 +304,7 @@ impl<T: Worker> Handler for WorkerHandler<T> {
 }
 
 impl<T: Host> Handler for HostHandler<T> {
-    fn handle(&self, body: Body) -> BoxFuture<Body> {
+    fn handle(&self, _ctx: Option<SpanContext>, body: Body) -> BoxFuture<Body> {
         match body {
             Body::HostRPCCallRequest { endpoint, request } => self
                 .0

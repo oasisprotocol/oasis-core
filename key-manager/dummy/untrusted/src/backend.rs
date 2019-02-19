@@ -288,7 +288,7 @@ impl KeyManagerEnclave {
 
         let enclave_response =
             self.enclave
-                .with_storage(self.storage_backend.clone(), &root_hash, || {
+                .with_storage(None, self.storage_backend.clone(), &root_hash, || {
                     self.enclave.call(enclave_request)
                 })?;
 

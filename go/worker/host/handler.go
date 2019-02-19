@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/opentracing/opentracing-go"
+
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
@@ -99,14 +101,24 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 	}
 	// Storage.
 	if body.HostStorageGetRequest != nil {
-		value, err := h.storage.Get(ctx, body.HostStorageGetRequest.Key)
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Get(key)",
+			opentracing.Tag{Key: "key", Value: body.HostStorageGetRequest.Key},
+		)
+		defer span.Finish()
+
+		value, err := h.storage.Get(sctx, body.HostStorageGetRequest.Key)
 		if err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostStorageGetResponse: &protocol.HostStorageGetResponse{Value: value}}, nil
 	}
 	if body.HostStorageGetBatchRequest != nil {
-		values, err := h.storage.GetBatch(ctx, body.HostStorageGetBatchRequest.Keys)
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetBatch(key)",
+			opentracing.Tag{Key: "key", Value: body.HostStorageGetRequest.Key},
+		)
+		defer span.Finish()
+
+		values, err := h.storage.GetBatch(sctx, body.HostStorageGetBatchRequest.Keys)
 		if err != nil {
 			return nil, err
 		}

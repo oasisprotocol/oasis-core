@@ -1,6 +1,7 @@
 //! Enclave database interface.
 use std::{cell::RefCell, sync::Arc};
 
+use rustracing_jaeger::span::SpanContext;
 use sgx_types::*;
 
 use ekiden_common::{
@@ -21,12 +22,18 @@ thread_local! {
 
     /// Transfer buffer for storage OCALLs.
     static TRANSFER_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![0; 8 * 1024 * 1024]);
+
+    /// Parent span context for creating child spans.
+    ///
+    /// This will only be set when the current thread is running in a `with_storage` context
+    /// and will otherwise be `None`.
+    static SPAN_CONTEXT: RefCell<Option<SpanContext>> = RefCell::new(None);
 }
 
 struct WithStorageGuard;
 
 impl WithStorageGuard {
-    fn new(backend: Arc<StorageBackend>) -> Self {
+    fn new(backend: Arc<StorageBackend>, ctx: Option<SpanContext>) -> Self {
         STORAGE.with(|storage| {
             // Set current storage.
             assert!(
@@ -34,6 +41,15 @@ impl WithStorageGuard {
                 "storage backend set multiple times"
             );
             *storage.borrow_mut() = Some(backend);
+        });
+
+        SPAN_CONTEXT.with(|span_context| {
+            // Set current span context.
+            assert!(
+                span_context.borrow().is_none(),
+                "span_context set multiple times"
+            );
+            *span_context.borrow_mut() = ctx;
         });
 
         WithStorageGuard
@@ -45,6 +61,11 @@ impl Drop for WithStorageGuard {
         STORAGE.with(|storage| {
             // Clear storage when the guard is dropped.
             *storage.borrow_mut() = None;
+        });
+
+        SPAN_CONTEXT.with(|span_context| {
+            // Clear span_context when the guard is dropped.
+            *span_context.borrow_mut() = None;
         });
     }
 }
@@ -62,6 +83,7 @@ pub trait EnclaveDb {
     /// Use [`current_storage`] to get the storage backend in OCALLs.
     fn with_storage<F: FnOnce() -> R, R>(
         &self,
+        ctx: Option<SpanContext>,
         storage: Arc<StorageBackend>,
         root_hash: &H256,
         f: F,
@@ -71,12 +93,13 @@ pub trait EnclaveDb {
 impl EnclaveDb for Enclave {
     fn with_storage<F: FnOnce() -> R, R>(
         &self,
+        ctx: Option<SpanContext>,
         storage: Arc<StorageBackend>,
         root_hash: &H256,
         f: F,
     ) -> Result<(H256, R)> {
         // Construct a guard so storage is properly cleared in case of unwinds.
-        let _guard = WithStorageGuard::new(storage);
+        let _guard = WithStorageGuard::new(storage, ctx);
 
         // Ensure transfer buffer is configured.
         TRANSFER_BUFFER.with(|buffer| {
@@ -134,6 +157,13 @@ pub fn current_storage() -> Arc<StorageBackend> {
             .expect("current_storage called outside with_storage context");
         storage.clone()
     })
+}
+
+/// Return the current SpanContext.
+///
+/// If called outside the `with_storage` context, this function will return None.
+pub fn current_span_context() -> Option<SpanContext> {
+    SPAN_CONTEXT.with(|span_context| span_context.borrow().clone())
 }
 
 /// Run a closure with the current transfer buffer as argument.
