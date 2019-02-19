@@ -103,11 +103,11 @@ fn main() {
             assert!(keymanager.get_or_create_secret_keys(id_1).is_err());
             assert!(keymanager.get_or_create_secret_keys(id_2).is_err());
             assert!(keymanager.get_public_key(id_0).is_ok());
-            assert!(keymanager.get_public_key(id_1).is_err());
-            assert!(keymanager.get_public_key(id_2).is_err());
+            assert!(keymanager.get_public_key(id_1).unwrap().is_none());
+            assert!(keymanager.get_public_key(id_2).unwrap().is_none());
             assert!(keymanager.long_term_public_key(id_0).is_ok());
-            assert!(keymanager.long_term_public_key(id_1).is_err());
-            assert!(keymanager.long_term_public_key(id_2).is_err());
+            assert!(keymanager.long_term_public_key(id_1).unwrap().is_none());
+            assert!(keymanager.long_term_public_key(id_2).unwrap().is_none());
 
             info!("Simple test passed.");
             exit(0);
