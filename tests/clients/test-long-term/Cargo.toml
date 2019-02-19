@@ -10,4 +10,4 @@ ekiden-runtime-client = { path = "../../../runtime/client" }
 ekiden-rpc-client = { path = "../../../rpc/client" }
 simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
-rand = "0.4"
+log = "0.4"
