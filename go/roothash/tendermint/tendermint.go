@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/eapache/channels"
-	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -230,7 +230,7 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 					continue
 				}
 
-				cache.Add(value.Round, height)
+				_ = cache.Put(value.Round, height)
 				if value.Round == round {
 					return block
 				}
@@ -325,7 +325,9 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 			lastBlock:     block,
 		}
 		var err error
-		notifiers.roundHeightMapCache, err = lru.New(roundHeightMapCacheSize)
+		notifiers.roundHeightMapCache, err = lru.New(
+			lru.Capacity(roundHeightMapCacheSize, false),
+		)
 		if err != nil {
 			panic(err)
 		}
@@ -404,7 +406,7 @@ func (r *tendermintBackend) worker() { // nolint: gocyclo
 
 				// Insert the round -> block height mapping into the
 				// cache.
-				notifiers.roundHeightMapCache.Add(value.Round, r.lastBlockHeight)
+				_ = notifiers.roundHeightMapCache.Put(value.Round, r.lastBlockHeight)
 
 				// Broadcast new block.
 				r.allBlockNotifier.Broadcast(block)
