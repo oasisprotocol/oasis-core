@@ -2,7 +2,8 @@ FROM oasislabs/development:0.2.0
 
 RUN apt-get install -y \
     unzip jq \
-    binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
+    binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev \
+    llvm-7 python3-pip
 
 # Install Docker client for building testnet images.
 RUN VER="18.03.0-ce" && \
@@ -40,3 +41,12 @@ RUN RUSTFLAGS="--cfg procmacro2_semver_exempt" \
     --git https://github.com/oasislabs/tarpaulin \
     --branch oasis \
     cargo-tarpaulin
+
+# Install TVM
+RUN git clone --recursive https://github.com/dmlc/tvm.git /tmp/tvm && \
+    cd /tmp/tvm && \
+    git checkout f6be4d6 && \
+    mkdir build && cd build && \
+    cmake .. -DUSE_LLVM=ON && \
+    make -j4 && cd ../nnvm && make -j4 && cd .. && \
+    pip3 install -e python -e nnvm/python -e topi/python
