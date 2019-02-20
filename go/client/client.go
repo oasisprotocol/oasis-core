@@ -17,6 +17,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -38,6 +39,7 @@ type clientCommon struct {
 	storage   storage.Backend
 	scheduler scheduler.Backend
 	registry  registry.Backend
+	syncable  common.Syncable
 
 	ctx context.Context
 }
@@ -116,6 +118,10 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *committee.Sub
 
 // SubmitTx submits a new transaction to the committee leader and returns its results.
 func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signature.PublicKey) ([]byte, error) {
+	if werr := c.WaitSync(ctx); werr != nil {
+		return nil, werr
+	}
+
 	req := &committee.SubmitTxRequest{
 		Data:      txData,
 		RuntimeId: runtimeID,
@@ -213,6 +219,28 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 	}
 }
 
+// WaitSync waits on the syncable given at construction to finish syncing.
+func (c *Client) WaitSync(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.common.syncable.Synced():
+		return nil
+	}
+}
+
+// IsSynced checks if the syncable given at construction has finished syncing.
+func (c *Client) IsSynced(ctx context.Context) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-c.common.syncable.Synced():
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
 // Cleanup stops all running block watchers and waits for them to finish.
 func (c *Client) Cleanup() {
 	for _, watcher := range c.watchers {
@@ -224,13 +252,14 @@ func (c *Client) Cleanup() {
 }
 
 // New returns a new instance of the Client service.
-func New(ctx context.Context, roothash roothash.Backend, storage storage.Backend, scheduler scheduler.Backend, registry registry.Backend) (*Client, error) {
+func New(ctx context.Context, roothash roothash.Backend, storage storage.Backend, scheduler scheduler.Backend, registry registry.Backend, syncable common.Syncable) (*Client, error) {
 	return &Client{
 		common: &clientCommon{
 			roothash:  roothash,
 			storage:   storage,
 			scheduler: scheduler,
 			registry:  registry,
+			syncable:  syncable,
 			ctx:       ctx,
 		},
 		watchers: make(map[signature.MapKey]*blockWatcher),

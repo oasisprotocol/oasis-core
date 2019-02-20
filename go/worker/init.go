@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -56,12 +57,6 @@ const (
 
 	cfgEntityPrivateKey = "worker.entity_private_key"
 )
-
-// Syncable is an interface exposed by consensus backends that expose
-// a way to block on initial synchronization.
-type Syncable interface {
-	Synced() <-chan struct{}
-}
 
 func parseAddressList(addresses []string) ([]node.Address, error) {
 	var output []node.Address
@@ -137,7 +132,7 @@ func New(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	syncable Syncable,
+	syncable common.Syncable,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)

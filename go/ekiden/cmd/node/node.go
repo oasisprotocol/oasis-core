@@ -113,7 +113,7 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
-	if n.Client, err = client.New(n.svcMgr.Ctx, n.RootHash, n.Storage, n.Scheduler, n.Registry); err != nil {
+	if n.Client, err = client.New(n.svcMgr.Ctx, n.RootHash, n.Storage, n.Scheduler, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Client, "client service")
