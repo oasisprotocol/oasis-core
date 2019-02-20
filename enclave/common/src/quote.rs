@@ -220,9 +220,9 @@ pub fn verify(identity_proof: &IdentityProof) -> Result<IdentityAuthenticatedInf
     match avr_body["isvEnclaveQuoteStatus"].as_str() {
         Some(status) => match status {
             "OK" => {}
-            "CONFIGURATION_NEEDED" => {
+            "GROUP_OUT_OF_DATE" | "CONFIGURATION_NEEDED" => {
                 if strict_avr_verification {
-                    return Err(Error::new("Rejecting quote status CONFIGURATION_NEEDED. Build without EKIDEN_STRICT_AVR_VERIFY=1 to allow"));
+                    return Err(Error::new(format!("Rejecting quote status {}. Build without EKIDEN_STRICT_AVR_VERIFY=1 to allow", status)));
                 }
             }
             _ => {
