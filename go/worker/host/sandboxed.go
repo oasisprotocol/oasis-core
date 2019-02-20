@@ -45,7 +45,9 @@ const (
 	// Worker connect timeout.
 	workerConnectTimeout = 5 * time.Second
 	// Worker RAK initialization timeout.
-	workerRAKTimeout = 5 * time.Second
+	// This can take a long time in deployments that run multiple
+	// nodes on a single machine, all sharing the same EPC.
+	workerRAKTimeout = 60 * time.Second
 	// Worker respawn delay.
 	workerRespawnDelay = 1 * time.Second
 	// Worker interrupt timeout.
