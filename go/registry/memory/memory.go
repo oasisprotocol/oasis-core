@@ -318,7 +318,7 @@ func (r *memoryBackend) buildNodeList(ctx context.Context, newEpoch epochtime.Ep
 
 	r.logger.Debug("worker: built node list",
 		"epoch", newEpoch,
-		"nodes", nodes,
+		"nodes_len", len(nodes),
 	)
 
 	r.nodeListNotifier.Broadcast(&api.NodeList{

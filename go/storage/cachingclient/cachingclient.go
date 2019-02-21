@@ -3,19 +3,20 @@
 package cachingclient
 
 import (
+	"bufio"
 	"context"
-	"encoding/binary"
+	"io"
 	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	dbm "github.com/tendermint/tendermint/libs/db"
+	"github.com/ugorji/go/codec"
 
 	"github.com/oasislabs/ekiden/go/common/cache/lru"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -212,28 +213,51 @@ func (b *cachingClientBackend) insertLocal(key api.Key, value []byte) bool {
 }
 
 func (b *cachingClientBackend) load() error {
-	dir, file := filepath.Split(b.dbPath)
-	db := dbm.NewDB(file, dbm.LevelDBBackend, dir)
-	defer db.Close()
-
 	b.logger.Info("loading cache to disk",
 		"path", b.dbPath,
 	)
 
+	f, err := os.Open(b.dbPath)
+	if err != nil {
+		b.logger.Error("failed to open persisted cache",
+			"err", err,
+		)
+
+		if os.IsNotExist(err) {
+			// This failure class is harmless, don't propagate the error.
+			err = nil
+		}
+		return err
+	}
+	defer f.Close()
+
 	var (
 		totalKeys int
 		totalSize int
+
+		r      = bufio.NewReader(f)
+		ch     = make(chan []byte, 64) // Buffered, we're populating a cold cache.
+		doneCh = make(chan struct{})
 	)
 
-	iter := db.Iterator(nil, nil)
-	defer iter.Close()
-	for ; iter.Valid(); iter.Next() {
-		v := iter.Value()
-
-		if b.insertLocal(api.HashStorageKey(v), append([]byte{}, v...)) {
-			totalKeys++
-			totalSize += len(v)
+	go func() {
+		defer close(doneCh)
+		for v := range ch {
+			if b.insertLocal(api.HashStorageKey(v), append([]byte{}, v...)) {
+				totalKeys++
+				totalSize += len(v)
+			}
 		}
+	}()
+
+	dec := codec.NewDecoder(r, cbor.Handle)
+	defer dec.Release()
+	err = dec.Decode(&ch)
+	close(ch)
+	<-doneCh
+
+	if err != nil && err != io.EOF {
+		return errors.Wrap(err, "failed to de-serialize persisted cache")
 	}
 
 	b.logger.Info("loaded cache from disk",
@@ -245,38 +269,46 @@ func (b *cachingClientBackend) load() error {
 }
 
 func (b *cachingClientBackend) save() error {
-	// Blow away the old cache.
-	if err := os.RemoveAll(b.dbPath); err != nil {
-		return errors.Wrap(err, "failed to remove existing cache")
-	}
-
 	b.logger.Info("persisting cache to disk",
 		"path", b.dbPath,
 	)
 
-	dir, file := filepath.Split(b.dbPath)
-	db := dbm.NewDB(file, dbm.LevelDBBackend, dir)
-	defer db.Close()
+	f, err := os.OpenFile(b.dbPath, os.O_CREATE|os.O_APPEND|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return errors.Wrap(err, "failed to open persisted cache for overwrite")
+	}
+	defer f.Close()
 
 	var (
-		batch = db.NewBatch()
-		keys  = b.local.Keys()
-	)
+		totalKeys int
+		totalSize int
 
-	var totalSize int
-	for i, v := range keys {
-		var dbKey [8]byte
-		binary.BigEndian.PutUint64(dbKey[:], uint64(i))
-		cached, _ := b.local.Get(v)
-		cachedBytes := cached.(*cachedValue).value
-		batch.Set(dbKey[:], cachedBytes)
-		totalSize += len(cachedBytes)
+		w  = bufio.NewWriter(f)
+		ch = make(chan []byte) // Unbuffered, entries may be large.
+	)
+	defer w.Flush()
+
+	go func() {
+		defer close(ch)
+
+		for _, v := range b.local.Keys() {
+			cached, _ := b.local.Get(v)
+			cachedBytes := cached.(*cachedValue).value
+			ch <- cachedBytes
+
+			totalSize += len(cachedBytes)
+			totalKeys++
+		}
+	}()
+
+	enc := codec.NewEncoder(w, cbor.Handle)
+	defer enc.Release()
+	if err = enc.Encode(ch); err != nil {
+		return errors.Wrap(err, "failed to serialize/persist cache")
 	}
 
-	batch.Write()
-
 	b.logger.Info("persisted cache to disk",
-		"keys", len(keys),
+		"keys", totalKeys,
 		"bytes_written", totalSize,
 	)
 
@@ -290,7 +322,7 @@ func New(remote api.Backend) (api.Backend, error) {
 	})
 
 	local, err := lru.New(
-		lru.Capacity(viper.GetInt(cfgCacheSize), true),
+		lru.Capacity(int(viper.GetSizeInBytes(cfgCacheSize)), true),
 	)
 	if err != nil {
 		return nil, err
@@ -314,7 +346,7 @@ func New(remote api.Backend) (api.Backend, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
-		cmd.Flags().Int(cfgCacheSize, 512*1024*1024, "Cache size (bytes)")
+		cmd.Flags().String(cfgCacheSize, "512mb", "Cache size (bytes)")
 	}
 
 	for _, v := range []string{

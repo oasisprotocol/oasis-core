@@ -464,7 +464,7 @@ func (r *tendermintBackend) workerPerEpochList(ctx context.Context) {
 
 		r.logger.Debug("worker: built node list",
 			"newEpoch", newEpoch,
-			"nodes", nl.Nodes,
+			"nodes_len", len(nl.Nodes),
 		)
 		r.nodeListNotifier.Broadcast(nl)
 
@@ -479,7 +479,7 @@ func (r *tendermintBackend) workerPerEpochList(ctx context.Context) {
 
 		r.logger.Debug("worker: built runtime list",
 			"newEpoch", newEpoch,
-			"runtimes", rl,
+			"runtimes_len", len(rl),
 		)
 
 		r.sweepCache(newEpoch)
