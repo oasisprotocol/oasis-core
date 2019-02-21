@@ -252,6 +252,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 		proxies[k] = host.ProxySpecification{
 			ProxyType:  v.Type(),
 			SourceName: v.UnixPath(),
+			OuterAddr:  v.RemoteAddress(),
 		}
 	}
 	switch strings.ToLower(cfg.Backend) {
