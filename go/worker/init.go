@@ -200,7 +200,7 @@ func New(
 
 	maxQueueSize := uint64(viper.GetInt(cfgMaxQueueSize))
 	maxBatchSize := uint64(viper.GetInt(cfgMaxBatchSize))
-	maxBatchSizeBytes := uint64(viper.GetInt(cfgMaxBatchSizeBytes))
+	maxBatchSizeBytes := uint64(viper.GetSizeInBytes(cfgMaxBatchSizeBytes))
 	maxBatchTimeout := viper.GetDuration(cfgMaxBatchTimeout)
 
 	// Parse register address overrides.
@@ -257,7 +257,7 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
 		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-		cmd.Flags().Uint64(cfgMaxBatchSizeBytes, 16777216, "Maximum size (in bytes) of a batch of runtime requests")
+		cmd.Flags().String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 		cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
 
 		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")

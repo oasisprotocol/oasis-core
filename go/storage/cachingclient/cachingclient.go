@@ -322,7 +322,7 @@ func New(remote api.Backend) (api.Backend, error) {
 	})
 
 	local, err := lru.New(
-		lru.Capacity(viper.GetInt(cfgCacheSize), true),
+		lru.Capacity(int(viper.GetSizeInBytes(cfgCacheSize)), true),
 	)
 	if err != nil {
 		return nil, err
@@ -346,7 +346,7 @@ func New(remote api.Backend) (api.Backend, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
-		cmd.Flags().Int(cfgCacheSize, 512*1024*1024, "Cache size (bytes)")
+		cmd.Flags().String(cfgCacheSize, "512mb", "Cache size (bytes)")
 	}
 
 	for _, v := range []string{
