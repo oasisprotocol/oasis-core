@@ -123,7 +123,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			return nil, fmt.Errorf("scheduler: empty committee not allowed")
 		}
 		if sz > nrNodes {
-			return nil, fmt.Errorf("scheduler: committee size exceeds available nodes")
+			return nil, fmt.Errorf("scheduler: committee size %d exceeds available nodes %d", sz, nrNodes)
 		}
 
 		drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], ctx)
