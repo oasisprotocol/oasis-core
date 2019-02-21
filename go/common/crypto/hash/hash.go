@@ -50,8 +50,12 @@ func (h *Hash) From(v interface{}) {
 }
 
 // FromBytes sets the hash to that of an arbitrary byte string.
-func (h *Hash) FromBytes(data []byte) {
-	sum := sha512.Sum512_256(data)
+func (h *Hash) FromBytes(data ...[]byte) {
+	hasher := sha512.New512_256()
+	for _, d := range data {
+		_, _ = hasher.Write(d)
+	}
+	sum := hasher.Sum([]byte{})
 	_ = h.UnmarshalBinary(sum[:])
 }
 
