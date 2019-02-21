@@ -53,6 +53,7 @@ func MustUnmarshal(data []byte, dst interface{}) {
 func init() {
 	h := new(codec.CborHandle)
 	h.EncodeOptions.Canonical = true
+	h.EncodeOptions.ChanRecvTimeout = -1 // Till chan is closed.
 
 	Handle = h
 }
