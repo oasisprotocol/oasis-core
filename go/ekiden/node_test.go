@@ -24,6 +24,7 @@ import (
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	roothashTests "github.com/oasislabs/ekiden/go/roothash/tests"
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
+	stakingTests "github.com/oasislabs/ekiden/go/staking/tests"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	"github.com/oasislabs/ekiden/go/worker/committee"
@@ -45,6 +46,8 @@ var (
 		{"scheduler.backend", "trivial"},
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},
+		{"staking.backend", "tendermint"},
+		{"staking.debug.genesis_state", stakingTests.InitialBalancesArg},
 		{"tendermint.consensus.skip_timeout_commit", true},
 		{"tendermint.debug.block_time_iota", 1 * time.Millisecond},
 		{"worker.backend", "mock"},
@@ -165,6 +168,7 @@ func TestNode(t *testing.T) {
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
 		{"Scheduler", testScheduler},
+		{"Staking", testStaking},
 		{"RootHash", testRootHash},
 	}
 
@@ -244,6 +248,10 @@ func testScheduler(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	schedulerTests.SchedulerImplementationTests(t, node.Scheduler, timeSource, node.Registry)
+}
+
+func testStaking(t *testing.T, node *testNode) {
+	stakingTests.StakingImplementationTests(t, node.Staking)
 }
 
 func testRootHash(t *testing.T, node *testNode) {
