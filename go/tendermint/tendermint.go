@@ -2,11 +2,11 @@ package tendermint
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,7 +79,6 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 
-	validatorKey             *signature.PrivateKey
 	nodeKey                  *signature.PrivateKey
 	dataDir                  string
 	isInitialized, isStarted bool
@@ -306,14 +305,7 @@ func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscr
 }
 
 func (t *tendermintService) NodeKey() *signature.PublicKey {
-	// Should *never* happen unless this is called prior to any backends
-	// being initialized.
-	if t.nodeKey == nil {
-		panic("node key not available yet")
-	}
-
 	pk := t.nodeKey.Public()
-
 	return &pk
 }
 
@@ -346,14 +338,6 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
-	// Initialize the node (P2P) key.
-	if t.nodeKey, err = initNodeKey(tendermintDataDir); err != nil {
-		return err
-	}
-	t.Logger.Debug("loaded/generated P2P key",
-		"public_key", t.nodeKey.Public(),
-	)
-
 	// Create Tendermint node.
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
@@ -379,7 +363,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.RPC.ListenAddress = ""
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
-	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
+	tenderValIdent := crypto.PrivateKeyToTendermint(t.nodeKey)
 	if !tenderValIdent.Equals(tendermintPV.Key.PrivKey) {
 		// The private validator must have been just generated.  Force
 		// it to use the oasis identity rather than the new key.
@@ -459,7 +443,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			}
 
 			validator := &bootstrap.GenesisValidator{
-				PubKey:      t.validatorKey.Public(),
+				PubKey:      t.nodeKey.Public(),
 				Name:        common.NormalizeFQDN(nodeName),
 				CoreAddress: nodeAddr,
 			}
@@ -473,7 +457,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		genDoc = &bootstrap.GenesisDocument{
 			Validators: []*bootstrap.GenesisValidator{
 				{
-					PubKey: t.validatorKey.Public(),
+					PubKey: t.nodeKey.Public(),
 					Name:   "ekiden-dummy",
 					Power:  10,
 				},
@@ -499,12 +483,16 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// So, the "right" thing to do is to use seed nodes, but those are totally
 		// 100% dedicated to just seeding.  PEX works just fine off the validators,
 		// so ensure that the validators exist in the address book, the hard way.
+		//
+		// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
+		// sensitive string comparision to validate public keys.
 		var addrs []*tmp2p.NetAddress
 		for _, v := range genDoc.Validators {
 			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
-			vAddr := vPubKey.Address().String() + "@" + v.CoreAddress
+			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
+			vAddr := vPkAddrHex + "@" + v.CoreAddress
 
-			if v.PubKey.Equal(t.validatorKey.Public()) {
+			if v.PubKey.Equal(t.nodeKey.Public()) {
 				// This validator entry is the current node, set the
 				// node name to that specified in the genesis document.
 				tenderConfig.Moniker = v.Name
@@ -534,13 +522,15 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// nodes.  This is somewhat silly, but there isn't any error-checking
 		// done with AddOurAddress, so using the P2P ListenAddress as the IP/port
 		// is totally fine.
-		valPubKey := t.validatorKey.Public()
+		valPubKey := t.nodeKey.Public()
 		ourPubKey := crypto.PublicKeyToTendermint(&valPubKey)
 		ourLaddr, err := common.GetHostPort(tenderConfig.P2P.ListenAddress)
 		if err != nil {
 			return nil, errors.Wrap(err, "tendermint: failed to parse p2p listen address")
 		}
-		ourAddr, err := tmp2p.NewNetAddressString(ourPubKey.Address().String() + "@" + ourLaddr)
+
+		ourPkAddrHex := strings.ToLower(ourPubKey.Address().String())
+		ourAddr, err := tmp2p.NewNetAddressString(ourPkAddrHex + "@" + ourLaddr)
 		if err != nil {
 			return nil, errors.Wrap(err, "tendermint: failed to generate our address")
 		}
@@ -625,7 +615,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity) servi
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
-		validatorKey:          identity.NodeKey,
+		nodeKey:               identity.NodeKey,
 		ctx:                   ctx,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
@@ -650,16 +640,6 @@ func initDataDir(dataDir string) error {
 	}
 
 	return nil
-}
-
-func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
-	var k signature.PrivateKey
-
-	if err := k.LoadPEM(filepath.Join(dataDir, "p2p.pem"), rand.Reader); err != nil {
-		return nil, err
-	}
-
-	return &k, nil
 }
 
 type logAdapter struct {
