@@ -82,6 +82,7 @@ func TestBatch(t *testing.T) {
 }
 
 func requireNewClient(t *testing.T, remote api.Backend) (api.Backend, string) {
+	<-remote.Initialized()
 	cacheDir, err := ioutil.TempDir("", "ekiden-cachingclient-test_")
 	require.NoError(t, err, "create cache dir")
 
