@@ -64,6 +64,7 @@ func doDumpMuxState(cmd *cobra.Command, args []string) {
 
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, handle)
+	defer enc.Release()
 	enc.MustEncode(output)
 	fmt.Printf("%s\n", b)
 }

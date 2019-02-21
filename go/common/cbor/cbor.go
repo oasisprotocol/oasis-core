@@ -26,6 +26,7 @@ type Unmarshaler interface {
 func Marshal(src interface{}) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, Handle)
+	defer enc.Release()
 	enc.MustEncode(src)
 	return b
 }
@@ -33,6 +34,7 @@ func Marshal(src interface{}) []byte {
 // Unmarshal deserializes a CBOR byte vector into a given type.
 func Unmarshal(data []byte, dst interface{}) error {
 	dec := codec.NewDecoderBytes(data, Handle)
+	defer dec.Release()
 	if err := dec.Decode(dst); err != nil {
 		return err
 	}
@@ -43,8 +45,7 @@ func Unmarshal(data []byte, dst interface{}) error {
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
 // Panics if unmarshal fails.
 func MustUnmarshal(data []byte, dst interface{}) {
-	dec := codec.NewDecoderBytes(data, Handle)
-	if err := dec.Decode(dst); err != nil {
+	if err := Unmarshal(data, dst); err != nil {
 		panic(err)
 	}
 }
@@ -52,6 +53,7 @@ func MustUnmarshal(data []byte, dst interface{}) {
 func init() {
 	h := new(codec.CborHandle)
 	h.EncodeOptions.Canonical = true
+	h.EncodeOptions.ChanRecvTimeout = -1 // Till chan is closed.
 
 	Handle = h
 }
