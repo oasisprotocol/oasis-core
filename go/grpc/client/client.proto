@@ -6,6 +6,10 @@ option go_package = "github.com/oasislabs/ekiden/go/grpc/client";
 service Runtime {
     // Submit a transaction to leader.
     rpc SubmitTx (SubmitTxRequest) returns (SubmitTxResponse) {}
+    // Wait for the node to finish syncing.
+    rpc WaitSync (WaitSyncRequest) returns (WaitSyncResponse) {}
+    // Check if the node is finished syncing.
+    rpc IsSynced (IsSyncedRequest) returns (IsSyncedResponse) {}
 }
 
 message SubmitTxRequest {
@@ -17,4 +21,15 @@ message SubmitTxRequest {
 
 message SubmitTxResponse {
 	bytes result = 1;
+}
+
+message WaitSyncRequest {}
+
+message WaitSyncResponse {}
+
+message IsSyncedRequest {}
+
+message IsSyncedResponse {
+	// True if the node finished the initial sync.
+	bool synced = 1;
 }

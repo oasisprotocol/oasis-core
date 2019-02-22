@@ -33,6 +33,24 @@ func (s *grpcServer) SubmitTx(ctx context.Context, req *pb.SubmitTxRequest) (*pb
 	return &response, nil
 }
 
+func (s *grpcServer) WaitSync(ctx context.Context, req *pb.WaitSyncRequest) (*pb.WaitSyncResponse, error) {
+	err := s.client.WaitSync(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.WaitSyncResponse{}, nil
+}
+
+func (s *grpcServer) IsSynced(ctx context.Context, req *pb.IsSyncedRequest) (*pb.IsSyncedResponse, error) {
+	synced, err := s.client.IsSynced(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.IsSyncedResponse{
+		Synced: synced,
+	}, nil
+}
+
 // NewGRPCServer creates and registers a new GRPC server for the client interface.
 func NewGRPCServer(srv *grpc.Server, client *Client) {
 	s := &grpcServer{

@@ -96,6 +96,55 @@ impl RuntimeClient {
             Err(e) => Box::new(future::err(Error::new(e.description()))),
         }
     }
+
+    /// Wait for the node to finish syncing.
+    pub fn wait_sync(&self) -> BoxFuture<()> {
+        let span = ekiden_tracing::get_tracer()
+            .span("client_wait_sync")
+            .tag(tag::StdTag::span_kind("client"))
+            .start();
+
+        let mut options = grpcio::CallOption::default();
+        if let Some(timeout) = self.timeout {
+            options = options.timeout(timeout);
+        }
+
+        let request = api::WaitSyncRequest::new();
+        options = inject_to_options(options, span.context());
+
+        let result = match self.client.wait_sync_async_opt(&request, options) {
+            Ok(_) => Box::new(future::ok(())),
+            Err(e) => Box::new(future::err(Error::new(e.description()))),
+        };
+        drop(span);
+        result
+    }
+
+    /// Check if the node is finished syncing.
+    pub fn is_synced(&self) -> BoxFuture<bool> {
+        let span = ekiden_tracing::get_tracer()
+            .span("client_is_synced")
+            .tag(tag::StdTag::span_kind("client"))
+            .start();
+
+        let mut options = grpcio::CallOption::default();
+        if let Some(timeout) = self.timeout {
+            options = options.timeout(timeout);
+        }
+
+        let request = api::IsSyncedRequest::new();
+        options = inject_to_options(options, span.context());
+
+        let result = match self.client.is_synced_async_opt(&request, options) {
+            Ok(resp) => resp
+                .map(|r| r.synced)
+                .map_err(|e| Error::new(e.description()))
+                .into_box(),
+            Err(e) => future::err(Error::new(e.description())).into_box(),
+        };
+        drop(span);
+        result
+    }
 }
 
 /// Parse runtime call output.
