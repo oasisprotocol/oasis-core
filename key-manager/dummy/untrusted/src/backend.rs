@@ -1,6 +1,7 @@
 use std::{
     borrow::Borrow,
     fmt::Write,
+    io::Read,
     ops::Deref,
     path::{Path, PathBuf},
     sync::{
@@ -61,6 +62,8 @@ pub struct BackendConfiguration {
     pub storage_backend: Arc<StorageBackend>,
     /// Filesystem storage path. Used to locate the roothash db.
     pub root_hash_path: PathBuf,
+    /// Path to internal keys if not using the unsecret testing keys.
+    pub internal_keys_path: Option<PathBuf>,
 }
 
 /// Key manager worker which executes commands in secure enclaves.
@@ -79,15 +82,27 @@ impl KeyManagerInner {
         let (command_sender, command_receiver) = channel();
         thread::spawn(move || {
             // Question: when is enclave destroyed?
-            KeyManagerEnclave::new(
+            let mut enclave = KeyManagerEnclave::new(
                 &config.enclave_filename,
                 config.ias,
                 config.saved_identity_path,
                 config.storage_backend,
                 config.root_hash_path,
             )
-            .unwrap()
-            .run(command_receiver);
+            .unwrap();
+            if let Some(internal_keys_path) = config.internal_keys_path {
+                let mut internal_keys_file = std::fs::File::open(internal_keys_path)
+                    .expect("Couldn't open internal keys file");
+                let mut internal_keys_buf = vec![];
+                internal_keys_file
+                    .read_to_end(&mut internal_keys_buf)
+                    .expect("Couldn't read internal keys file");
+                enclave
+                    .enclave
+                    .set_internal_keys(internal_keys_buf.as_slice())
+                    .expect("Couldn't set internal keys");
+            }
+            enclave.run(command_receiver);
         });
 
         Self {
@@ -290,5 +305,30 @@ impl KeyManagerEnclave {
             let result = self.handle_rpc_call(command.payload);
             command.sender.send(result).unwrap();
         }
+    }
+}
+
+extern "C" {
+    pub fn set_internal_keys(
+        eid: sgx_types::sgx_enclave_id_t,
+        internal_keys: *const u8,
+        internal_keys_length: usize,
+    ) -> sgx_types::sgx_status_t;
+}
+
+trait EnclaveDummyKeymanager {
+    /// ECALL, see edl
+    fn set_internal_keys(&self, internal_keys: &[u8]) -> Result<()>;
+}
+
+impl EnclaveDummyKeymanager for Enclave {
+    fn set_internal_keys(&self, internal_keys: &[u8]) -> Result<()> {
+        let result = unsafe {
+            set_internal_keys(self.get_id(), internal_keys.as_ptr(), internal_keys.len())
+        };
+        if result != sgx_types::sgx_status_t::SGX_SUCCESS {
+            return Err(Error::new(format!("set_internal_keys: {}", result)));
+        }
+        Ok(())
     }
 }

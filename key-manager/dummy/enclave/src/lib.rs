@@ -5,6 +5,10 @@ extern crate lazy_static;
 extern crate protobuf;
 extern crate serde_cbor;
 extern crate sodalite;
+#[cfg(not(target_env = "sgx"))]
+use std::sync::Mutex;
+#[cfg(target_env = "sgx")]
+use std::sync::SgxMutex as Mutex;
 
 extern crate ekiden_core;
 extern crate ekiden_keymanager_api;
@@ -104,6 +108,20 @@ pub fn long_term_public_key(
     Ok(Some(response))
 }
 
+/// ECALL, see edl
+#[cfg(target_env = "sgx")]
+#[no_mangle]
+pub extern "C" fn set_internal_keys(internal_keys: *const u8, internal_keys_length: usize) {
+    let internal_keys_buf =
+        unsafe { std::slice::from_raw_parts(internal_keys, internal_keys_length) };
+    let internal_keys: ekiden_keymanager_common::DummyInternalKeys =
+        serde_cbor::from_slice(internal_keys_buf).unwrap();
+
+    key_store::KeyStore::get().set_encryption_key(internal_keys.keystore_encryption_key);
+
+    *(SIGNER_KEY_PKCS8.lock().unwrap()) = internal_keys.signing_key;
+}
+
 fn sign_public_key(public_key: PublicKeyType, timestamp: Option<u64>) -> Result<B512> {
     let signer = dummy_signer()?;
     let digest = public_key_digest(public_key, timestamp);
@@ -120,21 +138,28 @@ fn public_key_digest(public_key: PublicKeyType, timestamp: Option<u64>) -> H256 
     hash::from_bytes(hash_data.as_slice())
 }
 
+/// A dummy key for use in tests where integrity is not needed.
+/// Public Key: 0x9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f
+const UNSECRET_SIGNING_KEY_PKCS8: [u8; 85] = [
+    48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 124, 181, 54, 35, 91, 34, 238,
+    29, 127, 17, 115, 64, 41, 135, 165, 19, 211, 246, 106, 37, 136, 149, 157, 187, 145, 157, 192,
+    170, 25, 201, 141, 161, 35, 3, 33, 0, 157, 65, 168, 116, 184, 14, 57, 164, 12, 150, 68, 233,
+    100, 240, 228, 249, 103, 16, 12, 145, 101, 75, 253, 118, 102, 67, 95, 233, 6, 175, 6, 15,
+];
+
+lazy_static! {
+    // Global key store object.
+    static ref SIGNER_KEY_PKCS8: Mutex<Vec<u8>> = Mutex::new(UNSECRET_SIGNING_KEY_PKCS8.to_vec());
+}
+
 /// Returns a dummy signer used by the KeyManager to sign public keys.
-/// Public Key: 0x51d5e24342ae2c4a951e24a2ba45a68106bcb7986198817331889264fd10f1bf
 ///
 /// This should be replaced as part of the following issue:
 /// https://github.com/oasislabs/ekiden/issues/1291
 fn dummy_signer() -> Result<InMemorySigner> {
-    let pkc8s = [
-        48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 255, 135, 103, 97, 49, 33, 200,
-        139, 130, 186, 54, 177, 83, 2, 162, 146, 160, 234, 231, 218, 124, 160, 72, 113, 26, 177,
-        100, 40, 135, 129, 195, 50, 161, 35, 3, 33, 0, 81, 213, 226, 67, 66, 174, 44, 74, 149, 30,
-        36, 162, 186, 69, 166, 129, 6, 188, 183, 152, 97, 152, 129, 115, 49, 136, 146, 100, 253,
-        16, 241, 191,
-    ];
-    let pkc8s_input = untrusted::Input::from(&pkc8s);
-    let keypair = signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkc8s_input)
+    let guard = SIGNER_KEY_PKCS8.lock().unwrap();
+    let pkcs8_input = untrusted::Input::from(guard.as_slice());
+    let keypair = signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8_input)
         .expect("Should always derive a keypair from the given pkc8s");
 
     Ok(InMemorySigner::new(keypair))

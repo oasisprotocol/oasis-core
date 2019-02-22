@@ -9,6 +9,7 @@ repository = "https://github.com/oasislabs/ekiden"
 [dependencies]
 ekiden-common = { path = "../../../common", version = "0.2.0-alpha" }
 ekiden-core = { path = "../../../core/common", version = "0.2.0-alpha" }
+ekiden-keymanager-api = { path = "../../api", version = "0.2.0-alpha" }
 ekiden-untrusted = { path = "../../../core/untrusted", version = "0.2.0-alpha" }
 ekiden-db-trusted = { path = "../../../db/trusted", version = "0.2.0-alpha" }
 ekiden-tools = { path = "../../../tools", version = "0.2.0-alpha" }

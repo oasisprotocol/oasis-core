@@ -1,0 +1,17 @@
+[package]
+name = "ekiden-keymanager-keygen"
+version = "0.2.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+edition = "2018"
+description = "A tool for generating a set of internal keys used by the Ekiden dummy key manager"
+keywords = ["ekiden"]
+repository = "https://github.com/oasislabs/ekiden"
+
+[dependencies]
+protobuf = "~2.0"
+ring = { git = "https://github.com/oasislabs/ring", default-features = false, features = ["use_heap"], branch = "0.14.0-ekiden" }
+serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
+untrusted = "0.6.2"
+
+ekiden-keymanager-api = { path = "../../api", version = "0.2.0-alpha" }
+ekiden-keymanager-common = { path = "../../common", version = "0.2.0-alpha" }
