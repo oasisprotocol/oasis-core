@@ -513,6 +513,9 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		}
 		defer func() {
 			// Can't pass tmn.NewNode() an existing address book.
+			// Make sure to call Save as the address book may otherwise not be saved
+			// due to the way Stop/Quit are broken in the address book implementation.
+			addrBook.Save()
 			ch := addrBook.Quit()
 			_ = addrBook.Stop()
 			<-ch
