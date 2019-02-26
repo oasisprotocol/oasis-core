@@ -10,13 +10,9 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	registryApi "github.com/oasislabs/ekiden/go/registry/api"
-	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker"
@@ -33,49 +29,13 @@ const recvTimeout = 5 * time.Second
 func WorkerImplementationTests(
 	t *testing.T,
 	worker *worker.Worker,
+	runtimeID signature.PublicKey,
+	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
-	registry registryApi.Backend,
 	roothash roothash.Backend,
-	identity *identity.Identity,
-	ent *entity.Entity,
-	entityPrivKey *signature.PrivateKey,
 ) {
-	// Get the runtime and the corresponding committee node instance.
-	runtimeID := worker.GetConfig().Runtimes[0].ID
-	rt := worker.GetRuntime(runtimeID)
-	require.NotNil(t, rt)
-	rtNode := rt.GetNode()
-
-	t.Run("RegisterTestEntity", func(t *testing.T) {
-		ent.RegistrationTime = uint64(time.Now().Unix())
-		signed, err := entity.SignEntity(*entityPrivKey, registryApi.RegisterEntitySignatureContext, ent)
-		require.NoError(t, err, "SignEntity")
-
-		err = registry.RegisterEntity(context.Background(), signed)
-		require.NoError(t, err, "RegisterEntity")
-	})
-
 	// Wait for worker to start and register.
 	<-worker.Initialized()
-
-	// Ensure that we leave the registry empty when we are done.
-	defer func() {
-		// Stop the node and wait for it to fully stop. This is required
-		// as otherwise the node will re-register itself on each epoch
-		// transition.
-		rtNode.Stop()
-		<-rtNode.Quit()
-
-		// Deregister the entity which should also deregister the node.
-		ts := registryApi.Timestamp(uint64(time.Now().Unix()))
-		signed, err := signature.SignSigned(*entityPrivKey, registryApi.DeregisterEntitySignatureContext, &ts)
-		require.NoError(t, err, "SignSigned")
-
-		err = registry.DeregisterEntity(context.Background(), signed)
-		require.NoError(t, err, "DeregisterEntity")
-
-		registryTests.EnsureRegistryEmpty(t, registry)
-	}()
 
 	// Subscribe to state transitions.
 	stateCh, sub := rtNode.WatchStateTransitions()

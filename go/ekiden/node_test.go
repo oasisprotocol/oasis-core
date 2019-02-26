@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	beaconTests "github.com/oasislabs/ekiden/go/beacon/tests"
+	clientTests "github.com/oasislabs/ekiden/go/client/tests"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
@@ -25,6 +26,7 @@ import (
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
+	"github.com/oasislabs/ekiden/go/worker/committee"
 	workerTests "github.com/oasislabs/ekiden/go/worker/tests"
 )
 
@@ -61,6 +63,9 @@ var (
 
 type testNode struct {
 	*node.Node
+
+	runtimeID     signature.PublicKey
+	committeeNode *committee.Node
 
 	entity        *entity.Entity
 	entityPrivKey *signature.PrivateKey
@@ -149,6 +154,12 @@ func TestNode(t *testing.T) {
 		// register the node.
 		{"Worker", testWorker},
 
+		// Client tests also need a functional runtime.
+		{"Client", testClient},
+
+		// Clean up and ensure the registry is empty for the following tests.
+		{"DeregisterTestEntityRuntime", testDeregisterEntityRuntime},
+
 		{"EpochTime", testEpochTime},
 		{"Beacon", testBeacon},
 		{"Storage", testStorage},
@@ -178,6 +189,31 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require.NoError(err, "sign runtime descriptor")
 	err = node.Node.Registry.RegisterRuntime(context.Background(), signedRt)
 	require.NoError(err, "register test runtime")
+
+	// Get the runtime and the corresponding committee node instance.
+	node.runtimeID = node.Worker.GetConfig().Runtimes[0].ID
+	rt := node.Worker.GetRuntime(node.runtimeID)
+	require.NotNil(t, rt)
+	node.committeeNode = rt.GetNode()
+}
+
+func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
+	// Stop the node and wait for it to fully stop. This is required
+	// as otherwise the node will re-register itself on each epoch
+	// transition.
+	node.committeeNode.Stop()
+	<-node.committeeNode.Quit()
+	node.committeeNode = nil
+
+	// Deregister the entity which should also deregister the node.
+	ts := registry.Timestamp(uint64(time.Now().Unix()))
+	signed, err := signature.SignSigned(*node.entityPrivKey, registry.DeregisterEntitySignatureContext, &ts)
+	require.NoError(t, err, "SignSigned")
+
+	err = node.Node.Registry.DeregisterEntity(context.Background(), signed)
+	require.NoError(t, err, "DeregisterEntity")
+
+	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
 }
 
 func testEpochTime(t *testing.T, node *testNode) {
@@ -219,7 +255,11 @@ func testRootHash(t *testing.T, node *testNode) {
 func testWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	workerTests.WorkerImplementationTests(t, node.Worker, timeSource, node.Registry, node.RootHash, node.Identity, node.entity, node.entityPrivKey)
+	workerTests.WorkerImplementationTests(t, node.Worker, node.runtimeID, node.committeeNode, timeSource, node.RootHash)
+}
+
+func testClient(t *testing.T, node *testNode) {
+	clientTests.ClientImplementationTests(t, node.Client, node.runtimeID, node.committeeNode)
 }
 
 func init() {
