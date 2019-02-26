@@ -1,6 +1,47 @@
 module github.com/oasislabs/ekiden/go
 
-replace github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden2
+replace (
+	github.com/libp2p/go-addr-util => github.com/libp2p/go-addr-util v0.0.0-00000000000000-94b4c8b41eba
+	github.com/libp2p/go-buffer-pool => github.com/libp2p/go-buffer-pool v0.0.0-00000000000000-058210c5a0d0
+	github.com/libp2p/go-conn-security => github.com/libp2p/go-conn-security v0.0.0-00000000000000-b7192598fc6d
+	github.com/libp2p/go-conn-security-multistream => github.com/libp2p/go-conn-security-multistream v0.0.0-00000000000000-578125a681ee
+	github.com/libp2p/go-flow-metrics => github.com/libp2p/go-flow-metrics v0.0.0-00000000000000-cc546389dcf0
+	github.com/libp2p/go-libp2p => github.com/libp2p/go-libp2p v0.0.0-00000000000000-1a0c9bc9f4ef
+	github.com/libp2p/go-libp2p-blankhost => github.com/libp2p/go-libp2p-blankhost v0.0.0-00000000000000-4fc7b2545c20
+	github.com/libp2p/go-libp2p-circuit => github.com/libp2p/go-libp2p-circuit v0.0.0-00000000000000-16eb677aaa62
+	github.com/libp2p/go-libp2p-crypto => github.com/libp2p/go-libp2p-crypto v0.0.0-00000000000000-a3075f70fa87
+	github.com/libp2p/go-libp2p-host => github.com/libp2p/go-libp2p-host v0.0.0-00000000000000-5e19768b7bf3
+	github.com/libp2p/go-libp2p-interface-connmgr => github.com/libp2p/go-libp2p-interface-connmgr v0.0.0-00000000000000-61a030e46d8f
+	github.com/libp2p/go-libp2p-interface-pnet => github.com/libp2p/go-libp2p-interface-pnet v0.0.0-00000000000000-3eda0a328422
+	github.com/libp2p/go-libp2p-loggables => github.com/libp2p/go-libp2p-loggables v0.0.0-00000000000000-2edffda90e41
+	github.com/libp2p/go-libp2p-metrics => github.com/libp2p/go-libp2p-metrics v0.0.0-00000000000000-20c0e3fed14d
+	github.com/libp2p/go-libp2p-nat => github.com/libp2p/go-libp2p-nat v0.0.0-00000000000000-b82aac8589e1
+	github.com/libp2p/go-libp2p-net => github.com/libp2p/go-libp2p-net v0.0.0-00000000000000-22c96766db92
+	github.com/libp2p/go-libp2p-peerstore => github.com/libp2p/go-libp2p-peerstore v0.0.0-00000000000000-6295e61c9fd2
+	github.com/libp2p/go-libp2p-protocol => github.com/libp2p/go-libp2p-protocol v0.0.0-00000000000000-e34f0d7468b3
+	github.com/libp2p/go-libp2p-routing => github.com/libp2p/go-libp2p-routing v0.0.0-00000000000000-c568217bd16d
+	github.com/libp2p/go-libp2p-secio => github.com/libp2p/go-libp2p-secio v0.0.0-00000000000000-8f95e95b9fed
+	github.com/libp2p/go-libp2p-swarm => github.com/libp2p/go-libp2p-swarm v0.0.0-00000000000000-839f88f8de4d
+	github.com/libp2p/go-libp2p-transport => github.com/libp2p/go-libp2p-transport v0.0.0-00000000000000-e6d021be15cb
+	github.com/libp2p/go-libp2p-transport-upgrader => github.com/libp2p/go-libp2p-transport-upgrader v0.0.0-00000000000000-8dde02b5e753
+	github.com/libp2p/go-maddr-filter => github.com/libp2p/go-maddr-filter v0.0.0-00000000000000-7f7ca1e79c45
+	github.com/libp2p/go-mplex => github.com/libp2p/go-mplex v0.0.0-00000000000000-1386e7e22616
+	github.com/libp2p/go-msgio => github.com/libp2p/go-msgio v0.0.0-00000000000000-031a413e6612
+	github.com/libp2p/go-reuseport => github.com/libp2p/go-reuseport v0.0.0-00000000000000-b3fd01f43ca5
+	github.com/libp2p/go-reuseport-transport => github.com/libp2p/go-reuseport-transport v0.0.0-00000000000000-98b2c72d3253
+	github.com/libp2p/go-sockaddr => github.com/libp2p/go-sockaddr v0.0.0-00000000000000-5c3ac7e71ec1
+	github.com/libp2p/go-stream-muxer => github.com/libp2p/go-stream-muxer v0.0.0-00000000000000-2ba231669cdd
+	github.com/libp2p/go-tcp-transport => github.com/libp2p/go-tcp-transport v0.0.0-00000000000000-7e41190ec068
+	github.com/libp2p/go-testutil => github.com/libp2p/go-testutil v0.0.0-20181024164553-58107e702ea7
+	github.com/libp2p/go-ws-transport => github.com/libp2p/go-ws-transport v0.0.0-00000000000000-246ec4b8bd9a
+	github.com/multiformats/go-multiaddr => github.com/multiformats/go-multiaddr v0.0.0-00000000000000-8c3eb5dc1c12
+	github.com/multiformats/go-multiaddr-dns => github.com/multiformats/go-multiaddr-dns v0.0.0-00000000000000-317a9bc842d4
+	github.com/multiformats/go-multiaddr-net => github.com/multiformats/go-multiaddr-net v0.0.0-00000000000000-c75d1cac17a0
+	github.com/multiformats/go-multibase => github.com/multiformats/go-multibase v0.0.0-00000000000000-bb91b53e5695
+	github.com/multiformats/go-multihash => github.com/multiformats/go-multihash v0.0.0-00000000000000-8be2a682ab9f
+	github.com/multiformats/go-multistream => github.com/multiformats/go-multistream v0.0.0-00000000000000-0e509f6b999d
+	github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden2
+)
 
 require (
 	git.schwanenlied.me/yawning/bsaes.git v0.0.0-20180720073208-c0276d75487e
