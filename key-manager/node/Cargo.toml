@@ -38,7 +38,7 @@ thread_local = "0.3.5"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
-ekiden-edl = { path = "../../core/edl", version = "0.2.0-alpha" }
+ekiden-keymanager-edl = { path = "../dummy/edl", version = "0.2.0-alpha" }
 
 [[bin]]
 name = "ekiden-keymanager-test-client"

@@ -85,7 +85,9 @@ members = [
     "key-manager/api",
     "key-manager/common",
     "key-manager/client",
+    "key-manager/dummy/edl",
     "key-manager/dummy/enclave",
+    "key-manager/dummy/keygen",
     "key-manager/dummy/untrusted",
     "key-manager/node",
 ]

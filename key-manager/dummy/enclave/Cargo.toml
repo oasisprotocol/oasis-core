@@ -26,4 +26,4 @@ byteorder = "1"
 
 [build-dependencies]
 ekiden-tools = { path = "../../../tools", version = "0.2.0-alpha" }
-ekiden-edl = { path = "../../../core/edl", version = "0.2.0-alpha" }
+ekiden-keymanager-edl = { path = "../edl", version = "0.2.0-alpha" }
