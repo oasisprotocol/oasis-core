@@ -538,6 +538,10 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 
 		// Populate the address book with the genesis validators.
 		for _, v := range addrs {
+			// Remove the address first as otherwise Tendermint's address book
+			// may not actually add the new address.
+			addrBook.RemoveAddress(v)
+
 			if err = addrBook.AddAddress(v, ourAddr); err != nil {
 				return nil, errors.Wrap(err, "tendermint: failed to add genesis validator to address book")
 			}
