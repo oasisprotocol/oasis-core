@@ -50,7 +50,6 @@ type tendermintBackend struct {
 	}
 	lastEpoch epochtime.EpochTime
 
-	closeCh   chan struct{}
 	closeOnce sync.Once
 	closedWg  sync.WaitGroup
 }
@@ -253,7 +252,6 @@ func (r *tendermintBackend) GetBlockNodeList(ctx context.Context, height int64) 
 
 func (r *tendermintBackend) Cleanup() {
 	r.closeOnce.Do(func() {
-		close(r.closeCh)
 		r.closedWg.Wait()
 	})
 }
@@ -305,7 +303,7 @@ func (r *tendermintBackend) workerEvents(ctx context.Context) {
 				r.logger.Debug("worker: terminating")
 				return
 			}
-		case <-r.closeCh:
+		case <-ctx.Done():
 			return
 		}
 
@@ -440,7 +438,7 @@ func (r *tendermintBackend) workerPerEpochList(ctx context.Context) {
 				r.logger.Debug("worker: terminating")
 				return
 			}
-		case <-r.closeCh:
+		case <-ctx.Done():
 			return
 		}
 
@@ -606,7 +604,6 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 		lastEpoch:        epochtime.EpochInvalid,
-		closeCh:          make(chan struct{}),
 	}
 	r.cached.nodeLists = make(map[epochtime.EpochTime]*api.NodeList)
 	r.cached.runtimes = make(map[epochtime.EpochTime][]*api.Runtime)

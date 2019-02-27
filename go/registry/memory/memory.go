@@ -34,7 +34,6 @@ type memoryBackend struct {
 	nodeListNotifier *pubsub.Broker
 	runtimeNotifier  *pubsub.Broker
 
-	closeCh  chan struct{}
 	closedCh chan struct{}
 }
 
@@ -268,7 +267,7 @@ func (r *memoryBackend) worker(ctx context.Context, timeSource epochtime.Backend
 				r.logger.Debug("worker: terminating")
 				return
 			}
-		case <-r.closeCh:
+		case <-ctx.Done():
 			return
 		}
 
@@ -390,7 +389,6 @@ func (r *memoryBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscripti
 
 func (r *memoryBackend) Cleanup() {
 	r.Once.Do(func() {
-		close(r.closeCh)
 		<-r.closedCh
 	})
 }
@@ -408,7 +406,6 @@ func New(ctx context.Context, timeSource epochtime.Backend) api.Backend {
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
-		closeCh:          make(chan struct{}),
 		closedCh:         make(chan struct{}),
 	}
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {

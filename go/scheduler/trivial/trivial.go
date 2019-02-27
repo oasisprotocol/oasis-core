@@ -52,7 +52,6 @@ type trivialScheduler struct {
 	service  service.TendermintService
 	notifier *pubsub.Broker
 
-	closeCh  chan struct{}
 	closedCh chan struct{}
 }
 
@@ -319,7 +318,6 @@ func (s *trivialSchedulerState) updateBeaconLocked(epoch epochtime.EpochTime, be
 
 func (s *trivialScheduler) Cleanup() {
 	s.Do(func() {
-		close(s.closeCh)
 		<-s.closedCh
 	})
 }
@@ -474,7 +472,7 @@ func (s *trivialScheduler) worker(ctx context.Context) { //nolint:gocyclo
 
 	for {
 		select {
-		case <-s.closeCh:
+		case <-ctx.Done():
 			return
 		case epoch := <-timeCh:
 			if epoch == s.state.epoch {
@@ -598,7 +596,6 @@ func New(ctx context.Context, timeSource epochtime.Backend, registryBackend regi
 			lastElect:  epochtime.EpochInvalid,
 		},
 		service:  service,
-		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}
 	s.state.logger = s.logger

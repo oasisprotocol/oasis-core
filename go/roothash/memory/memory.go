@@ -343,7 +343,6 @@ type memoryRootHash struct {
 
 	allBlockNotifier *pubsub.Broker
 
-	closeCh   chan struct{}
 	closedCh  chan struct{}
 	closedWg  sync.WaitGroup
 	closeOnce sync.Once
@@ -465,7 +464,6 @@ func (r *memoryRootHash) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscrip
 
 func (r *memoryRootHash) Cleanup() {
 	r.closeOnce.Do(func() {
-		close(r.closeCh)
 		<-r.closedCh // Need to ensure no Add() in progress for the Wait().
 		r.closedWg.Wait()
 	})
@@ -544,7 +542,7 @@ func (r *memoryRootHash) worker(ctx context.Context) {
 			}
 
 			_ = r.onRuntimeRegistration(ctx, runtime)
-		case <-r.closeCh:
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -565,7 +563,6 @@ func New(
 		runtimes:         make(map[signature.MapKey]*runtimeState),
 		genesisBlocks:    genesisBlocks,
 		allBlockNotifier: pubsub.NewBroker(false),
-		closeCh:          make(chan struct{}),
 		closedCh:         make(chan struct{}),
 		roundTimeout:     roundTimeout,
 	}
