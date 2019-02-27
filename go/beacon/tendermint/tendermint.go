@@ -16,7 +16,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
+	app "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -56,7 +56,7 @@ func (t *Backend) GetBeacon(ctx context.Context, epoch epochtime.EpochTime) ([]b
 		return beacon, nil
 	}
 
-	resp, err := t.service.Query(tmapi.QueryBeaconGetBeacon, &tmapi.QueryGetByEpochRequest{Epoch: epoch}, 0)
+	resp, err := t.service.Query(app.QueryGetBeacon, &tmapi.QueryGetByEpochRequest{Epoch: epoch}, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "beacon: failed to query beacon")
 	}
@@ -110,7 +110,7 @@ func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataN
 	tags := ev.ResultBeginBlock.GetTags()
 
 	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), tmapi.TagBeaconGenerated) {
+		if bytes.Equal(pair.GetKey(), app.TagGenerated) {
 			var genEv api.GenerateEvent
 			if err := cbor.Unmarshal(pair.GetValue(), &genEv); err != nil {
 				t.logger.Error("worker: failed to get beacon event from tag",
@@ -132,13 +132,13 @@ func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataN
 
 func (t *Backend) worker(ctx context.Context) {
 	txChannel := make(chan interface{})
-	if err := t.service.Subscribe(ctx, "beacon-worker", tmapi.QueryBeaconApp, txChannel); err != nil {
+	if err := t.service.Subscribe(ctx, "beacon-worker", app.QueryApp, txChannel); err != nil {
 		t.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer t.service.Unsubscribe(ctx, "beacon-worker", tmapi.QueryBeaconApp) // nolint: errcheck
+	defer t.service.Unsubscribe(ctx, "beacon-worker", app.QueryApp) // nolint: errcheck
 
 	for {
 		var event interface{}
@@ -174,7 +174,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 	}
 
 	// Initialize and register the tendermint service component.
-	app := tmbeacon.New(blockTimeSource)
+	app := app.New(blockTimeSource)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

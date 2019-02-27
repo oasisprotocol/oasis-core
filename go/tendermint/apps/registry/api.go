@@ -1,64 +1,63 @@
-package api
+package registry
 
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
 const (
-	// RegistryTransactionTag is a unique byte used to identify
-	// transactions for the entity registry application.
-	RegistryTransactionTag byte = 0x01
+	// TransactionTag is a unique byte used to identify transactions
+	// for the entity registry application.
+	TransactionTag byte = 0x01
 
-	// RegistryAppName is the ABCI application name.
-	RegistryAppName string = "999_registry"
+	// AppName is the ABCI application name.
+	AppName string = "999_registry"
 )
 
 var (
-	// TagRegistryRuntimeRegistered is an ABCI transaction tag for new
-	// runtime registrations (value is runtime id).
-	TagRegistryRuntimeRegistered = []byte("registry.runtime.registered")
+	// TagRuntimeRegistered is an ABCI transaction tag for new runtime
+	// registrations (value is runtime id).
+	TagRuntimeRegistered = []byte("registry.runtime.registered")
 
-	// TagRegistryEntityRegistered is an ABCI transaction tag for new
-	// entity registrations (value is entity id).
-	TagRegistryEntityRegistered = []byte("registry.entity.registered")
+	// TagEntityRegistered is an ABCI transaction tag for new entity
+	// registrations (value is entity id).
+	TagEntityRegistered = []byte("registry.entity.registered")
 
-	// TagRegistryNodesExpired is an ABCI transaction tag for node
-	// deregistrations due to expiration (value is a CBOR serialized
-	//  vector of node descriptors).
-	TagRegistryNodesExpired = []byte("registry.nodes.expired")
+	// TagNodesExpired is an ABCI transaction tag for node deregistrations
+	// due to expiration (value is a CBOR serialized vector of node
+	// descriptors).
+	TagNodesExpired = []byte("registry.nodes.expired")
+
+	// QueryApp is a query for filtering transactions processed by
+	// the registry application.
+	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
 )
 
 const (
-	// QueryRegistryGetEntity is a path for GetEntity query.
-	QueryRegistryGetEntity = RegistryAppName + "/entity"
+	// QueryGetEntity is a path for GetEntity query.
+	QueryGetEntity = AppName + "/entity"
 
-	// QueryRegistryGetEntities is a path for GetEntities query.
-	QueryRegistryGetEntities = RegistryAppName + "/entities"
+	// QueryGetEntities is a path for GetEntities query.
+	QueryGetEntities = AppName + "/entities"
 
 	// QueryRegistryGetNode is a path for GetNode query.
-	QueryRegistryGetNode = RegistryAppName + "/node"
+	QueryGetNode = AppName + "/node"
 
 	// QueryRegistryGetNodes is a path for GetNodes query.
-	QueryRegistryGetNodes = RegistryAppName + "/nodes"
+	QueryGetNodes = AppName + "/nodes"
 
 	// QueryRegistryGetRuntime is a path for GetRuntime query.
-	QueryRegistryGetRuntime = RegistryAppName + "/runtime"
+	QueryGetRuntime = AppName + "/runtime"
 
 	// QueryRegistryGetRuntimes is a path for GetRuntimes query.
-	QueryRegistryGetRuntimes = RegistryAppName + "/runtimes"
+	QueryGetRuntimes = AppName + "/runtimes"
 )
 
-var (
-	// QueryRegistryApp is a query for filtering transactions processed by
-	// the registry application.
-	QueryRegistryApp = QueryForEvent(TagApplication, []byte(RegistryAppName))
-)
-
-// TxRegistry is a transaction to be accepted by the registry app.
-type TxRegistry struct {
+// Tx is a transaction to be accepted by the registry app.
+type Tx struct {
 	_struct struct{} `codec:",omitempty"` // nolint
 
 	*TxRegisterEntity   `codec:"RegisterEntity"`
@@ -88,8 +87,8 @@ type TxRegisterRuntime struct {
 	Runtime registry.SignedRuntime
 }
 
-// OutputRegistry is an output of an registry app transaction.
-type OutputRegistry struct {
+// Output is an output of an registry app transaction.
+type Output struct {
 	_struct struct{} `codec:",omitempty"` // nolint
 
 	*OutputRegisterEntity   `codec:"RegisterEntity"`
@@ -126,8 +125,8 @@ type OutputRegisterRuntime struct {
 	Runtime registry.Runtime
 }
 
-// GenesisRegistryState is the registry genesis state.
-type GenesisRegistryState struct {
+// GenesisState is the registry genesis state.
+type GenesisState struct {
 	// Entities is the initial list of entities.
 	Entities []*entity.SignedEntity `codec:"entities,omit_empty"`
 

@@ -23,7 +23,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	tmroothash "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
+	app "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -72,11 +72,11 @@ func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.Pub
 }
 
 func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*block.Block, error) {
-	query := tmapi.QueryGetLatestBlock{
+	query := tmapi.QueryGetByIDRequest{
 		ID: id,
 	}
 
-	response, err := r.service.Query(tmapi.QueryRootHashGetLatestBlock, query, height)
+	response, err := r.service.Query(app.QueryGetLatestBlock, query, height)
 	if err != nil {
 		return nil, errors.Wrapf(err, "roothash: get block query failed (height: %d)", height)
 	}
@@ -216,7 +216,7 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 
 	extractBlock := func(tags []tmcmn.KVPair) *block.Block {
 		for _, pair := range tags {
-			if bytes.Equal(pair.GetKey(), tmapi.TagRootHashFinalized) {
+			if bytes.Equal(pair.GetKey(), app.TagFinalized) {
 				block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
 				if err != nil {
 					r.logger.Error("getBlockFromTmBlock: failed to get block from tag",
@@ -250,8 +250,8 @@ func (r *tendermintBackend) getBlockFromTmBlock(
 	return extractBlock(results.Results.EndBlock.GetTags())
 }
 
-func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *tmapi.ValueRootHashFinalized, error) {
-	var value tmapi.ValueRootHashFinalized
+func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
+	var value app.ValueFinalized
 	if err := value.UnmarshalCBOR(rawValue); err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: corrupt finalized tag")
 	}
@@ -286,14 +286,14 @@ func (r *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Eve
 }
 
 func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, commit *api.OpaqueCommitment) error {
-	tx := tmapi.TxRootHash{
-		TxCommit: &tmapi.TxCommit{
+	tx := app.Tx{
+		TxCommit: &app.TxCommit{
 			ID:         id,
 			Commitment: *commit,
 		},
 	}
 
-	if err := r.service.BroadcastTx(tmapi.RootHashTransactionTag, tx); err != nil {
+	if err := r.service.BroadcastTx(app.TransactionTag, tx); err != nil {
 		return errors.Wrap(err, "roothash: commit failed")
 	}
 
@@ -342,13 +342,13 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 	// Subscribe to transactions which modify state.
 	txChannel := make(chan interface{})
 
-	if err := r.service.Subscribe(r.ctx, "roothash-worker", tmapi.QueryRootHashUpdate, txChannel); err != nil {
+	if err := r.service.Subscribe(r.ctx, "roothash-worker", app.QueryUpdate, txChannel); err != nil {
 		r.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer r.service.Unsubscribe(r.ctx, "roothash-worker", tmapi.QueryRootHashUpdate) // nolint: errcheck
+	defer r.service.Unsubscribe(r.ctx, "roothash-worker", app.QueryUpdate) // nolint: errcheck
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
@@ -385,7 +385,7 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		}
 
 		for _, pair := range tags {
-			if bytes.Equal(pair.GetKey(), tmapi.TagRootHashFinalized) {
+			if bytes.Equal(pair.GetKey(), app.TagFinalized) {
 				block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), r.lastBlockHeight)
 				if err != nil {
 					r.logger.Error("worker: failed to get block from tag",
@@ -412,8 +412,8 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					Height: r.lastBlockHeight,
 					Block:  block,
 				})
-			} else if bytes.Equal(pair.GetKey(), tmapi.TagRootHashDiscrepancyDetected) {
-				var value tmapi.ValueRootHashDiscrepancyDetected
+			} else if bytes.Equal(pair.GetKey(), app.TagDiscrepancyDetected) {
+				var value app.ValueDiscrepancyDetected
 				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
 					r.logger.Error("worker: failed to get discrepancy from tag",
 						"err", err,
@@ -450,7 +450,7 @@ func New(
 	}
 
 	// Initialize and register the tendermint service component.
-	app := tmroothash.New(ctx, blockTimeSource, blockScheduler, beac, roundTimeout)
+	app := app.New(ctx, blockTimeSource, blockScheduler, beac, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
