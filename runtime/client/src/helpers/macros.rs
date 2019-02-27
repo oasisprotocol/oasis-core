@@ -12,18 +12,17 @@ pub use ekiden_instrumentation_prometheus::{
     get_arguments as get_instrumentation_arguments, init_from_args as instrumentation_init,
 };
 pub use ekiden_roothash_client::RootHashClient;
-pub use ekiden_runtime_client::RuntimeClient;
 pub use ekiden_storage_client::StorageClient;
 pub use ekiden_tracing::{get_arguments as get_tracing_arguments, report_forever};
 
 #[macro_export]
 macro_rules! default_app {
     () => {{
-        use $crate::macros::LevelFilter;
+        use $crate::helpers::macros::LevelFilter;
 
         // Initialize logger. If another logger is already initialized, move on.
         drop(
-            $crate::macros::formatted_builder()
+            $crate::helpers::macros::formatted_builder()
                 .unwrap()
                 .filter(None, LevelFilter::Trace)
                 .filter(Some("mio"), LevelFilter::Warn)
@@ -59,9 +58,9 @@ macro_rules! default_app {
                     .help("Mark nodes that take longer than this many seconds as failed")
                     .takes_value(true),
             )
-            .args(&$crate::macros::get_instrumentation_arguments())
-            .args(&$crate::macros::get_tracing_arguments())
-            .args(&$crate::macros::remote_node::get_arguments())
+            .args(&$crate::helpers::macros::get_instrumentation_arguments())
+            .args(&$crate::helpers::macros::get_tracing_arguments())
+            .args(&$crate::helpers::macros::remote_node::get_arguments())
     }};
 }
 
@@ -70,13 +69,13 @@ macro_rules! runtime_client {
     ($runtime:ident, $args:ident) => {{
         use std::sync::Arc;
 
-        use $crate::macros::*;
+        use $crate::{client::RuntimeClient, helpers::macros::*};
 
         // Initialize environment.
         let environment: Arc<Environment> = Arc::new(GrpcEnvironment::default());
 
         // Initialize metric collector (if not already initialized).
-        drop($crate::macros::instrumentation_init(
+        drop($crate::helpers::macros::instrumentation_init(
             environment.clone(),
             &$args,
         ));
@@ -88,7 +87,7 @@ macro_rules! runtime_client {
         let storage = Arc::new(StorageClient::new(channel.clone()));
         let runtime_client = Arc::new(RuntimeClient::new(
             channel.clone(),
-            $crate::args::get_runtime_id(&$args),
+            $crate::helpers::args::get_runtime_id(&$args),
             if $args.is_present("rpc-timeout") {
                 Some(std::time::Duration::new(
                     value_t_or_exit!($args, "rpc-timeout", u64),
@@ -100,7 +99,7 @@ macro_rules! runtime_client {
         ));
 
         $runtime::Client::new(
-            $crate::args::get_runtime_id(&$args),
+            $crate::helpers::args::get_runtime_id(&$args),
             value_t_or_exit!($args, "mr-enclave", MrEnclave),
             environment,
             roothash,
@@ -112,7 +111,7 @@ macro_rules! runtime_client {
         let args = default_app!().get_matches();
 
         // Initialize tracing.
-        $crate::macros::report_forever("runtime-client", &args);
+        $crate::helpers::macros::report_forever("runtime-client", &args);
 
         runtime_client!($runtime, args)
     }};
@@ -159,7 +158,7 @@ macro_rules! benchmark_app {
         );
 
         // Initialize tracing.
-        $crate::macros::report_forever("runtime-client", &args);
+        $crate::helpers::macros::report_forever("runtime-client", &args);
 
         args
     }};
@@ -169,7 +168,7 @@ macro_rules! benchmark_app {
 #[macro_export]
 macro_rules! benchmark_client {
     ($app:ident, $runtime:ident, $init:expr, $scenario:expr, $finalize:expr) => {{
-        use $crate::benchmark::OutputFormat;
+        use $crate::helpers::benchmark::OutputFormat;
 
         let args = $app.clone();
 
@@ -185,7 +184,7 @@ macro_rules! benchmark_client {
             format!("{}", stringify!($scenario))
         };
 
-        let benchmark = $crate::benchmark::Benchmark::new(
+        let benchmark = $crate::helpers::benchmark::Benchmark::new(
             value_t!(args, "benchmark-runs", usize).unwrap_or_else(|e| e.exit()),
             value_t!(args, "benchmark-threads", usize).unwrap_or_else(|e| e.exit()),
             move || {

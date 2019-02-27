@@ -2,7 +2,6 @@
 extern crate clap;
 extern crate log;
 
-extern crate client_utils;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
 extern crate ekiden_runtime_client;
@@ -23,7 +22,7 @@ with_api! {
 }
 
 fn main() {
-    let args = client_utils::default_app!()
+    let args = ekiden_runtime_client::default_app!()
         .arg(
             Arg::with_name("mode")
                 .long("mode")
@@ -42,11 +41,11 @@ fn main() {
         .get_matches();
 
     // Initialize tracing.
-    client_utils::macros::report_forever("runtime-client", &args);
+    ekiden_runtime_client::helpers::macros::report_forever("runtime-client", &args);
 
     let mode = args.value_of("mode").expect("mode argument is required");
 
-    let client = client_utils::runtime_client!(simple_keyvalue, args);
+    let client = ekiden_runtime_client::runtime_client!(simple_keyvalue, args);
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
     if mode == "sleep" || mode == "part1" {

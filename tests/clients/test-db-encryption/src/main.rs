@@ -2,10 +2,9 @@
 extern crate clap;
 extern crate rand;
 
-#[macro_use]
-extern crate client_utils;
 extern crate ekiden_core;
 extern crate ekiden_rpc_client;
+#[macro_use]
 extern crate ekiden_runtime_client;
 
 extern crate test_db_encryption_api;

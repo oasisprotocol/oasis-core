@@ -8,7 +8,6 @@ description = "Ekiden DB encryption end-to-end test client"
 default = []
 
 [dependencies]
-client-utils = { path = "../utils" }
 ekiden-core = { path = "../../../core/common" }
 ekiden-runtime-client = { path = "../../../runtime/client" }
 ekiden-rpc-client = { path = "../../../rpc/client" }
