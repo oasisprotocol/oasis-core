@@ -60,7 +60,7 @@ func printSeparators(w io.Writer, numCols, colWidth int, dashRune string) {
 	for col := 0; col < numCols; col++ {
 		_, _ = fmt.Fprintf(w, "+")
 		for dash := 0; dash < colWidth; dash++ {
-			_, _ = fmt.Fprintf(w, dashRune)
+			_, _ = fmt.Fprint(w, dashRune)
 		}
 	}
 	_, _ = fmt.Fprintf(w, "+\n")
