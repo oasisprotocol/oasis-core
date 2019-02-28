@@ -83,7 +83,7 @@ RUN . $NVM_DIR/nvm.sh && \
     npm install -g truffle-oasis
 
 # Install golang and utilities.
-ARG GO_VERSION=1.11.4
+ARG GO_VERSION=1.12
 RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
@@ -95,7 +95,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     cd protoc-gen-go && \
     go install && \
     # Install golangci-lint.
-    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.11.2 && \
+    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.15.0 && \
     mv /tmp/bin/golangci-lint /go/bin
 
 # Install bubblewrap (we need version 0.3.1 which is not available for 18.04).
