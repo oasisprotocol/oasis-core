@@ -1,6 +1,9 @@
 module github.com/oasislabs/ekiden/go
 
 replace (
+	github.com/ipfs/go-cid => github.com/ipfs/go-cid v0.0.0-00000000000000-6e296c5c49ad
+	github.com/ipfs/go-ipfs-util => github.com/ipfs/go-ipfs-util v0.0.0-00000000000000-10d786c5ed85
+	github.com/ipfs/go-log => github.com/ipfs/go-log v0.0.0-00000000000000-14e95105cbaf
 	github.com/libp2p/go-addr-util => github.com/libp2p/go-addr-util v0.0.0-00000000000000-94b4c8b41eba
 	github.com/libp2p/go-buffer-pool => github.com/libp2p/go-buffer-pool v0.0.0-00000000000000-058210c5a0d0
 	github.com/libp2p/go-conn-security => github.com/libp2p/go-conn-security v0.0.0-00000000000000-b7192598fc6d
