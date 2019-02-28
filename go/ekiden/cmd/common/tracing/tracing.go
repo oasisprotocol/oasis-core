@@ -2,14 +2,15 @@
 package tracing
 
 import (
+	"fmt"
 	"io"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/uber/jaeger-client-go"
-	"github.com/uber/jaeger-client-go/config"
+	jaegercfg "github.com/uber/jaeger-client-go/config"
 
+	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
 )
 
@@ -53,6 +54,19 @@ func (svc *tracingService) Cleanup() {
 	}
 }
 
+// Our logging adapter for opentracing.
+type ekidenTracingLogger struct {
+	logger *logging.Logger
+}
+
+func (l *ekidenTracingLogger) Error(msg string) {
+	l.logger.Error(msg)
+}
+
+func (l *ekidenTracingLogger) Infof(msg string, args ...interface{}) {
+	l.logger.Info(fmt.Sprintf(msg, args...))
+}
+
 // New constructs a new tracing service.
 func New(serviceName string) (service.CleanupAble, error) {
 	enabled := viper.GetBool(cfgTracingEnabled)
@@ -60,18 +74,18 @@ func New(serviceName string) (service.CleanupAble, error) {
 	reporterLocalAgentHostPort := viper.GetString(cfgTracingReporterLocalAgentHostPort)
 	samplerParam := viper.GetFloat64(cfgTracingSamplerParam)
 
-	cfg := config.Configuration{
+	cfg := jaegercfg.Configuration{
 		Disabled: !enabled,
-		Reporter: &config.ReporterConfig{
+		Reporter: &jaegercfg.ReporterConfig{
 			BufferFlushInterval: reporterFlushInterval,
 			LocalAgentHostPort:  reporterLocalAgentHostPort,
 		},
-		Sampler: &config.SamplerConfig{
+		Sampler: &jaegercfg.SamplerConfig{
 			Param: samplerParam,
 		},
 	}
 
-	closer, err := cfg.InitGlobalTracer(serviceName, config.Logger(jaeger.StdLogger))
+	closer, err := cfg.InitGlobalTracer(serviceName, jaegercfg.Logger(&ekidenTracingLogger{logger: logging.GetLogger("ekiden/cmd/common/tracing")}))
 	if err != nil {
 		return nil, err
 	}
@@ -82,10 +96,10 @@ func New(serviceName string) (service.CleanupAble, error) {
 // RegisterFlags registers the flags used by the tracing service.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgTracingEnabled, true, "Enable tracing")
+		cmd.Flags().Bool(cfgTracingEnabled, false, "Enable tracing")
 		cmd.Flags().Duration(cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
-		cmd.Flags().String(cfgTracingReporterLocalAgentHostPort, "localhost:6831", "Send spans to jaeger-agent at this address")
-		cmd.Flags().Float64(cfgTracingSamplerParam, 0.001, "Probability for probabilistic sampler")
+		cmd.Flags().String(cfgTracingReporterLocalAgentHostPort, "jaeger:6831", "Send spans to jaeger-agent at this address")
+		cmd.Flags().Float64(cfgTracingSamplerParam, 1.0, "Probability for probabilistic sampler")
 	}
 
 	for _, v := range []string{

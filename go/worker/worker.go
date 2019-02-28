@@ -77,6 +77,7 @@ type Worker struct {
 	registry      registry.Backend
 	epochtime     epochtime.Backend
 	scheduler     scheduler.Backend
+	syncable      common.Syncable
 	ias           *ias.IAS
 	keyManager    *enclaverpc.Client
 	p2p           *p2p.P2P
@@ -91,6 +92,7 @@ type Worker struct {
 	cancelCtx context.CancelFunc
 	quitCh    chan struct{}
 	initCh    chan struct{}
+	regCh     chan struct{}
 
 	logger *logging.Logger
 }
@@ -135,11 +137,14 @@ func (w *Worker) Start() error {
 		}
 	}
 
-	// Wait for all runtimes to be initialized.
+	// Wait for all runtimes to be initialized and for the node
+	// to be registered for the current epoch.
 	go func() {
 		for _, rt := range w.runtimes {
 			<-rt.node.Initialized()
 		}
+
+		<-w.regCh
 
 		close(w.initCh)
 	}()
@@ -247,6 +252,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 		proxies[k] = host.ProxySpecification{
 			ProxyType:  v.Type(),
 			SourceName: v.UnixPath(),
+			OuterAddr:  v.RemoteAddress(),
 		}
 	}
 	switch strings.ToLower(cfg.Backend) {
@@ -336,6 +342,7 @@ func newWorker(
 	registryInst registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
+	syncable common.Syncable,
 	ias *ias.IAS,
 	keyManager *enclaverpc.Client,
 	cfg Config,
@@ -369,6 +376,7 @@ func newWorker(
 		registry:      registryInst,
 		epochtime:     epochtime,
 		scheduler:     scheduler,
+		syncable:      syncable,
 		ias:           ias,
 		keyManager:    keyManager,
 		runtimes:      make(map[signature.MapKey]*Runtime),
@@ -378,6 +386,7 @@ func newWorker(
 		cancelCtx:     cancelCtx,
 		quitCh:        make(chan struct{}),
 		initCh:        make(chan struct{}),
+		regCh:         make(chan struct{}),
 		logger:        logging.GetLogger("worker"),
 	}
 

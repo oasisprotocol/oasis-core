@@ -22,6 +22,7 @@ var Handle codec.Handle
 func Marshal(src interface{}) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, Handle)
+	defer enc.Release()
 	enc.MustEncode(src)
 	return b
 }
@@ -29,6 +30,7 @@ func Marshal(src interface{}) []byte {
 // Unmarshal deserializes a JSON byte vector into a given type.
 func Unmarshal(data []byte, dst interface{}) error {
 	dec := codec.NewDecoderBytes(data, Handle)
+	defer dec.Release()
 	if err := dec.Decode(dst); err != nil {
 		return err
 	}
@@ -39,8 +41,7 @@ func Unmarshal(data []byte, dst interface{}) error {
 // MustUnmarshal deserializes a JSON byte vector into a given type.
 // Panics if unmarshal fails.
 func MustUnmarshal(data []byte, dst interface{}) {
-	dec := codec.NewDecoderBytes(data, Handle)
-	if err := dec.Decode(dst); err != nil {
+	if err := Unmarshal(data, dst); err != nil {
 		panic(err)
 	}
 }

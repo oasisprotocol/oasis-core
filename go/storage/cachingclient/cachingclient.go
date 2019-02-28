@@ -1,17 +1,24 @@
+// Package cachingclient implements a storage client wrapped with a
+// disk-persisted in-memory local cache.
 package cachingclient
 
 import (
+	"bufio"
 	"context"
+	"io"
+	"os"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/ugorji/go/codec"
 
+	"github.com/oasislabs/ekiden/go/common/cache/lru"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/cachingclient/cache"
-	"github.com/oasislabs/ekiden/go/storage/client"
 )
 
 const (
@@ -21,12 +28,13 @@ const (
 	// Path to file for persistent cache storage.
 	cfgCacheFile = "storage.cachingclient.file"
 
-	// Number of cache entries.
+	// Size of the cache in bytes.
 	cfgCacheSize = "storage.cachingclient.cache_size"
 )
 
 var (
-	_ api.Backend = (*cachingClientBackend)(nil)
+	_ api.Backend  = (*cachingClientBackend)(nil)
+	_ lru.Sizeable = (*cachedValue)(nil)
 
 	cacheHits = prometheus.NewCounter(
 		prometheus.CounterOpts{
@@ -58,23 +66,35 @@ var (
 
 type cachingClientBackend struct {
 	logger *logging.Logger
+
 	remote api.Backend
-	cache  *cache.Cache
+	local  *lru.Cache
+
+	dbPath string
+}
+
+type cachedValue struct {
+	value []byte
+}
+
+func (v *cachedValue) Size() int {
+	return len(v.value)
 }
 
 func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
 	// Try local cache first, then remote node if missing.
-	if cached := b.cache.Get(key); cached != nil {
+	cached, ok := b.local.Get(key)
+	if ok {
 		cacheHits.Inc()
-		return cached, nil
+		return cached.(*cachedValue).value, nil
 	}
+
 	cacheMisses.Inc()
 	value, err := b.remote.Get(ctx, key)
 	if err == api.ErrKeyNotFound {
 		remoteMisses.Inc()
 	} else if err == nil {
-		// Update local cache in the background.
-		go b.cache.Set(key, value)
+		b.insertLocal(key, value)
 	}
 
 	return value, err
@@ -88,9 +108,9 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 
 	// Go through each key and try to retrieve its value from local cache.
 	for _, key := range keys {
-		if cached := b.cache.Get(key); cached != nil {
+		if cached, ok := b.local.Get(key); ok {
 			cacheHits.Inc()
-			values = append(values, cached)
+			values = append(values, cached.(*cachedValue).value)
 		} else {
 			// Cache miss, add to batch for remote.
 			cacheMisses.Inc()
@@ -107,14 +127,10 @@ func (b *cachingClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 			return nil, err
 		}
 
-		var kvs []cache.KeyValue
 		for remoteIdx, idx := range missingIdx {
 			values[idx] = remote[remoteIdx]
-			kvs = append(kvs, cache.KeyValue{Key: missingKeys[idx], Value: values[idx]})
+			b.insertLocal(missingKeys[idx], values[idx])
 		}
-
-		// Update local cache in the background.
-		go b.cache.SetBatch(kvs)
 	}
 
 	return values, nil
@@ -131,29 +147,36 @@ func (b *cachingClientBackend) Insert(ctx context.Context, value []byte, expirat
 		err = b.remote.Insert(ctx, value, expiration, opts)
 	}
 	if err == nil {
-		b.cache.Set(api.HashStorageKey(value), value)
+		b.insertLocal(api.HashStorageKey(value), value)
 	}
 	return err
 }
 
 func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
-	// Write-through. Since storage insert operations are currently idempotent, we can
-	// parallelize remote insert and cache insert.
-	ch := make(chan struct{})
-	go func() {
-		var kvs []cache.KeyValue
+	localFunc := func() {
 		for _, value := range values {
-			kvs = append(kvs, cache.KeyValue{Key: api.HashStorageKey(value.Data), Value: value.Data})
+			b.insertLocal(api.HashStorageKey(value.Data), value.Data)
 		}
-		b.cache.SetBatch(kvs)
-		close(ch)
-	}()
+	}
 
 	var err error
-	if !opts.LocalOnly {
+	switch opts.LocalOnly {
+	case true:
+		localFunc()
+	default:
+		// Write-through. Since storage insert operations are currently idempotent,
+		// we can parallelize remote insert and cache insert.
+		ch := make(chan struct{})
+
+		go func() {
+			localFunc()
+			close(ch)
+		}()
+
 		err = b.remote.InsertBatch(ctx, values, opts)
+		<-ch
 	}
-	<-ch
+
 	return err
 }
 
@@ -164,29 +187,142 @@ func (b *cachingClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo
 
 func (b *cachingClientBackend) Cleanup() {
 	b.remote.Cleanup()
-	b.cache.Cleanup()
+	if err := b.save(); err != nil {
+		b.logger.Error("failed to persist cache to disk",
+			"err", err,
+		)
+	}
 }
 
 func (b *cachingClientBackend) Initialized() <-chan struct{} {
 	return b.remote.Initialized()
 }
 
-func New() (api.Backend, error) {
+func (b *cachingClientBackend) insertLocal(key api.Key, value []byte) bool {
+	err := b.local.Put(key, &cachedValue{value: value})
+	if err == nil {
+		return true
+	}
+
+	b.logger.Error("failed to insert into cache",
+		"err", err,
+		"key", key,
+		"value_size", len(value),
+	)
+	return false
+}
+
+func (b *cachingClientBackend) load() error {
+	b.logger.Info("loading cache to disk",
+		"path", b.dbPath,
+	)
+
+	f, err := os.Open(b.dbPath)
+	if err != nil {
+		b.logger.Error("failed to open persisted cache",
+			"err", err,
+		)
+
+		if os.IsNotExist(err) {
+			// This failure class is harmless, don't propagate the error.
+			err = nil
+		}
+		return err
+	}
+	defer f.Close()
+
+	var (
+		totalKeys int
+		totalSize int
+
+		r      = bufio.NewReader(f)
+		ch     = make(chan []byte, 64) // Buffered, we're populating a cold cache.
+		doneCh = make(chan struct{})
+	)
+
+	go func() {
+		defer close(doneCh)
+		for v := range ch {
+			if b.insertLocal(api.HashStorageKey(v), append([]byte{}, v...)) {
+				totalKeys++
+				totalSize += len(v)
+			}
+		}
+	}()
+
+	dec := codec.NewDecoder(r, cbor.Handle)
+	defer dec.Release()
+	err = dec.Decode(&ch)
+	close(ch)
+	<-doneCh
+
+	if err != nil && err != io.EOF {
+		return errors.Wrap(err, "failed to de-serialize persisted cache")
+	}
+
+	b.logger.Info("loaded cache from disk",
+		"keys", totalKeys,
+		"bytes_written", totalSize,
+	)
+
+	return nil
+}
+
+func (b *cachingClientBackend) save() error {
+	b.logger.Info("persisting cache to disk",
+		"path", b.dbPath,
+	)
+
+	f, err := os.OpenFile(b.dbPath, os.O_CREATE|os.O_APPEND|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return errors.Wrap(err, "failed to open persisted cache for overwrite")
+	}
+	defer f.Close()
+
+	var (
+		totalKeys int
+		totalSize int
+
+		w  = bufio.NewWriter(f)
+		ch = make(chan []byte) // Unbuffered, entries may be large.
+	)
+	defer w.Flush()
+
+	go func() {
+		defer close(ch)
+
+		for _, v := range b.local.Keys() {
+			cached, _ := b.local.Get(v)
+			cachedBytes := cached.(*cachedValue).value
+			ch <- cachedBytes
+
+			totalSize += len(cachedBytes)
+			totalKeys++
+		}
+	}()
+
+	enc := codec.NewEncoder(w, cbor.Handle)
+	defer enc.Release()
+	if err = enc.Encode(ch); err != nil {
+		return errors.Wrap(err, "failed to serialize/persist cache")
+	}
+
+	b.logger.Info("persisted cache to disk",
+		"keys", totalKeys,
+		"bytes_written", totalSize,
+	)
+
+	return nil
+}
+
+func New(remote api.Backend) (api.Backend, error) {
 	// Register metrics for cache hits and misses.
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(cacheCollectors...)
 	})
 
-	// The remote node address needs to be set with the
-	// "storage.client.address" config parameter.
-	remote, err := client.New()
-	if err != nil {
-		return nil, err
-	}
-
-	cache, err := cache.New(
-		viper.GetString(cfgCacheFile),
-		viper.GetInt(cfgCacheSize),
+	local, err := lru.New(
+		lru.Capacity(int(viper.GetSizeInBytes(cfgCacheSize)), true),
 	)
 	if err != nil {
 		return nil, err
@@ -195,7 +331,11 @@ func New() (api.Backend, error) {
 	b := &cachingClientBackend{
 		logger: logging.GetLogger("storage/cachingclient"),
 		remote: remote,
-		cache:  cache,
+		local:  local,
+		dbPath: viper.GetString(cfgCacheFile),
+	}
+	if err := b.load(); err != nil {
+		return nil, err
 	}
 
 	return b, nil
@@ -206,7 +346,7 @@ func New() (api.Backend, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.leveldb", "Path to file for persistent cache storage")
-		cmd.Flags().Int(cfgCacheSize, 1000000, "Cache size")
+		cmd.Flags().String(cfgCacheSize, "512mb", "Cache size (bytes)")
 	}
 
 	for _, v := range []string{

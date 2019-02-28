@@ -1,0 +1,12 @@
+enclave {
+    trusted {
+        /**
+         * Use the given internal keys, provided as a CBOR-serialized ekiden_keymanager_common::DummyInternalKeys
+         * structure.
+         */
+        public void set_internal_keys(
+            [in, size=internal_keys_length] uint8_t *internal_keys,
+            size_t internal_keys_length
+        );
+    };
+};

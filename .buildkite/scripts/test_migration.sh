@@ -33,6 +33,8 @@ source .buildkite/rust/common.sh
 
 # Runtime identifier.
 RUNTIME_ID=0000000000000000000000000000000000000000000000000000000000000000
+# Client.
+CLIENT="$WORKDIR/target/debug/test-long-term-client"
 
 ######################################
 # Storage and roothash migration test.
@@ -51,66 +53,39 @@ test_migration() {
     set_epoch 1
     sleep 1
 
-    # Link to correct UNIX socket so that we can switch the actual socket later.
-    local validator_sock=${TEST_BASE_DIR}/validator.sock
-    ln -s ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}
-
-    # Start long term client, which has a 10-second wait. We run this client so
-    # that we test if the migration works without restarting the client.
-    "$WORKDIR/target/debug/test-long-term-client" \
-        --node-address unix:${validator_sock} \
+    # Start client and do the state mutations.
+    ${CLIENT} \
+        --mode part1 \
+        --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
-        --test-runtime-id "$RUNTIME_ID" \
-        &
-    local client_pid=$(jobs -p +)
-
-    sleep 4
-    # 4 sec
+        --test-runtime-id "$RUNTIME_ID"
 
     # Stop the compute nodes.
     pkill --echo --full --signal 9 worker.backend
 
     # Export.
-    "$WORKDIR/go/ekiden/ekiden" storage export \
-        --address "127.0.0.1:${EKIDEN_STORAGE_PORT}" \
-        --output_file ${TEST_BASE_DIR}/export-storage.dat
     "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" \
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --output_file ${TEST_BASE_DIR}/export-roothash.dat
+        --output_file ${TEST_BASE_DIR}/export-roothash.json
 
-    # Stop the validator and storage nodes.
-    pkill --echo --signal 9 ekiden
-
-    sleep 1
-    # 5 sec
+    # Stop the validator nodes.
+    ps efh -C ekiden |grep -v "ekiden storage node" | awk '{print $1}' | xargs kill -9
 
     # Start the second network.
-    run_backend_tendermint_committee tendermint_mock 2 1 0 \
-        --roothash.genesis_blocks ${TEST_BASE_DIR}/export-roothash.dat
-
-    # Replace validator socket.
-    ln -sf ${EKIDEN_VALIDATOR_SOCKET} ${validator_sock}
-
-    sleep 1
-    # 6 sec
-
-    # Import storage.
-    "$WORKDIR/go/ekiden/ekiden" storage import \
-        --address "127.0.0.1:${EKIDEN_STORAGE_PORT}" \
-        --input_file ${TEST_BASE_DIR}/export-storage.dat \
-        --current_epoch 1
+    run_backend_tendermint_committee tendermint_mock 2 1 0 false "${TEST_BASE_DIR}/export-roothash.json"
 
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
 
-    sleep 3
-    # 9 sec
-
     wait_compute_nodes 1
     set_epoch 2
 
-    # Wait on the client and check its exit status.
-    wait "$client_pid"
+    # Start client and do state verification, checking that migration succeeded.
+    ${CLIENT} \
+        --mode part2 \
+        --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
+        --test-runtime-id "$RUNTIME_ID"
 
     # Cleanup.
     cleanup

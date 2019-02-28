@@ -257,8 +257,10 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.CommitmentsHash.UnmarshalBinary(pb.GetCommitmentsHash()); err != nil {
 		return err
 	}
-	if err := cbor.Unmarshal(pb.GetStorageReceipt(), &h.StorageReceipt); err != nil {
-		return err
+	if sr := pb.GetStorageReceipt(); sr != nil {
+		if err := cbor.Unmarshal(sr, &h.StorageReceipt); err != nil {
+			return err
+		}
 	}
 
 	return nil

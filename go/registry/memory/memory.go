@@ -34,8 +34,6 @@ type memoryBackend struct {
 	nodeListNotifier *pubsub.Broker
 	runtimeNotifier  *pubsub.Broker
 
-	lastEpoch epochtime.EpochTime
-
 	closeCh  chan struct{}
 	closedCh chan struct{}
 }
@@ -46,6 +44,8 @@ type memoryBackendState struct {
 	entities map[signature.MapKey]*entity.Entity
 	nodes    map[signature.MapKey]*node.Node
 	runtimes map[signature.MapKey]*api.Runtime
+
+	lastEpoch epochtime.EpochTime
 }
 
 func (r *memoryBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
@@ -157,6 +157,13 @@ func (r *memoryBackend) RegisterNode(ctx context.Context, sigNode *node.SignedNo
 		)
 		return api.ErrBadEntityForNode
 	}
+
+	// Ensure node is not expired.
+	if epochtime.EpochTime(node.Expiration) < r.state.lastEpoch {
+		r.state.Unlock()
+		return api.ErrNodeExpired
+	}
+
 	r.state.nodes[node.ID.ToMapKey()] = node
 	r.state.Unlock()
 
@@ -249,6 +256,8 @@ func (r *memoryBackend) worker(ctx context.Context, timeSource epochtime.Backend
 
 	epochEvents, sub := timeSource.WatchEpochs()
 	defer sub.Close()
+
+	lastEpoch := epochtime.EpochInvalid
 	for {
 		var newEpoch epochtime.EpochTime
 		var ok bool
@@ -264,17 +273,21 @@ func (r *memoryBackend) worker(ctx context.Context, timeSource epochtime.Backend
 		}
 
 		r.logger.Debug("worker: epoch transition",
-			"prev_epoch", r.lastEpoch,
+			"prev_epoch", lastEpoch,
 			"epoch", newEpoch,
 		)
 
-		if newEpoch == r.lastEpoch {
+		if newEpoch == lastEpoch {
 			continue
 		}
 
 		r.sweepNodeList(newEpoch)
 		r.buildNodeList(ctx, newEpoch)
-		r.lastEpoch = newEpoch
+		lastEpoch = newEpoch
+
+		r.state.Lock()
+		r.state.lastEpoch = lastEpoch
+		r.state.Unlock()
 	}
 }
 
@@ -305,7 +318,7 @@ func (r *memoryBackend) buildNodeList(ctx context.Context, newEpoch epochtime.Ep
 
 	r.logger.Debug("worker: built node list",
 		"epoch", newEpoch,
-		"nodes", nodes,
+		"nodes_len", len(nodes),
 	)
 
 	r.nodeListNotifier.Broadcast(&api.NodeList{
@@ -387,14 +400,14 @@ func New(ctx context.Context, timeSource epochtime.Backend) api.Backend {
 	r := &memoryBackend{
 		logger: logging.GetLogger("registry/memory"),
 		state: memoryBackendState{
-			entities: make(map[signature.MapKey]*entity.Entity),
-			nodes:    make(map[signature.MapKey]*node.Node),
-			runtimes: make(map[signature.MapKey]*api.Runtime),
+			entities:  make(map[signature.MapKey]*entity.Entity),
+			nodes:     make(map[signature.MapKey]*node.Node),
+			runtimes:  make(map[signature.MapKey]*api.Runtime),
+			lastEpoch: epochtime.EpochInvalid,
 		},
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
-		lastEpoch:        epochtime.EpochInvalid,
 		closeCh:          make(chan struct{}),
 		closedCh:         make(chan struct{}),
 	}

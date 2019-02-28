@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/beacon"
 	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/client"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/dummydebug"
@@ -65,6 +66,7 @@ type Node struct {
 	Scheduler schedulerAPI.Backend
 	Storage   storageAPI.Backend
 	Worker    *worker.Worker
+	Client    *client.Client
 }
 
 // Cleanup cleans up after the ndoe has terminated.
@@ -111,6 +113,10 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
+	if n.Client, err = client.New(n.svcMgr.Ctx, n.RootHash, n.Storage, n.Scheduler, n.Registry, n.svcTmnt); err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.Client, "client service")
 
 	// Initialize and register the gRPC services.
 	grpcSrv := n.grpcSrv.Server()
@@ -119,6 +125,7 @@ func (n *Node) initBackends() error {
 	scheduler.NewGRPCServer(grpcSrv, n.Scheduler)
 	storage.NewGRPCServer(grpcSrv, n.Storage)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
+	client.NewGRPCServer(grpcSrv, n.Client)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -243,6 +250,7 @@ func NewNode() (*Node, error) {
 		node.Registry,
 		node.Epochtime,
 		node.Scheduler,
+		node.svcTmnt,
 	)
 	if err != nil {
 		logger.Error("failed to initialize compute worker",

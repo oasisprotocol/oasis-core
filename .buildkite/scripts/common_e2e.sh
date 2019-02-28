@@ -14,13 +14,13 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_ENTITY_PRIVATE_KEY
-#   EKIDEN_EXTRA_ARGS
 #
 # Arguments:
 #   epochtime_backend - epochtime backend (default: tendermint)
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
 #   replica_group_backup_size - runtime replica group backup size (default: 1)
+#   start_storage - start the storage node
 #
 # Any additional arguments are passed to the validator Go node and
 # all compute nodes.
@@ -33,7 +33,10 @@ run_backend_tendermint_committee() {
     shift || true
     local replica_group_backup_size=${1:-1}
     shift || true
-    local extra_args=$*
+    local start_storage=${1:-true}
+    shift || true
+    local roothash_genesis_blocks=${1:-""}
+    shift || true
 
     local committee_dir=${TEST_BASE_DIR}/committee-${id}
     local base_datadir=${committee_dir}/committee-data
@@ -81,19 +84,23 @@ run_backend_tendermint_committee() {
         --genesis_file ${genesis_file} \
         --entity ${entity_dir}/entity_genesis.json \
         --runtime ${entity_dir}/runtime_genesis.json \
+        ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
         ${validator_files}
 
     # Run the storage node.
     local storage_datadir=${committee_dir}/storage
     local storage_port=60000
-    rm -Rf ${storage_datadir}
 
-    ${WORKDIR}/go/ekiden/ekiden \
-        storage node \
-        --datadir ${storage_datadir} \
-        --grpc.port ${storage_port} \
-        --log.file ${committee_dir}/storage.log \
-        &
+    if [ "$start_storage" = true ]; then
+        rm -Rf ${storage_datadir}
+
+        ${WORKDIR}/go/ekiden/ekiden \
+            storage node \
+            --datadir ${storage_datadir} \
+            --grpc.port ${storage_port} \
+            --log.file ${committee_dir}/storage.log \
+            &
+    fi
 
     # Run the validator nodes.
     for idx in $(seq 1 $nodes); do
@@ -122,7 +129,6 @@ run_backend_tendermint_committee() {
             --tendermint.debug.addr_book_lenient \
             --tendermint.log.debug \
             --datadir ${datadir} \
-            ${extra_args} \
             &
     done
 
@@ -133,7 +139,6 @@ run_backend_tendermint_committee() {
     EKIDEN_TM_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
     EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
-    EKIDEN_EXTRA_ARGS="${extra_args}"
 }
 
 # Run a compute node.
@@ -198,7 +203,7 @@ run_compute_node() {
         --worker.key_manager.certificate ${WORKDIR}/tests/keymanager/km.pem \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
-        ${EKIDEN_EXTRA_ARGS} ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
+        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
 }
 
 # Cat all compute node logs.

@@ -225,18 +225,21 @@ impl KeyManager {
         }
     }
 
-    pub fn get_public_key(&mut self, contract_id: ContractId) -> Result<PublicKeyPayload> {
+    pub fn get_public_key(&mut self, contract_id: ContractId) -> Result<Option<PublicKeyPayload>> {
         self.connect()?;
 
         match self.get_public_key_cache.entry(contract_id) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
+            Entry::Occupied(entry) => Ok(Some(entry.get().clone())),
             Entry::Vacant(entry) => {
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
                 request.set_contract_id(contract_id.to_vec());
                 // make a RPC
                 let mut response =
                     match self.client.as_mut().unwrap().get_public_key(request).wait() {
-                        Ok(r) => r,
+                        Ok(r) => match r {
+                            Some(r) => r,
+                            None => return Ok(None),
+                        },
                         Err(e) => return Err(Error::new(e.description())),
                     };
 
@@ -252,16 +255,19 @@ impl KeyManager {
 
                 entry.insert(public_key_payload.clone());
 
-                Ok(public_key_payload)
+                Ok(Some(public_key_payload))
             }
         }
     }
 
-    pub fn long_term_public_key(&mut self, contract_id: ContractId) -> Result<PublicKeyPayload> {
+    pub fn long_term_public_key(
+        &mut self,
+        contract_id: ContractId,
+    ) -> Result<Option<PublicKeyPayload>> {
         self.connect()?;
 
         match self.long_term_public_key_cache.entry(contract_id) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
+            Entry::Occupied(entry) => Ok(Some(entry.get().clone())),
             Entry::Vacant(entry) => {
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
                 request.set_contract_id(contract_id.to_vec());
@@ -272,7 +278,10 @@ impl KeyManager {
                     .long_term_public_key(request)
                     .wait()
                 {
-                    Ok(r) => r,
+                    Ok(r) => match r {
+                        Some(r) => r,
+                        None => return Ok(None),
+                    },
                     Err(e) => return Err(Error::new(e.description())),
                 };
 
@@ -287,7 +296,7 @@ impl KeyManager {
 
                 entry.insert(public_key_payload.clone());
 
-                Ok(public_key_payload)
+                Ok(Some(public_key_payload))
             }
         }
     }

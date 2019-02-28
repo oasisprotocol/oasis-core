@@ -45,7 +45,9 @@ const (
 	// Worker connect timeout.
 	workerConnectTimeout = 5 * time.Second
 	// Worker RAK initialization timeout.
-	workerRAKTimeout = 5 * time.Second
+	// This can take a long time in deployments that run multiple
+	// nodes on a single machine, all sharing the same EPC.
+	workerRAKTimeout = 60 * time.Second
 	// Worker respawn delay.
 	workerRespawnDelay = 1 * time.Second
 	// Worker interrupt timeout.
@@ -87,10 +89,15 @@ type ProxySpecification struct {
 	ProxyType string
 	// SourceName is the path of the unix socket outside the sandbox.
 	SourceName string
+	// OuterAddr is the address to which the proxy is forwarding outside.
+	OuterAddr string
 	// mapName is the name of the unix socket inside the sandbox.
 	mapName string
-	// innerAddr is the address on which the proxy will listen inside the sandbox.
+	// innerAddr is the address on which the proxy will listen inside the sandbox;
+	// if bypass is true, innerAddr is the same as OuterAddr
 	innerAddr string
+	// bypass specifies if a proxy is needed or if the service will connect directly.
+	bypass bool
 }
 
 type process struct {
@@ -231,20 +238,23 @@ func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]Prox
 	args := []string{
 		"--host-socket", hostSocket,
 	}
-	if _, ok := proxies[MetricsProxyKey]; ok {
+	if spec, ok := proxies[MetricsProxyKey]; ok {
 		config := metrics.GetServiceConfig()
 		args = append(args, "--prometheus-mode", config.Mode)
-		args = append(args, "--prometheus-metrics-addr", workerProxyInnerAddrs[MetricsProxyKey])
+		args = append(args, "--prometheus-metrics-addr", spec.innerAddr)
 		args = append(args, "--prometheus-push-job-name", config.JobName)
 		args = append(args, "--prometheus-push-instance-label", config.InstanceLabel)
 	}
-	if _, ok := proxies[TracingProxyKey]; ok {
+	if spec, ok := proxies[TracingProxyKey]; ok {
 		config := tracing.GetServiceConfig()
 		args = append(args, "--tracing-enable")
 		args = append(args, "--tracing-sample-probability", strconv.FormatFloat(config.SamplerParam, 'f', -1, 64))
-		args = append(args, "--tracing-agent-addr", workerProxyInnerAddrs[TracingProxyKey])
+		args = append(args, "--tracing-agent-addr", spec.innerAddr)
 	}
 	for name, proxy := range proxies {
+		if proxy.bypass {
+			continue
+		}
 		args = append(args, fmt.Sprintf("--proxy-bind=%s,%s,%s,%s", proxy.ProxyType, name, proxy.innerAddr, proxy.mapName))
 	}
 	args = append(args, runtimeBinary)
@@ -795,7 +805,12 @@ func NewSandboxedHost(
 	for name, mappedSocket := range workerMountSocketMap {
 		if proxy, ok := proxies[name]; ok {
 			proxy.mapName = mappedSocket
-			proxy.innerAddr = workerProxyInnerAddrs[name]
+			if noSandbox {
+				proxy.innerAddr = proxy.OuterAddr
+			} else {
+				proxy.innerAddr = workerProxyInnerAddrs[name]
+			}
+			proxy.bypass = noSandbox
 			knownProxies[name] = proxy
 		}
 	}

@@ -7,9 +7,7 @@ pub use ekiden_common::{
     futures::{BoxFuture, Future},
 };
 pub use ekiden_enclave_common::quote;
-pub use ekiden_registry_base::EntityRegistryBackend;
 pub use ekiden_roothash_base::backend::RootHashBackend;
-pub use ekiden_scheduler_base::Scheduler;
 pub use ekiden_storage_base::backend::StorageBackend;
 
 /// Create a runtime client for a given API.
@@ -41,7 +39,7 @@ macro_rules! create_runtime_client {
             use std::sync::Arc;
             use std::time::Duration;
 
-            use $crate::manager::RuntimeClientManager;
+            use $crate::client::RuntimeClient;
             use $crate::macros::quote::MrEnclave;
             use $crate::macros::*;
 
@@ -51,7 +49,7 @@ macro_rules! create_runtime_client {
                 environment: Arc<Environment>,
                 storage: Arc<StorageBackend>,
                 roothash: Arc<RootHashBackend>,
-                manager: RuntimeClientManager,
+                runtime_client: Arc<RuntimeClient>,
             }
 
             #[allow(dead_code)]
@@ -60,27 +58,16 @@ macro_rules! create_runtime_client {
                 pub fn new(
                     runtime_id: B256,
                     mr_enclave: MrEnclave,
-                    timeout: Option<Duration>,
                     environment: Arc<Environment>,
-                    scheduler: Arc<Scheduler>,
-                    entity_registry: Arc<EntityRegistryBackend>,
                     roothash: Arc<RootHashBackend>,
                     storage: Arc<StorageBackend>,
+                    runtime_client: Arc<RuntimeClient>,
                 ) -> Self {
                     Client {
-                        manager: RuntimeClientManager::new(
-                            runtime_id,
-                            mr_enclave,
-                            timeout,
-                            environment.clone(),
-                            scheduler,
-                            entity_registry,
-                            roothash.clone(),
-                            storage.clone(),
-                        ),
                         environment,
                         storage,
                         roothash,
+                        runtime_client,
                     }
                 }
 
@@ -105,7 +92,7 @@ macro_rules! create_runtime_client {
                         &self,
                         arguments: $request_type
                     ) -> BoxFuture<$response_type> {
-                        self.manager.call(stringify!($method_name), arguments)
+                        self.runtime_client.call(stringify!($method_name), arguments)
                     }
                 )*
             }

@@ -2,11 +2,11 @@ package tendermint
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	tmabci "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
+	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
@@ -78,11 +79,11 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 
-	validatorKey             *signature.PrivateKey
 	nodeKey                  *signature.PrivateKey
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
+	syncedCh                 chan struct{}
 
 	startFn func() error
 }
@@ -102,21 +103,26 @@ func (t *tendermintService) started() bool {
 }
 
 func (t *tendermintService) Start() error {
-	if !t.initialized() {
-		return nil
+	if t.started() {
+		return errors.New("tendermint: service already started")
 	}
 
-	if err := t.mux.Start(); err != nil {
-		return err
+	switch t.initialized() {
+	case true:
+		if err := t.mux.Start(); err != nil {
+			return err
+		}
+		if err := t.startFn(); err != nil {
+			return err
+		}
+		if err := t.node.Start(); err != nil {
+			return errors.Wrap(err, "tendermint: failed to start service")
+		}
+		go t.syncWorker()
+		go t.worker()
+	case false:
+		close(t.syncedCh)
 	}
-	if err := t.startFn(); err != nil {
-		return err
-	}
-	if err := t.node.Start(); err != nil {
-		return errors.Wrap(err, "tendermint: failed to start service")
-	}
-
-	go t.worker()
 
 	t.Lock()
 	t.isStarted = true
@@ -150,6 +156,10 @@ func (t *tendermintService) Stop() {
 
 func (t *tendermintService) Started() <-chan struct{} {
 	return t.startedCh
+}
+
+func (t *tendermintService) Synced() <-chan struct{} {
+	return t.syncedCh
 }
 
 func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
@@ -295,14 +305,7 @@ func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscr
 }
 
 func (t *tendermintService) NodeKey() *signature.PublicKey {
-	// Should *never* happen unless this is called prior to any backends
-	// being initialized.
-	if t.nodeKey == nil {
-		panic("node key not available yet")
-	}
-
 	pk := t.nodeKey.Public()
-
 	return &pk
 }
 
@@ -335,14 +338,6 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
-	// Initialize the node (P2P) key.
-	if t.nodeKey, err = initNodeKey(tendermintDataDir); err != nil {
-		return err
-	}
-	t.Logger.Debug("loaded/generated P2P key",
-		"public_key", t.nodeKey.Public(),
-	)
-
 	// Create Tendermint node.
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
@@ -368,7 +363,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.RPC.ListenAddress = ""
 
 	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
-	tenderValIdent := crypto.PrivateKeyToTendermint(t.validatorKey)
+	tenderValIdent := crypto.PrivateKeyToTendermint(t.nodeKey)
 	if !tenderValIdent.Equals(tendermintPV.Key.PrivKey) {
 		// The private validator must have been just generated.  Force
 		// it to use the oasis identity rather than the new key.
@@ -405,11 +400,7 @@ func (t *tendermintService) lazyInit() error {
 			tenderminGenesisProvider,
 			bolt.BoltDBProvider,
 			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
-			&abci.LogAdapter{
-				Logger:           logging.GetLogger("tendermint"),
-				IsTendermintCore: true,
-				SuppressDebug:    !viper.GetBool(cfgLogDebug),
-			},
+			newLogAdapter(!viper.GetBool(cfgLogDebug)),
 		)
 		if err != nil {
 			return errors.Wrap(err, "tendermint: failed to create node")
@@ -452,7 +443,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			}
 
 			validator := &bootstrap.GenesisValidator{
-				PubKey:      t.validatorKey.Public(),
+				PubKey:      t.nodeKey.Public(),
 				Name:        common.NormalizeFQDN(nodeName),
 				CoreAddress: nodeAddr,
 			}
@@ -466,7 +457,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		genDoc = &bootstrap.GenesisDocument{
 			Validators: []*bootstrap.GenesisValidator{
 				{
-					PubKey: t.validatorKey.Public(),
+					PubKey: t.nodeKey.Public(),
 					Name:   "ekiden-dummy",
 					Power:  10,
 				},
@@ -492,12 +483,16 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// So, the "right" thing to do is to use seed nodes, but those are totally
 		// 100% dedicated to just seeding.  PEX works just fine off the validators,
 		// so ensure that the validators exist in the address book, the hard way.
+		//
+		// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
+		// sensitive string comparision to validate public keys.
 		var addrs []*tmp2p.NetAddress
 		for _, v := range genDoc.Validators {
 			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
-			vAddr := vPubKey.Address().String() + "@" + v.CoreAddress
+			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
+			vAddr := vPkAddrHex + "@" + v.CoreAddress
 
-			if v.PubKey.Equal(t.validatorKey.Public()) {
+			if v.PubKey.Equal(t.nodeKey.Public()) {
 				// This validator entry is the current node, set the
 				// node name to that specified in the genesis document.
 				tenderConfig.Moniker = v.Name
@@ -518,6 +513,9 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		}
 		defer func() {
 			// Can't pass tmn.NewNode() an existing address book.
+			// Make sure to call Save as the address book may otherwise not be saved
+			// due to the way Stop/Quit are broken in the address book implementation.
+			addrBook.Save()
 			ch := addrBook.Quit()
 			_ = addrBook.Stop()
 			<-ch
@@ -527,13 +525,15 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// nodes.  This is somewhat silly, but there isn't any error-checking
 		// done with AddOurAddress, so using the P2P ListenAddress as the IP/port
 		// is totally fine.
-		valPubKey := t.validatorKey.Public()
+		valPubKey := t.nodeKey.Public()
 		ourPubKey := crypto.PublicKeyToTendermint(&valPubKey)
 		ourLaddr, err := common.GetHostPort(tenderConfig.P2P.ListenAddress)
 		if err != nil {
 			return nil, errors.Wrap(err, "tendermint: failed to parse p2p listen address")
 		}
-		ourAddr, err := tmp2p.NewNetAddressString(ourPubKey.Address().String() + "@" + ourLaddr)
+
+		ourPkAddrHex := strings.ToLower(ourPubKey.Address().String())
+		ourAddr, err := tmp2p.NewNetAddressString(ourPkAddrHex + "@" + ourLaddr)
 		if err != nil {
 			return nil, errors.Wrap(err, "tendermint: failed to generate our address")
 		}
@@ -541,6 +541,10 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 
 		// Populate the address book with the genesis validators.
 		for _, v := range addrs {
+			// Remove the address first as otherwise Tendermint's address book
+			// may not actually add the new address.
+			addrBook.RemoveAddress(v)
+
 			if err = addrBook.AddAddress(v, ourAddr); err != nil {
 				return nil, errors.Wrap(err, "tendermint: failed to add genesis validator to address book")
 			}
@@ -553,6 +557,38 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 	}
 
 	return tmGenDoc, nil
+}
+
+func (t *tendermintService) syncWorker() {
+	checkSyncFn := func() (isSyncing bool, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = errors.New("tendermint: node disappeared, terminated?")
+			}
+		}()
+
+		return t.node.ConsensusReactor().FastSync(), nil
+	}
+
+	for {
+		select {
+		case <-t.node.Quit():
+			return
+		case <-time.After(1 * time.Second):
+			isSyncing, err := checkSyncFn()
+			if err != nil {
+				t.Logger.Error("Failed to poll FastSync",
+					"err", err,
+				)
+				return
+			}
+			if !isSyncing {
+				t.Logger.Info("Tendermint Node finished fast-sync")
+				close(t.syncedCh)
+				return
+			}
+		}
+	}
 }
 
 func (t *tendermintService) worker() {
@@ -586,10 +622,11 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity) servi
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
-		validatorKey:          identity.NodeKey,
+		nodeKey:               identity.NodeKey,
 		ctx:                   ctx,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
+		syncedCh:              make(chan struct{}),
 	}
 }
 
@@ -612,14 +649,110 @@ func initDataDir(dataDir string) error {
 	return nil
 }
 
-func initNodeKey(dataDir string) (*signature.PrivateKey, error) {
-	var k signature.PrivateKey
+type logAdapter struct {
+	*logging.Logger
 
-	if err := k.LoadPEM(filepath.Join(dataDir, "p2p.pem"), rand.Reader); err != nil {
-		return nil, err
+	baseLogger    *logging.Logger
+	suppressDebug bool
+
+	keyVals []interface{}
+}
+
+func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
+	// Tendermint uses `module` like ekiden does, and to add insult to
+	// injury will cave off child loggers with subsequence calls to
+	// `With()`, resulting in multiple `module` keys.
+	//
+	// Do the right thing by:
+	//  * Prefixing the `module` values with `tendermint:`
+	//  * Coallece the multiple `module` values.
+	//
+	// This is more convoluted than it needs to be because the kit-log
+	// prefix vector is private.
+
+	findModule := func(vec []interface{}) (string, int) {
+		for i, v := range vec {
+			if i&1 != 0 {
+				continue
+			}
+
+			k := v.(string)
+			if k != "module" {
+				continue
+			}
+			if i+1 > len(vec) {
+				panic("With(): tendermint core logger, missing 'module' value")
+			}
+
+			vv := vec[i+1].(string)
+
+			return vv, i + 1
+		}
+		return "", -1
 	}
 
-	return &k, nil
+	parentMod, parentIdx := findModule(a.keyVals)
+
+	childKeyVals := append([]interface{}{}, a.keyVals...)
+	childMod, childIdx := findModule(keyvals)
+	if childIdx < 0 {
+		// "module" was not specified for this child, use the one belonging
+		// to the parent.
+		if parentIdx < 0 {
+			// This should *NEVER* happen, if it does, it means that tendermint
+			// called `With()` on the base logAdapter without setting a module.
+			panic("With(): tendermint core logger, no sensible parent 'module'")
+		}
+		childKeyVals = append(childKeyVals, keyvals...)
+	} else if parentIdx < 0 {
+		// No parent logger, this must be a child of the base logAdapter.
+		keyvals[childIdx] = "tendermint:" + childMod
+		childKeyVals = append(childKeyVals, keyvals...)
+	} else {
+		// Append the child's module to the parent's.
+		childKeyVals[parentIdx] = parentMod + "/" + childMod
+		for i, v := range keyvals {
+			// And omit the non-re=written key/value from the those passed to
+			// the kit-log logger.
+			if i != childIdx-1 && i != childIdx {
+				childKeyVals = append(childKeyVals, v)
+			}
+		}
+	}
+
+	return &logAdapter{
+		Logger:        a.baseLogger.With(childKeyVals...),
+		baseLogger:    a.baseLogger,
+		suppressDebug: a.suppressDebug,
+		keyVals:       childKeyVals,
+	}
+}
+
+func (a *logAdapter) Info(msg string, keyvals ...interface{}) {
+	a.Logger.Info(msg, keyvals...)
+}
+
+func (a *logAdapter) Error(msg string, keyvals ...interface{}) {
+	a.Logger.Error(msg, keyvals...)
+}
+
+func (a *logAdapter) Debug(msg string, keyvals ...interface{}) {
+	if !a.suppressDebug {
+		a.Logger.Debug(msg, keyvals...)
+	}
+}
+
+func newLogAdapter(suppressDebug bool) tmlog.Logger {
+	// Need an extra level of unwinding because the Debug wrapper
+	// exists.
+	//
+	// This might be able to be replaced with the per-module log
+	// level instead.
+	return &logAdapter{
+		Logger:        logging.GetLoggerEx("tendermint:base", 1),
+		baseLogger:    logging.GetLoggerEx("", 1), // Tendermint sets the module, repeatedly.
+		suppressDebug: suppressDebug,
+	}
 }
 
 // RegisterFlags registers the configuration flags with the provided

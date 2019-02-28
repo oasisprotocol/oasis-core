@@ -68,15 +68,6 @@ scenario_discrepancy() {
     set_epoch 1
 }
 
-# Test the key manager node.
-test_keymanager() {
-    sleep 3
-
-    ${WORKDIR}/target/debug/ekiden-keymanager-test-client \
-        --mrenclave $(cat ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.mrenclave) \
-        --tls-certificate ${WORKDIR}/tests/keymanager/km.pem
-}
-
 # Assert that the logger works.
 assert_logger_works() {
     assert_basic_success
@@ -123,8 +114,7 @@ test_suite() {
         name="e2e-${backend_name}-basic-db-encryption" \
         backend_runner=$backend_runner \
         runtime=test-db-encryption \
-        client=test-db-encryption \
-        post_km_hook=test_keymanager
+        client=test-db-encryption
 
     # Enclave logger test.
     run_test \

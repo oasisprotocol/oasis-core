@@ -156,3 +156,12 @@ impl ContractKey {
         }
     }
 }
+
+/// A set of keys for internal use by the dummy key manager.
+#[derive(Serialize, Deserialize)]
+pub struct DummyInternalKeys {
+    #[serde(with = "BigArray")]
+    pub keystore_encryption_key: StateKeyType,
+    /// Ed25519 keypair in PKCS8 format.
+    pub signing_key: Vec<u8>,
+}

@@ -19,6 +19,7 @@ const (
 	cfgBootstrapValidators = "debug.tendermint.bootstrap.validators"
 	cfgBootstrapRuntime    = "debug.tendermint.bootstrap.runtime"
 	cfgBootstrapEntity     = "debug.tendermint.bootstrap.entity"
+	cfgBootstrapRootHash   = "debug.tendermint.bootstrap.roothash"
 )
 
 var (
@@ -64,6 +65,15 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
+
+	roothash := viper.GetStringSlice(cfgBootstrapRootHash)
+	if err := tendermint.AppendRootHashState(st, roothash, logger); err != nil {
+		logger.Error("failed to parse roothash genesis state",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
 	if len(st.ABCIAppState) == 0 {
 		st = nil
 	}
@@ -98,6 +108,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 		cmd.Flags().Int(cfgBootstrapValidators, 3, "number of validators")
 		cmd.Flags().StringSlice(cfgBootstrapEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRuntime, nil, "path to runtime registration file")
+		cmd.Flags().StringSlice(cfgBootstrapRootHash, nil, "path to roothash genesis blocks file")
 	}
 
 	for _, v := range []string{
@@ -105,6 +116,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 		cfgBootstrapValidators,
 		cfgBootstrapRuntime,
 		cfgBootstrapEntity,
+		cfgBootstrapRootHash,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

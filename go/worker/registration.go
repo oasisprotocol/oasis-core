@@ -5,12 +5,24 @@ import (
 	"net"
 	"time"
 
+	"github.com/cenkalti/backoff"
+
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 )
 
 func (w *Worker) doNodeRegistration() {
+	// Delay node registration till after the consensus service has
+	// finished initial synchronization if applicable.
+	if w.syncable != nil {
+		select {
+		case <-w.quitCh:
+			return
+		case <-w.syncable.Synced():
+		}
+	}
+
 	// (re-)register the node on each epoch transition.  This doesn't
 	// need to be strict block-epoch time, since it just serves to
 	// extend the node's expiration.
@@ -18,30 +30,43 @@ func (w *Worker) doNodeRegistration() {
 	defer sub.Close()
 
 	regFn := func(epoch epochtime.EpochTime, retry bool) error {
-		for {
-			err := w.registerNode(epoch)
-			switch err {
-			case nil, context.Canceled:
-				return err
-			default:
-				if !retry {
-					return err
+		var off backoff.BackOff
+
+		switch retry {
+		case true:
+			expBackoff := backoff.NewExponentialBackOff()
+			expBackoff.MaxElapsedTime = 0
+			off = expBackoff
+		case false:
+			off = &backoff.StopBackOff{}
+		}
+		off = backoff.WithContext(off, w.ctx)
+
+		// WARNING: This can potentially infinite loop, on certain
+		// "shouldn't be possible" pathological failures.
+		//
+		// w.ctx being canceled will break out of the loop correctly
+		// but it's entirely possible to sit around in an ininite
+		// retry loop with no hope of success.
+		return backoff.Retry(func() error {
+			// Update the epoch if it happens to change while retrying.
+			var ok bool
+			select {
+			case epoch, ok = <-ch:
+				if !ok {
+					return context.Canceled
 				}
+			default:
 			}
 
-			// WARNING: This can potentially infinite loop, on certain
-			// "shouldn't be possible" pathological failures.
-			//
-			// w.ctx being canceled will break out of the loop correctly
-			// but it's entirely possible to sit around in an ininite
-			// retry loop with no hope of success.
-
-			time.Sleep(1 * time.Second)
-		}
+			return w.registerNode(epoch)
+		}, off)
 	}
 
 	epoch := <-ch
-	if err := regFn(epoch, true); err != nil {
+	err := regFn(epoch, true)
+	close(w.regCh)
+	if err != nil {
 		// This by definition is a cancelation.
 		return
 	}

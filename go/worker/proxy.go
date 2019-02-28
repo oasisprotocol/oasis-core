@@ -22,6 +22,8 @@ type NetworkProxy interface {
 	Type() string
 	// UnixPath returns the path of the unix socket used by this proxy.
 	UnixPath() string
+	// RemoteAddress returns the address on the outside the proxy is forwarding to.
+	RemoteAddress() string
 
 	service.BackgroundService
 }
@@ -57,6 +59,11 @@ func (p *proxyCommon) Type() string {
 // UnixPath returns the Unix socket path on which the proxy is listening.
 func (p *proxyCommon) UnixPath() string {
 	return p.localPath
+}
+
+// RemoteAddress returns the address on the outside the proxy is forwarding to.
+func (p *proxyCommon) RemoteAddress() string {
+	return p.remoteAddress
 }
 
 // Stop triggers a proxy shutdown.

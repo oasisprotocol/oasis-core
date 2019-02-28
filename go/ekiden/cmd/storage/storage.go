@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/storage/benchmark"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/storage/migrate"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/storage/node"
 )
 
@@ -17,7 +16,6 @@ var storageCmd = &cobra.Command{
 // Register registers the storage sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	benchmark.Register(storageCmd)
-	migrate.Register(storageCmd)
 	node.Register(storageCmd)
 
 	parentCmd.AddCommand(storageCmd)

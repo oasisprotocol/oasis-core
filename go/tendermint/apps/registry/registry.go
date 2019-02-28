@@ -2,6 +2,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
@@ -345,6 +346,15 @@ func (app *registryApplication) registerNode(
 			)
 			return err
 		}
+	}
+
+	// Ensure node is not expired.
+	epoch, err := app.timeSource.GetBlockEpoch(context.Background(), app.state.BlockHeight())
+	if err != nil {
+		return err
+	}
+	if epochtime.EpochTime(node.Expiration) < epoch {
+		return registry.ErrNodeExpired
 	}
 
 	err = state.createNode(node)

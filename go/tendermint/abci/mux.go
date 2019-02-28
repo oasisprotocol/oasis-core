@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,11 +20,11 @@ import (
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tendermint/libs/db"
-	tmlog "github.com/tendermint/tendermint/libs/log"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/version"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
@@ -230,6 +231,7 @@ type abciMux struct {
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
+		AppVersion:       version.BackendProtocol.ToU64(),
 		LastBlockHeight:  mux.state.BlockHeight(),
 		LastBlockAppHash: mux.state.BlockHash(),
 	}
@@ -299,7 +301,7 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
 		mux.logger.Error("CheckTx: failed to de-multiplex",
-			"tx", hex.EncodeToString(tx),
+			"tx", base64.StdEncoding.EncodeToString(tx),
 		)
 		return types.ResponseCheckTx{
 			Code: api.CodeInvalidApplication.ToInt(),
@@ -308,7 +310,7 @@ func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
 
 	mux.logger.Debug("CheckTx: dispatching",
 		"app", app.Name(),
-		"tx", hex.EncodeToString(tx),
+		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
 	ctx := NewContext(ContextCheckTx, mux.currentTime)
@@ -465,7 +467,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
 		mux.logger.Error("DeliverTx: failed to de-multiplex",
-			"tx", hex.EncodeToString(tx),
+			"tx", base64.StdEncoding.EncodeToString(tx),
 		)
 		return types.ResponseDeliverTx{
 			Code: api.CodeInvalidApplication.ToInt(),
@@ -474,7 +476,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 
 	mux.logger.Debug("DeliverTx: dispatching",
 		"app", app.Name(),
-		"tx", hex.EncodeToString(tx),
+		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
 	// Append application name tag.
@@ -645,54 +647,6 @@ func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ab
 	)
 
 	return mux, nil
-}
-
-// LogAdapter is a log adapter to allow tendermint to use ekiden logging.
-type LogAdapter struct {
-	*logging.Logger
-
-	IsTendermintCore bool
-	SuppressDebug    bool
-}
-
-// With implements the correspoding call in the tendermit Logger interface.
-func (a *LogAdapter) With(keyvals ...interface{}) tmlog.Logger {
-	// The tendermint code separates logs by module using the "module"
-	// key similar to the Ekiden code, so rewrite the module value to
-	// include a prefix that makes it obvious that the log originates
-	// from tendermint for easy filtering.
-	if a.IsTendermintCore {
-		for i, v := range keyvals {
-			// keyvals is a set of key value pairs.
-			if i&1 != 0 {
-				continue
-			}
-
-			sKey := v.(string)
-			if sKey != "module" {
-				continue
-			}
-			if i+1 >= len(keyvals) {
-				panic("With(): tenderming core logger, missing 'module' value")
-			}
-			sVal := keyvals[i+1].(string)
-			keyvals[i+1] = "tendermint:" + sVal
-			break
-		}
-	}
-
-	return &LogAdapter{
-		Logger:           a.Logger.With(keyvals...),
-		IsTendermintCore: a.IsTendermintCore,
-		SuppressDebug:    a.SuppressDebug,
-	}
-}
-
-// Debug logs the message and key value paris at the Debug log level.
-func (a *LogAdapter) Debug(msg string, keyvals ...interface{}) {
-	if !a.SuppressDebug {
-		a.Logger.Debug(msg, keyvals...)
-	}
 }
 
 // ApplicationState is the overall past, present and future state

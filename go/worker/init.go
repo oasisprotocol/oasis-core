@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -131,6 +132,7 @@ func New(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
+	syncable common.Syncable,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
@@ -193,7 +195,7 @@ func New(
 
 	maxQueueSize := uint64(viper.GetInt(cfgMaxQueueSize))
 	maxBatchSize := uint64(viper.GetInt(cfgMaxBatchSize))
-	maxBatchSizeBytes := uint64(viper.GetInt(cfgMaxBatchSizeBytes))
+	maxBatchSizeBytes := uint64(viper.GetSizeInBytes(cfgMaxBatchSizeBytes))
 	maxBatchTimeout := viper.GetDuration(cfgMaxBatchTimeout)
 
 	// Parse register address overrides.
@@ -226,7 +228,7 @@ func New(
 		Runtimes:        runtimes,
 	}
 
-	return newWorker(dataDir, identity, entityPrivKey, storage, roothash, registry, epochtime, scheduler, ias, keyManager, cfg)
+	return newWorker(dataDir, identity, entityPrivKey, storage, roothash, registry, epochtime, scheduler, syncable, ias, keyManager, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
@@ -250,7 +252,7 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
 		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-		cmd.Flags().Uint64(cfgMaxBatchSizeBytes, 16777216, "Maximum size (in bytes) of a batch of runtime requests")
+		cmd.Flags().String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 		cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
 
 		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")

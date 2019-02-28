@@ -8,10 +8,7 @@ use std::sync::SgxMutexGuard as MutexGuard;
 #[cfg(not(target_env = "sgx"))]
 use std::sync::{Mutex, MutexGuard};
 
-use ekiden_core::{
-    error::{Error, Result},
-    random,
-};
+use ekiden_core::{error::Result, random};
 
 use ekiden_keymanager_common::{
     ContractId, ContractKey, PublicKeyType, StateKeyType, EMPTY_PRIVATE_KEY, EMPTY_PUBLIC_KEY,
@@ -19,8 +16,19 @@ use ekiden_keymanager_common::{
 };
 use ekiden_trusted::db::{Database, DatabaseHandle};
 
+/// A dummy key for use in tests where confidentiality is not needed.
+const UNSECRET_ENCRYPTION_KEY: StateKeyType = [
+    119, 206, 190, 82, 117, 21, 62, 84, 119, 212, 117, 60, 32, 158, 183, 32, 68, 55, 131, 112, 38,
+    169, 217, 219, 58, 109, 194, 211, 89, 39, 198, 204, 254, 104, 202, 114, 203, 213, 89, 44, 192,
+    168, 42, 136, 220, 230, 66, 74, 197, 220, 22, 146, 84, 121, 175, 216, 144, 182, 40, 179, 6, 73,
+    177, 9,
+];
+
 /// Key store, which actually stores the key manager keys.
-pub struct KeyStore;
+pub struct KeyStore {
+    /// Dummy encryption key
+    encryption_key: StateKeyType,
+}
 
 lazy_static! {
     // Global key store object.
@@ -29,7 +37,9 @@ lazy_static! {
 
 impl KeyStore {
     fn new() -> Self {
-        let mut key_store = KeyStore;
+        let mut key_store = KeyStore {
+            encryption_key: UNSECRET_ENCRYPTION_KEY,
+        };
         // for testing purpose, insert a special key at address 0
         key_store
             .get_or_create_keys(ContractId::from_str(&"0".repeat(64)).unwrap())
@@ -59,18 +69,13 @@ impl KeyStore {
     }
 
     /// Get the public part of the key.
-    pub fn get_public_key(&self, contract_id: ContractId) -> Result<PublicKeyType> {
+    pub fn get_public_key(&self, contract_id: ContractId) -> Result<Option<PublicKeyType>> {
         DatabaseHandle::instance().with_encryption_key(self.encryption_key(), |db| {
             let pk_serialized = db.get(&contract_id);
-            if pk_serialized.is_none() {
-                return Err(Error::new(format!(
-                    "The requested public key doesn't exist for {:?}",
-                    contract_id
-                )));
-            }
-            let pk: ContractKey =
-                bincode::deserialize(&pk_serialized.unwrap()).expect("Corrupted state");
-            Ok(pk.input_keypair.get_pk())
+            let result = pk_serialized
+                .map(|pk| bincode::deserialize(&pk).expect("Corrupted state"))
+                .and_then(|ck: ContractKey| Some(ck.input_keypair.get_pk()));
+            Ok(result)
         })
     }
 
@@ -91,11 +96,10 @@ impl KeyStore {
 
     /// Dummy encryption key
     pub fn encryption_key(&self) -> StateKeyType {
-        [
-            255, 135, 103, 97, 49, 33, 200, 139, 130, 186, 54, 177, 83, 2, 162, 146, 160, 234, 231,
-            218, 124, 160, 72, 113, 26, 177, 100, 40, 135, 129, 195, 50, 161, 220, 212, 120, 240,
-            163, 240, 23, 9, 74, 150, 87, 253, 60, 105, 170, 133, 134, 109, 248, 100, 43, 4, 19,
-            39, 25, 13, 138, 28, 49, 71, 49,
-        ]
+        self.encryption_key
+    }
+
+    pub fn set_encryption_key(&mut self, encryption_key: StateKeyType) {
+        self.encryption_key = encryption_key;
     }
 }

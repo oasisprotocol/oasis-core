@@ -11,9 +11,8 @@ pub use ekiden_core::{
 pub use ekiden_instrumentation_prometheus::{
     get_arguments as get_instrumentation_arguments, init_from_args as instrumentation_init,
 };
-pub use ekiden_registry_client::EntityRegistryClient;
 pub use ekiden_roothash_client::RootHashClient;
-pub use ekiden_scheduler_client::SchedulerClient;
+pub use ekiden_runtime_client::RuntimeClient;
 pub use ekiden_storage_client::StorageClient;
 pub use ekiden_tracing::{get_arguments as get_tracing_arguments, report_forever};
 
@@ -85,14 +84,11 @@ macro_rules! runtime_client {
         // Initialize backends.
         let remote_node = remote_node::RemoteNode::from_args(&$args);
         let channel = remote_node.create_channel(environment.clone());
-        let scheduler = Arc::new(SchedulerClient::new(channel.clone()));
-        let entity_registry = Arc::new(EntityRegistryClient::new(channel.clone()));
         let roothash = Arc::new(RootHashClient::new(channel.clone()));
         let storage = Arc::new(StorageClient::new(channel.clone()));
-
-        $runtime::Client::new(
+        let runtime_client = Arc::new(RuntimeClient::new(
+            channel.clone(),
             $crate::args::get_runtime_id(&$args),
-            value_t_or_exit!($args, "mr-enclave", MrEnclave),
             if $args.is_present("rpc-timeout") {
                 Some(std::time::Duration::new(
                     value_t_or_exit!($args, "rpc-timeout", u64),
@@ -101,11 +97,15 @@ macro_rules! runtime_client {
             } else {
                 None
             },
+        ));
+
+        $runtime::Client::new(
+            $crate::args::get_runtime_id(&$args),
+            value_t_or_exit!($args, "mr-enclave", MrEnclave),
             environment,
-            scheduler,
-            entity_registry,
             roothash,
             storage,
+            runtime_client,
         )
     }};
     ($runtime:ident) => {{

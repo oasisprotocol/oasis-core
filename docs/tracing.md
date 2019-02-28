@@ -1,52 +1,64 @@
 # Distributed tracing
-We've selected the OpenTracing API for adding distributed tracing.
-They have documentation about the philosophy and data model online:
-http://opentracing.io/documentation/.
-We have selected Jaeger https://www.jaegertracing.io/ as the backend.
+For tracing we use [Jaeger](https://www.jaegertracing.io) implementation of
+the [OpenTracing API](https://opentracing.io/docs) for cross-language
+distributed tracing.
 
 ## Running with tracing enabled
-For Rust programs (compute node and dummy node), pass
-`--tracing-enable` (see the `tracing/src/lib.rs` package for how we
-process these common options).
-For the Go dummy node, pass `--tracing.enabled` (see
-`go/ekiden/cmd/tracing.go` for how we process these options). Tracing
-by default samples at 0.1%, and you can set this with other command
-line options.
+For tracing, our Go node uses `--tracing.enabled`,
+`--tracing.reporter.agent_addr`, and `--tracing.sampler.param` command line
+parameters. You can simply uncomment those in the [config file](../configs/single_node.yml).
+Check [the source](../go/ekiden/cmd/common/tracing/tracing.go) for how we
+process options and setup tracing.
+
+Rust worker uses `--tracing-enable`, `--tracing-agent-addr`, and
+`--tracing-sample-probability` command line parameters. If the Rust worker is
+dispatched by the Go node, tracing parameters are automatically obtained
+from the Go node. Check [the source](../tracing/src/lib.rs) for details. 
+
+Note: Since the Rust worker is sandboxed, we use the proxy for forwarding trace
+messages externally: the internal address `127.0.0.1:6831` is forwarded to
+Go-created socket `/jaeger-proxy.sock` which forwards to the provided Jaeger
+agent address.
 
 ## Connecting to a Jaeger agent
 Enabling tracing in the programs cause them to act as Jaeger
-"clients," which connect to an agent on the same machine.
-Although due to containerization, we usually don't make the agent
-available through the loopback interface.
-You have to tell the programs how to communicate with the agent.
+"clients", which connect to an agent.
 
 ### Local testing
-You can test locally by running Jaeger's all-in-one container and
-connecting it to your development container with a bridge network:
+You can trace locally by the Jaeger's all-in-one docker container. The  
+following will create a Jaeger docker container named `jaeger` and connect it
+ to your development container with a bridge network:
 
 ```sh
-# the publish below publishes the query UI
+# Publishing port 16686 below is for the web UI.
+# Jaeger agent's UDP port 6831 is already accessible.
 docker run -d -p 127.0.0.1:16686:16686 --name jaeger jaegertracing/all-in-one:latest
 docker network create jaegerbridge
 docker network connect jaegerbridge jaeger
-# substitute the name of your development container below
+# Substitute the name of your development container below!
 docker network connect jaegerbridge ekiden-ffffffffffffffff
 ```
 
-Instruct the programs to connect by passing `--tracing-agent-addr
-jaeger:6831` for Rust programs or `--tracing.reporter.agent-addr
-jaeger:6831` for the Go dummy node.
+Then, pass `--tracing.enable`, `--tracing.reporter.agent_addr jaeger:6831`, and 
+`--tracing-sample-probability 1.0` to our Go node to generate and store all
+reported traces.
 
 ### Testnet
-You can configure programs on the testnet by making a release of the
-Jaeger Helm chart.
-
-Instruct the programs to connect to the agent service.
+Similarly, you can configure programs on the testnet by making a release of the
+Jaeger Helm chart. Enable tracing, instruct the programs to connect to the agent
+service, and set the sampling probability (e.g. 0.1% to reduce load).
 
 ## How to look at the traces
 
 ### Local testing
-Open http://127.0.0.1:16686/ in your browser.
+Run the ekiden node with the specified runtime (e.g. `simple-keyvalue` runtime),
+run a client (e.g. `simple-keyvalue` client), and visit http://127.0.0.1:16686/
+with the web browser. There should two services on the left:
+- `ekiden-node` which corresponds to our Go node, and
+- `ekiden-worker` which corresponds to our Rust worker.
+
+By clicking "Find Traces" button below, on the right you will see all operations
+and their spans corresponding to the selected service.
 
 ### Testnet
 Configure an ingress to the query service and open that in your
@@ -77,33 +89,42 @@ interfaces other than loopback, which would make the `socat` step
 unnecessary.
 
 ## Adding tracing
-See OpenTracing's specification
-https://github.com/opentracing/specification/blob/master/specification.md
-on what "spans" are in tracing.
-
-Obtain a _span context_ to correlate your new span with a trace.
-You can:
+See [OpenTracing's specification](https://github.com/opentracing/specification/blob/master/specification.md)
+on what "spans" are in tracing. To obtain a _span context_ to correlate your new
+span with a trace, you either:
 
 * Pass around a span context to different functions.
 * _Inject_ them into RPC messages and _extract_ them.
 
-Use the span context to create a new "child" or "follows from" span,
-with, for example, `rustracing_jaeger::span::SpanHandle::child(...)`
-in Rust and `opentracing.StartSpanFromContext(...)` in Go.
+To start a new trace, get the global tracer and create a new span with
+`ekiden_tracing::get_tracer().span(...)` in Rust, and
+`opentracing.GlobalTracer().StartSpan(...)` in Go.
 
-If you want to start a new trace, get the global tracer and sample a
-the first span, with `ekiden_tracing::get_tracer().span(...)` in Rust
-and `opentracing.GlobalTracer().StartSpan(...)` in Go.
+To create a new "child" or "follows from" span, pass the parent span's context.
+In Go, you pass it by calling `opentracing.ChildOf()` in the `StartSpan()`
+function.
+```go
+span := opentracing.StartSpan(ctx, "storage-memory-lock-set", opentracing.Tag{Key: "ekiden.storage_key", Value: key}, opentracing.ChildOf(parentSpan.Context()))
+```
 
-Add tags, logs, and references to the span.
-See OpenTracing's semantic conventions
-https://github.com/opentracing/specification/blob/master/semantic_conventions.md
-on how to represent standard information.
-See the library reference, `rustracing`
-https://docs.rs/rustracing/0.1.7/rustracing/span/struct.Span.html for
-Rust and `opentracing-go`
-https://godoc.org/github.com/opentracing/opentracing-go#Span for Go,
-for how to add these.
+Note: Using the `StartSpanFromContext()` is not the preferred way anymore since
+the immutable node's context is used in various places and you should not
+replace it each time you make a new span.
+
+In Rust, the preferred way is by taking the parent span's handle:
+```rust
+let span = parent_span.handle().child("call_contract_batch_enclave", |opts| opts.start());
+```
+
+Optionally, add tags, logs, and references to the span. See [OpenTracing's
+semantic conventions](https://github.com/opentracing/specification/blob/master/semantic_conventions.md)
+on how to represent standard information. For more information on how to add
+these, see Rust's `rustracing` [reference](https://docs.rs/rustracing/0.1.7/rustracing/span/struct.Span.html) 
+and Go's `opentracing-go` [reference](https://godoc.org/github.com/opentracing/opentracing-go#Span).
+
+Note: For Rust, we use [own fork](https://github.com/oasislabs/rustracing_jaeger.git)
+of `rustracing_jaeger` crate which contains a fix for connecting to the agent on
+IP other than localhost. This issue has been reported [here](https://github.com/sile/rustracing_jaeger/issues/10).
 
 # Prometheus metrics
 

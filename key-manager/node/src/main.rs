@@ -80,6 +80,12 @@ fn main() {
                 .required(true)
         )
         .arg(
+            Arg::with_name("internal-keys")
+                .long("internal-keys")
+                .takes_value(true)
+                .help("Path to internal keys file. Uses built-in unsecret keys if not set")
+        )
+        .arg(
             Arg::with_name("storage-path")
                 .long("storage-path")
                 .help("Path to storage directory")
@@ -127,6 +133,7 @@ fn main() {
                 forwarded_rpc_timeout: None,
                 storage_backend: storage_backend,
                 root_hash_path: root_hash_path,
+                internal_keys_path: matches.value_of("internal-keys").map(PathBuf::from),
             }
         },
         environment: environment.grpc(),
