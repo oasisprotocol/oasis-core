@@ -1,4 +1,4 @@
-_A clear and concise description of what the bug is._
+_A clear and concise description of what the task/bug is._
 
 ## Details
 

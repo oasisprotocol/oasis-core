@@ -1,0 +1,106 @@
+_extends: private-global-settings
+
+
+labels:
+  - name: "c: instrumentation"
+    color: "c4c9fc"
+    description: "Category: metrics and tracing"
+  
+  - name: "c:apps"
+    color: "fef2c0"
+    description: "Category: application support"
+  
+  - name: "c:backend-ethereum"
+    color: "e4f984"
+    description: "Category: Ethereum-based backends"
+  
+  - name: "c:backend-tendermint"
+    color: "e0dc60"
+    description: "Category: Tendermint-based backends"
+  
+  - name: "c:breaking"
+    color: "ff7270"
+    description: "Category: breaking change requiring state wipes"
+  
+  - name: "c:bug"
+    color: "ce394d"
+    description: "Category: Bug"
+  
+  - name: "c:build"
+    color: "c5def5"
+    description: "Category: build environment"
+  
+  - name: "c:common"
+    color: "c5def5"
+    description: "Category: common libraries"
+  
+  - name: "c:compute-client"
+    color: "f9d0c4"
+    description: "Category: client to replicated computation"
+  
+  - name: "c:compute-node"
+    color: "c2e0c6"
+    description: "Category: compute nodes"
+  
+  - name: "c:compute-worker"
+    color: "51caff"
+    description: "Category: compute worker process"
+  
+  - name: "c:coordination"
+    color: "ffe7c9"
+    description: "Category: entity/node/contract registration/discovery"
+  
+  - name: "c:db"
+    color: "d3f9a9"
+    description: "Category: key/value database exposed to runtimes"
+  
+  - name: "c:docs"
+    color: "bfd4f2"
+    description: "Category: documentation"
+  
+  - name: "c:keymgmt"
+    color: "e99695"
+    description: "Category: key management"
+  
+  - name: "c:monitoring"
+    color: "f4adbe"
+    description: ""
+  
+  - name: "c:ops"
+    color: "c0ffb2"
+    description: "Category: operations"
+  
+  - name: "c:roothash"
+    color: "bfdadc"
+    description: "Category: root hash"
+  
+  - name: "c:runtime"
+    color: "ffc296"
+    description: "Category: runtime environment (e.g. EVM/WASM)"
+  
+  - name: "c:storage"
+    color: "bfdadc"
+    description: "Category: storage"
+  
+  - name: "c:testing"
+    color: "d4c5f9"
+    description: "Category: testing"
+  
+  - name: "epic"
+    color: "ccf8ff"
+    description: "Epic (costed tracking issue)"
+  
+  - name: "golang"
+    color: "85D5E3"
+    description: ""
+  
+  - name: "s: needs rfc"
+    color: "fc8711"
+    description: "Needs a design document and discussion (RFC)"
+  
+
+collaborators:
+  # kostko is the owner of this repository
+  - username: kostko
+    permission: admin
+  
