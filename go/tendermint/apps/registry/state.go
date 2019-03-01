@@ -26,10 +26,6 @@ const (
 
 	// Runtime map state key prefix.
 	stateRuntimeMap = "registry/runtime/%s"
-
-	// Highest hex-encoded node/entity/runtime identifier.
-	// TODO: Should we move this to common?
-	lastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 )
 
 var (
@@ -145,7 +141,7 @@ func (s *immutableState) getAll(
 	var items []interface{}
 	s.Snapshot.IterateRangeInclusive(
 		[]byte(fmt.Sprintf(stateKey, "")),
-		[]byte(fmt.Sprintf(stateKey, lastID)),
+		[]byte(fmt.Sprintf(stateKey, abci.LastID)),
 		true,
 		func(key, value []byte, version int64) bool {
 			itemCopy := item.Clone()
@@ -196,7 +192,7 @@ func (s *MutableState) removeEntity(id signature.PublicKey) (entity.Entity, []no
 		// Remove any associated nodes.
 		s.tree.IterateRangeInclusive(
 			[]byte(fmt.Sprintf(stateNodeByEntityMap, id.String(), "")),
-			[]byte(fmt.Sprintf(stateNodeByEntityMap, id.String(), lastID)),
+			[]byte(fmt.Sprintf(stateNodeByEntityMap, id.String(), abci.LastID)),
 			true,
 			func(key, value []byte, version int64) bool {
 				// Remove all dependent nodes.

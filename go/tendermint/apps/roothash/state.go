@@ -12,14 +12,8 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-const (
-	// Per-runtime state.
-	stateRuntimeMap = "roothash/%s"
-
-	// Highest hex-encoded node/entity/runtime identifier.
-	// TODO: Should we move this to common?
-	lastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-)
+// Per-runtime state.
+const stateRuntimeMap = "roothash/%s"
 
 var (
 	_ cbor.Marshaler   = (*runtimeState)(nil)
@@ -69,7 +63,7 @@ func (s *immutableState) getRuntimes() []*runtimeState {
 	var runtimes []*runtimeState
 	s.Snapshot.IterateRangeInclusive(
 		[]byte(fmt.Sprintf(stateRuntimeMap, "")),
-		[]byte(fmt.Sprintf(stateRuntimeMap, lastID)),
+		[]byte(fmt.Sprintf(stateRuntimeMap, abci.LastID)),
 		true,
 		func(key, value []byte, version int64) bool {
 			var state runtimeState
