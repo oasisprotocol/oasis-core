@@ -1,25 +1,77 @@
 ##################################
 # Docker image deployment pipeline
 ##################################
+docker_plugin: &docker_plugin_configuration
+  oasislabs/docker#v2.1.0-oasis4:
+    image: "oasislabs/development:0.2.0"
+    always_pull: true
+    workdir: /workdir
+    volumes:
+      - .:/workdir
+      - /var/lib/buildkite-agent/.ssh:/root/.ssh
+      # Shared Rust artifacts cache.
+      - /tmp/cargo_cache:/cargo_cache
+      # Shared Rust package checkouts directory.
+      - /tmp/cargo_pkg/git:/root/.cargo/git
+      - /tmp/cargo_pkg/registry:/root/.cargo/registry
+      # Shared Rust SGX standard library artifacts cache.
+      - /tmp/xargo_cache:/root/.xargo
+      # Shared Go package checkouts directory.
+      - /tmp/go_pkg:/root/go/pkg
+    environment:
+      - "LC_ALL=C.UTF-8"
+      - "LANG=C.UTF-8"
+      - "CARGO_TARGET_DIR=/workdir/target"
+      - "CARGO_INCREMENTAL=/cargo_cache"
+      - "CARGO_INSTALL_ROOT=/root/.cargo"
+    propagate-environment: true
+
 steps:
   - label: Get docker tag and save it as metadata for use later
     command: .buildkite/scripts/set_docker_tag_meta_data.sh
 
-  - wait
-
-  - label: Build docker image (master branches only)
+  - label: Build simulation artifacts (master branches only)
     branches: master
     command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh
+      - .buildkite/scripts/setup_gitconfig.sh
+      - eval $(ssh-agent -s)
+      - ssh-add
+      - docker/deployment/build_context.sh sim-context.tar.gz
+    artifact_paths:
+      - sim-context.tar.gz
     agents:
       buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Build hardware artifacts (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - eval $(ssh-agent -s)
+      - ssh-add
+      - docker/deployment/build_context.sh hw-context.tar.gz
+    artifact_paths:
+      - hw-context.tar.gz
+    env:
+      SGX_MODE: HW
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - wait
+
+  - label: Build simulation docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/build_tag_push_deployment_image.sh sim-context.tar.gz
 
   - label: Build hardware docker image (master branches only)
     branches: master
     command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh
+      - .buildkite/scripts/build_tag_push_deployment_image.sh hw-context.tar.gz
     env:
-      SGX_MODE: HW
       DEPLOYMENT_VARIANT: hw
 
   - block: Human approval required to deploy docker image
