@@ -16,14 +16,13 @@ Prerequisites:
 * [setup the repository authentication](https://github.com/oasislabs/runtime-ethereum#configuring-repository-authentication),
 * install Docker (tested with 1.13 and later) using your favorite package
   manager and setup your Docker hub credentials using `docker login`,
-* install [Rust](https://www.rust-lang.org) and the nightly toolchain by
-  `rustup install nightly`.
+* install [Rust](https://www.rust-lang.org)
 
 The Ekiden Docker setup typically needs more than 10 GB memory and at least 4
 CPU cores. To enter the Ekiden Docker environment, use the Ekiden cargo
 extension:
 ```
-$ cargo +nightly install --force --path tools
+$ cargo install --force --path tools
 ```
 
 To start the development container:
