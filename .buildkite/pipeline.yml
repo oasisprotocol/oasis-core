@@ -11,8 +11,9 @@ docker_plugin: &docker_plugin_configuration
       - /var/lib/buildkite-agent/.ssh:/root/.ssh
       - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
       - /var/lib/buildkite-agent/.codecov:/root/.codecov
-      # Shared Rust artifacts cache.
-      - /tmp/cargo_cache:/cargo_cache
+      # Shared Rust incremental compile caches.
+      - /tmp/cargo_ic/debug:/tmp/artifacts/debug/incremental
+      - /tmp/cargo_ic/debug_sgx:/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
       # Shared Rust package checkouts directory.
       - /tmp/cargo_pkg/git:/root/.cargo/git
       - /tmp/cargo_pkg/registry:/root/.cargo/registry
@@ -24,7 +25,6 @@ docker_plugin: &docker_plugin_configuration
       - "LC_ALL=C.UTF-8"
       - "LANG=C.UTF-8"
       - "CARGO_TARGET_DIR=/tmp/artifacts"
-      - "CARGO_INCREMENTAL=/cargo_cache"
       - "CARGO_INSTALL_ROOT=/root/.cargo"
     propagate-environment: true
     unconfined: true
