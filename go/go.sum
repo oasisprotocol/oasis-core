@@ -410,6 +410,10 @@ github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7/go.
 github.com/whyrusleeping/yamux v1.1.5 h1:4CK3aUUJQu0qpKZv5gEWJjNOQtdbdDhVVS6PJ+HimdE=
 github.com/whyrusleeping/yamux v1.1.5/go.mod h1:E8LnQQ8HKx5KD29HZFUwM1PxCOdPRzGwur1mcYhXcD8=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
+github.com/yawning/bsaes v0.0.0-20180720073208-c0276d75487e h1:iNf2dXyfsFkWKqRMDf4LRcQnAYXBcdKeBKby/mgBf7A=
+github.com/yawning/bsaes v0.0.0-20180720073208-c0276d75487e/go.mod h1:Bb2B6frTcZ7ENcY8EkrWfco1TDSju9uvZS7Edpud4hg=
+github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524 h1:mVjIWxguYcKYzB/1FPRwDr2BtjUKazQhmwjVSo5qpRI=
+github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524/go.mod h1:lsPnsCcmF/7g2/YABGVu2x5c3kTGkACLD3Gs2xMvFxw=
 go.etcd.io/bbolt v1.3.2 h1:Z/90sZLPOeCy2PwprqkFa25PdkusRzaj9P8zm/KNyvk=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.uber.org/atomic v1.3.2 h1:2Oa65PReHzfn29GpvgsYwloV9AVFHPDk8tYxt2c2tr4=
