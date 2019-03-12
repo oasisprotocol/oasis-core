@@ -13,9 +13,8 @@ LABEL com.oasislabs.ekiden-commit-sha="${EKIDEN_COMMIT_SHA}"
 LABEL com.oasislabs.ekiden-build-image-tag="${EKIDEN_BUILD_IMAGE_TAG}"
 
 COPY go/ekiden/ekiden /ekiden/bin/ekiden-node
-COPY target/release/ekiden-worker /ekiden/bin/
-COPY target/release/ekiden-keymanager-node /ekiden/bin/
-COPY target/enclave/ekiden-keymanager-trusted.so /ekiden/lib/
-COPY target/enclave/ekiden-keymanager-trusted.mrenclave /ekiden/res/
+COPY target/release/ekiden-runtime-loader /ekiden/bin/
+COPY target/release/ekiden-keymanager-runtime /ekiden/lib/
+COPY target/x86_64-fortanix-unknown-sgx/release/ekiden-keymanager-runtime.sgxs /ekiden/lib/
 
 ENV PATH "/ekiden/bin:${PATH}"

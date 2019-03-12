@@ -10,6 +10,8 @@ service Runtime {
     rpc WaitSync (WaitSyncRequest) returns (WaitSyncResponse) {}
     // Check if the node is finished syncing.
     rpc IsSynced (IsSyncedRequest) returns (IsSyncedResponse) {}
+    // Subscribe to roothash blocks.
+    rpc WatchBlocks (WatchBlocksRequest) returns (stream WatchBlocksResponse) {}
 }
 
 message SubmitTxRequest {
@@ -32,4 +34,14 @@ message IsSyncedRequest {}
 message IsSyncedResponse {
 	// True if the node finished the initial sync.
 	bool synced = 1;
+}
+
+message WatchBlocksRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+}
+
+message WatchBlocksResponse {
+    // A CBOR-serialized block.
+    bytes block = 1;
 }

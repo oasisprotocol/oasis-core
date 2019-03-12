@@ -2,8 +2,7 @@ package host
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -11,13 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtimeMock "github.com/oasislabs/ekiden/go/epochtime/mock"
-	storageMemory "github.com/oasislabs/ekiden/go/storage/memory"
+	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
-	"github.com/oasislabs/ekiden/go/worker/ias"
 )
 
 const recvTimeout = 5 * time.Second
@@ -27,6 +23,12 @@ var (
 	envWorkerHostRuntimeBinary = os.Getenv("EKIDEN_TEST_WORKER_HOST_RUNTIME_BINARY")
 	envWorkerHostTEE           = os.Getenv("EKIDEN_TEST_WORKER_HOST_TEE")
 )
+
+type mockHostHandler struct{}
+
+func (h *mockHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+	return nil, errors.New("method not supported")
+}
 
 func skipIfMissingDeps(t *testing.T) {
 	// Skip test if there is no bubblewrap binary available.
@@ -54,16 +56,6 @@ func TestSandboxedHost(t *testing.T) {
 	}
 
 	// Initialize sandboxed host.
-	var runtimeID signature.PublicKey
-	runtimeIDRaw, _ := hex.DecodeString("0000000000000000000000000000000000000000000000000000000000000000")
-	_ = runtimeID.UnmarshalBinary(runtimeIDRaw)
-
-	timeSource := epochtimeMock.New()
-	storagePrivKey, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "signature.NewPrivateKey")
-	storage := storageMemory.New(timeSource, &storagePrivKey)
-	<-storage.Initialized()
-
 	var tee node.TEEHardware
 	switch strings.ToLower(envWorkerHostTEE) {
 	case "intel-sgx":
@@ -71,19 +63,18 @@ func TestSandboxedHost(t *testing.T) {
 	default:
 	}
 
-	ias, err := ias.New(nil, "")
+	ias, err := ias.New(nil)
 	require.NoError(t, err, "ias.New")
 
 	// Create host with sandbox disabled.
 	host, err := NewSandboxedHost(
+		"test_worker",
 		envWorkerHostWorkerBinary,
 		envWorkerHostRuntimeBinary,
-		runtimeID,
-		storage,
 		make(map[string]ProxySpecification),
 		tee,
 		ias,
-		nil,
+		&mockHostHandler{},
 		true,
 	)
 	require.NoError(t, err, "NewSandboxedHost")
@@ -94,14 +85,13 @@ func TestSandboxedHost(t *testing.T) {
 
 	// Create host with sandbox enabled.
 	host, err = NewSandboxedHost(
+		"test_worker",
 		envWorkerHostWorkerBinary,
 		envWorkerHostRuntimeBinary,
-		runtimeID,
-		storage,
 		make(map[string]ProxySpecification),
 		tee,
 		ias,
-		nil,
+		&mockHostHandler{},
 		false,
 	)
 	require.NoError(t, err, "NewSandboxedHost")

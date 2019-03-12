@@ -15,7 +15,7 @@ type Client struct {
 	conn   *grpc.ClientConn
 	client erpcGrpc.EnclaveRpcClient
 
-	enclaveID []byte
+	endpoint string
 }
 
 // Close the connection.
@@ -30,8 +30,8 @@ func (c *Client) Close() error {
 // CallEnclave sends the request bytes to the target enclave.
 func (c *Client) CallEnclave(ctx context.Context, request []byte) ([]byte, error) {
 	req := erpcGrpc.CallEnclaveRequest{
-		EnclaveId: c.enclaveID,
-		Payload:   request,
+		Endpoint: c.endpoint,
+		Payload:  request,
 	}
 	res, err := c.client.CallEnclave(ctx, &req)
 	if err != nil {
@@ -42,7 +42,7 @@ func (c *Client) CallEnclave(ctx context.Context, request []byte) ([]byte, error
 }
 
 // NewClient creates a new enclave RPC client instance.
-func NewClient(address string, certFile string, enclaveID []byte) (*Client, error) {
+func NewClient(address string, certFile string, endpoint string) (*Client, error) {
 	creds, err := credentials.NewClientTLSFromFile(certFile, "ekiden-node")
 	if err != nil {
 		return nil, err
@@ -57,9 +57,9 @@ func NewClient(address string, certFile string, enclaveID []byte) (*Client, erro
 	}
 
 	c := &Client{
-		conn:      conn,
-		client:    erpcGrpc.NewEnclaveRpcClient(conn),
-		enclaveID: enclaveID,
+		conn:     conn,
+		client:   erpcGrpc.NewEnclaveRpcClient(conn),
+		endpoint: endpoint,
 	}
 	return c, nil
 }

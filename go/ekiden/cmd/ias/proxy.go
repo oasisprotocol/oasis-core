@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -57,6 +57,9 @@ type proxyEnv struct {
 }
 
 func doProxy(cmd *cobra.Command, args []string) {
+	// Re-register flags due to https://github.com/spf13/viper/issues/233.
+	RegisterFlags(cmd)
+
 	env := &proxyEnv{
 		svcMgr: background.NewServiceManager(logger),
 	}
@@ -190,14 +193,16 @@ func initProxy(cmd *cobra.Command, env *proxyEnv) error {
 	return nil
 }
 
-// Register registers the ias sub-command and all of it's children.
-func Register(parentCmd *cobra.Command) {
-	iasProxyCmd.Flags().StringVar(&flagAuthCertFile, cfgAuthCertFile, "", "the file with the client certificate")
-	iasProxyCmd.Flags().StringVar(&flagAuthKeyFile, cfgAuthKeyFile, "", "the file with the client private key")
-	iasProxyCmd.Flags().StringVar(&flagAuthCertCA, cfgAuthCertCA, "", "the file with the CA that signed the client certificate")
-	iasProxyCmd.Flags().StringVar(&flagSpid, cfgSPID, "", "SPID associated with the client certificate")
-	iasProxyCmd.Flags().StringVar(&flagQuoteSigType, cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
-	iasProxyCmd.Flags().BoolVar(&flagIsProduction, cfgIsProduction, false, "use the production IAS endpoint")
+// RegisterFlags registers the flags used by the proxy command.
+func RegisterFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().StringVar(&flagAuthCertFile, cfgAuthCertFile, "", "the file with the client certificate")
+		cmd.Flags().StringVar(&flagAuthKeyFile, cfgAuthKeyFile, "", "the file with the client private key")
+		cmd.Flags().StringVar(&flagAuthCertCA, cfgAuthCertCA, "", "the file with the CA that signed the client certificate")
+		cmd.Flags().StringVar(&flagSpid, cfgSPID, "", "SPID associated with the client certificate")
+		cmd.Flags().StringVar(&flagQuoteSigType, cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
+		cmd.Flags().BoolVar(&flagIsProduction, cfgIsProduction, false, "use the production IAS endpoint")
+	}
 
 	for _, v := range []string{
 		cfgAuthCertFile,
@@ -207,7 +212,7 @@ func Register(parentCmd *cobra.Command) {
 		cfgQuoteSigType,
 		cfgIsProduction,
 	} {
-		viper.BindPFlag(v, iasProxyCmd.Flags().Lookup(v)) // nolint: errcheck
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
 
 	for _, v := range []func(*cobra.Command){
@@ -215,9 +220,13 @@ func Register(parentCmd *cobra.Command) {
 		cmdGrpc.RegisterServerTCPFlags,
 		pprof.RegisterFlags,
 	} {
-		v(iasProxyCmd)
+		v(cmd)
 	}
+}
 
+// Register registers the ias sub-command and all of it's children.
+func Register(parentCmd *cobra.Command) {
+	RegisterFlags(iasProxyCmd)
 	iasCmd.AddCommand(iasProxyCmd)
 	parentCmd.AddCommand(iasCmd)
 }

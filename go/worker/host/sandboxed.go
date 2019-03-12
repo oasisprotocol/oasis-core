@@ -18,17 +18,15 @@ import (
 	"git.schwanenlied.me/yawning/dynlib.git"
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ctxsync"
-	cias "github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/sgx/aesm"
+	cias "github.com/oasislabs/ekiden/go/common/sgx/ias"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
+	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
-	"github.com/oasislabs/ekiden/go/worker/ias"
 )
 
 const (
@@ -60,7 +58,7 @@ const (
 
 	workerMountHostSocket = "/host.sock"
 	workerMountWorkerBin  = "/worker"
-	workerMountRuntimeBin = "/runtime.so"
+	workerMountRuntimeBin = "/runtime"
 	workerMountLibDir     = "/usr/lib"
 
 	teeIntelSGXDevice = "/dev/isgx"
@@ -187,13 +185,29 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 		args = append(args, "--bind", pair.SourceName, pair.mapName)
 	}
 
+	// Bind the TEE specific files.
+	binaries := []string{workerBinary}
+
+	switch hardware {
+	case node.TEEHardwareIntelSGX:
+		args = append(args, []string{
+			"--dev-bind", teeIntelSGXDevice, teeIntelSGXDevice,
+			"--dir", filepath.Dir(teeIntelSGXSocket),
+			"--bind", teeIntelSGXSocket, teeIntelSGXSocket,
+		}...)
+	default:
+		// We need to also inspect the runtime binary as it will be executed
+		// as a regular process by the loader.
+		binaries = append(binaries, runtimeBinary)
+	}
+
 	// Resolve worker binary library dependencies so we can mount them in.
 	cache, err := dynlib.LoadCache()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load dynamic library loader cache")
 	}
 	libs, err := cache.ResolveLibraries(
-		[]string{workerBinary},
+		binaries,
 		[]string{},
 		"",
 		os.Getenv("LD_LIBRARY_PATH"),
@@ -217,24 +231,13 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 		}
 	}
 
-	// Bind the TEE specific files.
-	switch hardware {
-	case node.TEEHardwareIntelSGX:
-		args = append(args, []string{
-			"--dev-bind", teeIntelSGXDevice, teeIntelSGXDevice,
-			"--dir", filepath.Dir(teeIntelSGXSocket),
-			"--bind", teeIntelSGXSocket, teeIntelSGXSocket,
-		}...)
-	default:
-	}
-
 	// Worker arguments follow.
 	args = append(args, "--", "/worker")
 
 	return args, nil
 }
 
-func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]ProxySpecification) []string {
+func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) []string {
 	args := []string{
 		"--host-socket", hostSocket,
 	}
@@ -257,6 +260,15 @@ func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]Prox
 		}
 		args = append(args, fmt.Sprintf("--proxy-bind=%s,%s,%s,%s", proxy.ProxyType, name, proxy.innerAddr, proxy.mapName))
 	}
+
+	// Configure runtime type.
+	switch hardware {
+	case node.TEEHardwareIntelSGX:
+		args = append(args, "--type", "sgxs")
+	default:
+		args = append(args, "--type", "elf")
+	}
+
 	args = append(args, runtimeBinary)
 	return args
 }
@@ -291,10 +303,10 @@ type sandboxedHost struct { // nolint: maligned
 	noSandbox     bool
 
 	proxies     map[string]ProxySpecification
-	storage     storage.Backend
 	teeHardware node.TEEHardware
 	ias         *ias.IAS
-	keyManager  *enclaverpc.Client
+	aesm        *aesm.Client
+	msgHandler  protocol.Handler
 
 	stopCh chan struct{}
 	quitCh chan struct{}
@@ -356,18 +368,12 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 		return nil, errors.Wrap(err, "worker: error while getting IAS SPID")
 	}
 
-	gidRes, err := worker.protocol.Call(
-		ctx,
-		&protocol.Body{
-			WorkerCapabilityTEEGidRequest: &protocol.Empty{},
-		},
-	)
+	qi, err := h.aesm.InitQuote(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while requesting worker EPID group")
+		return nil, errors.Wrap(err, "worker: error while getting quote info from AESM")
 	}
-	gid := gidRes.WorkerCapabilityTEEGidResponse.Gid
 
-	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(gid[:]))
+	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(qi.GID[:]))
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
 	}
@@ -378,18 +384,28 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 	rakQuoteRes, err := worker.protocol.Call(
 		ctx,
 		&protocol.Body{
-			WorkerCapabilityTEERakQuoteRequest: &protocol.WorkerCapabilityTEERakQuoteRequest{
-				QuoteType: uint32(*quoteType),
-				SPID:      spid,
-				SigRL:     sigRL,
+			WorkerCapabilityTEERakReportRequest: &protocol.WorkerCapabilityTEERakReportRequest{
+				TargetInfo: qi.TargetInfo,
 			},
 		},
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting worker quote and public RAK")
 	}
-	rakPub := rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.RakPub
-	quote := rakQuoteRes.WorkerCapabilityTEERakQuoteResponse.Quote
+	rakPub := rakQuoteRes.WorkerCapabilityTEERakReportResponse.RakPub
+	report := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Report
+
+	quote, err := h.aesm.GetQuote(
+		ctx,
+		report,
+		*quoteType,
+		spid,
+		make([]byte, 16),
+		sigRL,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while getting quote")
+	}
 
 	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil)
 	if err != nil {
@@ -401,6 +417,18 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 		CertificateChain: chain,
 		Signature:        sig,
 	}
+	_, err = worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEERakAvrRequest: &protocol.WorkerCapabilityTEERakAvrRequest{
+				AVR: avrBundle,
+			},
+		},
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while configuring AVR")
+	}
+
 	attestation := avrBundle.MarshalCBOR()
 	capabilityTEE := &node.CapabilityTEE{
 		Hardware:    node.TEEHardwareIntelSGX,
@@ -485,6 +513,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 			hostSocket,
 			h.runtimeBinary,
 			h.proxies,
+			h.teeHardware,
 		)
 	} else {
 		sandboxArgs = []string{
@@ -497,6 +526,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 			workerMountHostSocket,
 			workerMountRuntimeBin,
 			h.proxies,
+			h.teeHardware,
 		)
 	}
 
@@ -625,8 +655,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 
 	// Spawn protocol instance on the given connection.
 	logger := h.logger.With("worker_pid", cmd.Process.Pid)
-	handler := newHostHandler(h.storage, h.ias, h.keyManager)
-	proto, err := protocol.New(logger, conn, handler)
+	proto, err := protocol.New(logger, conn, h.msgHandler)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while instantiating protocol")
 	}
@@ -784,14 +813,13 @@ ManagerLoop:
 
 // NewSandboxedHost creates a new sandboxed worker host.
 func NewSandboxedHost(
+	name string,
 	workerBinary string,
 	runtimeBinary string,
-	runtimeID signature.PublicKey,
-	storage storage.Backend,
 	proxies map[string]ProxySpecification,
 	teeHardware node.TEEHardware,
 	ias *ias.IAS,
-	keyManager *enclaverpc.Client,
+	msgHandler protocol.Handler,
 	noSandbox bool,
 ) (Host, error) {
 	if workerBinary == "" {
@@ -815,21 +843,28 @@ func NewSandboxedHost(
 		}
 	}
 
+	var aesmClient *aesm.Client
+	switch teeHardware {
+	case node.TEEHardwareIntelSGX:
+		aesmClient = aesm.NewClient(teeIntelSGXSocket)
+	default:
+	}
+
 	host := &sandboxedHost{
 		workerBinary:          workerBinary,
 		runtimeBinary:         runtimeBinary,
 		noSandbox:             noSandbox,
 		proxies:               knownProxies,
-		storage:               storage,
 		teeHardware:           teeHardware,
 		ias:                   ias,
-		keyManager:            keyManager,
+		aesm:                  aesmClient,
+		msgHandler:            msgHandler,
 		quitCh:                make(chan struct{}),
 		stopCh:                make(chan struct{}),
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
 		requestCh:             make(chan *hostRequest, 10),
 		interruptCh:           make(chan *interruptRequest, 10),
-		logger:                logging.GetLogger("worker/host/sandboxed").With("runtime_id", runtimeID),
+		logger:                logging.GetLogger("worker/host/sandboxed").With("name", name),
 	}
 	return host, nil
 }

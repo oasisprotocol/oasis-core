@@ -16,3 +16,4 @@ grpc/storage/*.pb.go
 grpc/committee/*.pb.go
 grpc/client/*.pb.go
 grpc/enclaverpc/*.pb.go
+common/sgx/aesm/*.pb.go

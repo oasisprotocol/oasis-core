@@ -15,24 +15,19 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/ias"
+	"github.com/oasislabs/ekiden/go/keymanager"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/committee"
-	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
-	"github.com/oasislabs/ekiden/go/worker/ias"
 )
 
 const (
 	cfgWorkerBackend = "worker.backend"
 
 	cfgWorkerBinary = "worker.binary"
-
-	cfgIASProxy = "worker.ias.proxy_addr"
-
-	cfgKeyManagerAddress = "worker.key_manager.address"
-	cfgKeyManagerCert    = "worker.key_manager.certificate"
 
 	cfgRuntimeBinary = "worker.runtime.binary"
 	cfgRuntimeID     = "worker.runtime.id"
@@ -126,6 +121,7 @@ func getEntityPrivKey(dataDir string) (*signature.PrivateKey, error) {
 // New creates a new worker.
 func New(
 	dataDir string,
+	ias *ias.IAS,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -133,6 +129,7 @@ func New(
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
+	keyManager *keymanager.KeyManager,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
@@ -173,24 +170,6 @@ func New(
 			// XXX: This is needed till the code can watch the registry for runtimes.
 			TEEHardware: teeHardware,
 		})
-	}
-
-	// Create new IAS proxy client.
-	iasProxy := viper.GetString(cfgIASProxy)
-	ias, err := ias.New(identity, iasProxy)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create new key manager client.
-	var keyManager *enclaverpc.Client
-	keyManagerAddress := viper.GetString(cfgKeyManagerAddress)
-	if keyManagerAddress != "" {
-		keyManagerCert := viper.GetString(cfgKeyManagerCert)
-		keyManager, err = enclaverpc.NewClient(keyManagerAddress, keyManagerCert, []byte(""))
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	maxQueueSize := uint64(viper.GetInt(cfgMaxQueueSize))
@@ -239,11 +218,6 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
 
-		cmd.Flags().String(cfgIASProxy, "", "IAS proxy address")
-
-		cmd.Flags().String(cfgKeyManagerAddress, "", "key manager address")
-		cmd.Flags().String(cfgKeyManagerCert, "", "key manager TLS certificate")
-
 		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
 		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
 
@@ -272,11 +246,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgWorkerBackend,
 
 		cfgWorkerBinary,
-
-		cfgIASProxy,
-
-		cfgKeyManagerAddress,
-		cfgKeyManagerCert,
 
 		cfgRuntimeBinary,
 		cfgRuntimeID,

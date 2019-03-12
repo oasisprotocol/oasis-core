@@ -6,17 +6,21 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	pb "github.com/oasislabs/ekiden/go/grpc/client"
+	pbClient "github.com/oasislabs/ekiden/go/grpc/client"
+	pbEnRPC "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
 )
 
-var _ pb.RuntimeServer = (*grpcServer)(nil)
+var (
+	_ pbClient.RuntimeServer   = (*grpcServer)(nil)
+	_ pbEnRPC.EnclaveRpcServer = (*grpcServer)(nil)
+)
 
 type grpcServer struct {
 	client *Client
 }
 
 // SubmitTx submits a new transaction to the committee leader.
-func (s *grpcServer) SubmitTx(ctx context.Context, req *pb.SubmitTxRequest) (*pb.SubmitTxResponse, error) {
+func (s *grpcServer) SubmitTx(ctx context.Context, req *pbClient.SubmitTxRequest) (*pbClient.SubmitTxResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return nil, err
@@ -27,28 +31,68 @@ func (s *grpcServer) SubmitTx(ctx context.Context, req *pb.SubmitTxRequest) (*pb
 		return nil, err
 	}
 
-	response := pb.SubmitTxResponse{
+	response := pbClient.SubmitTxResponse{
 		Result: result,
 	}
 	return &response, nil
 }
 
-func (s *grpcServer) WaitSync(ctx context.Context, req *pb.WaitSyncRequest) (*pb.WaitSyncResponse, error) {
+func (s *grpcServer) WaitSync(ctx context.Context, req *pbClient.WaitSyncRequest) (*pbClient.WaitSyncResponse, error) {
 	err := s.client.WaitSync(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.WaitSyncResponse{}, nil
+	return &pbClient.WaitSyncResponse{}, nil
 }
 
-func (s *grpcServer) IsSynced(ctx context.Context, req *pb.IsSyncedRequest) (*pb.IsSyncedResponse, error) {
+func (s *grpcServer) IsSynced(ctx context.Context, req *pbClient.IsSyncedRequest) (*pbClient.IsSyncedResponse, error) {
 	synced, err := s.client.IsSynced(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.IsSyncedResponse{
+	return &pbClient.IsSyncedResponse{
 		Synced: synced,
 	}, nil
+}
+
+func (s *grpcServer) WatchBlocks(req *pbClient.WatchBlocksRequest, stream pbClient.Runtime_WatchBlocksServer) error {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return err
+	}
+
+	ch, sub, err := s.client.WatchBlocks(stream.Context(), id)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case blk, ok := <-ch:
+			if !ok {
+				return nil
+			}
+
+			pbBlk := &pbClient.WatchBlocksResponse{
+				Block: blk.MarshalCBOR(),
+			}
+			if err := stream.Send(pbBlk); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			return stream.Context().Err()
+		}
+	}
+}
+
+func (s *grpcServer) CallEnclave(ctx context.Context, req *pbEnRPC.CallEnclaveRequest) (*pbEnRPC.CallEnclaveResponse, error) {
+	rsp, err := s.client.CallEnclave(ctx, req.Endpoint, req.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbEnRPC.CallEnclaveResponse{Payload: rsp}, nil
 }
 
 // NewGRPCServer creates and registers a new GRPC server for the client interface.
@@ -56,5 +100,6 @@ func NewGRPCServer(srv *grpc.Server, client *Client) {
 	s := &grpcServer{
 		client: client,
 	}
-	pb.RegisterRuntimeServer(srv, s)
+	pbClient.RegisterRuntimeServer(srv, s)
+	pbEnRPC.RegisterEnclaveRpcServer(srv, s)
 }

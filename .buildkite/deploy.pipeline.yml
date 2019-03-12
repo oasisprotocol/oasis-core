@@ -3,7 +3,7 @@
 ##################################
 docker_plugin: &docker_plugin_configuration
   oasislabs/docker#v2.1.0-oasis4:
-    image: "oasislabs/development:0.2.0"
+    image: "oasislabs/development:0.3.0"
     always_pull: true
     workdir: /workdir
     volumes:
@@ -30,31 +30,15 @@ steps:
   - label: Get docker tag and save it as metadata for use later
     command: .buildkite/scripts/set_docker_tag_meta_data.sh
 
-  - label: Build simulation artifacts (master branches only)
+  - label: Build artifacts (master branches only)
     branches: master
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - eval $(ssh-agent -s)
       - ssh-add
-      - docker/deployment/build_context.sh sim-context.tar.gz
+      - docker/deployment/build_context.sh context.tar.gz
     artifact_paths:
-      - sim-context.tar.gz
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin_configuration
-
-  - label: Build hardware artifacts (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - eval $(ssh-agent -s)
-      - ssh-add
-      - docker/deployment/build_context.sh hw-context.tar.gz
-    artifact_paths:
-      - hw-context.tar.gz
-    env:
-      SGX_MODE: HW
+      - context.tar.gz
     agents:
       buildkite_agent_size: large
     plugins:
@@ -62,17 +46,10 @@ steps:
 
   - wait
 
-  - label: Build simulation docker image (master branches only)
+  - label: Build docker image (master branches only)
     branches: master
     command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh sim-context.tar.gz
-
-  - label: Build hardware docker image (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh hw-context.tar.gz
-    env:
-      DEPLOYMENT_VARIANT: hw
+      - .buildkite/scripts/build_tag_push_deployment_image.sh context.tar.gz
 
   - block: Human approval required to deploy docker image
     branches: "*"
@@ -88,10 +65,3 @@ steps:
     branches: master
     command:
       - .buildkite/scripts/promote_deployment_image_to.sh latest
-
-  - label: Deploy hardware docker image (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/promote_deployment_image_to.sh latest-hw
-    env:
-      DEPLOYMENT_VARIANT: hw

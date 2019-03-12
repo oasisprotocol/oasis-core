@@ -5,17 +5,28 @@
 # Temporary test base directory.
 TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 
+# Path to Ekiden root.
+EKIDEN_ROOT_PATH=${EKIDEN_ROOT_PATH:-${WORKDIR}}
+# Path to the Ekiden node.
+EKIDEN_NODE=${EKIDEN_NODE:-${EKIDEN_ROOT_PATH}/go/ekiden/ekiden}
+# Path to the runtime loader.
+EKIDEN_RUNTIME_LOADER=${EKIDEN_RUNTIME_LOADER:-${EKIDEN_ROOT_PATH}/target/debug/ekiden-runtime-loader}
+# TEE hardware (optional).
+EKIDEN_TEE_HARDWARE=${EKIDEN_TEE_HARDWARE:-""}
+
 # Run a Tendermint validator committee and a storage node.
 #
 # Sets:
 #   EKIDEN_COMMITTEE_DIR
 #   EKIDEN_TM_GENESIS_FILE
 #   EKIDEN_STORAGE_PORT
+#   EKIDEN_IAS_PROXY_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_ENTITY_PRIVATE_KEY
 #
-# Arguments:
+# Optional named arguments:
+#
 #   epochtime_backend - epochtime backend (default: tendermint)
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
@@ -25,23 +36,20 @@ TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
 # Any additional arguments are passed to the validator Go node and
 # all compute nodes.
 run_backend_tendermint_committee() {
-    local epochtime_backend=${1:-tendermint}
-    shift || true
-    local id=${1:-1}
-    shift || true
-    local replica_group_size=${1:-2}
-    shift || true
-    local replica_group_backup_size=${1:-1}
-    shift || true
-    local start_storage=${1:-true}
-    shift || true
-    local roothash_genesis_blocks=${1:-""}
-    shift || true
+    # Optional arguments with default values.
+    local epochtime_backend="tendermint"
+    local id=1
+    local replica_group_size=2
+    local replica_group_backup_size=1
+    local start_storage=true
+    local roothash_genesis_blocks=""
+    local nodes=3
+    # Load named arguments that override defaults.
+    local "${@}"
 
     local committee_dir=${TEST_BASE_DIR}/committee-${id}
     local base_datadir=${committee_dir}/committee-data
     local validator_files=""
-    let nodes=3
 
     # Provision the validators.
     for idx in $(seq 1 $nodes); do
@@ -49,7 +57,7 @@ run_backend_tendermint_committee() {
         rm -rf ${datadir}
 
         let port=(idx-1)+26656
-        ${WORKDIR}/go/ekiden/ekiden \
+        ${EKIDEN_NODE} \
             tendermint provision_validator \
             --datadir ${datadir} \
             --node_addr 127.0.0.1:${port} \
@@ -62,16 +70,17 @@ run_backend_tendermint_committee() {
     local entity_dir=${committee_dir}/entity
     rm -Rf ${entity_dir}
 
-    ${WORKDIR}/go/ekiden/ekiden \
+    ${EKIDEN_NODE} \
         registry entity init \
         --datadir ${entity_dir}
 
     # Provision the runtime.
-    ${WORKDIR}/go/ekiden/ekiden \
+    ${EKIDEN_NODE} \
         registry runtime init_genesis \
         --runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
         --runtime.replica_group_size ${replica_group_size} \
         --runtime.replica_group_backup_size ${replica_group_backup_size} \
+        ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --entity ${entity_dir} \
         --datadir ${entity_dir}
 
@@ -79,7 +88,7 @@ run_backend_tendermint_committee() {
     local genesis_file=${committee_dir}/genesis.json
     rm -Rf ${genesis_file}
 
-    ${WORKDIR}/go/ekiden/ekiden \
+    ${EKIDEN_NODE} \
         tendermint init_genesis \
         --genesis_file ${genesis_file} \
         --entity ${entity_dir}/entity_genesis.json \
@@ -94,13 +103,42 @@ run_backend_tendermint_committee() {
     if [ "$start_storage" = true ]; then
         rm -Rf ${storage_datadir}
 
-        ${WORKDIR}/go/ekiden/ekiden \
+        ${EKIDEN_NODE} \
             storage node \
             --datadir ${storage_datadir} \
             --grpc.port ${storage_port} \
             --log.file ${committee_dir}/storage.log \
             &
     fi
+
+    # Run the IAS proxy if needed.
+    local ias_proxy_port=9001
+
+    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
+        # TODO: Ensure that IAS credentials are configured.
+        ${EKIDEN_NODE} \
+            ias proxy \
+            --auth_cert ${EKIDEN_IAS_CERT} \
+            --auth_cert_ca ${EKIDEN_IAS_CERT} \
+            --auth_key ${EKIDEN_IAS_KEY} \
+            --spid ${EKIDEN_IAS_SPID} \
+            --metrics.mode none \
+            --log.level debug \
+            --log.file ${committee_dir}/ias-proxy.log \
+            &
+    fi
+
+    # Export some variables so compute workers can find them.
+    EKIDEN_COMMITTEE_DIR=${committee_dir}
+    EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
+    EKIDEN_STORAGE_PORT=${storage_port}
+    EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
+    EKIDEN_TM_GENESIS_FILE=${genesis_file}
+    EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
+    EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
+
+    # Run the key manager node.
+    run_keymanager_node
 
     # Run the validator nodes.
     for idx in $(seq 1 $nodes); do
@@ -109,8 +147,8 @@ run_backend_tendermint_committee() {
         let tm_port=(idx-1)+26656
         let grpc_debug_port=tm_port+36656
 
-        ${WORKDIR}/go/ekiden/ekiden \
-            --log.level debug \
+        ${EKIDEN_NODE} \
+            --log.level info \
             --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.log.verbose_debug \
             --grpc.debug.port ${grpc_debug_port} \
@@ -127,18 +165,11 @@ run_backend_tendermint_committee() {
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
             --tendermint.debug.addr_book_lenient \
-            --tendermint.log.debug \
+            --keymanager.client.address 127.0.0.1:9003 \
+            --keymanager.client.certificate ${committee_dir}/key-manager/tls_identity_cert.pem \
             --datadir ${datadir} \
             &
     done
-
-    # Export some variables so compute workers can find them.
-    EKIDEN_COMMITTEE_DIR=${committee_dir}
-    EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
-    EKIDEN_STORAGE_PORT=${storage_port}
-    EKIDEN_TM_GENESIS_FILE=${genesis_file}
-    EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
-    EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
 }
 
 # Run a compute node.
@@ -174,8 +205,15 @@ run_compute_node() {
     let p2p_port=id+12000
     let tm_port=id+13000
 
-    ${WORKDIR}/go/ekiden/ekiden \
-        --log.level debug \
+    local runtime_target=""
+    local runtime_ext=""
+    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
+        runtime_target="x86_64-fortanix-unknown-sgx"
+        runtime_ext=".sgxs"
+    fi
+
+    ${EKIDEN_NODE} \
+        --log.level info \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
@@ -191,16 +229,17 @@ run_compute_node() {
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
-        --tendermint.log.debug \
+        ${EKIDEN_TEE_HARDWARE:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        --keymanager.client.address 127.0.0.1:9003 \
+        --keymanager.client.certificate ${EKIDEN_COMMITTEE_DIR}/key-manager/tls_identity_cert.pem \
         --worker.backend sandboxed \
-        --worker.binary ${WORKDIR}/target/debug/ekiden-worker \
-        --worker.runtime.binary ${WORKDIR}/target/enclave/${runtime}.so \
+        --worker.binary ${EKIDEN_RUNTIME_LOADER} \
+        --worker.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
         --worker.runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
+        ${EKIDEN_TEE_HARDWARE:+--worker.runtime.sgx_ids 0000000000000000000000000000000000000000000000000000000000000000} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
         --worker.leader.max_batch_size 1 \
-        --worker.key_manager.address 127.0.0.1:9003 \
-        --worker.key_manager.certificate ${WORKDIR}/tests/keymanager/km.pem \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
@@ -218,7 +257,7 @@ cat_compute_logs() {
 wait_compute_nodes() {
     local nodes=$1
 
-    ${WORKDIR}/go/ekiden/ekiden debug dummy wait-nodes \
+    ${EKIDEN_NODE} debug dummy wait-nodes \
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --nodes $nodes
 }
@@ -230,7 +269,7 @@ wait_compute_nodes() {
 set_epoch() {
     local epoch=$1
 
-    ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch \
+    ${EKIDEN_NODE} debug dummy set-epoch \
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --epoch $epoch
 }
@@ -241,15 +280,44 @@ set_epoch() {
 run_keymanager_node() {
     local extra_args=$*
 
-    local db_dir=${TEST_BASE_DIR}/test-keymanager
-    rm -rf ${db_dir}
+    local data_dir=${EKIDEN_COMMITTEE_DIR}/key-manager
+    rm -rf ${data_dir}
+    local log_file=${EKIDEN_COMMITTEE_DIR}/key-manager.log
+    rm -rf ${log_file}
 
-    ${WORKDIR}/target/debug/ekiden-keymanager-node \
-        --enclave ${WORKDIR}/target/enclave/ekiden-keymanager-trusted.so \
-        --tls-certificate ${WORKDIR}/tests/keymanager/km.pem \
-        --tls-key ${WORKDIR}/tests/keymanager/km-key.pem \
-        --storage-path ${db_dir} \
-        ${extra_args} &
+    local runtime_target=""
+    local runtime_ext=""
+    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
+        runtime_target="x86_64-fortanix-unknown-sgx"
+        runtime_ext=".sgxs"
+    fi
+
+    let tm_port=13900
+
+    ${EKIDEN_NODE} \
+        --log.level info \
+        --grpc.log.verbose_debug \
+        --storage.backend cachingclient \
+        --storage.cachingclient.file ${data_dir}/storage-cache \
+        --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
+        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --metrics.mode none \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.debug.addr_book_lenient \
+        ${EKIDEN_TEE_HARDWARE:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_TEE_HARDWARE:+--keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
+        --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
+        --keymanager.port 9003 \
+        --datadir ${data_dir} \
+        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[key-manager] /" &
 }
 
 # Run a basic client.
@@ -264,11 +332,13 @@ run_basic_client() {
     local runtime=$1
     local client=$2
 
+    local log_file=${EKIDEN_COMMITTEE_DIR}/client.log
+    rm -rf ${log_file}
+
     ${WORKDIR}/target/debug/${client}-client \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --mr-enclave $(cat ${WORKDIR}/target/enclave/${runtime}.mrenclave) \
-        --test-runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        &
+        --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        2>&1 | tee ${log_file} | sed "s/^/[client] /" &
     EKIDEN_CLIENT_PID=$!
 }
 
@@ -285,7 +355,6 @@ E2E_TEST_COUNTER=0
 #   backend_runner - function that will prepare and run the backend services
 #   runtime        - name of the runtime enclave to use (without .so); the
 #                    enclave must be available under target/enclave
-#   client         - name of the client binary to use (without -client)
 #
 # Optional named arguments:
 #
@@ -294,6 +363,7 @@ E2E_TEST_COUNTER=0
 #   on_success_hook - function that will run after the client successfully
 #                     exits (default: assert_basic_success)
 #   client_runner   - function that will run the client (default: run_basic_client)
+#   client          - name of the client binary to use, without -client (default: none)
 #
 # Scenario function:
 #
@@ -304,12 +374,14 @@ E2E_TEST_COUNTER=0
 #
 run_test() {
     # Required arguments.
-    local name scenario backend_runner runtime client
+    local name scenario backend_runner runtime
     # Optional arguments with default values.
+    local pre_init_hook=""
     local post_km_hook=""
     local on_success_hook="assert_basic_success"
     local start_client_first=0
     local client_runner=run_basic_client
+    local client="none"
     # Load named arguments that override defaults.
     local "${@}"
 
@@ -332,13 +404,8 @@ run_test() {
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${name}\e[0m\n"
 
-    # Start the key manager before starting anything else.
-    run_keymanager_node
-    sleep 1
-
-    # Run post key-manager startup hook.
-    if [[ "$post_km_hook" != "" ]]; then
-        $post_km_hook
+    if [[ "${pre_init_hook}" != "" ]]; then
+        $pre_init_hook
     fi
 
     if [[ "${start_client_first}" == 0 ]]; then
@@ -349,7 +416,7 @@ run_test() {
 
     # Run the client.
     $client_runner $runtime $client
-    local client_pid=$EKIDEN_CLIENT_PID
+    local client_pid=${EKIDEN_CLIENT_PID:-""}
 
     if [[ "${start_client_first}" == 1 ]]; then
         # Start backend.
@@ -357,11 +424,18 @@ run_test() {
         sleep 1
     fi
 
+    # Run post key-manager startup hook.
+    if [[ "$post_km_hook" != "" ]]; then
+        $post_km_hook
+    fi
+
     # Run scenario.
     $scenario $runtime
 
     # Wait on the client and check its exit status.
-    wait ${client_pid}
+    if [ "${client_pid}" != "" ]; then
+        wait ${client_pid}
+    fi
 
     # Run on success hook.
     if [[ "$on_success_hook" != "" ]]; then

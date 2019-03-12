@@ -1,29 +1,39 @@
 #[macro_use]
 extern crate clap;
-extern crate log;
-
-extern crate client_utils;
-extern crate ekiden_core;
-extern crate ekiden_rpc_client;
-extern crate ekiden_runtime_client;
-
+extern crate ekiden_client;
+extern crate ekiden_runtime;
+extern crate grpcio;
 extern crate simple_keyvalue_api;
+extern crate tokio;
 
-use std::{thread, time};
+use std::{sync::Arc, thread, time};
 
 use clap::{App, Arg};
-use log::info;
+use grpcio::EnvBuilder;
+use tokio::runtime::Runtime;
 
-use ekiden_core::tokio;
-use ekiden_runtime_client::create_runtime_client;
+use ekiden_client::{create_txn_api_client, Node, TxnClient};
+use ekiden_runtime::common::runtime::RuntimeId;
 use simple_keyvalue_api::{with_api, KeyValue};
 
 with_api! {
-    create_runtime_client!(simple_keyvalue, simple_keyvalue_api, api);
+    create_txn_api_client!(SimpleKeyValueClient, api);
 }
 
 fn main() {
-    let args = client_utils::default_app!()
+    let matches = App::new("Simple key/value runtime test client")
+        .arg(
+            Arg::with_name("runtime-id")
+                .long("runtime-id")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("node-address")
+                .long("node-address")
+                .takes_value(true)
+                .required(true),
+        )
         .arg(
             Arg::with_name("mode")
                 .long("mode")
@@ -41,43 +51,46 @@ fn main() {
         )
         .get_matches();
 
-    // Initialize tracing.
-    client_utils::macros::report_forever("runtime-client", &args);
+    let node_address = matches.value_of("node-address").unwrap();
+    let runtime_id = value_t_or_exit!(matches, "runtime-id", RuntimeId);
+    let mode = matches.value_of("mode").unwrap();
 
-    let mode = args.value_of("mode").expect("mode argument is required");
-
-    let client = client_utils::runtime_client!(simple_keyvalue, args);
-    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    println!("Initializing simple key/value runtime!");
+    let mut rt = Runtime::new().unwrap();
+    let env = Arc::new(EnvBuilder::new().build());
+    let node = Node::new(env, node_address);
+    let txn_client = TxnClient::new(node.channel(), runtime_id, None);
+    let kv_client = SimpleKeyValueClient::new(txn_client);
 
     if mode == "sleep" || mode == "part1" {
-        info!("Inserting key/value pair");
+        println!("Inserting key/value pair");
         let kv = KeyValue {
             key: String::from("my_key"),
             value: String::from("my_value"),
         };
-        let r = runtime.block_on(client.insert(kv)).unwrap();
+        let r = rt.block_on(kv_client.insert(kv)).unwrap();
         assert_eq!(r, None); // key should not exist in db before
 
         // Check value.
-        info!("Checking if key exists and has the correct value");
-        let r = runtime.block_on(client.get("my_key".to_string())).unwrap();
+        println!("Checking if key exists and has the correct value");
+        let r = rt.block_on(kv_client.get("my_key".to_string())).unwrap();
         assert_eq!(r.unwrap(), "my_value".to_string()); // key should exist in db
     }
 
     if mode == "sleep" {
-        let sleep_for = value_t!(args.value_of("sleep-for"), u64).unwrap_or_else(|e| e.exit());
+        let sleep_for = value_t_or_exit!(matches, "sleep-for", u64);
 
         // Sleep to allow for epoch to advance.
-        info!("Sleeping for {} seconds", sleep_for);
+        println!("Sleeping for {} seconds", sleep_for);
         thread::sleep(time::Duration::from_secs(sleep_for));
     }
 
     if mode == "sleep" || mode == "part2" {
         // Check value again.
-        info!("Checking (again) if key exists and has the correct value");
-        let r = runtime.block_on(client.get("my_key".to_string())).unwrap();
+        println!("Checking (again) if key exists and has the correct value");
+        let r = rt.block_on(kv_client.get("my_key".to_string())).unwrap();
         assert_eq!(r.unwrap(), "my_value".to_string()); // key should still exist in db
     }
 
-    info!("All done");
+    println!("All done");
 }

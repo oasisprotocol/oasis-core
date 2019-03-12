@@ -1,13 +1,13 @@
 [package]
 name = "test-long-term-client"
-version = "0.2.0-alpha"
+version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Key value test client"
 
 [dependencies]
-client-utils = { path = "../utils" }
-ekiden-core = { path = "../../../core/common" }
-ekiden-runtime-client = { path = "../../../runtime/client" }
-ekiden-rpc-client = { path = "../../../rpc/client" }
+ekiden-client = { path = "../../../client" }
+ekiden-runtime = { path = "../../../runtime" }
 simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
-log = "0.4"
+tokio = "0.1.17"
+grpcio = "0.4.4"

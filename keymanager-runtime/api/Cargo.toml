@@ -1,0 +1,14 @@
+[package]
+name = "ekiden-keymanager-api"
+version = "0.3.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+
+[dependencies]
+ekiden-runtime = { path = "../../runtime" }
+serde = "1.0.71"
+serde_derive = "1.0"
+serde_bytes = "~0.10"
+rustc-hex = "2.0.1"
+failure = "0.1.5"
+x25519-dalek = "0.5.1"
+rand = "0.6.5"

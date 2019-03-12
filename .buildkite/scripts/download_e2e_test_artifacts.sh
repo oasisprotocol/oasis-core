@@ -14,28 +14,16 @@ source .buildkite/scripts/common.sh
 
 # Ekiden node, worker and compute node.
 download_artifact ekiden go/ekiden 755
-download_artifact ekiden-worker target/debug 755
+download_artifact ekiden-runtime-loader target/debug 755
 
-# Key manager.
-download_artifact ekiden-keymanager-node target/debug 755
-
-# Key manager enclave.
-download_artifact ekiden-keymanager-trusted.so target/enclave 755
-download_artifact ekiden-keymanager-trusted.mrenclave target/enclave
+# Key manager runtime.
+download_artifact ekiden-keymanager-runtime.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact ekiden-keymanager-runtime target/debug 755
 
 # Test simple-keyvalue runtime and clients.
 download_artifact test-long-term-client target/debug 755
 download_artifact simple-keyvalue-client target/debug 755
-download_artifact simple-keyvalue.so target/enclave 755
-download_artifact simple-keyvalue.mrenclave target/enclave
+download_artifact simple-keyvalue-enc-client target/debug 755
 
-# Test db encryption runtime and clients.
-download_artifact ekiden-keymanager-test-client target/debug 755
-download_artifact test-db-encryption-client target/debug 755
-download_artifact test-db-encryption.so target/enclave 755
-download_artifact test-db-encryption.mrenclave target/enclave
-
-# Test logger runtime and clients.
-download_artifact test-logger-client target/debug 755
-download_artifact test-logger.so target/enclave 755
-download_artifact test-logger.mrenclave target/enclave
+download_artifact simple-keyvalue.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact simple-keyvalue target/debug 755

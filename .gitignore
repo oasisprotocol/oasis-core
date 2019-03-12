@@ -6,16 +6,12 @@ target/
 *.so
 **/generated
 Cargo.lock
-Cargo.enclave.lock
 
 # IDE.
 .idea/*
 
 # Temporary files.
 *.swp
-
-# Saved enclave identity.
-/identity*.pb
 
 # Development-linked Workspaces.
 /thirdparty/

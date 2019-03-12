@@ -1,0 +1,100 @@
+############################################
+# Single node configuration for development.
+############################################
+#
+# NOTE: This sets up a single node that is a Tendermint validator,
+#       a storage node and an Ekiden worker at the same time. In
+#       actual deployments these nodes will likely run separately.
+#
+datadir: /tmp/ekiden-single-node-sgx
+
+# Logging.
+# Per-module log levels are defined below. If you prefer just one unified log level, you can use:
+# log:
+#   level: debug
+log:
+  level:
+    # Per-module log levels. Longest prefix match will be taken. Fallback to "default", if no match.
+    default: debug
+    tendermint: warn
+    tendermint/context: error
+
+# Internal gRPC services.
+grpc:
+  log:
+    verbose_debug: true
+
+# Worker configuration.
+worker:
+  backend: sandboxed
+  binary: target/debug/ekiden-runtime-loader
+  runtime:
+    id: "0000000000000000000000000000000000000000000000000000000000000000"
+    binary: target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs
+    sgx_ids:
+      - "0000000000000000000000000000000000000000000000000000000000000000"
+  client:
+    port: 9200
+    addresses:
+      - "127.0.0.1:9200"
+  p2p:
+    port: 9100
+
+# IAS configuration.
+ias:
+  proxy_addr: "127.0.0.1:9001"
+
+# Key manager configuration.
+keymanager:
+  tee_hardware: intel-sgx
+  loader: target/debug/ekiden-runtime-loader
+  runtime: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
+  port: 9003
+  client:
+    address: "127.0.0.1:9003"
+    certificate: /tmp/ekiden-single-node-sgx/tls_identity_cert.pem
+
+# Epochtime backend.
+epochtime:
+  backend: tendermint
+  tendermint:
+    # This makes each epoch last for 30 tendermint blocks.
+    interval: 30
+
+# Random beacon backend.
+beacon:
+  backend: tendermint
+
+# Storage backend.
+storage:
+  backend: leveldb
+  debug:
+    mock_signing_key: true
+
+# Scheduler backend.
+scheduler:
+  backend: trivial
+
+# Registry backend.
+registry:
+  backend: tendermint
+
+# Roothash backend.
+roothash:
+  backend: tendermint
+
+# Tendermint backend configuration.
+tendermint:
+  core:
+    genesis_file: /tmp/ekiden-single-node-sgx/genesis.json
+  consensus:
+    timeout_commit: 1s
+
+# Tracing settings.
+#tracing:
+#  enabled: 1
+#  reporter:
+#    agent_addr: jaeger:6831
+#  sampler:
+#    # Sampling frequency, 100% by default.
+#    param: 1.0

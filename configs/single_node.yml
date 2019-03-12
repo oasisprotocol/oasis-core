@@ -27,19 +27,25 @@ grpc:
 # Worker configuration.
 worker:
   backend: sandboxed
-  binary: /code/target/debug/ekiden-worker
+  binary: target/debug/ekiden-runtime-loader
   runtime:
     id: "0000000000000000000000000000000000000000000000000000000000000000"
-    binary: /code/target/enclave/simple-keyvalue.so
+    binary: target/debug/simple-keyvalue
   client:
     port: 9200
     addresses:
       - "127.0.0.1:9200"
   p2p:
     port: 9100
-  key_manager:
+
+# Key manager configuration.
+keymanager:
+  loader: target/debug/ekiden-runtime-loader
+  runtime: target/debug/ekiden-keymanager-runtime
+  port: 9003
+  client:
     address: "127.0.0.1:9003"
-    certificate: /code/tests/keymanager/km.pem
+    certificate: /tmp/ekiden-single-node/tls_identity_cert.pem
 
 # Epochtime backend.
 epochtime:
@@ -54,7 +60,7 @@ beacon:
 
 # Storage backend.
 storage:
-  backend: memory
+  backend: leveldb
   debug:
     mock_signing_key: true
 
@@ -73,7 +79,7 @@ roothash:
 # Tendermint backend configuration.
 tendermint:
   core:
-    genesis_file: /code/configs/single_node/genesis.json
+    genesis_file: /tmp/ekiden-single-node/genesis.json
   consensus:
     timeout_commit: 1s
 

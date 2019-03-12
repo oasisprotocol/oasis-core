@@ -1,0 +1,26 @@
+[package]
+name = "ekiden-client"
+version = "0.3.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+edition = "2018"
+
+[dependencies]
+ekiden-runtime = { path = "../runtime" }
+serde = "1.0.71"
+# TODO: Change to released version when 0.10.0 is released.
+serde_cbor = { git = "https://github.com/pyfisch/cbor", rev = "114ecaeac53799d0bf81ca8d1b980c7c419d76fe" }
+failure = "0.1.5"
+futures = "0.1.25"
+tokio-executor = "0.1.6"
+tokio-current-thread = "0.1.5"
+io-context = "0.2.0"
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+grpcio = "0.4.4"
+protobuf = "~2.4"
+rustracing = "0.2.0"
+rustracing_jaeger = "0.2.1"
+tokio = "0.1.18"
+
+[build-dependencies]
+protoc-grpcio = "1.0.1"

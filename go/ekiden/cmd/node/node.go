@@ -22,6 +22,8 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/ias"
+	"github.com/oasislabs/ekiden/go/keymanager"
 	"github.com/oasislabs/ekiden/go/registry"
 	registryAPI "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash"
@@ -60,19 +62,21 @@ type Node struct {
 	grpcSrv *grpc.Server
 	svcTmnt service.TendermintService
 
-	Identity  *identity.Identity
-	Beacon    beaconAPI.Backend
-	Epochtime epochtimeAPI.Backend
-	Registry  registryAPI.Backend
-	RootHash  roothashAPI.Backend
-	Scheduler schedulerAPI.Backend
-	Staking   stakingAPI.Backend
-	Storage   storageAPI.Backend
-	Worker    *worker.Worker
-	Client    *client.Client
+	Identity   *identity.Identity
+	Beacon     beaconAPI.Backend
+	Epochtime  epochtimeAPI.Backend
+	Registry   registryAPI.Backend
+	RootHash   roothashAPI.Backend
+	Scheduler  schedulerAPI.Backend
+	Staking    stakingAPI.Backend
+	Storage    storageAPI.Backend
+	IAS        *ias.IAS
+	Worker     *worker.Worker
+	Client     *client.Client
+	KeyManager *keymanager.KeyManager
 }
 
-// Cleanup cleans up after the ndoe has terminated.
+// Cleanup cleans up after the node has terminated.
 func (n *Node) Cleanup() {
 	n.svcMgr.Cleanup()
 }
@@ -120,10 +124,6 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
-	if n.Client, err = client.New(n.svcMgr.Ctx, n.RootHash, n.Storage, n.Scheduler, n.Registry, n.svcTmnt); err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.Client, "client service")
 
 	// Initialize and register the gRPC services.
 	grpcSrv := n.grpcSrv.Server()
@@ -132,7 +132,6 @@ func (n *Node) initBackends() error {
 	scheduler.NewGRPCServer(grpcSrv, n.Scheduler)
 	storage.NewGRPCServer(grpcSrv, n.Storage)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
-	client.NewGRPCServer(grpcSrv, n.Client)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -248,9 +247,34 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
+	// Initialize the IAS proxy client.
+	node.IAS, err = ias.New(node.Identity)
+	if err != nil {
+		logger.Error("failed to initialize IAS proxy client",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Initialize the key manager service.
+	node.KeyManager, err = keymanager.New(
+		cmdCommon.DataDir(),
+		node.IAS,
+		node.Identity,
+		node.Storage,
+	)
+	if err != nil {
+		logger.Error("failed to initialize key manager",
+			"err", err,
+		)
+		return nil, err
+	}
+	node.svcMgr.Register(node.KeyManager)
+
 	// Initialize the worker.
 	node.Worker, err = worker.New(
 		cmdCommon.DataDir(),
+		node.IAS,
 		node.Identity,
 		node.Storage,
 		node.RootHash,
@@ -258,6 +282,7 @@ func NewNode() (*Node, error) {
 		node.Epochtime,
 		node.Scheduler,
 		node.svcTmnt,
+		node.KeyManager,
 	)
 	if err != nil {
 		logger.Error("failed to initialize compute worker",
@@ -266,6 +291,22 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 	node.svcMgr.Register(node.Worker)
+
+	// Initialize the client.
+	node.Client, err = client.New(
+		node.svcMgr.Ctx,
+		node.RootHash,
+		node.Storage,
+		node.Scheduler,
+		node.Registry,
+		node.svcTmnt,
+		node.KeyManager,
+	)
+	if err != nil {
+		return nil, err
+	}
+	node.svcMgr.RegisterCleanupOnly(node.Client, "client service")
+	client.NewGRPCServer(node.grpcSrv.Server(), node.Client)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -289,6 +330,14 @@ func NewNode() (*Node, error) {
 	// Start the gRPC server.
 	if err = node.grpcSrv.Start(); err != nil {
 		logger.Error("failed to start gRPC server",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Start the key manager service.
+	if err = node.KeyManager.Start(); err != nil {
+		logger.Error("failed to start key manager service",
 			"err", err,
 		)
 		return nil, err
@@ -324,7 +373,9 @@ func RegisterFlags(cmd *cobra.Command) {
 		staking.RegisterFlags,
 		storage.RegisterFlags,
 		tendermint.RegisterFlags,
+		ias.RegisterFlags,
 		worker.RegisterFlags,
+		keymanager.RegisterFlags,
 	} {
 		v(cmd)
 	}

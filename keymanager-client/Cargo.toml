@@ -1,0 +1,16 @@
+[package]
+name = "ekiden-keymanager-client"
+version = "0.3.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+edition = "2018"
+
+[dependencies]
+ekiden-client = { path = "../client" }
+ekiden-runtime = { path = "../runtime" }
+ekiden-keymanager-api = { path = "../keymanager-runtime/api" }
+failure = "0.1.5"
+futures = "0.1.25"
+io-context = "0.2.0"
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+grpcio = "0.4.4"

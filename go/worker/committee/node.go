@@ -551,6 +551,9 @@ func (n *Node) abortBatch(reason error) {
 }
 
 func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
+	// We must be in ProcessingBatch state if we are here.
+	state := n.state.(StateProcessingBatch)
+
 	n.logger.Debug("proposing batch",
 		"batch", batch,
 	)
@@ -569,7 +572,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	// Generate proposed block header.
 	blk := block.NewEmptyBlock(n.currentBlock, 0, block.Normal)
 	blk.Header.GroupHash = epoch.GetGroupHash()
-	blk.Header.InputHash.From(batch.Calls)
+	blk.Header.InputHash.From(state.batch)
 	blk.Header.OutputHash.From(batch.Outputs)
 	blk.Header.StateRoot = batch.NewStateRoot
 

@@ -189,8 +189,6 @@ func (p *Protocol) handleMessage(ctx context.Context, message *Message) {
 
 		respCh <- &message.Body
 		close(respCh)
-	case MessageKeepAlive:
-		// Keep-alive message, ignore it.
 	default:
 		p.logger.Warn("received a malformed message from worker, ignoring",
 			"msg", fmt.Sprintf("%+v", message),

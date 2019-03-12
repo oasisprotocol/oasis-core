@@ -41,26 +41,7 @@ set +x
 cargo tarpaulin \
   --ignore-tests \
   --out Xml \
-  --packages ekiden-common \
-  --packages ekiden-db-trusted \
-  --packages ekiden-enclave-common \
-  --packages ekiden-enclave-trusted \
-  --packages ekiden-rpc-client \
-  --packages ekiden-rpc-common \
-  --packages ekiden-rpc-trusted \
-  --packages ekiden-runtime-client \
-  --packages ekiden-runtime-common \
-  --packages ekiden-runtime-trusted \
-  --packages ekiden-storage-base \
-  --packages ekiden-storage-batch \
-  --packages ekiden-storage-client \
-  --packages ekiden-storage-lru \
-  --packages ekiden-storage-persistent \
-  --packages ekiden-tools \
   --exclude-files *generated* \
-  --exclude-files key-manager/* \
-  --exclude-files registry/* \
-  --exclude-files scheduler/* \
   --coveralls ${coveralls_api_token} \
   -v
 set -x
