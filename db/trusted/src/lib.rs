@@ -12,6 +12,7 @@ extern crate protobuf;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate storagestudy;
 extern crate bincode;
 
 extern crate ekiden_common;

@@ -19,6 +19,7 @@ protobuf = "~2.0"
 sodalite = "0.3.0"
 serde = "1.0.71"
 serde_derive = "1.0"
+storagestudy = { path = "../../../storagestudy" }
 bincode = "1.0.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]

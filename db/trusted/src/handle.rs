@@ -290,6 +290,7 @@ impl Database for DatabaseHandle {
             None => key.to_vec(),
         };
 
+        storagestudy::dump("dh-insert");
         // Add a pending insert operation for the given key.
         self.pending_ops.insert(key, Operation::Insert(value));
 
