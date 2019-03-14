@@ -106,6 +106,7 @@ impl KeyManager {
     /// contract, so this operation may fail due to the key manager being unavailable or
     /// issues with establishing a mutually authenticated secure channel.
     fn connect(&mut self) -> Result<()> {
+        println!("km: connecting to {:?}", self.mr_enclave);
         let mr_enclave = match self.mr_enclave {
             Some(ref mr_enclave) => mr_enclave.clone(),
             None => {
@@ -191,20 +192,29 @@ impl KeyManager {
         &mut self,
         contract_id: ContractId,
     ) -> Result<(PrivateKeyType, StateKeyType)> {
+        println!("get_or_create_secret_keys. contract_id: {:?}", contract_id);
+
         // Ensure manager is connected.
         self.connect()?;
+        println!("get_or_create_secret_keys. connected");
 
         // Check cache first.
         match self.get_or_create_secret_keys_cache.entry(contract_id) {
             Entry::Occupied(entry) => {
                 let keys = entry.get().clone();
+                println!("get_or_create_secret_keys. found in cache");
                 Ok((keys.input_keypair.get_sk(), keys.state_key))
             }
             Entry::Vacant(entry) => {
+                println!("get_or_create_secret_keys. not found in cache");
                 // No entry in cache, fetch from key manager.
                 let mut request = key_manager::GetOrCreateKeyRequest::new();
                 request.set_contract_id(contract_id.to_vec());
                 // make a RPC
+                println!(
+                    "get_or_create_secret_keys. sending request to km: {:?}",
+                    request,
+                );
                 let mut response = match self
                     .client
                     .as_mut()
@@ -214,10 +224,16 @@ impl KeyManager {
                 {
                     Ok(response) => response,
                     Err(error) => {
+                        println!("get_or_create_secret_keys. got error from km: {:?}", error);
                         return Err(Error::new(error.description()));
                     }
                 };
+                println!(
+                    "get_or_create_secret_keys. got response from km: {:?}",
+                    response,
+                );
                 let keys: ContractKey = serde_cbor::from_slice(&response.take_key())?;
+                println!("get_or_create_secret_keys. got keys from km");
                 // Cache all keys locally
                 entry.insert(keys.clone());
                 Ok((keys.input_keypair.get_sk(), keys.state_key))
