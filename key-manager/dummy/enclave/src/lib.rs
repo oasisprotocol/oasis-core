@@ -2,6 +2,8 @@ extern crate bincode;
 extern crate byteorder;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 extern crate protobuf;
 extern crate serde_cbor;
 extern crate sodalite;
@@ -53,6 +55,8 @@ static MAX_KEY_TIMESTAMP: u64 = (1 << 53) - 1;
 pub fn get_or_create_keys(
     request: &Request<GetOrCreateKeyRequest>,
 ) -> Result<GetOrCreateKeyResponse> {
+    info!("get_or_create_keys(request: {:?})", request);
+
     let mut response = GetOrCreateKeyResponse::new();
     // Query the key store.
     {
@@ -70,6 +74,8 @@ pub fn get_or_create_keys(
 pub fn get_public_key(
     request: &Request<GetOrCreateKeyRequest>,
 ) -> Result<Option<GetOrCreateKeyResponse>> {
+    info!("get_public_key(request: {:?})", request);
+
     let mut response = GetOrCreateKeyResponse::new();
     // Query the key store.
     {
@@ -93,6 +99,8 @@ pub fn get_public_key(
 pub fn long_term_public_key(
     request: &Request<GetOrCreateKeyRequest>,
 ) -> Result<Option<GetOrCreateKeyResponse>> {
+    info!("long_term_public_key(request: {:?})", request);
+
     let mut response = GetOrCreateKeyResponse::new();
     {
         let key_store = KeyStore::get();
