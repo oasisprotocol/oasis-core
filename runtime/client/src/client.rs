@@ -113,7 +113,10 @@ impl RuntimeClient {
         options = inject_to_options(options, span.context());
 
         let result = match self.client.wait_sync_async_opt(&request, options) {
-            Ok(_) => Box::new(future::ok(())),
+            Ok(resp) => resp
+                .map(|_| ())
+                .map_err(|err| Error::new(err.description()))
+                .into_box(),
             Err(e) => Box::new(future::err(Error::new(e.description()))),
         };
         drop(span);
