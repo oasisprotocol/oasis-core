@@ -25,6 +25,12 @@ type Subscription struct {
 	ch *channels.InfiniteChannel
 }
 
+// Untyped returns the subscription's untyped output.  Effort should be
+// made to use Unwrap instead.
+func (s *Subscription) Untyped() <-chan interface{} {
+	return s.ch.Out()
+}
+
 // Unwrap ties the read end of the provided channel to the subscription's
 // output.
 func (s *Subscription) Unwrap(ch interface{}) {

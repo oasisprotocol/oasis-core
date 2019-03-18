@@ -62,11 +62,11 @@ type rootHashApplication struct {
 }
 
 func (app *rootHashApplication) Name() string {
-	return api.RootHashAppName
+	return AppName
 }
 
 func (app *rootHashApplication) TransactionTag() byte {
-	return api.RootHashTransactionTag
+	return TransactionTag
 }
 
 func (app *rootHashApplication) Blessed() bool {
@@ -77,7 +77,7 @@ func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRo
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryRootHashGetLatestBlock, api.QueryGetLatestBlock{}, app.queryGetLatestBlock)
+	queryRouter.AddRoute(QueryGetLatestBlock, api.QueryGetByIDRequest{}, app.queryGetLatestBlock)
 }
 
 func (app *rootHashApplication) OnCleanup() {
@@ -92,7 +92,7 @@ func (app *rootHashApplication) GetState(height int64) (interface{}, error) {
 }
 
 func (app *rootHashApplication) queryGetLatestBlock(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetLatestBlock)
+	request := r.(*api.QueryGetByIDRequest)
 	state := s.(*immutableState)
 
 	runtime, err := state.getRuntimeState(request.ID)
@@ -109,7 +109,7 @@ func (app *rootHashApplication) queryGetLatestBlock(s interface{}, r interface{}
 }
 
 func (app *rootHashApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &api.TxRootHash{}
+	request := &Tx{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("CheckTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
@@ -129,7 +129,7 @@ func (app *rootHashApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 }
 
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
-	var st api.GenesisRootHashState
+	var st GenesisState
 	if err := abci.UnmarshalGenesisAppState(request, app, &st); err != nil {
 		app.logger.Error("InitChain: failed to unmarshal genesis state",
 			"err", err,
@@ -288,16 +288,16 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runti
 
 	roundNr, _ := blk.Header.Round.ToU64()
 
-	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-	tagV := api.ValueRootHashFinalized{
+	ctx.EmitTag(TagUpdate, TagUpdateValue)
+	tagV := ValueFinalized{
 		ID:    runtime.Runtime.ID,
 		Round: roundNr,
 	}
-	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
+	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
 
 func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &api.TxRootHash{}
+	request := &Tx{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("DeliverTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
@@ -309,12 +309,12 @@ func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 }
 
 func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	var st *api.GenesisRootHashState
+	var st *GenesisState
 	ensureGenesis := func() error {
 		var err error
 
 		if st == nil {
-			st = new(api.GenesisRootHashState)
+			st = new(GenesisState)
 			if err = app.state.Genesis().UnmarshalAppState(app.Name(), st); err != nil {
 				st = nil
 			}
@@ -324,9 +324,9 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 	}
 
 	switch other.Name() {
-	case api.RegistryAppName:
+	case registryapp.AppName:
 		for _, pair := range ctx.Tags() {
-			if bytes.Equal(pair.GetKey(), api.TagRegistryRuntimeRegistered) {
+			if bytes.Equal(pair.GetKey(), registryapp.TagRuntimeRegistered) {
 				runtime := pair.GetValue()
 
 				app.logger.Debug("ForeignDeliverTx: new runtime",
@@ -354,7 +354,7 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 	return nil
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *api.GenesisRootHashState) {
+func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *GenesisState) {
 	state := newMutableState(tree)
 
 	// Check if state already exists for the given runtime.
@@ -390,12 +390,12 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 
 	// This transaction now also includes a new block for the given runtime.
 	id, _ := runtime.ID.MarshalBinary()
-	ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-	tagV := api.ValueRootHashFinalized{
+	ctx.EmitTag(TagUpdate, TagUpdateValue)
+	tagV := ValueFinalized{
 		ID:    id,
 		Round: roundNr,
 	}
-	ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
+	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
 
 func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
@@ -467,7 +467,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 func (app *rootHashApplication) executeTx(
 	ctx *abci.Context,
 	tree *iavl.MutableTree,
-	tx *api.TxRootHash,
+	tx *Tx,
 ) error {
 	state := newMutableState(tree)
 
@@ -590,12 +590,12 @@ func (app *rootHashApplication) tryFinalize(
 
 		roundNr, _ := blk.Header.Round.ToU64()
 
-		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-		tagV := api.ValueRootHashFinalized{
+		ctx.EmitTag(TagUpdate, TagUpdateValue)
+		tagV := ValueFinalized{
 			ID:    id,
 			Round: roundNr,
 		}
-		ctx.EmitTag(api.TagRootHashFinalized, tagV.MarshalCBOR())
+		ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 		return
 	case errStillWaiting:
 		if forced {
@@ -636,15 +636,15 @@ func (app *rootHashApplication) tryFinalize(
 			"input_hash", inputHash,
 		)
 
-		ctx.EmitTag(api.TagRootHashUpdate, api.TagRootHashUpdateValue)
-		tagV := api.ValueRootHashDiscrepancyDetected{
+		ctx.EmitTag(TagUpdate, TagUpdateValue)
+		tagV := ValueDiscrepancyDetected{
 			ID: id,
 			Event: roothash.DiscrepancyDetectedEvent{
 				BatchHash:   &inputHash,
 				BlockHeader: &latestBlock.Header,
 			},
 		}
-		ctx.EmitTag(api.TagRootHashDiscrepancyDetected, tagV.MarshalCBOR())
+		ctx.EmitTag(TagDiscrepancyDetected, tagV.MarshalCBOR())
 
 		// Re-arm the timer.  The rust code waits till the first discrepancy
 		// commit to do this, but there is 0 guarantee that said commit will

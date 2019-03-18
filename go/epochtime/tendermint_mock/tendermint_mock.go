@@ -14,8 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/epochtime/api"
-	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	tmepochtime_mock "github.com/oasislabs/ekiden/go/tendermint/apps/epochtime_mock"
+	app "github.com/oasislabs/ekiden/go/tendermint/apps/epochtime_mock"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -47,12 +46,12 @@ func (t *tendermintMockBackend) GetEpoch(ctx context.Context) (api.EpochTime, er
 }
 
 func (t *tendermintMockBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
-	response, err := t.service.Query(tmapi.QueryEpochTimeMockGetEpoch, tmapi.QueryGetEpoch{}, height)
+	response, err := t.service.Query(app.QueryGetEpoch, nil, height)
 	if err != nil {
 		return 0, errors.Wrap(err, "epochtime: get block epoch query failed")
 	}
 
-	var data tmapi.QueryGetEpochResponse
+	var data app.QueryGetEpochResponse
 	if err := cbor.Unmarshal(response, &data); err != nil {
 		return 0, errors.Wrap(err, "epochtime: get block epoch malformed response")
 	}
@@ -85,8 +84,8 @@ func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Sub
 }
 
 func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
-	tx := tmapi.TxEpochTimeMock{
-		TxSetEpoch: &tmapi.TxSetEpoch{
+	tx := app.Tx{
+		TxSetEpoch: &app.TxSetEpoch{
 			Epoch: epoch,
 		},
 	}
@@ -94,7 +93,7 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 	ch, sub := t.WatchEpochs()
 	defer sub.Close()
 
-	if err := t.service.BroadcastTx(tmapi.EpochTimeMockTransactionTag, tx); err != nil {
+	if err := t.service.BroadcastTx(app.TransactionTag, tx); err != nil {
 		return errors.Wrap(err, "epochtime: set epoch failed")
 	}
 
@@ -117,15 +116,15 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 	// Subscribe to transactions which advance the epoch.
 	txChannel := make(chan interface{})
 
-	if err := t.service.Subscribe(ctx, "epochtime-worker", tmapi.QueryEpochTimeMockApp, txChannel); err != nil {
+	if err := t.service.Subscribe(ctx, "epochtime-worker", app.QueryApp, txChannel); err != nil {
 		panic("worker: failed to subscribe")
 	}
-	defer t.service.Unsubscribe(ctx, "epochtime-worker", tmapi.QueryEpochTimeMockApp) // nolint: errcheck
+	defer t.service.Unsubscribe(ctx, "epochtime-worker", app.QueryApp) // nolint: errcheck
 
 	// Populate current epoch (if available).
-	response, err := t.service.Query(tmapi.QueryEpochTimeMockGetEpoch, tmapi.QueryGetEpoch{}, 0)
+	response, err := t.service.Query(app.QueryGetEpoch, nil, 0)
 	if err == nil {
-		var data tmapi.QueryGetEpochResponse
+		var data app.QueryGetEpochResponse
 		if err := cbor.Unmarshal(response, &data); err != nil {
 			panic("worker: malformed current epoch response")
 		}
@@ -163,7 +162,7 @@ func (t *tendermintMockBackend) onEventDataNewBlock(ctx context.Context, ev tmty
 	tags := ev.ResultBeginBlock.GetTags()
 
 	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), tmapi.TagEpochTimeMockEpoch) {
+		if bytes.Equal(pair.GetKey(), app.TagEpoch) {
 			var epoch api.EpochTime
 			if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
 				t.logger.Error("worker: malformed mock epoch",
@@ -201,7 +200,7 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 // New constructs a new mock tendermint backed epochtime Backend instance.
 func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
 	// Initialze and register the tendermint service component.
-	app := tmepochtime_mock.New()
+	app := app.New()
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

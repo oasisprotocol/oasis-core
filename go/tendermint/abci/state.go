@@ -2,6 +2,9 @@ package abci
 
 import "github.com/tendermint/iavl"
 
+// LastID is the highest hex-encoded node/entity/runtime/etc identifier.
+const LastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+
 // ImmutableState is an immutable state wrapper.
 type ImmutableState struct {
 	// Snapshot is the backing immutable iAVL tree snapshot.

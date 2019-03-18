@@ -9,11 +9,14 @@ import (
 )
 
 func TestRegistryMemory(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancelFn := context.WithCancel(context.Background())
 
 	timeSource := mock.New()
 	backend := New(ctx, timeSource)
-	defer backend.Cleanup()
+	defer func() {
+		cancelFn()
+		backend.Cleanup()
+	}()
 
 	tests.RegistryImplementationTests(t, backend, timeSource)
 }

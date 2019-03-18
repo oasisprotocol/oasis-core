@@ -28,6 +28,8 @@ import (
 	roothashAPI "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/scheduler"
 	schedulerAPI "github.com/oasislabs/ekiden/go/scheduler/api"
+	"github.com/oasislabs/ekiden/go/staking"
+	stakingAPI "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
@@ -64,6 +66,7 @@ type Node struct {
 	Registry  registryAPI.Backend
 	RootHash  roothashAPI.Backend
 	Scheduler schedulerAPI.Backend
+	Staking   stakingAPI.Backend
 	Storage   storageAPI.Backend
 	Worker    *worker.Worker
 	Client    *client.Client
@@ -101,6 +104,10 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
+	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.Staking, "staking backend")
 	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
@@ -314,6 +321,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		registry.RegisterFlags,
 		roothash.RegisterFlags,
 		scheduler.RegisterFlags,
+		staking.RegisterFlags,
 		storage.RegisterFlags,
 		tendermint.RegisterFlags,
 		worker.RegisterFlags,

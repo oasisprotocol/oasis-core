@@ -23,11 +23,11 @@ type epochTimeMockApplication struct {
 }
 
 func (app *epochTimeMockApplication) Name() string {
-	return api.EpochTimeMockAppName
+	return AppName
 }
 
 func (app *epochTimeMockApplication) TransactionTag() byte {
-	return api.EpochTimeMockTransactionTag
+	return TransactionTag
 }
 
 func (app *epochTimeMockApplication) Blessed() bool {
@@ -38,7 +38,7 @@ func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState, qu
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryEpochTimeMockGetEpoch, api.QueryGetEpoch{}, app.queryGetEpoch)
+	queryRouter.AddRoute(QueryGetEpoch, nil, app.queryGetEpoch)
 }
 
 func (app *epochTimeMockApplication) OnCleanup() {
@@ -56,7 +56,7 @@ func (app *epochTimeMockApplication) queryGetEpoch(s interface{}, r interface{})
 	state := s.(*immutableState)
 
 	var (
-		response api.QueryGetEpochResponse
+		response QueryGetEpochResponse
 		err      error
 	)
 	response.Epoch, response.Height, err = state.getEpoch()
@@ -68,7 +68,7 @@ func (app *epochTimeMockApplication) queryGetEpoch(s interface{}, r interface{})
 }
 
 func (app *epochTimeMockApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &api.TxEpochTimeMock{}
+	request := &Tx{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("CheckTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
@@ -116,11 +116,11 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 
 	state.setEpoch(future.Epoch, height)
 	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
-	ctx.EmitTag(api.TagEpochTimeMockEpoch, cbor.Marshal(future.Epoch))
+	ctx.EmitTag(TagEpoch, cbor.Marshal(future.Epoch))
 }
 
 func (app *epochTimeMockApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &api.TxEpochTimeMock{}
+	request := &Tx{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("DeliverTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
@@ -145,7 +145,7 @@ func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Ti
 func (app *epochTimeMockApplication) executeTx(
 	ctx *abci.Context,
 	tree *iavl.MutableTree,
-	tx *api.TxEpochTimeMock,
+	tx *Tx,
 ) error {
 	state := newMutableState(tree)
 

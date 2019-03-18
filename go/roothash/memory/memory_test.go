@@ -16,18 +16,26 @@ import (
 )
 
 func TestRootHashMemory(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancelFn := context.WithCancel(context.Background())
+	var cleanupFns []func()
+	defer func() {
+		cancelFn()
+		for _, fn := range cleanupFns {
+			fn()
+		}
+	}()
 
 	timeSource := mock.New()
 	beacon := insecure.New(ctx, timeSource)
 	registry := registry.New(ctx, timeSource)
-	defer registry.Cleanup()
+	cleanupFns = append(cleanupFns, registry.Cleanup)
 	scheduler := trivial.New(ctx, timeSource, registry, beacon, nil)
 	storagePrivKey, _ := signature.NewPrivateKey(rand.Reader)
 	storage := storage.New(timeSource, &storagePrivKey)
-	defer storage.Cleanup()
+	cleanupFns = append(cleanupFns, storage.Cleanup)
 
 	backend := New(ctx, scheduler, registry, nil, 10*time.Second)
+	cleanupFns = append(cleanupFns, backend.Cleanup)
 
 	tests.RootHashImplementationTests(t, backend, timeSource, scheduler, storage, registry)
 }

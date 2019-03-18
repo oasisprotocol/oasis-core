@@ -33,11 +33,11 @@ type beaconApplication struct {
 }
 
 func (app *beaconApplication) Name() string {
-	return api.BeaconAppName
+	return AppName
 }
 
 func (app *beaconApplication) TransactionTag() byte {
-	return api.BeaconTransactionTag
+	return TransactionTag
 }
 
 func (app *beaconApplication) Blessed() bool {
@@ -52,7 +52,7 @@ func (app *beaconApplication) OnRegister(state *abci.ApplicationState, queryRout
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryBeaconGetBeacon, api.QueryGetByEpochRequest{}, app.queryGetBeacon)
+	queryRouter.AddRoute(QueryGetBeacon, api.QueryGetByEpochRequest{}, app.queryGetBeacon)
 }
 
 func (app *beaconApplication) OnCleanup() {
@@ -133,7 +133,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.Gener
 	}
 
 	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
-	ctx.EmitTag(api.TagBeaconGenerated, cbor.Marshal(event))
+	ctx.EmitTag(TagGenerated, cbor.Marshal(event))
 }
 
 // New constructs a new beacon application instance.

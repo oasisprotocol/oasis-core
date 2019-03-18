@@ -19,6 +19,8 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	tmregistry "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	tmroothash "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
 	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 )
 
@@ -139,7 +141,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 // AppendRegistryState appends the registry genesis state given a vector
 // of entity registrations and runtime registrations.
 func AppendRegistryState(st *api.GenesisAppState, entities, runtimes []string, l *logging.Logger) error {
-	regSt := &api.GenesisRegistryState{
+	regSt := &tmregistry.GenesisState{
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
 	}
@@ -189,7 +191,7 @@ func AppendRegistryState(st *api.GenesisAppState, entities, runtimes []string, l
 	}
 
 	if len(regSt.Entities) > 0 || len(regSt.Runtimes) > 0 {
-		st.ABCIAppState[api.RegistryAppName] = cbor.Marshal(regSt)
+		st.ABCIAppState[tmregistry.AppName] = cbor.Marshal(regSt)
 	}
 
 	return nil
@@ -198,7 +200,7 @@ func AppendRegistryState(st *api.GenesisAppState, entities, runtimes []string, l
 // AppendRootHashState appends the roothash genesis state given a vector
 // of exported roothash blocks.
 func AppendRootHashState(st *api.GenesisAppState, roothash []string, l *logging.Logger) error {
-	rootSt := &api.GenesisRootHashState{
+	rootSt := &tmroothash.GenesisState{
 		Blocks: make(map[signature.MapKey]*block.Block),
 	}
 
@@ -236,7 +238,7 @@ func AppendRootHashState(st *api.GenesisAppState, roothash []string, l *logging.
 	}
 
 	if len(rootSt.Blocks) > 0 {
-		st.ABCIAppState[api.RootHashAppName] = cbor.Marshal(rootSt)
+		st.ABCIAppState[tmroothash.AppName] = cbor.Marshal(rootSt)
 	}
 
 	return nil

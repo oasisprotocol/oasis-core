@@ -34,11 +34,11 @@ type registryApplication struct {
 }
 
 func (app *registryApplication) Name() string {
-	return api.RegistryAppName
+	return AppName
 }
 
 func (app *registryApplication) TransactionTag() byte {
-	return api.RegistryTransactionTag
+	return TransactionTag
 }
 
 func (app *registryApplication) Blessed() bool {
@@ -49,12 +49,12 @@ func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRo
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(api.QueryRegistryGetEntity, api.QueryGetByIDRequest{}, app.queryGetEntity)
-	queryRouter.AddRoute(api.QueryRegistryGetEntities, nil, app.queryGetEntities)
-	queryRouter.AddRoute(api.QueryRegistryGetNode, api.QueryGetByIDRequest{}, app.queryGetNode)
-	queryRouter.AddRoute(api.QueryRegistryGetNodes, nil, app.queryGetNodes)
-	queryRouter.AddRoute(api.QueryRegistryGetRuntime, api.QueryGetByIDRequest{}, app.queryGetRuntime)
-	queryRouter.AddRoute(api.QueryRegistryGetRuntimes, nil, app.queryGetRuntimes)
+	queryRouter.AddRoute(QueryGetEntity, api.QueryGetByIDRequest{}, app.queryGetEntity)
+	queryRouter.AddRoute(QueryGetEntities, nil, app.queryGetEntities)
+	queryRouter.AddRoute(QueryGetNode, api.QueryGetByIDRequest{}, app.queryGetNode)
+	queryRouter.AddRoute(QueryGetNodes, nil, app.queryGetNodes)
+	queryRouter.AddRoute(QueryGetRuntime, api.QueryGetByIDRequest{}, app.queryGetRuntime)
+	queryRouter.AddRoute(QueryGetRuntimes, nil, app.queryGetRuntimes)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -102,7 +102,7 @@ func (app *registryApplication) queryGetRuntimes(s interface{}, r interface{}) (
 }
 
 func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &api.TxRegistry{}
+	request := &Tx{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("CheckTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
@@ -122,7 +122,7 @@ func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 }
 
 func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
-	var st api.GenesisRegistryState
+	var st GenesisState
 	if err := abci.UnmarshalGenesisAppState(request, app, &st); err != nil {
 		app.logger.Error("InitChain: failed to unmarshal genesis state",
 			"err", err,
@@ -174,7 +174,7 @@ func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.Requ
 }
 
 func (app *registryApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &api.TxRegistry{}
+	request := &Tx{}
 	if err := cbor.Unmarshal(tx, request); err != nil {
 		app.logger.Error("DeliverTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
@@ -222,14 +222,14 @@ func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 	// Iff any nodes have expired, force-emit the application tag so
 	// the change is picked up.
 	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
-	ctx.EmitTag(api.TagRegistryNodesExpired, cbor.Marshal(expiredNodes))
+	ctx.EmitTag(TagNodesExpired, cbor.Marshal(expiredNodes))
 }
 
 // Execute transaction against given state.
 func (app *registryApplication) executeTx(
 	ctx *abci.Context,
 	tree *iavl.MutableTree,
-	tx *api.TxRegistry,
+	tx *Tx,
 ) error {
 	state := NewMutableState(tree)
 
@@ -275,9 +275,9 @@ func (app *registryApplication) registerEntity(
 			"entity", ent,
 		)
 
-		ctx.EmitTag(api.TagRegistryEntityRegistered, ent.ID)
-		ctx.EmitData(&api.OutputRegistry{
-			OutputRegisterEntity: &api.OutputRegisterEntity{
+		ctx.EmitTag(TagEntityRegistered, ent.ID)
+		ctx.EmitData(&Output{
+			OutputRegisterEntity: &OutputRegisterEntity{
 				Entity: *ent,
 			},
 		})
@@ -315,8 +315,8 @@ func (app *registryApplication) deregisterEntity(
 			"entity_id", id,
 		)
 
-		ctx.EmitData(&api.OutputRegistry{
-			OutputDeregisterEntity: &api.OutputDeregisterEntity{
+		ctx.EmitData(&Output{
+			OutputDeregisterEntity: &OutputDeregisterEntity{
 				Entity: removedEntity,
 				Nodes:  removedNodes,
 			},
@@ -372,8 +372,8 @@ func (app *registryApplication) registerNode(
 			"node", node,
 		)
 
-		ctx.EmitData(&api.OutputRegistry{
-			OutputRegisterNode: &api.OutputRegisterNode{
+		ctx.EmitData(&Output{
+			OutputRegisterNode: &OutputRegisterNode{
 				Node: *node,
 			},
 		})
@@ -418,9 +418,9 @@ func (app *registryApplication) registerRuntime(
 			"runtime", rt,
 		)
 
-		ctx.EmitTag(api.TagRegistryRuntimeRegistered, rt.ID)
-		ctx.EmitData(&api.OutputRegistry{
-			OutputRegisterRuntime: &api.OutputRegisterRuntime{
+		ctx.EmitTag(TagRuntimeRegistered, rt.ID)
+		ctx.EmitData(&Output{
+			OutputRegisterRuntime: &OutputRegisterRuntime{
 				Runtime: *rt,
 			},
 		})
