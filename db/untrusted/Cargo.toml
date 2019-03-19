@@ -16,6 +16,8 @@ ekiden-enclave-untrusted = { path = "../../enclave/untrusted", version = "0.2.0-
 ekiden-instrumentation = { path = "../../instrumentation", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 log = "0.4"
+rustracing = "0.2.0"
+rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.2.0-ekiden1" }
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }

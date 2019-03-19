@@ -6,6 +6,7 @@ extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
 extern crate log;
+extern crate rustracing_jaeger;
 extern crate serde_bytes;
 extern crate sgx_types;
 extern crate tokio_codec;
@@ -14,6 +15,7 @@ extern crate tokio_io;
 extern crate ekiden_core;
 extern crate ekiden_roothash_base;
 extern crate ekiden_storage_base;
+extern crate ekiden_tracing;
 extern crate ekiden_untrusted;
 
 use ekiden_core::{
@@ -24,6 +26,8 @@ use ekiden_core::{
     runtime::batch::CallBatch,
 };
 use ekiden_roothash_base::Block;
+
+use rustracing_jaeger::span::SpanContext;
 
 pub mod codec;
 pub mod impls;
@@ -57,7 +61,12 @@ pub trait Worker: Send + Sync {
     fn rpc_call(&self, request: Vec<u8>) -> BoxFuture<Vec<u8>>;
 
     /// Request the worker to execute a runtime call batch.
-    fn runtime_call_batch(&self, calls: CallBatch, block: Block) -> BoxFuture<ComputedBatch>;
+    fn runtime_call_batch(
+        &self,
+        ctx: Option<SpanContext>,
+        calls: CallBatch,
+        block: Block,
+    ) -> BoxFuture<ComputedBatch>;
 }
 
 /// Interface exposed by the host.

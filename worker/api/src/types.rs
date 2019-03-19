@@ -171,4 +171,7 @@ pub struct Message {
     pub message_type: MessageType,
     /// Message body.
     pub body: Body,
+    /// Opentracing's SpanContext serialized in binary format.
+    #[serde(with = "serde_bytes")]
+    pub span_context: Vec<u8>,
 }

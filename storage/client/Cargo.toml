@@ -7,7 +7,7 @@ keywords = ["ekiden"]
 repository = "https://github.com/oasislabs/ekiden"
 
 [dependencies]
-rustracing = "0.1.7"
+rustracing = "0.2.0"
 grpcio = { version = "~0.4.2", features = ["openssl"] }
 futures = "0.1"
 protobuf = "~2.0"
