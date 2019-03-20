@@ -17,6 +17,9 @@ type Message struct {
 	// be discarded.
 	GroupHash hash.Hash
 
+	// Jaeger's span context in binary format.
+	SpanContext []byte
+
 	Ack   *Ack
 	Error *Error
 

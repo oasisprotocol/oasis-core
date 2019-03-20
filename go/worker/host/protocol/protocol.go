@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/tracing"
 )
 
 // Handler is a protocol message handler.
@@ -86,15 +86,13 @@ func (p *Protocol) MakeRequest(ctx context.Context, body *Body) (<-chan *Body, e
 
 	span := opentracing.SpanFromContext(ctx)
 	scBinary := []byte{}
+	var err error
 	if span != nil {
-		var scBuffer = new(bytes.Buffer)
-		err := span.Tracer().Inject(span.Context(), opentracing.Binary, scBuffer)
+		scBinary, err = tracing.SpanContextToBinary(span.Context())
 		if err != nil {
-			p.logger.Error("error while injecting trace to binary",
+			p.logger.Error("error while marshalling span context",
 				"err", err,
 			)
-		} else if scBuffer.Bytes() != nil {
-			scBinary = scBuffer.Bytes()
 		}
 	}
 
@@ -143,17 +141,17 @@ func (p *Protocol) handleMessage(ctx context.Context, message *Message) {
 		// Import Rust-provided span, if provided.
 		var span = opentracing.SpanFromContext(ctx)
 		if len(message.SpanContext) != 0 {
-			var scReader = bytes.NewReader(message.SpanContext)
-			sc, err := opentracing.GlobalTracer().Extract(opentracing.Binary, scReader)
+			sc, err := tracing.SpanContextFromBinary(message.SpanContext)
 			if err != nil {
-				p.logger.Error("error while extracting span from binary",
+				p.logger.Error("error while unmarshalling span context",
 					"err", err,
 				)
-			}
-			span = opentracing.StartSpan("OCALL", opentracingExt.RPCServerOption(sc))
-			defer span.Finish()
+			} else {
+				span = opentracing.StartSpan("OCALL", opentracingExt.RPCServerOption(sc))
+				defer span.Finish()
 
-			ctx = opentracing.ContextWithSpan(ctx, span)
+				ctx = opentracing.ContextWithSpan(ctx, span)
+			}
 		}
 
 		// Call actual handler.
