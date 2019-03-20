@@ -20,6 +20,9 @@ type NodeDB interface {
 
 	// NewBatch starts a new batch.
 	NewBatch() Batch
+
+	// Close closes the database.
+	Close()
 }
 
 // Batch is a NodeDB-specific batch implementation.
@@ -57,8 +60,8 @@ type Batch interface {
 type nopNodeDB struct{}
 
 // NewNopNodeDB creates a new no-op node database.
-func NewNopNodeDB() NodeDB {
-	return &nopNodeDB{}
+func NewNopNodeDB() (NodeDB, error) {
+	return &nopNodeDB{}, nil
 }
 
 // GetNode returns an ErrNodeNotFound error.
@@ -69,6 +72,10 @@ func (d *nopNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Nod
 // GetValue returns an ErrNodeNotFound error.
 func (d *nopNodeDB) GetValue(id hash.Hash) ([]byte, error) {
 	return nil, ErrNodeNotFound
+}
+
+// Close is a no-op.
+func (d *nopNodeDB) Close() {
 }
 
 // nopBatch is a no-op batch.
