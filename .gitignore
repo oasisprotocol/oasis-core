@@ -5,7 +5,6 @@ target/
 *.o
 *.so
 **/generated
-Cargo.lock
 
 # IDE.
 .idea/*
