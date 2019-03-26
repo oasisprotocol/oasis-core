@@ -10,7 +10,7 @@ use io_context::Context;
 use slog::Logger;
 
 use crate::{
-    common::logger::get_logger,
+    common::{crypto::hash::Hash, logger::get_logger},
     protocol::{Protocol, ProtocolCAS},
     rak::RAK,
     rpc::{
@@ -23,7 +23,7 @@ use crate::{
         StorageContext,
     },
     transaction::{dispatcher::Dispatcher as TxnDispatcher, Context as TxnContext},
-    types::{Body, ComputedBatch},
+    types::{BatchSigMessage, Body, ComputedBatch, BATCH_HASH_CONTEXT},
 };
 
 /// Maximum amount of requests that can be in the dispatcher queue.
@@ -249,7 +249,7 @@ impl Dispatcher {
                     ));
                     let cas = Arc::new(PassthroughCAS::new(cas));
                     let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
-                    let txn_ctx = TxnContext::new(ctx, block.header);
+                    let txn_ctx = TxnContext::new(ctx, &block.header);
                     let outputs = StorageContext::enter(cas.clone(), &mut mkvs, || {
                         txn_dispatcher.dispatch_batch(&calls, txn_ctx)
                     });
@@ -259,10 +259,26 @@ impl Dispatcher {
 
                     debug!(self.logger, "Transaction batch dispatch complete"; "new_state_root" => ?new_state_root);
 
+                    let rak_sig_message = BatchSigMessage {
+                        previous_block: &block,
+                        // (%%% review) aw we allocate a vector to hold the serialized form
+                        input_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&calls).unwrap()),
+                        output_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&outputs).unwrap()),
+                        state_root: &new_state_root,
+                    };
+                    let rak_sig = self
+                        .rak
+                        .sign(
+                            &BATCH_HASH_CONTEXT,
+                            &serde_cbor::to_vec(&rak_sig_message).unwrap(),
+                        )
+                        .unwrap();
+
                     let result = ComputedBatch {
-                        outputs,
+                        outputs: outputs,
                         storage_inserts: cas.take_inserts(),
-                        new_state_root,
+                        new_state_root: new_state_root,
+                        rak_sig,
                     };
 
                     // Send the result back.

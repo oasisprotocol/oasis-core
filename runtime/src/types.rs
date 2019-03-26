@@ -5,10 +5,30 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::common::{
     batch::{CallBatch, OutputBatch},
-    crypto::{hash::Hash, signature::PublicKey},
+    crypto::{
+        hash::Hash,
+        signature::{PublicKey, Signature},
+    },
     roothash::Block,
     sgx::avr::AVR,
 };
+
+/// Batch attestation context.
+#[cfg_attr(not(target_env = "sgx"), allow(unused))]
+pub const BATCH_HASH_CONTEXT: [u8; 8] = *b"EkBatch-";
+
+/// Batch attestation parameters.
+#[derive(Serialize)]
+pub struct BatchSigMessage<'a> {
+    /// The block (partial fields) that we computed this batch on.
+    pub previous_block: &'a Block,
+    /// The hash of the CallBatch.
+    pub input_hash: &'a Hash,
+    /// The hash of the OutputBatch.
+    pub output_hash: &'a Hash,
+    /// The root hash of the state after computing this batch.
+    pub state_root: &'a Hash,
+}
 
 /// Computed batch.
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,6 +39,9 @@ pub struct ComputedBatch {
     pub storage_inserts: Vec<(ByteBuf, u64)>,
     /// New state root hash.
     pub new_state_root: Hash,
+    /// If this runtime uses a TEE, then this is the signature of the batch's
+    /// BatchSigMessage with the node's RAK for this runtime.
+    pub rak_sig: Signature,
 }
 
 /// Worker protocol message body.
