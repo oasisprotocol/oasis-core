@@ -89,7 +89,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 		rs = syncer.NewNopReadSyncer()
 	}
 	if ndb == nil {
-		ndb = db.NewNopNodeDB()
+		ndb, _ = db.NewNopNodeDB()
 	}
 
 	t := &Tree{

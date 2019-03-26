@@ -21,10 +21,10 @@ type memoryNodeDB struct {
 }
 
 // NewMemoryNodeDB creates a new in-memory node database.
-func NewMemoryNodeDB() NodeDB {
+func NewMemoryNodeDB() (NodeDB, error) {
 	return &memoryNodeDB{
 		items: make(map[hash.Hash]*memoryItem),
-	}
+	}, nil
 }
 
 func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
@@ -53,6 +53,9 @@ func (d *memoryNodeDB) GetValue(id hash.Hash) ([]byte, error) {
 	}
 
 	return item.([]byte), nil
+}
+
+func (d *memoryNodeDB) Close() {
 }
 
 func (d *memoryNodeDB) putLocked(id hash.Hash, item interface{}) error {

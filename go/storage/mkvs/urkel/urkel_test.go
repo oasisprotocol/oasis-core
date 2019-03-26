@@ -3,6 +3,8 @@ package urkel
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -17,8 +19,7 @@ const (
 	allItemsRoot = "fecf46042f82fd1ec38c9f5ee40f941d8a147976d51b59f4c16bc5c0467c7f4f"
 )
 
-func TestBasic(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testBasic(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	keyZero := []byte("foo")
@@ -79,8 +80,7 @@ func TestBasic(t *testing.T) {
 	require.Equal(t, log[0].Type(), LogDelete)
 }
 
-func TestInsertCommitBatch(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testInsertCommitBatch(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	keys, values := generateKeyValuePairs()
@@ -98,8 +98,7 @@ func TestInsertCommitBatch(t *testing.T) {
 	require.Equal(t, allItemsRoot, root.String())
 }
 
-func TestInsertCommitEach(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testInsertCommitEach(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	keys, values := generateKeyValuePairs()
@@ -120,8 +119,7 @@ func TestInsertCommitEach(t *testing.T) {
 	require.Equal(t, allItemsRoot, root.String())
 }
 
-func TestRemove(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testRemove(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	var roots []hash.Hash
@@ -158,8 +156,7 @@ func TestRemove(t *testing.T) {
 	require.True(t, root.IsEmpty())
 }
 
-func TestSyncerBasic(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	keys, values := generateKeyValuePairs()
@@ -208,8 +205,7 @@ func TestSyncerBasic(t *testing.T) {
 	require.Equal(t, 10000, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
-func TestValueEviction(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb, Capacity(0, 1024))
 
 	keys, values := generateKeyValuePairs()
@@ -228,8 +224,7 @@ func TestValueEviction(t *testing.T) {
 	require.EqualValues(t, 1021, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
-func TestNodeEviction(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb, Capacity(1000, 0))
 
 	keys, values := generateKeyValuePairs()
@@ -249,8 +244,7 @@ func TestNodeEviction(t *testing.T) {
 	require.EqualValues(t, 4050, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
-func TestDebugDump(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testDebugDump(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	err := tree.Insert([]byte("foo 1"), []byte("bar 1"))
@@ -265,8 +259,7 @@ func TestDebugDump(t *testing.T) {
 	require.True(t, len(buffer.Bytes()) > 0)
 }
 
-func TestDebugStats(t *testing.T) {
-	ndb := db.NewMemoryNodeDB()
+func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	tree := New(nil, ndb)
 
 	keys, values := generateKeyValuePairs()
@@ -306,6 +299,87 @@ func TestDebugStats(t *testing.T) {
 // TODO: More tests for write logs.
 // TODO: More tests with bad syncer outputs.
 
+func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interface{}), finiBackend func(t *testing.T, ndb db.NodeDB, custom interface{})) {
+	t.Run("Basic", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testBasic(t, backend)
+	})
+	t.Run("InsertCommitBatch", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testInsertCommitBatch(t, backend)
+	})
+	t.Run("InsertCommitEach", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testInsertCommitEach(t, backend)
+	})
+	t.Run("Remove", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testRemove(t, backend)
+	})
+	t.Run("SyncerBasic", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testSyncerBasic(t, backend)
+	})
+	t.Run("ValueEviction", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testValueEviction(t, backend)
+	})
+	t.Run("NodeEviction", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testNodeEviction(t, backend)
+	})
+	t.Run("DebugDump", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testDebugDump(t, backend)
+	})
+	t.Run("DebugStats", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testDebugStats(t, backend)
+	})
+}
+
+func TestUrkelMemoryBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
+		// Create a memory-backed Node DB.
+		ndb, _ := db.NewMemoryNodeDB()
+		return ndb, nil
+	},
+		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
+			ndb.Close()
+		})
+}
+
+func TestUrkelLevelDBBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := ioutil.TempDir("", "mkvs.test.leveldb")
+		require.NoError(t, err, "TempDir")
+
+		// Create a LevelDB-backed Node DB.
+		ndb, err := db.NewLevelDBNodeDB(dir)
+		require.NoError(t, err, "NewLevelDBNodeDB")
+
+		return ndb, dir
+	},
+		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
+			ndb.Close()
+
+			dir, ok := custom.(string)
+			require.True(t, ok, "finiBackend")
+
+			os.RemoveAll(dir)
+		})
+}
+
 func BenchmarkInsertCommitBatch1(b *testing.B) {
 	benchmarkInsertBatch(b, 1, true)
 }
@@ -340,7 +414,7 @@ func BenchmarkInsertNoCommitBatch1000(b *testing.B) {
 
 func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	for n := 0; n < b.N; n++ {
-		ndb := db.NewMemoryNodeDB()
+		ndb, _ := db.NewMemoryNodeDB()
 		tree := New(nil, ndb)
 
 		for i := 0; i < numValues; i++ {
