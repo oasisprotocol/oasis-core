@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
+	"github.com/oasislabs/deoxysii"
 	"github.com/oasislabs/ekiden/go/common/crypto/mrae/gen_vectors/testvector"
 	"github.com/oasislabs/ekiden/go/common/crypto/mrae/sivaessha2"
 )
@@ -29,6 +30,12 @@ func main() {
 			ctor:      sivaessha2.New,
 			keySize:   sivaessha2.KeySize,
 			nonceSize: sivaessha2.NonceSize,
+		},
+		{
+			name:      "Deoxys-II-256-128",
+			ctor:      deoxysii.New,
+			keySize:   deoxysii.KeySize,
+			nonceSize: deoxysii.NonceSize,
 		},
 	}
 
