@@ -81,12 +81,16 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 		return err
 	}
 
-	// Check the commitment signature and de-serialize into header.
+	// Check the commitment signature and RAK signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
 		return err
 	}
-	header := openCom.Header
+	message := openCom.Message
+	// TODO: retrieve the node's RAK for this runtime
+	// TODO: assemble the BatchSigMessage
+	// TODO: verify message.RakSig
+	header := &message.Header
 
 	// Ensure the node did not already submit a commitment.
 	if _, ok := r.roundState.commitments[id]; ok {
@@ -180,7 +184,7 @@ func (r *round) forceBackupTransition() error {
 		}
 
 		r.roundState.state = stateDiscrepancyWaitingCommitments
-		return errDiscrepancyDetected(commit.Header.InputHash)
+		return errDiscrepancyDetected(commit.Message.Header.InputHash)
 	}
 
 	return fmt.Errorf("roothash/memory: no input hash available for backup transition")
@@ -201,12 +205,12 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		}
 
 		if header == nil {
-			header = commit.Header
+			header = &commit.Message.Header
 		}
 		if node.Role == scheduler.Leader {
-			leaderHeader = commit.Header
+			leaderHeader = &commit.Message.Header
 		}
-		if !header.MostlyEqual(commit.Header) {
+		if !header.MostlyEqual(&commit.Message.Header) {
 			discrepancyDetected = true
 		}
 	}
@@ -238,10 +242,10 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		k := commit.Header.EncodedHash()
+		k := commit.Message.Header.EncodedHash()
 		if ent, ok := votes[k]; !ok {
 			votes[k] = &voteEnt{
-				header: commit.Header,
+				header: &commit.Message.Header,
 				tally:  1,
 			}
 		} else {

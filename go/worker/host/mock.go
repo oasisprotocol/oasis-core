@@ -58,6 +58,7 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 					Outputs:      rq.Calls,
 					NewStateRoot: stateRoot,
 				},
+				// No RakSig in mock reponse.
 			}}
 		default:
 			ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) method not supported"}}

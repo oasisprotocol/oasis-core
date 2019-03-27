@@ -12,11 +12,27 @@ import (
 
 var (
 	// SignatureContext is the signature context used to sign commitments.
-	SignatureContext = []byte("EkCommit")
+	SignatureContext = []byte("EkCommi2")
 
 	_ cbor.Marshaler   = (*Commitment)(nil)
 	_ cbor.Unmarshaler = (*Commitment)(nil)
 )
+
+// Message holds the data signed in a commitment
+type Message struct {
+	Header block.Header
+	RakSig signature.RawSignature
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (m *Message) MarshalCBOR() []byte {
+	return cbor.Marshal(m)
+}
+
+// UnmarshalCBOR decodes a CBOR marshaled message.
+func (m *Message) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, m)
+}
 
 // Commitment is a roothash commitment.
 type Commitment struct {
@@ -29,7 +45,7 @@ type Commitment struct {
 type OpenCommitment struct {
 	Commitment
 
-	Header *block.Header `codec:"header"`
+	Message *Message `codec:"message"`
 }
 
 // FromOpaqueCommitment deserializes a opaque commitment into a commitment.
@@ -42,22 +58,22 @@ func (c *Commitment) ToOpaqueCommitment() *api.OpaqueCommitment {
 	return &api.OpaqueCommitment{Data: c.MarshalCBOR()}
 }
 
-// Open validates the commitment signature, and de-serializes the header.
+// Open validates the commitment signature, and de-serializes the message. This does not validate the RAK signature.
 func (c *Commitment) Open() (*OpenCommitment, error) {
-	var header block.Header
-	if err := c.Signed.Open(SignatureContext, &header); err != nil {
+	var message Message
+	if err := c.Signed.Open(SignatureContext, &message); err != nil {
 		return nil, errors.New("roothash/commitment: commitment has invalid signature")
 	}
 
 	return &OpenCommitment{
 		Commitment: *c,
-		Header:     &header,
+		Message:    &message,
 	}, nil
 }
 
-// SignCommitment serializes the header and signs the commitment.
-func SignCommitment(privateKey signature.PrivateKey, header *block.Header) (*Commitment, error) {
-	signed, err := signature.SignSigned(privateKey, SignatureContext, header)
+// SignCommitment serializes the message and signs the commitment.
+func SignCommitment(privateKey signature.PrivateKey, message *Message) (*Commitment, error) {
+	signed, err := signature.SignSigned(privateKey, SignatureContext, message)
 	if err != nil {
 		return nil, err
 	}
