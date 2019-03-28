@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -33,32 +34,37 @@ const (
 	stateDiscrepancyWaitingCommitments
 )
 
+type nodeInfo struct {
+	committeeNode *scheduler.CommitteeNode
+	runtime       *node.Runtime
+}
+
 type roundState struct {
 	runtime          *registry.Runtime
 	committee        *scheduler.Committee
-	computationGroup map[signature.MapKey]*scheduler.CommitteeNode
+	computationGroup map[signature.MapKey]nodeInfo
 	commitments      map[signature.MapKey]*commitment.OpenCommitment
 	currentBlock     *block.Block
 	state            state
 }
 
 func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, error) {
-	node, ok := s.computationGroup[id]
+	ni, ok := s.computationGroup[id]
 	if !ok {
 		return scheduler.Invalid, errors.New("roothash/memory: node not part of computation group")
 	}
 
 	switch s.state {
 	case stateWaitingCommitments:
-		ok = node.Role == scheduler.Worker || node.Role == scheduler.Leader
+		ok = ni.committeeNode.Role == scheduler.Worker || ni.committeeNode.Role == scheduler.Leader
 	case stateDiscrepancyWaitingCommitments:
-		ok = node.Role == scheduler.BackupWorker
+		ok = ni.committeeNode.Role == scheduler.BackupWorker
 	}
 	if !ok {
 		return scheduler.Invalid, errors.New("roothash/memory: node has incorrect role for current state")
 	}
 
-	return node.Role, nil
+	return ni.committeeNode.Role, nil
 }
 
 func (s *roundState) reset() {
@@ -173,8 +179,8 @@ func (r *round) forceBackupTransition() error {
 	}
 
 	// Find the Leader's batch hash based on the existing commitments.
-	for id, node := range r.roundState.computationGroup {
-		if node.Role != scheduler.Leader {
+	for id, ni := range r.roundState.computationGroup {
+		if ni.committeeNode.Role != scheduler.Leader {
 			continue
 		}
 
@@ -194,8 +200,8 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 	var header, leaderHeader *block.Header
 	var discrepancyDetected bool
 
-	for id, node := range r.roundState.computationGroup {
-		if node.Role != scheduler.Worker && node.Role != scheduler.Leader {
+	for id, ni := range r.roundState.computationGroup {
+		if ni.committeeNode.Role != scheduler.Worker && ni.committeeNode.Role != scheduler.Leader {
 			continue
 		}
 
@@ -207,7 +213,7 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		if header == nil {
 			header = &commit.Message.Header
 		}
-		if node.Role == scheduler.Leader {
+		if ni.committeeNode.Role == scheduler.Leader {
 			leaderHeader = &commit.Message.Header
 		}
 		if !header.MostlyEqual(&commit.Message.Header) {
@@ -231,8 +237,8 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 
 	votes := make(map[hash.Hash]*voteEnt)
 	var backupNodes int
-	for id, node := range r.roundState.computationGroup {
-		if node.Role != scheduler.BackupWorker {
+	for id, ni := range r.roundState.computationGroup {
+		if ni.committeeNode.Role != scheduler.BackupWorker {
 			continue
 		}
 		backupNodes++
@@ -273,13 +279,13 @@ func (r *round) checkCommitments() error {
 	wantPrimary := r.roundState.state == stateWaitingCommitments
 
 	var commits, required int
-	for id, node := range r.roundState.computationGroup {
+	for id, ni := range r.roundState.computationGroup {
 		var check bool
 		switch wantPrimary {
 		case true:
-			check = node.Role == scheduler.Worker || node.Role == scheduler.Leader
+			check = ni.committeeNode.Role == scheduler.Worker || ni.committeeNode.Role == scheduler.Leader
 		case false:
-			check = node.Role == scheduler.BackupWorker
+			check = ni.committeeNode.Role == scheduler.BackupWorker
 		}
 		if !check {
 			continue
@@ -306,14 +312,9 @@ func (r *round) checkCommitments() error {
 	return nil
 }
 
-func newRound(ctx context.Context, runtime *registry.Runtime, committee *scheduler.Committee, block *block.Block) *round {
+func newRound(ctx context.Context, runtime *registry.Runtime, committee *scheduler.Committee, computationGroup map[signature.MapKey]nodeInfo, block *block.Block) *round {
 	if committee.Kind != scheduler.Compute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
-	}
-
-	computationGroup := make(map[signature.MapKey]*scheduler.CommitteeNode)
-	for _, node := range committee.Members {
-		computationGroup[node.PublicKey.ToMapKey()] = node
 	}
 
 	state := &roundState{
