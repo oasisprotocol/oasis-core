@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/opentracing/opentracing-go"
+	opentracingExt "github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -11,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/tracing"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -269,6 +272,17 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 		return err
 	}
 
+	// Import SpanContext from the message and store it in the current Context.
+	if message.SpanContext != nil {
+		sc, err := tracing.SpanContextFromBinary(message.SpanContext)
+		if err == nil {
+			parentSpan := opentracing.StartSpan("parent", opentracingExt.RPCServerOption(sc))
+			span := opentracing.StartSpan("HandleBatch", opentracing.FollowsFrom(parentSpan.Context()))
+			defer span.Finish()
+			ctx = opentracing.ContextWithSpan(ctx, span)
+		}
+	}
+
 	if message.LeaderBatchDispatch != nil {
 		bd := message.LeaderBatchDispatch
 		return g.handler.HandleBatchFromCommittee(ctx, bd.BatchHash, bd.Header)
@@ -278,7 +292,7 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 }
 
 // PublishBatch publishes a batch to all members in the committee.
-func (g *Group) PublishBatch(batchHash hash.Hash, hdr block.Header) error {
+func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash hash.Hash, hdr block.Header) error {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -287,6 +301,11 @@ func (g *Group) PublishBatch(batchHash hash.Hash, hdr block.Header) error {
 	}
 
 	pubCtx := g.activeEpoch.roundCtx
+
+	var scBinary []byte
+	if batchSpanCtx != nil {
+		scBinary, _ = tracing.SpanContextToBinary(batchSpanCtx)
+	}
 
 	// Publish batch to all workers in the committee.
 	for index, member := range g.activeEpoch.committee.Members {
@@ -302,6 +321,7 @@ func (g *Group) PublishBatch(batchHash hash.Hash, hdr block.Header) error {
 				BatchHash: batchHash,
 				Header:    hdr,
 			},
+			SpanContext: scBinary,
 		})
 	}
 

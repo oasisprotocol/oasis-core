@@ -219,8 +219,9 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 
 	err := handler.HandlePeerMessage(rawPeerID, message)
 	response := &Message{
-		RuntimeID: message.RuntimeID,
-		GroupHash: message.GroupHash,
+		RuntimeID:   message.RuntimeID,
+		GroupHash:   message.GroupHash,
+		SpanContext: nil,
 	}
 	if err == nil {
 		response.Ack = &Ack{}

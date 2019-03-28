@@ -129,10 +129,10 @@ type Config struct {
 // ExternalBatch is an internal request to the worker goroutine that signals
 // an external batch has been received.
 type externalBatch struct {
-	batch  runtime.Batch
-	header block.Header
-	ch     chan<- error
-	span   opentracing.Span
+	batch   runtime.Batch
+	header  block.Header
+	ch      chan<- error
+	spanCtx opentracing.SpanContext
 }
 
 // Node is a committee node.
@@ -165,7 +165,7 @@ type Node struct {
 	state          NodeState
 	currentBlock   *block.Block
 	batchStartTime time.Time
-	batchSpan      opentracing.Span
+	batchSpanCtx   opentracing.SpanContext
 
 	stateTransitions *pubsub.Broker
 
@@ -253,18 +253,17 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 		return nil, errIncomatibleHeader
 	}
 
-	batchSpan := opentracing.StartSpan("QueueExternalBatch(batchHash, header)",
-		opentracing.Tag{Key: "batchHash", Value: batchHash},
-		opentracing.Tag{Key: "header", Value: hdr},
-	)
-
 	// Fetch batch from storage.
 	var k storage.Key
 	copy(k[:], batchHash[:])
 
+	var batchSpanCtx opentracing.SpanContext
+	if batchSpan := opentracing.SpanFromContext(ctx); batchSpan != nil {
+		batchSpanCtx = batchSpan.Context()
+	}
 	span, ctx := tracing.StartSpanWithContext(ctx, "Get(batchHash)",
 		opentracing.Tag{Key: "batchHash", Value: k},
-		opentracing.ChildOf(batchSpan.Context()),
+		opentracing.ChildOf(batchSpanCtx),
 	)
 	raw, err := n.storage.Get(ctx, k)
 	span.Finish()
@@ -286,7 +285,7 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 	respCh := make(chan error, 1)
 
 	select {
-	case n.incomingExtBatch <- &externalBatch{batch, hdr, respCh, batchSpan}:
+	case n.incomingExtBatch <- &externalBatch{batch, hdr, respCh, batchSpanCtx}:
 	case <-ctx.Done():
 		return nil, context.Canceled
 	}
@@ -475,7 +474,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 
 		span := opentracing.StartSpan("CallBatch(rq)",
 			opentracing.Tag{Key: "rq", Value: rq},
-			opentracing.ChildOf(n.batchSpan.Context()),
+			opentracing.ChildOf(n.batchSpanCtx),
 		)
 		ctx = opentracing.ContextWithSpan(ctx, span)
 		defer span.Finish()
@@ -586,7 +585,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		span, ctx := tracing.StartSpanWithContext(n.ctx, "InsertBatch(outputs, state)",
 			opentracing.Tag{Key: "outputs", Value: batch.Outputs},
 			opentracing.Tag{Key: "storageInserts", Value: batch.StorageInserts},
-			opentracing.ChildOf(n.batchSpan.Context()),
+			opentracing.ChildOf(n.batchSpanCtx),
 		)
 		defer span.Finish()
 
@@ -657,9 +656,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 
 	n.transition(StateWaitingForFinalize{})
 
-	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(n.batchSpan.Context()))
-	// Also close the parent span after roothash.Commit.
-	defer n.batchSpan.Finish()
+	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(n.batchSpanCtx))
 	defer span.Finish()
 
 	if err := n.roothash.Commit(n.ctx, n.runtimeID, commit.ToOpaqueCommitment()); err != nil {
@@ -734,13 +731,15 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}()
 
 	// Leader node opens a new parent span for batch processing.
-	n.batchSpan = opentracing.StartSpan("TakeBatchFromQueue(batch)",
+	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)",
 		opentracing.Tag{Key: "batch", Value: batch},
 	)
+	defer batchSpan.Finish()
+	n.batchSpanCtx = batchSpan.Context()
 
 	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Insert(batch)",
 		opentracing.Tag{Key: "batch", Value: batch},
-		opentracing.ChildOf(n.batchSpan.Context()),
+		opentracing.ChildOf(n.batchSpanCtx),
 	)
 
 	// Commit batch to storage.
@@ -760,9 +759,9 @@ func (n *Node) checkIncomingQueue(force bool) {
 	spanPublish := opentracing.StartSpan("Publish(batchHash, header)",
 		opentracing.Tag{Key: "batchHash", Value: batchID},
 		opentracing.Tag{Key: "header", Value: n.currentBlock.Header},
-		opentracing.ChildOf(n.batchSpan.Context()),
+		opentracing.ChildOf(n.batchSpanCtx),
 	)
-	if err := n.group.PublishBatch(batchID, n.currentBlock.Header); err != nil {
+	if err := n.group.PublishBatch(n.batchSpanCtx, batchID, n.currentBlock.Header); err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
@@ -792,7 +791,7 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 	}
 
 	// Set the Worker node's batchSpan from the obtained external batch.
-	n.batchSpan = batch.span
+	n.batchSpanCtx = batch.spanCtx
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.currentBlock.Header.MostlyEqual(&batch.header) {
