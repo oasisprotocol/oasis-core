@@ -12,6 +12,8 @@ import (
 	"math"
 
 	aes "git.schwanenlied.me/yawning/bsaes.git"
+
+	"github.com/oasislabs/ekiden/go/common/crypto/mrae/api"
 )
 
 const (
@@ -142,9 +144,9 @@ func (s *sivImpl) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, e
 	return ret, nil
 }
 
-func (s *sivImpl) reset() {
-	bzero(s.macKey)
-	bzero(s.ctrKey)
+func (s *sivImpl) Reset() {
+	api.Bzero(s.macKey)
+	api.Bzero(s.ctrKey)
 }
 
 // New creates a new cipher.AEAD instance using SIV_CTR-AES128_HMAC-SHA256-128
@@ -158,12 +160,6 @@ func New(key []byte) (cipher.AEAD, error) {
 		macKey: append([]byte{}, key[:32]...),
 		ctrKey: append([]byte{}, key[32:]...),
 	}, nil
-}
-
-func bzero(s []byte) {
-	for i := range s {
-		s[i] = 0
-	}
 }
 
 func writeLenVec(w io.Writer, aadLen, pLen int) error {

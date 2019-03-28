@@ -1,6 +1,4 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
-git.schwanenlied.me/yawning/bsaes.git v0.0.0-20180720073208-c0276d75487e h1:F2x1bq7RaNCIuqYpswggh1+c1JmwdnkHNC9wy1KDip0=
-git.schwanenlied.me/yawning/bsaes.git v0.0.0-20180720073208-c0276d75487e/go.mod h1:BWqTsj8PgcPriQJGl7el20J/7TuT1d/hSyFDXMEpoEo=
 git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524 h1:3B5PpS7NH4T9e72UFa6zmELvhiWruHsbCk3DlUQy3lM=
 git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524/go.mod h1:czIYL5oOHGvdIqJkLNwgrRuyokWt3eubQHZ1yQcs5VM=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
@@ -317,6 +315,8 @@ github.com/multiformats/go-multistream v0.0.0-00000000000000-0e509f6b999d/go.mod
 github.com/multiformats/go-multistream v0.3.9 h1:ZqVaUxtVzjRUCGaO3596vk/rj9UXheIGAdKXXo/VKUA=
 github.com/multiformats/go-multistream v0.3.9/go.mod h1:fJTiDfXJVmItycydCnNx4+wSzZ5NwG2FEVAI30fiovg=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
+github.com/oasislabs/deoxysii v0.0.0-20190327111415-34b555e1c03c h1:cgMjlA7od0NfM7wNbk+NQr8GAAXq82kpYDh/mv1NAqc=
+github.com/oasislabs/deoxysii v0.0.0-20190327111415-34b555e1c03c/go.mod h1:lYp+eM7TUm0n0T/KE8FyKXLC226gDx7/UlGTUAO6W/4=
 github.com/oasislabs/iavl v0.12.0-ekiden2 h1:kzdp6OTHYrn8TXlAo+2NsL84Qi2gqydFvjhWQZ/H9GM=
 github.com/oasislabs/iavl v0.12.0-ekiden2/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
@@ -410,8 +410,8 @@ github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7/go.
 github.com/whyrusleeping/yamux v1.1.5 h1:4CK3aUUJQu0qpKZv5gEWJjNOQtdbdDhVVS6PJ+HimdE=
 github.com/whyrusleeping/yamux v1.1.5/go.mod h1:E8LnQQ8HKx5KD29HZFUwM1PxCOdPRzGwur1mcYhXcD8=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
-github.com/yawning/bsaes v0.0.0-20180720073208-c0276d75487e h1:iNf2dXyfsFkWKqRMDf4LRcQnAYXBcdKeBKby/mgBf7A=
-github.com/yawning/bsaes v0.0.0-20180720073208-c0276d75487e/go.mod h1:Bb2B6frTcZ7ENcY8EkrWfco1TDSju9uvZS7Edpud4hg=
+github.com/yawning/bsaes v0.0.0-20190320102049-26d1add596b6 h1:XiURQ8aOK64ZQZo3A9CcH6HBPXHO1jQYKmojVZt1B1o=
+github.com/yawning/bsaes v0.0.0-20190320102049-26d1add596b6/go.mod h1:Bb2B6frTcZ7ENcY8EkrWfco1TDSju9uvZS7Edpud4hg=
 github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524 h1:mVjIWxguYcKYzB/1FPRwDr2BtjUKazQhmwjVSo5qpRI=
 github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524/go.mod h1:lsPnsCcmF/7g2/YABGVu2x5c3kTGkACLD3Gs2xMvFxw=
 go.etcd.io/bbolt v1.3.2 h1:Z/90sZLPOeCy2PwprqkFa25PdkusRzaj9P8zm/KNyvk=

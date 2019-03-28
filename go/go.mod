@@ -1,7 +1,7 @@
 module github.com/oasislabs/ekiden/go
 
 replace (
-	git.schwanenlied.me/yawning/bsaes.git => github.com/yawning/bsaes v0.0.0-20180720073208-c0276d75487e
+	git.schwanenlied.me/yawning/bsaes.git => github.com/yawning/bsaes v0.0.0-20190320102049-26d1add596b6
 	git.schwanenlied.me/yawning/dynlib.git => github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524
 	github.com/ipfs/go-cid => github.com/ipfs/go-cid v0.0.0-00000000000000-6e296c5c49ad
 	github.com/ipfs/go-ipfs-util => github.com/ipfs/go-ipfs-util v0.0.0-00000000000000-10d786c5ed85
@@ -49,7 +49,7 @@ replace (
 )
 
 require (
-	git.schwanenlied.me/yawning/bsaes.git v0.0.0-20180720073208-c0276d75487e
+	git.schwanenlied.me/yawning/bsaes.git v0.0.0-20190320102049-26d1add596b6
 	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/Netflix/go-expect v0.0.0-20180928190340-9d1f4485533b // indirect
@@ -122,6 +122,7 @@ require (
 	github.com/multiformats/go-multiaddr v1.4.0
 	github.com/multiformats/go-multibase v0.3.0 // indirect
 	github.com/multiformats/go-multistream v0.3.9 // indirect
+	github.com/oasislabs/deoxysii v0.0.0-20190327111415-34b555e1c03c
 	github.com/opentracing/opentracing-go v1.0.2
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.2
