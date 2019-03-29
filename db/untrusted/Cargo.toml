@@ -17,7 +17,7 @@ ekiden-instrumentation = { path = "../../instrumentation", version = "0.2.0-alph
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 log = "0.4"
 rustracing = "0.2.0"
-rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.2.0-ekiden1" }
+rustracing_jaeger = "0.2.1"
 
 [build-dependencies]
 ekiden-tools = { path = "../../tools", version = "0.2.0-alpha" }
