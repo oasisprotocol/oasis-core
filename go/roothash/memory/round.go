@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -19,6 +20,7 @@ import (
 var (
 	errStillWaiting      = errors.New("roothash/memory: still waiting for commits")
 	errInsufficientVotes = errors.New("roothash/memory: insufficient votes to finalize discrepancy resolution round")
+	errRakSigInvalid     = errors.New("roothash/memory: batch RAK signature invalid")
 )
 
 type errDiscrepancyDetected hash.Hash
@@ -93,10 +95,19 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 		return err
 	}
 	message := openCom.Message
-	// TODO: retrieve the node's RAK for this runtime
-	// TODO: assemble the BatchSigMessage
-	// TODO: verify message.RakSig
 	header := &message.Header
+	if r.roundState.runtime.TEEHardware != node.TEEHardwareInvalid {
+		rak := r.roundState.computationGroup[id].runtime.Capabilities.TEE.RAK
+		batchSigMessage := block.BatchSigMessage{
+			InputHash:  header.InputHash,
+			OutputHash: header.OutputHash,
+			StateRoot:  header.StateRoot,
+		}
+		batchSigMessage.PreviousBlock.FromFull(r.roundState.currentBlock)
+		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), message.RakSig[:]) {
+			return errRakSigInvalid
+		}
+	}
 
 	// Ensure the node did not already submit a commitment.
 	if _, ok := r.roundState.commitments[id]; ok {
