@@ -252,7 +252,10 @@ impl<'a> EnclaveBuilder<'a> {
             .args(&self.cargo_args)
             .env(
                 "RUSTFLAGS",
-                format!("-Z force-unstable-if-unmarked {}", user_rustflags),
+                format!(
+                    "-C target-feature=+aes,+sse2,+sse3,+ssse3,+avx,+avx2 -Z force-unstable-if-unmarked {}",
+                    user_rustflags
+                ),
             )
             .env("RUST_TARGET_PATH", &self.build_path)
             .env("CARGO_TARGET_DIR", &self.target_path)

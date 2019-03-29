@@ -29,6 +29,7 @@ serde_derive = "1.0"
 serde_cbor = { git = "https://github.com/oasislabs/cbor", tag = "v0.9.0-ekiden1" }
 serde_bytes = "~0.10"
 log = "0.4"
+zeroize = "0.6.0"
 
 [target.'cfg(target_env = "sgx")'.dependencies]
 futures-sgx = { git = "https://github.com/oasislabs/futures-rs" }
