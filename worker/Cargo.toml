@@ -23,7 +23,7 @@ ekiden-storage-base = { path = "../storage/base", version = "0.2.0-alpha" }
 ekiden-storage-batch = { path = "../storage/batch", version = "0.2.0-alpha" }
 protobuf = "~2.0"
 rustracing = "0.2.0"
-rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.2.0-ekiden1" }
+rustracing_jaeger = "0.2.1"
 sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.5-ekiden1" }
 thread_local = "0.3.5"
 clap = "2.29.1"

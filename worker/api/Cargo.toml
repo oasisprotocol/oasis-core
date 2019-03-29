@@ -13,7 +13,7 @@ ekiden-roothash-base = { path = "../../roothash/base", version = "0.2.0-alpha" }
 ekiden-storage-base = { path = "../../storage/base", version = "0.2.0-alpha" }
 ekiden-tracing = { path = "../../tracing", version = "0.2.0-alpha" }
 rustracing = "0.2.0"
-rustracing_jaeger = { git = "https://github.com/oasislabs/rustracing_jaeger.git", tag = "0.2.0-ekiden1" }
+rustracing_jaeger = "0.2.1"
 sgx_types = { git = "https://github.com/oasislabs/rust-sgx-sdk", tag = "v1.0.5-ekiden1" }
 serde = "1.0.71"
 serde_derive = "1.0"
