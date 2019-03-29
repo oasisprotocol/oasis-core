@@ -362,6 +362,29 @@ func (h *Header) VerifyStorageReceipt(receipt *storage.Receipt) error {
 	return nil
 }
 
+// ReducedHeader is a subset of Header that is available in the runtime.
+// Keep this in sync with /runtime/src/common/roothash.rs.
+type ReducedHeader struct {
+	// Timestamp is the block timestamp (POSIX time).
+	Timestamp uint64 `codec:"timestamp"`
+	// StateRoot is the state root hash.
+	StateRoot hash.Hash `codec:"state_root"`
+}
+
+// FromFull puts together a ReducedHeader from a full Header.
+func (rh *ReducedHeader) FromFull(header *Header) {
+	rh.Timestamp = header.Timestamp
+	rh.StateRoot = header.StateRoot
+}
+
+// BatchSigMessage is batch attestation parameters.
+type BatchSigMessage struct {
+	PreviousBlock ReducedBlock `codec:"previous_block"`
+	InputHash     hash.Hash    `codec:"input_hash"`
+	OutputHash    hash.Hash    `codec:"output_hash"`
+	StateRoot     hash.Hash    `codec:"state_root"`
+}
+
 func memIsZero(b []byte) bool {
 	var acc byte
 
