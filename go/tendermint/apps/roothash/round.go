@@ -20,6 +20,7 @@ import (
 var (
 	errStillWaiting      = errors.New("tendermint/roothash: still waiting for commits")
 	errInsufficientVotes = errors.New("tendermint/roothash: insufficient votes to finalize discrepancy resolution round")
+	errRakSigInvalid     = errors.New("tendermint/roothash: batch RAK signature invalid")
 
 	_ cbor.Marshaler   = (*round)(nil)
 	_ cbor.Unmarshaler = (*round)(nil)
@@ -86,7 +87,7 @@ type round struct {
 	DidTimeout bool        `codec:"did_timeout"`
 }
 
-func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commitment) error {
+func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commitment, runtime *registry.Runtime) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -101,10 +102,19 @@ func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commit
 		return err
 	}
 	message := openCom.Message
-	// TODO: retrieve the node's RAK for this runtime
-	// TODO: assemble the BatchSigMessage
-	// TODO: verify message.RakSig
 	header := &message.Header
+	if runtime.TEEHardware != node.TEEHardwareInvalid {
+		rak := r.RoundState.ComputationGroup[id].runtime.Capabilities.TEE.RAK
+		batchSigMessage := block.BatchSigMessage{
+			InputHash:  header.InputHash,
+			OutputHash: header.OutputHash,
+			StateRoot:  header.StateRoot,
+		}
+		batchSigMessage.PreviousBlock.FromFull(r.RoundState.CurrentBlock)
+		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), message.RakSig[:]) {
+			return errRakSigInvalid
+		}
+	}
 
 	// Ensure the node did not already submit a commitment.
 	if _, ok := r.RoundState.Commitments[id]; ok {

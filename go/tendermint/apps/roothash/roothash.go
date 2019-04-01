@@ -550,7 +550,7 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Add the commitment.
-	if err = rtState.Round.addCommitment(app.ctx, &c); err != nil {
+	if err = rtState.Round.addCommitment(app.ctx, &c, rtState.Runtime); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,
