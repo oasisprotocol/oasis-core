@@ -69,6 +69,16 @@ func (s *immutableState) getNodeRaw(id signature.PublicKey) ([]byte, error) {
 	return s.getByID(stateNodeMap, id.String())
 }
 
+func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
+	nodeRaw, err := s.getNodeRaw(id)
+	if err != nil {
+		return nil, err
+	}
+	node := node.Node{}
+	cbor.MustUnmarshal(nodeRaw, &node)
+	return &node, nil
+}
+
 func (s *immutableState) getNodes() ([]*node.Node, error) {
 	items, err := s.getAll(stateNodeMap, &node.Node{})
 	if err != nil {
