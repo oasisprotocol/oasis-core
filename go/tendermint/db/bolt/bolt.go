@@ -481,6 +481,10 @@ func (b *boltDBBatch) WriteSync() {
 	b.db.sync()
 }
 
+func (b *boltDBBatch) Close() {
+	b.cmds = nil
+}
+
 func toBoltDBKey(key []byte) []byte {
 	// BoltDB doesn't allow zero-length keys, so make all keys at least
 	// 1 byte long.

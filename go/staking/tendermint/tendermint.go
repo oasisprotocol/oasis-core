@@ -209,26 +209,24 @@ func (b *tendermintBackend) Cleanup() {
 func (b *tendermintBackend) worker(ctx context.Context) {
 	defer close(b.closedCh)
 
-	txChannel := make(chan interface{})
-	if err := b.service.Subscribe(ctx, "staking-worker", app.QueryApp, txChannel); err != nil {
+	sub, err := b.service.Subscribe("staking-worker", app.QueryApp)
+	if err != nil {
 		b.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer b.service.Unsubscribe(ctx, "staking-worker", app.QueryApp) // nolint: errcheck
+	defer b.service.Unsubscribe("staking-worker", app.QueryApp) // nolint: errcheck
 
 	for {
-		var (
-			event interface{}
-			ok    bool
-		)
+		var event interface{}
 
 		select {
-		case event, ok = <-txChannel:
-			if !ok {
-				return
-			}
+		case msg := <-sub.Out():
+			event = msg.Data()
+		case <-sub.Cancelled():
+			b.logger.Debug("worker: terminating, subscription closed")
+			return
 		case <-ctx.Done():
 			return
 		}

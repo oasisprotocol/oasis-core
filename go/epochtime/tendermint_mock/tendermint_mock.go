@@ -114,12 +114,14 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 
 func (t *tendermintMockBackend) worker(ctx context.Context) {
 	// Subscribe to transactions which advance the epoch.
-	txChannel := make(chan interface{})
-
-	if err := t.service.Subscribe(ctx, "epochtime-worker", app.QueryApp, txChannel); err != nil {
-		panic("worker: failed to subscribe")
+	sub, err := t.service.Subscribe("epochtime-worker", app.QueryApp)
+	if err != nil {
+		t.logger.Error("failed to subscribe",
+			"err", err,
+		)
+		return
 	}
-	defer t.service.Unsubscribe(ctx, "epochtime-worker", app.QueryApp) // nolint: errcheck
+	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
 
 	// Populate current epoch (if available).
 	response, err := t.service.Query(app.QueryGetEpoch, nil, 0)
@@ -138,14 +140,13 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 
 	for {
 		var event interface{}
-		var ok bool
 
 		select {
-		case event, ok = <-txChannel:
-			if !ok {
-				t.logger.Debug("worker: terminating, txChannel closed")
-				return
-			}
+		case msg := <-sub.Out():
+			event = msg.Data()
+		case <-sub.Cancelled():
+			t.logger.Debug("worker: terminating, subscription closed")
+			return
 		case <-ctx.Done():
 			return
 		}

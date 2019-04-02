@@ -131,25 +131,24 @@ func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataN
 }
 
 func (t *Backend) worker(ctx context.Context) {
-	txChannel := make(chan interface{})
-	if err := t.service.Subscribe(ctx, "beacon-worker", app.QueryApp, txChannel); err != nil {
+	sub, err := t.service.Subscribe("beacon-worker", app.QueryApp)
+	if err != nil {
 		t.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer t.service.Unsubscribe(ctx, "beacon-worker", app.QueryApp) // nolint: errcheck
+	defer t.service.Unsubscribe("beacon-worker", app.QueryApp) // nolint: errcheck
 
 	for {
 		var event interface{}
-		var ok bool
 
 		select {
-		case event, ok = <-txChannel:
-			if !ok {
-				t.logger.Debug("worker: terminating, txChannel closed")
-				return
-			}
+		case msg := <-sub.Out():
+			event = msg.Data()
+		case <-sub.Cancelled():
+			t.logger.Debug("worker: terminating, subscription closed")
+			return
 		case <-ctx.Done():
 			return
 		}
