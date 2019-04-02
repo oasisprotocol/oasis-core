@@ -58,10 +58,9 @@ const (
 
 	cfgLogDebug = "tendermint.log.debug"
 
-	cfgDebugBootstrapAddress       = "tendermint.debug.bootstrap.address"
-	cfgDebugBootstrapNodeName      = "tendermint.debug.bootstrap.node_name"
-	cfgDebugConsensusBlockTimeIota = "tendermint.debug.block_time_iota"
-	cfgDebugP2PAddrBookLenient     = "tendermint.debug.addr_book_lenient"
+	cfgDebugBootstrapAddress   = "tendermint.debug.bootstrap.address"
+	cfgDebugBootstrapNodeName  = "tendermint.debug.bootstrap.node_name"
+	cfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
 )
 
 var (
@@ -208,9 +207,13 @@ func (t *tendermintService) Query(path string, query interface{}, height int64) 
 	return response.GetValue(), nil
 }
 
-func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, query tmpubsub.Query, out chan<- interface{}) error {
-	subFn := func() error {
-		return t.node.EventBus().Subscribe(t.ctx, subscriber, query, out)
+func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
+	// Note: The tendermint documentation claims using SubscribeUnbuffered can
+	// freeze the server, however, the buffered Subscribe can drop events, and
+	// force-unsubscribe the channel if processing takes too long.
+
+	subFn := func() (tmtypes.Subscription, error) {
+		return t.node.EventBus().SubscribeUnbuffered(t.ctx, subscriber, query)
 	}
 
 	if t.started() {
@@ -219,22 +222,19 @@ func (t *tendermintService) Subscribe(ctx context.Context, subscriber string, qu
 
 	// The node doesn't exist until it's started since, creating the node
 	// triggers replay, InitChain, and etc.
-	go func() {
-		<-t.startedCh
-		if err := subFn(); err != nil {
-			t.Logger.Error("failed defered Subscribe",
-				"err", err,
-				"subscriber", subscriber,
-				"query", query,
-			)
-			panic("tendermint: defered Subscribe failure")
-		}
-	}()
+	t.Logger.Debug("Subscribe: node not available yet, blocking",
+		"subscriber", subscriber,
+		"query", query,
+	)
 
-	return nil
+	// XXX/yawning: As far as I can tell just blocking here is safe as
+	// ever single consumer of the API subscribes from a go routine.
+	<-t.startedCh
+
+	return subFn()
 }
 
-func (t *tendermintService) Unsubscribe(ctx context.Context, subscriber string, query tmpubsub.Query) error {
+func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query) error {
 	if t.started() {
 		return t.node.EventBus().Unsubscribe(t.ctx, subscriber, query)
 	}
@@ -349,11 +349,6 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.SkipTimeoutCommit = viper.GetBool(cfgConsensusSkipTimeoutCommit)
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
-	tenderConfig.Consensus.BlockTimeIota = timeoutCommit
-	if blockTimeIota := viper.GetDuration(cfgDebugConsensusBlockTimeIota); blockTimeIota > 0*time.Second {
-		// Override BlockTimeIota if set.
-		tenderConfig.Consensus.BlockTimeIota = blockTimeIota
-	}
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
@@ -594,24 +589,23 @@ func (t *tendermintService) syncWorker() {
 func (t *tendermintService) worker() {
 	// Subscribe to other events here as needed, no need to spawn additional
 	// workers.
-	evCh := make(chan interface{})
-	if err := t.client.Subscribe(t.ctx, "tendermint/worker", tmtypes.EventQueryNewBlock, evCh); err != nil {
+	sub, err := t.Subscribe("tendermint/worker", tmtypes.EventQueryNewBlock)
+	if err != nil {
 		t.Logger.Error("worker: failed to subscribe to new block events",
 			"err", err,
 		)
 		return
 	}
+	defer t.Unsubscribe("tendermint/worker", tmtypes.EventQueryNewBlock) // nolint:errcheck
 
 	for {
 		select {
 		case <-t.node.Quit():
 			return
-		case v, ok := <-evCh:
-			if !ok {
-				return
-			}
-
-			ev := v.(tmtypes.EventDataNewBlock)
+		case <-sub.Cancelled():
+			return
+		case v := <-sub.Out():
+			ev := v.Data().(tmtypes.EventDataNewBlock)
 			t.blockNotifier.Broadcast(ev.Block)
 		}
 	}
@@ -770,7 +764,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
-		cmd.Flags().Duration(cfgDebugConsensusBlockTimeIota, 0*time.Second, "tendermint block time iota")
 		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	}
 
@@ -786,7 +779,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgLogDebug,
 		cfgDebugBootstrapAddress,
 		cfgDebugBootstrapNodeName,
-		cfgDebugConsensusBlockTimeIota,
 		cfgDebugP2PAddrBookLenient,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck

@@ -340,27 +340,25 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 	defer close(r.closedCh)
 
 	// Subscribe to transactions which modify state.
-	txChannel := make(chan interface{})
-
-	if err := r.service.Subscribe(r.ctx, "roothash-worker", app.QueryUpdate, txChannel); err != nil {
+	sub, err := r.service.Subscribe("roothash-worker", app.QueryUpdate)
+	if err != nil {
 		r.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer r.service.Unsubscribe(r.ctx, "roothash-worker", app.QueryUpdate) // nolint: errcheck
+	defer r.service.Unsubscribe("roothash-worker", app.QueryUpdate) // nolint: errcheck
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
 		var event interface{}
-		var ok bool
 
 		select {
-		case event, ok = <-txChannel:
-			if !ok {
-				r.logger.Debug("worker: terminating")
-				return
-			}
+		case msg := <-sub.Out():
+			event = msg.Data()
+		case <-sub.Cancelled():
+			r.logger.Debug("worker: terminating, subsription closed")
+			return
 		case <-ctx.Done():
 			return
 		}
