@@ -254,8 +254,8 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		tree := app.state.DeliverTxTree()
 		regState := registryapp.NewMutableState(tree)
 		computationGroup := make(map[signature.MapKey]nodeInfo)
-		var nodeRuntime *node.Runtime
 		for _, committeeNode := range committee.Members {
+			var nodeRuntime *node.Runtime
 			// (%%% review) avoids reading all nodes into memory, but is this a lot of overhead?
 			node, err := regState.GetNode(committeeNode.PublicKey)
 			if err != nil {
