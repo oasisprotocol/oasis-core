@@ -551,6 +551,11 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
 	}
 
+	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
+	// BFT view of time pulling ahead.
+	timeoutCommit := viper.GetDuration(cfgConsensusTimeoutCommit)
+	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
+
 	return tmGenDoc, nil
 }
 
