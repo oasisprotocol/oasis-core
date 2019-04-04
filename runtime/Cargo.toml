@@ -39,3 +39,4 @@ tokio-current-thread = "0.1.5"
 tokio-executor = "0.1.6"
 io-context = "0.2.0"
 x25519-dalek = "0.5.1"
+deoxysii-rust = { git = "https://github.com/oasislabs/deoxysii-rust" }
