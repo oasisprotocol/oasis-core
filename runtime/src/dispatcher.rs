@@ -10,7 +10,10 @@ use io_context::Context;
 use slog::Logger;
 
 use crate::{
-    common::{crypto::hash::Hash, logger::get_logger},
+    common::{
+        crypto::{hash::Hash, signature::Signature},
+        logger::get_logger,
+    },
     protocol::{Protocol, ProtocolCAS},
     rak::RAK,
     rpc::{
@@ -259,20 +262,25 @@ impl Dispatcher {
 
                     debug!(self.logger, "Transaction batch dispatch complete"; "new_state_root" => ?new_state_root);
 
-                    let rak_sig_message = BatchSigMessage {
-                        previous_block: &block,
-                        // (%%% review) aw we allocate a vector to hold the serialized form
-                        input_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&calls).unwrap()),
-                        output_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&outputs).unwrap()),
-                        state_root: &new_state_root,
+                    let rak_sig = if self.rak.public_key().is_some() {
+                        let rak_sig_message = BatchSigMessage {
+                            previous_block: &block,
+                            // (%%% review) aw we allocate a vector to hold the serialized form
+                            input_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&calls).unwrap()),
+                            output_hash: &Hash::digest_bytes(
+                                &serde_cbor::to_vec(&outputs).unwrap(),
+                            ),
+                            state_root: &new_state_root,
+                        };
+                        self.rak
+                            .sign(
+                                &BATCH_HASH_CONTEXT,
+                                &serde_cbor::to_vec(&rak_sig_message).unwrap(),
+                            )
+                            .unwrap()
+                    } else {
+                        Signature::default()
                     };
-                    let rak_sig = self
-                        .rak
-                        .sign(
-                            &BATCH_HASH_CONTEXT,
-                            &serde_cbor::to_vec(&rak_sig_message).unwrap(),
-                        )
-                        .unwrap();
 
                     let result = ComputedBatch {
                         outputs: outputs,
