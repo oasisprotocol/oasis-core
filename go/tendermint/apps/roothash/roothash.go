@@ -269,8 +269,8 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 				break
 			}
 			computationGroup[committeeNode.PublicKey.ToMapKey()] = nodeInfo{
-				committeeNode: committeeNode,
-				runtime:       nodeRuntime,
+				CommitteeNode: committeeNode,
+				Runtime:       nodeRuntime,
 			}
 		}
 		rtState.Round = newRound(committee, computationGroup, blk)
