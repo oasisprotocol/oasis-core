@@ -2,7 +2,7 @@
 package deoxysii
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
 
 	"github.com/oasislabs/deoxysii"
 	"github.com/oasislabs/ekiden/go/common/crypto/mrae/api"
@@ -18,7 +18,7 @@ var (
 type boxImpl struct{}
 
 func (impl *boxImpl) DeriveSymmetricKey(key []byte, publicKey, privateKey *[32]byte) {
-	api.ECDHAndTweak(key, publicKey, privateKey, sha512.New512_256, boxKDFTweak)
+	api.ECDHAndTweak(key, publicKey, privateKey, sha256.New, boxKDFTweak)
 }
 
 func (impl *boxImpl) Seal(dst, nonce, plaintext, additionalData []byte, peersPublicKey, privateKey *[32]byte) []byte {
