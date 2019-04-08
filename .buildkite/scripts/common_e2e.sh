@@ -169,6 +169,15 @@ run_backend_tendermint_committee() {
             --keymanager.client.certificate ${committee_dir}/key-manager/tls_identity_cert.pem \
             --datadir ${datadir} \
             &
+
+        # HACK HACK HACK HACK HACK
+        #
+        # If you don't attempt to start the Tendermint Prometheus HTTP server
+        # (even if it is doomed to fail due to ekiden already listening on the
+        # port), and you launch all the validatiors near simultaniously, there
+        # is a high chance that at least one of the validators will get upset
+        # and start refusing connections.
+        sleep 3
     done
 }
 
