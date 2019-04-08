@@ -230,6 +230,7 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 			args = append(args, "--ro-bind", p, filepath.Join(mountDir, alias))
 		}
 	}
+	args = append(args, "--symlink", "/usr/lib", "/usr/lib64")
 
 	// Worker arguments follow.
 	args = append(args, "--", "/worker")
