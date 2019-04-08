@@ -350,6 +350,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
 	tenderConfig.Instrumentation.Prometheus = true
+	tenderConfig.Instrumentation.PrometheusListenAddr = ""
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
