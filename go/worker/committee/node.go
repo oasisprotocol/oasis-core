@@ -378,6 +378,12 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 	header := blk.Header
 
+	// The first received block will be treated an epoch transition (if valid).
+	// This will refresh the committee on the first block,
+	// instead of waiting for the next epoch transition to occur.
+	// Helps in cases where node is restarted mid epoch.
+	firstBlockReceived := n.currentBlock == nil
+
 	// Update the current block.
 	n.currentBlock = blk
 
@@ -388,14 +394,24 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	// Perform actions based on block type.
 	switch header.HeaderType {
 	case block.Normal:
-		// Normal block.
-		n.group.RoundTransition(n.ctx)
+		if firstBlockReceived {
+			n.logger.Warn("forcing an epoch transition on first received block")
+			n.handleEpochTransition(header.GroupHash, height)
+		} else {
+			// Normal block.
+			n.group.RoundTransition(n.ctx)
+		}
 	case block.RoundFailed:
-		// Round has failed.
-		n.logger.Warn("round has failed")
-		n.group.RoundTransition(n.ctx)
+		if firstBlockReceived {
+			n.logger.Warn("forcing an epoch transition on first received block")
+			n.handleEpochTransition(header.GroupHash, height)
+		} else {
+			// Round has failed.
+			n.logger.Warn("round has failed")
+			n.group.RoundTransition(n.ctx)
 
-		failedRoundCount.With(n.getMetricLabels()).Inc()
+			failedRoundCount.With(n.getMetricLabels()).Inc()
+		}
 	case block.EpochTransition:
 		// Process an epoch transition.
 		n.handleEpochTransition(header.GroupHash, height)
