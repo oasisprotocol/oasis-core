@@ -1,4 +1,5 @@
 SHELL = /bin/bash
+EKIDEN_GO ?= go
 
 all: generate build
 
@@ -8,16 +9,16 @@ all: generate build
 # compiler plugin supports modules.
 generate:
 	@echo "Running go generate"
-	@env -u GOPATH go generate -v ./...
+	@env -u GOPATH $(EKIDEN_GO) generate -v ./...
 
 # Build the Ekiden node.
 build: generate
 	@echo "Building Ekiden node"
-	@env -u GOPATH go build -v -o ./ekiden/ekiden ./ekiden
+	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden/ekiden ./ekiden
 
 # Run go fmt.
 fmt:
-	@env -u GOPATH go fmt ./...
+	@env -u GOPATH $(EKIDEN_GO) fmt ./...
 
 # Lint.
 lint:
@@ -25,6 +26,6 @@ lint:
 
 # Test.
 test:
-	@env -u GOPATH go test -race -v ./...
+	@env -u GOPATH $(EKIDEN_GO) test -race -v ./...
 
 .PHONY: all generate build lint test
