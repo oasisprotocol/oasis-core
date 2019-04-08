@@ -1,0 +1,19 @@
+[package]
+name = "ekiden-keymanager-runtime"
+version = "0.3.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+edition = "2018"
+
+[package.metadata.fortanix-sgx]
+heap-size = 134217728
+stack-size = 2097152
+threads = 2
+
+[dependencies]
+ekiden-runtime = { path = "../runtime" }
+ekiden-keymanager-api = { path = "./api" }
+failure = "0.1.5"
+lazy_static = "1.3.0"
+# TODO: Change to released version when 0.10.0 is released.
+serde_cbor = { git = "https://github.com/pyfisch/cbor", rev = "114ecaeac53799d0bf81ca8d1b980c7c419d76fe" }
+byteorder = "1.3.1"

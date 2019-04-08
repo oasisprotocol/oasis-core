@@ -213,19 +213,19 @@ func (b *cachingClientBackend) insertLocal(key api.Key, value []byte) bool {
 }
 
 func (b *cachingClientBackend) load() error {
-	b.logger.Info("loading cache to disk",
+	b.logger.Info("loading cache from disk",
 		"path", b.dbPath,
 	)
 
 	f, err := os.Open(b.dbPath)
 	if err != nil {
-		b.logger.Error("failed to open persisted cache",
-			"err", err,
-		)
-
 		if os.IsNotExist(err) {
 			// This failure class is harmless, don't propagate the error.
 			err = nil
+		} else {
+			b.logger.Error("failed to open persisted cache",
+				"err", err,
+			)
 		}
 		return err
 	}

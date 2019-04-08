@@ -43,8 +43,11 @@ test_migration() {
     local runtime=simple-keyvalue
 
     # Start the first network.
-    run_backend_tendermint_committee tendermint_mock 1 1 0
-
+    run_backend_tendermint_committee \
+        epochtime_backend=tendermint_mock \
+        id=1 \
+        replica_group_size=1 \
+        replica_group_backup_size=0
     sleep 1
 
     run_compute_node 1 ${runtime} &>/dev/null
@@ -57,8 +60,7 @@ test_migration() {
     ${CLIENT} \
         --mode part1 \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
-        --test-runtime-id "$RUNTIME_ID"
+        --runtime-id "$RUNTIME_ID"
 
     # Stop the compute nodes.
     pkill --echo --full --signal 9 worker.backend
@@ -69,10 +71,16 @@ test_migration() {
         --output_file ${TEST_BASE_DIR}/export-roothash.json
 
     # Stop the validator nodes.
-    ps efh -C ekiden |grep -v "ekiden storage node" | awk '{print $1}' | xargs kill -9
+    ps efh -C ekiden | grep -v "ekiden storage node" | awk '{print $1}' | xargs kill -9
 
     # Start the second network.
-    run_backend_tendermint_committee tendermint_mock 2 1 0 false "${TEST_BASE_DIR}/export-roothash.json"
+    run_backend_tendermint_committee \
+        epochtime_backend=tendermint_mock \
+        id=2 \
+        replica_group_size=1 \
+        replica_group_backup_size=0 \
+        start_storage=false \
+        roothash_genesis_blocks="${TEST_BASE_DIR}/export-roothash.json"
 
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
@@ -84,8 +92,7 @@ test_migration() {
     ${CLIENT} \
         --mode part2 \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --mr-enclave "$(cat "$WORKDIR/target/enclave/simple-keyvalue.mrenclave")" \
-        --test-runtime-id "$RUNTIME_ID"
+        --runtime-id "$RUNTIME_ID"
 
     # Cleanup.
     cleanup

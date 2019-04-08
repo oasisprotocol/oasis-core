@@ -1,91 +1,52 @@
-//! Cargo-specific structures.
+//! Simplified cargo structures.
+//!
+//! These are used to avoid pulling in cargo as a dependency, but
+//! they may not be exactly consistent with what cargo does.
 use std::{
     env,
     fs::File,
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
 };
 
+use failure::{format_err, Fallible};
+use serde_derive::Deserialize;
 use toml;
 
-use super::error::Result;
-
-/// Abstract crate source.
-pub trait CrateSource {
-    /// Write a Cargo-compatible dependency spec to a given writer. Includes newline.
-    fn write_location(&self, writer: &mut Write) -> Result<()>;
-}
-
-/// Git crate source.
-#[derive(Debug)]
-pub struct GitSource<'a> {
-    pub repository: &'a str,
-    pub branch: Option<&'a str>,
-    pub tag: Option<&'a str>,
-    pub rev: Option<&'a str>,
-}
-
-impl<'a> CrateSource for GitSource<'a> {
-    fn write_location(&self, mut writer: &mut Write) -> Result<()> {
-        write!(&mut writer, "{{ git = \"{}\"", self.repository)?;
-
-        if let Some(ref branch) = self.branch {
-            write!(&mut writer, ", branch = \"{}\"", branch)?;
-        } else if let Some(ref tag) = self.tag {
-            write!(&mut writer, ", tag = \"{}\"", tag)?;
-        } else if let Some(ref rev) = self.rev {
-            write!(&mut writer, ", rev = \"{}\"", rev)?;
-        }
-
-        writeln!(&mut writer, " }}")?;
-
-        Ok(())
-    }
-}
-
-/// Crates.io version crate source.
-#[derive(Debug)]
-pub struct VersionSource<'a> {
-    pub version: &'a str,
-}
-
-impl<'a> CrateSource for VersionSource<'a> {
-    fn write_location(&self, mut writer: &mut Write) -> Result<()> {
-        writeln!(&mut writer, "\"{}\"", self.version)?;
-
-        Ok(())
-    }
-}
-
-/// Local path crate source.
-#[derive(Debug)]
-pub struct PathSource {
-    pub path: PathBuf,
-}
-
-impl CrateSource for PathSource {
-    fn write_location(&self, mut writer: &mut Write) -> Result<()> {
-        writeln!(
-            &mut writer,
-            "{{ path = \"{}\" }}",
-            self.path.to_str().unwrap()
-        )?;
-
-        Ok(())
-    }
+/// Fortanix SGX metadata (based on ftxsgx-runner-cargo).
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct FortanixSGX {
+    pub heap_size: Option<u64>,
+    pub ssaframesize: Option<u32>,
+    pub stack_size: Option<u32>,
+    pub threads: Option<u32>,
+    pub debug: Option<bool>,
 }
 
 /// Cargo package metadata.
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct Metadata {
+    #[serde(default)]
+    pub fortanix_sgx: FortanixSGX,
+}
+
+/// Cargo package.
 #[derive(Deserialize, Debug)]
 pub struct Package {
     pub name: String,
     pub version: String,
+    #[serde(default)]
+    pub metadata: Metadata,
 }
 
-/// Cargo workspace metadata.
+/// Cargo workspace.
 #[derive(Deserialize, Debug)]
 pub struct Workspace {
     members: Vec<String>,
+    #[serde(default)]
+    exclude: Vec<String>,
 }
 
 /// Cargo manifest.
@@ -95,39 +56,39 @@ pub struct Manifest {
     workspace: Option<Workspace>,
 }
 
-/// Cargo project root.
+/// Cargo package root.
 #[derive(Debug)]
-pub struct ProjectRoot {
-    /// Path to the project root (directory containing Cargo.toml).
+pub struct PackageRoot {
+    /// Path to the package root.
     path: PathBuf,
     /// Path to the workspace root.
     workspace_path: PathBuf,
-    /// Parsed configuration file.
+    /// Parsed manifest.
     manifest: Manifest,
 }
 
-impl ProjectRoot {
-    /// Attempts to discover the root of the current project.
-    pub fn discover() -> Result<Self> {
+impl PackageRoot {
+    /// Attempts to discover the root of the current package.
+    pub fn discover() -> Fallible<Self> {
         // Start with the current directory and recursively move up if Cargo.toml
         // cannot be found in the given directory.
         let mut current_dir: &Path = &env::current_dir()?;
         loop {
             if current_dir.join("Cargo.toml").exists() {
-                return Ok(ProjectRoot::new(current_dir.to_owned())?);
+                return Ok(PackageRoot::new(current_dir.to_owned())?);
             }
 
             if let Some(parent) = current_dir.parent() {
                 current_dir = parent;
             } else {
                 // We've reached the root.
-                return Err("failed to discover project root".into());
+                return Err(format_err!("failed to discover package root"));
             }
         }
     }
 
     /// Parse Cargo manifest file.
-    fn parse_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
+    fn parse_manifest<P: AsRef<Path>>(path: P) -> Fallible<Manifest> {
         // Parse configuration file.
         let mut data = String::new();
         File::open(path)?.read_to_string(&mut data)?;
@@ -136,7 +97,7 @@ impl ProjectRoot {
     }
 
     /// Create new project root.
-    pub fn new(path: PathBuf) -> Result<Self> {
+    pub fn new(path: PathBuf) -> Fallible<Self> {
         let manifest = Self::parse_manifest(path.join("Cargo.toml"))?;
         let workspace_path = if manifest.workspace.is_some() {
             // This is already a workspace.
@@ -150,14 +111,24 @@ impl ProjectRoot {
                     let workspace_manifest = Self::parse_manifest(&manifest_path)?;
                     match workspace_manifest.workspace {
                         Some(ref workspace) => {
-                            // Contains a workspace. Ensure that this workspace also contains
-                            // the project root.
+                            // Contains a workspace. Check if the package root is excluded.
+                            if workspace
+                                .exclude
+                                .iter()
+                                .any(|m| path.starts_with(current_dir.join(m)))
+                            {
+                                // Package root is excluded, so the package is its own workspace.
+                                break path.clone();
+                            }
+
+                            // If not excluded, ensure that this workspace also contains
+                            // the package root.
                             if !workspace
                                 .members
                                 .iter()
-                                .any(|m| current_dir.join(m) == path)
+                                .any(|m| path.starts_with(current_dir.join(m)))
                             {
-                                return Err(format!(
+                                return Err(format_err!(
                                     "current package believes it's in a workspace when it's not: \n\
                                     current:   {}\n\
                                     workspace: {}\n\
@@ -168,8 +139,7 @@ impl ProjectRoot {
                                     current_dir.to_str().unwrap(),
                                     path.strip_prefix(current_dir).unwrap().to_str().unwrap(),
                                     manifest_path.to_str().unwrap()
-                                )
-                                .into());
+                                ));
                             }
 
                             break current_dir.to_owned();
@@ -187,28 +157,30 @@ impl ProjectRoot {
             }
         };
 
-        Ok(ProjectRoot {
+        Ok(PackageRoot {
             path,
             workspace_path,
             manifest,
         })
     }
 
-    pub fn get_path(&self) -> PathBuf {
+    /// Path to package root.
+    pub fn package_path(&self) -> PathBuf {
         self.path.clone()
     }
 
-    pub fn get_workspace_path(&self) -> PathBuf {
+    /// Path to workspace root.
+    pub fn workspace_path(&self) -> PathBuf {
         self.workspace_path.clone()
     }
 
-    /// Get project config path (Cargo.toml).
-    pub fn get_config_path(&self) -> PathBuf {
+    /// Path to package manifest.
+    pub fn manifest_path(&self) -> PathBuf {
         self.path.join("Cargo.toml")
     }
 
-    /// Get project target directory path.
-    pub fn get_target_path(&self) -> PathBuf {
+    /// Path to package target directory.
+    pub fn target_path(&self) -> PathBuf {
         if let Ok(path) = env::var("CARGO_TARGET_DIR") {
             Path::new(&path).to_owned()
         } else {
@@ -216,8 +188,8 @@ impl ProjectRoot {
         }
     }
 
-    /// Parse project config (Cargo.toml).
-    pub fn get_config(&self) -> &Manifest {
+    /// Parsed package manifest.
+    pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
 
@@ -232,12 +204,12 @@ impl ProjectRoot {
     }
 
     /// Get package metadata.
-    pub fn get_package(&self) -> Option<&Package> {
+    pub fn package(&self) -> Option<&Package> {
         self.manifest.package.as_ref()
     }
 
     /// Get workspace metadata.
-    pub fn get_workspace(&self) -> Option<&Workspace> {
+    pub fn workspace(&self) -> Option<&Workspace> {
         self.manifest.workspace.as_ref()
     }
 }

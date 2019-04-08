@@ -23,8 +23,10 @@ const (
 	nodeKeyPrivFilename = "identity.pem"
 	nodeKeyPubFilename  = "identity_pub.pem"
 
-	tlsKeyFilename = "tls-identity.pem"
-	tlsKeyPEMType  = "EC PRIVATE KEY"
+	tlsKeyFilename  = "tls_identity.pem"
+	tlsCertFilename = "tls_identity_cert.pem"
+	tlsKeyPEMType   = "EC PRIVATE KEY"
+	tlsCertPEMType  = "CERTIFICATE"
 )
 
 var tlsTemplate = x509.Certificate{
@@ -115,6 +117,17 @@ func LoadOrGenerate(dataDir string) (*Identity, error) {
 	certTemplate.NotAfter = time.Now().AddDate(1, 0, 0)
 	tlsCertDer, err = x509.CreateCertificate(rand.Reader, &certTemplate, &certTemplate, tlsKey.Public(), tlsKey)
 	if err != nil {
+		return nil, err
+	}
+
+	// Persist TLS certificate.
+	tlsCertPath := filepath.Join(dataDir, tlsCertFilename)
+	tlsCertPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  tlsCertPEMType,
+		Bytes: tlsCertDer,
+	})
+
+	if err := ioutil.WriteFile(tlsCertPath, tlsCertPEM, 0644); err != nil {
 		return nil, err
 	}
 

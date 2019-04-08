@@ -16,14 +16,14 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/ias"
+	"github.com/oasislabs/ekiden/go/keymanager"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/committee"
-	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
 	"github.com/oasislabs/ekiden/go/worker/host"
-	"github.com/oasislabs/ekiden/go/worker/ias"
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
@@ -79,7 +79,7 @@ type Worker struct {
 	scheduler     scheduler.Backend
 	syncable      common.Syncable
 	ias           *ias.IAS
-	keyManager    *enclaverpc.Client
+	keyManager    *keymanager.KeyManager
 	p2p           *p2p.P2P
 	grpc          *grpc.Server
 
@@ -258,26 +258,24 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 	switch strings.ToLower(cfg.Backend) {
 	case host.BackendSandboxed:
 		h, err = host.NewSandboxedHost(
+			rtCfg.ID.String(),
 			cfg.WorkerBinary,
 			rtCfg.Binary,
-			rtCfg.ID,
-			w.storage,
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			w.keyManager,
+			newHostHandler(rtCfg.ID, w.storage, w.keyManager),
 			false,
 		)
 	case host.BackendUnconfined:
 		h, err = host.NewSandboxedHost(
+			rtCfg.ID.String(),
 			cfg.WorkerBinary,
 			rtCfg.Binary,
-			rtCfg.ID,
-			w.storage,
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			w.keyManager,
+			newHostHandler(rtCfg.ID, w.storage, w.keyManager),
 			true,
 		)
 	case host.BackendMock:
@@ -344,7 +342,7 @@ func newWorker(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	ias *ias.IAS,
-	keyManager *enclaverpc.Client,
+	keyManager *keymanager.KeyManager,
 	cfg Config,
 ) (*Worker, error) {
 	enabled := false

@@ -1,20 +1,11 @@
 #!/usr/bin/env gmake
 
-# List of paths to enclaves that we should build.
-ENCLAVES = tests/runtimes/test-db-encryption \
-	tests/runtimes/test-logger \
-	tests/runtimes/simple-keyvalue \
-	key-manager/dummy/enclave
+# List of paths to runtimes that we should build.
+RUNTIMES = keymanager-runtime \
+	tests/runtimes/simple-keyvalue
 
-# Command that builds each enclave.
-BUILD_ENCLAVE = cargo ekiden build-enclave --output-identity
-
-
-# Make sure we're running inside the `cargo ekiden shell` container.
-ifndef SGX_MODE
-$(error ERROR: You need to run `make` from inside the `cargo ekiden shell` container to build Ekiden!)
-endif
-
+# Key manager enclave path.
+KM_ENCLAVE_PATH ?= target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
 
 # Check if we're running in an interactive terminal.
 ISATTY := $(shell [ -t 0 ] && echo 1)
@@ -38,31 +29,56 @@ ECHO = echo
 endif
 
 
-.PHONY: all tools enclaves rust go clean
+.PHONY: all tools runtimes rust go clean fmt test test-unit test-e2e
 
-all: tools enclaves rust go
+all: tools runtimes rust go
 	@$(ECHO) "$(CYAN)*** Everything built successfully!$(OFF)"
 
 tools:
 	@$(ECHO) "$(CYAN)*** Building Rust tools...$(OFF)"
 	@cargo install --force --path tools
 
-enclaves:
-	@$(ECHO) "$(CYAN)*** Building enclaves...$(OFF)"
-	@for e in $(ENCLAVES); do \
-		$(ECHO) "$(MAGENTA)*** Building enclave: $$e$(OFF)"; \
-		(cd $$e && $(BUILD_ENCLAVE)) || exit 1; \
+runtimes:
+	@$(ECHO) "$(CYAN)*** Building runtimes...$(OFF)"
+	@for e in $(RUNTIMES); do \
+		export KM_ENCLAVE_PATH=$$(pwd)/$(KM_ENCLAVE_PATH) && \
+		\
+		$(ECHO) "$(MAGENTA)*** Building runtime: $$e$(OFF)"; \
+		(cd $$e && \
+			cargo build --target x86_64-fortanix-unknown-sgx && \
+			cargo build && \
+			cargo elf2sgxs \
+		) || exit 1; \
 	done
 
 rust:
-	@$(ECHO) "$(CYAN)*** Building Rust worker...$(OFF)"
-	@cargo build
+	@$(ECHO) "$(CYAN)*** Building Rust libraries and runtime loader...$(OFF)"
+	@export KM_ENCLAVE_PATH=$$(pwd)/$(KM_ENCLAVE_PATH) && \
+		cargo build
 
 go:
 	@$(ECHO) "$(CYAN)*** Building Go node...$(OFF)"
 	@$(MAKE) -C go
 
+fmt:
+	@cargo fmt
+	@$(MAKE) -C go fmt
+
+test: test-unit test-e2e
+
+test-unit:
+	@$(ECHO) "$(CYAN)*** Running Rust unit tests...$(OFF)"
+	@export KM_ENCLAVE_PATH=$$(pwd)/$(KM_ENCLAVE_PATH) && \
+		cargo test
+	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
+	@$(MAKE) -C go test
+
+test-e2e:
+	@$(ECHO) "$(CYAN)*** Running E2E tests...$(OFF)"
+	@.buildkite/scripts/test_e2e.sh
+	@$(ECHO) "$(CYAN)*** Running E2E migration tests...$(OFF)"
+	@.buildkite/scripts/test_migration.sh
+
 clean:
 	@$(ECHO) "$(CYAN)*** Cleaning up...$(OFF)"
 	@cargo clean
-	@-rm -f Cargo.lock

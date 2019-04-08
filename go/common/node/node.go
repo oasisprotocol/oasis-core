@@ -15,7 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/ias"
+	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 

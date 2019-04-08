@@ -1,9 +1,7 @@
 extern crate serde;
-#[macro_use]
 extern crate serde_derive;
 
-extern crate ekiden_core;
-extern crate ekiden_trusted;
+extern crate ekiden_runtime;
 
 #[macro_use]
 mod api;

@@ -68,27 +68,6 @@ scenario_discrepancy() {
     set_epoch 1
 }
 
-# Assert that the logger works.
-assert_logger_works() {
-    assert_basic_success
-
-    # test-logger-client sends five distinct messages to five distinct log levels.
-    # Check, if they are correctly reported by the enclave and then by pretty_env_logger.
-    cat_compute_logs | grep "ERROR" | grep "<enclave>::test_logger" | grep -q "hello_error"
-    cat_compute_logs | grep "WARN" | grep "<enclave>::test_logger" | grep -q "hello_warn"
-    cat_compute_logs | grep "INFO" | grep "<enclave>::test_logger" | grep -q "hello_info"
-    cat_compute_logs | grep "DEBUG" | grep "<enclave>::test_logger" | grep -q "hello_debug"
-    cat_compute_logs | grep "TRACE" | grep "<enclave>::test_logger" | grep -q "hello_trace"
-
-    # Then a new max_log_level is set to ERROR.
-    # Check, if hello_new_error is reported and other hello_new messages omitted.
-    cat_compute_logs | grep "ERROR" | grep "<enclave>::test_logger" | grep -q "hello_new_error"
-    cat_compute_logs | grep "WARN" | grep "<enclave>::test_logger" | (! grep -q "hello_new_warn")
-    cat_compute_logs | grep "INFO" | grep "<enclave>::test_logger" | (! grep -q "hello_new_info")
-    cat_compute_logs | grep "DEBUG" | grep "<enclave>::test_logger" | (! grep -q "hello_new_debug")
-    cat_compute_logs | grep "TRACE" | grep "<enclave>::test_logger" | (! grep -q "hello_new_trace")
-}
-
 #############
 # Test suite.
 #
@@ -111,19 +90,10 @@ test_suite() {
     # Database encryption test.
     run_test \
         scenario=scenario_basic \
-        name="e2e-${backend_name}-basic-db-encryption" \
+        name="e2e-${backend_name}-basic-enc" \
         backend_runner=$backend_runner \
-        runtime=test-db-encryption \
-        client=test-db-encryption
-
-    # Enclave logger test.
-    run_test \
-        scenario=scenario_basic \
-        name="e2e-${backend_name}-logger" \
-        backend_runner=$backend_runner \
-        runtime=test-logger \
-        client=test-logger \
-        on_success_hook=assert_logger_works
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-enc
 
     # Discrepancy scenario.
     run_test \

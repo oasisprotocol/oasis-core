@@ -55,8 +55,6 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 
 			ch <- &protocol.Body{WorkerRuntimeCallBatchResponse: &protocol.WorkerRuntimeCallBatchResponse{
 				Batch: protocol.ComputedBatch{
-					Block:        rq.Block,
-					Calls:        rq.Calls,
 					Outputs:      rq.Calls,
 					NewStateRoot: stateRoot,
 				},

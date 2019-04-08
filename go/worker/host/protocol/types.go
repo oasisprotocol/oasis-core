@@ -3,8 +3,8 @@ package protocol
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/ias"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -19,8 +19,6 @@ func (m MessageType) String() string {
 		return "request"
 	case MessageResponse:
 		return "response"
-	case MessageKeepAlive:
-		return "keep-alive"
 	default:
 		return "invalid"
 	}
@@ -35,9 +33,6 @@ const (
 
 	// Response message.
 	MessageResponse MessageType = 2
-
-	// KeepAlive message.
-	MessageKeepAlive MessageType = 3
 )
 
 // Message is a protocol message.
@@ -56,30 +51,22 @@ type Body struct {
 	Error *Error
 
 	// Worker interface.
-	WorkerPingRequest                   *Empty
-	WorkerShutdownRequest               *Empty
-	WorkerCapabilityTEEGidRequest       *Empty
-	WorkerCapabilityTEEGidResponse      *WorkerCapabilityTEEGidResponse
-	WorkerCapabilityTEERakQuoteRequest  *WorkerCapabilityTEERakQuoteRequest
-	WorkerCapabilityTEERakQuoteResponse *WorkerCapabilityTEERakQuoteResponse
-	WorkerRPCCallRequest                *WorkerRPCCallRequest
-	WorkerRPCCallResponse               *WorkerRPCCallResponse
-	WorkerRuntimeCallBatchRequest       *WorkerRuntimeCallBatchRequest
-	WorkerRuntimeCallBatchResponse      *WorkerRuntimeCallBatchResponse
-	WorkerAbortRequest                  *Empty
-	WorkerAbortResponse                 *Empty
+	WorkerPingRequest                    *Empty
+	WorkerShutdownRequest                *Empty
+	WorkerCapabilityTEERakReportRequest  *WorkerCapabilityTEERakReportRequest
+	WorkerCapabilityTEERakReportResponse *WorkerCapabilityTEERakReportResponse
+	WorkerCapabilityTEERakAvrRequest     *WorkerCapabilityTEERakAvrRequest
+	WorkerCapabilityTEERakAvrResponse    *Empty
+	WorkerRPCCallRequest                 *WorkerRPCCallRequest
+	WorkerRPCCallResponse                *WorkerRPCCallResponse
+	WorkerRuntimeCallBatchRequest        *WorkerRuntimeCallBatchRequest
+	WorkerRuntimeCallBatchResponse       *WorkerRuntimeCallBatchResponse
+	WorkerAbortRequest                   *Empty
+	WorkerAbortResponse                  *Empty
 
 	// Host interface.
 	HostRPCCallRequest          *HostRPCCallRequest
 	HostRPCCallResponse         *HostRPCCallResponse
-	HostIasGetSpidRequest       *Empty
-	HostIasGetSpidResponse      *HostIasGetSpidResponse
-	HostIasGetQuoteTypeRequest  *Empty
-	HostIasGetQuoteTypeResponse *HostIasGetQuoteTypeResponse
-	HostIasSigRlRequest         *HostIasSigRlRequest
-	HostIasSigRlResponse        *HostIasSigRlResponse
-	HostIasReportRequest        *HostIasReportRequest
-	HostIasReportResponse       *HostIasReportResponse
 	HostStorageGetRequest       *HostStorageGetRequest
 	HostStorageGetResponse      *HostStorageGetResponse
 	HostStorageGetBatchRequest  *HostStorageGetBatchRequest
@@ -95,40 +82,42 @@ type Error struct {
 	Message string `codec:"message"`
 }
 
-// WorkerCapabilityTEEGidResponse is a worker RFC 0009 CapabilityTEE EPID group ID response message body.
-type WorkerCapabilityTEEGidResponse struct {
-	Gid [4]byte `codec:"gid"`
+// WorkerCapabilityTEERakReportRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
+type WorkerCapabilityTEERakReportRequest struct {
+	TargetInfo []byte `codec:"target_info"`
 }
 
-// WorkerCapabilityTEERakQuoteRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
-type WorkerCapabilityTEERakQuoteRequest struct {
-	QuoteType uint32   `codec:"quote_type"`
-	SPID      ias.SPID `codec:"spid"`
-	SigRL     []byte   `codec:"sig_rl"`
-}
-
-// WorkerCapabilityTEERakQuoteResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
-type WorkerCapabilityTEERakQuoteResponse struct {
+// WorkerCapabilityTEERakReportResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
+type WorkerCapabilityTEERakReportResponse struct {
 	RakPub signature.PublicKey `codec:"rak_pub"`
-	Quote  []byte              `codec:"quote"`
+	Report []byte              `codec:"report"`
+}
+
+// WorkerCapabilityTEERakAvrRequest is a worker RFC 0009 CapabilityTEE RAK AVR setup request message body.
+type WorkerCapabilityTEERakAvrRequest struct {
+	AVR ias.AVRBundle `codec:"avr"`
 }
 
 // WorkerRPCCallRequest is a worker RPC call request message body.
 type WorkerRPCCallRequest struct {
+	// Request.
 	Request []byte `codec:"request"`
+	// State root hash.
+	StateRoot hash.Hash `codec:"state_root"`
 }
 
 // WorkerRPCCallResponse is a worker RPC call response message body.
 type WorkerRPCCallResponse struct {
+	// Response.
 	Response []byte `codec:"response"`
+	// Batch of storage inserts.
+	StorageInserts []storage.Value `codec:"storage_inserts"`
+	// New state root hash.
+	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
 
 // ComputedBatch is a computed batch.
 type ComputedBatch struct {
-	// Block this batch was computed against.
-	Block roothash.Block `codec:"block"`
-	// Batch of runtime calls.
-	Calls runtime.Batch `codec:"calls"`
 	// Batch of runtime outputs.
 	Outputs runtime.Batch `codec:"outputs"`
 	// Batch of storage inserts.
@@ -144,7 +133,9 @@ func (b *ComputedBatch) String() string {
 
 // WorkerRuntimeCallBatchRequest is a worker batch runtime call request message body.
 type WorkerRuntimeCallBatchRequest struct {
-	Calls runtime.Batch  `codec:"calls"`
+	// Batch of runtime calls.
+	Calls runtime.Batch `codec:"calls"`
+	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }
 
@@ -153,58 +144,20 @@ type WorkerRuntimeCallBatchResponse struct {
 	Batch ComputedBatch `codec:"batch"`
 }
 
-// ClientEndpoint is a RPC client endpoint.
-type ClientEndpoint uint16
-
 const (
-	// EndpointInvalid is an invalid client endpoint (should never be seen on the wire).
-	EndpointInvalid ClientEndpoint = 0
-
 	// EndpointKeyManager is a key manager client endpoint.
-	EndpointKeyManager ClientEndpoint = 1
+	EndpointKeyManager string = "key-manager"
 )
 
 // HostRPCCallRequest is a host RPC call request message body.
 type HostRPCCallRequest struct {
-	Endpoint ClientEndpoint `codec:"endpoint"`
-	Request  []byte         `codec:"request"`
+	Endpoint string `codec:"endpoint"`
+	Request  []byte `codec:"request"`
 }
 
 // HostRPCCallResponse is a host RPC call response message body.
 type HostRPCCallResponse struct {
 	Response []byte `codec:"response"`
-}
-
-// HostIasGetSpidResponse is a host IAS get SPID response message body.
-type HostIasGetSpidResponse struct {
-	SPID ias.SPID `codec:"spid"`
-}
-
-// HostIasGetQuoteTypeResponse is a host IAS get quote type response message body.
-type HostIasGetQuoteTypeResponse struct {
-	QuoteType uint32 `codec:"quote_type"`
-}
-
-// HostIasSigRlRequest is a host IAS signature revocation list request message body.
-type HostIasSigRlRequest struct {
-	GID uint32 `codec:"gid"`
-}
-
-// HostIasSigRlResponse is a host IAS signature revocation list response message body.
-type HostIasSigRlResponse struct {
-	SigRL []byte `codec:"sigrl"`
-}
-
-// HostIasReportRequest is a host IAS report generation request message body.
-type HostIasReportRequest struct {
-	Quote []byte `codec:"quote"`
-}
-
-// HostIasReportResponse is a host IAS report generation response message body.
-type HostIasReportResponse struct {
-	AVR          []byte `codec:"avr"`
-	Signature    []byte `codec:"signature"`
-	Certificates []byte `codec:"certificates"`
 }
 
 // HostStorageGetRequest is a host storage get request message body.

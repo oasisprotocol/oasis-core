@@ -11,8 +11,8 @@ service EnclaveRpc {
 message CallEnclaveRequest {
     // Raw request payload that will be passed to the enclave.
     bytes payload = 1;
-    // Enclave routing key for cases where a single node supports multiple enclaves.
-    bytes enclave_id = 2;
+    // Endpoint identifier for cases where a single node supports multiple endpoints.
+    string endpoint = 2;
 }
 
 message CallEnclaveResponse {

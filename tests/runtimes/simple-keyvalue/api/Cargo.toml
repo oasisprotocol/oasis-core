@@ -1,14 +1,10 @@
 [package]
 name = "simple-keyvalue-api"
-version = "0.2.0-alpha"
+version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Example of using a simple key/value store API"
 
 [dependencies]
-ekiden-core = { path = "../../../../core/common" }
-ekiden-trusted = { path = "../../../../core/trusted" }
+ekiden-runtime = { path = "../../../../runtime" }
 serde = "1.0.71"
 serde_derive = "1.0"
-
-[build-dependencies]
-ekiden-tools = { path = "../../../../tools" }

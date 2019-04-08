@@ -27,7 +27,7 @@ shift
 # Run the build and tests
 #########################
 pushd $src_dir
-  cargo build
+  cargo build --all --exclude simple-keyvalue
   cargo fmt -- --check
-  cargo test --all --exclude ekiden-storage-dynamodb
+  cargo test --all --exclude simple-keyvalue
 popd

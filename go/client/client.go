@@ -3,7 +3,8 @@ package client
 import (
 	"context"
 	"crypto/x509"
-	"errors"
+	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -16,15 +17,19 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/cenkalti/backoff"
+	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/grpc/committee"
+	"github.com/oasislabs/ekiden/go/keymanager"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -35,11 +40,12 @@ const (
 )
 
 type clientCommon struct {
-	roothash  roothash.Backend
-	storage   storage.Backend
-	scheduler scheduler.Backend
-	registry  registry.Backend
-	syncable  common.Syncable
+	roothash   roothash.Backend
+	storage    storage.Backend
+	scheduler  scheduler.Backend
+	registry   registry.Backend
+	syncable   common.Syncable
+	keyManager *keymanager.KeyManager
 
 	ctx context.Context
 }
@@ -241,6 +247,38 @@ func (c *Client) IsSynced(ctx context.Context) (bool, error) {
 	}
 }
 
+// WatchBlocks subscribes to blocks for the given runtime.
+func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
+	return c.common.roothash.WatchBlocks(runtimeID)
+}
+
+// CallEnclave proxies an EnclaveRPC call to the given endpoint.
+//
+// The endpoint should be an URI in the form <endpoint-type>://<id> where the
+// <endpoint-type> is one of the known endpoint types and the <id> is an
+// endpoint-specific identifier.
+func (c *Client) CallEnclave(ctx context.Context, endpoint string, data []byte) ([]byte, error) {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	switch endpointURL.Scheme {
+	case EndpointKeyManager:
+		var runtimeID signature.PublicKey
+		if err = runtimeID.UnmarshalHex(endpointURL.Host); err != nil {
+			return nil, errors.Wrap(err, "malformed key manager EnclaveRPC endpoint")
+		}
+
+		return c.common.keyManager.CallRemote(ctx, runtimeID, data)
+	default:
+		c.logger.Warn("failed to route EnclaveRPC call",
+			"endpoint", endpoint,
+		)
+		return nil, fmt.Errorf("unknown EnclaveRPC endpoint: %s", endpoint)
+	}
+}
+
 // Cleanup stops all running block watchers and waits for them to finish.
 func (c *Client) Cleanup() {
 	for _, watcher := range c.watchers {
@@ -252,15 +290,24 @@ func (c *Client) Cleanup() {
 }
 
 // New returns a new instance of the Client service.
-func New(ctx context.Context, roothash roothash.Backend, storage storage.Backend, scheduler scheduler.Backend, registry registry.Backend, syncable common.Syncable) (*Client, error) {
+func New(
+	ctx context.Context,
+	roothash roothash.Backend,
+	storage storage.Backend,
+	scheduler scheduler.Backend,
+	registry registry.Backend,
+	syncable common.Syncable,
+	keyManager *keymanager.KeyManager,
+) (*Client, error) {
 	return &Client{
 		common: &clientCommon{
-			roothash:  roothash,
-			storage:   storage,
-			scheduler: scheduler,
-			registry:  registry,
-			syncable:  syncable,
-			ctx:       ctx,
+			roothash:   roothash,
+			storage:    storage,
+			scheduler:  scheduler,
+			registry:   registry,
+			syncable:   syncable,
+			keyManager: keyManager,
+			ctx:        ctx,
 		},
 		watchers: make(map[signature.MapKey]*blockWatcher),
 		logger:   logging.GetLogger("client"),

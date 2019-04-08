@@ -3,7 +3,7 @@
 ################
 docker_plugin: &docker_plugin_configuration
   oasislabs/docker#v2.1.0-oasis4:
-    image: "oasislabs/testing:0.2.0"
+    image: "oasislabs/testing:0.3.0"
     always_pull: true
     workdir: /workdir
     volumes:
@@ -68,82 +68,46 @@ steps:
 
   # This label needs to be synced with runtime-ethereum's
   # .buildkite/scripts/download_common_artifacts.sh.
-  - label: Build Rust worker, compute node and key manager node
+  - label: Build Rust runtime loader
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_generic.sh /workdir -Z unstable-options
+      - .buildkite/rust/build_generic.sh /workdir -p ekiden-runtime-loader
+      - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-enc-client
 
       # Upload the built artifacts.
       - cd /tmp/artifacts/debug
-      - buildkite-agent artifact upload ekiden-worker
-      - buildkite-agent artifact upload ekiden-keymanager-node
+      - buildkite-agent artifact upload ekiden-runtime-loader
       # Clients for E2E tests.
-      - buildkite-agent artifact upload ekiden-keymanager-test-client
-      - buildkite-agent artifact upload test-db-encryption-client
       - buildkite-agent artifact upload test-long-term-client
       - buildkite-agent artifact upload simple-keyvalue-client
-      - buildkite-agent artifact upload test-logger-client
+      - buildkite-agent artifact upload simple-keyvalue-enc-client
     agents:
       buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 
   ####################
-  # Enclave build jobs
+  # Runtime build jobs
   ####################
-  - label: Build test runtime
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_enclave.sh tests/runtimes/simple-keyvalue
-
-      # Upload the built artifacts.
-      - cd /tmp/artifacts/enclave
-      - buildkite-agent artifact upload simple-keyvalue.so
-      - buildkite-agent artifact upload simple-keyvalue.mrenclave
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin_configuration
-
   # This label needs to be synced with runtime-ethereum's
   # .buildkite/rust/build_and_test_runtime.sh and .buildkite/scripts/download_common_artifacts.sh.
-  - label: Build key manager enclave
+  - label: Build key manager runtime
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_enclave.sh key-manager/dummy/enclave
+      - .buildkite/rust/build_runtime.sh keymanager-runtime
+      # The test runtime must be built here as it requires the keymanager enclave hash.
+      - export KM_ENCLAVE_PATH=/tmp/artifacts/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
 
       # Upload the built artifacts.
-      - cd /tmp/artifacts/enclave
-      - buildkite-agent artifact upload ekiden-keymanager-trusted.so
-      - buildkite-agent artifact upload ekiden-keymanager-trusted.mrenclave
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin_configuration
-
-  - label: Build test db encryption runtime
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_enclave.sh tests/runtimes/test-db-encryption
-
-      # Upload the built artifacts.
-      - cd /tmp/artifacts/enclave
-      - buildkite-agent artifact upload test-db-encryption.so
-      - buildkite-agent artifact upload test-db-encryption.mrenclave
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin_configuration
-
-  - label: Build test logger runtime
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_enclave.sh tests/runtimes/test-logger
-
-      # Upload the built artifacts.
-      - cd /tmp/artifacts/enclave
-      - buildkite-agent artifact upload test-logger.so
-      - buildkite-agent artifact upload test-logger.mrenclave
+      - cd /tmp/artifacts/x86_64-fortanix-unknown-sgx/debug
+      - buildkite-agent artifact upload ekiden-keymanager-runtime.sgxs
+      - buildkite-agent artifact upload simple-keyvalue.sgxs
+      - cd /tmp/artifacts/debug
+      - buildkite-agent artifact upload ekiden-keymanager-runtime
+      - buildkite-agent artifact upload simple-keyvalue
     agents:
       buildkite_agent_size: large
     plugins:
@@ -178,16 +142,6 @@ steps:
   ###############
   # E2E test jobs
   ###############
-  - label: Dummy key manager tests
-    timeout_in_minutes: 5
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_dummy_keymanager.sh
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin_configuration
-
   - label: E2E tests (%n)
     parallelism: 4
     timeout_in_minutes: 20

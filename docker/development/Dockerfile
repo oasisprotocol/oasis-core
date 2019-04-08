@@ -1,29 +1,6 @@
-FROM ubuntu:18.04 as intermediate
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-# build linux-sgx-sdk but don't include build files in final image
-RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
-    # for SGX SDK
-    build-essential git cmake \
-    wget python pkg-config software-properties-common \
-    autoconf automake libtool ocaml ocamlbuild \
-    # for SGX PSW
-    libssl-dev libcurl4-openssl-dev
-
-RUN mkdir /root/.ssh/
-# read-only github deploy key for oasislabs/linux-sgx repo
-COPY deploy_key /root/.ssh/id_rsa
-RUN chmod 600 /root/.ssh/id_rsa && \
-    ssh-keyscan github.com >> /root/.ssh/known_hosts && \
-    git clone --depth 1 -b ekiden-next git@github.com:oasislabs/linux-sgx.git && \
-    cd linux-sgx && git fetch --tags && git checkout v2.4-ekiden1 && \
-    ./download_prebuilt.sh && make -j4 sdk && make -j4 sdk_install_pkg && \
-    ./linux/installer/bin/sgx_linux_x64_sdk_*.bin --prefix /opt && \
-    cd -
-
 FROM ubuntu:18.04
 
+ARG GO_VERSION=1.12
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
@@ -35,8 +12,6 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     python-pip \
     # for rust openssl
     libssl-dev libcurl4-openssl-dev \
-    # for rocksdb
-    libsnappy-dev librocksdb-dev \
     # for benchmarks
     python3-prometheus-client \
     # for seccomp Go bindings support
@@ -47,43 +22,25 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     # for linting Git commits
     pip install gitlint
 
-# Required because librocksdb5.8 doesn't provide it
-COPY librocksdb.pc /usr/lib/x86_64-linux-gnu/pkgconfig/librocksdb.pc
-# Required because rocksdb bindings search with lib prefix
-RUN cp /usr/lib/x86_64-linux-gnu/pkgconfig/snappy.pc /usr/lib/x86_64-linux-gnu/pkgconfig/libsnappy.pc
-
 ENV HOME="/root"
 ENV GOPATH="/go"
 ENV PATH="${HOME}/.cargo/bin:/go/bin:/usr/local/go/bin:${PATH}"
 
-# install protobuf (apt system v3.0 fails to compile our protos)
+# Install protobuf (apt system v3.0 fails to compile our protos).
 RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
     unzip protoc-3.5.1-linux-x86_64.zip -x readme.txt -d /usr && \
     rm protoc-3.5.1-linux-x86_64.zip && \
     chmod a+rx /usr/bin/protoc
 
-# install Linux SGX SDK
-COPY --from=intermediate /opt/sgxsdk /opt/sgxsdk
-RUN echo "source /opt/sgxsdk/environment" >> /root/.bashrc
-
-# install rust version supported by rust-sgx-sdk
+# Install Rust.
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
-    sh rustup.sh -y --default-toolchain nightly-2019-01-28 && \
-    rustup component add rust-src && \
-    cargo install rustfmt-nightly --version 1.0.1 --force && \
+    sh rustup.sh -y --default-toolchain nightly-2019-03-21 && \
+    rustup target add x86_64-fortanix-unknown-sgx && \
+    rustup component add rustfmt && \
+    cargo install fortanix-sgx-tools sgxs-tools && \
     cargo install xargo
 
-# install node / npm / truffle.
-RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
-ENV NVM_DIR="${HOME}/.nvm"
-RUN . $NVM_DIR/nvm.sh && \
-    nvm install lts/carbon --latest-npm && \
-    nvm use lts/carbon && \
-    nvm alias default node && \
-    npm install -g truffle-oasis
-
-# Install golang and utilities.
-ARG GO_VERSION=1.12
+# Install Go and utilities.
 RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
@@ -97,6 +54,15 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     # Install golangci-lint.
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.15.0 && \
     mv /tmp/bin/golangci-lint /go/bin
+
+# Install node / npm / truffle.
+RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
+ENV NVM_DIR="${HOME}/.nvm"
+RUN . $NVM_DIR/nvm.sh && \
+    nvm install lts/carbon --latest-npm && \
+    nvm use lts/carbon && \
+    nvm alias default node && \
+    npm install -g truffle-oasis
 
 # Install bubblewrap (we need version 0.3.1 which is not available for 18.04).
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.3.1-2_amd64.deb && \

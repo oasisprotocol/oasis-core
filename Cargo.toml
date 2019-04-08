@@ -1,97 +1,25 @@
 [workspace]
 members = [
+    "runtime",
+    "runtime-loader",
+    "client",
+    "keymanager-client",
+    "keymanager-runtime",
     "tools",
-
-    # Instrumentation.
-    "instrumentation",
-    "instrumentation/prometheus",
-
-    # Tracing.
-    "tracing",
-
-    # Common.
-    "common",
-    "common/api",
-
-    # Root hash interface.
-    "roothash/api",
-    "roothash/base",
-    "roothash/client",
-
-    # Storage interface.
-    "storage/base",
-    "storage/dummy",
-    "storage/client",
-    "storage/persistent",
-    "storage/lru_cache",
-    "storage/batch",
-
-    # Enclave loader (+ attestation).
-    "enclave/common",
-    "enclave/untrusted",
-    "enclave/trusted",
-
-    # RPC.
-    "rpc/api",
-    "rpc/common",
-    "rpc/client",
-    "rpc/untrusted",
-    "rpc/trusted",
-    "rpc/edl",
-
-    # Database.
-    "db/untrusted",
-    "db/trusted",
-    "db/edl",
-
-    # Runtime invocation.
-    "runtime/common",
-    "runtime/client",
-    "runtime/untrusted",
-    "runtime/trusted",
-    "runtime/edl",
-
-    # Core.
-    "core/common",
-    "core/untrusted",
-    "core/trusted",
-    "core/edl",
-
-    # Compute worker.
-    "worker",
 
     # Test runtimes.
     "tests/runtimes/simple-keyvalue",
-    "tests/runtimes/test-db-encryption",
-    "tests/runtimes/test-logger",
-
     # Test clients.
     "tests/clients/simple-keyvalue",
-    "tests/clients/test-db-encryption",
-    "tests/clients/test-logger",
+    "tests/clients/simple-keyvalue-enc",
     "tests/clients/test-long-term",
-
-    # Registry.
-    "registry/api",
-    "registry/base",
-    "registry/client",
-
-    # Scheduler.
-    "scheduler/api",
-    "scheduler/base",
-    "scheduler/client",
-
-    # Key manager.
-    "key-manager/api",
-    "key-manager/common",
-    "key-manager/client",
-    "key-manager/dummy/edl",
-    "key-manager/dummy/enclave",
-    "key-manager/dummy/keygen",
-    "key-manager/dummy/untrusted",
-    "key-manager/node",
 ]
-exclude = [ "thirdparty" ]
+
+[patch.crates-io]
+# TODO: Remove when merged upstream (briansmith/ring#738).
+ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }
+# TODO: Remove when merged upstream (rust-lang-deprecated/rustc-serialize#195).
+rustc-serialize = { git = "https://github.com/jethrogb/rustc-serialize", branch = "portability" }
 
 [profile.release]
 panic = "abort"
