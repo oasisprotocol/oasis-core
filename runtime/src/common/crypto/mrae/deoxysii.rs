@@ -55,9 +55,9 @@ pub fn box_seal(
 ) -> Fallible<Vec<u8>> {
     let key = derive_symmetric_key(peers_public_key, private_key);
 
-    let d2 = DeoxysII::new(&key)?;
+    let d2 = DeoxysII::new(&key);
 
-    d2.seal(nonce, plaintext, additional_data)
+    Ok(d2.seal(nonce, plaintext, additional_data))
 }
 
 /// Unboxes ("opens") the provided additional data and ciphertext via
@@ -74,9 +74,10 @@ pub fn box_open(
 ) -> Fallible<Vec<u8>> {
     let key = derive_symmetric_key(peers_public_key, private_key);
 
-    let d2 = DeoxysII::new(&key)?;
+    let d2 = DeoxysII::new(&key);
 
     d2.open(nonce, ciphertext, additional_data)
+        .map_err(|err| err.into())
 }
 
 #[cfg(test)]
