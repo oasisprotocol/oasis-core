@@ -107,28 +107,39 @@ func LoadOrGenerate(dataDir string) (*Identity, error) {
 		}
 	}
 
-	// Generate X509 certificate based on the key pair. We generate a new
-	// certificate on each startup so we can bump validity.
-	certTemplate := tlsTemplate
-	// Valid since one hour before issue.
-	certTemplate.NotBefore = time.Now().Add(-1 * time.Hour)
-	// Valid for one year.
-	// TODO: Use shorter validity and support proper rotation while the node is running.
-	certTemplate.NotAfter = time.Now().AddDate(1, 0, 0)
-	tlsCertDer, err = x509.CreateCertificate(rand.Reader, &certTemplate, &certTemplate, tlsKey.Public(), tlsKey)
-	if err != nil {
-		return nil, err
-	}
-
-	// Persist TLS certificate.
+	// TODO: Always generate a fresh certificate once ekiden#1541 is done.
 	tlsCertPath := filepath.Join(dataDir, tlsCertFilename)
-	tlsCertPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  tlsCertPEMType,
-		Bytes: tlsCertDer,
-	})
+	tlsCertPEM, err := ioutil.ReadFile(tlsCertPath)
+	if err == nil {
+		// Decode certificate.
+		blk, _ := pem.Decode(tlsCertPEM)
+		if blk == nil || blk.Type != tlsCertPEMType {
+			return nil, errors.New("failed to parse TLS certificate")
+		}
 
-	if err := ioutil.WriteFile(tlsCertPath, tlsCertPEM, 0644); err != nil {
-		return nil, err
+		tlsCertDer = blk.Bytes
+	} else {
+		// Generate X509 certificate based on the key pair.
+		certTemplate := tlsTemplate
+		// Valid since one hour before issue.
+		certTemplate.NotBefore = time.Now().Add(-1 * time.Hour)
+		// Valid for one year.
+		// TODO: Use shorter validity and support proper rotation while the node is running.
+		certTemplate.NotAfter = time.Now().AddDate(1, 0, 0)
+		tlsCertDer, err = x509.CreateCertificate(rand.Reader, &certTemplate, &certTemplate, tlsKey.Public(), tlsKey)
+		if err != nil {
+			return nil, err
+		}
+
+		// Persist TLS certificate.
+		tlsCertPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  tlsCertPEMType,
+			Bytes: tlsCertDer,
+		})
+
+		if err := ioutil.WriteFile(tlsCertPath, tlsCertPEM, 0644); err != nil {
+			return nil, err
+		}
 	}
 
 	tlsCert := &tls.Certificate{
