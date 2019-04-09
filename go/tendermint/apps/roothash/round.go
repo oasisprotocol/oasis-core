@@ -46,8 +46,7 @@ type nodeInfo struct {
 }
 
 type roundState struct {
-	Committee *scheduler.Committee `codec:"committee"`
-	// (%%% review) I didn't find anything that serializes this, so it should be safe to change
+	Committee        *scheduler.Committee                            `codec:"committee"`
 	ComputationGroup map[signature.MapKey]nodeInfo                   `codec:"computation_group"`
 	Commitments      map[signature.MapKey]*commitment.OpenCommitment `codec:"commitments"`
 	CurrentBlock     *block.Block                                    `codec:"current_block"`

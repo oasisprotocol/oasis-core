@@ -265,7 +265,6 @@ impl Dispatcher {
                     let rak_sig = if self.rak.public_key().is_some() {
                         let rak_sig_message = BatchSigMessage {
                             previous_block: &block,
-                            // (%%% review) aw we allocate a vector to hold the serialized form
                             input_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&calls).unwrap()),
                             output_hash: &Hash::digest_bytes(
                                 &serde_cbor::to_vec(&outputs).unwrap(),
