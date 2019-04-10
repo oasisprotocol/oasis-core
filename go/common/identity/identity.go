@@ -119,6 +119,10 @@ func LoadOrGenerate(dataDir string) (*Identity, error) {
 
 		tlsCertDer = blk.Bytes
 	} else {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+
 		// Generate X509 certificate based on the key pair.
 		certTemplate := tlsTemplate
 		// Valid since one hour before issue.
