@@ -9,6 +9,7 @@ docker_plugin: &docker_plugin_configuration
     volumes:
       - .:/workdir
       - /var/lib/buildkite-agent/.ssh:/root/.ssh
+      - /var/lib/buildkite-agent/.ekiden:/root/.ekiden
       # Shared Rust incremental compile caches.
       - /tmp/cargo_ic/release:/workdir/target/release/incremental
       - /tmp/cargo_ic/release_sgx:/workdir/target/x86_64-unknown-linux-sgx/release/incremental
@@ -24,6 +25,8 @@ docker_plugin: &docker_plugin_configuration
       - "LANG=C.UTF-8"
       - "CARGO_TARGET_DIR=/workdir/target"
       - "CARGO_INSTALL_ROOT=/root/.cargo"
+      - "KM_DUMMY_ENCRYPTION_KEY=/root/.ekiden/keymanager_dummy_encryption.key"
+      - "KM_DUMMY_SIGNING_KEY=/root/.ekiden/keymanager_dummy_signing.key"
     propagate-environment: true
 
 steps:

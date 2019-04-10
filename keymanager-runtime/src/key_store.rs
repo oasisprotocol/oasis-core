@@ -15,16 +15,22 @@ lazy_static! {
 }
 
 /// A dummy key for use in tests where confidentiality is not needed.
-const UNSECRET_ENCRYPTION_KEY: StateKey = StateKey([
+#[cfg(feature = "custom-keys")]
+const ENCRYPTION_KEY: &'static [u8] = include_bytes!(env!("KM_DUMMY_ENCRYPTION_KEY"));
+#[cfg(not(feature = "custom-keys"))]
+const ENCRYPTION_KEY: &'static [u8] = &[
     119, 206, 190, 82, 117, 21, 62, 84, 119, 212, 117, 60, 32, 158, 183, 32, 68, 55, 131, 112, 38,
     169, 217, 219, 58, 109, 194, 211, 89, 39, 198, 204, 254, 104, 202, 114, 203, 213, 89, 44, 192,
     168, 42, 136, 220, 230, 66, 74, 197, 220, 22, 146, 84, 121, 175, 216, 144, 182, 40, 179, 6, 73,
     177, 9,
-]);
+];
 
 /// A dummy key for use in tests where integrity is not needed.
 /// Public Key: 0x9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f
-const UNSECRET_SIGNING_KEY_PKCS8: [u8; 85] = [
+#[cfg(feature = "custom-keys")]
+const SIGNING_KEY_PKCS8: &'static [u8] = include_bytes!(env!("KM_DUMMY_SIGNING_KEY"));
+#[cfg(not(feature = "custom-keys"))]
+const SIGNING_KEY_PKCS8: &'static [u8] = &[
     48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 124, 181, 54, 35, 91, 34, 238,
     29, 127, 17, 115, 64, 41, 135, 165, 19, 211, 246, 106, 37, 136, 149, 157, 187, 145, 157, 192,
     170, 25, 201, 141, 161, 35, 3, 33, 0, 157, 65, 168, 116, 184, 14, 57, 164, 12, 150, 68, 233,
@@ -44,8 +50,8 @@ pub struct KeyStore {
 impl KeyStore {
     fn new() -> Self {
         Self {
-            encryption_key: UNSECRET_ENCRYPTION_KEY,
-            signing_key: signature::PrivateKey::from_pkcs8(&UNSECRET_SIGNING_KEY_PKCS8).unwrap(),
+            encryption_key: StateKey::from(ENCRYPTION_KEY),
+            signing_key: signature::PrivateKey::from_pkcs8(SIGNING_KEY_PKCS8).unwrap(),
         }
     }
 
