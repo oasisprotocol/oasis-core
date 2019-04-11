@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,8 +22,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/sgx/aesm"
 	cias "github.com/oasislabs/ekiden/go/common/sgx/ias"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
 )
@@ -241,19 +238,6 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) []string {
 	args := []string{
 		"--host-socket", hostSocket,
-	}
-	if spec, ok := proxies[MetricsProxyKey]; ok {
-		config := metrics.GetServiceConfig()
-		args = append(args, "--prometheus-mode", config.Mode)
-		args = append(args, "--prometheus-metrics-addr", spec.innerAddr)
-		args = append(args, "--prometheus-push-job-name", config.JobName)
-		args = append(args, "--prometheus-push-instance-label", config.InstanceLabel)
-	}
-	if spec, ok := proxies[TracingProxyKey]; ok {
-		config := tracing.GetServiceConfig()
-		args = append(args, "--tracing-enable")
-		args = append(args, "--tracing-sample-probability", strconv.FormatFloat(config.SamplerParam, 'f', -1, 64))
-		args = append(args, "--tracing-agent-addr", spec.innerAddr)
 	}
 	for name, proxy := range proxies {
 		if proxy.bypass {
