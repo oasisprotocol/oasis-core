@@ -12,6 +12,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -146,6 +147,7 @@ type Node struct {
 	epochtime  epochtime.Backend
 	scheduler  scheduler.Backend
 	workerHost host.Host
+	syncable   common.Syncable
 
 	cfg Config
 
@@ -179,7 +181,6 @@ func (n *Node) Name() string {
 
 // Start starts the service.
 func (n *Node) Start() error {
-	n.logger.Info("starting committee node")
 	go n.worker()
 	return nil
 }
@@ -836,6 +837,18 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 }
 
 func (n *Node) worker() {
+	// Delay starting of committee node until after the consensus service
+	// has finished initial synchronization, if applicable.
+	if n.syncable != nil {
+		n.logger.Info("delaying committee node start until after initial synchronization")
+		select {
+		case <-n.quitCh:
+			return
+		case <-n.syncable.Synced():
+		}
+	}
+	n.logger.Info("starting committee node")
+
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
 
@@ -932,6 +945,7 @@ func NewNode(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
+	syncable common.Syncable,
 	worker host.Host,
 	p2p *p2p.P2P,
 	cfg Config,
@@ -950,6 +964,7 @@ func NewNode(
 		registry:         registry,
 		epochtime:        epochtime,
 		scheduler:        scheduler,
+		syncable:         syncable,
 		workerHost:       worker,
 		cfg:              cfg,
 		ctx:              ctx,
