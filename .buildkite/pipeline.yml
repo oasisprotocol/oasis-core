@@ -2,7 +2,7 @@
 # Build pipeline
 ################
 docker_plugin: &docker_plugin_configuration
-  oasislabs/docker#v2.1.0-oasis4:
+  oasislabs/docker#v3.0.1-oasis1:
     image: "oasislabs/testing:0.3.0"
     always_pull: true
     workdir: /workdir
