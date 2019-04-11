@@ -16,9 +16,13 @@ Prerequisites:
 * install the [Fortanix Rust SGX](https://edp.fortanix.com) target by
   `rustup target add x86_64-fortanix-unknown-sgx` and utilities by
   `cargo install fortanix-sgx-tools sgxs-tools`,
-* install [Go](https://golang.org) (at least version 1.12),
+* install [Go](https://golang.org) (at least version 1.12) and
+  [protoc-gen-go](https://github.com/golang/protobuf),
 * install [bubblewrap](https://github.com/projectatomic/bubblewrap) (at
-  least version 0.3.1).
+  least version 0.3.1),
+* install `libssl-dev`, `protobuf-compiler`, `cmake`, and `libseccomp-dev`
+  packages. On typical Ubuntu, you can just run:
+  ```sudo apt install libssl-dev protobuf-compiler cmake libseccomp-dev```
 
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
