@@ -12,15 +12,17 @@ docker_plugin: &docker_plugin_configuration
       - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
       - /var/lib/buildkite-agent/.codecov:/root/.codecov
       # Shared Rust incremental compile caches.
-      - /tmp/cargo_ic/debug:/tmp/artifacts/debug/incremental
-      - /tmp/cargo_ic/debug_sgx:/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
+      - /var/lib/buildkite-agent/.cache/cargo_ic/debug:/tmp/artifacts/debug/incremental
+      - /var/lib/buildkite-agent/.cache/cargo_ic/debug_sgx:/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
       # Shared Rust package checkouts directory.
-      - /tmp/cargo_pkg/git:/root/.cargo/git
-      - /tmp/cargo_pkg/registry:/root/.cargo/registry
+      - /var/lib/buildkite-agent/.cache/cargo_pkg/git:/root/.cargo/git
+      - /var/lib/buildkite-agent/.cache/cargo_pkg/registry:/root/.cargo/registry
       # Shared Rust SGX standard library artifacts cache.
-      - /tmp/xargo_cache:/root/.xargo
+      - /var/lib/buildkite-agent/.cache/xargo_cache:/root/.xargo
       # Shared Go package checkouts directory.
-      - /tmp/go_pkg:/root/go/pkg
+      - /var/lib/buildkite-agent/.cache/go_pkg:/root/go/pkg
+    tmpfs:
+      - /tmp:exec
     environment:
       - "LC_ALL=C.UTF-8"
       - "LANG=C.UTF-8"
