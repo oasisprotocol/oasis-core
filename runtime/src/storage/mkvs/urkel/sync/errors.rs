@@ -20,4 +20,6 @@ pub enum SubtreeError {
     TooManyFullNodes,
     #[fail(display = "urkel: invalid subtree index")]
     InvalidSubtreeIndex,
+    #[fail(display = "urkel: malformed subtree")]
+    Malformed,
 }

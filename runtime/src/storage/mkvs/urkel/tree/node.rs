@@ -4,11 +4,8 @@ use failure::Fallible;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*},
+    storage::mkvs::urkel::{cache::*, marshal::*, tree::*},
 };
-
-const INTERNAL_NODE_PREFIX: u8 = 1;
-const LEAF_NODE_PREFIX: u8 = 0;
 
 /// Common interface for node-like objects in the tree.
 pub trait Node {
@@ -22,8 +19,6 @@ pub trait Node {
     fn validate(&mut self, h: Hash) -> Fallible<()>;
     /// Duplicate the node but include only hash references.
     fn extract(&self) -> NodeRef;
-    fn marshal_binary(&self) -> Fallible<Vec<u8>>;
-    fn unmarshal_binary(&mut self, data: Vec<u8>) -> Fallible<()>;
 }
 
 /// `NodeID` is a root-relative identifier which uniquely identifies a node
@@ -45,7 +40,7 @@ impl NodeID {
 }
 
 /// A box type that can contain either internal or leaf nodes.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum NodeBox {
     Internal(InternalNode),
     Leaf(LeafNode),
@@ -86,7 +81,9 @@ impl Node for NodeBox {
             NodeBox::Leaf(ref n) => n.extract(),
         }
     }
+}
 
+impl Marshal for NodeBox {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         match self {
             NodeBox::Internal(ref n) => n.marshal_binary(),
@@ -94,10 +91,25 @@ impl Node for NodeBox {
         }
     }
 
-    fn unmarshal_binary(&mut self, data: Vec<u8>) -> Fallible<()> {
-        match self {
-            NodeBox::Internal(ref mut n) => n.unmarshal_binary(data),
-            NodeBox::Leaf(ref mut n) => n.unmarshal_binary(data),
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+        if data.len() < 1 {
+            Err(TreeError::MalformedNode.into())
+        } else {
+            if data[0] == INTERNAL_NODE_PREFIX {
+                *self = NodeBox::Internal(InternalNode {
+                    ..Default::default()
+                });
+            } else if data[0] == LEAF_NODE_PREFIX {
+                *self = NodeBox::Leaf(LeafNode {
+                    ..Default::default()
+                })
+            } else {
+                return Err(TreeError::MalformedNode.into());
+            }
+            match self {
+                NodeBox::Internal(ref mut n) => n.unmarshal_binary(data),
+                NodeBox::Leaf(ref mut n) => n.unmarshal_binary(data),
+            }
         }
     }
 }
@@ -181,6 +193,18 @@ impl CacheItem for NodePointer {
     }
 }
 
+impl PartialEq for NodePointer {
+    fn eq(&self, other: &NodePointer) -> bool {
+        if self.clean && other.clean {
+            self.hash == other.hash
+        } else {
+            self.node != None && self.node == other.node
+        }
+    }
+}
+
+impl Eq for NodePointer {}
+
 /// An internal tree node with two children.
 #[derive(Debug, Default)]
 pub struct InternalNode {
@@ -238,7 +262,9 @@ impl Node for InternalNode {
             right: self.right.borrow().extract(),
         })))
     }
+}
 
+impl Marshal for InternalNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
         result.push(INTERNAL_NODE_PREFIX);
@@ -248,13 +274,13 @@ impl Node for InternalNode {
         Ok(result)
     }
 
-    fn unmarshal_binary(&mut self, data: Vec<u8>) -> Fallible<()> {
-        if data.len() != 1 + 2 * Hash::len() || data[0] != INTERNAL_NODE_PREFIX {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+        if data.len() < 1 + 2 * Hash::len() || data[0] != INTERNAL_NODE_PREFIX {
             return Err(TreeError::MalformedNode.into());
         }
 
         let left_hash = Hash::from(&data[1..(1 + Hash::len())]);
-        let right_hash = Hash::from(&data[(1 + Hash::len())..]);
+        let right_hash = Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]);
 
         self.clean = false;
         if left_hash.is_empty() {
@@ -278,9 +304,21 @@ impl Node for InternalNode {
             }));
         }
 
-        Ok(())
+        Ok(1 + 2 * Hash::len())
     }
 }
+
+impl PartialEq for InternalNode {
+    fn eq(&self, other: &InternalNode) -> bool {
+        if self.clean && other.clean {
+            self.hash == other.hash
+        } else {
+            self.left == other.left && self.right == other.right
+        }
+    }
+}
+
+impl Eq for InternalNode {}
 
 /// A leaf node containing a key/value pair.
 #[derive(Debug, Default)]
@@ -337,7 +375,9 @@ impl Node for LeafNode {
             value: self.value.borrow().extract(),
         })))
     }
+}
 
+impl Marshal for LeafNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
         result.push(LEAF_NODE_PREFIX);
@@ -347,8 +387,8 @@ impl Node for LeafNode {
         Ok(result)
     }
 
-    fn unmarshal_binary(&mut self, data: Vec<u8>) -> Fallible<()> {
-        if data.len() != 1 + 2 * Hash::len() || data[0] != LEAF_NODE_PREFIX {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+        if data.len() < 1 + 2 * Hash::len() || data[0] != LEAF_NODE_PREFIX {
             return Err(TreeError::MalformedNode.into());
         }
 
@@ -356,14 +396,26 @@ impl Node for LeafNode {
         self.key = Hash::from(&data[1..(1 + Hash::len())]);
         self.value = Rc::new(RefCell::new(ValuePointer {
             clean: true,
-            hash: Hash::from(&data[(1 + Hash::len())..]),
+            hash: Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]),
             value: None,
             ..Default::default()
         }));
 
-        Ok(())
+        Ok(1 + 2 * Hash::len())
     }
 }
+
+impl PartialEq for LeafNode {
+    fn eq(&self, other: &LeafNode) -> bool {
+        if self.clean && other.clean {
+            self.hash == other.hash
+        } else {
+            self.key == other.key && self.value == other.value
+        }
+    }
+}
+
+impl Eq for LeafNode {}
 
 pub type Value = Vec<u8>;
 /// A reference-counted value pointer.
@@ -429,6 +481,18 @@ impl CacheItem for ValuePointer {
         }
     }
 }
+
+impl PartialEq for ValuePointer {
+    fn eq(&self, other: &ValuePointer) -> bool {
+        if self.clean && other.clean {
+            self.hash == other.hash
+        } else {
+            self.value != None && self.value == other.value
+        }
+    }
+}
+
+impl Eq for ValuePointer {}
 
 #[macro_export]
 macro_rules! classify_noderef {

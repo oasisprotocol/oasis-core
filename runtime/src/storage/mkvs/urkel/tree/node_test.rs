@@ -1,6 +1,9 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 
-use crate::{common::crypto::hash::Hash, storage::mkvs::urkel::tree::*};
+use crate::{
+    common::crypto::hash::Hash,
+    storage::mkvs::urkel::{marshal::*, tree::*},
+};
 
 #[test]
 fn test_serialization_leaf() {
@@ -24,7 +27,7 @@ fn test_serialization_leaf() {
         ..Default::default()
     };
     decoded_leaf_node
-        .unmarshal_binary(marshaled)
+        .unmarshal_binary(marshaled.as_slice())
         .expect("unmarshal");
 
     assert_eq!(false, decoded_leaf_node.clean);
@@ -62,7 +65,7 @@ fn test_serialization_internal() {
         ..Default::default()
     };
     decoded_int_node
-        .unmarshal_binary(marshaled)
+        .unmarshal_binary(marshaled.as_slice())
         .expect("unmarshal");
 
     assert_eq!(false, decoded_int_node.clean);
