@@ -246,7 +246,7 @@ fn test_syncer_basic_no_prefetch() {
         assert_eq!(0, stats.subtree_fetches, "subtree fetches (no prefetch)");
         assert_eq!(0, stats.node_fetches, "node fetches (no prefetch)");
         assert_eq!(12056, stats.path_fetches, "path fetches (no prefetch)");
-        //TODO assert_eq!(10000, stats.value_fetches, "value fetches (no prefetch)");
+        assert_eq!(0, stats.value_fetches, "value fetches (no prefetch)");
     }
 }
 
@@ -293,7 +293,7 @@ fn test_syncer_basic_with_prefetch() {
         assert_eq!(1, stats.subtree_fetches, "subtree fetches (with prefetch)");
         assert_eq!(0, stats.node_fetches, "node fetches (with prefetch)");
         assert_eq!(12158, stats.path_fetches, "path fetches (with prefetch)");
-        //TODO assert_eq!(10000, stats.value_fetches, "value fetches (with prefetch)");
+        assert_eq!(0, stats.value_fetches, "value fetches (with prefetch)");
     }
 }
 

@@ -124,7 +124,7 @@ func TestExtractLeafNode(t *testing.T) {
 	require.Equal(t, key, exLeafNode.Key, "extracted leaf must have the same key")
 	require.Equal(t, true, exLeafNode.Value.Clean, "extracted leaf must have clean value")
 	require.Equal(t, valueHash, exLeafNode.Value.Hash, "extracted leaf's value must have the same hash")
-	require.Nil(t, exLeafNode.Value.Value, "extracted leaf's value must have nil value")
+	require.NotNil(t, exLeafNode.Value.Value, "extracted leaf's value must have non-nil value")
 }
 
 func TestExtractInternalNode(t *testing.T) {

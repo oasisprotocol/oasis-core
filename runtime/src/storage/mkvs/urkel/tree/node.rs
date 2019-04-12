@@ -407,6 +407,7 @@ impl ValuePointer {
         Rc::new(RefCell::new(ValuePointer {
             clean: true,
             hash: self.hash,
+            value: self.value.clone(),
             ..Default::default()
         }))
     }
