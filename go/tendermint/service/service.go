@@ -64,4 +64,7 @@ type TendermintService interface {
 
 	// Genesis returns the tendermint genesis block information.
 	Genesis() (*tmrpctypes.ResultGenesis, error)
+
+	// IsSeed returns if the tendermint service is set up as a seed node.
+	IsSeed() bool
 }

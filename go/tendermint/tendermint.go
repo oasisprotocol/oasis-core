@@ -56,6 +56,9 @@ const (
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
+	cfgP2PSeeds    = "tendermint.seeds"
+	cfgP2PSeedMode = "tendermint.seedMode"
+
 	cfgLogDebug = "tendermint.log.debug"
 
 	cfgDebugBootstrapAddress   = "tendermint.debug.bootstrap.address"
@@ -250,6 +253,11 @@ func (t *tendermintService) Genesis() (*tmrpctypes.ResultGenesis, error) {
 	return t.client.Genesis()
 }
 
+func (t *tendermintService) IsSeed() bool {
+	// XXX: Probably should properly check and not rely on the flag.
+	return viper.GetBool(cfgP2PSeedMode)
+}
+
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	if err := t.ForceInitialize(); err != nil {
 		return err
@@ -355,6 +363,12 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
 	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
+	tenderConfig.P2P.SeedMode = viper.GetBool(cfgP2PSeedMode)
+	// Seed Ids need to be Lowecase as p2p/transport.go:MultiplexTransport.upgrade()
+	// uses a case sensitive string comparision to validate public keys
+	// Since Seeds is expected to be in comma-delimited id@host:port format,
+	// lowercasing the whole string is ok.
+	tenderConfig.P2P.Seeds = strings.ToLower(viper.GetString(cfgP2PSeeds))
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
@@ -412,10 +426,7 @@ func (t *tendermintService) lazyInit() error {
 }
 
 func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.GenesisDoc, error) {
-	var (
-		genDoc   *bootstrap.GenesisDocument
-		isSingle bool
-	)
+	var genDoc *bootstrap.GenesisDocument
 
 	genFile := tenderConfig.GenesisFile()
 	if addr := viper.GetString(cfgDebugBootstrapAddress); addr != "" {
@@ -460,7 +471,6 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			},
 			GenesisTime: time.Now(),
 		}
-		isSingle = true
 	} else {
 		// The genesis document is just an array of GenesisValidator(s)
 		// in JSON format for now.
@@ -475,10 +485,8 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		}
 	}
 
-	if !isSingle {
-		// So, the "right" thing to do is to use seed nodes, but those are totally
-		// 100% dedicated to just seeding.  PEX works just fine off the validators,
-		// so ensure that the validators exist in the address book, the hard way.
+	if t.IsSeed() {
+		// Add validators to seed nodes address books
 		//
 		// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
 		// sensitive string comparision to validate public keys.
@@ -767,6 +775,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
 		cmd.Flags().String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 		cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+		cmd.Flags().Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
+		cmd.Flags().String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
@@ -782,6 +792,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgConsensusEmptyBlockInterval,
 		cfgABCIPruneStrategy,
 		cfgABCIPruneNumKept,
+		cfgP2PSeedMode,
+		cfgP2PSeeds,
 		cfgLogDebug,
 		cfgDebugBootstrapAddress,
 		cfgDebugBootstrapNodeName,
