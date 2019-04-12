@@ -57,7 +57,7 @@ const (
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
 	cfgP2PSeeds    = "tendermint.seeds"
-	cfgP2PSeedMode = "tendermint.seedMode"
+	cfgP2PSeedMode = "tendermint.seed_mode"
 
 	cfgLogDebug = "tendermint.log.debug"
 
