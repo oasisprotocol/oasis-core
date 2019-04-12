@@ -309,6 +309,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		w.registry,
 		w.epochtime,
 		w.scheduler,
+		w.syncable,
 		workerHost,
 		w.p2p,
 		nodeCfg,
