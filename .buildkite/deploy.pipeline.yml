@@ -25,8 +25,6 @@ docker_plugin: &docker_plugin_configuration
       - "LANG=C.UTF-8"
       - "CARGO_TARGET_DIR=/workdir/target"
       - "CARGO_INSTALL_ROOT=/root/.cargo"
-      - "KM_DUMMY_ENCRYPTION_KEY=/root/.ekiden/keymanager_dummy_encryption.key"
-      - "KM_DUMMY_SIGNING_KEY=/root/.ekiden/keymanager_dummy_signing.key"
     propagate-environment: true
 
 steps:
@@ -40,6 +38,25 @@ steps:
       - eval $(ssh-agent -s)
       - ssh-add
       - docker/deployment/build_context.sh context.tar.gz
+    env:
+      EKIDEN_KM_CUSTOM_KEYS: "0"
+    artifact_paths:
+      - context.tar.gz
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin_configuration
+
+  - label: Build production-track artifacts (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/setup_gitconfig.sh
+      - eval $(ssh-agent -s)
+      - ssh-add
+      - docker/deployment/build_context.sh context-prod.tar.gz
+    env:
+      KM_DUMMY_ENCRYPTION_KEY: /root/.ekiden/keymanager_dummy_encryption.key
+      KM_DUMMY_SIGNING_KEY: /root/.ekiden/keymanager_dummy_signing.key
     artifact_paths:
       - context.tar.gz
     agents:
@@ -53,6 +70,13 @@ steps:
     branches: master
     command:
       - .buildkite/scripts/build_tag_push_deployment_image.sh context.tar.gz
+    env:
+      DEPLOYMENT_VARIANT: testing
+
+  - label: Build production-track docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/build_tag_push_deployment_image.sh context-prod.tar.gz
 
   - block: Human approval required to deploy docker image
     branches: "*"
@@ -65,6 +89,13 @@ steps:
       NOTE: This will NOT deploy the image to any testnet.
 
   - label: Deploy docker image (master branches only)
+    branches: master
+    command:
+      - .buildkite/scripts/promote_deployment_image_to.sh latest-testing
+    env:
+      DEPLOYMENT_VARIANT: testing
+
+  - label: Deploy production-track docker image (master branches only)
     branches: master
     command:
       - .buildkite/scripts/promote_deployment_image_to.sh latest
