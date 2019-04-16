@@ -30,7 +30,7 @@ pub struct Frame {
     pub payload: Vec<u8>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     pub method: String,
     pub args: Value,

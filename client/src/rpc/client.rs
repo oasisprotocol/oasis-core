@@ -44,6 +44,8 @@ enum RpcClientError {
     ExpectedCloseMessage(types::Message),
     #[fail(display = "transport error")]
     Transport,
+    #[fail(display = "client dropped")]
+    Dropped,
 }
 
 trait Transport: Send + Sync {
@@ -115,9 +117,10 @@ impl Transport for GrpcTransport {
 }
 
 type SendqRequest = (
-    Context,
+    Arc<Context>,
     types::Request,
     oneshot::Sender<Fallible<types::Response>>,
+    usize,
 );
 
 struct Inner {
@@ -132,15 +135,17 @@ struct Inner {
     /// Internal send queue receiver, only available until the controller
     /// is spawned (is None later).
     recvq: Mutex<Option<mpsc::Receiver<SendqRequest>>>,
+    /// Internal send queue sender for serializing all requests.
+    sendq: mpsc::Sender<SendqRequest>,
     /// Flag indicating whether the controller has been spawned.
     has_controller: AtomicBool,
+    /// Maximum number of call retries.
+    max_retries: usize,
 }
 
 /// RPC client.
 pub struct RpcClient {
     inner: Arc<Inner>,
-    /// Internal send queue sender for serializing all requests.
-    sendq: mpsc::Sender<SendqRequest>,
 }
 
 impl RpcClient {
@@ -154,9 +159,10 @@ impl RpcClient {
                 session_id: types::SessionID::random(),
                 transport,
                 recvq: Mutex::new(Some(rx)),
+                sendq: tx,
                 has_controller: AtomicBool::new(false),
+                max_retries: 3,
             }),
-            sendq: tx,
         }
     }
 
@@ -207,7 +213,6 @@ impl RpcClient {
     }
 
     fn execute_call(&self, ctx: Context, request: types::Request) -> BoxFuture<types::Response> {
-        let sendq = self.sendq.clone();
         let inner = self.inner.clone();
         Box::new(future::lazy(move || {
             // Spawn a new controller if we haven't spawned one yet.
@@ -225,15 +230,41 @@ impl RpcClient {
                 let inner = inner.clone();
                 let inner2 = inner.clone();
                 spawn(
-                    rx.for_each(move |(ctx, request, rsp_tx)| {
+                    rx.for_each(move |(ctx, request, rsp_tx, retries)| {
                         let inner = inner.clone();
-                        let ctx = ctx.freeze();
+                        let inner2 = inner.clone();
+                        let request2 = request.clone();
+                        let ctx2 = ctx.clone();
 
                         Self::connect(inner.clone(), Context::create_child(&ctx))
                             .and_then(move |_| {
                                 Self::call_raw(inner.clone(), Context::create_child(&ctx), request)
                             })
-                            .then(move |result| rsp_tx.send(result).map_err(|_err| ()))
+                            .then(move |result| -> Box<Future<Item = (), Error = ()> + Send> {
+                                match result {
+                                    ref r if r.is_ok() || retries >= inner2.max_retries => {
+                                        drop(rsp_tx.send(result));
+                                        Box::new(future::ok(()))
+                                    }
+                                    _ => {
+                                        // Attempt retry if number of retries is not exceeded.
+                                        Box::new(
+                                            inner2
+                                                .sendq
+                                                .clone()
+                                                .send((ctx2, request2, rsp_tx, retries + 1))
+                                                .map(|_| ())
+                                                .or_else(|err| {
+                                                    let (_, _, rsp_tx, _) = err.into_inner();
+                                                    rsp_tx
+                                                        .send(Err(RpcClientError::Dropped.into()))
+                                                        .map_err(|_err| ())
+                                                })
+                                                .map_err(|_err| ()),
+                                        )
+                                    }
+                                }
+                            })
                     })
                     .then(move |_| {
                         // Close stream after the client is dropped.
@@ -244,8 +275,10 @@ impl RpcClient {
 
             // Send request to controller.
             let (rsp_tx, rsp_rx) = oneshot::channel();
-            sendq
-                .send((ctx, request, rsp_tx))
+            inner
+                .sendq
+                .clone()
+                .send((ctx.freeze(), request, rsp_tx, 0))
                 .map_err(|err| err.into())
                 .and_then(move |_| rsp_rx.map_err(|err| err.into()).and_then(|result| result))
         }))
@@ -345,6 +378,7 @@ impl RpcClient {
         }
 
         let inner = inner.clone();
+        let inner2 = inner.clone();
         Box::new(
             inner
                 .transport
@@ -359,6 +393,13 @@ impl RpcClient {
                         types::Message::Response(rsp) => Ok(rsp),
                         msg => Err(RpcClientError::ExpectedResponseMessage(msg).into()),
                     }
+                })
+                .or_else(move |err| {
+                    // Failed to communicate, we must reset it as otherwise it will always fail.
+                    let mut session = inner2.session.lock().unwrap();
+                    *session = inner2.builder.clone().build_initiator();
+
+                    Err(err)
                 }),
         )
     }
