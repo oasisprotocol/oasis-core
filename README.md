@@ -9,20 +9,83 @@
 Prerequisites:
 
 * Linux (if you are not on Linux, you will need to either set up a VM with the
-  proper environment or, if Docker is available for your platform, use the provided
-  Docker image which does this for you, [see below](#using-the-development-docker-image)),
-* install [Rust](https://www.rust-lang.org) and the nightly toolchain by
-  `rustup install nightly` and make it default by `rustup default nightly`,
-* install the [Fortanix Rust SGX](https://edp.fortanix.com) target by
-  `rustup target add x86_64-fortanix-unknown-sgx` and utilities by
-  `cargo install fortanix-sgx-tools sgxs-tools`,
-* install [Go](https://golang.org) (at least version 1.12) and
-  [protoc-gen-go](https://github.com/golang/protobuf),
-* install [bubblewrap](https://github.com/projectatomic/bubblewrap) (at
-  least version 0.3.1),
-* install `libssl-dev`, `protobuf-compiler`, `cmake`, and `libseccomp-dev`
-  packages. On typical Ubuntu, you can just run:
-  ```sudo apt install libssl-dev protobuf-compiler cmake libseccomp-dev```
+  proper environment or, if Docker is available for your platform, use the
+  provided Docker image which does this for you, [see below](
+  #using-the-development-docker-image)).
+
+* System packages:
+  * [Bubblewrap](https://github.com/projectatomic/bubblewrap) (at least version
+    0.3.1).
+  * [GCC](http://gcc.gnu.org/) (including C++ subpackage).
+  * [Protobuf](https://github.com/protocolbuffers/protobuf) compiler.
+  * [CMake](https://cmake.org/).
+  * [OpenSSL](https://www.openssl.org/) development package.
+  * [libseccomp](https://github.com/seccomp/libseccomp) development package.
+
+  On Fedora 29, you can install all the above with:
+  ```
+  sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler cmake openssl-devel libseccomp-devel
+  ```
+  On Ubuntu 18.10, you can install all the above with:
+  ```
+  sudo apt install bubblewrap gcc g++ protobuf-compiler cmake libssl-dev libseccomp-dev
+  ```
+
+* [Go](https://golang.org) (at least version 1.12).
+
+  If your distribution provides a new-enough version of Go, just use that.
+
+  Otherwise:
+  * install the Go version provided by your distribution,
+  * [ensure `$GOPATH/bin` is in your `PATH`](
+    https://tip.golang.org/doc/code.html#GOPATH),
+  * [install the desired version of Go](
+    https://golang.org/doc/install#extra_versions), e.g. 1.12.4, with:
+    ```
+    go get golang.org/dl/go1.12.4
+    go1.12.4 download
+    ```
+  * instruct Ekiden to use this particular version of Go by setting the
+    `EKIDEN_GO` environment variable in your `~/.bashrc`:
+    ```
+    export EKIDEN_GO=go1.12.4
+    ```
+
+* [protoc-gen-go](https://github.com/golang/protobuf).
+
+  Install it with:
+  ```
+  go get github.com/golang/protobuf/protoc-gen-go
+  ```
+
+  _NOTE: If you use a particular version of Go, i.e. the one set in
+  `EKIDEN_GO`, then install it with:_
+  ```
+  $EKIDEN_GO get github.com/golang/protobuf/protoc-gen-go
+  ```
+
+* [Rust](https://www.rust-lang.org) and the nightly toolchain.
+
+  Once you have [`rustup` installed](https://www.rust-lang.org/tools/install),
+  install the nightly with:
+  ```
+  rustup install nightly
+  ```
+  Then make it the default version with:
+  ```
+  rustup default nightly
+  ```
+
+* [Fortanix Rust SGX](https://edp.fortanix.com) target.
+
+  Install it by running:
+  ```
+  rustup target add x86_64-fortanix-unknown-sgx
+  ```
+  Install its utilities by running:
+  ```
+  cargo install fortanix-sgx-tools sgxs-tools
+  ```
 
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
