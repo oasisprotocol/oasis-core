@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/oasislabs/go-codec/codec"
 	"github.com/spf13/cobra"

@@ -61,9 +61,10 @@ const (
 
 	cfgLogDebug = "tendermint.log.debug"
 
-	cfgDebugBootstrapAddress   = "tendermint.debug.bootstrap.address"
-	cfgDebugBootstrapNodeName  = "tendermint.debug.bootstrap.node_name"
-	cfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
+	cfgDebugBootstrapAddress    = "tendermint.debug.bootstrap.address"
+	cfgDebugBootstrapNodeName   = "tendermint.debug.bootstrap.node_name"
+	cfgDebugBootstrapQuerySeeds = "tendermint.debug.bootstrap.query_seeds"
+	cfgDebugP2PAddrBookLenient  = "tendermint.debug.addr_book_lenient"
 )
 
 var (
@@ -432,9 +433,10 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 	if addr := viper.GetString(cfgDebugBootstrapAddress); addr != "" {
 		t.Logger.Warn("The bootstrap provisioning server is NOT FOR PRODUCTION USE.")
 		var (
-			nodeAddr = viper.GetString(cfgCoreExternalAddress)
-			nodeName = viper.GetString(cfgDebugBootstrapNodeName)
-			err      error
+			nodeAddr   = viper.GetString(cfgCoreExternalAddress)
+			nodeName   = viper.GetString(cfgDebugBootstrapNodeName)
+			querySeeds = viper.GetBool(cfgDebugBootstrapQuerySeeds)
+			err        error
 		)
 		if nodeName == "" {
 			genDoc, err = bootstrap.Client(addr)
@@ -458,6 +460,33 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			if err != nil {
 				return nil, errors.Wrap(err, "tendermint: validator bootstrap failed")
 			}
+		}
+		// Register itself as a seed node to the bootstrap server
+		if t.IsSeed() {
+			if err = common.IsAddrPort(nodeAddr); err != nil {
+				return nil, errors.Wrap(err, "tendermint: malformed bootstrap seed node address")
+			}
+
+			seed := &bootstrap.SeedNode{
+				PubKey:      t.nodeKey.Public(),
+				CoreAddress: nodeAddr,
+			}
+			if err = bootstrap.Seed(addr, seed); err != nil {
+				return nil, errors.Wrap(err, "tendermint: seed bootstrap failed")
+			}
+		}
+		// Query seed nodes from the bootstrap server
+		if querySeeds {
+			t.Logger.Debug("querying seeds")
+			seeds, err := bootstrap.GetSeeds(addr)
+			if err != nil {
+				return nil, errors.Wrap(err, "tendermint: getting bootstrap seeds failed")
+			}
+			for _, seed := range seeds {
+				tenderConfig.P2P.Seeds = tenderConfig.P2P.Seeds + "," + seed.ToTendermint()
+				tenderConfig.P2P.Seeds = strings.TrimLeft(tenderConfig.P2P.Seeds, ",")
+			}
+			t.Logger.Debug("done querying seeds", "seeds", tenderConfig.P2P.Seeds)
 		}
 	} else if _, err := os.Lstat(genFile); err != nil && os.IsNotExist(err) {
 		t.Logger.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
@@ -780,6 +809,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
+		cmd.Flags().Bool(cfgDebugBootstrapQuerySeeds, false, "if true, query bootstrap server for seed nodes")
 		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	}
 
@@ -797,6 +827,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgLogDebug,
 		cfgDebugBootstrapAddress,
 		cfgDebugBootstrapNodeName,
+		cfgDebugBootstrapQuerySeeds,
 		cfgDebugP2PAddrBookLenient,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
