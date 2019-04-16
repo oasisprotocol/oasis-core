@@ -75,7 +75,10 @@ func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
 		return nil, err
 	}
 	node := node.Node{}
-	cbor.MustUnmarshal(nodeRaw, &node)
+	err = cbor.Unmarshal(nodeRaw, &node)
+	if err != nil {
+		return nil, err
+	}
 	return &node, nil
 }
 
