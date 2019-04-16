@@ -4,6 +4,7 @@ use failure::Fallible;
 use crate::common::crypto::hash::Hash;
 
 pub mod cas_patricia_trie;
+pub mod urkel;
 
 /// Merklized key-value store.
 pub trait MKVS: Send + Sync {
@@ -53,4 +54,4 @@ where
 }
 
 // Re-exports.
-pub use self::cas_patricia_trie::CASPatriciaTrie;
+pub use self::{cas_patricia_trie::CASPatriciaTrie, urkel::UrkelTree};

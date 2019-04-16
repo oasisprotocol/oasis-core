@@ -187,7 +187,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 0, stats.SubtreeFetches, "subtree fetches (no prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (no prefetch)")
 	require.Equal(t, 12056, stats.PathFetches, "path fetches (no prefetch)")
-	require.Equal(t, 10000, stats.ValueFetches, "value fetches (no prefetch)")
+	require.Equal(t, 0, stats.ValueFetches, "value fetches (no prefetch)")
 
 	stats = syncer.NewStatsCollector(tree)
 	remoteTree, err = NewWithRoot(stats, nil, root, PrefetchDepth(10))
@@ -202,7 +202,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 1, stats.SubtreeFetches, "subtree fetches (with prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (with prefetch)")
 	require.Equal(t, 12158, stats.PathFetches, "path fetches (no prefetch)")
-	require.Equal(t, 10000, stats.ValueFetches, "value fetches (with prefetch)")
+	require.Equal(t, 0, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
 func testValueEviction(t *testing.T, ndb db.NodeDB) {

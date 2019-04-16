@@ -108,7 +108,7 @@ func (c *cache) useValue(v *internal.Value) {
 	c.lruValues.MoveToFront(v.LRU)
 }
 
-// commitNode makes the node elegible for eviction.
+// commitNode makes the node eligible for eviction.
 func (c *cache) commitNode(ptr *internal.Pointer) {
 	if !ptr.IsClean() {
 		panic("urkel: commitNode called on dirty node")
@@ -135,7 +135,7 @@ func (c *cache) commitNode(ptr *internal.Pointer) {
 	}
 }
 
-// commitValue makes the value elegible for eviction.
+// commitValue makes the value eligible for eviction.
 func (c *cache) commitValue(v *internal.Value) {
 	if !v.Clean {
 		panic("urkel: commitValue called on dirty value")
@@ -226,7 +226,7 @@ func (c *cache) evictValues(targetCapacity uint64) {
 
 // evictNodes tries to evict nodes from the cache.
 func (c *cache) evictNodes(targetCapacity uint64) {
-	// TODO: Consider optimizing this to know which nodes are elegible for removal.
+	// TODO: Consider optimizing this to know which nodes are eligible for removal.
 	for c.lruNodes.Len() > 0 && c.nodeCapacity-(c.internalNodeCount+c.leafNodeCount) < targetCapacity {
 		elem := c.lruNodes.Back()
 		n := elem.Value.(*internal.Pointer)

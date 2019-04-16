@@ -348,6 +348,7 @@ func (v *Value) Extract() *Value {
 	return &Value{
 		Clean: true,
 		Hash:  v.Hash,
+		Value: v.Value,
 	}
 }
 

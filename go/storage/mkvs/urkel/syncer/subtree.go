@@ -43,12 +43,11 @@ type Subtree struct {
 }
 
 func checkSubtreeIndex(idx int) (SubtreeIndex, error) {
-	si := SubtreeIndex(idx)
-	if si >= InvalidSubtreeIndex {
+	if idx >= int(InvalidSubtreeIndex) {
 		return InvalidSubtreeIndex, ErrTooManyFullNodes
 	}
 
-	return si, nil
+	return SubtreeIndex(idx), nil
 }
 
 // AddSummary adds a new internal node summary to the subtree.
