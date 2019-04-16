@@ -267,6 +267,14 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 				nodeRuntime = r
 				break
 			}
+			if nodeRuntime == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				app.logger.Warn("checkCommittees: committee member not registered with this runtime",
+					"node", committeeNode.PublicKey,
+				)
+				continue
+			}
 			computationGroup[committeeNode.PublicKey.ToMapKey()] = nodeInfo{
 				CommitteeNode: committeeNode,
 				Runtime:       nodeRuntime,
