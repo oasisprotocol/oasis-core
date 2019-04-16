@@ -13,7 +13,7 @@
 //    a `Marshaler` nor a `Unmarshaler` interface are defined.
 package json
 
-import "github.com/ugorji/go/codec"
+import "github.com/oasislabs/go-codec/codec"
 
 // Handle is the JSON codec Handle used to encode/decode JSON blobs.
 var Handle codec.Handle

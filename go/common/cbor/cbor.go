@@ -5,7 +5,7 @@
 // to always have the same serialization.
 package cbor
 
-import "github.com/ugorji/go/codec"
+import "github.com/oasislabs/go-codec/codec"
 
 // Handle is the CBOR codec Handle used to encode/decode CBOR blobs.
 var Handle codec.Handle
@@ -54,6 +54,7 @@ func init() {
 	h := new(codec.CborHandle)
 	h.EncodeOptions.Canonical = true
 	h.EncodeOptions.ChanRecvTimeout = -1 // Till chan is closed.
+	h.EncodeOptions.ForceNoNatural = true
 
 	Handle = h
 }

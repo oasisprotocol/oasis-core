@@ -9,11 +9,11 @@ import (
 	"os"
 	"sync"
 
+	"github.com/oasislabs/go-codec/codec"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/ugorji/go/codec"
 
 	"github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/cbor"
