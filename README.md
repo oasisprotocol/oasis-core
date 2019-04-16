@@ -100,7 +100,7 @@ Ekiden development environment with all the dependencies preinstalled is availab
 in the `oasislabs/development:0.3.0` image. To run a container do something like the
 following in the top-level directory:
 ```
-$ docker run -t -i \
+docker run -t -i \
   --name ekiden \
   --security-opt apparmor:unconfined \
   --security-opt seccomp=unconfined \
@@ -118,7 +118,7 @@ documentation for detailed instructions on working with Docker containers.
 To build everything required for running an Ekiden node, simply execute in
 the top-level directory:
 ```
-$ make
+make
 ```
 
 This will build all the required parts (build tools, Ekiden node, runtime libraries,
@@ -129,16 +129,16 @@ runtime loader, key manager and test runtimes).
 These instructions specify how to run a single-node "network" for development
 purposes. For more complex setups, see E2E test helpers [here](.buildkite/scripts/common_e2e.sh).
 
-First, make sure that you have built everything as described in the *Building* section
-before proceeding and move to the top-level directory.
+First, make sure that you have built everything as described in the [*Building* section](
+#building) before proceeding and move to the top-level directory.
 
 Before we can launch an Ekiden node, we need to copy over the identity keys
 that are configured in the genesis file (instead of doing this, you could
 also generate your own keys) and set correct permissions. Make sure that the
 directory `/tmp/ekiden-single-node` does not exist.
 ```
-# cp -R configs/single_node /tmp/ekiden-single-node
-# chmod -R go-rwx /tmp/ekiden-single-node
+cp -R configs/single_node /tmp/ekiden-single-node
+chmod -R go-rwx /tmp/ekiden-single-node
 ```
 The pre-configured Ekiden node stores data in `/tmp/ekiden-single-node`
 regardless of the loaded runtime. In case you restart it, you may need to
@@ -148,7 +148,7 @@ identity keys. More information on the Ekiden node is available [here](go/README
 Second, we launch a single Ekiden node with an example `simple-keyvalue`
 runtime loaded to trusted enclave as defined in `configs/single_node.yml`:
 ```
-# ./go/ekiden/ekiden --config configs/single_node.yml
+./go/ekiden/ekiden --config configs/single_node.yml
 ```
 
 The `simple-keyvalue` runtime implements a key-value hash map in the enclave
@@ -161,9 +161,9 @@ for the `simple-keyvalue` runtime. The client sends a few keys with associated
 values and fetches them back over RPC defined in the runtime's API. Execute the
 client as follows:
 ```
-# ./target/debug/simple-keyvalue-client \
-    --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-    --node-address unix:/tmp/ekiden-single-node/internal.sock
+./target/debug/simple-keyvalue-client \
+  --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+  --node-address unix:/tmp/ekiden-single-node/internal.sock
 ```
 
 By default, Ekiden node is configured with a 30-second epoch, so you may
@@ -203,17 +203,17 @@ commands to run tests.
 
 To run all unit tests:
 ```
-$ make test-unit
+make test-unit
 ```
 
 To run end-to-end tests:
 ```
-$ make test-e2e
+make test-e2e
 ```
 
 To run all tests:
 ```
-$ make test
+make test
 ```
 
 ## Contributing
@@ -222,14 +222,14 @@ See our [contributing guidelines](CONTRIBUTING.md).
 
 ## Directories
 
-- `client`: Client library for talking with the runtimes.
-- `configs`: Example configurations for development and testing.
-- `docker`: Docker environment definitions.
-- `go`: Ekiden node.
-- `keymanager-client`: Client crate for the key manager.
-- `keymanager-runtime`: (INSECURE) key manager implementation.
-- `runtime`: The runtime library that simplifies writing SGX and non-SGX runtimes.
-- `runtime-loader`: The SGX and non-SGX runtime loader process.
-- `scripts`: Bash scripts for development.
-- `tests`: Runtimes, clients and resources used for E2E tests.
-- `tools`: Build tools.
+* `client`: Client library for talking with the runtimes.
+* `configs`: Example configurations for development and testing.
+* `docker`: Docker environment definitions.
+* `go`: Ekiden node.
+* `keymanager-client`: Client crate for the key manager.
+* `keymanager-runtime`: (INSECURE) key manager implementation.
+* `runtime`: The runtime library that simplifies writing SGX and non-SGX runtimes.
+* `runtime-loader`: The SGX and non-SGX runtime loader process.
+* `scripts`: Bash scripts for development.
+* `tests`: Runtimes, clients and resources used for E2E tests.
+* `tools`: Build tools.
