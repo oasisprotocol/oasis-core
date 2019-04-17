@@ -141,7 +141,7 @@ run_backend_tendermint_committee() {
     run_seed_node
 
     # Run the key manager node.
-    run_keymanager_node
+    run_keymanager_node 0
 
     # Run the validator nodes.
     for idx in $(seq 1 $nodes); do
@@ -290,12 +290,19 @@ set_epoch() {
 
 # Run a key manager node.
 #
+# Required arguments:
+#   keep_data_dir - Should the data directory be preserved (1) or not (0)
+#
 # Any arguments are passed to the key manager node.
 run_keymanager_node() {
+    local keep_data_dir=$1
+    shift
     local extra_args=$*
 
     local data_dir=${EKIDEN_COMMITTEE_DIR}/key-manager
-    rm -rf ${data_dir}
+    if [ "${keep_data_dir}" != "1" ]; then
+        rm -rf ${data_dir}
+    fi
     local log_file=${EKIDEN_COMMITTEE_DIR}/key-manager.log
     rm -rf ${log_file}
 
@@ -393,9 +400,14 @@ run_seed_node() {
 #   runtime        - name of the runtime enclave to use (without .so); the
 #                    enclave must be available under target/enclave
 #   client         - name of the client binary to use (without -client)
+#
+# All remaining arguments are passed to the client unchanged.
 run_basic_client() {
     local runtime=$1
-    local client=$2
+    shift
+    local client=$1
+    shift
+    local extra_args=$*
 
     local log_file=${EKIDEN_COMMITTEE_DIR}/client.log
     rm -rf ${log_file}
@@ -403,7 +415,7 @@ run_basic_client() {
     ${WORKDIR}/target/debug/${client}-client \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-        2>&1 | tee ${log_file} | sed "s/^/[client] /" &
+        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[client] /" &
     EKIDEN_CLIENT_PID=$!
 }
 
