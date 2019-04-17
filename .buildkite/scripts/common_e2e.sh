@@ -372,7 +372,12 @@ run_seed_node() {
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[seed-node-${id}] /" &
 
-    sleep 2
+    # 'show-node-id' relies on key file to be present
+    while [ ! -f "${data_dir}/tendermint/config/priv_validator_key.json" ]
+    do
+      echo "Waiting for seed node to start..."
+      sleep 2
+    done
 
     EKIDEN_SEED_NODE_ID=$(${EKIDEN_NODE} debug tendermint show-node-id \
         --dataDir ${data_dir})
