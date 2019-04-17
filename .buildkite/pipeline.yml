@@ -26,6 +26,7 @@ docker_plugin: &docker_plugin_configuration
       - "LANG=C.UTF-8"
       - "CARGO_TARGET_DIR=/tmp/artifacts"
       - "CARGO_INSTALL_ROOT=/root/.cargo"
+      - "GOPROXY=https://athens.ops.oasiscloud.io/"
     propagate-environment: true
     unconfined: true
 
