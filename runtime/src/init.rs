@@ -2,7 +2,7 @@
 use std::{env, sync::Arc};
 
 use crate::{
-    common::logger::get_logger,
+    common::logger::{get_logger, init_logger},
     dispatcher::{Dispatcher, Initializer},
     protocol::{Protocol, Stream},
     rak::RAK,
@@ -15,6 +15,7 @@ pub fn start_runtime(initializer: Option<Box<Initializer>>) {
 
     // Initialize logging.
     let logger = get_logger("runtime");
+    init_logger();
     info!(logger, "Runtime is starting");
 
     // Initialize runtime attestation key.

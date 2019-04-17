@@ -11,6 +11,12 @@ lazy_static! {
     );
 }
 
+/// Init the log adapter.
+pub fn init_logger() {
+    let _scope_guard = slog_scope::set_global_logger(LOGGER.clone());
+    let _log_guard = slog_stdlog::init_with_level(log::LogLevel::Trace).unwrap();
+}
+
 /// Get the logger.
 pub fn get_logger(module: &'static str) -> slog::Logger {
     LOGGER.new(o!("module" => module))

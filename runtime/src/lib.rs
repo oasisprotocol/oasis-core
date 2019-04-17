@@ -36,6 +36,9 @@ extern crate tokio_current_thread;
 extern crate tokio_executor;
 extern crate webpki;
 
+extern crate slog_scope;
+extern crate slog_stdlog;
+
 #[macro_use]
 pub mod common;
 pub mod dispatcher;
