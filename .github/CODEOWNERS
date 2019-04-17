@@ -1,5 +1,5 @@
 # Default code owners.
-* @kostko @Yawning
+* @kostko @Yawning @peterjgilbert
 
 # Ekiden node.
 /go/ @kostko @Yawning
