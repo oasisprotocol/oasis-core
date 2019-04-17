@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/oasislabs/go-codec/codec"
 	"github.com/spf13/cobra"
-	"github.com/ugorji/go/codec"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"

@@ -323,13 +323,11 @@ mod tests {
         };
         let call_encoded = serde_cbor::to_vec(&call).unwrap();
 
-        let mut ctx = Context::new(
-            IoContext::background().freeze(),
-            Header {
-                timestamp: TEST_TIMESTAMP,
-                ..Default::default()
-            },
-        );
+        let header = Header {
+            timestamp: TEST_TIMESTAMP,
+            ..Default::default()
+        };
+        let mut ctx = Context::new(IoContext::background().freeze(), &header);
 
         // Call runtime.
         let result = dispatcher.dispatch(&call_encoded, &mut ctx);

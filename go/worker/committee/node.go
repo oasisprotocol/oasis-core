@@ -664,8 +664,11 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		return
 	}
 
-	// Commit header.
-	commit, err := commitment.SignCommitment(*n.identity.NodeKey, &blk.Header)
+	// Commit.
+	commit, err := commitment.SignCommitment(*n.identity.NodeKey, &commitment.Message{
+		Header: blk.Header,
+		RakSig: batch.RakSig,
+	})
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
 			"err", err,

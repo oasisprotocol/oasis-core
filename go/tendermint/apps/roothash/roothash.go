@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -248,7 +249,38 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		)
 
 		rtState.Timer.Stop(ctx)
-		rtState.Round = newRound(committee, blk)
+
+		// Retrieve nodes for their runtime-specific information.
+		tree := app.state.DeliverTxTree()
+		regState := registryapp.NewMutableState(tree)
+		computationGroup := make(map[signature.MapKey]nodeInfo)
+		for _, committeeNode := range committee.Members {
+			var nodeRuntime *node.Runtime
+			node, err := regState.GetNode(committeeNode.PublicKey)
+			if err != nil {
+				panic(err)
+			}
+			for _, r := range node.Runtimes {
+				if !r.ID.Equal(rtID) {
+					continue
+				}
+				nodeRuntime = r
+				break
+			}
+			if nodeRuntime == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				app.logger.Warn("checkCommittees: committee member not registered with this runtime",
+					"node", committeeNode.PublicKey,
+				)
+				continue
+			}
+			computationGroup[committeeNode.PublicKey.ToMapKey()] = nodeInfo{
+				CommitteeNode: committeeNode,
+				Runtime:       nodeRuntime,
+			}
+		}
+		rtState.Round = newRound(committee, computationGroup, blk)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.
@@ -521,11 +553,11 @@ func (app *rootHashApplication) commit(
 			"round", blockNr,
 		)
 
-		rtState.Round = newRound(rtState.Round.RoundState.Committee, latestBlock)
+		rtState.Round = newRound(rtState.Round.RoundState.Committee, rtState.Round.RoundState.ComputationGroup, latestBlock)
 	}
 
 	// Add the commitment.
-	if err = rtState.Round.addCommitment(app.ctx, &c); err != nil {
+	if err = rtState.Round.addCommitment(app.ctx, &c, rtState.Runtime); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,

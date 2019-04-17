@@ -30,6 +30,9 @@ var (
 	_ encoding.BinaryUnmarshaler = (*OpaqueCommitment)(nil)
 	_ cbor.Marshaler             = (*DiscrepancyDetectedEvent)(nil)
 	_ cbor.Unmarshaler           = (*DiscrepancyDetectedEvent)(nil)
+
+	// RakSigContext is the context string of a batch's RAK signature.
+	RakSigContext = []byte("EkBatch-")
 )
 
 // OpaqueCommitment is an opaque commitment from a compute node.

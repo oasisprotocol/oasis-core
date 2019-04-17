@@ -89,3 +89,15 @@ func NewEmptyBlock(child *Block, timestamp uint64, htype HeaderType) *Block {
 
 	return &blk
 }
+
+// ReducedBlock is a subset of Block that is available in the runtime.
+// Keep this in sync with /runtime/src/common/roothash.rs.
+type ReducedBlock struct {
+	// Header is the block header.
+	Header ReducedHeader `codec:"header"`
+}
+
+// FromFull puts together a ReducedBlock from a full Block.
+func (rb *ReducedBlock) FromFull(block *Block) {
+	rb.Header.FromFull(&block.Header)
+}

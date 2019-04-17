@@ -106,7 +106,32 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 	}
 	s.timer.Reset(infiniteTimeout)
 
-	s.round = newRound(ctx, s.runtime, committee, blk)
+	// Retrieve nodes for their runtime-specific information.
+	nodes, err := s.rootHash.registry.GetNodes(ctx)
+	if err != nil {
+		panic(err)
+	}
+	computationGroup := make(map[signature.MapKey]nodeInfo)
+	for _, committeeNode := range committee.Members {
+		computationGroup[committeeNode.PublicKey.ToMapKey()] = nodeInfo{
+			committeeNode: committeeNode,
+		}
+	}
+	for _, node := range nodes {
+		ni, ok := computationGroup[node.ID.ToMapKey()]
+		if !ok {
+			continue
+		}
+		for _, r := range node.Runtimes {
+			if !r.ID.Equal(s.runtime.ID) {
+				continue
+			}
+			ni.runtime = r
+			break
+		}
+	}
+
+	s.round = newRound(ctx, s.runtime, committee, computationGroup, blk)
 
 	// Emit an empty epoch transition block in the new round. This is required so that
 	// the clients can be sure what state is final when an epoch transition occurs.
@@ -302,7 +327,7 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 					"round", blockNr,
 				)
 
-				s.round = newRound(ctx, s.runtime, s.round.roundState.committee, latestBlock)
+				s.round = newRound(ctx, s.runtime, s.round.roundState.committee, s.round.roundState.computationGroup, latestBlock)
 			}
 
 			// Add the commitment.

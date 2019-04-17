@@ -8,18 +8,18 @@ use crate::common::roothash::Header;
 struct NoRuntimeContext;
 
 /// Transaction context.
-pub struct Context {
+pub struct Context<'a> {
     /// I/O context.
     pub io_ctx: Arc<IoContext>,
     /// The block header accompanying this transaction.
-    pub header: Header,
+    pub header: &'a Header,
     /// Runtime-specific context.
     pub runtime: Box<Any>,
 }
 
-impl Context {
+impl<'a> Context<'a> {
     /// Construct new transaction context.
-    pub fn new(io_ctx: Arc<IoContext>, header: Header) -> Self {
+    pub fn new(io_ctx: Arc<IoContext>, header: &'a Header) -> Self {
         Self {
             io_ctx,
             header,
