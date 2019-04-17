@@ -4,6 +4,7 @@
 
 # Temporary artifacts download directory.
 ARTIFACTS_TEMPORARY_DIR=/tmp/artifacts
+CLEANING_UP=0
 
 # Download an artifact and change its mode
 download_artifact() {
@@ -22,8 +23,13 @@ download_artifact() {
 }
 
 cleanup() {
+    if [ "${CLEANING_UP}" == "1" ]; then
+        return
+    fi
+    CLEANING_UP=1
+
     # Send all child processes a kill signal.
-    pkill -P $$ || true
+    pkill -P $BASHPID || true
 
     # Wait for all child processes to exit.
     # Helpful context:

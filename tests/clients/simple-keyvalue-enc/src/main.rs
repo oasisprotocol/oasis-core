@@ -34,10 +34,18 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
+        .arg(
+            Arg::with_name("key")
+                .long("key")
+                .takes_value(true)
+                .default_value("hello_key")
+                .required(true),
+        )
         .get_matches();
 
     let node_address = matches.value_of("node-address").unwrap();
     let runtime_id = value_t_or_exit!(matches, "runtime-id", RuntimeId);
+    let key = matches.value_of("key").unwrap();
 
     println!("Initializing simple key/value runtime client!");
     let mut rt = Runtime::new().unwrap();
@@ -47,7 +55,7 @@ fn main() {
     let kv_client = SimpleKeyValueClient::new(txn_client);
 
     let kv = KeyValue {
-        key: String::from("hello_key"),
+        key: key.to_owned(),
         value: String::from("hello_value"),
     };
     println!(
@@ -57,10 +65,8 @@ fn main() {
     let r: Option<String> = rt.block_on(kv_client.enc_insert(kv)).unwrap();
     assert_eq!(r, None); // key should not exist in db before
 
-    println!("Getting \"hello_key\"...");
-    let r = rt
-        .block_on(kv_client.enc_get("hello_key".to_string()))
-        .unwrap();
+    println!("Getting \"{}\"...", key);
+    let r = rt.block_on(kv_client.enc_get(key.to_owned())).unwrap();
     match r {
         Some(val) => {
             println!("Got \"{}\"", val);
@@ -68,20 +74,16 @@ fn main() {
         } // key should exist in db
         None => {
             println!("Key not found");
-            panic!("Key \"hello_value\" not found, but it should be.")
+            panic!("Key \"{}\" not found, but it should be.", key)
         }
     }
 
-    println!("Removing \"hello_key\" record from database...");
-    let r = rt
-        .block_on(kv_client.enc_remove("hello_key".to_string()))
-        .unwrap();
+    println!("Removing \"{}\" record from database...", key);
+    let r = rt.block_on(kv_client.enc_remove(key.to_owned())).unwrap();
     assert_eq!(r, Some("hello_value".to_string())); // key should exist in db while removing it
 
-    println!("Getting \"hello_key\" to check whether it still exists...");
-    let r = rt
-        .block_on(kv_client.enc_get("hello_key".to_string()))
-        .unwrap();
+    println!("Getting \"{}\" to check whether it still exists...", key);
+    let r = rt.block_on(kv_client.enc_get(key.to_owned())).unwrap();
     match r {
         Some(_) => println!("Key still exists."),
         None => println!("Key not found anymore"),

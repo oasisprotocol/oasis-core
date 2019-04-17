@@ -68,6 +68,32 @@ scenario_discrepancy() {
     set_epoch 1
 }
 
+run_client_km_restart() {
+    local runtime=$1
+    local client=$2
+
+    (
+        trap_add 'cleanup' EXIT
+
+        # Run client on first key.
+        run_basic_client ${runtime} ${client} --key key1
+        wait ${EKIDEN_CLIENT_PID}
+
+        # Restart the key manager.
+        pkill --echo --full --signal 9 keymanager.runtime
+        sleep 1
+        # Keep the data directory.
+        run_keymanager_node 1
+        sleep 3
+
+        # Run client on a different key so that it will require another
+        # trip to the key manager.
+        run_basic_client ${runtime} ${client} --key key2
+        wait ${EKIDEN_CLIENT_PID}
+    ) &
+    EKIDEN_CLIENT_PID=$!
+}
+
 #############
 # Test suite.
 #
@@ -94,6 +120,15 @@ test_suite() {
         backend_runner=$backend_runner \
         runtime=simple-keyvalue \
         client=simple-keyvalue-enc
+
+    # Database encryption test with restarting key manager.
+    run_test \
+        scenario=scenario_basic \
+        name="e2e-${backend_name}-km-restart" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-enc \
+        client_runner=run_client_km_restart
 
     # Discrepancy scenario.
     run_test \

@@ -11,6 +11,7 @@ use io_context::Context as IoContext;
 
 use ekiden_keymanager_client::{ContractId, KeyManagerClient};
 use ekiden_runtime::{
+    common::crypto::hash::Hash,
     executor::Executor,
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
@@ -51,17 +52,18 @@ fn remove(args: &String, _ctx: &mut TxnContext) -> Fallible<Option<String>> {
 }
 
 /// Helper for doing encrypted MKVS operations.
-fn with_encryption<F, R>(ctx: &mut TxnContext, f: F) -> Fallible<R>
+fn with_encryption<F, R>(ctx: &mut TxnContext, key: &[u8], f: F) -> Fallible<R>
 where
     F: FnOnce(&mut MKVS) -> R,
 {
     let rctx = runtime_context!(ctx, Context);
 
+    // Derive contract ID based on key.
+    let contract_id = ContractId::from(Hash::digest_bytes(key).as_ref());
+
     // Fetch encryption keys.
     let io_ctx = IoContext::create_child(&ctx.io_ctx);
-    let result = rctx
-        .km_client
-        .get_or_create_keys(io_ctx, ContractId::default());
+    let result = rctx.km_client.get_or_create_keys(io_ctx, contract_id);
     let key = Executor::with_current(|executor| executor.block_on(result))?;
 
     // NOTE: This is only for example purposes, the correct way would be
@@ -74,7 +76,7 @@ where
 
 /// (encrypted) Insert a key/value pair.
 fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
-    let existing = with_encryption(ctx, |mkvs| {
+    let existing = with_encryption(ctx, args.key.as_bytes(), |mkvs| {
         mkvs.insert(args.key.as_bytes(), args.value.as_bytes())
     })?;
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -82,13 +84,13 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>>
 
 /// (encrypted) Retrieve a key/value pair.
 fn enc_get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
-    let existing = with_encryption(ctx, |mkvs| mkvs.get(args.as_bytes()))?;
+    let existing = with_encryption(ctx, args.as_bytes(), |mkvs| mkvs.get(args.as_bytes()))?;
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// (encrypted) Remove a key/value pair.
 fn enc_remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
-    let existing = with_encryption(ctx, |mkvs| mkvs.remove(args.as_bytes()))?;
+    let existing = with_encryption(ctx, args.as_bytes(), |mkvs| mkvs.remove(args.as_bytes()))?;
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
