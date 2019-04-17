@@ -4,6 +4,7 @@ package tendermint
 import (
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 
 	"github.com/oasislabs/go-codec/codec"
 	"github.com/spf13/cobra"
@@ -12,10 +13,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/tendermint/inspector"
+	tmconfig "github.com/tendermint/tendermint/config"
+	tmpriv "github.com/tendermint/tendermint/privval"
 )
 
 var (
 	stateFilename string
+	dataDir       string
 
 	tmCmd = &cobra.Command{
 		Use:   "tendermint",
@@ -26,6 +30,12 @@ var (
 		Use:   "dump-abci-mux-state",
 		Short: "dump ABCI mux state as JSON",
 		Run:   doDumpMuxState,
+	}
+
+	tmShowNodeIDCmd = &cobra.Command{
+		Use:   "show-node-id",
+		Short: "otuputs tendermint node id",
+		Run:   showNodeID,
 	}
 )
 
@@ -69,11 +79,27 @@ func doDumpMuxState(cmd *cobra.Command, args []string) {
 	fmt.Printf("%s\n", b)
 }
 
+func showNodeID(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	tenderConfig := tmconfig.DefaultConfig()
+	tendermintDataDir := filepath.Join(dataDir, "tendermint")
+	tenderConfig.SetRoot(tendermintDataDir)
+
+	// LoadFilePV will already exit on errors
+	tendermintPV := tmpriv.LoadFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
+
+	fmt.Println(tendermintPV.Key.Address)
+}
+
 // Register registers the tendermint sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	registerBootstrap(tmCmd)
 	tmDumpMuxStateCmd.Flags().StringVarP(&stateFilename, "state", "s", "abci-mux-state.bolt.db", "ABCI mux state file to dump")
-
+	tmShowNodeIDCmd.Flags().StringVar(&dataDir, "dataDir", "", "data directory")
+	tmCmd.AddCommand(tmShowNodeIDCmd)
 	tmCmd.AddCommand(tmDumpMuxStateCmd)
 	parentCmd.AddCommand(tmCmd)
 }

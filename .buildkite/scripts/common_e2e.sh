@@ -137,6 +137,9 @@ run_backend_tendermint_committee() {
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
     EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
 
+    # Run the seed node.
+    run_seed_node
+
     # Run the key manager node.
     run_keymanager_node
 
@@ -167,6 +170,7 @@ run_backend_tendermint_committee() {
             --tendermint.debug.addr_book_lenient \
             --keymanager.client.address 127.0.0.1:9003 \
             --keymanager.client.certificate ${committee_dir}/key-manager/tls_identity_cert.pem \
+            --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
             --datadir ${datadir} \
             &
 
@@ -250,6 +254,7 @@ run_compute_node() {
         --worker.p2p.port ${p2p_port} \
         --worker.leader.max_batch_size 1 \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
 }
@@ -325,8 +330,54 @@ run_keymanager_node() {
         --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
         --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
         --keymanager.port 9003 \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[key-manager] /" &
+}
+
+# Run a seed node.
+#
+# Requires that EKIDEN_TM_GENESIS_FILE and EKIDEN_STORAGE_PORT are
+# set. Exits with an error otherwise.
+#
+# Sets:
+#   EKIDEN_SEED_NODE_ID
+#   EKIDEN_SEED_NODE_PORT
+#
+# Any arguments are passed to the Go node.
+run_seed_node() {
+    local extra_args=$*
+
+    # Ensure the genesis file and storage port are available.
+    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" || "${EKIDEN_STORAGE_PORT:-}" == "" ]]; then
+        echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
+        exit 1
+    fi
+
+    local data_dir=${EKIDEN_COMMITTEE_DIR}/seed-$id
+    rm -rf ${data_dir}
+    local log_file=${EKIDEN_COMMITTEE_DIR}/seed-$id.log
+    rm -rf ${log_file}
+
+    # Generate port number.
+    let EKIDEN_SEED_NODE_PORT=id+23000
+
+    ${EKIDEN_NODE} \
+        --log.level info \
+        --metrics.mode none \
+        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
+        --tendermint.seed_mode \
+        --tendermint.debug.addr_book_lenient \
+        --datadir ${data_dir} \
+        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[seed-node-${id}] /" &
+
+    sleep 2
+
+    EKIDEN_SEED_NODE_ID=$(${EKIDEN_NODE} debug tendermint show-node-id \
+        --dataDir ${data_dir})
+    export EKIDEN_SEED_NODE_ID
+    export EKIDEN_SEED_NODE_PORT
 }
 
 # Run a basic client.

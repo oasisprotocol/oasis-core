@@ -17,6 +17,7 @@ import (
 const (
 	cfgBootstrapAddress    = "debug.tendermint.bootstrap.address"
 	cfgBootstrapValidators = "debug.tendermint.bootstrap.validators"
+	cfgBootstrapSeeds      = "debug.tendermint.bootstrap.seeds"
 	cfgBootstrapRuntime    = "debug.tendermint.bootstrap.runtime"
 	cfgBootstrapEntity     = "debug.tendermint.bootstrap.entity"
 	cfgBootstrapRootHash   = "debug.tendermint.bootstrap.roothash"
@@ -78,10 +79,12 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 		st = nil
 	}
 
+	bootstrapSeeds := viper.GetInt(cfgBootstrapSeeds)
+
 	svcMgr := background.NewServiceManager(logger)
 
 	bootstrapAddr := viper.GetString(cfgBootstrapAddress)
-	srv, err := bootstrap.NewServer(bootstrapAddr, bootstrapValidators, st, dataDir)
+	srv, err := bootstrap.NewServer(bootstrapAddr, bootstrapValidators, bootstrapSeeds, st, dataDir)
 	if err != nil {
 		logger.Error("failed to initialize bootstrap server",
 			"err", err,
@@ -106,6 +109,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgBootstrapAddress, ":19156", "server listen address")
 		cmd.Flags().Int(cfgBootstrapValidators, 3, "number of validators")
+		cmd.Flags().Int(cfgBootstrapSeeds, 1, "number of seeds")
 		cmd.Flags().StringSlice(cfgBootstrapEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRuntime, nil, "path to runtime registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRootHash, nil, "path to roothash genesis blocks file")
@@ -114,6 +118,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 	for _, v := range []string{
 		cfgBootstrapAddress,
 		cfgBootstrapValidators,
+		cfgBootstrapSeeds,
 		cfgBootstrapRuntime,
 		cfgBootstrapEntity,
 		cfgBootstrapRootHash,

@@ -163,8 +163,6 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	logger.Info("starting ekiden node")
-
 	dataDir := cmdCommon.DataDir()
 	if dataDir == "" {
 		logger.Error("data directory not configured")
@@ -247,6 +245,29 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
+	if node.svcTmnt.IsSeed() {
+		// Tendermint nodes in seed mode crawl the network for
+		// peers. In case of incoming connections seed node will
+		// share some of the peers and immediately disconnect.
+		// Because of that only start Tendermint service in case
+		// were operating as it would be useless running a full
+		// node.
+
+		logger.Info("starting seed node")
+		// Start the tendermint service.
+		//
+		// Note: This will only start the node if it is required by
+		// one of the backends.
+		if err = node.svcTmnt.Start(); err != nil {
+			logger.Error("failed to start tendermint service",
+				"err", err,
+			)
+			return nil, err
+		}
+		return node, nil
+	}
+
+	logger.Info("starting ekiden node")
 	// Initialize the IAS proxy client.
 	node.IAS, err = ias.New(node.Identity)
 	if err != nil {
