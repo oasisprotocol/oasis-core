@@ -58,7 +58,7 @@ steps:
       KM_DUMMY_ENCRYPTION_KEY: /root/.ekiden/keymanager_dummy_encryption.key
       KM_DUMMY_SIGNING_KEY: /root/.ekiden/keymanager_dummy_signing.key
     artifact_paths:
-      - context.tar.gz
+      - context-prod.tar.gz
     agents:
       buildkite_agent_size: large
     plugins:
