@@ -35,6 +35,8 @@ cleanup() {
     # Helpful context:
     # https://stackoverflow.com/questions/17894720/kill-a-process-and-wait-for-the-process-to-exit
     wait || true
+
+    CLEANING_UP=0
 }
 
 # appends a command to a trap
