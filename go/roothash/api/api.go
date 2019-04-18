@@ -81,7 +81,7 @@ type Backend interface {
 	// The block at the specified round is included as the first
 	// entry in the stream.  Following blocks are pushed in order as
 	// they are confirmed.
-	WatchBlocksSince(signature.PublicKey, block.Round) (<-chan *block.Block, *pubsub.Subscription, error)
+	WatchBlocksSince(signature.PublicKey, uint64) (<-chan *block.Block, *pubsub.Subscription, error)
 
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)

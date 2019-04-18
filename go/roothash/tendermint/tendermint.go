@@ -99,14 +99,10 @@ func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *block.B
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round block.Round) (<-chan *block.Block, *pubsub.Subscription, error) {
+func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round uint64) (<-chan *block.Block, *pubsub.Subscription, error) {
 	notifiers := r.getRuntimeNotifiers(id)
 
-	startRound, err := round.ToU64()
-	if err != nil {
-		return nil, nil, err
-	}
-
+	startRound := round
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
 		// NOTE: Due to taking the notifiers lock, block replay blocks any events for
 		// this runtime (and others since they share a worker) from being processed.
@@ -114,7 +110,7 @@ func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round block
 		defer notifiers.Unlock()
 
 		if notifiers.lastBlock != nil {
-			lastRound, _ := notifiers.lastBlock.Header.Round.ToU64()
+			lastRound := notifiers.lastBlock.Header.Round
 
 			for round := startRound; round < lastRound; round++ {
 				block := r.findBlockForRound(id, round, notifiers)
@@ -167,7 +163,7 @@ func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan
 }
 
 func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *runtimeBrokers) *block.Block {
-	lastRound, _ := notifiers.lastBlock.Header.Round.ToU64()
+	lastRound := notifiers.lastBlock.Header.Round
 	if notifiers.lastBlock == nil || round > lastRound {
 		return nil
 	} else if round == lastRound {
@@ -261,8 +257,8 @@ func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int
 		return nil, nil, errors.Wrap(err, "roothash: failed to fetch block")
 	}
 
-	if round, _ := block.Header.Round.ToU64(); round != value.Round {
-		return nil, nil, errors.Errorf("roothash: tag/query round mismatch (tag: %d, query: %d)", value.Round, round)
+	if block.Header.Round != value.Round {
+		return nil, nil, errors.Errorf("roothash: tag/query round mismatch (tag: %d, query: %d)", value.Round, block.Header.Round)
 	}
 
 	return block, &value, nil

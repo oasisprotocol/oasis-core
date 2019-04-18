@@ -21,6 +21,8 @@ pub struct Block {
 /// This is a reduced roothash block header as used within the runtime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Header {
+    /// Round number.
+    pub round: u64,
     /// Timestamp (POSIX time).
     pub timestamp: u64,
     /// State root hash.

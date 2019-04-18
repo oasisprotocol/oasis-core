@@ -436,8 +436,8 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		// Check if the new block is for the same or newer round than the
 		// one we are waiting for. In this case, we should abort as the
 		// block will never be seen.
-		curRound, _ := header.Round.ToU64()
-		waitRound, _ := state.header.Round.ToU64()
+		curRound := header.Round
+		waitRound := state.header.Round
 		if curRound >= waitRound {
 			n.logger.Warn("seen newer block while waiting for block")
 			n.transition(StateWaitingForBatch{})
@@ -824,8 +824,8 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 
 	// Check if the current block is older than what is expected we base our batch
 	// on. In case it is equal or newer, but different, discard the batch.
-	curRound, _ := n.currentBlock.Header.Round.ToU64()
-	waitRound, _ := batch.header.Round.ToU64()
+	curRound := n.currentBlock.Header.Round
+	waitRound := batch.header.Round
 	if curRound >= waitRound {
 		n.logger.Warn("got external batch based on incompatible header",
 			"header", batch.header,
