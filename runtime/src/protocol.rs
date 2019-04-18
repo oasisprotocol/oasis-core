@@ -268,6 +268,53 @@ impl Protocol {
     }
 }
 
+/// Untrusted key/value store which stores arbitrary binary key/value pairs
+/// on the worker host.
+///
+/// Care MUST be taken to not trust this interface at all.  The worker host
+/// is capable of doing whatever it wants including but not limited to,
+/// hiding data, tampering with keys/values, ignoring writes, replaying
+/// past values, etc.
+pub struct ProtocolUntrustedLocalStorage {
+    ctx: Arc<Context>,
+    protocol: Arc<Protocol>,
+}
+
+impl ProtocolUntrustedLocalStorage {
+    pub fn new(ctx: Context, protocol: Arc<Protocol>) -> Self {
+        Self {
+            ctx: ctx.freeze(),
+            protocol,
+        }
+    }
+
+    pub fn get(&self, key: Vec<u8>) -> Fallible<Vec<u8>> {
+        let ctx = Context::create_child(&self.ctx);
+
+        match self
+            .protocol
+            .make_request(ctx, Body::HostLocalStorageGetRequest { key })
+        {
+            Ok(Body::HostLocalStorageGetResponse { value }) => Ok(value),
+            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn set(&self, key: Vec<u8>, value: Vec<u8>) -> Fallible<()> {
+        let ctx = Context::create_child(&self.ctx);
+
+        match self
+            .protocol
+            .make_request(ctx, Body::HostLocalStorageSetRequest { key, value })
+        {
+            Ok(Body::HostLocalStorageSetResponse {}) => Ok(()),
+            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
+            Err(error) => Err(error),
+        }
+    }
+}
+
 /// CAS implementation which forwards all requests to the worker host.
 pub struct ProtocolCAS {
     ctx: Arc<Context>,

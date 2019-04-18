@@ -115,6 +115,21 @@ pub enum Body {
     HostStorageGetBatchResponse {
         values: Vec<Option<ByteBuf>>,
     },
+    HostLocalStorageGetRequest {
+        #[serde(with = "serde_bytes")]
+        key: Vec<u8>,
+    },
+    HostLocalStorageGetResponse {
+        #[serde(with = "serde_bytes")]
+        value: Vec<u8>,
+    },
+    HostLocalStorageSetRequest {
+        #[serde(with = "serde_bytes")]
+        key: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        value: Vec<u8>,
+    },
+    HostLocalStorageSetResponse {},
 }
 
 #[derive(Clone, Copy, Debug)]
