@@ -27,7 +27,7 @@ shift
 # Run the build and tests
 #########################
 pushd $src_dir
-  cargo build --all --exclude simple-keyvalue
+  cargo build --all --locked --exclude simple-keyvalue
   cargo fmt -- --check
-  cargo test --all --exclude simple-keyvalue
+  cargo test --all --locked --exclude simple-keyvalue
 popd

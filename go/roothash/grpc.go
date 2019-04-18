@@ -52,12 +52,7 @@ func (s *grpcServer) GetBlocksSince(req *pb.BlockSinceRequest, stream pb.RootHas
 		return err
 	}
 
-	var round block.Round
-	if err := round.UnmarshalBinary(req.GetRound()); err != nil {
-		return err
-	}
-
-	ch, sub, err := s.backend.WatchBlocksSince(id, round)
+	ch, sub, err := s.backend.WatchBlocksSince(id, req.GetRound())
 	if err != nil {
 		return err
 	}

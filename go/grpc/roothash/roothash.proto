@@ -20,7 +20,7 @@ message Nonce {
 message Header {
   uint32 version = 1;
   bytes namespace = 2;
-  bytes round = 3;
+  bytes round_legacy = 3;
   uint64 timestamp = 4;
   uint32 header_type = 5;
   bytes previous_hash = 6;
@@ -31,6 +31,8 @@ message Header {
   bytes commitments_hash = 11;
 
   bytes storage_receipt = 12;
+
+  uint64 round = 13;
 }
 
 // This is used for exporting a runtime's latest block to a file.
@@ -62,5 +64,5 @@ message BlockResponse {
 
 message BlockSinceRequest {
   bytes runtime_id = 1;
-  bytes round = 2;
+  uint64 round = 2;
 }

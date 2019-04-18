@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	pb "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
 
-func TestRound(t *testing.T) {
+func TestLegacyRound(t *testing.T) {
 	for i, vec := range []struct {
 		value   uint64
 		encoded []byte
@@ -21,18 +23,29 @@ func TestRound(t *testing.T) {
 		{0xca, []byte{0xca}},
 		{0, []byte{}},
 	} {
-		var round Round
-		round.FromU64(vec.value)
+		pbHeader := pb.Header{
+			Namespace:       make([]byte, NamespaceSize),
+			RoundLegacy:     vec.encoded,
+			PreviousHash:    make([]byte, 32),
+			GroupHash:       make([]byte, 32),
+			InputHash:       make([]byte, 32),
+			OutputHash:      make([]byte, 32),
+			StateRoot:       make([]byte, 32),
+			CommitmentsHash: make([]byte, 32),
+		}
 
-		b, err := round.MarshalBinary()
-		require.NoError(t, err, "[%d]: MarshalBinary()", i)
-		require.EqualValues(t, vec.encoded, b, "[%d]: MarshalBinary()", i)
+		var header Header
+		err := header.FromProto(&pbHeader)
+		require.NoError(t, err, "[%d]: FromProto(legacy)", i)
+		require.EqualValues(t, vec.value, header.Round, "[%d]: FromProto(legacy)", i)
 
-		err = round.UnmarshalBinary(vec.encoded)
-		require.NoError(t, err, "[%d]: UnmarshalBinary()", i)
+		// Test without legacy round.
+		pbHeader.RoundLegacy = nil
+		pbHeader.Round = vec.value
 
-		v, err := round.ToU64()
-		require.NoError(t, err, "[%d]: ToU64()", i)
-		require.Equal(t, vec.value, v, "[%d]: ToU64()", i)
+		header = Header{}
+		err = header.FromProto(&pbHeader)
+		require.NoError(t, err, "[%d]: FromProto(new)", i)
+		require.EqualValues(t, vec.value, header.Round, "[%d]: FromProto(new)", i)
 	}
 }

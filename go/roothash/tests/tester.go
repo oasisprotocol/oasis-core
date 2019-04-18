@@ -106,10 +106,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 		header := blk.Header
 
 		require.EqualValues(header.Version, 0, "block version")
-		var round uint64
-		round, err = header.Round.ToU64()
-		require.NoError(err, "header.Round.ToU64")
-		require.EqualValues(0, round, "block round")
+		require.EqualValues(0, header.Round, "block round")
 		require.Equal(block.Normal, header.HeaderType, "block header type")
 		require.True(header.InputHash.IsEmpty(), "block input hash empty")
 		require.True(header.OutputHash.IsEmpty(), "block output hash empty")
@@ -131,10 +128,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	for _, v := range states {
 		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID)
 		require.NoError(err, "GetLatestBlock")
-		var round uint64
-		round, err = genesisBlock.Header.Round.ToU64()
-		require.NoError(err, "header.Round.ToU64")
-		require.EqualValues(0, round, "genesis block round")
+		require.EqualValues(0, genesisBlock.Header.Round, "genesis block round")
 
 		v.genesisBlock = genesisBlock
 	}
@@ -220,7 +214,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		Header: block.Header{
 			Version:      0,
 			Namespace:    child.Header.Namespace,
-			Round:        child.Header.Round.Increment(),
+			Round:        child.Header.Round + 1,
 			Timestamp:    uint64(time.Now().Unix()),
 			HeaderType:   block.Normal,
 			PreviousHash: child.Header.EncodedHash(),
@@ -257,24 +251,16 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 
 	parent.Header.CommitmentsHash.From(commitments) // For comparison.
 
-	var childRound uint64
-	childRound, err = child.Header.Round.ToU64()
-	require.NoError(err, "child.Header.Round.ToU64")
-
 	// Ensure that the round was finalized.
 	for {
 		select {
 		case blk := <-ch:
 			header := blk.Header
 
-			var round uint64
-			round, err = header.Round.ToU64()
-			require.NoError(err, "header.Round.ToU64")
-
 			// Ensure that WatchBlocks uses the correct latest block.
-			require.True(round >= childRound, "WatchBlocks must start at child block")
+			require.True(header.Round >= child.Header.Round, "WatchBlocks must start at child block")
 
-			if round == childRound {
+			if header.Round == child.Header.Round {
 				require.EqualValues(child.Header, header, "old block is equal")
 				continue
 			}

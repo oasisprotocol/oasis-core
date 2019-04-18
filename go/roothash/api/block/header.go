@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"math"
-	"strconv"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -20,30 +19,18 @@ import (
 const (
 	// NamespaceSize is the size of a chain namespace identifier in bytes.
 	NamespaceSize = 32
-
-	// RoundSize is the size of a round in bytes.
-	RoundSize = 32
 )
 
 var (
 	// ErrInvalidVersion is the error returned when a version is invalid.
 	ErrInvalidVersion = errors.New("roothash: invalid version")
 
-	// ErrInvalidRound is the error returned when a round is invalid
-	// (out of range).
-	ErrInvalidRound = errors.New("roothash: invalid round")
-
 	// ErrMalformedNamespace is the error returned when a namespace
 	// identifier is malformed.
 	ErrMalformedNamespace = errors.New("roothash: malformed namespace")
 
-	// ErrMalformedRound is the error returned when a round is invalid.
-	ErrMalformedRound = errors.New("roothash: malformed round")
-
 	_ encoding.BinaryMarshaler   = (*Namespace)(nil)
 	_ encoding.BinaryUnmarshaler = (*Namespace)(nil)
-	_ encoding.BinaryMarshaler   = (*Round)(nil)
-	_ encoding.BinaryUnmarshaler = (*Round)(nil)
 	_ cbor.Marshaler             = (*Header)(nil)
 	_ cbor.Unmarshaler           = (*Header)(nil)
 )
@@ -73,77 +60,6 @@ func (n *Namespace) String() string {
 	return hex.EncodeToString(n[:])
 }
 
-// Round is a round number.
-//
-// While this is encoded as a unsigned 256 bit big endian integer
-// on the wire, it is a 64 bit unsigned integer in reality.
-type Round [RoundSize]byte
-
-// ToU64 returns the 64 bit unsigned representation of a round.
-func (r *Round) ToU64() (uint64, error) {
-	// Ensure the value fits in 64 bits.
-	if !memIsZero(r[:RoundSize-8]) {
-		return 0, ErrInvalidRound
-	}
-
-	return binary.BigEndian.Uint64(r[RoundSize-8:]), nil
-}
-
-// FromU64 sets a round from a uint64.
-func (r *Round) FromU64(x uint64) {
-	for i := 0; i < RoundSize-8; i++ {
-		r[i] = 0
-	}
-
-	binary.BigEndian.PutUint64(r[RoundSize-8:], x)
-}
-
-// Increment returns the round incremented by 1.
-func (r *Round) Increment() Round {
-	v, err := r.ToU64()
-	if err != nil {
-		panic(err)
-	}
-
-	var ret Round
-	ret.FromU64(v + 1)
-	return ret
-}
-
-// MarshalBinary encodes a round into binary form.
-func (r *Round) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, bytes.TrimLeft(r[:], "\x00")...)
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled round.
-func (r *Round) UnmarshalBinary(data []byte) error {
-	if len(data) > 0 && data[0] == 0 {
-		// Leading empty bytes should be stripped.
-		return ErrMalformedRound
-	} else if len(data) > RoundSize {
-		return ErrMalformedRound
-	}
-
-	for i := range r {
-		r[i] = 0
-	}
-	copy(r[RoundSize-len(data):], data)
-
-	_, err := r.ToU64()
-	return err
-}
-
-// String returns the string representation of a round.
-func (r *Round) String() string {
-	v, err := r.ToU64()
-	if err != nil {
-		return "[invalid]"
-	}
-
-	return strconv.FormatUint(v, 10)
-}
-
 // HeaderType is the type of header.
 type HeaderType uint8
 
@@ -171,7 +87,7 @@ type Header struct { // nolint: maligned
 	Namespace Namespace `codec:"namespace"`
 
 	// Round is the block round.
-	Round Round `codec:"round"`
+	Round uint64 `codec:"round"`
 
 	// Timestamp is the block timestamp (POSIX time).
 	Timestamp uint64 `codec:"timestamp"`
@@ -234,8 +150,20 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.Namespace.UnmarshalBinary(pb.GetNamespace()); err != nil {
 		return err
 	}
-	if err := h.Round.UnmarshalBinary(pb.GetRound()); err != nil {
-		return err
+	if legacyRound := pb.GetRoundLegacy(); legacyRound != nil {
+		// TODO: Only needed for migration, remove once everything is migrated.
+		const LegacyRoundSize = 8
+		r := make([]byte, LegacyRoundSize)
+
+		if len(legacyRound) > LegacyRoundSize {
+			return errors.New("roothash: malformed legacy round")
+		} else if len(legacyRound) > 0 {
+			copy(r[LegacyRoundSize-len(legacyRound):], legacyRound)
+		}
+
+		h.Round = binary.BigEndian.Uint64(r)
+	} else {
+		h.Round = pb.GetRound()
 	}
 	h.Timestamp = pb.GetTimestamp()
 	h.HeaderType = HeaderType(pb.GetHeaderType())
@@ -272,7 +200,7 @@ func (h *Header) ToProto() *pbRoothash.Header {
 
 	pb.Version = uint32(h.Version)
 	pb.Namespace, _ = h.Namespace.MarshalBinary()
-	pb.Round, _ = h.Round.MarshalBinary()
+	pb.Round = h.Round
 	pb.Timestamp = h.Timestamp
 	pb.HeaderType = uint32(h.HeaderType)
 	pb.PreviousHash, _ = h.PreviousHash.MarshalBinary()
@@ -383,14 +311,4 @@ type BatchSigMessage struct {
 	InputHash     hash.Hash    `codec:"input_hash"`
 	OutputHash    hash.Hash    `codec:"output_hash"`
 	StateRoot     hash.Hash    `codec:"state_root"`
-}
-
-func memIsZero(b []byte) bool {
-	var acc byte
-
-	for _, v := range b {
-		acc |= v
-	}
-
-	return acc == 0
 }

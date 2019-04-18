@@ -240,7 +240,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 		// Transition the round.
 		blk := rtState.CurrentBlock
-		blockNr, _ := blk.Header.Round.ToU64()
+		blockNr := blk.Header.Round
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
 			"runtime", rtID,
@@ -318,12 +318,10 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runti
 
 	runtime.CurrentBlock = blk
 
-	roundNr, _ := blk.Header.Round.ToU64()
-
 	ctx.EmitTag(TagUpdate, TagUpdateValue)
 	tagV := ValueFinalized{
 		ID:    runtime.Runtime.ID,
-		Round: roundNr,
+		Round: blk.Header.Round,
 	}
 	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
@@ -406,8 +404,6 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
 	}
 
-	roundNr, _ := genesisBlock.Header.Round.ToU64()
-
 	// Create new state containing the genesis block.
 	timerCtx := &timerContext{ID: runtime.ID}
 	state.updateRuntimeState(&runtimeState{
@@ -425,7 +421,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	ctx.EmitTag(TagUpdate, TagUpdateValue)
 	tagV := ValueFinalized{
 		ID:    id,
-		Round: roundNr,
+		Round: genesisBlock.Header.Round,
 	}
 	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
@@ -452,13 +448,13 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	runtime := rtState.Runtime
 
 	latestBlock := rtState.CurrentBlock
-	if blockNr, _ := latestBlock.Header.Round.ToU64(); blockNr != tCtx.Round {
+	if latestBlock.Header.Round != tCtx.Round {
 		// Note: This should NEVER happen, but it does and causes massive
 		// problems (#1047).
 		app.logger.Error("FireTimer: spurious timeout detected",
 			"runtime", tCtx.ID,
 			"timer_round", tCtx.Round,
-			"current_round", blockNr,
+			"current_round", latestBlock.Header.Round,
 		)
 
 		timer.Stop(ctx)
@@ -543,7 +539,7 @@ func (app *rootHashApplication) commit(
 	}
 
 	latestBlock := rtState.CurrentBlock
-	blockNr, _ := latestBlock.Header.Round.ToU64()
+	blockNr := latestBlock.Header.Round
 
 	defer state.updateRuntimeState(rtState)
 
@@ -578,7 +574,7 @@ func (app *rootHashApplication) tryFinalize(
 	forced bool,
 ) { // nolint: gocyclo
 	latestBlock := rtState.CurrentBlock
-	blockNr, _ := latestBlock.Header.Round.ToU64()
+	blockNr := latestBlock.Header.Round
 
 	var rearmTimer bool
 	defer func() {
@@ -620,12 +616,10 @@ func (app *rootHashApplication) tryFinalize(
 
 		rtState.CurrentBlock = blk
 
-		roundNr, _ := blk.Header.Round.ToU64()
-
 		ctx.EmitTag(TagUpdate, TagUpdateValue)
 		tagV := ValueFinalized{
 			ID:    id,
-			Round: roundNr,
+			Round: blk.Header.Round,
 		}
 		ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 		return

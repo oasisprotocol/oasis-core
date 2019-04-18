@@ -94,7 +94,7 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 		panic(err) // Will never happen, but just in case.
 	}
 
-	blockNr, _ := blk.Header.Round.ToU64()
+	blockNr := blk.Header.Round
 
 	s.logger.Debug("worker: new committee, transitioning round",
 		"epoch", committee.ValidFor,
@@ -181,7 +181,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 	}()
 
 	latestBlock, _ := s.getLatestBlockImpl()
-	blockNr, _ := latestBlock.Header.Round.ToU64()
+	blockNr := latestBlock.Header.Round
 
 	state := s.round.roundState.state
 
@@ -319,7 +319,7 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 				cmd.errCh <- err
 				continue
 			}
-			blockNr, _ := latestBlock.Header.Round.ToU64()
+			blockNr := latestBlock.Header.Round
 
 			// If the round was finalized, transition.
 			if s.round.roundState.currentBlock != latestBlock {
@@ -404,16 +404,13 @@ func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *block.Bloc
 	return ch, sub, nil
 }
 
-func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round block.Round) (<-chan *block.Block, *pubsub.Subscription, error) {
+func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round uint64) (<-chan *block.Block, *pubsub.Subscription, error) {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	startBlock, err := round.ToU64()
-	if err != nil {
-		return nil, nil, err
-	}
+	startBlock := round
 
 	var replayOk bool
 	sub := s.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
@@ -422,7 +419,7 @@ func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round block.Ro
 
 		// Replay from startBlock up to current.
 		for _, block := range s.blocks {
-			nr, _ := block.Header.Round.ToU64()
+			nr := block.Header.Round
 			if nr >= startBlock {
 				replayOk = true
 				ch.In() <- block
