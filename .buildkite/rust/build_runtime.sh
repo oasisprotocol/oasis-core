@@ -46,9 +46,9 @@ fi
 ###############
 pushd $src_dir
     # Build non-SGX runtime.
-    cargo build
+    cargo build --locked
 
     # Build SGX runtime.
-    cargo build --target x86_64-fortanix-unknown-sgx
+    cargo build --locked --target x86_64-fortanix-unknown-sgx
     cargo elf2sgxs
 popd
