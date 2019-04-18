@@ -2,6 +2,7 @@ package urkel
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
@@ -378,6 +380,35 @@ func TestUrkelLevelDBBackend(t *testing.T) {
 
 			os.RemoveAll(dir)
 		})
+}
+
+func TestSubtreeSerializationSimple(t *testing.T) {
+	tree := New(nil, nil)
+
+	keyZero := []byte("foo")
+	valueZero := []byte("bar")
+	keyOne := []byte("moo")
+	valueOne := []byte("boo")
+
+	err := tree.Insert(keyZero, valueZero)
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(keyOne, valueOne)
+	require.NoError(t, err, "Insert")
+
+	_, root, err := tree.Commit()
+	require.NoError(t, err, "Commit")
+
+	st, err := tree.GetSubtree(context.Background(), root, internal.NodeID{Path: root, Depth: 0}, 10)
+	require.NoError(t, err, "GetSubtree")
+
+	binary, err := st.MarshalBinary()
+	require.NoError(t, err, "MarshalBinary")
+
+	newSt := &syncer.Subtree{}
+	err = newSt.UnmarshalBinary(binary)
+	require.NoError(t, err, "UnmarshalBinary")
+
+	require.True(t, st.Equal(newSt))
 }
 
 func BenchmarkInsertCommitBatch1(b *testing.B) {
