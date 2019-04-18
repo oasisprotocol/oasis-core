@@ -95,17 +95,23 @@ impl Marshal for NodeBox {
         if data.len() < 1 {
             Err(TreeError::MalformedNode.into())
         } else {
-            if data[0] == INTERNAL_NODE_PREFIX {
-                *self = NodeBox::Internal(InternalNode {
-                    ..Default::default()
-                });
-            } else if data[0] == LEAF_NODE_PREFIX {
-                *self = NodeBox::Leaf(LeafNode {
-                    ..Default::default()
-                })
-            } else {
-                return Err(TreeError::MalformedNode.into());
-            }
+            let mut kind = NodeKind::None;
+            kind.unmarshal_binary(data)?;
+            match kind {
+                NodeKind::Internal => {
+                    *self = NodeBox::Internal(InternalNode {
+                        ..Default::default()
+                    });
+                }
+                NodeKind::Leaf => {
+                    *self = NodeBox::Leaf(LeafNode {
+                        ..Default::default()
+                    });
+                }
+                _ => {
+                    return Err(TreeError::MalformedNode.into());
+                }
+            };
             match self {
                 NodeBox::Internal(ref mut n) => n.unmarshal_binary(data),
                 NodeBox::Leaf(ref mut n) => n.unmarshal_binary(data),
@@ -115,11 +121,38 @@ impl Marshal for NodeBox {
 }
 
 /// Node types in the tree.
-#[derive(Debug)]
+///
+/// Integer values of the variants here are also used in subtree
+/// serialization and as prefixes in node hash computations.
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum NodeKind {
-    None,
-    Internal,
-    Leaf,
+    None = 0x02,
+    Internal = 0x01,
+    Leaf = 0x00,
+}
+
+impl Marshal for NodeKind {
+    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+        Ok(vec![*self as u8])
+    }
+
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+        if data.len() < 1 {
+            Err(TreeError::MalformedNode.into())
+        } else {
+            if data[0] == NodeKind::None as u8 {
+                *self = NodeKind::None;
+            } else if data[0] == NodeKind::Internal as u8 {
+                *self = NodeKind::Internal;
+            } else if data[0] == NodeKind::Leaf as u8 {
+                *self = NodeKind::Leaf;
+            } else {
+                return Err(TreeError::MalformedNode.into());
+            }
+            Ok(1)
+        }
+    }
 }
 
 /// `NodeRef` is a reference-counted pointer to a node box.
@@ -227,7 +260,7 @@ impl Node for InternalNode {
         let hash_left = self.left.borrow().hash;
         let hash_right = self.right.borrow().hash;
         self.hash = Hash::digest_bytes_list(&[
-            &[INTERNAL_NODE_PREFIX],
+            &[NodeKind::Internal as u8],
             hash_left.as_ref(),
             hash_right.as_ref(),
         ]);
@@ -267,7 +300,7 @@ impl Node for InternalNode {
 impl Marshal for InternalNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
-        result.push(INTERNAL_NODE_PREFIX);
+        result.push(NodeKind::Internal as u8);
         result.extend_from_slice(self.left.borrow().hash.as_ref());
         result.extend_from_slice(self.right.borrow().hash.as_ref());
 
@@ -275,7 +308,7 @@ impl Marshal for InternalNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + 2 * Hash::len() || data[0] != INTERNAL_NODE_PREFIX {
+        if data.len() < 1 + 2 * Hash::len() || data[0] != NodeKind::Internal as u8 {
             return Err(TreeError::MalformedNode.into());
         }
 
@@ -340,7 +373,7 @@ impl Node for LeafNode {
 
     fn update_hash(&mut self) {
         self.hash = Hash::digest_bytes_list(&[
-            &[LEAF_NODE_PREFIX],
+            &[NodeKind::Leaf as u8],
             self.key.as_ref(),
             self.value.borrow().hash.as_ref(),
         ]);
@@ -380,28 +413,29 @@ impl Node for LeafNode {
 impl Marshal for LeafNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
-        result.push(LEAF_NODE_PREFIX);
+        result.push(NodeKind::Leaf as u8);
         result.extend_from_slice(self.key.as_ref());
-        result.extend_from_slice(self.value.borrow().hash.as_ref());
+        result.append(&mut self.value.borrow().marshal_binary()?);
 
         Ok(result)
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + 2 * Hash::len() || data[0] != LEAF_NODE_PREFIX {
+        if data.len() < 1 + Hash::len() || data[0] != NodeKind::Leaf as u8 {
             return Err(TreeError::MalformedNode.into());
         }
 
         self.clean = false;
         self.key = Hash::from(&data[1..(1 + Hash::len())]);
         self.value = Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]),
-            value: None,
             ..Default::default()
         }));
+        let value_len = self
+            .value
+            .borrow_mut()
+            .unmarshal_binary(&data[(1 + Hash::len())..])?;
 
-        Ok(1 + 2 * Hash::len())
+        Ok(1 + Hash::len() + value_len)
     }
 }
 
@@ -462,6 +496,44 @@ impl ValuePointer {
             value: self.value.clone(),
             ..Default::default()
         }))
+    }
+}
+
+impl Marshal for ValuePointer {
+    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+        let mut result: Vec<u8> = Vec::new();
+        let value_len = match self.value {
+            None => 0,
+            Some(ref v) => v.len(),
+        };
+        result.append(&mut (value_len as u32).marshal_binary()?);
+        if let Some(ref v) = self.value {
+            result.extend_from_slice(v.as_ref());
+        }
+        Ok(result)
+    }
+
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+        if data.len() < 4 {
+            return Err(TreeError::MalformedNode.into());
+        }
+
+        let mut value_len = 0u32;
+        value_len.unmarshal_binary(data)?;
+        let value_len = value_len as usize;
+
+        if data.len() < 4 + value_len {
+            return Err(TreeError::MalformedNode.into());
+        }
+
+        self.clean = false;
+        self.hash = Hash::default();
+        if value_len == 0 {
+            self.value = None;
+        } else {
+            self.value = Some(data[4..(4 + value_len)].to_vec());
+        }
+        Ok(4 + value_len)
     }
 }
 

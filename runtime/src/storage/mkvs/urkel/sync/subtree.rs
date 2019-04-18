@@ -1,4 +1,4 @@
-use std::{cell::RefCell, io::Cursor, rc::Rc};
+use std::{cell::RefCell, io::Cursor, mem::size_of, rc::Rc};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -122,13 +122,13 @@ impl Subtree {
 
 impl Marshal for SubtreeIndex {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(2);
+        let mut result: Vec<u8> = Vec::with_capacity(size_of::<SubtreeIndex>());
         result.write_u16::<LittleEndian>(*self)?;
         Ok(result)
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 2 {
+        if data.len() < size_of::<SubtreeIndex>() {
             Err(SubtreeError::Malformed.into())
         } else {
             let mut reader = Cursor::new(data);
@@ -138,44 +138,47 @@ impl Marshal for SubtreeIndex {
     }
 }
 
+// Size of the subtree pointer: index + flag byte.
+const SUBTREE_POINTER_LEN: usize = size_of::<SubtreeIndex>() + 1;
 impl Marshal for SubtreePointer {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(4);
+        let mut result: Vec<u8> = Vec::with_capacity(SUBTREE_POINTER_LEN);
         result.append(&mut self.index.marshal_binary()?);
         result.push(if self.full { 1u8 } else { 0u8 });
-        result.push(if self.valid { 1u8 } else { 0u8 });
         Ok(result)
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 4 {
+        if data.len() < SUBTREE_POINTER_LEN || data[size_of::<SubtreeIndex>()] > 1 {
             Err(SubtreeError::Malformed.into())
         } else {
-            self.index.unmarshal_binary(&data[0..2])?;
-            self.full = data[2] > 0;
-            self.valid = data[3] > 0;
-            Ok(4)
+            self.index
+                .unmarshal_binary(&data[0..size_of::<SubtreeIndex>()])?;
+            self.full = data[size_of::<SubtreeIndex>()] > 0;
+            self.valid = true;
+            Ok(3)
         }
     }
 }
 
+const SUMMARY_NODE_LEN: usize = 2 * SUBTREE_POINTER_LEN;
 impl Marshal for InternalNodeSummary {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(9);
-        result.push(if self.invalid { 1u8 } else { 0u8 });
+        let mut result: Vec<u8> = Vec::with_capacity(SUMMARY_NODE_LEN);
         result.append(&mut self.left.marshal_binary()?);
         result.append(&mut self.right.marshal_binary()?);
         Ok(result)
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 9 {
+        if data.len() < SUMMARY_NODE_LEN {
             Err(SubtreeError::Malformed.into())
         } else {
-            self.invalid = data[0] > 0;
-            self.left.unmarshal_binary(&data[1..5])?;
-            self.right.unmarshal_binary(&data[5..])?;
-            Ok(9)
+            let mut size = 0usize;
+            size += self.left.unmarshal_binary(&data[0..])?;
+            size += self.right.unmarshal_binary(&data[size..])?;
+            self.invalid = false;
+            Ok(size)
         }
     }
 }
@@ -183,23 +186,21 @@ impl Marshal for InternalNodeSummary {
 impl Marshal for Subtree {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::new();
-        result.push(SUBTREE_PREFIX);
         result.append(&mut self.root.marshal_binary()?);
 
         // Summaries.
-        result.append(&mut (self.summaries.len() as u64).marshal_binary()?);
+        result.append(&mut (self.summaries.len() as SubtreeIndex).marshal_binary()?);
         for summary in &self.summaries {
             result.append(&mut summary.marshal_binary()?);
         }
 
         // Full nodes.
-        result.append(&mut (self.full_nodes.len() as u64).marshal_binary()?);
+        result.append(&mut (self.full_nodes.len() as SubtreeIndex).marshal_binary()?);
         for node in &self.full_nodes {
             match node {
-                None => result.append(&mut 0u64.marshal_binary()?),
+                None => result.push(NodeKind::None as u8),
                 Some(node) => {
                     let mut data = node.borrow().marshal_binary()?;
-                    result.append(&mut (data.len() as u64).marshal_binary()?);
                     result.append(&mut data)
                 }
             };
@@ -209,13 +210,13 @@ impl Marshal for Subtree {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 21 || data[0] != SUBTREE_PREFIX {
+        if data.len() < SUBTREE_POINTER_LEN + 2 * size_of::<SubtreeIndex>() {
             Err(SubtreeError::Malformed.into())
         } else {
-            let mut offset = 1 + self.root.unmarshal_binary(&data[1..])?;
+            let mut offset = self.root.unmarshal_binary(data)?;
 
             // Summaries.
-            let mut summaries_len: u64 = 0;
+            let mut summaries_len: SubtreeIndex = 0;
             self.summaries.clear();
             offset += summaries_len.unmarshal_binary(&data[offset..])?;
             for _ in 0..summaries_len {
@@ -227,14 +228,16 @@ impl Marshal for Subtree {
             }
 
             // Full nodes.
-            let mut nodes_len: u64 = 0;
+            let mut nodes_len: SubtreeIndex = 0;
             self.full_nodes.clear();
             offset += nodes_len.unmarshal_binary(&data[offset..])?;
             for _ in 0..nodes_len {
-                let mut item_len: u64 = 0;
-                offset += item_len.unmarshal_binary(&data[offset..])?;
-                if item_len == 0 {
+                if data.len() <= offset {
+                    return Err(SubtreeError::Malformed.into());
+                }
+                if data[offset] == NodeKind::None as u8 {
                     self.full_nodes.push(None);
+                    offset += 1;
                 } else {
                     let mut item = NodeBox::Internal(InternalNode {
                         ..Default::default()

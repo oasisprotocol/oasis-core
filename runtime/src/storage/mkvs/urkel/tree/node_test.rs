@@ -7,15 +7,15 @@ use crate::{
 
 #[test]
 fn test_serialization_leaf() {
-    let key = Hash::digest_bytes("a golden key".as_bytes());
-    let value_hash = Hash::digest_bytes("value".as_bytes());
+    let key = Hash::digest_bytes(b"a golden key");
+    let value_hash = Hash::digest_bytes(b"value");
 
     let leaf_node = LeafNode {
         key: key,
         value: Rc::new(RefCell::new(ValuePointer {
             clean: true,
             hash: value_hash,
-            value: Some("value".as_bytes().to_vec()),
+            value: Some(b"value".to_vec()),
             ..Default::default()
         })),
         ..Default::default()
@@ -32,18 +32,18 @@ fn test_serialization_leaf() {
 
     assert_eq!(false, decoded_leaf_node.clean);
     assert_eq!(leaf_node.key, decoded_leaf_node.key);
-    assert_eq!(true, decoded_leaf_node.value.borrow().clean);
+    assert_eq!(false, decoded_leaf_node.value.borrow().clean);
     assert_eq!(
-        leaf_node.value.borrow().hash,
-        decoded_leaf_node.value.borrow().hash
+        leaf_node.value.borrow().value,
+        decoded_leaf_node.value.borrow().value
     );
-    assert_eq!(None, decoded_leaf_node.value.borrow().value);
+    assert_ne!(None, decoded_leaf_node.value.borrow().value);
 }
 
 #[test]
 fn test_serialization_internal() {
-    let left_hash = Hash::digest_bytes("everyone move to the left".as_bytes());
-    let right_hash = Hash::digest_bytes("everyone move to the right".as_bytes());
+    let left_hash = Hash::digest_bytes(b"everyone move to the left");
+    let right_hash = Hash::digest_bytes(b"everyone move to the right");
 
     let int_node = InternalNode {
         left: Rc::new(RefCell::new(NodePointer {
@@ -85,8 +85,8 @@ fn test_serialization_internal() {
 
 #[test]
 fn test_hash_leaf() {
-    let key = Hash::digest_bytes("a golden key".as_bytes());
-    let value_hash = Hash::digest_bytes("value".as_bytes());
+    let key = Hash::digest_bytes(b"a golden key");
+    let value_hash = Hash::digest_bytes(b"value");
 
     let mut leaf_node = LeafNode {
         key: key,
@@ -108,8 +108,8 @@ fn test_hash_leaf() {
 
 #[test]
 fn test_hash_internal() {
-    let left_hash = Hash::digest_bytes("everyone move to the left".as_bytes());
-    let right_hash = Hash::digest_bytes("everyone move to the right".as_bytes());
+    let left_hash = Hash::digest_bytes(b"everyone move to the left");
+    let right_hash = Hash::digest_bytes(b"everyone move to the right");
 
     let mut int_node = InternalNode {
         left: Rc::new(RefCell::new(NodePointer {
