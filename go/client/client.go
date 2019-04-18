@@ -46,7 +46,13 @@ func newManualGrpcResolver() (*manual.Resolver, func()) {
 	grpcResolverLock.Lock()
 	defer grpcResolverLock.Unlock()
 
-	return manual.GenerateAndRegisterManualResolver()
+	resolver, cleanup := manual.GenerateAndRegisterManualResolver()
+
+	return resolver, func() {
+		grpcResolverLock.Lock()
+		defer grpcResolverLock.Unlock()
+		cleanup()
+	}
 }
 
 const (
