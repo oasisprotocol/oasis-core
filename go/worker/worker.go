@@ -88,6 +88,8 @@ type Worker struct {
 	netProxies map[string]NetworkProxy
 	socketDir  string
 
+	localStorage *localStorage
+
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	quitCh    chan struct{}
@@ -195,6 +197,9 @@ func (w *Worker) Stop() {
 	}
 
 	w.grpc.Stop()
+	if w.localStorage != nil {
+		w.localStorage.Stop()
+	}
 }
 
 // Quit returns a channel that will be closed when the service terminates.
@@ -264,7 +269,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			newHostHandler(rtCfg.ID, w.storage, w.keyManager),
+			newHostHandler(rtCfg.ID, w.storage, w.keyManager, w.localStorage),
 			false,
 		)
 	case host.BackendUnconfined:
@@ -275,7 +280,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			newHostHandler(rtCfg.ID, w.storage, w.keyManager),
+			newHostHandler(rtCfg.ID, w.storage, w.keyManager, w.localStorage),
 			true,
 		)
 	case host.BackendMock:
@@ -408,7 +413,8 @@ func newWorker(
 		// Create required network proxies.
 		metricsConfig := metrics.GetServiceConfig()
 		if metricsConfig.Mode == "push" {
-			proxy, err := NewNetworkProxy(host.MetricsProxyKey, "http", filepath.Join(w.socketDir, metricsProxySocketName), metricsConfig.Address)
+			var proxy NetworkProxy
+			proxy, err = NewNetworkProxy(host.MetricsProxyKey, "http", filepath.Join(w.socketDir, metricsProxySocketName), metricsConfig.Address)
 			if err != nil {
 				return nil, err
 			}
@@ -417,11 +423,16 @@ func newWorker(
 
 		tracingConfig := tracing.GetServiceConfig()
 		if tracingConfig.Enabled {
-			address, err := common.GetHostPort(tracingConfig.AgentAddress)
+			var (
+				address string
+				proxy   NetworkProxy
+			)
+
+			address, err = common.GetHostPort(tracingConfig.AgentAddress)
 			if err != nil {
 				return nil, err
 			}
-			proxy, err := NewNetworkProxy(host.TracingProxyKey, "dgram", filepath.Join(w.socketDir, tracingProxySocketName), address)
+			proxy, err = NewNetworkProxy(host.TracingProxyKey, "dgram", filepath.Join(w.socketDir, tracingProxySocketName), address)
 			if err != nil {
 				return nil, err
 			}
@@ -430,10 +441,14 @@ func newWorker(
 
 		// Register all configured runtimes.
 		for _, rtCfg := range cfg.Runtimes {
-			if err := w.registerRuntime(&cfg, &rtCfg); err != nil {
+			if err = w.registerRuntime(&cfg, &rtCfg); err != nil {
 				return nil, err
 			}
+		}
 
+		// Open the local storage.
+		if w.localStorage, err = newLocalStorage(dataDir); err != nil {
+			return nil, err
 		}
 	}
 

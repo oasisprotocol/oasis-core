@@ -71,6 +71,10 @@ type Body struct {
 	HostStorageGetResponse      *HostStorageGetResponse
 	HostStorageGetBatchRequest  *HostStorageGetBatchRequest
 	HostStorageGetBatchResponse *HostStorageGetBatchResponse
+	HostLocalStorageGetRequest  *HostLocalStorageGetRequest
+	HostLocalStorageGetResponse *HostLocalStorageGetResponse
+	HostLocalStorageSetRequest  *HostLocalStorageSetRequest
+	HostLocalStorageSetResponse *Empty
 }
 
 // Empty is an empty message body.
@@ -181,4 +185,20 @@ type HostStorageGetBatchRequest struct {
 // HostStorageGetBatchResponse is a host storage batch get response message body.
 type HostStorageGetBatchResponse struct {
 	Values [][]byte `codec:"values"`
+}
+
+// HostLocalStorageGetRequest is a host local storage get request message body.
+type HostLocalStorageGetRequest struct {
+	Key []byte `codec:"key"`
+}
+
+// HostLocalStorageGetResponse is a host local storage get response message body.
+type HostLocalStorageGetResponse struct {
+	Value []byte `codec:"value"`
+}
+
+// HostLocalStorageSetRequest is a host local storage set request message body.
+type HostLocalStorageSetRequest struct {
+	Key   []byte `codec:"key"`
+	Value []byte `codec:"value"`
 }
