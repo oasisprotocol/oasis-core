@@ -34,6 +34,21 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
+var grpcResolverLock sync.Mutex
+
+func newManualGrpcResolver() (*manual.Resolver, func()) {
+	// The gRPC manual resolver is supposed to allow for per-invocation resolver
+	// instances, by generating resolvers for randomized schemes, presumably at
+	// runtime.
+	//
+	// It has been said that there are primitives that can be used to protect
+	// shared datastructures from concurrent writes.
+	grpcResolverLock.Lock()
+	defer grpcResolverLock.Unlock()
+
+	return manual.GenerateAndRegisterManualResolver()
+}
+
 const (
 	maxRetryElapsedTime = 60 * time.Second
 	maxRetryInterval    = 10 * time.Second
@@ -83,7 +98,7 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *committee.Sub
 
 	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
 
-	manualResolver, cleanup := manual.GenerateAndRegisterManualResolver()
+	manualResolver, cleanup := newManualGrpcResolver()
 	defer cleanup()
 
 	address := manualResolver.Scheme() + ":///leader.node"
