@@ -5,8 +5,11 @@ authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
 
 [dependencies]
+log = "0.3"
 slog = "2.4.1"
 slog-json = "2.3.0"
+slog-scope = "4.1.1"
+slog-stdlog = "3.0.4-pre"
 serde = "1.0.71"
 serde_derive = "1.0"
 # TODO: Change to released version when 0.10.0 is released.

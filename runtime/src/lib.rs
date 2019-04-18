@@ -21,6 +21,8 @@ extern crate serde_cbor;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate slog_json;
+extern crate slog_scope;
+extern crate slog_stdlog;
 #[macro_use]
 extern crate failure;
 extern crate base64;

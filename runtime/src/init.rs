@@ -1,12 +1,13 @@
 //! Runtime initialization.
-use std::{env, sync::Arc};
-
 use crate::{
-    common::logger::get_logger,
+    common::logger::{get_logger, init_logger},
     dispatcher::{Dispatcher, Initializer},
     protocol::{Protocol, Stream},
     rak::RAK,
 };
+
+use log;
+use std::{env, sync::Arc};
 
 /// Starts the runtime.
 pub fn start_runtime(initializer: Option<Box<Initializer>>) {
@@ -14,6 +15,7 @@ pub fn start_runtime(initializer: Option<Box<Initializer>>) {
     env::set_var("RUST_BACKTRACE", "1");
 
     // Initialize logging.
+    init_logger(log::LogLevel::Info);
     let logger = get_logger("runtime");
     info!(logger, "Runtime is starting");
 
