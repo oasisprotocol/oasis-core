@@ -9,6 +9,7 @@ mod debug;
 mod errors;
 mod insert;
 mod lookup;
+mod marshal;
 mod remove;
 mod sync;
 
