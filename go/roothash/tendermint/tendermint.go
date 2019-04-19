@@ -9,11 +9,12 @@ import (
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -31,7 +32,7 @@ const (
 	// BackendName is the name of this implementation.
 	BackendName = "tendermint"
 
-	roundHeightMapCacheSize = 10000
+	cfgIndexBlocks = "roothash.tendermint.index_blocks"
 )
 
 var (
@@ -47,8 +48,6 @@ type runtimeBrokers struct {
 
 	lastBlockHeight int64
 	lastBlock       *block.Block
-
-	roundHeightMapCache *lru.Cache
 }
 
 type tendermintBackend struct {
@@ -62,6 +61,7 @@ type tendermintBackend struct {
 
 	allBlockNotifier *pubsub.Broker
 	runtimeNotifiers map[signature.MapKey]*runtimeBrokers
+	blockIndex       *blockIndexer
 
 	closeOnce sync.Once
 	closedCh  chan struct{}
@@ -89,51 +89,26 @@ func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int6
 	return &block, nil
 }
 
+func (r *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey, round uint64) (*block.Block, error) {
+	if r.blockIndex == nil {
+		return nil, errors.New("roothash: block indexer not enabled for tendermint backend")
+	}
+
+	height, err := r.blockIndex.GetBlockHeight(id, round)
+	if err != nil {
+		// TODO: Support on-demand reindexing based on neighbouring blocks in
+		//       case blocks are not found.
+		return nil, err
+	}
+
+	return r.getLatestBlockAt(id, height)
+}
+
 func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
 	annCh, sub, err := r.WatchAnnotatedBlocks(id)
 	if err != nil {
 		return nil, nil, err
 	}
-	ch := api.MapAnnotatedBlockToBlock(annCh)
-
-	return ch, sub, nil
-}
-
-func (r *tendermintBackend) WatchBlocksSince(id signature.PublicKey, round uint64) (<-chan *block.Block, *pubsub.Subscription, error) {
-	notifiers := r.getRuntimeNotifiers(id)
-
-	startRound := round
-	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
-		// NOTE: Due to taking the notifiers lock, block replay blocks any events for
-		// this runtime (and others since they share a worker) from being processed.
-		notifiers.Lock()
-		defer notifiers.Unlock()
-
-		if notifiers.lastBlock != nil {
-			lastRound := notifiers.lastBlock.Header.Round
-
-			for round := startRound; round < lastRound; round++ {
-				block := r.findBlockForRound(id, round, notifiers)
-				if block == nil {
-					r.logger.Error("WatchBlocksSince: failed to replay block for round",
-						"round", round,
-					)
-					break
-				}
-
-				// NOTE: This doesn't emit the height, but height is always stripped
-				//       in this method as there is no WatchAnnotatedBlocksSince.
-				ch.In() <- &api.AnnotatedBlock{Block: block}
-			}
-
-			ch.In() <- &api.AnnotatedBlock{
-				Height: notifiers.lastBlockHeight,
-				Block:  notifiers.lastBlock,
-			}
-		}
-	})
-	annCh := make(chan *api.AnnotatedBlock)
-	sub.Unwrap(annCh)
 	ch := api.MapAnnotatedBlockToBlock(annCh)
 
 	return ch, sub, nil
@@ -160,90 +135,6 @@ func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
-}
-
-func (r *tendermintBackend) findBlockForRound(id signature.PublicKey, round uint64, notifiers *runtimeBrokers) *block.Block {
-	lastRound := notifiers.lastBlock.Header.Round
-	if notifiers.lastBlock == nil || round > lastRound {
-		return nil
-	} else if round == lastRound {
-		return notifiers.lastBlock
-	}
-
-	// First we need to map the roothash round number into a Tendermint
-	// block. To do this, we first consult the local cache and if the
-	// round is not available we do a backwards linear scan.
-	cache := notifiers.roundHeightMapCache
-	blockHeight, ok := cache.Get(round)
-	if ok {
-		return r.getBlockFromTmBlock(id, blockHeight.(int64), round, cache)
-	}
-
-	// Perform a linear scan to get the block height. This will also
-	// populate the cache so we should have all the items available.
-	r.Lock()
-	currentHeight := r.lastBlockHeight
-	r.Unlock()
-
-	for blockHeight := currentHeight; blockHeight > 0; blockHeight-- {
-		if block := r.getBlockFromTmBlock(id, blockHeight, round, cache); block != nil {
-			return block
-		}
-	}
-
-	return nil
-}
-
-func (r *tendermintBackend) getBlockFromTmBlock(
-	id signature.PublicKey,
-	height int64,
-	round uint64,
-	cache *lru.Cache,
-) *block.Block {
-	// Fetch results for given block to get the tags.
-	results, err := r.service.GetBlockResults(height)
-	if err != nil {
-		r.logger.Error("getBlockFromTmBlock: failed to get block results",
-			"block_height", height,
-			"err", err,
-		)
-		return nil
-	}
-
-	extractBlock := func(tags []tmcmn.KVPair) *block.Block {
-		for _, pair := range tags {
-			if bytes.Equal(pair.GetKey(), app.TagFinalized) {
-				block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
-				if err != nil {
-					r.logger.Error("getBlockFromTmBlock: failed to get block from tag",
-						"err", err,
-					)
-					continue
-				}
-
-				if !id.Equal(value.ID) {
-					continue
-				}
-
-				_ = cache.Put(value.Round, height)
-				if value.Round == round {
-					return block
-				}
-			}
-		}
-
-		return nil
-	}
-
-	if block := extractBlock(results.Results.BeginBlock.GetTags()); block != nil {
-		return block
-	}
-	for _, tx := range results.Results.DeliverTx {
-		if block := extractBlock(tx.GetTags()); block != nil {
-			return block
-		}
-	}
-	return extractBlock(results.Results.EndBlock.GetTags())
 }
 
 func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
@@ -318,13 +209,6 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 			eventNotifier: pubsub.NewBroker(false),
 			lastBlock:     block,
 		}
-		var err error
-		notifiers.roundHeightMapCache, err = lru.New(
-			lru.Capacity(roundHeightMapCacheSize, false),
-		)
-		if err != nil {
-			panic(err)
-		}
 
 		r.runtimeNotifiers[k] = notifiers
 	}
@@ -345,6 +229,22 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 	}
 	defer r.service.Unsubscribe("roothash-worker", app.QueryUpdate) // nolint: errcheck
 
+	// Subscribe to prune events if a block indexer is configured.
+	var pruneCh <-chan int64
+	if r.blockIndex != nil {
+		var pruneSub *pubsub.Subscription
+		pruneCh, pruneSub, err = r.service.Pruner().Subscribe()
+		if err != nil {
+			r.logger.Error("failed to subscribe to prune events",
+				"err", err,
+			)
+			return
+		}
+		if pruneSub != nil {
+			defer pruneSub.Close()
+		}
+	}
+
 	// Process transactions and emit notifications for our subscribers.
 	for {
 		var event interface{}
@@ -355,6 +255,16 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		case <-sub.Cancelled():
 			r.logger.Debug("worker: terminating, subsription closed")
 			return
+		case height := <-pruneCh:
+			if r.blockIndex != nil {
+				err = r.blockIndex.Prune(height)
+				if err != nil {
+					r.logger.Error("worker: failed to prune block index",
+						"err", err,
+					)
+				}
+			}
+			continue
 		case <-ctx.Done():
 			return
 		}
@@ -396,9 +306,16 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 				notifiers.lastBlockHeight = r.lastBlockHeight
 				notifiers.Unlock()
 
-				// Insert the round -> block height mapping into the
-				// cache.
-				_ = notifiers.roundHeightMapCache.Put(value.Round, r.lastBlockHeight)
+				// Index the block when an indexer is configured.
+				if r.blockIndex != nil {
+					err = r.blockIndex.Index(block, r.lastBlockHeight)
+					if err != nil {
+						r.logger.Error("worker: failed to index block",
+							"err", err,
+						)
+						// TODO: Support on-demand reindexing.
+					}
+				}
 
 				// Broadcast new block.
 				r.allBlockNotifier.Broadcast(block)
@@ -425,6 +342,7 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 // New constructs a new tendermint-based root hash backend.
 func New(
 	ctx context.Context,
+	dataDir string,
 	timeSource epochtime.Backend,
 	sched scheduler.Backend,
 	beac beacon.Backend,
@@ -458,7 +376,30 @@ func New(
 		closedCh:         make(chan struct{}),
 	}
 
+	// Check if we need to index roothash blocks.
+	if viper.GetBool(cfgIndexBlocks) {
+		var err error
+		r.blockIndex, err = newBlockIndex(dataDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	go r.worker(ctx)
 
 	return r, nil
+}
+
+// RegisterFlags registers the configuration flags with the provided
+// command.
+func RegisterFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgIndexBlocks, false, "Should the roothash blocks be indexed")
+	}
+
+	for _, v := range []string{
+		cfgIndexBlocks,
+	} {
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+	}
 }

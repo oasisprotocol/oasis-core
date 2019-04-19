@@ -43,6 +43,7 @@ var (
 		{"beacon.backend", "tendermint"},
 		{"registry.backend", "tendermint"},
 		{"roothash.backend", "tendermint"},
+		{"roothash.tendermint.index_blocks", true},
 		{"scheduler.backend", "trivial"},
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},

@@ -67,4 +67,7 @@ type TendermintService interface {
 
 	// IsSeed returns if the tendermint service is set up as a seed node.
 	IsSeed() bool
+
+	// Pruner returns the ABCI state pruner.
+	Pruner() abci.StatePruner
 }

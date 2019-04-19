@@ -68,6 +68,9 @@ type Backend interface {
 	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
 	GetLatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
 
+	// GetBlock returns the block at a specific height.
+	GetBlock(context.Context, signature.PublicKey, uint64) (*block.Block, error)
+
 	// WatchBlocks returns a channel that produces a stream of blocks.
 	//
 	// The latest block if any will get pushed to the stream immediately.

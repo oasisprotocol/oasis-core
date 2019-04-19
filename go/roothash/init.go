@@ -28,6 +28,7 @@ const (
 // New constructs a new Backend based on the configuration flags.
 func New(
 	ctx context.Context,
+	dataDir string,
 	timeSource epochtime.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
@@ -35,7 +36,6 @@ func New(
 	tmService service.TendermintService,
 ) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
-
 	roundTimeout := viper.GetDuration(cfgRoundTimeout)
 
 	var impl api.Backend
@@ -45,7 +45,7 @@ func New(
 	case memory.BackendName:
 		impl = memory.New(ctx, scheduler, registry, nil, roundTimeout)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, timeSource, scheduler, beacon, tmService, roundTimeout)
+		impl, err = tendermint.New(ctx, dataDir, timeSource, scheduler, beacon, tmService, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}
@@ -70,4 +70,6 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
+
+	tendermint.RegisterFlags(cmd)
 }

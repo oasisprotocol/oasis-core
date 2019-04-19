@@ -384,6 +384,27 @@ func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.Public
 	return s.getLatestBlock()
 }
 
+func (r *memoryRootHash) GetBlock(ctx context.Context, id signature.PublicKey, round uint64) (*block.Block, error) {
+	s, err := r.getRuntimeState(id)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Lock()
+	defer s.Unlock()
+
+	blk := s.blocks[round]
+	if blk == nil {
+		return nil, api.ErrInvalidArgument
+	}
+
+	if blk.Header.Round != round {
+		panic("roothash: inconsistent state")
+	}
+
+	return blk, nil
+}
+
 func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
@@ -398,39 +419,6 @@ func (r *memoryRootHash) WatchBlocks(id signature.PublicKey) (<-chan *block.Bloc
 			ch.In() <- block
 		}
 	})
-	ch := make(chan *block.Block)
-	sub.Unwrap(ch)
-
-	return ch, sub, nil
-}
-
-func (r *memoryRootHash) WatchBlocksSince(id signature.PublicKey, round uint64) (<-chan *block.Block, *pubsub.Subscription, error) {
-	s, err := r.getRuntimeState(id)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	startBlock := round
-
-	var replayOk bool
-	sub := s.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
-		s.Lock()
-		defer s.Unlock()
-
-		// Replay from startBlock up to current.
-		for _, block := range s.blocks {
-			nr := block.Header.Round
-			if nr >= startBlock {
-				replayOk = true
-				ch.In() <- block
-			}
-		}
-	})
-	if !replayOk {
-		sub.Close()
-		return nil, nil, errNoSuchBlocks
-	}
-
 	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 

@@ -195,6 +195,11 @@ func (a *ApplicationServer) Register(app Application) error {
 	return a.mux.doRegister(app)
 }
 
+// Pruner returns the ABCI state pruner.
+func (a *ApplicationServer) Pruner() StatePruner {
+	return a.mux.state.statePruner
+}
+
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
 func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationServer, error) {
