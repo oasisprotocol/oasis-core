@@ -46,21 +46,6 @@ func (s *grpcServer) GetBlocks(req *pb.BlockRequest, stream pb.RootHash_GetBlock
 	return grpcSendBlocks(ch, stream)
 }
 
-func (s *grpcServer) GetBlocksSince(req *pb.BlockSinceRequest, stream pb.RootHash_GetBlocksSinceServer) error {
-	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
-		return err
-	}
-
-	ch, sub, err := s.backend.WatchBlocksSince(id, req.GetRound())
-	if err != nil {
-		return err
-	}
-	defer sub.Close()
-
-	return grpcSendBlocks(ch, stream)
-}
-
 // NewGRPCServer initializes and registers a gRPC root hash server
 // backed by the provided backend.
 func NewGRPCServer(srv *grpc.Server, backend api.Backend) {

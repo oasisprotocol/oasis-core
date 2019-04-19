@@ -6,7 +6,6 @@ option go_package = "github.com/oasislabs/ekiden/go/grpc/roothash";
 service RootHash {
   rpc GetLatestBlock (LatestBlockRequest) returns (LatestBlockResponse) {}
   rpc GetBlocks (BlockRequest) returns (stream BlockResponse) {}
-  rpc GetBlocksSince (BlockSinceRequest) returns (stream BlockResponse) {}
 }
 
 message Block {
@@ -35,17 +34,6 @@ message Header {
   uint64 round = 13;
 }
 
-// This is used for exporting a runtime's latest block to a file.
-message GenesisBlock {
-  bytes runtime_id = 1;
-  Block block = 2;
-}
-
-// This is used for exporting runtimes' latest blocks to a file.
-message GenesisBlocks {
-  repeated GenesisBlock genesis_blocks = 1;
-}
-
 message LatestBlockRequest {
   bytes runtime_id = 1;
 }
@@ -60,9 +48,4 @@ message BlockRequest {
 
 message BlockResponse {
   Block block = 1;
-}
-
-message BlockSinceRequest {
-  bytes runtime_id = 1;
-  uint64 round = 2;
 }
