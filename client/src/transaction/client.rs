@@ -179,6 +179,33 @@ impl TxnClient {
         }))
     }
 
+    // Retrieve block snapshot at specified round.
+    pub fn get_block(&self, round: u64) -> BoxFuture<BlockSnapshot> {
+        let (span, options) = self.prepare_options("TxnClient::get_block");
+        let mut request = api::client::GetBlockRequest::new();
+        request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        request.set_round(round);
+
+        let result: BoxFuture<BlockSnapshot> = match self
+            .client
+            .get_block_async_opt(&request, options)
+        {
+            Ok(resp) => {
+                let storage_client = self.storage_client.clone();
+                Box::new(
+                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
+                        .and_then(|rsp| Ok(serde_cbor::from_slice(&rsp.block)?))
+                        .map(move |block| BlockSnapshot::new(storage_client, block)),
+                )
+            }
+            Err(error) => Box::new(future::err(
+                TxnClientError::CallFailed(format!("{}", error)).into(),
+            )),
+        };
+        drop(span);
+        result
+    }
+
     fn prepare_options(&self, span_name: &'static str) -> (Span, grpcio::CallOption) {
         // TODO: Use ekiden_tracing to get the tracer.
         let (tracer, _) = Tracer::new(AllSampler);

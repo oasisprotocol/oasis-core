@@ -86,6 +86,21 @@ func (s *grpcServer) WatchBlocks(req *pbClient.WatchBlocksRequest, stream pbClie
 	}
 }
 
+func (s *grpcServer) GetBlock(ctx context.Context, req *pbClient.GetBlockRequest) (*pbClient.GetBlockResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	blk, err := s.client.GetBlock(ctx, id, req.GetRound())
+	if err != nil {
+		return nil, err
+	}
+	return &pbClient.GetBlockResponse{
+		Block: blk.MarshalCBOR(),
+	}, nil
+}
+
 func (s *grpcServer) CallEnclave(ctx context.Context, req *pbEnRPC.CallEnclaveRequest) (*pbEnRPC.CallEnclaveResponse, error) {
 	rsp, err := s.client.CallEnclave(ctx, req.Endpoint, req.Payload)
 	if err != nil {

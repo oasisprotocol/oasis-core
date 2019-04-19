@@ -12,6 +12,8 @@ service Runtime {
     rpc IsSynced (IsSyncedRequest) returns (IsSyncedResponse) {}
     // Subscribe to roothash blocks.
     rpc WatchBlocks (WatchBlocksRequest) returns (stream WatchBlocksResponse) {}
+    // Get roothash block at specific round.
+    rpc GetBlock (GetBlockRequest) returns (GetBlockResponse) {}
 }
 
 message SubmitTxRequest {
@@ -42,6 +44,18 @@ message WatchBlocksRequest {
 }
 
 message WatchBlocksResponse {
+    // A CBOR-serialized block.
+    bytes block = 1;
+}
+
+message GetBlockRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+    // Round.
+    uint64 round = 2;
+}
+
+message GetBlockResponse {
     // A CBOR-serialized block.
     bytes block = 1;
 }
