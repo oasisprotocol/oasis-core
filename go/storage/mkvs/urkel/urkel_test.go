@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	insertItems  = 10000
-	allItemsRoot = "fecf46042f82fd1ec38c9f5ee40f941d8a147976d51b59f4c16bc5c0467c7f4f"
+	insertItems  = 1000
+	allItemsRoot = "5f101fe53bb5d0b17e8bcdd07e08078c66627e2bd0d8a9f64e967eb67fe7d420"
 )
 
 func testBasic(t *testing.T, ndb db.NodeDB) {
@@ -186,7 +186,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 
 	require.Equal(t, 0, stats.SubtreeFetches, "subtree fetches (no prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (no prefetch)")
-	require.Equal(t, 12056, stats.PathFetches, "path fetches (no prefetch)")
+	require.Equal(t, 1216, stats.PathFetches, "path fetches (no prefetch)")
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (no prefetch)")
 
 	stats = syncer.NewStatsCollector(tree)
@@ -201,12 +201,12 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 
 	require.Equal(t, 1, stats.SubtreeFetches, "subtree fetches (with prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (with prefetch)")
-	require.Equal(t, 12158, stats.PathFetches, "path fetches (no prefetch)")
+	require.Equal(t, 710, stats.PathFetches, "path fetches (no prefetch)")
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
 func testValueEviction(t *testing.T, ndb db.NodeDB) {
-	tree := New(nil, ndb, Capacity(0, 1024))
+	tree := New(nil, ndb, Capacity(0, 512))
 
 	keys, values := generateKeyValuePairs()
 	for i := 0; i < len(keys); i++ {
@@ -218,14 +218,14 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	stats := tree.Stats(0)
-	require.EqualValues(t, 14331, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 10000, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
+	require.EqualValues(t, 1470, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 1000, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 1021, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 511, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 func testNodeEviction(t *testing.T, ndb db.NodeDB) {
-	tree := New(nil, ndb, Capacity(1000, 0))
+	tree := New(nil, ndb, Capacity(512, 0))
 
 	keys, values := generateKeyValuePairs()
 	for i := 0; i < len(keys); i++ {
@@ -238,10 +238,10 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 
 	stats := tree.Stats(0)
 	// Only a subset of nodes should remain in cache.
-	require.EqualValues(t, 590, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 410, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
+	require.EqualValues(t, 313, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 199, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 4050, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 1770, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 func testDebugDump(t *testing.T, ndb db.NodeDB) {
@@ -269,11 +269,11 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	}
 
 	stats := tree.Stats(0)
-	require.EqualValues(t, 28, stats.MaxDepth, "MaxDepth")
-	require.EqualValues(t, 14331, stats.InternalNodeCount, "InternalNodeCount")
-	require.EqualValues(t, 10000, stats.LeafNodeCount, "LeafNodeCount")
-	require.EqualValues(t, 98890, stats.LeafValueSize, "LeafValueSize")
-	require.EqualValues(t, 4332, stats.DeadNodeCount, "DeadNodeCount")
+	require.EqualValues(t, 20, stats.MaxDepth, "MaxDepth")
+	require.EqualValues(t, 1470, stats.InternalNodeCount, "InternalNodeCount")
+	require.EqualValues(t, 1000, stats.LeafNodeCount, "LeafNodeCount")
+	require.EqualValues(t, 8890, stats.LeafValueSize, "LeafValueSize")
+	require.EqualValues(t, 471, stats.DeadNodeCount, "DeadNodeCount")
 	// Cached node counts will update on commit.
 	require.EqualValues(t, 0, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
 	require.EqualValues(t, 0, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
@@ -286,14 +286,14 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	// Values are not counted as cached until they are committed (since
 	// they cannot be evicted while uncommitted).
 	stats = tree.Stats(0)
-	require.EqualValues(t, 28, stats.MaxDepth, "MaxDepth")
-	require.EqualValues(t, 14331, stats.InternalNodeCount, "InternalNodeCount")
-	require.EqualValues(t, 10000, stats.LeafNodeCount, "LeafNodeCount")
-	require.EqualValues(t, 98890, stats.LeafValueSize, "LeafValueSize")
-	require.EqualValues(t, 4332, stats.DeadNodeCount, "DeadNodeCount")
-	require.EqualValues(t, 14331, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 10000, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
-	require.EqualValues(t, 98890, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 20, stats.MaxDepth, "MaxDepth")
+	require.EqualValues(t, 1470, stats.InternalNodeCount, "InternalNodeCount")
+	require.EqualValues(t, 1000, stats.LeafNodeCount, "LeafNodeCount")
+	require.EqualValues(t, 8890, stats.LeafValueSize, "LeafValueSize")
+	require.EqualValues(t, 471, stats.DeadNodeCount, "DeadNodeCount")
+	require.EqualValues(t, 1470, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 1000, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
+	require.EqualValues(t, 8890, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 // TODO: More tests for write logs.
