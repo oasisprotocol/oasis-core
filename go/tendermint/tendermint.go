@@ -259,6 +259,10 @@ func (t *tendermintService) IsSeed() bool {
 	return viper.GetBool(cfgP2PSeedMode)
 }
 
+func (t *tendermintService) Pruner() abci.StatePruner {
+	return t.mux.Pruner()
+}
+
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	if err := t.ForceInitialize(); err != nil {
 		return err

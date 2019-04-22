@@ -119,6 +119,10 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	blk, err := backend.GetLatestBlock(context.Background(), id)
 	require.NoError(err, "GetLatestBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
+
+	blk, err = backend.GetBlock(context.Background(), id, 0)
+	require.NoError(err, "GetBlock")
+	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 }
 
 func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, states []*runtimeState) {
@@ -277,6 +281,11 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			require.EqualValues(parent.Header.OutputHash, header.OutputHash, "block output hash")
 			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
 			require.EqualValues(parent.Header.CommitmentsHash, header.CommitmentsHash, "block commitments hash")
+
+			// Check if we can fetch the block via GetBlock.
+			gblk, err := backend.GetBlock(context.Background(), rt.Runtime.ID, header.Round)
+			require.NoError(err, "GetBlock")
+			require.EqualValues(blk, gblk, "GetBlock")
 
 			// Nothing more to do after the block was received.
 			return

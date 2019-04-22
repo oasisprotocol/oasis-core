@@ -7,6 +7,7 @@ import (
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
 )
 
 const (
@@ -67,6 +68,9 @@ type StatePruner interface {
 	// Prune purges unneeded versions from the ABCI mux iAVL tree,
 	// given the latest version, based on the underlying strategy.
 	Prune(latestVersion int64)
+
+	// Subscribe subscribes to prune events.
+	Subscribe() (<-chan int64, *pubsub.Subscription, error)
 }
 
 type statePrunerInitializer interface {
@@ -79,12 +83,18 @@ func (p *nonePruner) Prune(latestVersion int64) {
 	// Nothing to prune.
 }
 
+func (p *nonePruner) Subscribe() (<-chan int64, *pubsub.Subscription, error) {
+	return nil, nil, nil
+}
+
 type genericPruner struct {
 	logger *logging.Logger
 	tree   *iavl.MutableTree
 
 	eldestRetained int64
 	keepN          int64
+
+	notifier *pubsub.Broker
 }
 
 func (p *genericPruner) Initialize(latestVersion int64) error {
@@ -133,6 +143,8 @@ func (p *genericPruner) doPrune(latestVersion int64) error {
 			if err := p.tree.DeleteVersion(i); err != nil {
 				return err
 			}
+
+			p.notifier.Broadcast(i)
 		}
 	}
 
@@ -142,6 +154,14 @@ func (p *genericPruner) doPrune(latestVersion int64) error {
 	)
 
 	return nil
+}
+
+func (p *genericPruner) Subscribe() (<-chan int64, *pubsub.Subscription, error) {
+	sub := p.notifier.Subscribe()
+	ch := make(chan int64)
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
 }
 
 func newStatePruner(cfg *PruneConfig, tree *iavl.MutableTree, latestVersion int64) (StatePruner, error) {
@@ -161,9 +181,10 @@ func newStatePruner(cfg *PruneConfig, tree *iavl.MutableTree, latestVersion int6
 		}
 
 		statePruner = &genericPruner{
-			logger: logger,
-			tree:   tree,
-			keepN:  cfg.NumKept,
+			logger:   logger,
+			tree:     tree,
+			keepN:    cfg.NumKept,
+			notifier: pubsub.NewBroker(false),
 		}
 	default:
 		return nil, fmt.Errorf("abci/pruner: unsupported pruning strategy: %v", cfg.Strategy)
@@ -175,7 +196,7 @@ func newStatePruner(cfg *PruneConfig, tree *iavl.MutableTree, latestVersion int6
 		}
 	}
 
-	logger.Debug("ABCI state pruiner initialized",
+	logger.Debug("ABCI state pruner initialized",
 		"strategy", cfg.Strategy,
 		"num_kept", cfg.NumKept,
 	)

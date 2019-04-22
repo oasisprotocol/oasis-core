@@ -273,6 +273,11 @@ func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey)
 	return c.common.roothash.WatchBlocks(runtimeID)
 }
 
+// GetBlock returns the block at a specific round.
+func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, round uint64) (*block.Block, error) {
+	return c.common.roothash.GetBlock(ctx, runtimeID, round)
+}
+
 // CallEnclave proxies an EnclaveRPC call to the given endpoint.
 //
 // The endpoint should be an URI in the form <endpoint-type>://<id> where the

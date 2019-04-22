@@ -68,20 +68,15 @@ type Backend interface {
 	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
 	GetLatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
 
+	// GetBlock returns the block at a specific height.
+	GetBlock(context.Context, signature.PublicKey, uint64) (*block.Block, error)
+
 	// WatchBlocks returns a channel that produces a stream of blocks.
 	//
 	// The latest block if any will get pushed to the stream immediately.
 	// Subsequent blocks will be pushed into the stream as they are
 	// confirmed.
 	WatchBlocks(signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error)
-
-	// WatchBlocksSince returns a channel that produces a stream of blocks
-	// starting at the specified round.
-	//
-	// The block at the specified round is included as the first
-	// entry in the stream.  Following blocks are pushed in order as
-	// they are confirmed.
-	WatchBlocksSince(signature.PublicKey, uint64) (<-chan *block.Block, *pubsub.Subscription, error)
 
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
