@@ -48,7 +48,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/tendermint/go-amino v0.14.1 // indirect
 	github.com/tendermint/iavl v0.12.0
-	github.com/tendermint/tendermint v0.31.4
+	github.com/tendermint/tendermint v0.31.5
 	github.com/uber-go/atomic v1.3.2 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
