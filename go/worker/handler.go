@@ -22,8 +22,9 @@ var (
 type hostHandler struct {
 	runtimeID signature.PublicKey
 
-	storage    storage.Backend
-	keyManager *keymanager.KeyManager
+	storage      storage.Backend
+	keyManager   *keymanager.KeyManager
+	localStorage *localStorage
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -71,10 +72,24 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 		return &protocol.Body{HostStorageGetBatchResponse: &protocol.HostStorageGetBatchResponse{Values: values}}, nil
 	}
+	// Local storage.
+	if body.HostLocalStorageGetRequest != nil {
+		value, err := h.localStorage.Get(h.runtimeID, body.HostLocalStorageGetRequest.Key)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
+	}
+	if body.HostLocalStorageSetRequest != nil {
+		if err := h.localStorage.Set(h.runtimeID, body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
+	}
 
 	return nil, errMethodNotSupported
 }
 
-func newHostHandler(runtimeID signature.PublicKey, storage storage.Backend, keyManager *keymanager.KeyManager) protocol.Handler {
-	return &hostHandler{runtimeID, storage, keyManager}
+func newHostHandler(runtimeID signature.PublicKey, storage storage.Backend, keyManager *keymanager.KeyManager, localStorage *localStorage) protocol.Handler {
+	return &hostHandler{runtimeID, storage, keyManager, localStorage}
 }
