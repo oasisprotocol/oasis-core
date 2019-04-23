@@ -27,8 +27,8 @@ import (
 	stakingTests "github.com/oasislabs/ekiden/go/staking/tests"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
-	"github.com/oasislabs/ekiden/go/worker/committee"
-	workerTests "github.com/oasislabs/ekiden/go/worker/tests"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	workerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
 )
 
 const testRuntimeID = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -50,9 +50,9 @@ var (
 		{"staking.backend", "tendermint"},
 		{"staking.debug.genesis_state", stakingTests.InitialBalancesArg},
 		{"tendermint.consensus.skip_timeout_commit", true},
-		{"worker.backend", "mock"},
-		{"worker.runtime.binary", "mock-runtime"},
-		{"worker.runtime.id", testRuntimeID},
+		{"worker.compute.backend", "mock"},
+		{"worker.compute.runtime.binary", "mock-runtime"},
+		{"worker.compute.runtime.id", testRuntimeID},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 
@@ -154,9 +154,9 @@ func TestNode(t *testing.T) {
 		// including the worker tests.
 		{"RegisterTestEntityRuntime", testRegisterEntityRuntime},
 
-		// Worker test case must run second as starting the worker will
+		// ComputeWorker test case must run second as starting the worker will
 		// register the node.
-		{"Worker", testWorker},
+		{"ComputeWorker", testComputeWorker},
 
 		// Client tests also need a functional runtime.
 		{"Client", testClient},
@@ -196,8 +196,8 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require.NoError(err, "register test runtime")
 
 	// Get the runtime and the corresponding committee node instance.
-	node.runtimeID = node.Worker.GetConfig().Runtimes[0].ID
-	rt := node.Worker.GetRuntime(node.runtimeID)
+	node.runtimeID = node.ComputeWorker.GetConfig().Runtimes[0].ID
+	rt := node.ComputeWorker.GetRuntime(node.runtimeID)
 	require.NotNil(t, rt)
 	node.committeeNode = rt.GetNode()
 }
@@ -261,10 +261,10 @@ func testRootHash(t *testing.T, node *testNode) {
 	roothashTests.RootHashImplementationTests(t, node.RootHash, timeSource, node.Scheduler, node.Storage, node.Registry)
 }
 
-func testWorker(t *testing.T, node *testNode) {
+func testComputeWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	workerTests.WorkerImplementationTests(t, node.Worker, node.runtimeID, node.committeeNode, timeSource, node.RootHash)
+	workerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.committeeNode, timeSource, node.RootHash)
 }
 
 func testClient(t *testing.T, node *testNode) {

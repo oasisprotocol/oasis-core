@@ -1,4 +1,4 @@
-package worker
+package compute
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pb "github.com/oasislabs/ekiden/go/grpc/committee"
-	"github.com/oasislabs/ekiden/go/worker/committee"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
 
 var _ pb.RuntimeServer = (*grpcServer)(nil)

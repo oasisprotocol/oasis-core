@@ -10,7 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/client"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/worker/committee"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
 
 const timeout = 1 * time.Second

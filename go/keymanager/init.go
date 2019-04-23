@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
+	"github.com/oasislabs/ekiden/go/worker/common/enclaverpc"
 )
 
 const (

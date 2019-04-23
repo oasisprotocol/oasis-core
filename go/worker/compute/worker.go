@@ -1,4 +1,4 @@
-package worker
+package compute
 
 import (
 	"context"
@@ -22,9 +22,10 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/committee"
-	"github.com/oasislabs/ekiden/go/worker/host"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
+	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
 const (
@@ -70,18 +71,18 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	identity      *identity.Identity
-	entityPrivKey *signature.PrivateKey
-	storage       storage.Backend
-	roothash      roothash.Backend
-	registry      registry.Backend
-	epochtime     epochtime.Backend
-	scheduler     scheduler.Backend
-	syncable      common.Syncable
-	ias           *ias.IAS
-	keyManager    *keymanager.KeyManager
-	p2p           *p2p.P2P
-	grpc          *grpc.Server
+	identity     *identity.Identity
+	storage      storage.Backend
+	roothash     roothash.Backend
+	registry     registry.Backend
+	epochtime    epochtime.Backend
+	scheduler    scheduler.Backend
+	syncable     common.Syncable
+	ias          *ias.IAS
+	keyManager   *keymanager.KeyManager
+	p2p          *p2p.P2P
+	grpc         *grpc.Server
+	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -94,9 +95,56 @@ type Worker struct {
 	cancelCtx context.CancelFunc
 	quitCh    chan struct{}
 	initCh    chan struct{}
-	regCh     chan struct{}
 
 	logger *logging.Logger
+}
+
+// getNodeRuntimes returns worker node runtimes.
+func (w *Worker) getNodeRuntimes() []*node.Runtime {
+	var nodeRuntimes []*node.Runtime
+
+	for _, v := range w.runtimes {
+		var err error
+
+		rt := &node.Runtime{
+			ID: v.cfg.ID,
+		}
+		if rt.Capabilities.TEE, err = v.workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
+			w.logger.Error("failed to obtain CapabilityTEE",
+				"err", err,
+				"runtime", rt.ID,
+			)
+			continue
+		}
+		nodeRuntimes = append(nodeRuntimes, rt)
+	}
+
+	return nodeRuntimes
+}
+
+// getNodeAddresses returns worker node addresses.
+func (w *Worker) getNodeAddresses() ([]node.Address, error) {
+	var addresses []node.Address
+
+	if len(w.cfg.ClientAddresses) > 0 {
+		addresses = w.cfg.ClientAddresses
+	} else {
+		// Use all non-loopback addresses of this node.
+		addrs, err := common.FindAllAddresses()
+		if err != nil {
+			w.logger.Error("failed to obtain addresses",
+				"err", err)
+			return nil, err
+		}
+		var address node.Address
+		for _, addr := range addrs {
+			if derr := address.FromIP(addr, w.cfg.ClientPort); derr != nil {
+				continue
+			}
+			addresses = append(addresses, address)
+		}
+	}
+	return addresses, nil
 }
 
 // Name returns the service name.
@@ -139,14 +187,13 @@ func (w *Worker) Start() error {
 		}
 	}
 
-	// Wait for all runtimes to be initialized and for the node
-	// to be registered for the current epoch.
+	// Wait for all runtimes to be initialized and node to be registered.
 	go func() {
 		for _, rt := range w.runtimes {
 			<-rt.node.Initialized()
 		}
 
-		<-w.regCh
+		<-w.registration.InitialRegistrationCh()
 
 		close(w.initCh)
 	}()
@@ -169,9 +216,6 @@ func (w *Worker) Start() error {
 			return err
 		}
 	}
-
-	// Start the node (re-)registration worker.
-	go w.doNodeRegistration()
 
 	return nil
 }
@@ -340,7 +384,6 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 func newWorker(
 	dataDir string,
 	identity *identity.Identity,
-	entityPrivKey *signature.PrivateKey,
 	storage storage.Backend,
 	roothash roothash.Backend,
 	registryInst registry.Backend,
@@ -348,6 +391,7 @@ func newWorker(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	ias *ias.IAS,
+	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
 	cfg Config,
 ) (*Worker, error) {
@@ -371,27 +415,26 @@ func newWorker(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:       enabled,
-		cfg:           cfg,
-		identity:      identity,
-		entityPrivKey: entityPrivKey,
-		storage:       storage,
-		roothash:      roothash,
-		registry:      registryInst,
-		epochtime:     epochtime,
-		scheduler:     scheduler,
-		syncable:      syncable,
-		ias:           ias,
-		keyManager:    keyManager,
-		runtimes:      make(map[signature.MapKey]*Runtime),
-		netProxies:    make(map[string]NetworkProxy),
-		socketDir:     socketDir,
-		ctx:           ctx,
-		cancelCtx:     cancelCtx,
-		quitCh:        make(chan struct{}),
-		initCh:        make(chan struct{}),
-		regCh:         make(chan struct{}),
-		logger:        logging.GetLogger("worker"),
+		enabled:      enabled,
+		cfg:          cfg,
+		identity:     identity,
+		storage:      storage,
+		roothash:     roothash,
+		registry:     registryInst,
+		epochtime:    epochtime,
+		scheduler:    scheduler,
+		syncable:     syncable,
+		ias:          ias,
+		registration: registration,
+		keyManager:   keyManager,
+		runtimes:     make(map[signature.MapKey]*Runtime),
+		netProxies:   make(map[string]NetworkProxy),
+		socketDir:    socketDir,
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/compute"),
 	}
 
 	if enabled {
@@ -450,6 +493,26 @@ func newWorker(
 		if w.localStorage, err = newLocalStorage(dataDir); err != nil {
 			return nil, err
 		}
+
+		// Register compute worker role.
+		w.registration.RegisterRole(func(n *node.Node) error {
+			addresses, err := w.getNodeAddresses()
+			if err != nil {
+				w.logger.Error("failed to register node: unable to get addresses",
+					"err", err,
+				)
+				return err
+			}
+			// XXX: Addresses & P2P will be shared between different workers
+			// so should probably be set elsewhere in future.
+			n.Addresses = append(n.Addresses, addresses...)
+			n.P2P = w.p2p.Info()
+
+			n.AddRoles(node.ComputeWorker)
+			n.Runtimes = w.getNodeRuntimes()
+
+			return nil
+		})
 	}
 
 	startedOk = true

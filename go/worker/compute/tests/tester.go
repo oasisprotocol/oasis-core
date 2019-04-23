@@ -15,8 +15,8 @@ import (
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/worker"
-	"github.com/oasislabs/ekiden/go/worker/committee"
+	"github.com/oasislabs/ekiden/go/worker/compute"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
 
 const recvTimeout = 5 * time.Second
@@ -28,7 +28,7 @@ const recvTimeout = 5 * time.Second
 // after the node was registered.
 func WorkerImplementationTests(
 	t *testing.T,
-	worker *worker.Worker,
+	worker *compute.Worker,
 	runtimeID signature.PublicKey,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,

@@ -1,4 +1,4 @@
-package worker
+package compute
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
 var (
