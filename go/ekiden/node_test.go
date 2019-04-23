@@ -58,8 +58,9 @@ var (
 
 	testRuntime = &registry.Runtime{
 		// ID: default value,
-		ReplicaGroupSize: 1,
-		StorageGroupSize: 1,
+		ReplicaGroupSize:              1,
+		StorageGroupSize:              1,
+		TransactionSchedulerGroupSize: 1,
 	}
 
 	initConfigOnce sync.Once
