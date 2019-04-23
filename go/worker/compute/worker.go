@@ -188,6 +188,7 @@ func (w *Worker) Start() error {
 	}
 
 	// Wait for all runtimes to be initialized and node to be registered.
+	// to be registered for the current epoch.
 	go func() {
 		for _, rt := range w.runtimes {
 			<-rt.node.Initialized()

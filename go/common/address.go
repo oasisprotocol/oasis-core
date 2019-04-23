@@ -47,7 +47,6 @@ func GuessExternalAddress() net.IP {
 func FindAllAddresses() ([]net.IP, error) {
 	var addresses []net.IP
 
-	// Use all non-loopback addresses of this node.
 	ifaces, ierr := net.Interfaces()
 	if ierr != nil {
 		return nil, ierr

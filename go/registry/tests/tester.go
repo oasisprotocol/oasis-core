@@ -99,7 +99,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	nodes := make([][]*TestNode, 0, len(entities))
 	for i, v := range entities {
 		// Stagger the expirations so that it's possible to test it.
-		entityNodes, err := v.NewTestNodes(i+1, nil, epoch+epochtime.EpochTime(i)+1)
+		entityNodes, err := v.NewTestNodes(i+1, node.ComputeWorker, nil, epoch+epochtime.EpochTime(i)+1)
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
@@ -360,7 +360,7 @@ type TestNode struct {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(n int, runtimes []*TestRuntime, expiration epochtime.EpochTime) ([]*TestNode, error) {
+func (ent *TestEntity) NewTestNodes(n int, roles node.RolesMask, runtimes []*TestRuntime, expiration epochtime.EpochTime) ([]*TestNode, error) {
 	if n <= 0 || n > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -389,6 +389,7 @@ func (ent *TestEntity) NewTestNodes(n int, runtimes []*TestRuntime, expiration e
 			Expiration:       uint64(expiration),
 			RegistrationTime: uint64(time.Now().Unix()),
 			Runtimes:         nodeRts,
+			Roles:            roles,
 		}
 		addr, err := node.NewAddress(node.AddressFamilyIPv4, []byte{192, 0, 2, byte(i + 1)}, 451)
 		if err != nil {
@@ -541,7 +542,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 	defer nodeSub.Close()
 
 	numNodes := runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize
-	nodes, err := entity.NewTestNodes(int(numNodes), runtimes, epochtime.EpochInvalid)
+	nodes, err := entity.NewTestNodes(int(numNodes), node.ComputeWorker, runtimes, epochtime.EpochInvalid)
 	require.NoError(err, "NewTestNodes")
 	ret := make([]*node.Node, 0, int(numNodes))
 	for _, node := range nodes {

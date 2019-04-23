@@ -14,6 +14,7 @@ func TestSerialization(t *testing.T) {
 		ID:         signature.PublicKey(key),
 		EntityID:   signature.PublicKey(key),
 		Expiration: 42,
+		Roles:  ComputeWorker,
 	}
 
 	np := n.ToProto()

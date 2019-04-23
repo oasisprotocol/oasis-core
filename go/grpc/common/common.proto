@@ -32,6 +32,7 @@ message Node {
     Certificate certificate = 5;
     uint64 registration_time = 6;
     repeated NodeRuntime runtimes = 7;
+    uint32 roles = 8;
 }
 
 message NodeRuntime {
