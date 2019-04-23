@@ -43,3 +43,5 @@ tokio-executor = "0.1.6"
 io-context = "0.2.0"
 x25519-dalek = "0.5.1"
 deoxysii = { git = "https://github.com/oasislabs/deoxysii-rust" }
+tiny-keccak = "1.4.2"
+sp800-185 = "0.2.0"
