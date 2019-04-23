@@ -4,10 +4,42 @@ use std::sync::Arc;
 use ekiden_runtime::{
     common::{crypto::hash::Hash, roothash::Block},
     storage::{mkvs::CASPatriciaTrie, CAS, MKVS},
+    transaction::types::{TxnCall, TxnOutput},
 };
-use failure::Fallible;
+use failure::{Fallible, ResultExt};
+use serde_cbor;
 
 use super::{api, client::TxnClientError};
+
+/// A transaction snapshot.
+#[derive(Clone)]
+pub struct TransactionSnapshot {
+    /// Block snapshot for this transaction.
+    pub block_snapshot: BlockSnapshot,
+    /// Transaction index in the list of transactions.
+    pub index: u32,
+    /// Transaction input.
+    pub input: TxnCall,
+    /// Transaction output.
+    pub output: TxnOutput,
+}
+
+impl TransactionSnapshot {
+    pub(super) fn new(
+        storage_client: api::storage::StorageClient,
+        block: Block,
+        index: u32,
+        input: Vec<u8>,
+        output: Vec<u8>,
+    ) -> Fallible<Self> {
+        Ok(Self {
+            block_snapshot: BlockSnapshot::new(storage_client, block),
+            index,
+            input: serde_cbor::from_slice(&input).context("input is malformed")?,
+            output: serde_cbor::from_slice(&output).context("output is malformed")?,
+        })
+    }
+}
 
 /// A partial block snapshot exposing the storage root.
 pub struct BlockSnapshot {

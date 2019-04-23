@@ -26,3 +26,24 @@ func (b Batch) MarshalCBOR() []byte {
 func (b *Batch) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, b)
 }
+
+// TagTxnIndexBlock is the value of a tag's transaction index when the
+// tag refers to the block.
+const TagTxnIndexBlock int32 = -1
+
+// Tag is a key/value pair of arbitrary byte blobs with runtime-dependent
+// semantics which can be indexed to allow easier lookup of blocks and
+// transactions on runtime clients.
+type Tag struct {
+	_struct struct{} `codec:",toarray"` // nolint
+
+	// TxnIndex is a transaction index that this tag belongs to.
+	//
+	// In case the value is TagTxnIndexBlock, the tag instead refers to
+	// the block.
+	TxnIndex int32
+	// Key is the tag key.
+	Key []byte
+	// Value is the tag value.
+	Value []byte
+}

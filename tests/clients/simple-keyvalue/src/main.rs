@@ -70,6 +70,7 @@ fn main() {
         }
     }
 
+    // Test get_latest_block call.
     println!("Getting latest block...");
     let snapshot = rt
         .block_on(kv_client.txn_client().get_latest_block())
@@ -86,6 +87,16 @@ fn main() {
     );
     assert_eq!(&r[..], "hello_value".as_bytes());
 
+    // Test get_block call.
+    for round in 0..=snapshot.block.header.round {
+        println!("Getting indexed block {}...", round);
+        let snapshot = rt
+            .block_on(kv_client.txn_client().get_block(round))
+            .expect("get block snapshot");
+
+        println!("Retrieved block: {:?}", snapshot.block);
+    }
+
     println!("Removing \"hello_key\" record from database...");
     let r = rt
         .block_on(kv_client.remove("hello_key".to_string()))
@@ -99,6 +110,29 @@ fn main() {
         None => println!("Key not found anymore"),
     }
     assert_eq!(r, None, "key should not exist anymore");
+
+    // Test query_block call.
+    println!("Querying block tags (kv_hello=insert)...");
+    let snapshot = rt
+        .block_on(kv_client.txn_client().query_block(b"kv_hello", b"insert"))
+        .expect("query block snapshot");
+    println!("Found block: {:?}", snapshot.block);
+
+    println!("Querying block tags (kv_hello=get)...");
+    let snapshot = rt
+        .block_on(kv_client.txn_client().query_block(b"kv_hello", b"get"))
+        .expect("query block snapshot");
+    println!("Found block: {:?}", snapshot.block);
+
+    // Test query_txn call.
+    println!("Querying transaction tags (kv_op=insert)...");
+    let snapshot = rt
+        .block_on(kv_client.txn_client().query_txn(b"kv_op", b"insert"))
+        .expect("query transaction snapshot");
+    println!(
+        "Found transaction: index={} input={:?} output={:?}",
+        snapshot.index, snapshot.input, snapshot.output
+    );
 
     println!("Simple key/value client finished.");
 }

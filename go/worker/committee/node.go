@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -591,6 +592,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	blk.Header.GroupHash = epoch.GetGroupHash()
 	blk.Header.InputHash.From(state.batch)
 	blk.Header.OutputHash.From(batch.Outputs)
+	blk.Header.TagHash.From(batch.Tags)
 	blk.Header.StateRoot = batch.NewStateRoot
 
 	// Commit outputs and state to storage. If we are a regular worker, then we only
@@ -602,9 +604,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 
 	start := time.Now()
 	err := func() error {
-		span, ctx := tracing.StartSpanWithContext(n.ctx, "InsertBatch(outputs, state)",
-			opentracing.Tag{Key: "outputs", Value: batch.Outputs},
-			opentracing.Tag{Key: "storageInserts", Value: batch.StorageInserts},
+		span, ctx := tracing.StartSpanWithContext(n.ctx, "InsertBatch(outputs, state, tags)",
 			opentracing.ChildOf(n.batchSpanCtx),
 		)
 		defer span.Finish()
@@ -614,6 +614,9 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 
 		batch.StorageInserts = append(batch.StorageInserts, storage.Value{
 			Data:       batch.Outputs.MarshalCBOR(),
+			Expiration: 2,
+		}, storage.Value{
+			Data:       cbor.Marshal(batch.Tags),
 			Expiration: 2,
 		})
 		if err := n.storage.InsertBatch(ctx, batch.StorageInserts, opts); err != nil {

@@ -13,6 +13,8 @@ EKIDEN_NODE=${EKIDEN_NODE:-${EKIDEN_ROOT_PATH}/go/ekiden/ekiden}
 EKIDEN_RUNTIME_LOADER=${EKIDEN_RUNTIME_LOADER:-${EKIDEN_ROOT_PATH}/target/debug/ekiden-runtime-loader}
 # TEE hardware (optional).
 EKIDEN_TEE_HARDWARE=${EKIDEN_TEE_HARDWARE:-""}
+# Runtime identifier.
+EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000000000000000000000000000"}
 
 # Run a Tendermint validator committee and a storage node.
 #
@@ -77,7 +79,7 @@ run_backend_tendermint_committee() {
     # Provision the runtime.
     ${EKIDEN_NODE} \
         registry runtime init_genesis \
-        --runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --runtime.id ${EKIDEN_RUNTIME_ID} \
         --runtime.replica_group_size ${replica_group_size} \
         --runtime.replica_group_backup_size ${replica_group_backup_size} \
         ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
@@ -164,6 +166,7 @@ run_backend_tendermint_committee() {
             --scheduler.backend trivial \
             --registry.backend tendermint \
             --roothash.backend tendermint \
+            --roothash.tendermint.index_blocks \
             --tendermint.core.genesis_file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
@@ -171,6 +174,7 @@ run_backend_tendermint_committee() {
             --keymanager.client.address 127.0.0.1:9003 \
             --keymanager.client.certificate ${committee_dir}/key-manager/tls_identity_cert.pem \
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
+            --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
             --datadir ${datadir} \
             &
 
@@ -248,8 +252,8 @@ run_compute_node() {
         --worker.backend sandboxed \
         --worker.binary ${EKIDEN_RUNTIME_LOADER} \
         --worker.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
-        --worker.runtime.id 0000000000000000000000000000000000000000000000000000000000000000 \
-        ${EKIDEN_TEE_HARDWARE:+--worker.runtime.sgx_ids 0000000000000000000000000000000000000000000000000000000000000000} \
+        --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
+        ${EKIDEN_TEE_HARDWARE:+--worker.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
         --worker.leader.max_batch_size 1 \
@@ -414,7 +418,7 @@ run_basic_client() {
 
     ${WORKDIR}/target/debug/${client}-client \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+        --runtime-id ${EKIDEN_RUNTIME_ID} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[client] /" &
     EKIDEN_CLIENT_PID=$!
 }

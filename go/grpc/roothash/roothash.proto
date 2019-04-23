@@ -32,6 +32,7 @@ message Header {
   bytes storage_receipt = 12;
 
   uint64 round = 13;
+  bytes tag_hash = 14;
 }
 
 message LatestBlockRequest {

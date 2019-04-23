@@ -316,6 +316,7 @@ func NewNode() (*Node, error) {
 	// Initialize the client.
 	node.Client, err = client.New(
 		node.svcMgr.Ctx,
+		cmdCommon.DataDir(),
 		node.RootHash,
 		node.Storage,
 		node.Scheduler,
@@ -397,6 +398,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		ias.RegisterFlags,
 		worker.RegisterFlags,
 		keymanager.RegisterFlags,
+		client.RegisterFlags,
 	} {
 		v(cmd)
 	}

@@ -32,7 +32,11 @@ struct Context {
 }
 
 /// Insert a key/value pair.
-fn insert(args: &KeyValue, _ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    ctx.emit_block_tag(b"kv_hello", b"insert");
+    ctx.emit_txn_tag(b"kv_op", b"insert");
+    ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
+
     let existing = StorageContext::with_current(|_cas, mkvs| {
         mkvs.insert(args.key.as_bytes(), args.value.as_bytes())
     });
@@ -40,13 +44,21 @@ fn insert(args: &KeyValue, _ctx: &mut TxnContext) -> Fallible<Option<String>> {
 }
 
 /// Retrieve a key/value pair.
-fn get(args: &String, _ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    ctx.emit_block_tag(b"kv_hello", b"get");
+    ctx.emit_txn_tag(b"kv_op", b"get");
+    ctx.emit_txn_tag(b"kv_key", args.as_bytes());
+
     let existing = StorageContext::with_current(|_cas, mkvs| mkvs.get(args.as_bytes()));
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// Remove a key/value pair.
-fn remove(args: &String, _ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    ctx.emit_block_tag(b"kv_hello", b"remove");
+    ctx.emit_txn_tag(b"kv_op", b"remove");
+    ctx.emit_txn_tag(b"kv_key", args.as_bytes());
+
     let existing = StorageContext::with_current(|_cas, mkvs| mkvs.remove(args.as_bytes()));
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }

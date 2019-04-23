@@ -18,8 +18,12 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/client/indexer"
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -32,6 +36,10 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+)
+
+const (
+	cfgIndexRuntimes = "client.indexer.runtimes"
 )
 
 var grpcResolverLock sync.Mutex
@@ -87,6 +95,9 @@ type Client struct {
 	sync.Mutex
 	common   *clientCommon
 	watchers map[signature.MapKey]*blockWatcher
+
+	indexers       map[signature.MapKey]*indexer.Service
+	indexerBackend indexer.Backend
 
 	logger *logging.Logger
 }
@@ -278,6 +289,70 @@ func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, ro
 	return c.common.roothash.GetBlock(ctx, runtimeID, round)
 }
 
+// Query the block index of a given runtime.
+func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, error) {
+	if c.indexerBackend == nil {
+		return nil, errors.New("indexer not enabled")
+	}
+
+	round, err := c.indexerBackend.QueryBlock(ctx, runtimeID, key, value)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.GetBlock(ctx, runtimeID, round)
+}
+
+// Query the transaction index of a given runtime.
+func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, uint32, []byte, []byte, error) {
+	if c.indexerBackend == nil {
+		return nil, 0, nil, nil, errors.New("indexer not enabled")
+	}
+
+	round, txnIdx, err := c.indexerBackend.QueryTxn(ctx, runtimeID, key, value)
+	if err != nil {
+		return nil, 0, nil, nil, err
+	}
+
+	blk, err := c.GetBlock(ctx, runtimeID, round)
+	if err != nil {
+		return nil, 0, nil, nil, err
+	}
+
+	// Fetch transaction input and output.
+	var inputHash storage.Key
+	copy(inputHash[:], blk.Header.InputHash[:])
+	var outputHash storage.Key
+	copy(outputHash[:], blk.Header.OutputHash[:])
+
+	// TODO: After the new MKVS is done, only fetch specific inputs/outputs.
+	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{inputHash, outputHash})
+	if err != nil {
+		return nil, 0, nil, nil, err
+	}
+
+	var inputs [][]byte
+	if err := cbor.Unmarshal(txn[0], &inputs); err != nil {
+		return nil, 0, nil, nil, err
+	}
+	if int(txnIdx) >= len(inputs) {
+		return nil, 0, nil, nil, errors.New("malformed transaction inputs")
+	}
+
+	var outputs [][]byte
+	if err := cbor.Unmarshal(txn[1], &outputs); err != nil {
+		return nil, 0, nil, nil, err
+	}
+	if int(txnIdx) >= len(outputs) {
+		return nil, 0, nil, nil, errors.New("malformed transaction outputs")
+	}
+
+	input := inputs[txnIdx]
+	output := outputs[txnIdx]
+
+	return blk, txnIdx, input, output, nil
+}
+
 // CallEnclave proxies an EnclaveRPC call to the given endpoint.
 //
 // The endpoint should be an URI in the form <endpoint-type>://<id> where the
@@ -305,19 +380,33 @@ func (c *Client) CallEnclave(ctx context.Context, endpoint string, data []byte) 
 	}
 }
 
-// Cleanup stops all running block watchers and waits for them to finish.
+// Cleanup stops all running block watchers and indexers and waits for them
+// to finish.
 func (c *Client) Cleanup() {
+	// Watchers.
 	for _, watcher := range c.watchers {
 		watcher.Stop()
 	}
 	for _, watcher := range c.watchers {
 		<-watcher.Quit()
 	}
+
+	// Indexers.
+	for _, indexer := range c.indexers {
+		indexer.Stop()
+	}
+	for _, indexer := range c.indexers {
+		<-indexer.Quit()
+	}
+	if c.indexerBackend != nil {
+		c.indexerBackend.Stop()
+	}
 }
 
 // New returns a new instance of the Client service.
 func New(
 	ctx context.Context,
+	dataDir string,
 	roothash roothash.Backend,
 	storage storage.Backend,
 	scheduler scheduler.Backend,
@@ -325,7 +414,7 @@ func New(
 	syncable common.Syncable,
 	keyManager *keymanager.KeyManager,
 ) (*Client, error) {
-	return &Client{
+	c := &Client{
 		common: &clientCommon{
 			roothash:   roothash,
 			storage:    storage,
@@ -336,6 +425,55 @@ func New(
 			ctx:        ctx,
 		},
 		watchers: make(map[signature.MapKey]*blockWatcher),
+		indexers: make(map[signature.MapKey]*indexer.Service),
 		logger:   logging.GetLogger("client"),
-	}, nil
+	}
+
+	// Initialize the tag indexer(s) when configured.
+	indexRuntimes := viper.GetStringSlice(cfgIndexRuntimes)
+	if indexRuntimes != nil {
+		var err error
+		c.indexerBackend, err = indexer.NewExactBackend(dataDir)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, rawID := range indexRuntimes {
+			var id signature.PublicKey
+			if err = id.UnmarshalHex(rawID); err != nil {
+				return nil, err
+			}
+
+			var idx *indexer.Service
+			idx, err = indexer.New(id, c.indexerBackend, roothash, storage)
+			if err != nil {
+				return nil, err
+			}
+
+			c.indexers[id.ToMapKey()] = idx
+		}
+
+		// Start all indexers.
+		for _, indexer := range c.indexers {
+			if err = indexer.Start(); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return c, nil
+}
+
+// RegisterFlags registers the configuration flags with the provided
+// command.
+func RegisterFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().StringSlice(cfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
+	}
+
+	for _, v := range []string{
+		cfgIndexRuntimes,
+	} {
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+	}
 }

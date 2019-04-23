@@ -1,6 +1,6 @@
 //! Types used by the worker-host protocol.
-use serde::{self, Deserializer, Serializer};
-use serde_bytes::{self, ByteBuf};
+use serde::{self, ser::SerializeSeq, Deserializer, Serializer};
+use serde_bytes::{self, ByteBuf, Bytes};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::common::{
@@ -26,8 +26,44 @@ pub struct BatchSigMessage<'a> {
     pub input_hash: &'a Hash,
     /// The hash of the OutputBatch.
     pub output_hash: &'a Hash,
+    /// The hash of serialized tags.
+    pub tags_hash: &'a Hash,
     /// The root hash of the state after computing this batch.
     pub state_root: &'a Hash,
+}
+
+/// Value of a tag's transaction index when the tag refers to the block.
+pub const TAG_TXN_INDEX_BLOCK: i32 = -1;
+
+/// Tag is a key/value pair of arbitrary byte blobs with runtime-dependent
+/// semantics which can be indexed to allow easier lookup of blocks and
+/// transactions on runtime clients.
+#[derive(Debug, Deserialize)]
+pub struct Tag {
+    // A transaction index that this tag belongs to.
+    //
+    // In case the value is TAG_TXN_INDEX_BLOCK, the tag instead refers
+    // to the block.
+    pub txn_index: i32,
+    /// The tag key.
+    #[serde(with = "serde_bytes")]
+    pub key: Vec<u8>,
+    /// The tag value.
+    #[serde(with = "serde_bytes")]
+    pub value: Vec<u8>,
+}
+
+impl serde::Serialize for Tag {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(3))?;
+        seq.serialize_element(&self.txn_index)?;
+        seq.serialize_element(&Bytes::new(&self.key))?;
+        seq.serialize_element(&Bytes::new(&self.value))?;
+        seq.end()
+    }
 }
 
 /// Computed batch.
@@ -39,6 +75,8 @@ pub struct ComputedBatch {
     pub storage_inserts: Vec<(ByteBuf, u64)>,
     /// New state root hash.
     pub new_state_root: Hash,
+    /// Runtime-specific indexable tags.
+    pub tags: Vec<Tag>,
     /// If this runtime uses a TEE, then this is the signature of the batch's
     /// BatchSigMessage with the node's RAK for this runtime.
     pub rak_sig: Signature,

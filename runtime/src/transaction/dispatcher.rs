@@ -9,9 +9,12 @@ use super::{
     context::Context,
     types::{TxnCall, TxnOutput},
 };
-use crate::common::{
-    batch::{CallBatch, OutputBatch},
-    crypto::hash::Hash,
+use crate::{
+    common::{
+        batch::{CallBatch, OutputBatch},
+        crypto::hash::Hash,
+    },
+    types::{Tag, TAG_TXN_INDEX_BLOCK},
 };
 
 /// Dispatch error.
@@ -33,7 +36,7 @@ pub trait BatchHandler {
     fn start_batch(&self, ctx: &mut Context);
 
     /// Called after all calls have been dispatched.
-    fn end_batch(&self, ctx: Context);
+    fn end_batch(&self, ctx: &mut Context);
 }
 
 /// Custom context initializer.
@@ -215,10 +218,13 @@ impl Dispatcher {
     }
 
     /// Dispatches a batch of runtime requests.
-    pub fn dispatch_batch(&self, batch: &CallBatch, mut ctx: Context) -> OutputBatch {
+    pub fn dispatch_batch(&self, batch: &CallBatch, mut ctx: Context) -> (OutputBatch, Vec<Tag>) {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
+
+        // Reset current transaction index.
+        ctx.txn_index = TAG_TXN_INDEX_BLOCK;
 
         // Invoke start batch handler.
         if let Some(ref handler) = self.batch_handler {
@@ -229,16 +235,25 @@ impl Dispatcher {
         let outputs = OutputBatch(
             batch
                 .iter()
-                .map(|call| self.dispatch(call, &mut ctx))
+                .enumerate()
+                .map(|(idx, call)| {
+                    // Set current transaction index in the context.
+                    ctx.txn_index = idx as i32;
+
+                    self.dispatch(call, &mut ctx)
+                })
                 .collect(),
         );
 
+        // Reset current transaction index.
+        ctx.txn_index = TAG_TXN_INDEX_BLOCK;
+
         // Invoke end batch handler.
         if let Some(ref handler) = self.batch_handler {
-            handler.end_batch(ctx);
+            handler.end_batch(&mut ctx);
         }
 
-        outputs
+        (outputs, ctx.tags)
     }
 
     /// Dispatches a raw runtime invocation request.

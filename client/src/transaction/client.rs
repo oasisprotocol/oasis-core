@@ -14,7 +14,11 @@ use ekiden_runtime::{
     transaction::types::{TxnCall, TxnOutput},
 };
 
-use super::{api, block_watcher::BlockWatcher, snapshot::BlockSnapshot};
+use super::{
+    api,
+    block_watcher::BlockWatcher,
+    snapshot::{BlockSnapshot, TransactionSnapshot},
+};
 use crate::BoxFuture;
 
 /// Transaction client error.
@@ -196,6 +200,69 @@ impl TxnClient {
                     resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
                         .and_then(|rsp| Ok(serde_cbor::from_slice(&rsp.block)?))
                         .map(move |block| BlockSnapshot::new(storage_client, block)),
+                )
+            }
+            Err(error) => Box::new(future::err(
+                TxnClientError::CallFailed(format!("{}", error)).into(),
+            )),
+        };
+        drop(span);
+        result
+    }
+
+    /// Query the block index.
+    pub fn query_block(&self, key: &[u8], value: &[u8]) -> BoxFuture<BlockSnapshot> {
+        let (span, options) = self.prepare_options("TxnClient::query_block");
+        let mut request = api::client::QueryBlockRequest::new();
+        request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        request.set_key(key.into());
+        request.set_value(value.into());
+
+        let result: BoxFuture<BlockSnapshot> = match self
+            .client
+            .query_block_async_opt(&request, options)
+        {
+            Ok(resp) => {
+                let storage_client = self.storage_client.clone();
+                Box::new(
+                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
+                        .and_then(|rsp| Ok(serde_cbor::from_slice(&rsp.block)?))
+                        .map(move |block| BlockSnapshot::new(storage_client, block)),
+                )
+            }
+            Err(error) => Box::new(future::err(
+                TxnClientError::CallFailed(format!("{}", error)).into(),
+            )),
+        };
+        drop(span);
+        result
+    }
+
+    /// Query the transaction index.
+    pub fn query_txn(&self, key: &[u8], value: &[u8]) -> BoxFuture<TransactionSnapshot> {
+        let (span, options) = self.prepare_options("TxnClient::query_txn");
+        let mut request = api::client::QueryTxnRequest::new();
+        request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        request.set_key(key.into());
+        request.set_value(value.into());
+
+        let result: BoxFuture<TransactionSnapshot> = match self
+            .client
+            .query_txn_async_opt(&request, options)
+        {
+            Ok(resp) => {
+                let storage_client = self.storage_client.clone();
+                Box::new(
+                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
+                        .and_then(move |mut rsp| {
+                            TransactionSnapshot::new(
+                                storage_client,
+                                serde_cbor::from_slice(&rsp.block)?,
+                                rsp.txn_index,
+                                rsp.take_input(),
+                                rsp.take_output(),
+                            )
+                        }),
                 )
             }
             Err(error) => Box::new(future::err(

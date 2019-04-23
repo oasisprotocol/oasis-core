@@ -253,7 +253,7 @@ impl Dispatcher {
                     let cas = Arc::new(PassthroughCAS::new(cas));
                     let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
                     let txn_ctx = TxnContext::new(ctx, &block.header);
-                    let outputs = StorageContext::enter(cas.clone(), &mut mkvs, || {
+                    let (outputs, tags) = StorageContext::enter(cas.clone(), &mut mkvs, || {
                         txn_dispatcher.dispatch_batch(&calls, txn_ctx)
                     });
 
@@ -269,6 +269,7 @@ impl Dispatcher {
                             output_hash: &Hash::digest_bytes(
                                 &serde_cbor::to_vec(&outputs).unwrap(),
                             ),
+                            tags_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&tags).unwrap()),
                             state_root: &new_state_root,
                         };
                         self.rak
@@ -282,9 +283,10 @@ impl Dispatcher {
                     };
 
                     let result = ComputedBatch {
-                        outputs: outputs,
+                        outputs,
                         storage_inserts: cas.take_inserts(),
-                        new_state_root: new_state_root,
+                        new_state_root,
+                        tags,
                         rak_sig,
                     };
 

@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/worker/host/protocol"
 )
 
@@ -57,6 +58,10 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 				Batch: protocol.ComputedBatch{
 					Outputs:      rq.Calls,
 					NewStateRoot: stateRoot,
+					Tags: []runtime.Tag{
+						runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("foo"), Value: []byte("bar")},
+						runtime.Tag{TxnIndex: 0, Key: []byte("txn_foo"), Value: []byte("txn_bar")},
+					},
 				},
 				// No RakSig in mock reponse.
 			}}

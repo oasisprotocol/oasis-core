@@ -30,6 +30,7 @@ func TestLegacyRound(t *testing.T) {
 			GroupHash:       make([]byte, 32),
 			InputHash:       make([]byte, 32),
 			OutputHash:      make([]byte, 32),
+			TagHash:         make([]byte, 32),
 			StateRoot:       make([]byte, 32),
 			CommitmentsHash: make([]byte, 32),
 		}
