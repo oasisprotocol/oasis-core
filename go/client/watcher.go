@@ -65,7 +65,7 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 
 	var committee *scheduler.Committee
 	for _, c := range committees {
-		if c.Kind != scheduler.Compute {
+		if c.Kind != scheduler.TransactionScheduler {
 			continue
 		}
 		committee = c
@@ -73,7 +73,7 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 	}
 
 	if committee == nil {
-		return errors.New("client/watcher: no compute committee after epoch transition")
+		return errors.New("client/watcher: no transaction scheduler committee after epoch transition")
 	}
 
 	var leader *node.Node
