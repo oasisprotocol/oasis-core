@@ -12,9 +12,17 @@ use crate::common::{
     sgx::avr,
 };
 
+#[cfg(target_env = "sgx")]
+use crate::common::sgx::egetkey::egetkey;
+#[cfg(target_env = "sgx")]
+use sgx_isa::Keypolicy;
+
 /// Context used for computing the RAK digest.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const RAK_HASH_CONTEXT: [u8; 8] = *b"EkNodReg";
+
+#[cfg(target_env = "sgx")]
+const RAK_EGETKEY_CONTEXT: &[u8] = b"Ekiden Derive RAK";
 
 /// RAK-related error.
 #[derive(Debug, Fail)]
@@ -68,8 +76,12 @@ impl RAK {
         let target_info =
             Targetinfo::try_copy_from(&target_info).expect("target info must be the right size");
 
-        // Generate RAK.
-        let rak = PrivateKey::generate();
+        // Generate RAK determinstically from the SGX sealing key.
+        //
+        // Note: If this code ever is enabled for a non SGX environment,
+        // the RAK will be identical and insecure.
+        let seed = egetkey(Keypolicy::MRENCLAVE, RAK_EGETKEY_CONTEXT);
+        let rak = PrivateKey::from_seed_unchecked(&seed).unwrap();
         let rak_pub = rak.public_key();
 
         // Generate report body.
