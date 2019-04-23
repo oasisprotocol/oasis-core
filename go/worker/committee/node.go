@@ -321,6 +321,13 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	return nil
 }
 
+// IsTransactionQueued checks if the given transaction is present in the
+// transaction scheduler queue and is waiting to be dispatched to a
+// compute committee.
+func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
+	panic("not implemented")
+}
+
 func (n *Node) transition(state NodeState) {
 	n.logger.Info("state transition",
 		"current_state", n.state,

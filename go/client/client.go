@@ -29,7 +29,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/grpc/committee"
+	"github.com/oasislabs/ekiden/go/grpc/transactionscheduler"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -90,7 +90,7 @@ func (c *submitContext) cancel() {
 	<-c.closeCh
 }
 
-// Client is implements submitting transactions to the committee leader.
+// Client is implements submitting transactions to the transaction scheduler committee leader.
 type Client struct {
 	sync.Mutex
 	common   *clientCommon
@@ -102,7 +102,7 @@ type Client struct {
 	logger *logging.Logger
 }
 
-func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *committee.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
+func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *transactionscheduler.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
 	defer close(submitCtx.closeCh)
 
 	nodeCert, err := nodeMeta.Certificate.Parse()
@@ -125,7 +125,7 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *committee.Sub
 		return
 	}
 	defer conn.Close()
-	client := committee.NewRuntimeClient(conn)
+	client := transactionscheduler.NewTransactionSchedulerClient(conn)
 
 	var addresses []resolver.Address
 	for _, addr := range nodeMeta.Addresses {
@@ -160,9 +160,9 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 		return nil, werr
 	}
 
-	req := &committee.SubmitTxRequest{
-		Data:      txData,
+	req := &transactionscheduler.SubmitTxRequest{
 		RuntimeId: runtimeID,
+		Data:      txData,
 	}
 
 	mapKey := runtimeID.ToMapKey()

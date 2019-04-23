@@ -32,9 +32,9 @@ var protoFiles = [][]string{
 	{"roothash/roothash.proto"},
 	{"scheduler/scheduler.proto"},
 	{"storage/storage.proto"},
-	{"committee/runtime.proto"},
 	{"client/client.proto"},
 	{"enclaverpc/enclaverpc.proto"},
+	{"transactionscheduler/transactionscheduler.proto"},
 }
 
 //
