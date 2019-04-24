@@ -61,8 +61,8 @@ type Body struct {
 	WorkerCapabilityTEERakAvrResponse    *Empty
 	WorkerRPCCallRequest                 *WorkerRPCCallRequest
 	WorkerRPCCallResponse                *WorkerRPCCallResponse
-	WorkerRuntimeCallBatchRequest        *WorkerRuntimeCallBatchRequest
-	WorkerRuntimeCallBatchResponse       *WorkerRuntimeCallBatchResponse
+	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest
+	WorkerExecuteTxBatchResponse         *WorkerExecuteTxBatchResponse
 	WorkerAbortRequest                   *Empty
 	WorkerAbortResponse                  *Empty
 
@@ -144,16 +144,16 @@ func (b *ComputedBatch) String() string {
 	return "<ComputedBatch>"
 }
 
-// WorkerRuntimeCallBatchRequest is a worker batch runtime call request message body.
-type WorkerRuntimeCallBatchRequest struct {
+// WorkerExecuteTxBatchRequest is a worker execute tx batch request message body.
+type WorkerExecuteTxBatchRequest struct {
 	// Batch of runtime calls.
 	Calls runtime.Batch `codec:"calls"`
 	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }
 
-// WorkerRuntimeCallBatchResponse is a worker batch runtime call response message body.
-type WorkerRuntimeCallBatchResponse struct {
+// WorkerExecuteTxBatchResponse is a worker execute tx batch response message body.
+type WorkerExecuteTxBatchResponse struct {
 	Batch ComputedBatch `codec:"batch"`
 }
 

@@ -240,8 +240,8 @@ impl Dispatcher {
 
                     protocol.send_response(id, protocol_response).unwrap();
                 }
-                Ok((ctx, id, Body::WorkerRuntimeCallBatchRequest { calls, block })) => {
-                    debug!(self.logger, "Received transaction batch call request"; "state_root" => ?block.header.state_root);
+                Ok((ctx, id, Body::WorkerExecuteTxBatchRequest { calls, block })) => {
+                    debug!(self.logger, "Received execute transaction batch request"; "state_root" => ?block.header.state_root);
 
                     // Create a new context and dispatch the batch.
                     // TODO: Add LRU cache.
@@ -292,7 +292,7 @@ impl Dispatcher {
 
                     // Send the result back.
                     protocol
-                        .send_response(id, Body::WorkerRuntimeCallBatchResponse { batch: result })
+                        .send_response(id, Body::WorkerExecuteTxBatchResponse { batch: result })
                         .unwrap();
                 }
                 Ok(_) => {

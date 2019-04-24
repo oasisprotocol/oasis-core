@@ -48,13 +48,13 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 	ch := make(chan *protocol.Body)
 	go func() {
 		switch {
-		case body.WorkerRuntimeCallBatchRequest != nil:
-			rq := body.WorkerRuntimeCallBatchRequest
+		case body.WorkerExecuteTxBatchRequest != nil:
+			rq := body.WorkerExecuteTxBatchRequest
 
 			var stateRoot hash.Hash
 			stateRoot.From(rq.Calls)
 
-			ch <- &protocol.Body{WorkerRuntimeCallBatchResponse: &protocol.WorkerRuntimeCallBatchResponse{
+			ch <- &protocol.Body{WorkerExecuteTxBatchResponse: &protocol.WorkerExecuteTxBatchResponse{
 				Batch: protocol.ComputedBatch{
 					Outputs:      rq.Calls,
 					NewStateRoot: stateRoot,

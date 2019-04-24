@@ -488,7 +488,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 	done := make(chan *protocol.ComputedBatch, 1)
 
 	rq := &protocol.Body{
-		WorkerRuntimeCallBatchRequest: &protocol.WorkerRuntimeCallBatchRequest{
+		WorkerExecuteTxBatchRequest: &protocol.WorkerExecuteTxBatchRequest{
 			Calls: batch,
 			Block: *n.currentBlock,
 		},
@@ -525,7 +525,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 				return
 			}
 
-			rsp := response.WorkerRuntimeCallBatchResponse
+			rsp := response.WorkerExecuteTxBatchResponse
 			if rsp == nil {
 				n.logger.Error("malformed response from worker",
 					"response", response,

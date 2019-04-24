@@ -127,11 +127,11 @@ pub enum Body {
         storage_inserts: Vec<(ByteBuf, u64)>,
         new_state_root: Hash,
     },
-    WorkerRuntimeCallBatchRequest {
+    WorkerExecuteTxBatchRequest {
         calls: TxnBatch,
         block: Block,
     },
-    WorkerRuntimeCallBatchResponse {
+    WorkerExecuteTxBatchResponse {
         batch: ComputedBatch,
     },
 

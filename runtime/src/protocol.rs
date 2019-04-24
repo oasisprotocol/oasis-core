@@ -270,7 +270,7 @@ impl Protocol {
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
-            req @ Body::WorkerRuntimeCallBatchRequest { .. } => {
+            req @ Body::WorkerExecuteTxBatchRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
