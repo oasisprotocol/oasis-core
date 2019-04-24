@@ -44,6 +44,8 @@ enum RAKError {
 #[cfg(target_env = "sgx")]
 #[derive(Debug, Fail)]
 enum AVRError {
+    #[fail(display = "MRENCLAVE mismatch")]
+    MrEnclaveMismatch,
     #[fail(display = "AVR nonce mismatch")]
     NonceMismatch,
 }
@@ -51,6 +53,8 @@ enum AVRError {
 struct Inner {
     private_key: Option<PrivateKey>,
     avr: Option<Arc<avr::AVR>>,
+    #[allow(unused)]
+    mr_enclave: Option<avr::MrEnclave>, // Only used when attesting with IAS.
     #[allow(unused)]
     nonce: Option<String>, // Only used when attesting with IAS.
 }
@@ -73,6 +77,7 @@ impl RAK {
             inner: RwLock::new(Inner {
                 private_key: None,
                 avr: None,
+                mr_enclave: None,
                 nonce: None,
             }),
         }
@@ -127,6 +132,10 @@ impl RAK {
         let nonce = Self::generate_nonce();
         inner.nonce = Some(nonce.clone());
 
+        // Store our MRENCLAVE.
+        let mr_enclave = avr::MrEnclave(report.mrenclave);
+        inner.mr_enclave = Some(mr_enclave);
+
         (rak_pub, report, nonce)
     }
 
@@ -139,6 +148,15 @@ impl RAK {
             None => return Err(RAKError::NotConfigured.into()),
         };
         let authenticated_avr = avr::verify(&avr)?;
+
+        // Verify that the AVR's MRENCLAVE matches our own.
+        let mr_enclave = match inner.mr_enclave {
+            Some(mr_enclave) => mr_enclave,
+            None => return Err(RAKError::NotConfigured.into()),
+        };
+        if authenticated_avr.mr_enclave != mr_enclave {
+            return Err(AVRError::MrEnclaveMismatch.into());
+        }
 
         // Verify that the AVR has H(RAK) in report body.
         let rak_pub = rak.public_key();
