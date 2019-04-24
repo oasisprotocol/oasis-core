@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/storage"
@@ -129,6 +130,121 @@ func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysSe
 	}
 
 	return nil
+}
+
+func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
+	var root hash.Hash
+	copy(root[:], req.GetRoot())
+
+	var expectedNewRoot hash.Hash
+	copy(expectedNewRoot[:], req.GetExpectedNewRoot())
+
+	var log api.WriteLog
+	for _, item := range req.GetLog() {
+		log = append(log, api.LogEntry{
+			Key:   item.GetKey(),
+			Value: item.GetValue(),
+		})
+	}
+
+	signedReceipt, err := s.backend.Apply(ctx, root, expectedNewRoot, log)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.ApplyResponse{Receipt: signedReceipt.MarshalCBOR()}, nil
+}
+
+func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
+	var root hash.Hash
+	copy(root[:], req.GetRoot())
+
+	maxDepth := uint8(req.GetMaxDepth())
+
+	nid := req.GetId()
+	var path hash.Hash
+	copy(path[:], nid.GetPath())
+
+	nodeID := api.NodeID{
+		Path:  path,
+		Depth: uint8(nid.GetDepth()),
+	}
+
+	subtree, err := s.backend.GetSubtree(ctx, root, nodeID, maxDepth)
+	if err != nil {
+		return nil, err
+	}
+
+	serializedSubtree, err := subtree.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetSubtreeResponse{Subtree: serializedSubtree}, nil
+}
+
+func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.GetPathResponse, error) {
+	var root hash.Hash
+	copy(root[:], req.GetRoot())
+
+	var key hash.Hash
+	copy(key[:], req.GetKey())
+
+	startDepth := uint8(req.GetStartDepth())
+
+	subtree, err := s.backend.GetPath(ctx, root, key, startDepth)
+	if err != nil {
+		return nil, err
+	}
+
+	serializedSubtree, err := subtree.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetPathResponse{Subtree: serializedSubtree}, nil
+}
+
+func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
+	var root hash.Hash
+	copy(root[:], req.GetRoot())
+
+	nid := req.GetId()
+	var path hash.Hash
+	copy(path[:], nid.GetPath())
+
+	nodeID := api.NodeID{
+		Path:  path,
+		Depth: uint8(nid.GetDepth()),
+	}
+
+	node, err := s.backend.GetNode(ctx, root, nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	serializedNode, err := node.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetNodeResponse{Node: serializedNode}, nil
+}
+
+func (s *grpcServer) GetValue(ctx context.Context, req *pb.GetValueRequest) (*pb.GetValueResponse, error) {
+	var root hash.Hash
+	copy(root[:], req.GetRoot())
+
+	var id hash.Hash
+	copy(id[:], req.GetId())
+
+	value, err := s.backend.GetValue(ctx, root, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetValueResponse{Value: value}, nil
 }
 
 // NewGRPCServer intializes and registers a grpc storage server backed

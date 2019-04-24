@@ -42,8 +42,9 @@ func New(timeSource epochtime.Backend, dataDir string, signingKey *signature.Pri
 	case memory.BackendName:
 		impl = memory.New(timeSource, signingKey)
 	case leveldb.BackendName:
-		fn := filepath.Join(dataDir, leveldb.DBFile)
-		impl, err = leveldb.New(fn, timeSource, signingKey)
+		dbDir := filepath.Join(dataDir, leveldb.DBFile)
+		mkvsDBDir := filepath.Join(dataDir, leveldb.MKVSDBFile)
+		impl, err = leveldb.New(dbDir, mkvsDBDir, timeSource, signingKey)
 	case client.BackendName:
 		impl, err = client.New()
 	case cachingclient.BackendName:

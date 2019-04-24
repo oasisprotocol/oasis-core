@@ -4,12 +4,19 @@ package storage;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 
 service Storage {
+    // CAS
     rpc Get(GetRequest) returns (GetResponse) {}
     rpc GetBatch(GetBatchRequest) returns (GetBatchResponse) {}
     rpc GetReceipt(GetReceiptRequest) returns (GetReceiptResponse) {}
     rpc Insert(InsertRequest) returns (InsertResponse) {}
     rpc InsertBatch(InsertBatchRequest) returns (InsertBatchResponse) {}
     rpc GetKeys(GetKeysRequest) returns (stream GetKeysResponse) {}
+    // MKVS
+    rpc Apply(ApplyRequest) returns (ApplyResponse) {}
+    rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
+    rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
+    rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
+    rpc GetValue(GetValueRequest) returns (GetValueResponse) {}
 }
 
 message GetRequest {
@@ -57,4 +64,62 @@ message GetKeysRequest {
 message GetKeysResponse {
     bytes key = 1;
     uint64 expiry = 2;
+}
+
+message LogEntry {
+    bytes key = 1;
+    bytes value = 2;
+}
+
+message ApplyRequest {
+    bytes root = 1;
+    bytes expected_new_root = 2;
+    repeated LogEntry log = 3;
+}
+
+message ApplyResponse {
+    bytes receipt = 1; // MKVSReceipt, serialized to CBOR
+}
+
+message NodeID {
+    bytes path = 1;
+    uint32 depth = 2;  // Actually uint8, but protobufs don't have that :/
+}
+
+message GetSubtreeRequest {
+    bytes root = 1;
+    NodeID id = 2;
+    uint32 max_depth = 3;  // uint8
+}
+
+message GetSubtreeResponse {
+    bytes subtree = 1;  // serialized to binary
+}
+
+message GetPathRequest {
+    bytes root = 1;
+    bytes key = 2;
+    uint32 start_depth = 3;  // uint8
+}
+
+message GetPathResponse {
+    bytes subtree = 1;  // serialized to binary
+}
+
+message GetNodeRequest {
+    bytes root = 1;
+    NodeID id = 2;
+}
+
+message GetNodeResponse {
+    bytes node = 1;  // serialized to binary
+}
+
+message GetValueRequest {
+    bytes root = 1;
+    bytes id = 2;
+}
+
+message GetValueResponse {
+    bytes value = 1;
 }

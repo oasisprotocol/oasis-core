@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
@@ -153,6 +154,100 @@ func (b *storageClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo
 	}()
 
 	return kiCh, nil
+}
+
+func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+	var req storage.ApplyRequest
+	req.Root = root[:]
+	req.ExpectedNewRoot = expectedNewRoot[:]
+	req.Log = make([]*storage.LogEntry, 0, len(log))
+	for _, e := range log {
+		req.Log = append(req.Log, &storage.LogEntry{
+			Key:   e.Key,
+			Value: e.Value,
+		})
+	}
+
+	resp, err := b.client.Apply(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	var receipt api.MKVSReceipt
+	if err = receipt.UnmarshalCBOR(resp.GetReceipt()); err != nil {
+		return nil, err
+	}
+
+	return &receipt, nil
+}
+
+func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+	var req storage.GetSubtreeRequest
+	req.Root = root[:]
+	req.MaxDepth = uint32(maxDepth)
+	req.Id = &storage.NodeID{Path: id.Path[:], Depth: uint32(id.Depth)}
+
+	resp, err := b.client.GetSubtree(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	var subtree api.Subtree
+	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
+		return nil, err
+	}
+
+	return &subtree, nil
+}
+
+func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+	var req storage.GetPathRequest
+	req.Root = root[:]
+	req.Key = key[:]
+	req.StartDepth = uint32(startDepth)
+
+	resp, err := b.client.GetPath(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	var subtree api.Subtree
+	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
+		return nil, err
+	}
+
+	return &subtree, nil
+}
+
+func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+	var req storage.GetNodeRequest
+	req.Root = root[:]
+	req.Id = &storage.NodeID{Path: id.Path[:], Depth: uint32(id.Depth)}
+
+	resp, err := b.client.GetNode(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	var node api.Node
+	if err = node.UnmarshalBinary(resp.GetNode()); err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+func (b *storageClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
+	var req storage.GetValueRequest
+	req.Root = root[:]
+	req.Id = id[:]
+
+	resp, err := b.client.GetValue(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetValue(), nil
 }
 
 func (b *storageClientBackend) Cleanup() {

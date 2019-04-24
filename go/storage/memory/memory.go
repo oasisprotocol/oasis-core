@@ -8,6 +8,10 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -33,6 +37,7 @@ type memoryBackend struct {
 	logger  *logging.Logger
 	store   map[api.Key]*memoryEntry
 	sweeper *api.Sweeper
+	nodedb  nodedb.NodeDB
 
 	signingKey *signature.PrivateKey
 }
@@ -168,6 +173,83 @@ func (b *memoryBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error
 	return kiChan, nil
 }
 
+func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+	var r hash.Hash
+
+	// Check if we already have the expected new root in our local DB.
+	if urkel.HasRoot(b.nodedb, expectedNewRoot) {
+		// We do, don't apply anything.
+		r = expectedNewRoot
+	} else {
+		// We don't, apply operations.
+		tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, entry := range log {
+			err = tree.Insert(entry.Key, entry.Value)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		_, r, err = tree.Commit()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	receipt := api.MKVSReceiptBody{
+		Version: 1,
+		Root:    r,
+	}
+	signed, err := signature.SignSigned(*b.signingKey, api.MKVSReceiptSignatureContext, &receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.MKVSReceipt{
+		Signed: *signed,
+	}, nil
+}
+
+func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetSubtree(ctx, root, id, maxDepth)
+}
+
+func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetPath(ctx, root, key, startDepth)
+}
+
+func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetNode(ctx, root, id)
+}
+
+func (b *memoryBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetValue(ctx, root, id)
+}
+
 func (b *memoryBackend) PurgeExpired(epoch epochtime.EpochTime) {
 	b.Lock()
 	defer b.Unlock()
@@ -184,6 +266,7 @@ func (b *memoryBackend) PurgeExpired(epoch epochtime.EpochTime) {
 
 func (b *memoryBackend) Cleanup() {
 	b.sweeper.Close()
+	b.nodedb.Close()
 }
 
 func (b *memoryBackend) Initialized() <-chan struct{} {
@@ -192,10 +275,13 @@ func (b *memoryBackend) Initialized() <-chan struct{} {
 
 // New constructs a new memory backed storage Backend instance.
 func New(timeSource epochtime.Backend, signingKey *signature.PrivateKey) api.Backend {
+	ndb, _ := nodedb.NewMemoryNodeDB()
+
 	b := &memoryBackend{
 		logger:     logging.GetLogger("storage/memory"),
 		store:      make(map[api.Key]*memoryEntry),
 		signingKey: signingKey,
+		nodedb:     ndb,
 	}
 	b.sweeper = api.NewSweeper(b, timeSource)
 

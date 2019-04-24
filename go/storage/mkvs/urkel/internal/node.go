@@ -224,7 +224,7 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		return 0, err
 	}
 
-	n.Clean = false
+	n.Clean = true
 	if leftHash.IsEmpty() {
 		n.Left = nil
 	} else {
@@ -236,6 +236,8 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	} else {
 		n.Right = &Pointer{Clean: true, Hash: rightHash}
 	}
+
+	n.UpdateHash()
 
 	return 1 + hash.Size*2, nil
 }
@@ -352,9 +354,11 @@ func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		return 0, err
 	}
 
-	n.Clean = false
+	n.Clean = true
 	n.Key = key
 	n.Value = value
+
+	n.UpdateHash()
 
 	return 1 + hash.Size + valueSize, nil
 }
@@ -470,9 +474,11 @@ func (v *Value) SizedUnmarshalBinary(data []byte) (int, error) {
 
 	valueLen := int(binary.LittleEndian.Uint32(data[:4]))
 	v.Value = nil
+	v.Clean = true
 	if valueLen > 0 {
 		v.Value = make([]byte, valueLen)
 		copy(v.Value, data[4:])
 	}
+	v.UpdateHash()
 	return valueLen + 4, nil
 }
