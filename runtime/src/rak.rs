@@ -17,6 +17,11 @@ use crate::common::sgx::egetkey::egetkey;
 #[cfg(target_env = "sgx")]
 use sgx_isa::Keypolicy;
 
+#[cfg(target_env = "sgx")]
+use base64;
+#[cfg(target_env = "sgx")]
+use ring::rand::{SecureRandom, SystemRandom};
+
 /// Context used for computing the RAK digest.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const RAK_HASH_CONTEXT: [u8; 8] = *b"EkNodReg";
@@ -35,9 +40,19 @@ enum RAKError {
     MalformedReportData,
 }
 
+/// AVR-related errors.
+#[cfg(target_env = "sgx")]
+#[derive(Debug, Fail)]
+enum AVRError {
+    #[fail(display = "AVR nonce mismatch")]
+    NonceMismatch,
+}
+
 struct Inner {
     private_key: Option<PrivateKey>,
     avr: Option<Arc<avr::AVR>>,
+    #[allow(unused)]
+    nonce: Option<String>, // Only used when attesting with IAS.
 }
 
 /// Runtime attestation key.
@@ -58,6 +73,7 @@ impl RAK {
             inner: RwLock::new(Inner {
                 private_key: None,
                 avr: None,
+                nonce: None,
             }),
         }
     }
@@ -70,9 +86,20 @@ impl RAK {
         Hash::digest_bytes(&message)
     }
 
+    /// Generate a random 32 character nonce, for IAS anti-replay.
+    #[cfg(target_env = "sgx")]
+    fn generate_nonce() -> String {
+        let rng = SystemRandom::new();
+        let mut nonce_bytes = [0u8; 24]; // 24 bytes is 32 chars in Base64.
+        rng.fill(&mut nonce_bytes)
+            .expect("random nonce generation must succeed");
+
+        base64::encode(&nonce_bytes)
+    }
+
     /// Initialize the runtime attestation key.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn init(&self, target_info: Vec<u8>) -> (PublicKey, Report) {
+    pub(crate) fn init(&self, target_info: Vec<u8>) -> (PublicKey, Report, String) {
         let target_info =
             Targetinfo::try_copy_from(&target_info).expect("target info must be the right size");
 
@@ -96,7 +123,11 @@ impl RAK {
         inner.private_key = Some(rak);
         inner.avr = None;
 
-        (rak_pub, report)
+        // Generate a new IAS anti-replay nonce.
+        let nonce = Self::generate_nonce();
+        inner.nonce = Some(nonce.clone());
+
+        (rak_pub, report, nonce)
     }
 
     /// Configure the attestation verification report for RAK.
@@ -107,8 +138,22 @@ impl RAK {
             Some(ref key) => key,
             None => return Err(RAKError::NotConfigured.into()),
         };
-        let _authenticated_avr = avr::verify(&avr)?;
+        let authenticated_avr = avr::verify(&avr)?;
+
+        // Verify that the AVR's nonce matches the one returned with the most
+        // recently generated report.
+        match inner.nonce {
+            Some(ref nonce) => {
+                if *nonce != authenticated_avr.nonce {
+                    return Err(AVRError::NonceMismatch.into());
+                }
+            }
+            None => {
+                return Err(RAKError::NotConfigured.into());
+            }
+        };
         // TODO: Verify that the AVR has H(RAK) in report body.
+
         inner.avr = Some(Arc::new(avr));
         Ok(())
     }
