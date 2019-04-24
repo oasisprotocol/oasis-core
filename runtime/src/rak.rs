@@ -134,11 +134,15 @@ impl RAK {
     #[cfg(target_env = "sgx")]
     pub(crate) fn set_avr(&self, avr: avr::AVR) -> Fallible<()> {
         let mut inner = self.inner.write().unwrap();
-        let _private_key = match inner.private_key {
+        let rak = match inner.private_key {
             Some(ref key) => key,
             None => return Err(RAKError::NotConfigured.into()),
         };
         let authenticated_avr = avr::verify(&avr)?;
+
+        // Verify that the AVR has H(RAK) in report body.
+        let rak_pub = rak.public_key();
+        Self::verify_binding(&authenticated_avr, &rak_pub)?;
 
         // Verify that the AVR's nonce matches the one returned with the most
         // recently generated report.
@@ -152,7 +156,6 @@ impl RAK {
                 return Err(RAKError::NotConfigured.into());
             }
         };
-        // TODO: Verify that the AVR has H(RAK) in report body.
 
         inner.avr = Some(Arc::new(avr));
         Ok(())
