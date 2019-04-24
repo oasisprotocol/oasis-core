@@ -4,7 +4,7 @@ use failure::Fallible;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, marshal::*, tree::*},
+    storage::mkvs::urkel::{cache::*, tree::*},
 };
 
 /// Common interface for node-like objects in the tree.
@@ -83,43 +83,16 @@ impl Node for NodeBox {
     }
 }
 
-impl Marshal for NodeBox {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        match self {
-            NodeBox::Internal(ref n) => n.marshal_binary(),
-            NodeBox::Leaf(ref n) => n.marshal_binary(),
-        }
-    }
-
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 {
-            Err(TreeError::MalformedNode.into())
-        } else {
-            if data[0] == INTERNAL_NODE_PREFIX {
-                *self = NodeBox::Internal(InternalNode {
-                    ..Default::default()
-                });
-            } else if data[0] == LEAF_NODE_PREFIX {
-                *self = NodeBox::Leaf(LeafNode {
-                    ..Default::default()
-                })
-            } else {
-                return Err(TreeError::MalformedNode.into());
-            }
-            match self {
-                NodeBox::Internal(ref mut n) => n.unmarshal_binary(data),
-                NodeBox::Leaf(ref mut n) => n.unmarshal_binary(data),
-            }
-        }
-    }
-}
-
 /// Node types in the tree.
-#[derive(Debug)]
+///
+/// Integer values of the variants here are also used in subtree
+/// serialization and as prefixes in node hash computations.
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum NodeKind {
-    None,
-    Internal,
-    Leaf,
+    None = 0x02,
+    Internal = 0x01,
+    Leaf = 0x00,
 }
 
 /// `NodeRef` is a reference-counted pointer to a node box.
@@ -227,7 +200,7 @@ impl Node for InternalNode {
         let hash_left = self.left.borrow().hash;
         let hash_right = self.right.borrow().hash;
         self.hash = Hash::digest_bytes_list(&[
-            &[INTERNAL_NODE_PREFIX],
+            &[NodeKind::Internal as u8],
             hash_left.as_ref(),
             hash_right.as_ref(),
         ]);
@@ -264,50 +237,6 @@ impl Node for InternalNode {
     }
 }
 
-impl Marshal for InternalNode {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
-        result.push(INTERNAL_NODE_PREFIX);
-        result.extend_from_slice(self.left.borrow().hash.as_ref());
-        result.extend_from_slice(self.right.borrow().hash.as_ref());
-
-        Ok(result)
-    }
-
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + 2 * Hash::len() || data[0] != INTERNAL_NODE_PREFIX {
-            return Err(TreeError::MalformedNode.into());
-        }
-
-        let left_hash = Hash::from(&data[1..(1 + Hash::len())]);
-        let right_hash = Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]);
-
-        self.clean = false;
-        if left_hash.is_empty() {
-            self.left = NodePointer::null_ptr();
-        } else {
-            self.left = Rc::new(RefCell::new(NodePointer {
-                clean: true,
-                hash: left_hash,
-                node: None,
-                ..Default::default()
-            }));
-        }
-        if right_hash.is_empty() {
-            self.right = NodePointer::null_ptr();
-        } else {
-            self.right = Rc::new(RefCell::new(NodePointer {
-                clean: true,
-                hash: right_hash,
-                node: None,
-                ..Default::default()
-            }));
-        }
-
-        Ok(1 + 2 * Hash::len())
-    }
-}
-
 impl PartialEq for InternalNode {
     fn eq(&self, other: &InternalNode) -> bool {
         if self.clean && other.clean {
@@ -340,7 +269,7 @@ impl Node for LeafNode {
 
     fn update_hash(&mut self) {
         self.hash = Hash::digest_bytes_list(&[
-            &[LEAF_NODE_PREFIX],
+            &[NodeKind::Leaf as u8],
             self.key.as_ref(),
             self.value.borrow().hash.as_ref(),
         ]);
@@ -374,34 +303,6 @@ impl Node for LeafNode {
             key: self.key,
             value: self.value.borrow().extract(),
         })))
-    }
-}
-
-impl Marshal for LeafNode {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
-        result.push(LEAF_NODE_PREFIX);
-        result.extend_from_slice(self.key.as_ref());
-        result.extend_from_slice(self.value.borrow().hash.as_ref());
-
-        Ok(result)
-    }
-
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + 2 * Hash::len() || data[0] != LEAF_NODE_PREFIX {
-            return Err(TreeError::MalformedNode.into());
-        }
-
-        self.clean = false;
-        self.key = Hash::from(&data[1..(1 + Hash::len())]);
-        self.value = Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]),
-            value: None,
-            ..Default::default()
-        }));
-
-        Ok(1 + 2 * Hash::len())
     }
 }
 

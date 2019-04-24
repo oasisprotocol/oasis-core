@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding"
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -20,6 +21,8 @@ const (
 	PrefixLeafNode byte = 0x00
 	// Prefix used in hash computations of internal nodes.
 	PrefixInternalNode byte = 0x01
+	// Prefix used to mark a nil pointer in a subtree serialization.
+	PrefixNilNode byte = 0x02
 )
 
 var (
@@ -27,6 +30,8 @@ var (
 	_ encoding.BinaryUnmarshaler = (*InternalNode)(nil)
 	_ encoding.BinaryMarshaler   = (*LeafNode)(nil)
 	_ encoding.BinaryUnmarshaler = (*LeafNode)(nil)
+	_ encoding.BinaryMarshaler   = (*Value)(nil)
+	_ encoding.BinaryUnmarshaler = (*Value)(nil)
 )
 
 // NodeID is a root-relative node identifier which uniquely identifies
@@ -89,6 +94,14 @@ func (p *Pointer) Extract() *Pointer {
 	}
 }
 
+// Equal compares two pointers for equality.
+func (p *Pointer) Equal(other *Pointer) bool {
+	if p.Clean && other.Clean {
+		return p.Hash.Equal(&other.Hash)
+	}
+	return p.Node != nil && other.Node != nil && p.Node.Equal(other.Node)
+}
+
 // Node is either an InternalNode or a LeafNode.
 type Node interface {
 	encoding.BinaryMarshaler
@@ -111,6 +124,9 @@ type Node interface {
 	//
 	// Calling this on a dirty node will return an error.
 	Validate(h hash.Hash) error
+
+	// Equal compares a node with another node.
+	Equal(other Node) bool
 }
 
 // InternalNode is an internal node with two children.
@@ -186,20 +202,26 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary decodes a binary marshaled internal node.
 func (n *InternalNode) UnmarshalBinary(data []byte) error {
-	if len(data) != 1+hash.Size*2 {
-		return ErrMalformed
+	_, err := n.SizedUnmarshalBinary(data)
+	return err
+}
+
+// SizedUnmarshalBinary decodes a binary marshaled internal node.
+func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
+	if len(data) < 1+hash.Size*2 {
+		return 0, ErrMalformed
 	}
 	if data[0] != PrefixInternalNode {
-		return ErrMalformed
+		return 0, ErrMalformed
 	}
 
 	var leftHash hash.Hash
 	if err := leftHash.UnmarshalBinary(data[1 : 1+hash.Size]); err != nil {
-		return err
+		return 0, err
 	}
 	var rightHash hash.Hash
 	if err := rightHash.UnmarshalBinary(data[1+hash.Size:]); err != nil {
-		return err
+		return 0, err
 	}
 
 	n.Clean = false
@@ -215,7 +237,24 @@ func (n *InternalNode) UnmarshalBinary(data []byte) error {
 		n.Right = &Pointer{Clean: true, Hash: rightHash}
 	}
 
-	return nil
+	return 1 + hash.Size*2, nil
+}
+
+// Equal compares a node with some other node.
+func (n *InternalNode) Equal(other Node) bool {
+	if n == nil && other == nil {
+		return true
+	}
+	if n == nil || other == nil {
+		return false
+	}
+	if other, ok := other.(*InternalNode); ok {
+		if n.Clean && other.Clean {
+			return n.Hash.Equal(&other.Hash)
+		}
+		return n.Left.Equal(other.Left) && n.Right.Equal(other.Right)
+	}
+	return false
 }
 
 // LeafNode is a leaf node containing a key/value pair.
@@ -276,36 +315,65 @@ func (n *LeafNode) Validate(h hash.Hash) error {
 
 // MarshalBinary encodes a leaf node into binary form.
 func (n *LeafNode) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, 1+hash.Size*2)
+	valueData, err := n.Value.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, 1+hash.Size+len(valueData))
 	data[0] = PrefixLeafNode
 	copy(data[1:1+hash.Size], n.Key[:])
-	copy(data[1+hash.Size:], n.Value.Hash[:])
+	copy(data[1+hash.Size:], valueData)
 	return
 }
 
 // UnmarshalBinary decodes a binary marshaled leaf node.
 func (n *LeafNode) UnmarshalBinary(data []byte) error {
-	if len(data) != 1+hash.Size*2 {
-		return ErrMalformed
+	_, err := n.SizedUnmarshalBinary(data)
+	return err
+}
+
+// SizedUnmarshalBinary decodes a binary marshaled leaf node.
+func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
+	if len(data) < 1+hash.Size {
+		return 0, ErrMalformed
 	}
 	if data[0] != PrefixLeafNode {
-		return ErrMalformed
+		return 0, ErrMalformed
 	}
 
 	var key hash.Hash
 	if err := key.UnmarshalBinary(data[1 : 1+hash.Size]); err != nil {
-		return err
+		return 0, err
 	}
-	var valueHash hash.Hash
-	if err := valueHash.UnmarshalBinary(data[1+hash.Size:]); err != nil {
-		return err
+
+	value := &Value{}
+	valueSize, err := value.SizedUnmarshalBinary(data[1+hash.Size:])
+	if err != nil {
+		return 0, err
 	}
 
 	n.Clean = false
 	n.Key = key
-	n.Value = &Value{Clean: true, Hash: valueHash}
+	n.Value = value
 
-	return nil
+	return 1 + hash.Size + valueSize, nil
+}
+
+// Equal compares a node with some other node.
+func (n *LeafNode) Equal(other Node) bool {
+	if n == nil && other == nil {
+		return true
+	}
+	if n == nil || other == nil {
+		return false
+	}
+	if other, ok := other.(*LeafNode); ok {
+		if n.Clean && other.Clean {
+			return n.Hash.Equal(&other.Hash)
+		}
+		return n.Key.Equal(&other.Key) && n.Value.EqualPointer(other.Value)
+	}
+	return false
 }
 
 // Value holds the value.
@@ -339,6 +407,17 @@ func (v *Value) Equal(other []byte) bool {
 	return v.Hash.Equal(&otherHash)
 }
 
+// EqualPointer compares the value pointer with some other value pointer.
+func (v *Value) EqualPointer(other *Value) bool {
+	if v == nil && other == nil {
+		return true
+	}
+	if v == nil || other == nil {
+		return true
+	}
+	return v.Equal(other.Value)
+}
+
 // Extract makes a copy of the value containing only hash references.
 func (v *Value) Extract() *Value {
 	if !v.Clean {
@@ -365,4 +444,35 @@ func (v *Value) Validate(h hash.Hash) error {
 	}
 
 	return nil
+}
+
+// MarshalBinary encodes a value into binary form.
+func (v *Value) MarshalBinary() (data []byte, err error) {
+	data = make([]byte, 4+len(v.Value))
+	binary.LittleEndian.PutUint32(data[:4], uint32(len(v.Value)))
+	if v.Value != nil {
+		copy(data[4:], v.Value)
+	}
+	return
+}
+
+// UnmarshalBinary decodes a binary marshaled value.
+func (v *Value) UnmarshalBinary(data []byte) error {
+	_, err := v.SizedUnmarshalBinary(data)
+	return err
+}
+
+// SizedUnmarshalBinary decodes a binary marshaled value.
+func (v *Value) SizedUnmarshalBinary(data []byte) (int, error) {
+	if len(data) < 4 {
+		return 0, ErrMalformed
+	}
+
+	valueLen := int(binary.LittleEndian.Uint32(data[:4]))
+	v.Value = nil
+	if valueLen > 0 {
+		v.Value = make([]byte, valueLen)
+		copy(v.Value, data[4:])
+	}
+	return valueLen + 4, nil
 }

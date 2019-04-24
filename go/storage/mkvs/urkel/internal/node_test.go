@@ -32,9 +32,9 @@ func TestSerializationLeafNode(t *testing.T) {
 
 	require.False(t, decodedLeafNode.Clean)
 	require.Equal(t, leafNode.Key, decodedLeafNode.Key)
-	require.True(t, decodedLeafNode.Value.Clean)
-	require.Equal(t, leafNode.Value.Hash, decodedLeafNode.Value.Hash)
-	require.Nil(t, decodedLeafNode.Value.Value)
+	require.False(t, decodedLeafNode.Value.Clean)
+	require.Equal(t, leafNode.Value.Value, decodedLeafNode.Value.Value)
+	require.NotNil(t, decodedLeafNode.Value.Value)
 }
 
 func TestSerializationInternalNode(t *testing.T) {
