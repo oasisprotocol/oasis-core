@@ -241,6 +241,7 @@ impl Protocol {
                 Ok(Some(Body::WorkerCapabilityTEERakReportResponse {
                     rak_pub,
                     report,
+                    nonce: "".to_string(), // XXX: Generate and persist a random nonce.
                 }))
             }
             #[cfg(target_env = "sgx")]
