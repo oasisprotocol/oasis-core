@@ -40,18 +40,21 @@ type epoch struct {
 	roundCtx       context.Context
 	cancelRoundCtx context.CancelFunc
 
-	committee *scheduler.Committee
-	nodes     []*node.Node
-	groupHash hash.Hash
-	peerIndex map[string]int
+	computeCommittee              *scheduler.Committee
+	transactionSchedulerCommittee *scheduler.Committee
+	nodes                         []*node.Node
+	groupHash                     hash.Hash
+	peerIndex                     map[string]int
 
-	role scheduler.Role
+	computeRole              scheduler.Role
+	transactionSchedulerRole scheduler.Role
 }
 
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
-	role      scheduler.Role
-	groupHash hash.Hash
+	computeRole              scheduler.Role
+	transactionSchedulerRole scheduler.Role
+	groupHash                hash.Hash
 }
 
 // GetGroupHash returns the current committee members hash.
@@ -61,26 +64,33 @@ func (e *EpochSnapshot) GetGroupHash() hash.Hash {
 
 // IsMember checks if the current node is a member of the compute committee
 // in the current epoch.
+// TODO: rename these?
 func (e *EpochSnapshot) IsMember() bool {
-	return e.role != scheduler.Invalid
+	return e.computeRole != scheduler.Invalid
 }
 
 // IsLeader checks if the current node is a leader of the compute committee
 // in the current epoch.
 func (e *EpochSnapshot) IsLeader() bool {
-	return e.role == scheduler.Leader
+	return e.computeRole == scheduler.Leader
 }
 
 // IsWorker checks if the current node is a worker of the compute committee
 // in the current epoch.
 func (e *EpochSnapshot) IsWorker() bool {
-	return e.role == scheduler.Worker
+	return e.computeRole == scheduler.Worker
 }
 
 // IsBackupWorker checks if the current node is a backup worker of the compute
 // committee in the current epoch.
 func (e *EpochSnapshot) IsBackupWorker() bool {
-	return e.role == scheduler.BackupWorker
+	return e.computeRole == scheduler.BackupWorker
+}
+
+// IsTransactionSchedulerLeader checks if the current node is a leader of the transaction scheduler committee
+// in the current epoch.
+func (e *EpochSnapshot) IsTransactionSchedulerLeader() bool {
+	return e.transactionSchedulerRole == scheduler.Leader
 }
 
 // Group encapsulates communication with a group of nodes in the
@@ -152,33 +162,37 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 	}
 
 	// Find the current compute committee.
-	var committee *scheduler.Committee
+	var computeCommittee, transactionSchedulerCommittee *scheduler.Committee
 	for _, cm := range committees {
-		if cm.Kind != scheduler.Compute {
-			continue
+		switch cm.Kind {
+		case scheduler.Compute:
+			computeCommittee = cm
+		case scheduler.TransactionScheduler:
+			transactionSchedulerCommittee = cm
 		}
-
-		committee = cm
-		break
 	}
-	if committee == nil {
+	if computeCommittee == nil {
 		return errors.New("no compute committee")
+	}
+	if transactionSchedulerCommittee == nil {
+		return errors.New("no transaction scheduler committee")
 	}
 
 	// Sanity check the group hash against the current committee.
-	committeeHash := committee.EncodedMembersHash()
+	committeeHash := computeCommittee.EncodedMembersHash()
 	if !committeeHash.Equal(&groupHash) {
 		return errors.New("received inconsistent committee")
 	}
 
-	// Determine our role in this committee.
-	var nodes []*node.Node
-	var role scheduler.Role
-	peerIndex := make(map[string]int)
 	publicIdentity := g.identity.NodeKey.Public()
-	for index, node := range committee.Members {
+
+	// Determine our role in the compute committee.
+	var nodes []*node.Node
+	var computeRole scheduler.Role
+	peerIndex := make(map[string]int)
+	for index, node := range computeCommittee.Members {
 		if node.PublicKey.Equal(publicIdentity) {
-			role = node.Role
+			computeRole = node.Role
 			// Use nil for our own node to not break indices.
 			nodes = append(nodes, nil)
 		} else {
@@ -193,14 +207,24 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 		}
 	}
 
+	// Determine our role in the transaction scheduler committee.
+	var transactionSchedulerRole scheduler.Role
+	for _, node := range transactionSchedulerCommittee.Members {
+		if node.PublicKey.Equal(publicIdentity) {
+			transactionSchedulerRole = node.Role
+			break
+		}
+	}
+
 	// Create round context.
 	roundCtx, cancel := context.WithCancel(ctx)
 
 	// Update the current epoch.
-	g.activeEpoch = &epoch{roundCtx, cancel, committee, nodes, groupHash, peerIndex, role}
+	g.activeEpoch = &epoch{roundCtx, cancel, computeCommittee, transactionSchedulerCommittee, nodes, groupHash, peerIndex, computeRole, transactionSchedulerRole}
 
 	g.logger.Info("epoch transition complete",
-		"role", role,
+		"computeRole", computeRole,
+		"transactionSchedulerRole", transactionSchedulerRole,
 	)
 
 	return nil
@@ -212,12 +236,13 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil {
-		return &EpochSnapshot{role: scheduler.Invalid}
+		return &EpochSnapshot{computeRole: scheduler.Invalid, transactionSchedulerRole: scheduler.Invalid}
 	}
 
 	return &EpochSnapshot{
-		role:      g.activeEpoch.role,
-		groupHash: g.activeEpoch.groupHash,
+		computeRole:              g.activeEpoch.computeRole,
+		transactionSchedulerRole: g.activeEpoch.transactionSchedulerRole,
+		groupHash:                g.activeEpoch.groupHash,
 	}
 }
 
@@ -233,7 +258,7 @@ func (g *Group) IsPeerAuthorized(peerID []byte) bool {
 
 	if index, ok := g.activeEpoch.peerIndex[string(peerID)]; ok {
 		// Currently we only accept messages from the committee leader.
-		return g.activeEpoch.committee.Members[index].Role == scheduler.Leader
+		return g.activeEpoch.transactionSchedulerCommittee.Members[index].Role == scheduler.Leader
 	}
 
 	return false
@@ -249,12 +274,12 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 
 		// Ensure that we are a worker as currently the only allowed communication
 		// is the leader sending batches to workers.
-		if g.activeEpoch == nil || g.activeEpoch.role != scheduler.Worker {
+		if g.activeEpoch == nil || g.activeEpoch.computeRole != scheduler.Worker {
 			return nil, errors.New("not worker")
 		}
 
 		index, ok := g.activeEpoch.peerIndex[string(peerID)]
-		if !ok || g.activeEpoch.committee.Members[index].Role != scheduler.Leader {
+		if !ok || g.activeEpoch.transactionSchedulerCommittee.Members[index].Role != scheduler.Leader {
 			// Currently we only accept messages from the committee leader.
 			return nil, errors.New("peer is not leader")
 		}
@@ -296,7 +321,7 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 	g.RLock()
 	defer g.RUnlock()
 
-	if g.activeEpoch == nil || g.activeEpoch.role != scheduler.Leader {
+	if g.activeEpoch == nil || g.activeEpoch.transactionSchedulerRole != scheduler.Leader {
 		return errors.New("not leader")
 	}
 
@@ -308,7 +333,7 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 	}
 
 	// Publish batch to all workers in the committee.
-	for index, member := range g.activeEpoch.committee.Members {
+	for index, member := range g.activeEpoch.computeCommittee.Members {
 		if member.Role != scheduler.Worker {
 			continue
 		}

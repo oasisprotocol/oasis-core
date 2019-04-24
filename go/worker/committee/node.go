@@ -299,7 +299,7 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsLeader() {
+	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		return ErrNotLeader
 	}
 
@@ -370,7 +370,7 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 	epoch := n.group.GetEpochSnapshot()
 
 	// Clear incoming queue if we are not a leader.
-	if !epoch.IsLeader() {
+	if !epoch.IsTransactionSchedulerLeader() {
 		n.incomingQueue.Clear()
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
@@ -558,7 +558,7 @@ func (n *Node) abortBatch(reason error) {
 	state.cancel()
 
 	// If we are a leader, put the batch back into the incoming queue.
-	if n.group.GetEpochSnapshot().IsLeader() {
+	if n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		if err := n.incomingQueue.AddBatch(state.batch); err != nil {
 			n.logger.Warn("failed to add batch back into the incoming queue",
 				"err", err,
@@ -741,7 +741,7 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}
 
 	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !n.group.GetEpochSnapshot().IsLeader() || n.currentBlock == nil {
+	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() || n.currentBlock == nil {
 		return
 	}
 
