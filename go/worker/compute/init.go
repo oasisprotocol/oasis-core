@@ -24,9 +24,11 @@ import (
 )
 
 const (
+	cfgWorkerEnabled = "worker.compute.enabled"
+
 	cfgWorkerBackend = "worker.compute.backend"
 
-	cfgWorkerBinary = "worker.compute.binary"
+	cfgWorkerRuntimeLoader = "worker.compute.runtime_loader"
 
 	cfgRuntimeBinary = "worker.compute.runtime.binary"
 	cfgRuntimeID     = "worker.compute.runtime.id"
@@ -75,7 +77,7 @@ func New(
 	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
-	workerBinary := viper.GetString(cfgWorkerBinary)
+	workerRuntimeLoader := viper.GetString(cfgWorkerRuntimeLoader)
 
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
@@ -126,20 +128,23 @@ func New(
 
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
-		WorkerBinary: workerBinary,
-		Runtimes:     runtimes,
+		WorkerRuntimeLoaderBinary: workerRuntimeLoader,
+		Runtimes:                  runtimes,
 	}
 
-	return newWorker(dataDir, identity, storage, roothash, registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
+	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
+		registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable compute worker process")
+
 		cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
 
-		cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
+		cmd.Flags().String(cfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
 
 		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
 		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
@@ -158,9 +163,11 @@ func RegisterFlags(cmd *cobra.Command) {
 	}
 
 	for _, v := range []string{
+		cfgWorkerEnabled,
+
 		cfgWorkerBackend,
 
-		cfgWorkerBinary,
+		cfgWorkerRuntimeLoader,
 
 		cfgRuntimeBinary,
 		cfgRuntimeID,

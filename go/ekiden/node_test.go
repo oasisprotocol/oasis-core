@@ -50,6 +50,7 @@ var (
 		{"staking.backend", "tendermint"},
 		{"staking.debug.genesis_state", stakingTests.InitialBalancesArg},
 		{"tendermint.consensus.skip_timeout_commit", true},
+		{"worker.compute.enabled", true},
 		{"worker.compute.backend", "mock"},
 		{"worker.compute.runtime.binary", "mock-runtime"},
 		{"worker.compute.runtime.id", testRuntimeID},

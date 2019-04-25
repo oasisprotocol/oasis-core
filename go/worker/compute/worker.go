@@ -42,12 +42,12 @@ type RuntimeConfig struct {
 	TEEHardware node.TEEHardware
 }
 
-// Config is the worker configuration.
+// Config is the compute worker configuration.
 type Config struct {
-	Backend      string
-	Committee    committee.Config
-	WorkerBinary string
-	Runtimes     []RuntimeConfig
+	Backend                   string
+	Committee                 committee.Config
+	WorkerRuntimeLoaderBinary string
+	Runtimes                  []RuntimeConfig
 }
 
 // Runtime is a single runtime.
@@ -63,7 +63,7 @@ func (r *Runtime) GetNode() *committee.Node {
 	return r.node
 }
 
-// Worker is a worker handling many runtimes.
+// Worker is a compute worker handling many runtimes.
 type Worker struct {
 	enabled         bool
 	cfg             Config
@@ -97,7 +97,7 @@ type Worker struct {
 	logger *logging.Logger
 }
 
-// getNodeRuntimes returns worker node runtimes.
+// getNodeRuntimes returns compute worker node runtimes.
 func (w *Worker) getNodeRuntimes() []*node.Runtime {
 	var nodeRuntimes []*node.Runtime
 
@@ -160,7 +160,7 @@ func (w *Worker) Start() error {
 		}
 	}
 
-	// Wait for all runtimes to be initialized and node to be registered.
+	// Wait for all runtimes to be initialized and for the node
 	// to be registered for the current epoch.
 	go func() {
 		for _, rt := range w.runtimes {
@@ -282,7 +282,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 	case host.BackendSandboxed:
 		h, err = host.NewSandboxedHost(
 			rtCfg.ID.String(),
-			cfg.WorkerBinary,
+			cfg.WorkerRuntimeLoaderBinary,
 			rtCfg.Binary,
 			proxies,
 			rtCfg.TEEHardware,
@@ -293,7 +293,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 	case host.BackendUnconfined:
 		h, err = host.NewSandboxedHost(
 			rtCfg.ID.String(),
-			cfg.WorkerBinary,
+			cfg.WorkerRuntimeLoaderBinary,
 			rtCfg.Binary,
 			proxies,
 			rtCfg.TEEHardware,
@@ -357,6 +357,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 
 func newWorker(
 	dataDir string,
+	enabled bool,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -370,11 +371,6 @@ func newWorker(
 	cfg Config,
 	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
-	enabled := false
-	if cfg.WorkerBinary != "" || cfg.Backend == host.BackendMock {
-		enabled = true
-	}
-
 	startedOk := false
 	socketDir := filepath.Join(dataDir, proxySocketDirName)
 	err := common.Mkdir(socketDir)
@@ -414,6 +410,13 @@ func newWorker(
 	}
 
 	if enabled {
+		if cfg.WorkerRuntimeLoaderBinary == "" && cfg.Backend != host.BackendMock {
+			return nil, fmt.Errorf("compute/worker: no runtime loader binary configured and backend not host.BackendMock")
+		}
+		if len(cfg.Runtimes) == 0 {
+			return nil, fmt.Errorf("compute/worker: no runtimes configured")
+		}
+
 		// Create client gRPC server.
 		grpc, err := grpc.NewServerTCP("worker-client", workerCommonCfg.ClientPort, identity.TLSCertificate)
 		if err != nil {
