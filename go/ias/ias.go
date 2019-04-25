@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
@@ -76,8 +77,8 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, non
 		// and such a report will not pass any verification so it can only be used with verification
 		// disabled (e.g., built with EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1).
 		avr = newMockAVR(quote, nonce)
-		sig = nil
-		chain = nil
+		sig = cbor.FixSliceForSerde(nil)
+		chain = cbor.FixSliceForSerde(nil)
 		return
 	}
 

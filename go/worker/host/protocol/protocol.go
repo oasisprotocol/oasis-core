@@ -165,7 +165,7 @@ func (p *Protocol) handleMessage(ctx context.Context, message *Message) {
 			ID:          message.ID,
 			MessageType: MessageResponse,
 			Body:        *body,
-			SpanContext: []byte{},
+			SpanContext: cbor.FixSliceForSerde(nil),
 		}
 
 		select {

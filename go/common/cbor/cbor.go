@@ -7,6 +7,15 @@ package cbor
 
 import "github.com/oasislabs/go-codec/codec"
 
+// FixSliceForSerde will convert `nil` to `[]byte` to work around serde
+// brain damage.
+func FixSliceForSerde(b []byte) []byte {
+	if b != nil {
+		return b
+	}
+	return []byte{}
+}
+
 // Handle is the CBOR codec Handle used to encode/decode CBOR blobs.
 var Handle codec.Handle
 

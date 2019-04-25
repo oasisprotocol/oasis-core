@@ -6,6 +6,7 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
@@ -37,11 +38,8 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 			if err != nil {
 				return nil, err
 			}
-			if res == nil {
-				res = []byte{}
-			}
 			return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
-				Response: res,
+				Response: cbor.FixSliceForSerde(res),
 			}}, nil
 		default:
 			return nil, errEndpointNotSupported
