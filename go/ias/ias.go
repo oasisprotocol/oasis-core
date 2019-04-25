@@ -138,6 +138,7 @@ func New(identity *identity.Identity) (*IAS, error) {
 	if proxyAddr == "" {
 		s.logger.Warn("IAS proxy is not configured, all reports will be mocked")
 
+		ias.SetSkipVerify() // Disable signature verification as well.
 		s.spidInfo = &ias.SPIDInfo{}
 		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {

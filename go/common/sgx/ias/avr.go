@@ -18,6 +18,8 @@ import (
 
 const nonceMaxLen = 32
 
+var unsafeSkipVerify bool
+
 // TimestampFormat is the format of the AVR timestamp, suitable for use with
 // time.Parse.
 //
@@ -308,8 +310,10 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 
 // DecodeAVR decodes and validates an Attestation Verification Report.
 func DecodeAVR(data, encodedSignature, encodedCertChain []byte, trustRoots *x509.CertPool, ts time.Time) (*AttestationVerificationReport, error) {
-	if err := validateAVRSignature(data, encodedSignature, encodedCertChain, trustRoots, ts); err != nil {
-		return nil, err
+	if !unsafeSkipVerify {
+		if err := validateAVRSignature(data, encodedSignature, encodedCertChain, trustRoots, ts); err != nil {
+			return nil, err
+		}
 	}
 
 	// Set the ISVEnclaveQuoteStatus to a sentinel value so that it is
@@ -374,6 +378,12 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trust
 	}
 
 	return nil
+}
+
+// SetSkipVerify will disable AVR signature verification for the remainder
+// of the process' lifetime.
+func SetSkipVerify() {
+	unsafeSkipVerify = true
 }
 
 func init() {
