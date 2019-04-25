@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 )
 
 const (
@@ -26,6 +27,8 @@ const (
 // Registration is a service handling worker node registration.
 type Registration struct {
 	sync.Mutex
+
+	workerCommonCfg *workerCommon.Config
 
 	epochtime     epochtime.Backend
 	registry      registry.Backend
@@ -130,6 +133,13 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 		"epoch", epoch,
 	)
 
+	addresses, err := r.workerCommonCfg.GetNodeAddresses()
+	if err != nil {
+		r.logger.Error("failed to register node: unable to get addresses",
+			"err", err,
+		)
+		return err
+	}
 	identityPublic := r.identity.NodeKey.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
@@ -139,6 +149,7 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 			DER: r.identity.TLSCertificate.Certificate[0],
 		},
 		RegistrationTime: uint64(time.Now().Unix()),
+		Addresses:        addresses,
 	}
 
 	r.Lock()
@@ -202,6 +213,7 @@ func New(
 	registry registry.Backend,
 	identity *identity.Identity,
 	syncable common.Syncable,
+	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {
 	ctx := context.Background()
 
@@ -212,16 +224,17 @@ func New(
 	}
 
 	r := &Registration{
-		epochtime:     epochtime,
-		registry:      registry,
-		identity:      identity,
-		entityPrivKey: entityPrivKey,
-		quitCh:        make(chan struct{}),
-		regCh:         make(chan struct{}),
-		ctx:           ctx,
-		logger:        logging.GetLogger("worker/registration"),
-		syncable:      syncable,
-		roleHooks:     []func(*node.Node) error{},
+		workerCommonCfg: workerCommonCfg,
+		epochtime:       epochtime,
+		registry:        registry,
+		identity:        identity,
+		entityPrivKey:   entityPrivKey,
+		quitCh:          make(chan struct{}),
+		regCh:           make(chan struct{}),
+		ctx:             ctx,
+		logger:          logging.GetLogger("worker/registration"),
+		syncable:        syncable,
+		roleHooks:       []func(*node.Node) error{},
 	}
 
 	return r, nil

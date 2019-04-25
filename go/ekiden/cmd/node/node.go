@@ -36,6 +36,7 @@ import (
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
@@ -146,6 +147,11 @@ func (n *Node) initAndStartWorkers() error {
 
 	var err error
 
+	workerCommonCfg, err := workerCommon.NewConfig()
+	if err != nil {
+		return err
+	}
+
 	// Initialize the worker registration.
 	n.WorkerRegistration, err = registration.New(
 		dataDir,
@@ -153,6 +159,7 @@ func (n *Node) initAndStartWorkers() error {
 		n.Registry,
 		n.Identity,
 		n.svcTmnt,
+		workerCommonCfg,
 	)
 	if err != nil {
 		return err
@@ -172,6 +179,7 @@ func (n *Node) initAndStartWorkers() error {
 		n.svcTmnt,
 		n.KeyManager,
 		n.WorkerRegistration,
+		workerCommonCfg,
 	)
 	if err != nil {
 		return err
@@ -432,6 +440,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		client.RegisterFlags,
 		compute.RegisterFlags,
 		registration.RegisterFlags,
+		workerCommon.RegisterFlags,
 	} {
 		v(cmd)
 	}

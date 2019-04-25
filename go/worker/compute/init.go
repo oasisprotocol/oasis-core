@@ -2,8 +2,6 @@ package compute
 
 import (
 	"fmt"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -20,6 +18,7 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
@@ -42,45 +41,8 @@ const (
 
 	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
 
-	// XXX: These should probably extracted ouf of the compute worker
-	// as these will be shared with other workers as well.
-	cfgClientPort      = "worker.client.port"
-	cfgClientAddresses = "worker.client.addresses"
-
-	cfgP2pPort      = "worker.p2p.port"
-	cfgP2pAddresses = "worker.p2p.addresses"
-
 	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
 )
-
-func parseAddressList(addresses []string) ([]node.Address, error) {
-	var output []node.Address
-	for _, rawAddress := range addresses {
-		rawIP, rawPort, err := net.SplitHostPort(rawAddress)
-		if err != nil {
-			return nil, fmt.Errorf("malformed address: %s", err)
-		}
-
-		port, err := strconv.ParseUint(rawPort, 10, 16)
-		if err != nil {
-			return nil, fmt.Errorf("malformed port: %s", rawPort)
-		}
-
-		ip := net.ParseIP(rawIP)
-		if ip == nil {
-			return nil, fmt.Errorf("malformed ip address: %s", rawIP)
-		}
-
-		var address node.Address
-		if err := address.FromIP(ip, uint16(port)); err != nil {
-			return nil, fmt.Errorf("unknown address family: %s", rawIP)
-		}
-
-		output = append(output, address)
-	}
-
-	return output, nil
-}
 
 func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	m := make(map[signature.MapKey]bool)
@@ -110,6 +72,7 @@ func New(
 	syncable common.Syncable,
 	keyManager *keymanager.KeyManager,
 	registration *registration.Registration,
+	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerBinary := viper.GetString(cfgWorkerBinary)
@@ -151,16 +114,6 @@ func New(
 	maxBatchSizeBytes := uint64(viper.GetSizeInBytes(cfgMaxBatchSizeBytes))
 	maxBatchTimeout := viper.GetDuration(cfgMaxBatchTimeout)
 
-	// Parse register address overrides.
-	clientAddresses, err := parseAddressList(viper.GetStringSlice(cfgClientAddresses))
-	if err != nil {
-		return nil, err
-	}
-	p2pAddresses, err := parseAddressList(viper.GetStringSlice(cfgP2pAddresses))
-	if err != nil {
-		return nil, err
-	}
-
 	cfg := Config{
 		Backend: backend,
 		Committee: committee.Config{
@@ -173,15 +126,11 @@ func New(
 
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
-		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
-		ClientAddresses: clientAddresses,
-		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
-		P2PAddresses:    p2pAddresses,
-		WorkerBinary:    workerBinary,
-		Runtimes:        runtimes,
+		WorkerBinary: workerBinary,
+		Runtimes:     runtimes,
 	}
 
-	return newWorker(dataDir, identity, storage, roothash, registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg)
+	return newWorker(dataDir, identity, storage, roothash, registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
@@ -205,12 +154,6 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
-		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
-		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-
-		cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
-		cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-
 		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
 	}
 
@@ -230,11 +173,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgMaxBatchTimeout,
 
 		cfgStorageCommitTimeout,
-
-		cfgClientPort,
-		cfgClientAddresses,
-
-		cfgP2pPort,
 
 		cfgByzantineInjectDiscrepancies,
 	} {

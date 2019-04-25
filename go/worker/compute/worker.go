@@ -22,6 +22,7 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
@@ -42,15 +43,11 @@ type RuntimeConfig struct {
 }
 
 // Config is the worker configuration.
-type Config struct { // nolint: maligned
-	Backend         string
-	Committee       committee.Config
-	ClientPort      uint16
-	ClientAddresses []node.Address
-	P2PPort         uint16
-	P2PAddresses    []node.Address
-	WorkerBinary    string
-	Runtimes        []RuntimeConfig
+type Config struct {
+	Backend      string
+	Committee    committee.Config
+	WorkerBinary string
+	Runtimes     []RuntimeConfig
 }
 
 // Runtime is a single runtime.
@@ -68,8 +65,9 @@ func (r *Runtime) GetNode() *committee.Node {
 
 // Worker is a worker handling many runtimes.
 type Worker struct {
-	enabled bool
-	cfg     Config
+	enabled         bool
+	cfg             Config
+	workerCommonCfg *workerCommon.Config
 
 	identity     *identity.Identity
 	storage      storage.Backend
@@ -120,31 +118,6 @@ func (w *Worker) getNodeRuntimes() []*node.Runtime {
 	}
 
 	return nodeRuntimes
-}
-
-// getNodeAddresses returns worker node addresses.
-func (w *Worker) getNodeAddresses() ([]node.Address, error) {
-	var addresses []node.Address
-
-	if len(w.cfg.ClientAddresses) > 0 {
-		addresses = w.cfg.ClientAddresses
-	} else {
-		// Use all non-loopback addresses of this node.
-		addrs, err := common.FindAllAddresses()
-		if err != nil {
-			w.logger.Error("failed to obtain addresses",
-				"err", err)
-			return nil, err
-		}
-		var address node.Address
-		for _, addr := range addrs {
-			if derr := address.FromIP(addr, w.cfg.ClientPort); derr != nil {
-				continue
-			}
-			addresses = append(addresses, address)
-		}
-	}
-	return addresses, nil
 }
 
 // Name returns the service name.
@@ -395,6 +368,7 @@ func newWorker(
 	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
 	cfg Config,
+	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	enabled := false
 	if cfg.WorkerBinary != "" || cfg.Backend == host.BackendMock {
@@ -416,31 +390,32 @@ func newWorker(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:      enabled,
-		cfg:          cfg,
-		identity:     identity,
-		storage:      storage,
-		roothash:     roothash,
-		registry:     registryInst,
-		epochtime:    epochtime,
-		scheduler:    scheduler,
-		syncable:     syncable,
-		ias:          ias,
-		registration: registration,
-		keyManager:   keyManager,
-		runtimes:     make(map[signature.MapKey]*Runtime),
-		netProxies:   make(map[string]NetworkProxy),
-		socketDir:    socketDir,
-		ctx:          ctx,
-		cancelCtx:    cancelCtx,
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/compute"),
+		enabled:         enabled,
+		cfg:             cfg,
+		workerCommonCfg: workerCommonCfg,
+		identity:        identity,
+		storage:         storage,
+		roothash:        roothash,
+		registry:        registryInst,
+		epochtime:       epochtime,
+		scheduler:       scheduler,
+		syncable:        syncable,
+		ias:             ias,
+		registration:    registration,
+		keyManager:      keyManager,
+		runtimes:        make(map[signature.MapKey]*Runtime),
+		netProxies:      make(map[string]NetworkProxy),
+		socketDir:       socketDir,
+		ctx:             ctx,
+		cancelCtx:       cancelCtx,
+		quitCh:          make(chan struct{}),
+		initCh:          make(chan struct{}),
+		logger:          logging.GetLogger("worker/compute"),
 	}
 
 	if enabled {
 		// Create client gRPC server.
-		grpc, err := grpc.NewServerTCP("worker-client", cfg.ClientPort, identity.TLSCertificate)
+		grpc, err := grpc.NewServerTCP("worker-client", workerCommonCfg.ClientPort, identity.TLSCertificate)
 		if err != nil {
 			return nil, err
 		}
@@ -448,7 +423,7 @@ func newWorker(
 		newClientGRPCServer(grpc.Server(), w)
 
 		// Create P2P node.
-		p2p, err := p2p.New(w.ctx, identity, cfg.P2PPort, cfg.P2PAddresses)
+		p2p, err := p2p.New(w.ctx, identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)
 		if err != nil {
 			return nil, err
 		}
@@ -497,16 +472,8 @@ func newWorker(
 
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
-			addresses, err := w.getNodeAddresses()
-			if err != nil {
-				w.logger.Error("failed to register node: unable to get addresses",
-					"err", err,
-				)
-				return err
-			}
-			// XXX: Addresses & P2P will be shared between different workers
+			// XXX: P2P will (probably?) be shared between different workers
 			// so should probably be set elsewhere in future.
-			n.Addresses = append(n.Addresses, addresses...)
 			n.P2P = w.p2p.Info()
 
 			n.AddRoles(node.ComputeWorker)
