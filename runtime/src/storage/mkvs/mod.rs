@@ -26,7 +26,7 @@ pub trait MKVS: Send + Sync {
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(&mut self) -> Fallible<Hash>;
+    fn commit(&mut self) -> Fallible<(urkel::WriteLog, Hash)>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);

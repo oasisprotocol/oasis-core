@@ -12,6 +12,7 @@ use crate::{
         roothash::Block,
         sgx::avr::AVR,
     },
+    storage::mkvs::urkel::WriteLog,
     transaction::types::TxnBatch,
 };
 
@@ -75,6 +76,8 @@ pub struct ComputedBatch {
     pub outputs: TxnBatch,
     /// Batch of storage inserts.
     pub storage_inserts: Vec<(ByteBuf, u64)>,
+    /// Log of changes to the storage tree.
+    pub storage_log: WriteLog,
     /// New state root hash.
     pub new_state_root: Hash,
     /// Runtime-specific indexable tags.
@@ -125,6 +128,7 @@ pub enum Body {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
         storage_inserts: Vec<(ByteBuf, u64)>,
+        storage_log: WriteLog,
         new_state_root: Hash,
     },
     WorkerCheckTxBatchRequest {
@@ -164,6 +168,30 @@ pub enum Body {
     },
     HostStorageGetBatchResponse {
         values: Vec<Option<ByteBuf>>,
+    },
+    HostStorageSyncGetSubtreeRequest {
+        root_hash: Hash,
+        node_path: Hash,
+        node_depth: u8,
+        max_depth: u8,
+    },
+    HostStorageSyncGetPathRequest {
+        root_hash: Hash,
+        key: Hash,
+        start_depth: u8,
+    },
+    HostStorageSyncGetNodeRequest {
+        root_hash: Hash,
+        node_path: Hash,
+        node_depth: u8,
+    },
+    HostStorageSyncGetValueRequest {
+        root_hash: Hash,
+        value_id: Hash,
+    },
+    HostStorageSyncSerializedResponse {
+        #[serde(with = "serde_bytes")]
+        serialized: Vec<u8>,
     },
     HostLocalStorageGetRequest {
         #[serde(with = "serde_bytes")]

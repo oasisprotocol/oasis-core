@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ekiden_runtime::{
     common::{crypto::hash::Hash, roothash::Block},
-    storage::{mkvs::CASPatriciaTrie, CAS, MKVS},
+    storage::{mkvs::{CASPatriciaTrie, urkel::WriteLog}, CAS, MKVS},
     transaction::types::{TxnCall, TxnOutput},
 };
 use failure::{Fallible, ResultExt};
@@ -110,7 +110,7 @@ impl MKVS for BlockSnapshot {
         unimplemented!("block snapshot is read-only");
     }
 
-    fn commit(&mut self) -> Fallible<Hash> {
+    fn commit(&mut self) -> Fallible<(WriteLog, Hash)> {
         unimplemented!("block snapshot is read-only");
     }
 

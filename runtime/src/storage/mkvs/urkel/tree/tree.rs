@@ -2,6 +2,8 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use failure::Fallible;
 
+use serde_derive::{Deserialize, Serialize};
+
 use crate::{
     common::crypto::hash::Hash,
     storage::mkvs::urkel::{cache::*, sync::*, tree::*},
@@ -21,7 +23,7 @@ pub enum LogEntryKind {
 }
 
 /// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct LogEntry {
     /// The key that was inserted or deleted.
     pub key: Vec<u8>,

@@ -179,7 +179,7 @@ impl Dispatcher {
                                     });
                                 let response = RpcMessage::Response(response);
 
-                                let new_state_root =
+                                let (storage_log, new_state_root) =
                                     mkvs.commit().expect("mkvs commit must succeed");
 
                                 debug!(self.logger, "RPC call dispatch complete"; "new_state_root" => ?new_state_root);
@@ -191,6 +191,7 @@ impl Dispatcher {
                                         protocol_response = Body::WorkerRPCCallResponse {
                                             response: buffer,
                                             storage_inserts: cas.take_inserts(),
+                                            storage_log: storage_log,
                                             new_state_root,
                                         };
                                     }
@@ -211,6 +212,7 @@ impl Dispatcher {
                                         protocol_response = Body::WorkerRPCCallResponse {
                                             response: buffer,
                                             storage_inserts: vec![],
+                                            storage_log: vec![],
                                             new_state_root: state_root,
                                         };
                                     }
@@ -234,6 +236,7 @@ impl Dispatcher {
                         protocol_response = Body::WorkerRPCCallResponse {
                             response: buffer,
                             storage_inserts: vec![],
+                            storage_log: vec![],
                             new_state_root: state_root,
                         };
                     }
@@ -257,7 +260,7 @@ impl Dispatcher {
                         txn_dispatcher.dispatch_batch(&calls, txn_ctx)
                     });
 
-                    let new_state_root = mkvs.commit().expect("mkvs commit must succeed");
+                    let (storage_log, new_state_root) = mkvs.commit().expect("mkvs commit must succeed");
                     txn_dispatcher.finalize(new_state_root);
 
                     debug!(self.logger, "Transaction batch dispatch complete"; "new_state_root" => ?new_state_root);
@@ -285,6 +288,7 @@ impl Dispatcher {
                     let result = ComputedBatch {
                         outputs,
                         storage_inserts: cas.take_inserts(),
+                        storage_log: storage_log,
                         new_state_root,
                         tags,
                         rak_sig,

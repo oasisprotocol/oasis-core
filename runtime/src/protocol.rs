@@ -33,7 +33,7 @@ pub type Stream = ::std::net::TcpStream;
 const MAX_MESSAGE_SIZE: usize = 104_857_600; // 100MB
 
 #[derive(Debug, Fail)]
-enum ProtocolError {
+pub enum ProtocolError {
     #[fail(display = "message too large")]
     MessageTooLarge,
     #[fail(display = "method not supported")]
