@@ -58,4 +58,13 @@ func testSubmitTransaction(
 	// Check if everything is in order.
 	require.NoError(t, err, "SubmitTx")
 	require.EqualValues(t, testInput, testOutput)
+
+	// We need to wait for the indexer to index the tags. We could have a channel
+	// to subscribe to these updates and this would not be needed.
+	time.Sleep(1 * time.Second)
+
+	// Check that indexer has indexed keys (check the mock worker for key/values).
+	blk, err := client.QueryBlock(ctx, runtimeID, []byte("foo"), []byte("bar"))
+	require.NoError(t, err, "QueryBlock")
+	require.EqualValues(t, 2, blk.Header.Round)
 }

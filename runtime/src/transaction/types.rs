@@ -3,7 +3,7 @@ use serde_cbor::Value;
 use serde_derive::{Deserialize, Serialize};
 
 /// Transaction call.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxnCall {
     /// Method name.
     pub method: String,
@@ -12,7 +12,7 @@ pub struct TxnCall {
 }
 
 /// Transaction call output.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TxnOutput {
     /// Call invoked successfully.
     Success(Value),

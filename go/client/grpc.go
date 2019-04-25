@@ -101,6 +101,39 @@ func (s *grpcServer) GetBlock(ctx context.Context, req *pbClient.GetBlockRequest
 	}, nil
 }
 
+func (s *grpcServer) QueryBlock(ctx context.Context, req *pbClient.QueryBlockRequest) (*pbClient.QueryBlockResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	blk, err := s.client.QueryBlock(ctx, id, req.GetKey(), req.GetValue())
+	if err != nil {
+		return nil, err
+	}
+	return &pbClient.QueryBlockResponse{
+		Block: blk.MarshalCBOR(),
+	}, nil
+}
+
+func (s *grpcServer) QueryTxn(ctx context.Context, req *pbClient.QueryTxnRequest) (*pbClient.QueryTxnResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	blk, txnIdx, input, output, err := s.client.QueryTxn(ctx, id, req.GetKey(), req.GetValue())
+	if err != nil {
+		return nil, err
+	}
+	return &pbClient.QueryTxnResponse{
+		Block:    blk.MarshalCBOR(),
+		TxnIndex: txnIdx,
+		Input:    input,
+		Output:   output,
+	}, nil
+}
+
 func (s *grpcServer) CallEnclave(ctx context.Context, req *pbEnRPC.CallEnclaveRequest) (*pbEnRPC.CallEnclaveResponse, error) {
 	rsp, err := s.client.CallEnclave(ctx, req.Endpoint, req.Payload)
 	if err != nil {

@@ -128,6 +128,8 @@ type ComputedBatch struct {
 	StorageInserts []storage.Value `codec:"storage_inserts"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
+	// Tags are runtime-specific indexable tags.
+	Tags []runtime.Tag `codec:"tags"`
 	// If this runtime uses a TEE, then this is the signature of the batch's
 	// BatchSigMessage with the node's RAK for this runtime.
 	RakSig signature.RawSignature `codec:"rak_sig"`

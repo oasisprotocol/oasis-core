@@ -3,7 +3,6 @@ package block
 import (
 	"bytes"
 	"encoding"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"math"
@@ -107,6 +106,9 @@ type Header struct { // nolint: maligned
 	// OutputHash is the output hash.
 	OutputHash hash.Hash `codec:"output_hash"`
 
+	// TagHash is the tag hash.
+	TagHash hash.Hash `codec:"tag_hash"`
+
 	// StateRoot is the state root hash.
 	StateRoot hash.Hash `codec:"state_root"`
 
@@ -150,21 +152,7 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.Namespace.UnmarshalBinary(pb.GetNamespace()); err != nil {
 		return err
 	}
-	if legacyRound := pb.GetRoundLegacy(); legacyRound != nil {
-		// TODO: Only needed for migration, remove once everything is migrated.
-		const LegacyRoundSize = 8
-		r := make([]byte, LegacyRoundSize)
-
-		if len(legacyRound) > LegacyRoundSize {
-			return errors.New("roothash: malformed legacy round")
-		} else if len(legacyRound) > 0 {
-			copy(r[LegacyRoundSize-len(legacyRound):], legacyRound)
-		}
-
-		h.Round = binary.BigEndian.Uint64(r)
-	} else {
-		h.Round = pb.GetRound()
-	}
+	h.Round = pb.GetRound()
 	h.Timestamp = pb.GetTimestamp()
 	h.HeaderType = HeaderType(pb.GetHeaderType())
 	if err := h.PreviousHash.UnmarshalBinary(pb.GetPreviousHash()); err != nil {
@@ -177,6 +165,9 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 		return err
 	}
 	if err := h.OutputHash.UnmarshalBinary(pb.GetOutputHash()); err != nil {
+		return err
+	}
+	if err := h.TagHash.UnmarshalBinary(pb.GetTagHash()); err != nil {
 		return err
 	}
 	if err := h.StateRoot.UnmarshalBinary(pb.GetStateRoot()); err != nil {
@@ -207,6 +198,7 @@ func (h *Header) ToProto() *pbRoothash.Header {
 	pb.GroupHash, _ = h.GroupHash.MarshalBinary()
 	pb.InputHash, _ = h.InputHash.MarshalBinary()
 	pb.OutputHash, _ = h.OutputHash.MarshalBinary()
+	pb.TagHash, _ = h.TagHash.MarshalBinary()
 	pb.StateRoot, _ = h.StateRoot.MarshalBinary()
 	pb.CommitmentsHash, _ = h.CommitmentsHash.MarshalBinary()
 	pb.StorageReceipt = cbor.Marshal(&h.StorageReceipt)
@@ -236,11 +228,12 @@ func (h *Header) EncodedHash() hash.Hash {
 // KeysForStorageReceipt gets the storage keys required to request a
 // storage receipt.
 func (h *Header) KeysForStorageReceipt() []storage.Key {
-	keys := make([]storage.Key, 0, 3)
+	keys := make([]storage.Key, 0, 4)
 
 	for _, h := range []hash.Hash{
 		h.InputHash,
 		h.OutputHash,
+		h.TagHash,
 		h.StateRoot,
 	} {
 		if h.IsEmpty() {
@@ -293,6 +286,8 @@ func (h *Header) VerifyStorageReceipt(receipt *storage.Receipt) error {
 // ReducedHeader is a subset of Header that is available in the runtime.
 // Keep this in sync with /runtime/src/common/roothash.rs.
 type ReducedHeader struct {
+	// Round is the block round.
+	Round uint64 `codec:"round"`
 	// Timestamp is the block timestamp (POSIX time).
 	Timestamp uint64 `codec:"timestamp"`
 	// StateRoot is the state root hash.
@@ -301,6 +296,7 @@ type ReducedHeader struct {
 
 // FromFull puts together a ReducedHeader from a full Header.
 func (rh *ReducedHeader) FromFull(header *Header) {
+	rh.Round = header.Round
 	rh.Timestamp = header.Timestamp
 	rh.StateRoot = header.StateRoot
 }
@@ -310,5 +306,6 @@ type BatchSigMessage struct {
 	PreviousBlock ReducedBlock `codec:"previous_block"`
 	InputHash     hash.Hash    `codec:"input_hash"`
 	OutputHash    hash.Hash    `codec:"output_hash"`
+	TagsHash      hash.Hash    `codec:"tags_hash"`
 	StateRoot     hash.Hash    `codec:"state_root"`
 }

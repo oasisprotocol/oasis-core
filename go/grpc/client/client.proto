@@ -14,6 +14,10 @@ service Runtime {
     rpc WatchBlocks (WatchBlocksRequest) returns (stream WatchBlocksResponse) {}
     // Get roothash block at specific round.
     rpc GetBlock (GetBlockRequest) returns (GetBlockResponse) {}
+    // Query the block index of a given runtime.
+    rpc QueryBlock(QueryBlockRequest) returns (QueryBlockResponse) {}
+    // Query the transaction index of a given runtime.
+    rpc QueryTxn(QueryTxnRequest) returns (QueryTxnResponse) {}
 }
 
 message SubmitTxRequest {
@@ -58,4 +62,38 @@ message GetBlockRequest {
 message GetBlockResponse {
     // A CBOR-serialized block.
     bytes block = 1;
+}
+
+message QueryBlockRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+    // Tag key.
+    bytes key = 2;
+    // Tag value.
+    bytes value = 3;
+}
+
+message QueryBlockResponse {
+    // A CBOR-serialized block.
+    bytes block = 1;
+}
+
+message QueryTxnRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+    // Tag key.
+    bytes key = 2;
+    // Tag value.
+    bytes value = 3;
+}
+
+message QueryTxnResponse {
+    // A CBOR-serialized block.
+    bytes block = 1;
+    // Transaction index.
+    uint32 txn_index = 2;
+    // Transaction input.
+    bytes input = 3;
+    // Transaction output.
+    bytes output = 4;
 }

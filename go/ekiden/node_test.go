@@ -53,6 +53,7 @@ var (
 		{"worker.backend", "mock"},
 		{"worker.runtime.binary", "mock-runtime"},
 		{"worker.runtime.id", testRuntimeID},
+		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 
 	testRuntime = &registry.Runtime{

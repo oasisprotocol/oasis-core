@@ -19,7 +19,7 @@ message Nonce {
 message Header {
   uint32 version = 1;
   bytes namespace = 2;
-  bytes round_legacy = 3;
+  // Legacy round was here with id 3.
   uint64 timestamp = 4;
   uint32 header_type = 5;
   bytes previous_hash = 6;
@@ -32,6 +32,7 @@ message Header {
   bytes storage_receipt = 12;
 
   uint64 round = 13;
+  bytes tag_hash = 14;
 }
 
 message LatestBlockRequest {
