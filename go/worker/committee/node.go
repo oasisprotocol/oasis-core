@@ -740,8 +740,9 @@ func (n *Node) checkIncomingQueue(force bool) {
 		return
 	}
 
+	epochSnapshot := n.group.GetEpochSnapshot()
 	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() || n.currentBlock == nil {
+	if !epochSnapshot.IsTransactionSchedulerLeader() || n.currentBlock == nil {
 		return
 	}
 
@@ -803,8 +804,10 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}
 	spanPublish.Finish()
 
-	// Start processing the batch locally.
-	n.startProcessingBatch(batch)
+	if epochSnapshot.IsLeader() || epochSnapshot.IsWorker() {
+		// Start processing the batch locally.
+		n.startProcessingBatch(batch)
+	}
 
 	processOk = true
 }
@@ -817,8 +820,8 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 
 	epoch := n.group.GetEpochSnapshot()
 
-	// We can only receive external batches if we are a worker or a backup worker.
-	if !epoch.IsWorker() && !epoch.IsBackupWorker() {
+	// We can only receive external batches if we are a leader, a worker, or a backup worker.
+	if !epoch.IsLeader() && !epoch.IsWorker() && !epoch.IsBackupWorker() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
 	}

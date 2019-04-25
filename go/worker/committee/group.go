@@ -1,6 +1,7 @@
 package committee
 
 import (
+	"bytes"
 	"context"
 	"sync"
 
@@ -44,7 +45,7 @@ type epoch struct {
 	transactionSchedulerCommittee *scheduler.Committee
 	nodes                         []*node.Node
 	groupHash                     hash.Hash
-	peerIndex                     map[string]int
+	leaderPeerID                  []byte
 
 	computeRole              scheduler.Role
 	transactionSchedulerRole scheduler.Role
@@ -189,8 +190,7 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 	// Determine our role in the compute committee.
 	var nodes []*node.Node
 	var computeRole scheduler.Role
-	peerIndex := make(map[string]int)
-	for index, node := range computeCommittee.Members {
+	for _, node := range computeCommittee.Members {
 		if node.PublicKey.Equal(publicIdentity) {
 			computeRole = node.Role
 			// Use nil for our own node to not break indices.
@@ -203,16 +203,22 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 			}
 
 			nodes = append(nodes, n)
-			peerIndex[string(n.P2P.ID)] = index
 		}
 	}
 
 	// Determine our role in the transaction scheduler committee.
 	var transactionSchedulerRole scheduler.Role
+	var leaderPeerID []byte
 	for _, node := range transactionSchedulerCommittee.Members {
 		if node.PublicKey.Equal(publicIdentity) {
 			transactionSchedulerRole = node.Role
-			break
+		} else if node.Role == scheduler.Leader {
+			// Fetch peer node information from the registry.
+			n, err := g.registry.GetNode(ctx, node.PublicKey)
+			if err != nil {
+				return errors.Wrap(err, "failed to fetch node info")
+			}
+			leaderPeerID = n.P2P.ID
 		}
 	}
 
@@ -220,7 +226,7 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 	roundCtx, cancel := context.WithCancel(ctx)
 
 	// Update the current epoch.
-	g.activeEpoch = &epoch{roundCtx, cancel, computeCommittee, transactionSchedulerCommittee, nodes, groupHash, peerIndex, computeRole, transactionSchedulerRole}
+	g.activeEpoch = &epoch{roundCtx, cancel, computeCommittee, transactionSchedulerCommittee, nodes, groupHash, leaderPeerID, computeRole, transactionSchedulerRole}
 
 	g.logger.Info("epoch transition complete",
 		"computeRole", computeRole,
@@ -256,12 +262,8 @@ func (g *Group) IsPeerAuthorized(peerID []byte) bool {
 		return false
 	}
 
-	if index, ok := g.activeEpoch.peerIndex[string(peerID)]; ok {
-		// Currently we only accept messages from the committee leader.
-		return g.activeEpoch.transactionSchedulerCommittee.Members[index].Role == scheduler.Leader
-	}
-
-	return false
+	// Currently we only accept messages from the committee leader.
+	return g.activeEpoch.leaderPeerID != nil && bytes.Equal(peerID, g.activeEpoch.leaderPeerID)
 }
 
 // HandlePeerMessage handles an incoming message from a peer.
@@ -274,14 +276,13 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 
 		// Ensure that we are a worker as currently the only allowed communication
 		// is the leader sending batches to workers.
-		if g.activeEpoch == nil || g.activeEpoch.computeRole != scheduler.Worker {
-			return nil, errors.New("not worker")
+		if g.activeEpoch == nil || g.activeEpoch.computeRole != scheduler.Leader && g.activeEpoch.computeRole != scheduler.Worker {
+			return nil, errors.New("not compute leader or worker")
 		}
 
-		index, ok := g.activeEpoch.peerIndex[string(peerID)]
-		if !ok || g.activeEpoch.transactionSchedulerCommittee.Members[index].Role != scheduler.Leader {
+		if g.activeEpoch.leaderPeerID == nil || !bytes.Equal(peerID, g.activeEpoch.leaderPeerID) {
 			// Currently we only accept messages from the committee leader.
-			return nil, errors.New("peer is not leader")
+			return nil, errors.New("peer is not transaction scheduler leader")
 		}
 
 		// Ensure that both peers have the same view of the current group. If this
@@ -333,8 +334,14 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 	}
 
 	// Publish batch to all workers in the committee.
+	publicIdentity := g.identity.NodeKey.Public()
 	for index, member := range g.activeEpoch.computeCommittee.Members {
-		if member.Role != scheduler.Worker {
+		if member.Role != scheduler.Leader && member.Role != scheduler.Worker {
+			continue
+		}
+		if member.PublicKey.Equal(publicIdentity) {
+			// Skip self, because we don't keep our own P2P address and because
+			// we'll start it locally after this.
 			continue
 		}
 
