@@ -101,6 +101,7 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 		batchSigMessage := block.BatchSigMessage{
 			InputHash:  header.InputHash,
 			OutputHash: header.OutputHash,
+			TagsHash:   header.TagHash,
 			StateRoot:  header.StateRoot,
 		}
 		batchSigMessage.PreviousBlock.FromFull(r.roundState.currentBlock)
