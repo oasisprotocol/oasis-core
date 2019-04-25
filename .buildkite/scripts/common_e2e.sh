@@ -116,7 +116,7 @@ run_backend_tendermint_committee() {
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001
 
-    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
+    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" && "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]]; then
         # TODO: Ensure that IAS credentials are configured.
         ${EKIDEN_NODE} \
             ias proxy \
@@ -128,6 +128,8 @@ run_backend_tendermint_committee() {
             --log.level debug \
             --log.file ${committee_dir}/ias-proxy.log \
             &
+
+        EKIDEN_IAS_PROXY_ENABLED=1
     fi
 
     # Export some variables so compute workers can find them.
@@ -246,7 +248,7 @@ run_compute_node() {
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
-        ${EKIDEN_TEE_HARDWARE:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         --keymanager.client.address 127.0.0.1:9003 \
         --keymanager.client.certificate ${EKIDEN_COMMITTEE_DIR}/key-manager/tls_identity_cert.pem \
         --worker.backend sandboxed \
@@ -336,7 +338,7 @@ run_keymanager_node() {
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
-        ${EKIDEN_TEE_HARDWARE:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         ${EKIDEN_TEE_HARDWARE:+--keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
         --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \

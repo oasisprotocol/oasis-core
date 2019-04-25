@@ -180,7 +180,7 @@ In order to run under SGX there are some additional prerequisites:
   be automatically started on boot):
   ```
   docker run \
-    --detach
+    --detach \
     --restart always \
     --device /dev/isgx \
     --volume /var/run/aesmd:/var/run/aesmd \
