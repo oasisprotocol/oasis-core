@@ -3,7 +3,6 @@ package block
 import (
 	"bytes"
 	"encoding"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"math"
@@ -153,21 +152,7 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.Namespace.UnmarshalBinary(pb.GetNamespace()); err != nil {
 		return err
 	}
-	if legacyRound := pb.GetRoundLegacy(); legacyRound != nil {
-		// TODO: Only needed for migration, remove once everything is migrated.
-		const LegacyRoundSize = 8
-		r := make([]byte, LegacyRoundSize)
-
-		if len(legacyRound) > LegacyRoundSize {
-			return errors.New("roothash: malformed legacy round")
-		} else if len(legacyRound) > 0 {
-			copy(r[LegacyRoundSize-len(legacyRound):], legacyRound)
-		}
-
-		h.Round = binary.BigEndian.Uint64(r)
-	} else {
-		h.Round = pb.GetRound()
-	}
+	h.Round = pb.GetRound()
 	h.Timestamp = pb.GetTimestamp()
 	h.HeaderType = HeaderType(pb.GetHeaderType())
 	if err := h.PreviousHash.UnmarshalBinary(pb.GetPreviousHash()); err != nil {
