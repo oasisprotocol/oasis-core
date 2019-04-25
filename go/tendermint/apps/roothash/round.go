@@ -107,6 +107,7 @@ func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commit
 		batchSigMessage := block.BatchSigMessage{
 			InputHash:  header.InputHash,
 			OutputHash: header.OutputHash,
+			TagsHash:   header.TagHash,
 			StateRoot:  header.StateRoot,
 		}
 		batchSigMessage.PreviousBlock.FromFull(r.RoundState.CurrentBlock)

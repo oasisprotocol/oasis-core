@@ -302,6 +302,8 @@ func (rh *ReducedHeader) FromFull(header *Header) {
 }
 
 // BatchSigMessage is batch attestation parameters.
+//
+// Keep the roothash RAK validation in sync with changes to this structure.
 type BatchSigMessage struct {
 	PreviousBlock ReducedBlock `codec:"previous_block"`
 	InputHash     hash.Hash    `codec:"input_hash"`

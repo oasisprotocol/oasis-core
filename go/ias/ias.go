@@ -3,16 +3,16 @@ package ias
 
 import (
 	"context"
-	"encoding/base64"
-	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	iasGrpc "github.com/oasislabs/ekiden/go/grpc/ias"
@@ -21,6 +21,24 @@ import (
 const (
 	cfgProxyAddress = "ias.proxy_addr"
 )
+
+type mockAVR struct {
+	Timestamp             string `codec:"timestamp"`
+	ISVEnclaveQuoteStatus string `codec:"isvEnclaveQuoteStatus"`
+	ISVEnclaveQuoteBody   []byte `codec:"isvEnclaveQuoteBody"`
+	Nonce                 string `codec:"nonce,omitempty"`
+}
+
+func newMockAVR(quote []byte, nonce string) []byte {
+	avr := &mockAVR{
+		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
+		ISVEnclaveQuoteStatus: "OK",
+		ISVEnclaveQuoteBody:   quote[:ias.QuoteLen],
+		Nonce:                 nonce,
+	}
+
+	return json.Marshal(avr)
+}
 
 // IAS is an IAS proxy client.
 type IAS struct {
@@ -54,25 +72,21 @@ func (s *IAS) GetQuoteSignatureType(ctx context.Context) (*ias.SignatureType, er
 }
 
 // VerifyEvidence verifies attestation evidence.
-func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte) (avr, sig, chain []byte, err error) {
+func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
 	if s.client == nil {
 		// Generate mock AVR when IAS is not configured. Signature and certificate chain are empty
 		// and such a report will not pass any verification so it can only be used with verification
 		// disabled (e.g., built with EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1).
-		avr = []byte(
-			fmt.Sprintf(
-				"{\"isvEnclaveQuoteStatus\": \"OK\", \"isvEnclaveQuoteBody\": \"%s\"}",
-				base64.StdEncoding.EncodeToString(quote),
-			),
-		)
-		sig = nil
-		chain = nil
+		avr = newMockAVR(quote, nonce)
+		sig = cbor.FixSliceForSerde(nil)
+		chain = cbor.FixSliceForSerde(nil)
 		return
 	}
 
 	evidence := ias.Evidence{
 		Quote:       quote,
 		PSEManifest: pseManifest,
+		Nonce:       nonce,
 	}
 	se, err := signature.SignSigned(*s.identity.NodeKey, ias.EvidenceSignatureContext, &evidence)
 	if err != nil {
@@ -124,6 +138,7 @@ func New(identity *identity.Identity) (*IAS, error) {
 	if proxyAddr == "" {
 		s.logger.Warn("IAS proxy is not configured, all reports will be mocked")
 
+		ias.SetSkipVerify() // Disable signature verification as well.
 		s.spidInfo = &ias.SPIDInfo{}
 		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {

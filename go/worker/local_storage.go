@@ -7,6 +7,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 )
@@ -45,11 +46,7 @@ func (s *localStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
 		return nil, txErr
 	}
 
-	if value == nil {
-		value = []byte{} // serde_cbor will get mad without this.
-	}
-
-	return value, nil
+	return cbor.FixSliceForSerde(value), nil
 }
 
 func (s *localStorage) Set(id signature.PublicKey, key, value []byte) error {

@@ -35,6 +35,8 @@ enum AVRError {
     MissingQuoteStatus,
     #[fail(display = "AVR did not contain quote body")]
     MissingQuoteBody,
+    #[fail(display = "AVR did not contain nonce")]
+    MissingNonce,
     #[fail(display = "failed to parse quote")]
     MalformedQuote,
     #[fail(display = "unable to find any certificates")]
@@ -202,6 +204,7 @@ pub struct AuthenticatedAVR {
     pub report_data: Vec<u8>,
     // TODO: add other av report/quote body/report fields we want to give the consumer
     pub mr_enclave: MrEnclave,
+    pub nonce: String,
 }
 
 /// Verify attestation report.
@@ -269,6 +272,13 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
         }
     };
 
+    let nonce = match avr_body["nonce"].as_str() {
+        Some(nonce) => nonce,
+        None => {
+            return Err(AVRError::MissingNonce.into());
+        }
+    };
+
     let quote_body = match avr_body["isvEnclaveQuoteBody"].as_str() {
         Some(quote_body) => quote_body,
         None => {
@@ -292,6 +302,7 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
     Ok(AuthenticatedAVR {
         report_data: quote_body.report_body.report_data,
         mr_enclave: quote_body.report_body.mr_enclave,
+        nonce: nonce.to_string(),
     })
 }
 

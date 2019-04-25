@@ -233,7 +233,7 @@ impl Protocol {
             Body::WorkerCapabilityTEERakReportRequest { target_info } => {
                 // Initialize the runtime attestation key.
                 info!(self.logger, "Initializing the runtime attestation key");
-                let (rak_pub, report) = self.rak.init(target_info);
+                let (rak_pub, report, nonce) = self.rak.init(target_info);
 
                 let report: &[u8] = report.as_ref();
                 let report = report.to_vec();
@@ -241,6 +241,7 @@ impl Protocol {
                 Ok(Some(Body::WorkerCapabilityTEERakReportResponse {
                     rak_pub,
                     report,
+                    nonce,
                 }))
             }
             #[cfg(target_env = "sgx")]

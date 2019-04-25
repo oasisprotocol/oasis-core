@@ -95,6 +95,7 @@ type WorkerCapabilityTEERakReportRequest struct {
 type WorkerCapabilityTEERakReportResponse struct {
 	RakPub signature.PublicKey `codec:"rak_pub"`
 	Report []byte              `codec:"report"`
+	Nonce  string              `codec:"nonce"`
 }
 
 // WorkerCapabilityTEERakAvrRequest is a worker RFC 0009 CapabilityTEE RAK AVR setup request message body.

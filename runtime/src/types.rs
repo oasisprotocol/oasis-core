@@ -106,6 +106,7 @@ pub enum Body {
         rak_pub: PublicKey,
         #[serde(with = "serde_bytes")]
         report: Vec<u8>,
+        nonce: String,
     },
     WorkerCapabilityTEERakAvrRequest {
         avr: AVR,

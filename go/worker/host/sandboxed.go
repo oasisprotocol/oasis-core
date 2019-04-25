@@ -379,6 +379,7 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 	}
 	rakPub := rakQuoteRes.WorkerCapabilityTEERakReportResponse.RakPub
 	report := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Report
+	nonce := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Nonce
 
 	quote, err := h.aesm.GetQuote(
 		ctx,
@@ -392,7 +393,7 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 		return nil, errors.Wrap(err, "worker: error while getting quote")
 	}
 
-	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil)
+	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil, nonce)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
 	}

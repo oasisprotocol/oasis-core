@@ -46,6 +46,7 @@ func (s *SignedEvidence) UnmarshalCBOR(data []byte) error {
 type Evidence struct {
 	Quote       []byte `codec:"quote"`
 	PSEManifest []byte `codec:"pse_manifest"`
+	Nonce       string `codec:"nonce"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -78,8 +79,7 @@ func (s *grpcServer) VerifyEvidence(ctx context.Context, req *pb.VerifyEvidenceR
 	//  * ev.Quote MUST be well-formed and for an approved MRENCLAVE.
 	//  * (Possibly other validation things here.)
 
-	// XXX: Do something with the nonce?
-	avr, sig, certChain, err := s.endpoint.VerifyEvidence(ctx, ev.Quote, ev.PSEManifest, "")
+	avr, sig, certChain, err := s.endpoint.VerifyEvidence(ctx, ev.Quote, ev.PSEManifest, ev.Nonce)
 	if err != nil {
 		return nil, err
 	}
