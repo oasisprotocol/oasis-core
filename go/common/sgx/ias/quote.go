@@ -6,7 +6,9 @@ import (
 )
 
 const (
-	quoteLen     = 432
+	// QuoteLen is the length of a quote in bytes, without the signature.
+	QuoteLen = 432
+
 	quoteBodyLen = 48
 )
 
@@ -88,10 +90,10 @@ type Quote struct {
 func DecodeQuote(data []byte) (*Quote, error) {
 	// Signature length is variable, and also more importantly, missing
 	// in the AVR.
-	if len(data) < quoteLen {
+	if len(data) < QuoteLen {
 		return nil, fmt.Errorf("ias/quote: invalid quote body length")
 	}
-	data = data[:quoteLen] // Clip off the signature (Do we need this?).
+	data = data[:QuoteLen] // Clip off the signature (Do we need this?).
 
 	var q Quote
 	if err := q.Body.decode(data[:quoteBodyLen]); err != nil {

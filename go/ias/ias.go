@@ -3,7 +3,6 @@ package ias
 
 import (
 	"context"
-	"encoding/base64"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -24,15 +23,17 @@ const (
 )
 
 type mockAVR struct {
+	Timestamp             string `codec:"timestamp"`
 	ISVEnclaveQuoteStatus string `codec:"isvEnclaveQuoteStatus"`
-	ISVEnclaveQuoteBody   string `codec:"isvEnclaveQuoteBody"`
+	ISVEnclaveQuoteBody   []byte `codec:"isvEnclaveQuoteBody"`
 	Nonce                 string `codec:"nonce,omitempty"`
 }
 
 func newMockAVR(quote []byte, nonce string) []byte {
 	avr := &mockAVR{
+		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
 		ISVEnclaveQuoteStatus: "OK",
-		ISVEnclaveQuoteBody:   base64.StdEncoding.EncodeToString(quote),
+		ISVEnclaveQuoteBody:   quote[:ias.QuoteLen],
 		Nonce:                 nonce,
 	}
 

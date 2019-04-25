@@ -233,7 +233,7 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 	}
 
 	switch len(a.ISVEnclaveQuoteBody) {
-	case 0, quoteLen:
+	case 0, QuoteLen:
 	default:
 		return fmt.Errorf("ias/avr: invalid isvEnclaveQuoteBody length")
 	}
