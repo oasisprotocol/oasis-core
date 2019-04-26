@@ -19,9 +19,9 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
-	"github.com/oasislabs/ekiden/go/worker/host"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/enclaverpc"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
 const (
@@ -279,8 +279,9 @@ func (k *KeyManager) CallRemote(ctx context.Context, runtimeID signature.PublicK
 
 func newKeyManager(
 	dataDir string,
+	enabled bool,
 	teeHardware node.TEEHardware,
-	workerBinary string,
+	workerRuntimeLoaderBinary string,
 	runtimeBinary string,
 	port uint16,
 	ias *ias.IAS,
@@ -288,11 +289,6 @@ func newKeyManager(
 	storage storage.Backend,
 	client *enclaverpc.Client,
 ) (*KeyManager, error) {
-	var enabled bool
-	if workerBinary != "" && runtimeBinary != "" {
-		enabled = true
-	}
-
 	km := &KeyManager{
 		enabled:       enabled,
 		quitCh:        make(chan struct{}),
@@ -307,6 +303,14 @@ func newKeyManager(
 	if enabled {
 		var err error
 
+		if workerRuntimeLoaderBinary == "" {
+			return nil, fmt.Errorf("keymanager: worker runtime loader binary not configured")
+		}
+
+		if runtimeBinary == "" {
+			return nil, fmt.Errorf("keymanager: runtime binary not configured")
+		}
+
 		if err = km.loadStateRoot(); err != nil {
 			return nil, err
 		}
@@ -314,7 +318,7 @@ func newKeyManager(
 		// Create worker host for the keymanager runtime.
 		km.workerHost, err = host.NewSandboxedHost(
 			"keymanager",
-			workerBinary,
+			workerRuntimeLoaderBinary,
 			runtimeBinary,
 			make(map[string]host.ProxySpecification),
 			teeHardware,

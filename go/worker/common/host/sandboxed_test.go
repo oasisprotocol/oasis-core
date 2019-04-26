@@ -13,7 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
 const recvTimeout = 5 * time.Second

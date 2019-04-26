@@ -1,4 +1,4 @@
-package worker
+package compute
 
 import (
 	"encoding/hex"
@@ -91,7 +91,7 @@ func (s *localStorage) Stop() {
 
 func newLocalStorage(dataDir string) (*localStorage, error) {
 	s := &localStorage{
-		logger: logging.GetLogger("worker/localStorage"),
+		logger: logging.GetLogger("worker/compute/localStorage"),
 	}
 
 	var err error

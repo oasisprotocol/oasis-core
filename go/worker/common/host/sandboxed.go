@@ -23,7 +23,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/sgx/aesm"
 	cias "github.com/oasislabs/ekiden/go/common/sgx/ias"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
 const (
@@ -850,7 +850,7 @@ func NewSandboxedHost(
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
 		requestCh:             make(chan *hostRequest, 10),
 		interruptCh:           make(chan *interruptRequest, 10),
-		logger:                logging.GetLogger("worker/host/sandboxed").With("name", name),
+		logger:                logging.GetLogger("worker/common/host/sandboxed").With("name", name),
 	}
 	return host, nil
 }

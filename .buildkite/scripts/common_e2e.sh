@@ -251,14 +251,15 @@ run_compute_node() {
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         --keymanager.client.address 127.0.0.1:9003 \
         --keymanager.client.certificate ${EKIDEN_COMMITTEE_DIR}/key-manager/tls_identity_cert.pem \
-        --worker.backend sandboxed \
-        --worker.binary ${EKIDEN_RUNTIME_LOADER} \
-        --worker.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
-        --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
-        ${EKIDEN_TEE_HARDWARE:+--worker.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
+        --worker.compute.enabled \
+        --worker.compute.backend sandboxed \
+        --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
+        --worker.compute.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
+        --worker.compute.runtime.id ${EKIDEN_RUNTIME_ID} \
+        ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
+        --worker.compute.leader.max_batch_size 1 \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
-        --worker.leader.max_batch_size 1 \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
@@ -340,6 +341,7 @@ run_keymanager_node() {
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         ${EKIDEN_TEE_HARDWARE:+--keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --keymanager.enabled \
         --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
         --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
         --keymanager.port 9003 \

@@ -17,7 +17,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
+	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
 )
 
 // BatchHandler is a handler for batches incoming from other members
@@ -344,7 +344,7 @@ func NewGroup(
 		registry:  registry,
 		handler:   handler,
 		p2p:       p2p,
-		logger:    logging.GetLogger("worker/committee/group").With("runtime_id", runtimeID),
+		logger:    logging.GetLogger("worker/compute/committee/group").With("runtime_id", runtimeID),
 	}
 
 	p2p.RegisterHandler(runtimeID, g)

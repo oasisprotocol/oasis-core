@@ -11,12 +11,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/enclaverpc"
+	"github.com/oasislabs/ekiden/go/worker/common/enclaverpc"
 )
 
 const (
+	cfgEnabled = "keymanager.enabled"
+
 	cfgTEEHardware   = "keymanager.tee_hardware"
-	cfgWorkerBinary  = "keymanager.loader"
+	cfgRuntimeLoader = "keymanager.loader"
 	cfgRuntimeBinary = "keymanager.runtime"
 	cfgPort          = "keymanager.port"
 
@@ -43,7 +45,7 @@ func New(
 		return nil, fmt.Errorf("invalid TEE hardware: %s", s)
 	}
 
-	workerBinary := viper.GetString(cfgWorkerBinary)
+	workerRuntimeLoaderBinary := viper.GetString(cfgRuntimeLoader)
 	runtimeBinary := viper.GetString(cfgRuntimeBinary)
 	port := uint16(viper.GetInt(cfgPort))
 
@@ -60,15 +62,18 @@ func New(
 		}
 	}
 
-	return newKeyManager(dataDir, teeHardware, workerBinary, runtimeBinary, port, ias, identity, storage, client)
+	return newKeyManager(dataDir, viper.GetBool(cfgEnabled), teeHardware, workerRuntimeLoaderBinary,
+		runtimeBinary, port, ias, identity, storage, client)
 }
 
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgEnabled, false, "Enable key manager process")
+
 		cmd.Flags().String(cfgTEEHardware, "", "TEE hardware to use for the key manager")
-		cmd.Flags().String(cfgWorkerBinary, "", "Path to key manager worker process binary")
+		cmd.Flags().String(cfgRuntimeLoader, "", "Path to key manager worker process binary")
 		cmd.Flags().String(cfgRuntimeBinary, "", "Path to key manager runtime binary")
 		cmd.Flags().Uint16(cfgPort, 9003, "Port to use for incoming key manager gRPC connections")
 
@@ -77,8 +82,10 @@ func RegisterFlags(cmd *cobra.Command) {
 	}
 
 	for _, v := range []string{
+		cfgEnabled,
+
 		cfgTEEHardware,
-		cfgWorkerBinary,
+		cfgRuntimeLoader,
 		cfgRuntimeBinary,
 		cfgPort,
 

@@ -63,7 +63,7 @@ test_migration() {
         --runtime-id "$RUNTIME_ID"
 
     # Stop the compute nodes.
-    pkill --echo --full --signal 9 worker.backend
+    pkill --echo --full --signal 9 worker.compute.backend
 
     # Export.
     "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" \

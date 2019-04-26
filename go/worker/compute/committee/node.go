@@ -28,9 +28,9 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/host"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
 )
 
 const queueExternalBatchTimeout = 5 * time.Second
@@ -982,7 +982,7 @@ func NewNode(
 		incomingExtBatch: make(chan *externalBatch, 10),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
-		logger:           logging.GetLogger("worker/committee").With("runtime_id", runtimeID),
+		logger:           logging.GetLogger("worker/compute/committee").With("runtime_id", runtimeID),
 	}
 	group, err := NewGroup(identity, runtimeID, n, registry, scheduler, p2p)
 	if err != nil {
