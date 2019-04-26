@@ -85,7 +85,7 @@ impl Marshal for InternalNode {
         let left_hash = Hash::from(&data[1..(1 + Hash::len())]);
         let right_hash = Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]);
 
-        self.clean = false;
+        self.clean = true;
         if left_hash.is_empty() {
             self.left = NodePointer::null_ptr();
         } else {
@@ -107,6 +107,8 @@ impl Marshal for InternalNode {
             }));
         }
 
+        self.update_hash();
+
         Ok(1 + 2 * Hash::len())
     }
 }
@@ -126,7 +128,7 @@ impl Marshal for LeafNode {
             return Err(TreeError::MalformedNode.into());
         }
 
-        self.clean = false;
+        self.clean = true;
         self.key = Hash::from(&data[1..(1 + Hash::len())]);
         self.value = Rc::new(RefCell::new(ValuePointer {
             ..Default::default()
@@ -135,6 +137,8 @@ impl Marshal for LeafNode {
             .value
             .borrow_mut()
             .unmarshal_binary(&data[(1 + Hash::len())..])?;
+
+        self.update_hash();
 
         Ok(1 + Hash::len() + value_len)
     }
@@ -167,13 +171,14 @@ impl Marshal for ValuePointer {
             return Err(TreeError::MalformedNode.into());
         }
 
-        self.clean = false;
+        self.clean = true;
         self.hash = Hash::default();
         if value_len == 0 {
             self.value = None;
         } else {
             self.value = Some(data[4..(4 + value_len)].to_vec());
         }
+        self.update_hash();
         Ok(4 + value_len)
     }
 }

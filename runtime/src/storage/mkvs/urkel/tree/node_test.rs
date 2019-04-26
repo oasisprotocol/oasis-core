@@ -30,9 +30,9 @@ fn test_serialization_leaf() {
         .unmarshal_binary(marshaled.as_slice())
         .expect("unmarshal");
 
-    assert_eq!(false, decoded_leaf_node.clean);
+    assert_eq!(true, decoded_leaf_node.clean);
     assert_eq!(leaf_node.key, decoded_leaf_node.key);
-    assert_eq!(false, decoded_leaf_node.value.borrow().clean);
+    assert_eq!(true, decoded_leaf_node.value.borrow().clean);
     assert_eq!(
         leaf_node.value.borrow().value,
         decoded_leaf_node.value.borrow().value
@@ -68,7 +68,7 @@ fn test_serialization_internal() {
         .unmarshal_binary(marshaled.as_slice())
         .expect("unmarshal");
 
-    assert_eq!(false, decoded_int_node.clean);
+    assert_eq!(true, decoded_int_node.clean);
     assert_eq!(
         int_node.left.borrow().hash,
         decoded_int_node.left.borrow().hash
