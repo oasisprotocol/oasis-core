@@ -7,7 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/runtime"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
 var (
@@ -87,7 +87,7 @@ func (h *mockHost) InterruptWorker(ctx context.Context) error {
 func NewMockHost() (Host, error) {
 	host := &mockHost{
 		quitCh: make(chan struct{}),
-		logger: logging.GetLogger("worker/host/mock"),
+		logger: logging.GetLogger("worker/common/host/mock"),
 	}
 	return host, nil
 }

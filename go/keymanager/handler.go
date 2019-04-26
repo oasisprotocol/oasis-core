@@ -7,7 +7,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
 var (

@@ -71,6 +71,27 @@ type Node struct {
 
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `codec:"runtimes"`
+
+	// Roles is a bitmask representing the node roles.
+	Roles RolesMask `codec:"roles"`
+}
+
+// RolesMask is Ekiden Node roles bitmask.
+type RolesMask uint32
+
+const (
+	// ComputeWorker Role is Ekiden Compute Worker role.
+	ComputeWorker RolesMask = 1 << iota
+)
+
+// AddRoles adds the Node roles
+func (n *Node) AddRoles(r RolesMask) {
+	n.Roles |= r
+}
+
+// HasRoles checks if Node has roles
+func (n *Node) HasRoles(r RolesMask) bool {
+	return n.Roles&r != 0
 }
 
 // Runtime represents the runtimes supported by a given Ekiden node.
@@ -407,6 +428,8 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		}
 	}
 
+	n.Roles = RolesMask(pb.GetRoles())
+
 	return nil
 }
 
@@ -432,6 +455,8 @@ func (n *Node) ToProto() *pbCommon.Node {
 			pb.Runtimes = append(pb.Runtimes, v.toProto())
 		}
 	}
+
+	pb.Roles = uint32(n.Roles)
 
 	return pb
 }

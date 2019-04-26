@@ -1,4 +1,4 @@
-package worker
+package compute
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pb "github.com/oasislabs/ekiden/go/grpc/transactionscheduler"
-	"github.com/oasislabs/ekiden/go/worker/committee"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
 
 var _ pb.TransactionSchedulerServer = (*grpcServer)(nil)

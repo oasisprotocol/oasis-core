@@ -36,7 +36,9 @@ import (
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
-	"github.com/oasislabs/ekiden/go/worker"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/compute"
+	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
 // Run runs the ekiden node.
@@ -71,9 +73,11 @@ type Node struct {
 	Staking    stakingAPI.Backend
 	Storage    storageAPI.Backend
 	IAS        *ias.IAS
-	Worker     *worker.Worker
 	Client     *client.Client
 	KeyManager *keymanager.KeyManager
+
+	ComputeWorker      *compute.Worker
+	WorkerRegistration *registration.Registration
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -134,6 +138,63 @@ func (n *Node) initBackends() error {
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
 
 	cmdCommon.Logger().Debug("backends initialized")
+
+	return nil
+}
+
+func (n *Node) initAndStartWorkers() error {
+	dataDir := cmdCommon.DataDir()
+
+	var err error
+
+	workerCommonCfg, err := workerCommon.NewConfig()
+	if err != nil {
+		return err
+	}
+
+	// Initialize the worker registration.
+	n.WorkerRegistration, err = registration.New(
+		dataDir,
+		n.Epochtime,
+		n.Registry,
+		n.Identity,
+		n.svcTmnt,
+		workerCommonCfg,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.WorkerRegistration)
+
+	// Initialize the compute worker.
+	n.ComputeWorker, err = compute.New(
+		dataDir,
+		n.IAS,
+		n.Identity,
+		n.Storage,
+		n.RootHash,
+		n.Registry,
+		n.Epochtime,
+		n.Scheduler,
+		n.svcTmnt,
+		n.KeyManager,
+		n.WorkerRegistration,
+		workerCommonCfg,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.ComputeWorker)
+
+	// Start the compute worker.
+	if err = n.ComputeWorker.Start(); err != nil {
+		return err
+	}
+
+	// Start the worker registration service.
+	if err = n.WorkerRegistration.Start(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -292,27 +353,6 @@ func NewNode() (*Node, error) {
 	}
 	node.svcMgr.Register(node.KeyManager)
 
-	// Initialize the worker.
-	node.Worker, err = worker.New(
-		cmdCommon.DataDir(),
-		node.IAS,
-		node.Identity,
-		node.Storage,
-		node.RootHash,
-		node.Registry,
-		node.Epochtime,
-		node.Scheduler,
-		node.svcTmnt,
-		node.KeyManager,
-	)
-	if err != nil {
-		logger.Error("failed to initialize compute worker",
-			"err", err,
-		)
-		return nil, err
-	}
-	node.svcMgr.Register(node.Worker)
-
 	// Initialize the client.
 	node.Client, err = client.New(
 		node.svcMgr.Ctx,
@@ -333,6 +373,14 @@ func NewNode() (*Node, error) {
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
 		logger.Error("failed to start metric server",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Initialize and Start ekiden workers
+	if err = node.initAndStartWorkers(); err != nil {
+		logger.Error("failed to initialize workers",
 			"err", err,
 		)
 		return nil, err
@@ -365,14 +413,6 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Start the worker.
-	if err = node.Worker.Start(); err != nil {
-		logger.Error("failed to start worker",
-			"err", err,
-		)
-		return nil, err
-	}
-
 	logger.Info("initialization complete: ready to serve")
 	startOk = true
 
@@ -396,9 +436,11 @@ func RegisterFlags(cmd *cobra.Command) {
 		storage.RegisterFlags,
 		tendermint.RegisterFlags,
 		ias.RegisterFlags,
-		worker.RegisterFlags,
 		keymanager.RegisterFlags,
 		client.RegisterFlags,
+		compute.RegisterFlags,
+		registration.RegisterFlags,
+		workerCommon.RegisterFlags,
 	} {
 		v(cmd)
 	}

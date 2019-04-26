@@ -42,6 +42,44 @@ func GuessExternalAddress() net.IP {
 	return net.ParseIP(h)
 }
 
+// FindAllAddresses returns all addresses found by examining all
+// up interfaces (skipping loopback).
+func FindAllAddresses() ([]net.IP, error) {
+	var addresses []net.IP
+
+	ifaces, ierr := net.Interfaces()
+	if ierr != nil {
+		return nil, ierr
+	}
+
+	for _, iface := range ifaces {
+		// Skip interfaces which are down or loopback.
+		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 {
+			continue
+		}
+
+		addrs, aerr := iface.Addrs()
+		if aerr != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch a := addr.(type) {
+			case *net.IPAddr:
+				ip = a.IP
+			case *net.IPNet:
+				ip = a.IP
+			}
+
+			if ip != nil {
+				addresses = append(addresses, ip)
+			}
+		}
+	}
+	return addresses, nil
+}
+
 // IsFQDN validates that the provided string is a well-formed FQDN.
 func IsFQDN(s string) error {
 	_, err := idna.Lookup.ToASCII(s)

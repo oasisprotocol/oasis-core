@@ -1,9 +1,7 @@
-package worker
+package compute
 
 import (
 	"fmt"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -11,7 +9,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -21,66 +18,33 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/committee"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
 const (
-	cfgWorkerBackend = "worker.backend"
+	cfgWorkerEnabled = "worker.compute.enabled"
 
-	cfgWorkerBinary = "worker.binary"
+	cfgWorkerBackend = "worker.compute.backend"
 
-	cfgRuntimeBinary = "worker.runtime.binary"
-	cfgRuntimeID     = "worker.runtime.id"
+	cfgWorkerRuntimeLoader = "worker.compute.runtime_loader"
+
+	cfgRuntimeBinary = "worker.compute.runtime.binary"
+	cfgRuntimeID     = "worker.compute.runtime.id"
 
 	// XXX: This is needed till the code can watch the registry for runtimes.
-	cfgRuntimeSGXIDs = "worker.runtime.sgx_ids"
+	cfgRuntimeSGXIDs = "worker.compute.runtime.sgx_ids"
 
-	cfgMaxQueueSize      = "worker.leader.max_queue_size"
-	cfgMaxBatchSize      = "worker.leader.max_batch_size"
-	cfgMaxBatchSizeBytes = "worker.leader.max_batch_size_bytes"
-	cfgMaxBatchTimeout   = "worker.leader.max_batch_timeout"
+	cfgMaxQueueSize      = "worker.compute.leader.max_queue_size"
+	cfgMaxBatchSize      = "worker.compute.leader.max_batch_size"
+	cfgMaxBatchSizeBytes = "worker.compute.leader.max_batch_size_bytes"
+	cfgMaxBatchTimeout   = "worker.compute.leader.max_batch_timeout"
 
-	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
-
-	cfgClientPort      = "worker.client.port"
-	cfgClientAddresses = "worker.client.addresses"
-
-	cfgP2pPort      = "worker.p2p.port"
-	cfgP2pAddresses = "worker.p2p.addresses"
+	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
 
 	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
-
-	cfgEntityPrivateKey = "worker.entity_private_key"
 )
-
-func parseAddressList(addresses []string) ([]node.Address, error) {
-	var output []node.Address
-	for _, rawAddress := range addresses {
-		rawIP, rawPort, err := net.SplitHostPort(rawAddress)
-		if err != nil {
-			return nil, fmt.Errorf("malformed address: %s", err)
-		}
-
-		port, err := strconv.ParseUint(rawPort, 10, 16)
-		if err != nil {
-			return nil, fmt.Errorf("malformed port: %s", rawPort)
-		}
-
-		ip := net.ParseIP(rawIP)
-		if ip == nil {
-			return nil, fmt.Errorf("malformed ip address: %s", rawIP)
-		}
-
-		var address node.Address
-		if err := address.FromIP(ip, uint16(port)); err != nil {
-			return nil, fmt.Errorf("unknown address family: %s", rawIP)
-		}
-
-		output = append(output, address)
-	}
-
-	return output, nil
-}
 
 func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	m := make(map[signature.MapKey]bool)
@@ -97,27 +61,6 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	return m, nil
 }
 
-func getEntityPrivKey(dataDir string) (*signature.PrivateKey, error) {
-	var (
-		entityPrivKey *signature.PrivateKey
-		err           error
-	)
-
-	if f := viper.GetString(cfgEntityPrivateKey); f != "" {
-		// Load PEM.
-		entityPrivKey = new(signature.PrivateKey)
-		if err = entityPrivKey.LoadPEM(f, nil); err != nil {
-			entityPrivKey = nil
-		}
-	} else {
-		// Load or generate in the data dir.  If this generates,
-		// the entity will NOT be in the registry.
-		_, entityPrivKey, err = entity.LoadOrGenerate(dataDir)
-	}
-
-	return entityPrivKey, err
-}
-
 // New creates a new worker.
 func New(
 	dataDir string,
@@ -130,15 +73,11 @@ func New(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	keyManager *keymanager.KeyManager,
+	registration *registration.Registration,
+	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
-	workerBinary := viper.GetString(cfgWorkerBinary)
-
-	// Load the entity private key used for node registration.
-	entityPrivKey, err := getEntityPrivKey(dataDir)
-	if err != nil {
-		return nil, err
-	}
+	workerRuntimeLoader := viper.GetString(cfgWorkerRuntimeLoader)
 
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
@@ -177,16 +116,6 @@ func New(
 	maxBatchSizeBytes := uint64(viper.GetSizeInBytes(cfgMaxBatchSizeBytes))
 	maxBatchTimeout := viper.GetDuration(cfgMaxBatchTimeout)
 
-	// Parse register address overrides.
-	clientAddresses, err := parseAddressList(viper.GetStringSlice(cfgClientAddresses))
-	if err != nil {
-		return nil, err
-	}
-	p2pAddresses, err := parseAddressList(viper.GetStringSlice(cfgP2pAddresses))
-	if err != nil {
-		return nil, err
-	}
-
 	cfg := Config{
 		Backend: backend,
 		Committee: committee.Config{
@@ -199,24 +128,23 @@ func New(
 
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
-		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
-		ClientAddresses: clientAddresses,
-		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
-		P2PAddresses:    p2pAddresses,
-		WorkerBinary:    workerBinary,
-		Runtimes:        runtimes,
+		WorkerRuntimeLoaderBinary: workerRuntimeLoader,
+		Runtimes:                  runtimes,
 	}
 
-	return newWorker(dataDir, identity, entityPrivKey, storage, roothash, registry, epochtime, scheduler, syncable, ias, keyManager, cfg)
+	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
+		registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable compute worker process")
+
 		cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
 
-		cmd.Flags().String(cfgWorkerBinary, "", "Path to worker process binary")
+		cmd.Flags().String(cfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
 
 		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
 		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
@@ -231,21 +159,15 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
-		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
-		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-
-		cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
-		cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-
-		cmd.Flags().String(cfgEntityPrivateKey, "", "Private key to use to sign node registrations")
-
 		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
 	}
 
 	for _, v := range []string{
+		cfgWorkerEnabled,
+
 		cfgWorkerBackend,
 
-		cfgWorkerBinary,
+		cfgWorkerRuntimeLoader,
 
 		cfgRuntimeBinary,
 		cfgRuntimeID,
@@ -258,13 +180,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgMaxBatchTimeout,
 
 		cfgStorageCommitTimeout,
-
-		cfgClientPort,
-		cfgClientAddresses,
-
-		cfgP2pPort,
-
-		cfgEntityPrivateKey,
 
 		cfgByzantineInjectDiscrepancies,
 	} {
