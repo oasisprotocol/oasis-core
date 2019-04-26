@@ -341,6 +341,7 @@ run_keymanager_node() {
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         ${EKIDEN_TEE_HARDWARE:+--keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --keymanager.enabled \
         --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
         --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
         --keymanager.port 9003 \
