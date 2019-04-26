@@ -58,13 +58,27 @@ func (q *incomingQueue) Clear() {
 }
 
 // NOTE: Assumes lock is held.
+func (q *incomingQueue) isQueuedLocked(callHash hash.Hash) bool {
+	_, ok := q.callHashes[callHash]
+	return ok
+}
+
+// IsQueued returns whether a call is in the queue already.
+func (q *incomingQueue) IsQueued(callHash hash.Hash) bool {
+	q.Lock()
+	defer q.Unlock()
+
+	return q.isQueuedLocked(callHash)
+}
+
+// NOTE: Assumes lock is held.
 func (q *incomingQueue) checkCallLocked(call []byte, callHash hash.Hash) error {
 	callSize := uint64(len(call))
 
 	if callSize > q.maxBatchSizeBytes {
 		return errCallTooLarge
 	}
-	if _, exists := q.callHashes[callHash]; exists {
+	if q.isQueuedLocked(callHash) {
 		return errCallAlreadyExists
 	}
 

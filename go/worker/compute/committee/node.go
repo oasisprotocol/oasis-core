@@ -325,7 +325,13 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 // transaction scheduler queue and is waiting to be dispatched to a
 // compute committee.
 func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
-	panic("not implemented")
+	// Check if we are a leader. Note that we may be in the middle of a
+	// transition, but this shouldn't matter as the client will retry.
+	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
+		return false, ErrNotLeader
+	}
+
+	return n.incomingQueue.IsQueued(id), nil
 }
 
 func (n *Node) transition(state NodeState) {
