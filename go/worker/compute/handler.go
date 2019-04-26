@@ -70,6 +70,91 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 		return &protocol.Body{HostStorageGetBatchResponse: &protocol.HostStorageGetBatchResponse{Values: values}}, nil
 	}
+	if body.HostStorageSyncGetSubtreeRequest != nil {
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetSubtree(root_hash, node_path, node_depth, max_depth)",
+			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetSubtreeRequest.RootHash},
+			opentracing.Tag{Key: "node_path", Value: body.HostStorageSyncGetSubtreeRequest.NodePath},
+			opentracing.Tag{Key: "node_depth", Value: body.HostStorageSyncGetSubtreeRequest.NodeDepth},
+			opentracing.Tag{Key: "max_depth", Value: body.HostStorageSyncGetSubtreeRequest.MaxDepth},
+		)
+		defer span.Finish()
+
+		nodeID := storage.NodeID{
+			Path:  body.HostStorageSyncGetSubtreeRequest.NodePath,
+			Depth: body.HostStorageSyncGetSubtreeRequest.NodeDepth,
+		}
+
+		subtree, err := h.storage.GetSubtree(sctx, body.HostStorageSyncGetSubtreeRequest.RootHash, nodeID, body.HostStorageSyncGetSubtreeRequest.MaxDepth)
+		if err != nil {
+			return nil, err
+		}
+
+		serialized, err := subtree.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
+	}
+	if body.HostStorageSyncGetPathRequest != nil {
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetPath(root_hash, key, start_depth)",
+			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetPathRequest.RootHash},
+			opentracing.Tag{Key: "key", Value: body.HostStorageSyncGetPathRequest.Key},
+			opentracing.Tag{Key: "start_depth", Value: body.HostStorageSyncGetPathRequest.StartDepth},
+		)
+		defer span.Finish()
+
+		subtree, err := h.storage.GetPath(sctx, body.HostStorageSyncGetPathRequest.RootHash, body.HostStorageSyncGetPathRequest.Key, body.HostStorageSyncGetPathRequest.StartDepth)
+		if err != nil {
+			return nil, err
+		}
+
+		serialized, err := subtree.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
+	}
+	if body.HostStorageSyncGetNodeRequest != nil {
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetNode(root_hash, node_path, node_depth)",
+			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetNodeRequest.RootHash},
+			opentracing.Tag{Key: "node_path", Value: body.HostStorageSyncGetNodeRequest.NodePath},
+			opentracing.Tag{Key: "node_depth", Value: body.HostStorageSyncGetNodeRequest.NodeDepth},
+		)
+		defer span.Finish()
+
+		nodeID := storage.NodeID{
+			Path:  body.HostStorageSyncGetNodeRequest.NodePath,
+			Depth: body.HostStorageSyncGetNodeRequest.NodeDepth,
+		}
+
+		node, err := h.storage.GetNode(sctx, body.HostStorageSyncGetNodeRequest.RootHash, nodeID)
+		if err != nil {
+			return nil, err
+		}
+
+		serialized, err := node.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
+	}
+	if body.HostStorageSyncGetValueRequest != nil {
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetValue(root_hash, value_id)",
+			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetValueRequest.RootHash},
+			opentracing.Tag{Key: "value_id", Value: body.HostStorageSyncGetValueRequest.ValueID},
+		)
+		defer span.Finish()
+
+		value, err := h.storage.GetValue(sctx, body.HostStorageSyncGetValueRequest.RootHash, body.HostStorageSyncGetValueRequest.ValueID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: cbor.FixSliceForSerde(value)}}, nil
+	}
 	// Local storage.
 	if body.HostLocalStorageGetRequest != nil {
 		value, err := h.localStorage.Get(h.runtimeID, body.HostLocalStorageGetRequest.Key)

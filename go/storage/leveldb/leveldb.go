@@ -201,6 +201,7 @@ func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewR
 			return nil, err
 		}
 
+		// XXX(jan) what about deletions?
 		for _, entry := range log {
 			err = tree.Insert(entry.Key, entry.Value)
 			if err != nil {
