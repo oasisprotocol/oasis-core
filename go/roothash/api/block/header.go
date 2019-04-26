@@ -167,8 +167,14 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.OutputHash.UnmarshalBinary(pb.GetOutputHash()); err != nil {
 		return err
 	}
-	if err := h.TagHash.UnmarshalBinary(pb.GetTagHash()); err != nil {
-		return err
+	// TODO: This is needed for migrating from legacy versions, remove after
+	//       everything is migrated to the new version.
+	if len(pb.GetTagHash()) > 0 {
+		if err := h.TagHash.UnmarshalBinary(pb.GetTagHash()); err != nil {
+			return err
+		}
+	} else {
+		h.TagHash.Empty()
 	}
 	if err := h.StateRoot.UnmarshalBinary(pb.GetStateRoot()); err != nil {
 		return err
