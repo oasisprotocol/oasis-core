@@ -27,8 +27,9 @@ grpc:
 # Worker configuration.
 worker:
   compute:
+    enabled: true
     backend: sandboxed
-    binary: target/debug/ekiden-runtime-loader
+    runtime_loader: target/debug/ekiden-runtime-loader
     runtime:
       id: "0000000000000000000000000000000000000000000000000000000000000000"
       binary: target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs
@@ -47,6 +48,7 @@ ias:
 
 # Key manager configuration.
 keymanager:
+  enabled: true
   tee_hardware: intel-sgx
   loader: target/debug/ekiden-runtime-loader
   runtime: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs

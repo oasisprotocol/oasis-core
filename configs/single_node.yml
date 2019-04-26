@@ -27,8 +27,9 @@ grpc:
 # Worker configuration.
 worker:
   compute:
+    enabled: true
     backend: sandboxed
-    binary: target/debug/ekiden-runtime-loader
+    runtime_loader: target/debug/ekiden-runtime-loader
     runtime:
       id: "0000000000000000000000000000000000000000000000000000000000000000"
       binary: target/debug/simple-keyvalue
@@ -41,6 +42,7 @@ worker:
 
 # Key manager configuration.
 keymanager:
+  enabled: true
   loader: target/debug/ekiden-runtime-loader
   runtime: target/debug/ekiden-keymanager-runtime
   port: 9003
