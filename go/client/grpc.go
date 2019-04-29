@@ -5,6 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pbClient "github.com/oasislabs/ekiden/go/grpc/client"
 	pbEnRPC "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
@@ -74,8 +75,10 @@ func (s *grpcServer) WatchBlocks(req *pbClient.WatchBlocksRequest, stream pbClie
 				return nil
 			}
 
+			blockHash := blk.Header.EncodedHash()
 			pbBlk := &pbClient.WatchBlocksResponse{
-				Block: blk.MarshalCBOR(),
+				Block:     blk.MarshalCBOR(),
+				BlockHash: blockHash[:],
 			}
 			if err := stream.Send(pbBlk); err != nil {
 				return err
@@ -96,8 +99,53 @@ func (s *grpcServer) GetBlock(ctx context.Context, req *pbClient.GetBlockRequest
 	if err != nil {
 		return nil, err
 	}
+	blockHash := blk.Header.EncodedHash()
 	return &pbClient.GetBlockResponse{
-		Block: blk.MarshalCBOR(),
+		Block:     blk.MarshalCBOR(),
+		BlockHash: blockHash[:],
+	}, nil
+}
+
+func (s *grpcServer) GetTxn(ctx context.Context, req *pbClient.GetTxnRequest) (*pbClient.GetTxnResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	blk, input, output, err := s.client.GetTxn(ctx, id, req.GetRound(), req.GetIndex())
+	if err != nil {
+		return nil, err
+	}
+	blockHash := blk.Header.EncodedHash()
+	return &pbClient.GetTxnResponse{
+		Block:     blk.MarshalCBOR(),
+		BlockHash: blockHash[:],
+		Input:     input,
+		Output:    output,
+	}, nil
+}
+
+func (s *grpcServer) GetTxnByBlockHash(ctx context.Context, req *pbClient.GetTxnByBlockHashRequest) (*pbClient.GetTxnByBlockHashResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	var blockHash hash.Hash
+	if err := blockHash.UnmarshalBinary(req.GetBlockHash()); err != nil {
+		return nil, err
+	}
+
+	blk, input, output, err := s.client.GetTxnByBlockHash(ctx, id, blockHash, req.GetIndex())
+	if err != nil {
+		return nil, err
+	}
+	blockHash = blk.Header.EncodedHash()
+	return &pbClient.GetTxnByBlockHashResponse{
+		Block:     blk.MarshalCBOR(),
+		BlockHash: blockHash[:],
+		Input:     input,
+		Output:    output,
 	}, nil
 }
 
@@ -111,8 +159,10 @@ func (s *grpcServer) QueryBlock(ctx context.Context, req *pbClient.QueryBlockReq
 	if err != nil {
 		return nil, err
 	}
+	blockHash := blk.Header.EncodedHash()
 	return &pbClient.QueryBlockResponse{
-		Block: blk.MarshalCBOR(),
+		Block:     blk.MarshalCBOR(),
+		BlockHash: blockHash[:],
 	}, nil
 }
 
@@ -126,11 +176,13 @@ func (s *grpcServer) QueryTxn(ctx context.Context, req *pbClient.QueryTxnRequest
 	if err != nil {
 		return nil, err
 	}
+	blockHash := blk.Header.EncodedHash()
 	return &pbClient.QueryTxnResponse{
-		Block:    blk.MarshalCBOR(),
-		TxnIndex: txnIdx,
-		Input:    input,
-		Output:   output,
+		Block:     blk.MarshalCBOR(),
+		BlockHash: blockHash[:],
+		TxnIndex:  txnIdx,
+		Input:     input,
+		Output:    output,
 	}, nil
 }
 

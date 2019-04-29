@@ -28,12 +28,13 @@ impl TransactionSnapshot {
     pub(super) fn new(
         storage_client: api::storage::StorageClient,
         block: Block,
+        block_hash: Hash,
         index: u32,
         input: Vec<u8>,
         output: Vec<u8>,
     ) -> Fallible<Self> {
         Ok(Self {
-            block_snapshot: BlockSnapshot::new(storage_client, block),
+            block_snapshot: BlockSnapshot::new(storage_client, block, block_hash),
             index,
             input: serde_cbor::from_slice(&input).context("input is malformed")?,
             output: serde_cbor::from_slice(&output).context("output is malformed")?,
@@ -45,6 +46,8 @@ impl TransactionSnapshot {
 pub struct BlockSnapshot {
     /// The (partial) block this snapshot is based on.
     pub block: Block,
+    /// Block header hash.
+    pub block_hash: Hash,
 
     cas: Arc<CAS>,
     mkvs: CASPatriciaTrie,
@@ -53,19 +56,34 @@ pub struct BlockSnapshot {
 impl Clone for BlockSnapshot {
     fn clone(&self) -> Self {
         let block = self.block.clone();
+        let block_hash = self.block_hash.clone();
         let cas = self.cas.clone();
         let mkvs = CASPatriciaTrie::new(cas.clone(), &self.block.header.state_root);
 
-        Self { block, cas, mkvs }
+        Self {
+            block,
+            block_hash,
+            cas,
+            mkvs,
+        }
     }
 }
 
 impl BlockSnapshot {
-    pub(super) fn new(storage_client: api::storage::StorageClient, block: Block) -> Self {
+    pub(super) fn new(
+        storage_client: api::storage::StorageClient,
+        block: Block,
+        block_hash: Hash,
+    ) -> Self {
         let cas = Arc::new(RemoteCAS(storage_client));
         let mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
 
-        Self { cas, mkvs, block }
+        Self {
+            cas,
+            mkvs,
+            block,
+            block_hash,
+        }
     }
 }
 

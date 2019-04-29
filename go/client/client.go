@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
+	"math"
 	"net/url"
 	"sync"
 	"time"
@@ -40,6 +41,9 @@ import (
 
 const (
 	cfgIndexRuntimes = "client.indexer.runtimes"
+
+	// RoundLatest is a special round number always referring to the latest round.
+	RoundLatest uint64 = math.MaxUint64
 )
 
 var grpcResolverLock sync.Mutex
@@ -285,11 +289,83 @@ func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey)
 }
 
 // GetBlock returns the block at a specific round.
+//
+// Pass RoundLatest to get the latest block.
 func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, round uint64) (*block.Block, error) {
+	if round == RoundLatest {
+		return c.common.roothash.GetLatestBlock(ctx, runtimeID)
+	}
 	return c.common.roothash.GetBlock(ctx, runtimeID, round)
 }
 
-// Query the block index of a given runtime.
+func (c *Client) getTxnData(ctx context.Context, blk *block.Block, index uint32) ([]byte, []byte, error) {
+	// Fetch transaction input and output.
+	var inputHash storage.Key
+	copy(inputHash[:], blk.Header.InputHash[:])
+	var outputHash storage.Key
+	copy(outputHash[:], blk.Header.OutputHash[:])
+
+	// TODO: After the new MKVS is done, only fetch specific inputs/outputs.
+	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{inputHash, outputHash})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var inputs [][]byte
+	if err := cbor.Unmarshal(txn[0], &inputs); err != nil {
+		return nil, nil, err
+	}
+	if int(index) >= len(inputs) {
+		return nil, nil, errors.New("bad transaction index or malformed inputs")
+	}
+
+	var outputs [][]byte
+	if err := cbor.Unmarshal(txn[1], &outputs); err != nil {
+		return nil, nil, err
+	}
+	if int(index) >= len(outputs) {
+		return nil, nil, errors.New("bad transaction index or malformed outputs")
+	}
+
+	input := inputs[index]
+	output := outputs[index]
+
+	return input, output, nil
+}
+
+// GetTxn returns the transaction at a specific block round and index.
+//
+// Pass RoundLatest for the round to get the latest block.
+func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, round uint64, index uint32) (*block.Block, []byte, []byte, error) {
+	blk, err := c.GetBlock(ctx, runtimeID, round)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	input, output, err := c.getTxnData(ctx, blk, index)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return blk, input, output, nil
+}
+
+// GetTxnByBlockHash returns the transaction at a specific block hash and index.
+func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash, index uint32) (*block.Block, []byte, []byte, error) {
+	blk, err := c.QueryBlock(ctx, runtimeID, indexer.TagBlockHash, blockHash[:])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	input, output, err := c.getTxnData(ctx, blk, index)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return blk, input, output, nil
+}
+
+// QueryBlock queries the block index of a given runtime.
 func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, error) {
 	if c.indexerBackend == nil {
 		return nil, errors.New("indexer not enabled")
@@ -303,7 +379,7 @@ func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, 
 	return c.GetBlock(ctx, runtimeID, round)
 }
 
-// Query the transaction index of a given runtime.
+// QueryTxn queries the transaction index of a given runtime.
 func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, uint32, []byte, []byte, error) {
 	if c.indexerBackend == nil {
 		return nil, 0, nil, nil, errors.New("indexer not enabled")
@@ -319,36 +395,10 @@ func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, ke
 		return nil, 0, nil, nil, err
 	}
 
-	// Fetch transaction input and output.
-	var inputHash storage.Key
-	copy(inputHash[:], blk.Header.InputHash[:])
-	var outputHash storage.Key
-	copy(outputHash[:], blk.Header.OutputHash[:])
-
-	// TODO: After the new MKVS is done, only fetch specific inputs/outputs.
-	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{inputHash, outputHash})
+	input, output, err := c.getTxnData(ctx, blk, txnIdx)
 	if err != nil {
 		return nil, 0, nil, nil, err
 	}
-
-	var inputs [][]byte
-	if err := cbor.Unmarshal(txn[0], &inputs); err != nil {
-		return nil, 0, nil, nil, err
-	}
-	if int(txnIdx) >= len(inputs) {
-		return nil, 0, nil, nil, errors.New("malformed transaction inputs")
-	}
-
-	var outputs [][]byte
-	if err := cbor.Unmarshal(txn[1], &outputs); err != nil {
-		return nil, 0, nil, nil, err
-	}
-	if int(txnIdx) >= len(outputs) {
-		return nil, 0, nil, nil, errors.New("malformed transaction outputs")
-	}
-
-	input := inputs[txnIdx]
-	output := outputs[txnIdx]
 
 	return blk, txnIdx, input, output, nil
 }
