@@ -53,7 +53,9 @@ type Body struct {
 	// Worker interface.
 	WorkerPingRequest                    *Empty
 	WorkerShutdownRequest                *Empty
-	WorkerCapabilityTEERakReportRequest  *WorkerCapabilityTEERakReportRequest
+	WorkerCapabilityTEERakInitRequest    *WorkerCapabilityTEERakInitRequest
+	WorkerCapabilityTEERakInitResponse   *Empty
+	WorkerCapabilityTEERakReportRequest  *Empty
 	WorkerCapabilityTEERakReportResponse *WorkerCapabilityTEERakReportResponse
 	WorkerCapabilityTEERakAvrRequest     *WorkerCapabilityTEERakAvrRequest
 	WorkerCapabilityTEERakAvrResponse    *Empty
@@ -86,8 +88,9 @@ type Error struct {
 	Message string `codec:"message"`
 }
 
-// WorkerCapabilityTEERakReportRequest is a worker RFC 0009 CapabilityTEE RAK request message body.
-type WorkerCapabilityTEERakReportRequest struct {
+// WorkerCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE
+// initialization request message body.
+type WorkerCapabilityTEERakInitRequest struct {
 	TargetInfo []byte `codec:"target_info"`
 }
 

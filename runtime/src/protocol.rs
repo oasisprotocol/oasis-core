@@ -40,6 +40,9 @@ enum ProtocolError {
     MethodNotSupported,
     #[fail(display = "invalid response")]
     InvalidResponse,
+    #[fail(display = "attestation required")]
+    #[allow(unused)]
+    AttestationRequired,
 }
 
 /// Worker part of the worker-host protocol.
@@ -230,10 +233,19 @@ impl Protocol {
                 Err(ProtocolError::MethodNotSupported.into())
             }
             #[cfg(target_env = "sgx")]
-            Body::WorkerCapabilityTEERakReportRequest { target_info } => {
-                // Initialize the runtime attestation key.
+            Body::WorkerCapabilityTEERakInitRequest { target_info } => {
                 info!(self.logger, "Initializing the runtime attestation key");
-                let (rak_pub, report, nonce) = self.rak.init(target_info);
+                self.rak.init_rak(target_info)?;
+                Ok(Some(Body::WorkerCapabilityTEERakInitResponse {}))
+            }
+            #[cfg(target_env = "sgx")]
+            Body::WorkerCapabilityTEERakReportRequest {} => {
+                // Initialize the RAK report (for attestation).
+                info!(
+                    self.logger,
+                    "Initializing the runtime attestation key report"
+                );
+                let (rak_pub, report, nonce) = self.rak.init_report();
 
                 let report: &[u8] = report.as_ref();
                 let report = report.to_vec();
@@ -254,10 +266,12 @@ impl Protocol {
                 Ok(Some(Body::WorkerCapabilityTEERakAvrResponse {}))
             }
             req @ Body::WorkerRPCCallRequest { .. } => {
+                self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
             req @ Body::WorkerRuntimeCallBatchRequest { .. } => {
+                self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
@@ -266,6 +280,17 @@ impl Protocol {
                 Err(ProtocolError::MethodNotSupported.into())
             }
         }
+    }
+
+    fn can_handle_runtime_requests(&self) -> Fallible<()> {
+        #[cfg(target_env = "sgx")]
+        {
+            if self.rak.avr().is_none() {
+                return Err(ProtocolError::AttestationRequired.into());
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -33,12 +33,6 @@ impl PrivateKey {
         Ok(PrivateKey(key))
     }
 
-    /// Loads the private key unchecked from a raw seed.
-    pub fn from_seed_unchecked(key: &[u8]) -> Fallible<Self> {
-        let key = Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(key))?;
-        Ok(PrivateKey(key))
-    }
-
     /// Returns the public key.
     pub fn public_key(&self) -> PublicKey {
         let mut data = [0u8; 32];

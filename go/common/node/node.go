@@ -32,10 +32,6 @@ var (
 	// does not contain the node's RAK hash.
 	ErrRAKHashMismatch = errors.New("node: RAK hash mismatch")
 
-	// ErrInvalidAttestation is the error returned when the TEE attestation
-	// is malformed.
-	ErrInvalidAttestation = errors.New("node: invalid TEE attestation")
-
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
 
@@ -361,13 +357,8 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 			return ErrRAKHashMismatch
 		}
 
-		var acc byte
-		for _, v := range q.Report.ReportData[hash.Size:] {
-			acc |= v
-		}
-		if acc != 0 {
-			return ErrInvalidAttestation
-		}
+		// The last 32 bytes of the quote ReportData are deliberately
+		// ignored.
 
 		return nil
 	default:

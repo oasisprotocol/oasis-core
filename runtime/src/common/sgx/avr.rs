@@ -1,8 +1,5 @@
 //! Attestation verification report handling.
-use std::{
-    io::{Cursor, Read, Seek, SeekFrom},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -17,6 +14,11 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use untrusted;
 use webpki;
+
+#[cfg(target_env = "sgx")]
+use sgx_isa::Report;
+
+use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
 
 /// AVR verification error.
 #[derive(Debug, Fail)]
@@ -49,6 +51,7 @@ pub const QUOTE_CONTEXT_LEN: usize = 8;
 pub type QuoteContext = [u8; QUOTE_CONTEXT_LEN];
 
 impl_bytes!(MrEnclave, 32, "Enclave hash (MRENCLAVE).");
+impl_bytes!(MrSigner, 32, "Enclave signer hash (MRSIGNER).");
 
 // AVR signature validation constants.
 static IAS_ANCHORS: [webpki::TrustAnchor<'static>; 1] = [
@@ -133,7 +136,7 @@ struct ReportBody {
     misc_select: u32,
     attributes: [u8; 16],
     mr_enclave: MrEnclave,
-    mr_signer: [u8; 32],
+    mr_signer: MrSigner,
     isv_prod_id: u16,
     isv_svn: u16,
     report_data: Vec<u8>,
@@ -159,7 +162,7 @@ impl QuoteBody {
 
         // TODO: Should we ensure that reserved bytes are all zero?
 
-        // Body.
+        // Quote body.
         quote_body.version = reader.read_u16::<LittleEndian>()?;
         quote_body.signature_type = reader.read_u16::<LittleEndian>()?;
         quote_body.gid = reader.read_u32::<LittleEndian>()?;
@@ -175,7 +178,7 @@ impl QuoteBody {
         reader.read_exact(&mut quote_body.report_body.attributes)?;
         reader.read_exact(&mut quote_body.report_body.mr_enclave.0)?;
         reader.seek(SeekFrom::Current(32))?; // 32 reserved bytes.
-        reader.read_exact(&mut quote_body.report_body.mr_signer)?;
+        reader.read_exact(&mut quote_body.report_body.mr_signer.0)?;
         reader.seek(SeekFrom::Current(96))?; // 96 reserved bytes.
         quote_body.report_body.isv_prod_id = reader.read_u16::<LittleEndian>()?;
         quote_body.report_body.isv_svn = reader.read_u16::<LittleEndian>()?;
@@ -204,7 +207,56 @@ pub struct AuthenticatedAVR {
     pub report_data: Vec<u8>,
     // TODO: add other av report/quote body/report fields we want to give the consumer
     pub mr_enclave: MrEnclave,
+    pub mr_signer: MrSigner,
+    pub timestamp: i64,
     pub nonce: String,
+}
+
+/// Parsed AVR body.
+#[derive(Debug, Clone)]
+pub(crate) struct ParsedAVR {
+    body: serde_json::Value,
+}
+
+impl ParsedAVR {
+    pub(crate) fn new(avr: &AVR) -> Fallible<Self> {
+        let body = match serde_json::from_slice(&avr.body) {
+            Ok(avr_body) => avr_body,
+            _ => return Err(AVRError::MalformedReportBody.into()),
+        };
+        Ok(Self { body })
+    }
+
+    fn isv_enclave_quote_status(&self) -> Fallible<String> {
+        match self.body["isvEnclaveQuoteStatus"].as_str() {
+            Some(status) => Ok(status.to_string()),
+            None => Err(AVRError::MissingQuoteStatus.into()),
+        }
+    }
+
+    fn isv_enclave_quote_body(&self) -> Fallible<String> {
+        match self.body["isvEnclaveQuoteBody"].as_str() {
+            Some(quote_body) => Ok(quote_body.to_string()),
+            None => Err(AVRError::MissingQuoteBody.into()),
+        }
+    }
+
+    fn timestamp(&self) -> Fallible<i64> {
+        let timestamp = match self.body["timestamp"].as_str() {
+            Some(timestamp) => timestamp,
+            None => {
+                return Err(AVRError::MissingTimestamp.into());
+            }
+        };
+        parse_avr_timestamp(&timestamp)
+    }
+
+    pub(crate) fn nonce(&self) -> Fallible<String> {
+        match self.body["nonce"].as_str() {
+            Some(nonce) => Ok(nonce.to_string()),
+            None => Err(AVRError::MissingNonce.into()),
+        }
+    }
 }
 
 /// Verify attestation report.
@@ -212,12 +264,8 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
     let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
     let strict_avr_verification = option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
 
-    // Get the current time.
-    //
-    // WARNING: If this is running in an enclave, this will be an OCALL, and
-    // entirely reliant on the responder to provide the correct time.
-    let now_unix = SystemTime::now().duration_since(UNIX_EPOCH)?;
-    let now_unix = now_unix.as_secs() as i64;
+    // Get the time.
+    let timestamp_now = insecure_posix_time();
 
     // Verify IAS signature.
     if !unsafe_skip_avr_verification {
@@ -225,83 +273,58 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
             &avr.certificate_chain,
             &avr.body,
             &avr.signature,
-            now_unix as u64,
+            timestamp_now as u64,
         )?;
     }
 
     // Parse AV report body.
-    let avr_body: serde_json::Value = match serde_json::from_slice(&avr.body) {
-        Ok(avr_body) => avr_body,
-        _ => return Err(AVRError::MalformedReportBody.into()),
-    };
+    let avr_body = ParsedAVR::new(&avr)?;
 
-    // Check timestamp, reject if report is too old (e.g. 1 day).
-    if !unsafe_skip_avr_verification {
-        let timestamp = match avr_body["timestamp"].as_str() {
-            Some(timestamp) => timestamp,
-            None => {
-                return Err(AVRError::MissingTimestamp.into());
-            }
-        };
-        let timestamp_unix = parse_avr_timestamp(&timestamp)?;
-        if (now_unix - timestamp_unix).abs() > 1000 * 60 * 60 * 24 {
-            return Err(AVRError::TimestampOutOfRange.into());
-        }
+    // Check timestamp, reject if report is too old.
+    let timestamp = avr_body.timestamp()?;
+    if !timestamp_is_fresh(timestamp_now, timestamp) {
+        return Err(AVRError::TimestampOutOfRange.into());
     }
 
-    match avr_body["isvEnclaveQuoteStatus"].as_str() {
-        Some(status) => match status {
-            "OK" => {}
-            "GROUP_OUT_OF_DATE" | "CONFIGURATION_NEEDED" => {
-                if strict_avr_verification {
-                    return Err(AVRError::QuoteStatusInvalid {
-                        status: status.to_owned(),
-                    }
-                    .into());
-                }
-            }
-            _ => {
+    let nonce = avr_body.nonce()?;
+
+    let quote_status = avr_body.isv_enclave_quote_status()?;
+    match quote_status.as_str() {
+        "OK" => {}
+        "GROUP_OUT_OF_DATE" | "CONFIGURATION_NEEDED" => {
+            if strict_avr_verification {
                 return Err(AVRError::QuoteStatusInvalid {
-                    status: status.to_owned(),
+                    status: quote_status.to_owned(),
                 }
                 .into());
             }
-        },
-        None => {
-            return Err(AVRError::MissingQuoteStatus.into());
+        }
+        _ => {
+            return Err(AVRError::QuoteStatusInvalid {
+                status: quote_status.to_owned(),
+            }
+            .into());
         }
     };
 
-    let nonce = match avr_body["nonce"].as_str() {
-        Some(nonce) => nonce,
-        None => {
-            return Err(AVRError::MissingNonce.into());
-        }
-    };
-
-    let quote_body = match avr_body["isvEnclaveQuoteBody"].as_str() {
-        Some(quote_body) => quote_body,
-        None => {
-            return Err(AVRError::MissingQuoteBody.into());
-        }
-    };
-
+    let quote_body = avr_body.isv_enclave_quote_body()?;
     let quote_body = match base64::decode(&quote_body) {
         Ok(quote_body) => quote_body,
         _ => return Err(AVRError::MalformedQuote.into()),
     };
-
     let quote_body = match QuoteBody::decode(&quote_body) {
         Ok(quote_body) => quote_body,
         _ => return Err(AVRError::MalformedQuote.into()),
     };
 
-    // TODO: Apply common policy to report body, e.g., check enclave
-    // attributes for debug mode.
+    // Force-ratchet the clock forward, to at least the time in the AVR.
+    update_insecure_posix_time(timestamp);
 
     Ok(AuthenticatedAVR {
         report_data: quote_body.report_body.report_data,
         mr_enclave: quote_body.report_body.mr_enclave,
+        mr_signer: quote_body.report_body.mr_signer,
+        timestamp,
         nonce: nonce.to_string(),
     })
 }
@@ -416,6 +439,33 @@ fn pem_parse_many(input: &str, label: &str) -> Vec<Vec<u8>> {
     }
 
     contents
+}
+
+/// Return true iff the (POXIX) timestamp is considered "fresh" for the purposes
+/// of a cached AVR, given the current time.
+pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
+    (now - timestamp).abs() < 60 * 60 * 24
+}
+
+/// Enclave identity.
+pub struct EnclaveIdentity {
+    pub mr_enclave: MrEnclave,
+    pub mr_signer: MrSigner,
+}
+
+// Get the current running enclave's identity.
+pub fn get_enclave_identity() -> Option<EnclaveIdentity> {
+    #[cfg(target_env = "sgx")]
+    {
+        let report = Report::for_self();
+        Some(EnclaveIdentity {
+            mr_enclave: MrEnclave(report.mrenclave),
+            mr_signer: MrSigner(report.mrsigner),
+        })
+    }
+
+    #[cfg(not(target_env = "sgx"))]
+    None
 }
 
 #[cfg(test)]
