@@ -101,11 +101,35 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 		return committees, nil
 	}
 
-	nodeList := s.nodeLists[epoch][rtID][rt.TEEHardware]
 	beacon := s.beacons[epoch]
-	nrNodes := len(nodeList)
+	runtimeTeeNodeList := s.nodeLists[epoch][rtID][rt.TEEHardware]
 
 	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage, api.TransactionScheduler} {
+
+		// Select nodes with compatible roles
+		nodeList := []*node.Node{}
+		for _, n := range runtimeTeeNodeList {
+			switch kind {
+			case api.Compute:
+				if n.HasRoles(node.ComputeWorker) {
+					nodeList = append(nodeList, n)
+				}
+			case api.Storage:
+				// XXX: Storage committee is completely ignored at the moment
+				// so we just select one of the compute nodes.
+				// #1583 will refactor this and select storage workers from
+				// the pool of all registered storage worker nodes.
+				nodeList = append(nodeList, n)
+			case api.TransactionScheduler:
+				// XXX: Transaction scheduler committee is completely ignored at the moment
+				// so we just select one of the compute nodes.
+				// #1626 will refactor this and select transaction scheduler workers from
+				// the pool of all registered transaction scheduler worker nodes.
+				nodeList = append(nodeList, n)
+			}
+		}
+		nrNodes := len(nodeList)
+
 		var sz int
 		var ctx []byte
 		switch kind {
