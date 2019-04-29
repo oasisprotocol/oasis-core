@@ -15,5 +15,5 @@ grpc/scheduler/*.pb.go
 grpc/storage/*.pb.go
 grpc/client/*.pb.go
 grpc/enclaverpc/*.pb.go
-grpc/transactionscheduler/*.pb.go
+grpc/txnscheduler/*.pb.go
 common/sgx/aesm/*.pb.go

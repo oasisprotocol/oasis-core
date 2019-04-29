@@ -10,7 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	pb "github.com/oasislabs/ekiden/go/grpc/transactionscheduler"
+	pb "github.com/oasislabs/ekiden/go/grpc/txnscheduler"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
 

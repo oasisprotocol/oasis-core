@@ -30,7 +30,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/grpc/transactionscheduler"
+	"github.com/oasislabs/ekiden/go/grpc/txnscheduler"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -106,7 +106,7 @@ type Client struct {
 	logger *logging.Logger
 }
 
-func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *transactionscheduler.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
+func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
 	defer close(submitCtx.closeCh)
 
 	nodeCert, err := nodeMeta.Certificate.Parse()
@@ -129,7 +129,7 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *transactionsc
 		return
 	}
 	defer conn.Close()
-	client := transactionscheduler.NewTransactionSchedulerClient(conn)
+	client := txnscheduler.NewTransactionSchedulerClient(conn)
 
 	var addresses []resolver.Address
 	for _, addr := range nodeMeta.Addresses {
@@ -164,7 +164,7 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 		return nil, werr
 	}
 
-	req := &transactionscheduler.SubmitTxRequest{
+	req := &txnscheduler.SubmitTxRequest{
 		RuntimeId: runtimeID,
 		Data:      txData,
 	}
