@@ -91,6 +91,12 @@ macro_rules! impl_bytes {
             }
         }
 
+        impl From<Vec<u8>> for $name {
+            fn from(v: Vec<u8>) -> $name {
+                Self::from(&v[..])
+            }
+        }
+
         impl ::std::str::FromStr for $name {
             type Err = ::rustc_hex::FromHexError;
 

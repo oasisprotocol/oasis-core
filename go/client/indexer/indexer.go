@@ -25,6 +25,9 @@ var (
 	ErrTagTooLong = errors.New("indexer: tag too long to process")
 	// ErrNotFound is the error when no entries are found.
 	ErrNotFound = errors.New("indexer: no entries found")
+
+	// TagBlockHash is the tag used for storing the Ekiden block hash.
+	TagBlockHash = []byte("hblk")
 )
 
 // Backend is an indexer backend.
@@ -79,31 +82,40 @@ func (s *Service) worker() {
 			s.Logger.Info("stop requested, terminating indexer")
 			return
 		case blk := <-blocksCh:
-			// Fetch tags from storage.
-			if blk.Header.TagHash.IsEmpty() {
-				continue
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), storageTimeout)
-			rawTags, err := s.storage.Get(ctx, storage.Key(blk.Header.TagHash))
-			cancel()
-			if err != nil {
-				s.Logger.Error("can't get block tags from storage",
-					"err", err,
-					"round", blk.Header.Round,
-				)
-				continue
-			}
-
 			var tags []runtime.Tag
-			err = cbor.Unmarshal(rawTags, &tags)
-			if err != nil {
-				s.Logger.Error("can't unmarshal tags from cbor",
-					"err", err,
-					"round", blk.Header.Round,
-				)
-				continue
+
+			// Fetch tags from storage.
+			if !blk.Header.TagHash.IsEmpty() {
+				ctx, cancel := context.WithTimeout(context.Background(), storageTimeout)
+
+				var rawTags []byte
+				rawTags, err = s.storage.Get(ctx, storage.Key(blk.Header.TagHash))
+				cancel()
+				if err != nil {
+					s.Logger.Error("can't get block tags from storage",
+						"err", err,
+						"round", blk.Header.Round,
+					)
+					continue
+				}
+
+				err = cbor.Unmarshal(rawTags, &tags)
+				if err != nil {
+					s.Logger.Error("can't unmarshal tags from cbor",
+						"err", err,
+						"round", blk.Header.Round,
+					)
+					continue
+				}
 			}
+
+			// Include block hash tag.
+			blockHash := blk.Header.EncodedHash()
+			tags = append(tags, runtime.Tag{
+				TxnIndex: runtime.TagTxnIndexBlock,
+				Key:      TagBlockHash,
+				Value:    blockHash[:],
+			})
 
 			if err = s.backend.Index(s.runtimeID, blk.Header.Round, tags); err != nil {
 				s.Logger.Error("failed to index tags",

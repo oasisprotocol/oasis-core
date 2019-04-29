@@ -12,7 +12,7 @@ use clap::{App, Arg};
 use grpcio::EnvBuilder;
 use tokio::runtime::Runtime;
 
-use ekiden_client::{create_txn_api_client, Node, TxnClient};
+use ekiden_client::{create_txn_api_client, transaction::client::TAG_BLOCK_HASH, Node, TxnClient};
 use ekiden_runtime::{common::runtime::RuntimeId, storage::MKVS};
 use simple_keyvalue_api::{with_api, KeyValue};
 
@@ -121,6 +121,17 @@ fn main() {
     println!("Querying block tags (kv_hello=get)...");
     let snapshot = rt
         .block_on(kv_client.txn_client().query_block(b"kv_hello", b"get"))
+        .expect("query block snapshot");
+    println!("Found block: {:?}", snapshot.block);
+
+    // Test query_block call by block hash.
+    println!("Querying block by hash ({:?})...", snapshot.block_hash);
+    let snapshot = rt
+        .block_on(
+            kv_client
+                .txn_client()
+                .query_block(TAG_BLOCK_HASH, snapshot.block_hash),
+        )
         .expect("query block snapshot");
     println!("Found block: {:?}", snapshot.block);
 

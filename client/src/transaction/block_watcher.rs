@@ -4,9 +4,10 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use ekiden_runtime::common::roothash::Block;
 use futures::{prelude::*, stream::Fuse, try_ready};
 use tokio::{spawn, sync::watch};
+
+use super::snapshot::BlockSnapshot;
 
 /// Block watcher error.
 #[derive(Debug, Fail)]
@@ -17,8 +18,8 @@ pub enum WatchError {
 
 struct Inner {
     spawned: AtomicBool,
-    current_block: watch::Receiver<Option<Block>>,
-    current_block_tx: Mutex<Option<watch::Sender<Option<Block>>>>,
+    current_block: watch::Receiver<Option<BlockSnapshot>>,
+    current_block_tx: Mutex<Option<watch::Sender<Option<BlockSnapshot>>>>,
 }
 
 /// Block watcher.
@@ -64,7 +65,7 @@ impl BlockWatcher {
     /// Must only be called after first calling `start_spawn`.
     pub fn spawn<T>(&self, blocks: T)
     where
-        T: Stream<Item = Option<Block>> + Send + 'static,
+        T: Stream<Item = BlockSnapshot> + Send + 'static,
     {
         let tx = self
             .inner
@@ -76,7 +77,7 @@ impl BlockWatcher {
 
         let inner = self.inner.clone();
         spawn(
-            Watch::new(blocks, tx)
+            Watch::new(blocks.map(|blk| Some(blk)), tx)
                 .map_err(|_err| ())
                 .and_then(move |tx| {
                     // Watch has terminated which indicates that there is something wrong
@@ -92,7 +93,7 @@ impl BlockWatcher {
     }
 
     /// Get the latest block.
-    pub fn get_latest_block(&self) -> impl Future<Item = Block, Error = WatchError> {
+    pub fn get_latest_block(&self) -> impl Future<Item = BlockSnapshot, Error = WatchError> {
         self.inner
             .current_block
             .clone()
