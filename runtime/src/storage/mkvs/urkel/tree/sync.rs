@@ -12,7 +12,7 @@ impl ReadSync for UrkelTree {
     }
 
     fn get_subtree(&mut self, root_hash: Hash, id: NodeID, max_depth: u8) -> Fallible<Subtree> {
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
         if root_hash != pending_root.borrow().hash {
             return Err(SyncerError::InvalidRoot.into());
         }
@@ -20,7 +20,7 @@ impl ReadSync for UrkelTree {
             return Err(SyncerError::DirtyRoot.into());
         }
 
-        let subtree_root = self.cache.deref_node_id(id)?;
+        let subtree_root = self.cache.borrow_mut().deref_node_id(id)?;
         if subtree_root.borrow().is_null() {
             return Err(SyncerError::NodeNotFound.into());
         }
@@ -38,15 +38,16 @@ impl ReadSync for UrkelTree {
     }
 
     fn get_path(&mut self, root_hash: Hash, key: Hash, start_depth: u8) -> Fallible<Subtree> {
-        if root_hash != self.cache.get_pending_root().borrow().hash {
+        if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
             return Err(SyncerError::InvalidRoot.into());
         }
-        if !self.cache.get_pending_root().borrow().clean {
+        if !self.cache.borrow().get_pending_root().borrow().clean {
             return Err(SyncerError::DirtyRoot.into());
         }
 
         let subtree_root = self
             .cache
+            .borrow_mut()
             .deref_node_id(NodeID {
                 path: key,
                 depth: start_depth,
@@ -63,17 +64,19 @@ impl ReadSync for UrkelTree {
     }
 
     fn get_node(&mut self, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
-        if root_hash != self.cache.get_pending_root().borrow().hash {
+        if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
             Err(SyncerError::InvalidRoot.into())
-        } else if !self.cache.get_pending_root().borrow().clean {
+        } else if !self.cache.borrow().get_pending_root().borrow().clean {
             Err(SyncerError::DirtyRoot.into())
         } else {
             let ptr = self
                 .cache
+                .borrow_mut()
                 .deref_node_id(id)
                 .map_err(|_| Error::from(SyncerError::NodeNotFound))?;
             let node = self
                 .cache
+                .borrow_mut()
                 .deref_node_ptr(id, ptr, None)
                 .map_err(|_| Error::from(SyncerError::NodeNotFound))?;
             Ok(node.unwrap().borrow().extract())
@@ -81,12 +84,13 @@ impl ReadSync for UrkelTree {
     }
 
     fn get_value(&mut self, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        if root_hash != self.cache.get_pending_root().borrow().hash {
+        if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
             Err(SyncerError::InvalidRoot.into())
-        } else if !self.cache.get_pending_root().borrow().clean {
+        } else if !self.cache.borrow().get_pending_root().borrow().clean {
             Err(SyncerError::DirtyRoot.into())
         } else {
             self.cache
+                .borrow_mut()
                 .deref_value_ptr(Rc::new(RefCell::new(ValuePointer {
                     clean: true,
                     hash: id,
@@ -105,7 +109,7 @@ impl UrkelTree {
         st: &mut Subtree,
         max_depth: u8,
     ) -> Fallible<SubtreePointer> {
-        let node_ref = self.cache.deref_node_ptr(
+        let node_ref = self.cache.borrow_mut().deref_node_ptr(
             NodeID {
                 path: path,
                 depth: depth,
@@ -181,7 +185,7 @@ impl UrkelTree {
         key: Hash,
         st: &mut Subtree,
     ) -> Fallible<SubtreePointer> {
-        let node_ref = self.cache.deref_node_ptr(
+        let node_ref = self.cache.borrow_mut().deref_node_ptr(
             NodeID {
                 path: key,
                 depth: depth,

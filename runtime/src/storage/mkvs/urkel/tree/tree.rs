@@ -112,31 +112,38 @@ pub struct UrkelStats {
 
 /// An Urkel tree-based MKVS implementation.
 pub struct UrkelTree {
-    pub cache: Box<LRUCache>,
+    pub cache: RefCell<Box<LRUCache>>,
     pub pending_write_log: BTreeMap<Hash, PendingLogEntry>,
 }
 
 impl UrkelTree {
     /// Construct a new tree instance using the given read syncer and options struct.
     pub fn new(read_syncer: Box<dyn ReadSync>, opts: &UrkelOptions) -> Fallible<UrkelTree> {
-        let mut tree = UrkelTree {
-            cache: LRUCache::new(opts.node_capacity, opts.value_capacity, read_syncer),
+        let tree = UrkelTree {
+            cache: RefCell::new(LRUCache::new(
+                opts.node_capacity,
+                opts.value_capacity,
+                read_syncer,
+            )),
             pending_write_log: BTreeMap::new(),
         };
 
-        tree.cache.set_prefetch_depth(opts.prefetch_depth);
+        tree.cache
+            .borrow_mut()
+            .set_prefetch_depth(opts.prefetch_depth);
 
         if let Some(root_hash) = opts.root_hash {
             tree.cache
+                .borrow_mut()
                 .set_pending_root(Rc::new(RefCell::new(NodePointer {
                     clean: true,
                     hash: root_hash,
                     ..Default::default()
                 })));
-            tree.cache.set_sync_root(root_hash);
-            let ptr = tree.cache.prefetch(root_hash, 0)?;
+            tree.cache.borrow_mut().set_sync_root(root_hash);
+            let ptr = tree.cache.borrow_mut().prefetch(root_hash, 0)?;
             if !ptr.borrow().is_null() {
-                tree.cache.set_pending_root(ptr);
+                tree.cache.borrow_mut().set_pending_root(ptr);
             }
         }
 
@@ -151,10 +158,5 @@ impl UrkelTree {
             prefetch_depth: 0,
             root_hash: None,
         }
-    }
-
-    /// Return the read syncer used by this tree.
-    pub fn get_read_syncer(&self) -> &Box<dyn ReadSync> {
-        self.cache.get_read_syncer()
     }
 }

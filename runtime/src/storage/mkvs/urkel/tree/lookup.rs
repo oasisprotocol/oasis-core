@@ -7,14 +7,14 @@ use crate::{
 
 impl UrkelTree {
     /// Get an existing key.
-    pub fn get(&mut self, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
+    pub fn get(&self, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
         let hkey = Hash::digest_bytes(key);
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
         Ok(self._get(pending_root, 0, hkey)?)
     }
 
-    fn _get(&mut self, ptr: NodePtrRef, depth: u8, key: Hash) -> Fallible<Option<Value>> {
-        let node_ref = self.cache.deref_node_ptr(
+    fn _get(&self, ptr: NodePtrRef, depth: u8, key: Hash) -> Fallible<Option<Value>> {
+        let node_ref = self.cache.borrow_mut().deref_node_ptr(
             NodeID {
                 path: key,
                 depth: depth,
@@ -44,6 +44,7 @@ impl UrkelTree {
                 if noderef_as!(node_ref, Leaf).key == key {
                     return Ok(self
                         .cache
+                        .borrow_mut()
                         .deref_value_ptr(noderef_as!(node_ref, Leaf).value.clone())?);
                 } else {
                     return Ok(None);

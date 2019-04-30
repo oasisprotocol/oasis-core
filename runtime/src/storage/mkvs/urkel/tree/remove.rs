@@ -9,7 +9,7 @@ impl UrkelTree {
     /// Remove a key from the tree and return true if the tree was modified.
     pub fn remove(&mut self, key: &[u8]) -> Fallible<bool> {
         let hkey = Hash::digest_bytes(key);
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
 
         let (new_root, changed) = self._remove(pending_root, 0, hkey)?;
         match self.pending_write_log.get_mut(&hkey) {
@@ -27,13 +27,13 @@ impl UrkelTree {
                 entry.value = None;
             }
         };
-        self.cache.set_pending_root(new_root);
+        self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(changed)
     }
 
     fn _remove(&mut self, ptr: NodePtrRef, depth: u8, key: Hash) -> Fallible<(NodePtrRef, bool)> {
-        let node_ref = self.cache.deref_node_ptr(
+        let node_ref = self.cache.borrow_mut().deref_node_ptr(
             NodeID {
                 path: key,
                 depth: depth,
@@ -76,17 +76,22 @@ impl UrkelTree {
                     depth: depth + 1,
                 };
 
-                let left_ref = self
-                    .cache
-                    .deref_node_ptr(lr_id.clone(), int_left.clone(), None)?;
+                let left_ref = self.cache.borrow_mut().deref_node_ptr(
+                    lr_id.clone(),
+                    int_left.clone(),
+                    None,
+                )?;
                 match left_ref {
                     None => {
-                        let right_ref =
-                            self.cache.deref_node_ptr(lr_id, int_right.clone(), None)?;
+                        let right_ref = self.cache.borrow_mut().deref_node_ptr(
+                            lr_id,
+                            int_right.clone(),
+                            None,
+                        )?;
                         let right_ref = match right_ref {
                             None => {
                                 // No more children, delete the internal node as well.
-                                self.cache.try_remove_node(ptr.clone());
+                                self.cache.borrow_mut().try_remove_node(ptr.clone());
                                 return Ok((NodePointer::null_ptr(), true));
                             }
                             Some(node_ref) => node_ref,
@@ -98,8 +103,11 @@ impl UrkelTree {
                     }
                     Some(left_ref) => {
                         if let NodeBox::Leaf(_) = *left_ref.borrow() {
-                            let right_ref =
-                                self.cache.deref_node_ptr(lr_id, int_right.clone(), None)?;
+                            let right_ref = self.cache.borrow_mut().deref_node_ptr(
+                                lr_id,
+                                int_right.clone(),
+                                None,
+                            )?;
                             if let None = right_ref {
                                 // Right is None, left is a leaf, merge nodes back.
                                 return Ok((int_left.clone(), true));
@@ -125,7 +133,7 @@ impl UrkelTree {
                     remove = true;
                 }
                 if remove {
-                    self.cache.try_remove_node(ptr.clone());
+                    self.cache.borrow_mut().try_remove_node(ptr.clone());
                     return Ok((NodePointer::null_ptr(), true));
                 }
                 return Ok((ptr.clone(), false));

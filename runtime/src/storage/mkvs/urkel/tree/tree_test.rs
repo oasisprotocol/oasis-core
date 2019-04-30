@@ -1,6 +1,6 @@
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{sync::*, tree::*},
+    storage::mkvs::urkel::{cache::*, sync::*, tree::*},
 };
 
 const INSERT_ITEMS: usize = 10000;
@@ -224,7 +224,7 @@ fn test_syncer_basic_no_prefetch() {
     // prefetching.
 
     let stats = StatsCollector::new(Box::new(tree));
-    let mut remote_tree = UrkelTree::make()
+    let remote_tree = UrkelTree::make()
         .with_root(hash)
         .new(Box::new(stats))
         .expect("with_root");
@@ -238,7 +238,8 @@ fn test_syncer_basic_no_prefetch() {
     }
 
     {
-        let stats = remote_tree
+        let cache = remote_tree.cache.borrow();
+        let stats = cache
             .get_read_syncer()
             .as_any()
             .downcast_ref::<StatsCollector>()
@@ -270,7 +271,7 @@ fn test_syncer_basic_with_prefetch() {
     // prefetching.
 
     let stats = StatsCollector::new(Box::new(tree));
-    let mut remote_tree = UrkelTree::make()
+    let remote_tree = UrkelTree::make()
         .with_root(hash)
         .with_prefetch_depth(10)
         .new(Box::new(stats))
@@ -285,7 +286,8 @@ fn test_syncer_basic_with_prefetch() {
     }
 
     {
-        let stats = remote_tree
+        let cache = remote_tree.cache.borrow();
+        let stats = cache
             .get_read_syncer()
             .as_any()
             .downcast_ref::<StatsCollector>()

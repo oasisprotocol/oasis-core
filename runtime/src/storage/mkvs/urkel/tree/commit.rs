@@ -10,10 +10,10 @@ impl UrkelTree {
     /// the write log and new merkle root.
     pub fn commit(&mut self) -> Fallible<(WriteLog, Hash)> {
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
         let new_hash = _commit(pending_root.clone(), &mut update_list)?;
 
-        update_list.commit(&mut self.cache);
+        update_list.commit(&mut self.cache.borrow_mut());
 
         let mut log: WriteLog = Vec::new();
         for (_, entry) in self.pending_write_log.iter() {
@@ -28,7 +28,7 @@ impl UrkelTree {
             });
         }
         self.pending_write_log.clear();
-        self.cache.set_sync_root(new_hash);
+        self.cache.borrow_mut().set_sync_root(new_hash);
 
         Ok((log, new_hash))
     }

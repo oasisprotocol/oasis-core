@@ -11,7 +11,7 @@ impl UrkelTree {
     /// Insert a key/value pair into the tree.
     pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Fallible<()> {
         let hkey = Hash::digest_bytes(key);
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
         let boxed_val = value.to_vec();
 
         let (new_root, existed) = self._insert(pending_root, 0, hkey, boxed_val.clone())?;
@@ -30,7 +30,7 @@ impl UrkelTree {
                 entry.value = Some(boxed_val.clone());
             }
         };
-        self.cache.set_pending_root(new_root.clone());
+        self.cache.borrow_mut().set_pending_root(new_root.clone());
 
         Ok(())
     }
@@ -42,7 +42,7 @@ impl UrkelTree {
         key: Hash,
         val: Value,
     ) -> Fallible<(NodePtrRef, bool)> {
-        let node_ref = self.cache.deref_node_ptr(
+        let node_ref = self.cache.borrow_mut().deref_node_ptr(
             NodeID {
                 path: key,
                 depth: depth,
@@ -53,7 +53,7 @@ impl UrkelTree {
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
-                return Ok((self.cache.new_leaf_node(key, val), false));
+                return Ok((self.cache.borrow_mut().new_leaf_node(key, val), false));
             }
             NodeKind::Internal => {
                 let node_ref = node_ref.unwrap();
@@ -99,8 +99,8 @@ impl UrkelTree {
                             }
                             _ => {}
                         };
-                        self.cache.remove_value(leaf.value.clone());
-                        leaf.value = self.cache.new_value(val);
+                        self.cache.borrow_mut().remove_value(leaf.value.clone());
+                        leaf.value = self.cache.borrow_mut().new_value(val);
                         leaf.clean = false;
                         ptr.borrow_mut().clean = false;
                         return Ok((ptr.clone(), true));
@@ -121,13 +121,13 @@ impl UrkelTree {
                 let pointers = if new_bit != existing_bit {
                     if existing_bit {
                         (
-                            /* left */ self.cache.new_leaf_node(key, val),
+                            /* left */ self.cache.borrow_mut().new_leaf_node(key, val),
                             /* right */ ptr.clone(),
                         )
                     } else {
                         (
                             /* left */ ptr.clone(),
-                            /* right */ self.cache.new_leaf_node(key, val),
+                            /* right */ self.cache.borrow_mut().new_leaf_node(key, val),
                         )
                     }
                 } else {
@@ -138,7 +138,10 @@ impl UrkelTree {
                         (ret.0, none_ptr.clone()) // (left, right)
                     }
                 };
-                let new_internal = self.cache.new_internal_node(pointers.0, pointers.1);
+                let new_internal = self
+                    .cache
+                    .borrow_mut()
+                    .new_internal_node(pointers.0, pointers.1);
                 return Ok((new_internal.clone(), false));
             }
         }
