@@ -63,28 +63,27 @@ func (e *EpochSnapshot) GetGroupHash() hash.Hash {
 	return e.groupHash
 }
 
-// IsMember checks if the current node is a member of the compute committee
+// IsComputeMember checks if the current node is a member of the compute committee
 // in the current epoch.
-// TODO: rename these?
-func (e *EpochSnapshot) IsMember() bool {
+func (e *EpochSnapshot) IsComputeMember() bool {
 	return e.computeRole != scheduler.Invalid
 }
 
-// IsLeader checks if the current node is a leader of the compute committee
+// IsComputeLeader checks if the current node is a leader of the compute committee
 // in the current epoch.
-func (e *EpochSnapshot) IsLeader() bool {
+func (e *EpochSnapshot) IsComputeLeader() bool {
 	return e.computeRole == scheduler.Leader
 }
 
-// IsWorker checks if the current node is a worker of the compute committee
+// IsComputeWorker checks if the current node is a worker of the compute committee
 // in the current epoch.
-func (e *EpochSnapshot) IsWorker() bool {
+func (e *EpochSnapshot) IsComputeWorker() bool {
 	return e.computeRole == scheduler.Worker
 }
 
-// IsBackupWorker checks if the current node is a backup worker of the compute
+// IsComputeBackupWorker checks if the current node is a backup worker of the compute
 // committee in the current epoch.
-func (e *EpochSnapshot) IsBackupWorker() bool {
+func (e *EpochSnapshot) IsComputeBackupWorker() bool {
 	return e.computeRole == scheduler.BackupWorker
 }
 

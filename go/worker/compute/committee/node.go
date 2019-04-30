@@ -381,7 +381,7 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
 
-	if epoch.IsMember() {
+	if epoch.IsComputeMember() {
 		n.transition(StateWaitingForBatch{})
 	} else {
 		n.transition(StateNotReady{})
@@ -611,7 +611,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	// Commit outputs and state to storage. If we are a regular worker, then we only
 	// insert into local cache.
 	var opts storage.InsertOptions
-	if !epoch.IsLeader() && !epoch.IsBackupWorker() {
+	if !epoch.IsComputeLeader() && !epoch.IsComputeBackupWorker() {
 		opts.LocalOnly = true
 	}
 
@@ -720,7 +720,7 @@ func (n *Node) handleNewEvent(ev *roothash.Event) {
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
-	if n.group.GetEpochSnapshot().IsBackupWorker() {
+	if n.group.GetEpochSnapshot().IsComputeBackupWorker() {
 		// Backup worker, start processing a batch.
 		n.logger.Info("backup worker activating and processing batch",
 			"input_hash", dis.BatchHash,
@@ -810,7 +810,7 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}
 	spanPublish.Finish()
 
-	if epochSnapshot.IsLeader() || epochSnapshot.IsWorker() {
+	if epochSnapshot.IsComputeLeader() || epochSnapshot.IsComputeWorker() {
 		// Start processing the batch locally.
 		n.startProcessingBatch(batch)
 	}
@@ -827,7 +827,7 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 	epoch := n.group.GetEpochSnapshot()
 
 	// We can only receive external batches if we are a leader, a worker, or a backup worker.
-	if !epoch.IsLeader() && !epoch.IsWorker() && !epoch.IsBackupWorker() {
+	if !epoch.IsComputeLeader() && !epoch.IsComputeWorker() && !epoch.IsComputeBackupWorker() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
 	}
