@@ -45,7 +45,8 @@ type epoch struct {
 	transactionSchedulerCommittee *scheduler.Committee
 	nodes                         []*node.Node
 	groupHash                     hash.Hash
-	leaderPeerID                  []byte
+	// The transaction scheduler leader's peer ID.
+	leaderPeerID []byte
 
 	computeRole              scheduler.Role
 	transactionSchedulerRole scheduler.Role
@@ -271,7 +272,7 @@ func (g *Group) IsPeerAuthorized(peerID []byte) bool {
 		return false
 	}
 
-	// Currently we only accept messages from the committee leader.
+	// Currently we only accept messages from the transaction scheduler committee leader.
 	return g.activeEpoch.leaderPeerID != nil && bytes.Equal(peerID, g.activeEpoch.leaderPeerID)
 }
 
@@ -290,7 +291,7 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 		}
 
 		if g.activeEpoch.leaderPeerID == nil || !bytes.Equal(peerID, g.activeEpoch.leaderPeerID) {
-			// Currently we only accept messages from the committee leader.
+			// Currently we only accept messages from the transaction scheduler committee leader.
 			return nil, errors.New("peer is not transaction scheduler leader")
 		}
 
@@ -342,7 +343,7 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 		scBinary, _ = tracing.SpanContextToBinary(batchSpanCtx)
 	}
 
-	// Publish batch to all workers in the committee.
+	// Publish batch to all workers in the compute committee.
 	publicIdentity := g.identity.NodeKey.Public()
 	for index, member := range g.activeEpoch.computeCommittee.Members {
 		if member.Role != scheduler.Leader && member.Role != scheduler.Worker {
