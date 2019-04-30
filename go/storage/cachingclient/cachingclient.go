@@ -17,6 +17,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -183,6 +184,31 @@ func (b *cachingClientBackend) InsertBatch(ctx context.Context, values []api.Val
 func (b *cachingClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
 	// This must always be fetched from remote.
 	return b.remote.GetKeys(ctx)
+}
+
+func (b *cachingClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+	// TODO: Implement caching for MKVS operations (issue #1664).
+	return b.remote.Apply(ctx, root, expectedNewRoot, log)
+}
+
+func (b *cachingClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+	// TODO: Implement caching for MKVS operations (issue #1664).
+	return b.remote.GetSubtree(ctx, root, id, maxDepth)
+}
+
+func (b *cachingClientBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+	// TODO: Implement caching for MKVS operations (issue #1664).
+	return b.remote.GetPath(ctx, root, key, startDepth)
+}
+
+func (b *cachingClientBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+	// TODO: Implement caching for MKVS operations (issue #1664).
+	return b.remote.GetNode(ctx, root, id)
+}
+
+func (b *cachingClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
+	// TODO: Implement caching for MKVS operations (issue #1664).
+	return b.remote.GetValue(ctx, root, id)
 }
 
 func (b *cachingClientBackend) Cleanup() {

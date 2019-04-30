@@ -13,6 +13,10 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -25,6 +29,9 @@ const (
 
 	// DBFile is the default backing store filename.
 	DBFile = "storage.leveldb.db"
+
+	// MKVSDBFile is the default MKVS backing store filename.
+	MKVSDBFile = "mkvs_storage.leveldb.db"
 )
 
 var (
@@ -51,6 +58,7 @@ var (
 type leveldbBackend struct {
 	logger *logging.Logger
 	db     *leveldb.DB
+	nodedb nodedb.NodeDB
 
 	signingKey *signature.PrivateKey
 
@@ -179,8 +187,90 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 	return kiChan, nil
 }
 
+func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+	var r hash.Hash
+
+	// Check if we already have the expected new root in our local DB.
+	if urkel.HasRoot(b.nodedb, expectedNewRoot) {
+		// We do, don't apply anything.
+		r = expectedNewRoot
+	} else {
+		// We don't, apply operations.
+		tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, entry := range log {
+			err = tree.Insert(entry.Key, entry.Value)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		_, r, err = tree.Commit()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	receipt := api.MKVSReceiptBody{
+		Version: 1,
+		Root:    r,
+	}
+	signed, err := signature.SignSigned(*b.signingKey, api.MKVSReceiptSignatureContext, &receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.MKVSReceipt{
+		Signed: *signed,
+	}, nil
+}
+
+func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+	// TODO: Don't create a new root every time (issue #1580).
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetSubtree(ctx, root, id, maxDepth)
+}
+
+func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+	// TODO: Don't create a new root every time (issue #1580).
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetPath(ctx, root, key, startDepth)
+}
+
+func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+	// TODO: Don't create a new root every time (issue #1580).
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetNode(ctx, root, id)
+}
+
+func (b *leveldbBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
+	// TODO: Don't create a new root every time (issue #1580).
+	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.GetValue(ctx, root, id)
+}
+
 func (b *leveldbBackend) Cleanup() {
 	b.closeOnce.Do(func() {
+		b.nodedb.Close()
 		_ = b.db.Close()
 	})
 }
@@ -227,24 +317,30 @@ func checkVersion(db *leveldb.DB) error {
 
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
-func New(fn string, timeSource epochtime.Backend, signingKey *signature.PrivateKey) (api.Backend, error) {
+func New(dbDir string, mkvsDBDir string, timeSource epochtime.Backend, signingKey *signature.PrivateKey) (api.Backend, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(leveldbCollectors...)
 	})
 
-	db, err := leveldb.OpenFile(fn, nil)
+	db, err := leveldb.OpenFile(dbDir, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := checkVersion(db); err != nil {
+	if err = checkVersion(db); err != nil {
 		_ = db.Close()
+		return nil, err
+	}
+
+	ndb, err := nodedb.NewLevelDBNodeDB(mkvsDBDir)
+	if err != nil {
 		return nil, err
 	}
 
 	b := &leveldbBackend{
 		logger:     logging.GetLogger("storage/leveldb"),
 		db:         db,
+		nodedb:     ndb,
 		signingKey: signingKey,
 	}
 	b.updateMetrics()
