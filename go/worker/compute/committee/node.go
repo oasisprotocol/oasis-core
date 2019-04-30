@@ -3,7 +3,6 @@ package committee
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -46,13 +45,6 @@ var (
 )
 
 var (
-	incomingQueueSize = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "ekiden_worker_incoming_queue_size",
-			Help: "Size of the incoming queue (number of entries)",
-		},
-		[]string{"runtime"},
-	)
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ekiden_worker_discrepancy_detected_count",
@@ -103,7 +95,6 @@ var (
 		[]string{"runtime"},
 	)
 	nodeCollectors = []prometheus.Collector{
-		incomingQueueSize,
 		discrepancyDetectedCount,
 		processedBlockCount,
 		failedRoundCount,
@@ -118,11 +109,6 @@ var (
 
 // Config is a committee node configuration.
 type Config struct {
-	MaxQueueSize      uint64
-	MaxBatchSize      uint64
-	MaxBatchSizeBytes uint64
-	MaxBatchTimeout   time.Duration
-
 	StorageCommitTimeout time.Duration
 
 	ByzantineInjectDiscrepancies bool
@@ -159,7 +145,6 @@ type Node struct {
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	incomingQueue    *incomingQueue
 	incomingExtBatch chan *externalBatch
 	group            *Group
 
@@ -295,45 +280,6 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 	return respCh, nil
 }
 
-// QueueCall queues a call for processing by this node.
-func (n *Node) QueueCall(ctx context.Context, call []byte) error {
-	// Check if we are a leader. Note that we may be in the middle of a
-	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
-		return ErrNotLeader
-	}
-
-	if err := n.incomingQueue.Add(call); err != nil {
-		// Return success in case of duplicate calls to avoid the client
-		// mistaking this for an actual error.
-		if err == errCallAlreadyExists {
-			n.logger.Warn("ignoring duplicate call",
-				"call", hex.EncodeToString(call),
-			)
-			return nil
-		}
-
-		return err
-	}
-
-	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
-
-	return nil
-}
-
-// IsTransactionQueued checks if the given transaction is present in the
-// transaction scheduler queue and is waiting to be dispatched to a
-// compute committee.
-func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
-	// Check if we are a leader. Note that we may be in the middle of a
-	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
-		return false, ErrNotLeader
-	}
-
-	return n.incomingQueue.IsQueued(id), nil
-}
-
 func (n *Node) transition(state NodeState) {
 	n.logger.Info("state transition",
 		"current_state", n.state,
@@ -374,12 +320,6 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 	}
 
 	epoch := n.group.GetEpochSnapshot()
-
-	// Clear incoming queue if we are not a leader.
-	if !epoch.IsTransactionSchedulerLeader() {
-		n.incomingQueue.Clear()
-		incomingQueueSize.With(n.getMetricLabels()).Set(0)
-	}
 
 	if epoch.IsMember() {
 		n.transition(StateWaitingForBatch{})
@@ -563,17 +503,6 @@ func (n *Node) abortBatch(reason error) {
 	// Cancel the batch processing context and wait for it to finish.
 	state.cancel()
 
-	// If we are a leader, put the batch back into the incoming queue.
-	if n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
-		if err := n.incomingQueue.AddBatch(state.batch); err != nil {
-			n.logger.Warn("failed to add batch back into the incoming queue",
-				"err", err,
-			)
-		}
-
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
-	}
-
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
 
 	// After the batch has been aborted, we must wait for the round to be
@@ -740,84 +669,6 @@ func (n *Node) handleNewEvent(ev *roothash.Event) {
 	}
 }
 
-func (n *Node) checkIncomingQueue(force bool) {
-	// If we are not waiting for a batch, don't do anything.
-	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		return
-	}
-
-	epochSnapshot := n.group.GetEpochSnapshot()
-	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !epochSnapshot.IsTransactionSchedulerLeader() || n.currentBlock == nil {
-		return
-	}
-
-	batch, err := n.incomingQueue.Take(force)
-	if err != nil {
-		return
-	}
-	var processOk bool
-	defer func() {
-		if !processOk {
-			// Put the batch back into the incoming queue in case this failed.
-			if err := n.incomingQueue.AddBatch(batch); err != nil {
-				n.logger.Error("failed to add batch back into the incoming queue",
-					"err", err,
-				)
-			}
-		}
-
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
-	}()
-
-	// Leader node opens a new parent span for batch processing.
-	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)",
-		opentracing.Tag{Key: "batch", Value: batch},
-	)
-	defer batchSpan.Finish()
-	n.batchSpanCtx = batchSpan.Context()
-
-	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Insert(batch)",
-		opentracing.Tag{Key: "batch", Value: batch},
-		opentracing.ChildOf(n.batchSpanCtx),
-	)
-
-	// Commit batch to storage.
-	if err := n.storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
-		spanInsert.Finish()
-		n.logger.Error("failed to commit input batch to storage",
-			"err", err,
-		)
-		return
-	}
-	spanInsert.Finish()
-
-	// Dispatch batch to group.
-	var batchID hash.Hash
-	batchID.From(batch)
-
-	spanPublish := opentracing.StartSpan("Publish(batchHash, header)",
-		opentracing.Tag{Key: "batchHash", Value: batchID},
-		opentracing.Tag{Key: "header", Value: n.currentBlock.Header},
-		opentracing.ChildOf(n.batchSpanCtx),
-	)
-	if err := n.group.PublishBatch(n.batchSpanCtx, batchID, n.currentBlock.Header); err != nil {
-		spanPublish.Finish()
-		n.logger.Error("failed to publish batch to committee",
-			"err", err,
-		)
-		return
-	}
-	spanPublish.Finish()
-
-	if epochSnapshot.IsLeader() || epochSnapshot.IsWorker() {
-		// Start processing the batch locally.
-		n.startProcessingBatch(batch)
-	}
-
-	processOk = true
-}
-
 func (n *Node) handleExternalBatch(batch *externalBatch) error {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
@@ -902,13 +753,6 @@ func (n *Node) worker() {
 	}
 	defer eventsSub.Close()
 
-	// Check incoming queue every MaxBatchTimeout.
-	incomingQueueTicker := time.NewTicker(n.cfg.MaxBatchTimeout)
-	defer incomingQueueTicker.Stop()
-
-	// Check incoming queue when signalled.
-	incomingQueueSignal := n.incomingQueue.Signal()
-
 	// We are initialized.
 	close(n.initCh)
 
@@ -944,12 +788,6 @@ func (n *Node) worker() {
 		case ev := <-events:
 			// Received an event.
 			n.handleNewEvent(ev)
-		case <-incomingQueueTicker.C:
-			// Check incoming queue for a new batch.
-			n.checkIncomingQueue(true)
-		case <-incomingQueueSignal:
-			// Check incoming queue for a new batch.
-			n.checkIncomingQueue(false)
 		case batch := <-n.incomingExtBatch:
 			// New incoming batch from an external source (compute committee or
 			// roothash discrepancy event).
@@ -994,7 +832,6 @@ func NewNode(
 		quitCh:           make(chan struct{}),
 		stopCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
-		incomingQueue:    newIncomingQueue(cfg.MaxQueueSize, cfg.MaxBatchSize, cfg.MaxBatchSizeBytes),
 		incomingExtBatch: make(chan *externalBatch, 10),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
