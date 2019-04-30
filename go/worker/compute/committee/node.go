@@ -826,8 +826,8 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 
 	epoch := n.group.GetEpochSnapshot()
 
-	// We can only receive external batches if we are a leader, a worker, or a backup worker.
-	if !epoch.IsComputeLeader() && !epoch.IsComputeWorker() && !epoch.IsComputeBackupWorker() {
+	// We can only receive external batches if we are a compute member.
+	if !epoch.IsComputeMember() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
 	}
