@@ -225,7 +225,17 @@ func (g *Group) EpochTransition(ctx context.Context, groupHash hash.Hash, height
 	roundCtx, cancel := context.WithCancel(ctx)
 
 	// Update the current epoch.
-	g.activeEpoch = &epoch{roundCtx, cancel, computeCommittee, transactionSchedulerCommittee, nodes, groupHash, leaderPeerID, computeRole, transactionSchedulerRole}
+	g.activeEpoch = &epoch{
+		roundCtx,
+		cancel,
+		computeCommittee,
+		transactionSchedulerCommittee,
+		nodes,
+		groupHash,
+		leaderPeerID,
+		computeRole,
+		transactionSchedulerRole,
+	}
 
 	g.logger.Info("epoch transition complete",
 		"computeRole", computeRole,
