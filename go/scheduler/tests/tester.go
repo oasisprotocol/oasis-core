@@ -39,7 +39,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	// Advance the epoch.
 	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees := func(expectedCompute int) {
+	ensureValidCommittees := func(expectedCompute, expectedStorage int) {
 		var compute, storage *api.Committee
 		var seen int
 		for seen < 2 {
@@ -56,10 +56,10 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 				case api.Compute:
 					require.Nil(compute, "haven't seen a compute committee yet")
 					compute = committee
-					require.Len(committee.Members, expectedCompute, "committee has all nodes")
+					require.Len(committee.Members, expectedCompute, "committee has all compute nodes")
 				case api.Storage:
 					require.Nil(storage, "haven't seen a storage committee yet")
-					require.Len(committee.Members, 1, "committee has one node")
+					require.Len(committee.Members, expectedStorage, "committee has all storage nodes")
 					storage = committee
 				}
 
@@ -90,16 +90,26 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 		require.Nil(storage, "fetched a storage committee")
 	}
 
-	ensureValidCommittees(len(nodes))
+	var nCompute, nStorage int
+	for _, n := range nodes {
+		if n.HasRoles(node.RoleComputeWorker) {
+			nCompute++
+		}
+		if n.HasRoles(node.RoleStorageWorker) {
+			nStorage++
+		}
+	}
+	ensureValidCommittees(nCompute, nStorage)
 
 	// Re-register the runtime with less nodes.
 	rt.Runtime.ReplicaGroupSize = 2
 	rt.Runtime.ReplicaGroupBackupSize = 1
+	rt.Runtime.StorageGroupSize = 1
 	rt.MustRegister(t, registry)
 
 	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees(3)
+	ensureValidCommittees(3, 1)
 
 	// Cleanup the registry.
 	rt.Cleanup(t, registry)

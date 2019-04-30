@@ -479,7 +479,7 @@ func newWorker(
 			// so should probably be set elsewhere in future.
 			n.P2P = w.p2p.Info()
 
-			n.AddRoles(node.ComputeWorker)
+			n.AddRoles(node.RoleComputeWorker)
 			n.Runtimes = w.getNodeRuntimes()
 
 			return nil
