@@ -1,7 +1,6 @@
 package committee
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -13,91 +12,78 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/common/host"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
-	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
+	"github.com/oasislabs/ekiden/go/worker/txnscheduler/p2p"
 )
-
-const queueExternalBatchTimeout = 5 * time.Second
 
 var (
 	ErrNotLeader = errors.New("not leader")
-
-	errSeenNewerBlock    = errors.New("seen newer block")
-	errWorkerAborted     = errors.New("worker aborted batch processing")
-	errIncomatibleHeader = errors.New("incompatible header")
-	errIncorrectRole     = errors.New("incorrect role")
-	errIncorrectState    = errors.New("incorrect state")
 )
 
 var (
 	incomingQueueSize = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "ekiden_worker_incoming_queue_size",
+			Name: "ekiden_worker_txnscheduler_incoming_queue_size",
 			Help: "Size of the incoming queue (number of entries)",
 		},
 		[]string{"runtime"},
 	)
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_discrepancy_detected_count",
+			Name: "ekiden_worker_txnscheduler_discrepancy_detected_count",
 			Help: "Number of detected discrepancies",
 		},
 		[]string{"runtime"},
 	)
 	processedBlockCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_processed_block_count",
+			Name: "ekiden_worker_txnscheduler_processed_block_count",
 			Help: "Number of processed roothash blocks",
 		},
 		[]string{"runtime"},
 	)
 	failedRoundCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_failed_round_count",
+			Name: "ekiden_worker_txnscheduler_failed_round_count",
 			Help: "Number of failed roothash rounds",
 		},
 		[]string{"runtime"},
 	)
 	epochTransitionCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_epoch_transition_count",
+			Name: "ekiden_worker_txnscheduler_epoch_transition_count",
 			Help: "Number of epoch transitions",
 		},
 		[]string{"runtime"},
 	)
 	abortedBatchCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_aborted_batch_count",
+			Name: "ekiden_worker_txnscheduler_aborted_batch_count",
 			Help: "Number of aborted batches",
 		},
 		[]string{"runtime"},
 	)
 	storageCommitLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_storage_commit_latency",
+			Name: "ekiden_worker_txnscheduler_storage_commit_latency",
 			Help: "Latency of storage commit calls (state + outputs)",
 		},
 		[]string{"runtime"},
 	)
 	batchProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_batch_processing_time",
+			Name: "ekiden_worker_txnscheduler_batch_processing_time",
 			Help: "Time it takes for a batch to finalize",
 		},
 		[]string{"runtime"},
@@ -124,31 +110,19 @@ type Config struct {
 	MaxBatchTimeout   time.Duration
 
 	StorageCommitTimeout time.Duration
-
-	ByzantineInjectDiscrepancies bool
-}
-
-// ExternalBatch is an internal request to the worker goroutine that signals
-// an external batch has been received.
-type externalBatch struct {
-	batch   runtime.Batch
-	header  block.Header
-	ch      chan<- error
-	spanCtx opentracing.SpanContext
 }
 
 // Node is a committee node.
 type Node struct {
 	runtimeID signature.PublicKey
 
-	identity   *identity.Identity
-	storage    storage.Backend
-	roothash   roothash.Backend
-	registry   registry.Backend
-	epochtime  epochtime.Backend
-	scheduler  scheduler.Backend
-	workerHost host.Host
-	syncable   common.Syncable
+	identity  *identity.Identity
+	storage   storage.Backend
+	roothash  roothash.Backend
+	registry  registry.Backend
+	epochtime epochtime.Backend
+	scheduler scheduler.Backend
+	syncable  common.Syncable
 
 	cfg Config
 
@@ -159,9 +133,8 @@ type Node struct {
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	incomingQueue    *incomingQueue
-	incomingExtBatch chan *externalBatch
-	group            *Group
+	incomingQueue *incomingQueue
+	group         *Group
 
 	// No locking required, the variables in the next group are only accessed
 	// and modified from the worker goroutine.
@@ -221,85 +194,11 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	}
 }
 
-// HandleBatchFromCommittee processes an incoming batch.
-//
-// The call has already been authenticated to come from a committee
-// member.
-//
-// The batch identifier is a hash of the batch which can be used
-// to retrieve the batch from storage.
-//
-// The block header determines what block the batch should be
-// computed against.
-func (n *Node) HandleBatchFromCommittee(ctx context.Context, batchHash hash.Hash, hdr block.Header) error {
-	respCh, err := n.queueExternalBatch(ctx, batchHash, hdr)
-	if err != nil {
-		return err
-	}
-
-	// Wait for response from the worker goroutine.
-	select {
-	case resp := <-respCh:
-		return resp
-	case <-ctx.Done():
-		return context.Canceled
-	}
-}
-
-func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr block.Header) (<-chan error, error) {
-	// Quick check to see if header is compatible.
-	if !bytes.Equal(hdr.Namespace[:], n.runtimeID) {
-		n.logger.Warn("received incompatible header in external batch",
-			"header", hdr,
-		)
-		return nil, errIncomatibleHeader
-	}
-
-	// Fetch batch from storage.
-	var k storage.Key
-	copy(k[:], batchHash[:])
-
-	var batchSpanCtx opentracing.SpanContext
-	if batchSpan := opentracing.SpanFromContext(ctx); batchSpan != nil {
-		batchSpanCtx = batchSpan.Context()
-	}
-	span, ctx := tracing.StartSpanWithContext(ctx, "Get(batchHash)",
-		opentracing.Tag{Key: "batchHash", Value: k},
-		opentracing.ChildOf(batchSpanCtx),
-	)
-	raw, err := n.storage.Get(ctx, k)
-	span.Finish()
-	if err != nil {
-		n.logger.Error("failed to fetch batch from storage",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	var batch runtime.Batch
-	if err := batch.UnmarshalCBOR(raw); err != nil {
-		n.logger.Error("failed to deserialize batch",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	respCh := make(chan error, 1)
-
-	select {
-	case n.incomingExtBatch <- &externalBatch{batch, hdr, respCh, batchSpanCtx}:
-	case <-ctx.Done():
-		return nil, context.Canceled
-	}
-
-	return respCh, nil
-}
-
 // QueueCall queues a call for processing by this node.
 func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
+	if !n.group.GetEpochSnapshot().IsLeader() {
 		return ErrNotLeader
 	}
 
@@ -327,7 +226,7 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
+	if !n.group.GetEpochSnapshot().IsLeader() {
 		return false, ErrNotLeader
 	}
 
@@ -375,17 +274,15 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 
 	epoch := n.group.GetEpochSnapshot()
 
-	// Clear incoming queue if we are not a leader.
-	if !epoch.IsTransactionSchedulerLeader() {
-		n.incomingQueue.Clear()
-		incomingQueueSize.With(n.getMetricLabels()).Set(0)
-	}
-
-	if epoch.IsComputeMember() {
+	if epoch.IsLeader() {
 		n.transition(StateWaitingForBatch{})
 	} else {
+		n.incomingQueue.Clear()
+		// Clear incoming queue if we are not a leader.
+		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 		n.transition(StateNotReady{})
 	}
+	// TODO: Make non-leader members follow.
 }
 
 func (n *Node) handleNewBlock(blk *block.Block, height int64) {
@@ -401,10 +298,6 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 	// Update the current block.
 	n.currentBlock = blk
-
-	// If we have seen a new block while a batch was processing, we need to
-	// abort it no matter what as any processed state may be invalid.
-	n.abortBatch(errSeenNewerBlock)
 
 	// Perform actions based on block type.
 	switch header.HeaderType {
@@ -438,31 +331,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	}
 
 	// Perform actions based on current state.
-	switch state := n.state.(type) {
-	case StateWaitingForBlock:
-		// Check if this was the block we were waiting for.
-		if header.MostlyEqual(state.header) {
-			n.logger.Info("received block needed for batch processing")
-			n.startProcessingBatch(state.batch)
-			break
-		}
-
-		// Check if the new block is for the same or newer round than the
-		// one we are waiting for. In this case, we should abort as the
-		// block will never be seen.
-		curRound := header.Round
-		waitRound := state.header.Round
-		if curRound >= waitRound {
-			n.logger.Warn("seen newer block while waiting for block")
-			n.transition(StateWaitingForBatch{})
-			break
-		}
-
-		// Continue waiting for block.
-		n.logger.Info("still waiting for block",
-			"current_round", curRound,
-			"wait_round", waitRound,
-		)
+	switch n.state.(type) {
 	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
 		n.logger.Info("considering the round finalized")
@@ -474,270 +343,10 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	}
 }
 
-func (n *Node) startProcessingBatch(batch runtime.Batch) {
-	if n.currentBlock == nil {
-		panic("attempted to start processing batch with a nil block")
-	}
-
-	n.logger.Debug("processing batch",
-		"batch", batch,
-	)
-
-	// Create batch processing context and channel for receiving the response.
-	ctx, cancel := context.WithCancel(n.ctx)
-	done := make(chan *protocol.ComputedBatch, 1)
-
-	rq := &protocol.Body{
-		WorkerRuntimeCallBatchRequest: &protocol.WorkerRuntimeCallBatchRequest{
-			Calls: batch,
-			Block: *n.currentBlock,
-		},
-	}
-
+func (n *Node) batchSent() {
 	n.batchStartTime = time.Now()
 
-	n.transition(StateProcessingBatch{batch, cancel, done})
-
-	// Request the worker host to process a batch. This is done in a separate
-	// goroutine so that the committee node can continue processing blocks.
-	go func() {
-		defer close(done)
-
-		span := opentracing.StartSpan("CallBatch(rq)",
-			opentracing.Tag{Key: "rq", Value: rq},
-			opentracing.ChildOf(n.batchSpanCtx),
-		)
-		ctx = opentracing.ContextWithSpan(ctx, span)
-		defer span.Finish()
-
-		ch, err := n.workerHost.MakeRequest(ctx, rq)
-		if err != nil {
-			n.logger.Error("error while sending batch processing request to worker host",
-				"err", err,
-			)
-			return
-		}
-
-		select {
-		case response := <-ch:
-			if response == nil {
-				n.logger.Error("worker channel closed while processing batch")
-				return
-			}
-
-			rsp := response.WorkerRuntimeCallBatchResponse
-			if rsp == nil {
-				n.logger.Error("malformed response from worker",
-					"response", response,
-				)
-				return
-			}
-
-			done <- &rsp.Batch
-		case <-ctx.Done():
-			n.logger.Error("batch processing aborted by context, interrupting worker")
-
-			// Interrupt the worker, so we can start processing the next batch.
-			err = n.workerHost.InterruptWorker(n.ctx)
-			if err != nil {
-				n.logger.Error("failed to interrupt the worker",
-					"err", err,
-				)
-			}
-			return
-		}
-	}()
-}
-
-func (n *Node) abortBatch(reason error) {
-	state, ok := n.state.(StateProcessingBatch)
-	if !ok {
-		// We can only abort if a batch is being processed.
-		return
-	}
-
-	n.logger.Warn("aborting batch",
-		"reason", reason,
-	)
-
-	// Cancel the batch processing context and wait for it to finish.
-	state.cancel()
-
-	// If we are a leader, put the batch back into the incoming queue.
-	if n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
-		if err := n.incomingQueue.AddBatch(state.batch); err != nil {
-			n.logger.Warn("failed to add batch back into the incoming queue",
-				"err", err,
-			)
-		}
-
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
-	}
-
-	abortedBatchCount.With(n.getMetricLabels()).Inc()
-
-	// After the batch has been aborted, we must wait for the round to be
-	// finalized.
 	n.transition(StateWaitingForFinalize{})
-}
-
-func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
-	// We must be in ProcessingBatch state if we are here.
-	state := n.state.(StateProcessingBatch)
-
-	n.logger.Debug("proposing batch",
-		"batch", batch,
-	)
-
-	epoch := n.group.GetEpochSnapshot()
-
-	// Byzantine mode: inject discrepancy.
-	if n.cfg.ByzantineInjectDiscrepancies {
-		n.logger.Error("BYZANTINE MODE: injecting discrepancy into batch")
-
-		for idx := range batch.Outputs {
-			batch.Outputs[idx] = []byte("boom")
-		}
-	}
-
-	// Generate proposed block header.
-	blk := block.NewEmptyBlock(n.currentBlock, 0, block.Normal)
-	blk.Header.GroupHash = epoch.GetGroupHash()
-	blk.Header.InputHash.From(state.batch)
-	blk.Header.OutputHash.From(batch.Outputs)
-	blk.Header.TagHash.From(batch.Tags)
-	blk.Header.StateRoot = batch.NewStateRoot
-
-	// Commit outputs and state to storage. If we are a regular worker, then we only
-	// insert into local cache.
-	var opts storage.InsertOptions
-	if !epoch.IsComputeLeader() && !epoch.IsComputeBackupWorker() {
-		opts.LocalOnly = true
-	}
-
-	start := time.Now()
-	err := func() error {
-		span, ctx := tracing.StartSpanWithContext(n.ctx, "InsertBatch(outputs, state, tags)",
-			opentracing.ChildOf(n.batchSpanCtx),
-		)
-		defer span.Finish()
-
-		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
-		defer cancel()
-
-		batch.StorageInserts = append(batch.StorageInserts, storage.Value{
-			Data:       batch.Outputs.MarshalCBOR(),
-			Expiration: 2,
-		}, storage.Value{
-			Data:       cbor.Marshal(batch.Tags),
-			Expiration: 2,
-		})
-		if err := n.storage.InsertBatch(ctx, batch.StorageInserts, opts); err != nil {
-			n.logger.Error("failed to commit state to storage",
-				"err", err,
-			)
-			return err
-		}
-
-		if opts.LocalOnly {
-			return nil
-		}
-
-		// If we actually write to storage, acquire proof that we did.
-		signedReceipt, err := n.storage.GetReceipt(ctx, blk.Header.KeysForStorageReceipt())
-		if err != nil {
-			n.logger.Error("failed to get storage proof",
-				"err", err,
-			)
-			return err
-		}
-
-		// TODO: Ensure that the receipt is actually signed by the
-		// storage node.  For now accept a signature from anyone.
-		var receipt storage.Receipt
-		if err = signedReceipt.Open(storage.ReceiptSignatureContext, &receipt); err != nil {
-			n.logger.Error("failed to open signed receipt",
-				"err", err,
-			)
-			return err
-		}
-		if err = blk.Header.VerifyStorageReceipt(&receipt); err != nil {
-			n.logger.Error("failed to validate receipt",
-				"err", err,
-			)
-			return err
-		}
-
-		// No need to append the entire blob, just the signature/public key.
-		blk.Header.StorageReceipt = signedReceipt.Signature
-
-		return nil
-	}()
-	storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
-
-	if err != nil {
-		n.abortBatch(err)
-		return
-	}
-
-	// Commit.
-	commit, err := commitment.SignCommitment(*n.identity.NodeKey, &commitment.Message{
-		Header: blk.Header,
-		RakSig: batch.RakSig,
-	})
-	if err != nil {
-		n.logger.Error("failed to sign commitment",
-			"err", err,
-		)
-		n.abortBatch(err)
-		return
-	}
-
-	n.transition(StateWaitingForFinalize{})
-
-	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(n.batchSpanCtx))
-	defer span.Finish()
-
-	if err := n.roothash.Commit(n.ctx, n.runtimeID, commit.ToOpaqueCommitment()); err != nil {
-		n.logger.Error("failed to submit commitment",
-			"err", err,
-		)
-		n.abortBatch(err)
-		return
-	}
-}
-
-func (n *Node) handleNewEvent(ev *roothash.Event) {
-	dis := ev.DiscrepancyDetected
-	if dis == nil {
-		panic(fmt.Sprintf("unsupported event type: %+v", ev))
-	}
-
-	n.logger.Warn("discrepancy detected",
-		"input_hash", dis.BatchHash,
-		"header", dis.BlockHeader,
-	)
-
-	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
-
-	if n.group.GetEpochSnapshot().IsComputeBackupWorker() {
-		// Backup worker, start processing a batch.
-		n.logger.Info("backup worker activating and processing batch",
-			"input_hash", dis.BatchHash,
-			"header", dis.BlockHeader,
-		)
-
-		// This may block if we are unable to fetch the batch from storage or if
-		// the external batch channel is full. Be sure to abort early in this case.
-		ctx, cancel := context.WithTimeout(n.ctx, queueExternalBatchTimeout)
-		defer cancel()
-
-		if _, err := n.queueExternalBatch(ctx, *dis.BatchHash, *dis.BlockHeader); err != nil {
-			n.logger.Error("backup worker failed to queue external batch",
-				"err", err,
-			)
-		}
-	}
 }
 
 func (n *Node) checkIncomingQueue(force bool) {
@@ -748,7 +357,7 @@ func (n *Node) checkIncomingQueue(force bool) {
 
 	epochSnapshot := n.group.GetEpochSnapshot()
 	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !epochSnapshot.IsTransactionSchedulerLeader() || n.currentBlock == nil {
+	if !epochSnapshot.IsLeader() || n.currentBlock == nil {
 		return
 	}
 
@@ -760,9 +369,9 @@ func (n *Node) checkIncomingQueue(force bool) {
 	defer func() {
 		if !processOk {
 			// Put the batch back into the incoming queue in case this failed.
-			if err := n.incomingQueue.AddBatch(batch); err != nil {
+			if errAB := n.incomingQueue.AddBatch(batch); errAB != nil {
 				n.logger.Error("failed to add batch back into the incoming queue",
-					"err", err,
+					"err", errAB,
 				)
 			}
 		}
@@ -783,7 +392,7 @@ func (n *Node) checkIncomingQueue(force bool) {
 	)
 
 	// Commit batch to storage.
-	if err := n.storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
+	if err = n.storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
 		spanInsert.Finish()
 		n.logger.Error("failed to commit input batch to storage",
 			"err", err,
@@ -810,52 +419,11 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}
 	spanPublish.Finish()
 
-	if epochSnapshot.IsComputeLeader() || epochSnapshot.IsComputeWorker() {
-		// Start processing the batch locally.
-		n.startProcessingBatch(batch)
-	}
+	n.batchSent()
+
+	// TODO: Send batch to our own compute node.
 
 	processOk = true
-}
-
-func (n *Node) handleExternalBatch(batch *externalBatch) error {
-	// If we are not waiting for a batch, don't do anything.
-	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		return errIncorrectState
-	}
-
-	epoch := n.group.GetEpochSnapshot()
-
-	// We can only receive external batches if we are a compute member.
-	if !epoch.IsComputeMember() {
-		n.logger.Error("got external batch while in incorrect role")
-		return errIncorrectRole
-	}
-
-	// Set the Worker node's batchSpan from the obtained external batch.
-	n.batchSpanCtx = batch.spanCtx
-
-	// Check if we have the correct block -- in this case, start processing the batch.
-	if n.currentBlock.Header.MostlyEqual(&batch.header) {
-		n.startProcessingBatch(batch.batch)
-		return nil
-	}
-
-	// Check if the current block is older than what is expected we base our batch
-	// on. In case it is equal or newer, but different, discard the batch.
-	curRound := n.currentBlock.Header.Round
-	waitRound := batch.header.Round
-	if curRound >= waitRound {
-		n.logger.Warn("got external batch based on incompatible header",
-			"header", batch.header,
-		)
-		return errIncomatibleHeader
-	}
-
-	// Wait for the correct block to arrive.
-	n.transition(StateWaitingForBlock{batch.batch, &batch.header})
-
-	return nil
 }
 
 func (n *Node) worker() {
@@ -892,16 +460,6 @@ func (n *Node) worker() {
 	}
 	defer blocksSub.Close()
 
-	// Start watching roothash events.
-	events, eventsSub, err := n.roothash.WatchEvents(n.runtimeID)
-	if err != nil {
-		n.logger.Error("failed to subscribe to roothash events",
-			"err", err,
-		)
-		return
-	}
-	defer eventsSub.Close()
-
 	// Check incoming queue every MaxBatchTimeout.
 	incomingQueueTicker := time.NewTicker(n.cfg.MaxBatchTimeout)
 	defer incomingQueueTicker.Stop()
@@ -913,13 +471,6 @@ func (n *Node) worker() {
 	close(n.initCh)
 
 	for {
-		// Check if we are currently processing a batch. In this case, we also
-		// need to select over the result channel.
-		var processingDoneCh chan *protocol.ComputedBatch
-		if stateProcessing, ok := n.state.(StateProcessingBatch); ok {
-			processingDoneCh = stateProcessing.done
-		}
-
 		select {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
@@ -930,31 +481,12 @@ func (n *Node) worker() {
 		case blk := <-blocksPlain:
 			// Received a block (plain).
 			n.handleNewBlock(blk, 0)
-		case batch := <-processingDoneCh:
-			// Batch processing has finished.
-			if batch == nil {
-				n.logger.Warn("worker has aborted batch processing")
-				n.abortBatch(errWorkerAborted)
-				break
-			}
-
-			n.logger.Info("worker has finished processing a batch")
-
-			n.proposeBatch(batch)
-		case ev := <-events:
-			// Received an event.
-			n.handleNewEvent(ev)
 		case <-incomingQueueTicker.C:
 			// Check incoming queue for a new batch.
 			n.checkIncomingQueue(true)
 		case <-incomingQueueSignal:
 			// Check incoming queue for a new batch.
 			n.checkIncomingQueue(false)
-		case batch := <-n.incomingExtBatch:
-			// New incoming batch from an external source (compute committee or
-			// roothash discrepancy event).
-			err := n.handleExternalBatch(batch)
-			batch.ch <- err
 		}
 	}
 }
@@ -968,7 +500,6 @@ func NewNode(
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
-	worker host.Host,
 	p2p *p2p.P2P,
 	cfg Config,
 ) (*Node, error) {
@@ -987,7 +518,6 @@ func NewNode(
 		epochtime:        epochtime,
 		scheduler:        scheduler,
 		syncable:         syncable,
-		workerHost:       worker,
 		cfg:              cfg,
 		ctx:              ctx,
 		cancelCtx:        cancel,
@@ -995,12 +525,11 @@ func NewNode(
 		stopCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		incomingQueue:    newIncomingQueue(cfg.MaxQueueSize, cfg.MaxBatchSize, cfg.MaxBatchSizeBytes),
-		incomingExtBatch: make(chan *externalBatch, 10),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
-		logger:           logging.GetLogger("worker/compute/committee").With("runtime_id", runtimeID),
+		logger:           logging.GetLogger("worker/txnclient/committee").With("runtime_id", runtimeID),
 	}
-	group, err := NewGroup(identity, runtimeID, n, registry, scheduler, p2p)
+	group, err := NewGroup(identity, runtimeID, registry, scheduler, p2p)
 	if err != nil {
 		return nil, err
 	}

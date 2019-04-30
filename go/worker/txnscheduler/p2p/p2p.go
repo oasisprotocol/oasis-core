@@ -24,7 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/version"
 )
 
-var protocolName = protocol.ID("/p2p/oasislabs.com/committee/compute/" + version.ComputeCommitteeProtocol.String())
+var protocolName = protocol.ID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
 
 // Handler is a handler for P2P messages.
 type Handler interface {
@@ -301,7 +301,7 @@ func New(ctx context.Context, identity *identity.Identity, port uint16, addresse
 		registerAddresses: registerAddresses,
 		host:              host,
 		handlers:          make(map[signature.MapKey]Handler),
-		logger:            logging.GetLogger("worker/compute/p2p"),
+		logger:            logging.GetLogger("worker/txnscheduler/p2p"),
 	}
 
 	p.host.Network().SetConnHandler(p.handleConnection)

@@ -11,7 +11,6 @@ import (
 	"github.com/oasislabs/ekiden/go/client"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
 
 const timeout = 1 * time.Second
@@ -21,18 +20,17 @@ func ClientImplementationTests(
 	t *testing.T,
 	client *client.Client,
 	runtimeID signature.PublicKey,
-	rtNode *committee.Node,
 ) {
 	t.Run("SubmitTx", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 		defer cancelFunc()
-		testSubmitTransaction(ctx, t, runtimeID, client, rtNode)
+		testSubmitTransaction(ctx, t, runtimeID, client)
 	})
 
 	t.Run("Query", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 		defer cancelFunc()
-		testQuery(ctx, t, runtimeID, client, rtNode)
+		testQuery(ctx, t, runtimeID, client)
 	})
 
 	// These can't test anything useful, so just make sure the roundtrip works.
@@ -56,7 +54,6 @@ func testSubmitTransaction(
 	t *testing.T,
 	runtimeID signature.PublicKey,
 	c *client.Client,
-	rtNode *committee.Node,
 ) {
 	// Submit a test transaction.
 	testInput := []byte("hello world")
@@ -72,7 +69,6 @@ func testQuery(
 	t *testing.T,
 	runtimeID signature.PublicKey,
 	c *client.Client,
-	rtNode *committee.Node,
 ) {
 	err := c.WaitBlockIndexed(ctx, runtimeID, 2)
 	require.NoError(t, err, "WaitBlockIndexed")

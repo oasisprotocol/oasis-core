@@ -9,7 +9,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -79,7 +78,6 @@ type Worker struct {
 	ias          *ias.IAS
 	keyManager   *keymanager.KeyManager
 	p2p          *p2p.P2P
-	grpc         *grpc.Server
 	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
@@ -149,8 +147,6 @@ func (w *Worker) Start() error {
 		for _, proxy := range w.netProxies {
 			<-proxy.Quit()
 		}
-
-		<-w.grpc.Quit()
 	}()
 
 	// Start all the network proxies.
@@ -171,11 +167,6 @@ func (w *Worker) Start() error {
 
 		close(w.initCh)
 	}()
-
-	// Start client gRPC server.
-	if err := w.grpc.Start(); err != nil {
-		return err
-	}
 
 	// Start runtime services.
 	for _, rt := range w.runtimes {
@@ -214,7 +205,6 @@ func (w *Worker) Stop() {
 		proxy.Stop()
 	}
 
-	w.grpc.Stop()
 	if w.localStorage != nil {
 		w.localStorage.Stop()
 	}
@@ -239,8 +229,6 @@ func (w *Worker) Cleanup() {
 	for _, proxy := range w.netProxies {
 		proxy.Cleanup()
 	}
-
-	w.grpc.Cleanup()
 
 	os.RemoveAll(w.socketDir)
 }
@@ -416,14 +404,6 @@ func newWorker(
 		if len(cfg.Runtimes) == 0 {
 			return nil, fmt.Errorf("compute/worker: no runtimes configured")
 		}
-
-		// Create client gRPC server.
-		grpc, err := grpc.NewServerTCP("worker-client", workerCommonCfg.ClientPort, identity.TLSCertificate)
-		if err != nil {
-			return nil, err
-		}
-		w.grpc = grpc
-		newClientGRPCServer(grpc.Server(), w)
 
 		// Create P2P node.
 		p2p, err := p2p.New(w.ctx, identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)

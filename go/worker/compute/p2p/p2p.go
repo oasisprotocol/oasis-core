@@ -24,7 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/version"
 )
 
-var protocolName = protocol.ID("/p2p/oasislabs.com/committee/compute/" + version.ComputeCommitteeProtocol.String())
+var protocolName = protocol.ID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
 
 // Handler is a handler for P2P messages.
 type Handler interface {

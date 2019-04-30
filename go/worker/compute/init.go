@@ -36,11 +36,6 @@ const (
 	// XXX: This is needed till the code can watch the registry for runtimes.
 	cfgRuntimeSGXIDs = "worker.compute.runtime.sgx_ids"
 
-	cfgMaxQueueSize      = "worker.compute.leader.max_queue_size"
-	cfgMaxBatchSize      = "worker.compute.leader.max_batch_size"
-	cfgMaxBatchSizeBytes = "worker.compute.leader.max_batch_size_bytes"
-	cfgMaxBatchTimeout   = "worker.compute.leader.max_batch_timeout"
-
 	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
 
 	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
@@ -111,19 +106,9 @@ func New(
 		})
 	}
 
-	maxQueueSize := uint64(viper.GetInt(cfgMaxQueueSize))
-	maxBatchSize := uint64(viper.GetInt(cfgMaxBatchSize))
-	maxBatchSizeBytes := uint64(viper.GetSizeInBytes(cfgMaxBatchSizeBytes))
-	maxBatchTimeout := viper.GetDuration(cfgMaxBatchTimeout)
-
 	cfg := Config{
 		Backend: backend,
 		Committee: committee.Config{
-			MaxQueueSize:      maxQueueSize,
-			MaxBatchSize:      maxBatchSize,
-			MaxBatchSizeBytes: maxBatchSizeBytes,
-			MaxBatchTimeout:   maxBatchTimeout,
-
 			StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
 
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
@@ -152,11 +137,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		// XXX: This is needed till the code can watch the registry for runtimes.
 		cmd.Flags().StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
 
-		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
-		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-		cmd.Flags().String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
-		cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
-
 		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
 		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
@@ -173,11 +153,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgRuntimeID,
 
 		cfgRuntimeSGXIDs,
-
-		cfgMaxQueueSize,
-		cfgMaxBatchSize,
-		cfgMaxBatchSizeBytes,
-		cfgMaxBatchTimeout,
 
 		cfgStorageCommitTimeout,
 

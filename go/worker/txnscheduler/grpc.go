@@ -1,4 +1,4 @@
-package compute
+package txnscheduler
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pb "github.com/oasislabs/ekiden/go/grpc/txnscheduler"
-	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
 
 var _ pb.TransactionSchedulerServer = (*grpcServer)(nil)

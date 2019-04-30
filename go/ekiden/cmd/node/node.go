@@ -39,6 +39,7 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/registration"
+	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 )
 
 // Run runs the ekiden node.
@@ -76,8 +77,9 @@ type Node struct {
 	Client     *client.Client
 	KeyManager *keymanager.KeyManager
 
-	ComputeWorker      *compute.Worker
-	WorkerRegistration *registration.Registration
+	ComputeWorker              *compute.Worker
+	TransactionSchedulerWorker *txnscheduler.Worker
+	WorkerRegistration         *registration.Registration
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -188,6 +190,31 @@ func (n *Node) initAndStartWorkers() error {
 
 	// Start the compute worker.
 	if err = n.ComputeWorker.Start(); err != nil {
+		return err
+	}
+
+	// Initialize the transaction scheduler.
+	n.TransactionSchedulerWorker, err = txnscheduler.New(
+		dataDir,
+		n.IAS,
+		n.Identity,
+		n.Storage,
+		n.RootHash,
+		n.Registry,
+		n.Epochtime,
+		n.Scheduler,
+		n.svcTmnt,
+		n.KeyManager,
+		n.WorkerRegistration,
+		workerCommonCfg,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.TransactionSchedulerWorker)
+
+	// Start the transaction scheduler.
+	if err = n.TransactionSchedulerWorker.Start(); err != nil {
 		return err
 	}
 
@@ -440,6 +467,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		client.RegisterFlags,
 		compute.RegisterFlags,
 		registration.RegisterFlags,
+		txnscheduler.RegisterFlags,
 		workerCommon.RegisterFlags,
 	} {
 		v(cmd)

@@ -12,11 +12,10 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/worker/compute"
-	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
+	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
 
 const recvTimeout = 5 * time.Second
@@ -28,7 +27,7 @@ const recvTimeout = 5 * time.Second
 // after the node was registered.
 func WorkerImplementationTests(
 	t *testing.T,
-	worker *compute.Worker,
+	worker *txnscheduler.Worker,
 	runtimeID signature.PublicKey,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
@@ -54,8 +53,7 @@ func WorkerImplementationTests(
 }
 
 func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
-	// Perform an epoch transition, so that the node gets elected leader.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	// We'll be elected leader from the epoch transition in TestNode/ComputeWorker/InitialEpochTransition
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, "WaitingForBatch")
@@ -83,9 +81,6 @@ func testQueueCall(
 	testCall := []byte("hello world")
 	err = rtNode.QueueCall(context.Background(), testCall)
 	require.NoError(t, err, "QueueCall")
-
-	// Node should transition to ProcessingBatch state.
-	waitForNodeTransition(t, stateCh, "ProcessingBatch")
 
 	// Node should transition to WaitingForFinalize state.
 	waitForNodeTransition(t, stateCh, "WaitingForFinalize")
