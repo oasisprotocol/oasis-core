@@ -92,10 +92,10 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 
 	var nCompute, nStorage int
 	for _, n := range nodes {
-		if n.HasRoles(node.ComputeWorker) {
+		if n.HasRoles(node.RoleComputeWorker) {
 			nCompute++
 		}
-		if n.HasRoles(node.StorageWorker) {
+		if n.HasRoles(node.RoleStorageWorker) {
 			nStorage++
 		}
 	}

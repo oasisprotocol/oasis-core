@@ -110,7 +110,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 		for _, n := range runtimeTeeNodeList {
 			switch kind {
 			case api.Compute:
-				if n.HasRoles(node.ComputeWorker) {
+				if n.HasRoles(node.RoleComputeWorker) {
 					nodeList = append(nodeList, n)
 				}
 			case api.Storage:

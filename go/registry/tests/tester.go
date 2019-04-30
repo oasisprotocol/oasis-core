@@ -387,9 +387,9 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 
 		var role node.RolesMask
 		if i < nCompute {
-			role = node.ComputeWorker
+			role = node.RoleComputeWorker
 		} else {
-			role = node.StorageWorker
+			role = node.RoleStorageWorker
 		}
 
 		nod.Node = &node.Node{
