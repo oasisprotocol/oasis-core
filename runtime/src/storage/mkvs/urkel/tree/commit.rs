@@ -2,7 +2,10 @@ use failure::Fallible;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*},
+    storage::mkvs::{
+        urkel::{cache::*, tree::*},
+        LogEntry, WriteLog,
+    },
 };
 
 impl UrkelTree {

@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use ekiden_runtime::{
     common::{crypto::hash::Hash, roothash::Block},
-    storage::{mkvs::{CASPatriciaTrie, urkel::WriteLog}, CAS, MKVS},
+    storage::{
+        mkvs::{CASPatriciaTrie, WriteLog},
+        CAS, MKVS,
+    },
     transaction::types::{TxnCall, TxnOutput},
 };
 use failure::{Fallible, ResultExt};

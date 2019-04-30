@@ -7,11 +7,11 @@ use crate::{
 
 impl UrkelTree {
     /// Remove a key from the tree and return true if the tree was modified.
-    pub fn remove(&mut self, key: &[u8]) -> Fallible<bool> {
+    pub fn remove(&mut self, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
         let hkey = Hash::digest_bytes(key);
         let pending_root = self.cache.borrow().get_pending_root();
 
-        let (new_root, changed) = self._remove(pending_root, 0, hkey)?;
+        let (new_root, changed, old_val) = self._remove(pending_root, 0, hkey)?;
         match self.pending_write_log.get_mut(&hkey) {
             None => {
                 self.pending_write_log.insert(
@@ -29,10 +29,15 @@ impl UrkelTree {
         };
         self.cache.borrow_mut().set_pending_root(new_root);
 
-        Ok(changed)
+        Ok(old_val)
     }
 
-    fn _remove(&mut self, ptr: NodePtrRef, depth: u8, key: Hash) -> Fallible<(NodePtrRef, bool)> {
+    fn _remove(
+        &mut self,
+        ptr: NodePtrRef,
+        depth: u8,
+        key: Hash,
+    ) -> Fallible<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             NodeID {
                 path: key,
@@ -44,11 +49,11 @@ impl UrkelTree {
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
-                return Ok((NodePointer::null_ptr(), false));
+                return Ok((NodePointer::null_ptr(), false, None));
             }
             NodeKind::Internal => {
                 let node_ref = node_ref.unwrap();
-                let changed = {
+                let (changed, old_val) = {
                     let go_right = get_key_bit(&key, depth);
 
                     let child = if go_right {
@@ -57,14 +62,14 @@ impl UrkelTree {
                         noderef_as!(node_ref, Internal).left.clone()
                     };
 
-                    let (child, changed) = self._remove(child, depth + 1, key)?;
+                    let (child, changed, old_val) = self._remove(child, depth + 1, key)?;
 
                     if go_right {
                         noderef_as_mut!(node_ref, Internal).right = child;
                     } else {
                         noderef_as_mut!(node_ref, Internal).left = child;
                     }
-                    changed
+                    (changed, old_val)
                 };
                 let (int_left, int_right) = (
                     noderef_as!(node_ref, Internal).left.clone(),
@@ -92,13 +97,13 @@ impl UrkelTree {
                             None => {
                                 // No more children, delete the internal node as well.
                                 self.cache.borrow_mut().try_remove_node(ptr.clone());
-                                return Ok((NodePointer::null_ptr(), true));
+                                return Ok((NodePointer::null_ptr(), true, old_val));
                             }
                             Some(node_ref) => node_ref,
                         };
                         if let NodeBox::Leaf(_) = *right_ref.borrow() {
                             // Left is None, right is a leaf, merge nodes back.
-                            return Ok((int_right.clone(), true));
+                            return Ok((int_right.clone(), true, old_val));
                         };
                     }
                     Some(left_ref) => {
@@ -110,7 +115,7 @@ impl UrkelTree {
                             )?;
                             if let None = right_ref {
                                 // Right is None, left is a leaf, merge nodes back.
-                                return Ok((int_left.clone(), true));
+                                return Ok((int_left.clone(), true, old_val));
                             };
                         }
                     }
@@ -123,20 +128,17 @@ impl UrkelTree {
                     ptr.borrow_mut().clean = false;
                 }
 
-                return Ok((ptr.clone(), changed));
+                return Ok((ptr.clone(), changed, old_val));
             }
             NodeKind::Leaf => {
                 // Remove from leaf node.
                 let node_ref = node_ref.unwrap();
-                let mut remove = false;
                 if noderef_as!(node_ref, Leaf).key == key {
-                    remove = true;
-                }
-                if remove {
+                    let old_val = noderef_as!(node_ref, Leaf).value.borrow().value.clone();
                     self.cache.borrow_mut().try_remove_node(ptr.clone());
-                    return Ok((NodePointer::null_ptr(), true));
+                    return Ok((NodePointer::null_ptr(), true, old_val));
                 }
-                return Ok((ptr.clone(), false));
+                return Ok((ptr.clone(), false, None));
             }
         };
     }

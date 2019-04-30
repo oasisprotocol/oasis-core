@@ -1,8 +1,11 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use failure::Fallible;
-
-use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::crypto::hash::Hash,
@@ -14,37 +17,6 @@ pub struct PendingLogEntry {
     pub value: Option<Vec<u8>>,
     pub existed: bool,
 }
-
-/// The type of entry in the log.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum LogEntryKind {
-    Insert,
-    Delete,
-}
-
-/// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct LogEntry {
-    /// The key that was inserted or deleted.
-    pub key: Vec<u8>,
-    /// The inserted value, or `None` if the key was deleted.
-    pub value: Option<Vec<u8>>,
-}
-
-impl LogEntry {
-    pub fn kind(&self) -> LogEntryKind {
-        if self.value.is_none() {
-            LogEntryKind::Delete
-        } else {
-            LogEntryKind::Insert
-        }
-    }
-}
-
-/// The write log.
-///
-/// The keys in the write log must be unique.
-pub type WriteLog = Vec<LogEntry>;
 
 /// A container for the parameters used to construct a new Urkel tree instance.
 pub struct UrkelOptions {
@@ -116,6 +88,7 @@ pub struct UrkelStats {
 pub struct UrkelTree {
     pub cache: RefCell<Box<LRUCache>>,
     pub pending_write_log: BTreeMap<Hash, PendingLogEntry>,
+    pub lock: Arc<Mutex<isize>>,
 }
 
 impl UrkelTree {
@@ -128,6 +101,7 @@ impl UrkelTree {
                 read_syncer,
             )),
             pending_write_log: BTreeMap::new(),
+            lock: Arc::new(Mutex::new(0)),
         };
 
         tree.cache

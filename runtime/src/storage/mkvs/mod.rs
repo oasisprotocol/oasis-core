@@ -1,10 +1,43 @@
 //! Merklized key-value store.
 use failure::Fallible;
 
+use serde_derive::{Deserialize, Serialize};
+
 use crate::common::crypto::hash::Hash;
 
 pub mod cas_patricia_trie;
 pub mod urkel;
+
+/// The type of entry in the log.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum LogEntryKind {
+    Insert,
+    Delete,
+}
+
+/// An entry in the write log, describing a single update.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct LogEntry {
+    /// The key that was inserted or deleted.
+    pub key: Vec<u8>,
+    /// The inserted value, or `None` if the key was deleted.
+    pub value: Option<Vec<u8>>,
+}
+
+impl LogEntry {
+    pub fn kind(&self) -> LogEntryKind {
+        if self.value.is_none() {
+            LogEntryKind::Delete
+        } else {
+            LogEntryKind::Insert
+        }
+    }
+}
+
+/// The write log.
+///
+/// The keys in the write log must be unique.
+pub type WriteLog = Vec<LogEntry>;
 
 /// Merklized key-value store.
 pub trait MKVS: Send + Sync {
@@ -26,7 +59,7 @@ pub trait MKVS: Send + Sync {
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(&mut self) -> Fallible<(urkel::WriteLog, Hash)>;
+    fn commit(&mut self) -> Fallible<(WriteLog, Hash)>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);

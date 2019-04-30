@@ -9,7 +9,7 @@ fn test_simple() {
     tree.insert(b"foo", b"bar").expect("insert");
     tree.insert(b"moo", b"boo").expect("insert");
 
-    let (_, root) = tree.commit().expect("commit");
+    let (_, root) = UrkelTree::commit(&mut tree).expect("commit");
 
     let st = tree
         .get_subtree(

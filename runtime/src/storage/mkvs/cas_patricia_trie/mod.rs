@@ -11,7 +11,7 @@ use crate::{
             sivaessha2::{SivAesSha2, KEY_SIZE},
         },
     },
-    storage::{CAS, MKVS, mkvs::urkel::WriteLog},
+    storage::{mkvs::WriteLog, CAS, MKVS},
 };
 
 pub mod nibble;
@@ -161,7 +161,10 @@ impl MKVS for CASPatriciaTrie {
 
         self.root_hash = root_hash;
 
-        Ok((Vec::new(), self.root_hash.clone().unwrap_or_else(|| Hash::empty_hash())))
+        Ok((
+            Vec::new(),
+            self.root_hash.clone().unwrap_or_else(|| Hash::empty_hash()),
+        ))
     }
 
     fn rollback(&mut self) {
