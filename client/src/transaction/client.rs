@@ -11,7 +11,7 @@ use serde_cbor;
 
 use ekiden_runtime::{
     common::{crypto::hash::Hash, runtime::RuntimeId},
-    transaction::types::{TxnCall, TxnOutput},
+    transaction::types::{TxnBatch, TxnCall, TxnOutput},
 };
 
 use super::{
@@ -293,6 +293,27 @@ impl TxnClient {
                 TxnClientError::CallFailed(format!("{}", error)).into(),
             )),
         };
+        drop(span);
+        result
+    }
+
+    // Retrieve transactions at specific root.
+    pub fn get_transactions(&self, root: Hash) -> BoxFuture<TxnBatch> {
+        let (span, options) = self.prepare_options("TxnClient::get_transactions");
+        let mut request = api::client::GetTransactionsRequest::new();
+        request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        request.set_root(root.as_ref().to_vec());
+
+        let result: BoxFuture<TxnBatch> =
+            match self.client.get_transactions_async_opt(&request, options) {
+                Ok(resp) => Box::new(
+                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
+                        .map(|mut rsp| TxnBatch(rsp.take_txns().into())),
+                ),
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
         drop(span);
         result
     }
