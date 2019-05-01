@@ -3,14 +3,16 @@ use serde::{self, ser::SerializeSeq, Deserializer, Serializer};
 use serde_bytes::{self, ByteBuf, Bytes};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::common::{
-    batch::{CallBatch, OutputBatch},
-    crypto::{
-        hash::Hash,
-        signature::{PublicKey, Signature},
+use crate::{
+    common::{
+        crypto::{
+            hash::Hash,
+            signature::{PublicKey, Signature},
+        },
+        roothash::Block,
+        sgx::avr::AVR,
     },
-    roothash::Block,
-    sgx::avr::AVR,
+    transaction::types::TxnBatch,
 };
 
 /// Batch attestation context.
@@ -22,9 +24,9 @@ pub const BATCH_HASH_CONTEXT: [u8; 8] = *b"EkBatch-";
 pub struct BatchSigMessage<'a> {
     /// The block (partial fields) that we computed this batch on.
     pub previous_block: &'a Block,
-    /// The hash of the CallBatch.
+    /// The hash of the input TxnBatch.
     pub input_hash: &'a Hash,
-    /// The hash of the OutputBatch.
+    /// The hash of the output TxnBatch.
     pub output_hash: &'a Hash,
     /// The hash of serialized tags.
     pub tags_hash: &'a Hash,
@@ -70,7 +72,7 @@ impl serde::Serialize for Tag {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComputedBatch {
     /// Batch of runtime outputs.
-    pub outputs: OutputBatch,
+    pub outputs: TxnBatch,
     /// Batch of storage inserts.
     pub storage_inserts: Vec<(ByteBuf, u64)>,
     /// New state root hash.
@@ -124,7 +126,7 @@ pub enum Body {
         new_state_root: Hash,
     },
     WorkerRuntimeCallBatchRequest {
-        calls: CallBatch,
+        calls: TxnBatch,
         block: Block,
     },
     WorkerRuntimeCallBatchResponse {

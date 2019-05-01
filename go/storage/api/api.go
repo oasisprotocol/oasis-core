@@ -7,7 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
@@ -35,10 +39,17 @@ var (
 	// ReceiptSignatureContext is the signature context used for verifying receipts.
 	ReceiptSignatureContext = []byte("EkStrRec")
 
+	// MKVSReceiptSignatureContext is the signature context used for verifying MKVS receipts.
+	MKVSReceiptSignatureContext = []byte("EkStrRct")
+
 	_ cbor.Marshaler   = (*Receipt)(nil)
 	_ cbor.Unmarshaler = (*Receipt)(nil)
 	_ cbor.Marshaler   = (*SignedReceipt)(nil)
 	_ cbor.Unmarshaler = (*SignedReceipt)(nil)
+	_ cbor.Marshaler   = (*MKVSReceiptBody)(nil)
+	_ cbor.Unmarshaler = (*MKVSReceiptBody)(nil)
+	_ cbor.Marshaler   = (*MKVSReceipt)(nil)
+	_ cbor.Unmarshaler = (*MKVSReceipt)(nil)
 )
 
 // Key is a storage key.
@@ -49,7 +60,7 @@ func (k Key) String() string {
 	return hex.EncodeToString(k[:])
 }
 
-// KeyInfo is a key and it's associated metadata in storage.
+// KeyInfo is a key and its associated metadata in storage.
 type KeyInfo struct {
 	// Key is the key of the value.
 	Key Key
@@ -58,7 +69,7 @@ type KeyInfo struct {
 	Expiration epochtime.EpochTime
 }
 
-// Value is a data blob and it's associated metadata in storage.
+// Value is a data blob and its associated metadata in storage.
 type Value struct {
 	_struct struct{} `codec:",toarray"` // nolint
 
@@ -89,7 +100,7 @@ func (r *Receipt) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, r)
 }
 
-// SignedReceipt is a signed proff that a set of keys exist in storage.
+// SignedReceipt is a signed proof that a set of keys exist in storage.
 type SignedReceipt struct {
 	signature.Signed
 }
@@ -116,6 +127,89 @@ type InsertOptions struct {
 	// into the local cache and not propagate inserts remotely.
 	LocalOnly bool
 }
+
+// WriteLog is a write log.
+//
+// The keys in the write log must be unique.
+type WriteLog = urkel.WriteLog
+
+// LogEntry is a write log entry.
+type LogEntry = urkel.LogEntry
+
+// ReceiptBody is the body of a receipt.
+type MKVSReceiptBody struct {
+	// Version is the storage data structure version.
+	Version uint16
+	// Root is the root hash of the merklized data structure that the
+	// storage node is certifying to store.
+	Root hash.Hash
+}
+
+// MKVSReceipt is a signed MKVSReceiptBody.
+type MKVSReceipt struct {
+	signature.Signed
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (rb *MKVSReceiptBody) MarshalCBOR() []byte {
+	return cbor.Marshal(rb)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (rb *MKVSReceiptBody) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, rb)
+}
+
+// Open first verifies the blob signature then unmarshals the blob.
+func (s *MKVSReceipt) Open(context []byte, receipt *MKVSReceiptBody) error {
+	return s.Signed.Open(context, receipt)
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (s *MKVSReceipt) MarshalCBOR() []byte {
+	return s.Signed.MarshalCBOR()
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (s *MKVSReceipt) UnmarshalCBOR(data []byte) error {
+	return s.Signed.UnmarshalCBOR(data)
+}
+
+// NodeID is a root-relative node identifier which uniquely identifies
+// a node under a given root.
+type NodeID = urkel.NodeID
+
+// Node is either an InternalNode or a LeafNode.
+type Node = urkel.Node
+
+// Pointer is a pointer to another node.
+type Pointer = urkel.Pointer
+
+// InternalNode is an internal node with two children.
+type InternalNode = urkel.InternalNode
+
+// LeafNode is a leaf node containing a key/value pair.
+type LeafNode = urkel.LeafNode
+
+// MKVSValue holds the value.
+type MKVSValue = urkel.Value
+
+// SubtreeIndex is a subtree index.
+type SubtreeIndex = syncer.SubtreeIndex
+
+// InvalidSubtreeIndex is an invalid subtree index.
+const InvalidSubtreeIndex = syncer.InvalidSubtreeIndex
+
+// SubtreePointer is a pointer into the compressed representation of a
+// subtree.
+type SubtreePointer = syncer.SubtreePointer
+
+// InternalNodeSummary is a compressed (index-only) representation of an
+// internal node.
+type InternalNodeSummary = syncer.InternalNodeSummary
+
+// Subtree is a compressed representation of a subtree.
+type Subtree = syncer.Subtree
 
 // Backend is a storage backend implementation.
 type Backend interface {
@@ -146,6 +240,29 @@ type Backend interface {
 	// with their associated metadata.
 	GetKeys(context.Context) (<-chan *KeyInfo, error)
 
+	// Apply applies a set of operations against the MKVS.  The root may refer
+	// to a nil node, in which case a new root will be created.
+	// The expected new root is used to check if the new root after all the
+	// operations are applied already exists in the local DB.  If it does, the
+	// Apply is ignored.
+	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) (*MKVSReceipt, error)
+
+	// GetSubtree retrieves a compressed subtree summary of the given node
+	// under the given root up to the specified depth. The summary contains
+	// full nodes (with hashes) and summary nodes (only structure as hashes
+	// can and must be recomputed locally).
+	GetSubtree(context.Context, hash.Hash, NodeID, uint8) (*Subtree, error)
+
+	// GetPath retrieves a compressed path summary for the given key under
+	// the given root, starting at the given depth.
+	GetPath(context.Context, hash.Hash, hash.Hash, uint8) (*Subtree, error)
+
+	// GetNode retrieves a specific node under the given root.
+	GetNode(context.Context, hash.Hash, NodeID) (Node, error)
+
+	// GetValue retrieves a specific value under the given root.
+	GetValue(context.Context, hash.Hash, hash.Hash) ([]byte, error)
+
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()
 
@@ -154,7 +271,7 @@ type Backend interface {
 	Initialized() <-chan struct{}
 }
 
-// HashStorageKey generates a storage key from it's value.
+// HashStorageKey generates a storage key from its value.
 //
 // All backends MUST use this method to hash values (generate keys).
 func HashStorageKey(value []byte) Key {

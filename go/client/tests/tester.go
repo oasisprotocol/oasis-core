@@ -117,4 +117,15 @@ func testSubmitTransaction(
 	require.EqualValues(t, 0, index)
 	require.EqualValues(t, testInput, input)
 	require.EqualValues(t, testOutput, output)
+
+	// Transactions (check the mock worker for content).
+	txns, err := client.GetTransactions(ctx, runtimeID, blk.Header.InputHash)
+	require.NoError(t, err, "GetTransactions(input)")
+	require.Len(t, txns, 1)
+	require.EqualValues(t, testInput, txns[0])
+
+	txns, err = client.GetTransactions(ctx, runtimeID, blk.Header.OutputHash)
+	require.NoError(t, err, "GetTransactions(output)")
+	require.Len(t, txns, 1)
+	require.EqualValues(t, testOutput, txns[0])
 }

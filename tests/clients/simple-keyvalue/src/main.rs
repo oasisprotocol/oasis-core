@@ -135,6 +135,18 @@ fn main() {
         .expect("query block snapshot");
     println!("Found block: {:?}", snapshot.block);
 
+    // Test get_transactions call.
+    println!("Fetching transaction inputs...");
+    let txns = rt
+        .block_on(
+            kv_client
+                .txn_client()
+                .get_transactions(snapshot.block.header.input_hash),
+        )
+        .expect("get transactions");
+    println!("Found transactions: {:?}", txns);
+    assert_eq!(txns.len(), 1);
+
     // Test query_txn call.
     println!("Querying transaction tags (kv_op=insert)...");
     let snapshot = rt

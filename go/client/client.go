@@ -365,6 +365,26 @@ func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.Publ
 	return blk, input, output, nil
 }
 
+// GetTransactions returns a list of transactions under the given transaction root.
+func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.PublicKey, root hash.Hash) ([][]byte, error) {
+	// Fetch transaction input and output.
+	var key storage.Key
+	copy(key[:], root[:])
+
+	// TODO: Change after transactions are in MKVS.
+	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{key})
+	if err != nil {
+		return nil, err
+	}
+
+	var txns [][]byte
+	if err := cbor.Unmarshal(txn[0], &txns); err != nil {
+		return nil, err
+	}
+
+	return txns, nil
+}
+
 // QueryBlock queries the block index of a given runtime.
 func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, error) {
 	if c.indexerBackend == nil {

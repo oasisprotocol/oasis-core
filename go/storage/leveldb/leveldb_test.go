@@ -1,6 +1,7 @@
 package leveldb
 
 import (
+	"crypto/rand"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
@@ -18,7 +20,10 @@ func TestStorageLevelDB(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	timeSource := mock.New()
-	backend, err := New(filepath.Join(tmpDir, DBFile), timeSource, nil)
+	pk, err := signature.NewPrivateKey(rand.Reader)
+	require.NoError(t, err, "NewPrivateKey()")
+
+	backend, err := New(filepath.Join(tmpDir, DBFile), filepath.Join(tmpDir, MKVSDBFile), timeSource, &pk)
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 

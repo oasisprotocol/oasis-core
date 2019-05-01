@@ -30,9 +30,9 @@ func TestSerializationLeafNode(t *testing.T) {
 	err = decodedLeafNode.UnmarshalBinary(rawLeafNode)
 	require.NoError(t, err, "UnmarshalBinary")
 
-	require.False(t, decodedLeafNode.Clean)
+	require.True(t, decodedLeafNode.Clean)
 	require.Equal(t, leafNode.Key, decodedLeafNode.Key)
-	require.False(t, decodedLeafNode.Value.Clean)
+	require.True(t, decodedLeafNode.Value.Clean)
 	require.Equal(t, leafNode.Value.Value, decodedLeafNode.Value.Value)
 	require.NotNil(t, decodedLeafNode.Value.Value)
 }
@@ -55,7 +55,7 @@ func TestSerializationInternalNode(t *testing.T) {
 	err = decodedIntNode.UnmarshalBinary(rawIntNode)
 	require.NoError(t, err, "UnmarshalBinary")
 
-	require.False(t, decodedIntNode.Clean)
+	require.True(t, decodedIntNode.Clean)
 	require.Equal(t, intNode.Left.Hash, decodedIntNode.Left.Hash)
 	require.Equal(t, intNode.Right.Hash, decodedIntNode.Right.Hash)
 	require.True(t, decodedIntNode.Left.Clean)

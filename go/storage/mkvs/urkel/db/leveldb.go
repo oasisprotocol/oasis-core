@@ -40,6 +40,9 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal
 
 	bytes, err := d.db.Get(append(nodeKeyPrefix, ptr.Hash[:]...), nil)
 	if err != nil {
+		if err == leveldb.ErrNotFound {
+			err = ErrNodeNotFound
+		}
 		return nil, err
 	}
 

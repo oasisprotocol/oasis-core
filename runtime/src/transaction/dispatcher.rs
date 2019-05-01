@@ -7,13 +7,10 @@ use serde_cbor::{self, Value};
 
 use super::{
     context::Context,
-    types::{TxnCall, TxnOutput},
+    types::{TxnBatch, TxnCall, TxnOutput},
 };
 use crate::{
-    common::{
-        batch::{CallBatch, OutputBatch},
-        crypto::hash::Hash,
-    },
+    common::crypto::hash::Hash,
     types::{Tag, TAG_TXN_INDEX_BLOCK},
 };
 
@@ -218,7 +215,7 @@ impl Dispatcher {
     }
 
     /// Dispatches a batch of runtime requests.
-    pub fn dispatch_batch(&self, batch: &CallBatch, mut ctx: Context) -> (OutputBatch, Vec<Tag>) {
+    pub fn dispatch_batch(&self, batch: &TxnBatch, mut ctx: Context) -> (TxnBatch, Vec<Tag>) {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -232,7 +229,7 @@ impl Dispatcher {
         }
 
         // Process batch.
-        let outputs = OutputBatch(
+        let outputs = TxnBatch(
             batch
                 .iter()
                 .enumerate()

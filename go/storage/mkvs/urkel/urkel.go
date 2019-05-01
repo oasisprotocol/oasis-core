@@ -12,6 +12,14 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
+// Re-export the node structures, as we need them in the storage API.
+type NodeID = internal.NodeID
+type Node = internal.Node
+type Pointer = internal.Pointer
+type InternalNode = internal.InternalNode
+type LeafNode = internal.LeafNode
+type Value = internal.Value
+
 type Stats struct {
 	MaxDepth          uint8
 	InternalNodeCount uint64
@@ -124,6 +132,15 @@ func NewWithRoot(rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ..
 	}
 
 	return t, nil
+}
+
+// HasRoot checks the given NodeDB to see if the given root exists.
+func HasRoot(ndb db.NodeDB, root hash.Hash) bool {
+	_, err := ndb.GetNode(root, &internal.Pointer{
+		Clean: true,
+		Hash:  root,
+	})
+	return err != db.ErrNodeNotFound
 }
 
 // Insert inserts a key/value pair into the tree.

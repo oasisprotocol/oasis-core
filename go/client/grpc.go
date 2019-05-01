@@ -149,6 +149,26 @@ func (s *grpcServer) GetTxnByBlockHash(ctx context.Context, req *pbClient.GetTxn
 	}, nil
 }
 
+func (s *grpcServer) GetTransactions(ctx context.Context, req *pbClient.GetTransactionsRequest) (*pbClient.GetTransactionsResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	var root hash.Hash
+	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+		return nil, err
+	}
+
+	txns, err := s.client.GetTransactions(ctx, id, root)
+	if err != nil {
+		return nil, err
+	}
+	return &pbClient.GetTransactionsResponse{
+		Txns: txns,
+	}, nil
+}
+
 func (s *grpcServer) QueryBlock(ctx context.Context, req *pbClient.QueryBlockRequest) (*pbClient.QueryBlockResponse, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
