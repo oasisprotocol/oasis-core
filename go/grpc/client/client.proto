@@ -18,6 +18,8 @@ service Runtime {
     rpc GetTxn (GetTxnRequest) returns (GetTxnResponse) {}
     // Get transaction at specific block hash and index.
     rpc GetTxnByBlockHash (GetTxnByBlockHashRequest) returns (GetTxnByBlockHashResponse) {}
+    // Get transactions at specific transaction root.
+    rpc GetTransactions (GetTransactionsRequest) returns (GetTransactionsResponse) {}
     // Query the block index of a given runtime.
     rpc QueryBlock(QueryBlockRequest) returns (QueryBlockResponse) {}
     // Query the transaction index of a given runtime.
@@ -110,6 +112,18 @@ message GetTxnByBlockHashResponse {
     bytes input = 3;
     // Transaction output.
     bytes output = 4;
+}
+
+message GetTransactionsRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+    // Transaction root.
+    bytes root = 2;
+}
+
+message GetTransactionsResponse {
+    // Raw transactions.
+    repeated bytes txns = 1;
 }
 
 message QueryBlockRequest {

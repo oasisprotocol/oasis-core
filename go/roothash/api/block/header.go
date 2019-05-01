@@ -78,6 +78,8 @@ const (
 )
 
 // Header is a block header.
+//
+// Keep this in sync with /runtime/src/common/roothash.rs.
 type Header struct { // nolint: maligned
 	// Version is the protocol version number.
 	Version uint16 `codec:"version"`
@@ -283,31 +285,13 @@ func (h *Header) VerifyStorageReceipt(receipt *storage.Receipt) error {
 	return nil
 }
 
-// ReducedHeader is a subset of Header that is available in the runtime.
-// Keep this in sync with /runtime/src/common/roothash.rs.
-type ReducedHeader struct {
-	// Round is the block round.
-	Round uint64 `codec:"round"`
-	// Timestamp is the block timestamp (POSIX time).
-	Timestamp uint64 `codec:"timestamp"`
-	// StateRoot is the state root hash.
-	StateRoot hash.Hash `codec:"state_root"`
-}
-
-// FromFull puts together a ReducedHeader from a full Header.
-func (rh *ReducedHeader) FromFull(header *Header) {
-	rh.Round = header.Round
-	rh.Timestamp = header.Timestamp
-	rh.StateRoot = header.StateRoot
-}
-
 // BatchSigMessage is batch attestation parameters.
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type BatchSigMessage struct {
-	PreviousBlock ReducedBlock `codec:"previous_block"`
-	InputHash     hash.Hash    `codec:"input_hash"`
-	OutputHash    hash.Hash    `codec:"output_hash"`
-	TagsHash      hash.Hash    `codec:"tags_hash"`
-	StateRoot     hash.Hash    `codec:"state_root"`
+	PreviousBlock Block     `codec:"previous_block"`
+	InputHash     hash.Hash `codec:"input_hash"`
+	OutputHash    hash.Hash `codec:"output_hash"`
+	TagsHash      hash.Hash `codec:"tags_hash"`
+	StateRoot     hash.Hash `codec:"state_root"`
 }

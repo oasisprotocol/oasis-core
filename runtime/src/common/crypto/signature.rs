@@ -4,6 +4,7 @@ use ring::{
     rand,
     signature::{verify, Ed25519KeyPair, KeyPair, ED25519},
 };
+use serde_derive::{Deserialize, Serialize};
 use untrusted;
 
 use super::hash::Hash;
@@ -70,4 +71,13 @@ impl Signature {
 
         Ok(verify(&ED25519, pk, digest, sig)?)
     }
+}
+
+/// A signature bundled with a public key.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SignatureBundle {
+    /// Public key that produced the signature.
+    pub public_key: Option<PublicKey>,
+    /// Actual signature.
+    pub signature: Signature,
 }

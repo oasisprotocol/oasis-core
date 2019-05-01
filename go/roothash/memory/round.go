@@ -99,12 +99,12 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 	if r.roundState.runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := r.roundState.computationGroup[id].runtime.Capabilities.TEE.RAK
 		batchSigMessage := block.BatchSigMessage{
-			InputHash:  header.InputHash,
-			OutputHash: header.OutputHash,
-			TagsHash:   header.TagHash,
-			StateRoot:  header.StateRoot,
+			PreviousBlock: *r.roundState.currentBlock,
+			InputHash:     header.InputHash,
+			OutputHash:    header.OutputHash,
+			TagsHash:      header.TagHash,
+			StateRoot:     header.StateRoot,
 		}
-		batchSigMessage.PreviousBlock.FromFull(r.roundState.currentBlock)
 		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), message.RakSig[:]) {
 			return errRakSigInvalid
 		}
