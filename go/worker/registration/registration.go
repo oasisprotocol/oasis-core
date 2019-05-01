@@ -18,6 +18,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
 const (
@@ -33,6 +34,7 @@ type Registration struct {
 	epochtime     epochtime.Backend
 	registry      registry.Backend
 	identity      *identity.Identity
+	p2p           *p2p.P2P
 	entityPrivKey *signature.PrivateKey
 	ctx           context.Context
 	quitCh        chan struct{}
@@ -145,6 +147,7 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 		ID:         identityPublic,
 		EntityID:   r.entityPrivKey.Public(),
 		Expiration: uint64(epoch) + 2,
+		P2P:        r.p2p.Info(),
 		Certificate: &node.Certificate{
 			DER: r.identity.TLSCertificate.Certificate[0],
 		},
@@ -213,6 +216,7 @@ func New(
 	registry registry.Backend,
 	identity *identity.Identity,
 	syncable common.Syncable,
+	p2p *p2p.P2P,
 	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {
 	ctx := context.Background()
@@ -234,6 +238,7 @@ func New(
 		ctx:             ctx,
 		logger:          logging.GetLogger("worker/registration"),
 		syncable:        syncable,
+		p2p:             p2p,
 		roleHooks:       []func(*node.Node) error{},
 	}
 

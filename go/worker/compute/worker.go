@@ -24,7 +24,7 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
-	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -354,6 +354,7 @@ func newWorker(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	ias *ias.IAS,
+	p2p *p2p.P2P,
 	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
 	cfg Config,
@@ -385,6 +386,7 @@ func newWorker(
 		scheduler:       scheduler,
 		syncable:        syncable,
 		ias:             ias,
+		p2p:             p2p,
 		registration:    registration,
 		keyManager:      keyManager,
 		runtimes:        make(map[signature.MapKey]*Runtime),
@@ -404,13 +406,6 @@ func newWorker(
 		if len(cfg.Runtimes) == 0 {
 			return nil, fmt.Errorf("compute/worker: no runtimes configured")
 		}
-
-		// Create P2P node.
-		p2p, err := p2p.New(w.ctx, identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)
-		if err != nil {
-			return nil, err
-		}
-		w.p2p = p2p
 
 		// Create required network proxies.
 		metricsConfig := metrics.GetServiceConfig()
@@ -455,10 +450,6 @@ func newWorker(
 
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
-			// XXX: P2P will (probably?) be shared between different workers
-			// so should probably be set elsewhere in future.
-			n.P2P = w.p2p.Info()
-
 			n.AddRoles(node.RoleComputeWorker)
 			n.Runtimes = w.getNodeRuntimes()
 

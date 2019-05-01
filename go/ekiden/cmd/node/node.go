@@ -2,6 +2,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/client"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/dummydebug"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
@@ -35,9 +37,10 @@ import (
 	"github.com/oasislabs/ekiden/go/storage"
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	tmService "github.com/oasislabs/ekiden/go/tendermint/service"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 )
@@ -63,7 +66,7 @@ func Run(cmd *cobra.Command, args []string) {
 type Node struct {
 	svcMgr  *background.ServiceManager
 	grpcSrv *grpc.Server
-	svcTmnt service.TendermintService
+	svcTmnt tmService.TendermintService
 
 	Identity   *identity.Identity
 	Beacon     beaconAPI.Backend
@@ -79,6 +82,7 @@ type Node struct {
 
 	ComputeWorker              *compute.Worker
 	TransactionSchedulerWorker *txnscheduler.Worker
+	P2P                        *p2p.P2P
 	WorkerRegistration         *registration.Registration
 }
 
@@ -154,6 +158,14 @@ func (n *Node) initAndStartWorkers() error {
 		return err
 	}
 
+	// Initialize the worker P2P.
+	p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
+	n.P2P, err = p2p.New(p2pCtx, n.Identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
+
 	// Initialize the worker registration.
 	n.WorkerRegistration, err = registration.New(
 		dataDir,
@@ -161,6 +173,7 @@ func (n *Node) initAndStartWorkers() error {
 		n.Registry,
 		n.Identity,
 		n.svcTmnt,
+		n.P2P,
 		workerCommonCfg,
 	)
 	if err != nil {
@@ -180,6 +193,7 @@ func (n *Node) initAndStartWorkers() error {
 		n.Scheduler,
 		n.svcTmnt,
 		n.KeyManager,
+		n.P2P,
 		n.WorkerRegistration,
 		workerCommonCfg,
 	)
@@ -196,7 +210,6 @@ func (n *Node) initAndStartWorkers() error {
 	// Initialize the transaction scheduler.
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		dataDir,
-		n.IAS,
 		n.Identity,
 		n.Storage,
 		n.RootHash,
@@ -205,6 +218,7 @@ func (n *Node) initAndStartWorkers() error {
 		n.Scheduler,
 		n.svcTmnt,
 		n.KeyManager,
+		n.P2P,
 		n.WorkerRegistration,
 		workerCommonCfg,
 	)

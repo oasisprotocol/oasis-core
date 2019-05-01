@@ -29,7 +29,7 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
-	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
 const queueExternalBatchTimeout = 5 * time.Second

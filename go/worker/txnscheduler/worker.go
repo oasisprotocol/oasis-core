@@ -19,9 +19,9 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/p2p"
 )
 
 const (
@@ -265,7 +265,7 @@ func newWorker(
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
-	ias *ias.IAS,
+	p2p *p2p.P2P,
 	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
 	cfg Config,
@@ -296,7 +296,7 @@ func newWorker(
 		epochtime:       epochtime,
 		scheduler:       scheduler,
 		syncable:        syncable,
-		ias:             ias,
+		p2p:             p2p,
 		registration:    registration,
 		keyManager:      keyManager,
 		runtimes:        make(map[signature.MapKey]*Runtime),
@@ -321,13 +321,6 @@ func newWorker(
 		w.grpc = grpc
 		newClientGRPCServer(grpc.Server(), w)
 
-		// Create P2P node.
-		p2p, err := p2p.New(w.ctx, identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)
-		if err != nil {
-			return nil, err
-		}
-		w.p2p = p2p
-
 		// Register all configured runtimes.
 		for _, rtCfg := range cfg.Runtimes {
 			if err = w.registerRuntime(&cfg, &rtCfg); err != nil {
@@ -337,10 +330,6 @@ func newWorker(
 
 		// Register transaction scheduler worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
-			// XXX: P2P will (probably?) be shared between different workers
-			// so should probably be set elsewhere in future.
-			n.P2P = w.p2p.Info()
-
 			n.AddRoles(node.RoleTransactionScheduler)
 			n.Runtimes = w.getNodeRuntimes()
 

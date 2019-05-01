@@ -10,13 +10,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
@@ -37,7 +37,6 @@ const (
 // New creates a new worker.
 func New(
 	dataDir string,
-	ias *ias.IAS,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -46,6 +45,7 @@ func New(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	keyManager *keymanager.KeyManager,
+	p2p *p2p.P2P,
 	registration *registration.Registration,
 	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
@@ -82,7 +82,7 @@ func New(
 	}
 
 	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
+		registry, epochtime, scheduler, syncable, p2p, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

@@ -20,6 +20,7 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -68,6 +69,7 @@ func New(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	keyManager *keymanager.KeyManager,
+	p2p *p2p.P2P,
 	registration *registration.Registration,
 	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
@@ -118,7 +120,7 @@ func New(
 	}
 
 	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
+		registry, epochtime, scheduler, syncable, ias, p2p, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

@@ -16,7 +16,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/p2p"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
 type epoch struct {

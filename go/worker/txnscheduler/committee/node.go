@@ -24,7 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/p2p"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
 var (

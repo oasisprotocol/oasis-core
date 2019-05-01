@@ -18,7 +18,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
+	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
 // BatchHandler is a handler for batches incoming from other members
