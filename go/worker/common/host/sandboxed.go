@@ -48,6 +48,8 @@ const (
 	workerRespawnDelay = 1 * time.Second
 	// Worker interrupt timeout.
 	workerInterruptTimeout = 1 * time.Second
+	// Worker attest interval.
+	workerAttestInterval = 1 * time.Hour
 
 	// Path to bubblewrap sandbox.
 	workerBubblewrapBinary = "/usr/bin/bwrap"
@@ -97,11 +99,15 @@ type ProxySpecification struct {
 }
 
 type process struct {
+	sync.Mutex
+
 	process  *os.Process
 	protocol *protocol.Protocol
 
-	waitCh <-chan error
-	quitCh chan error
+	waitCh       <-chan error
+	stopAttestCh chan struct{}
+	quitAttestCh chan struct{}
+	quitCh       chan error
 
 	logger *logging.Logger
 
@@ -142,11 +148,60 @@ func (p *process) worker() {
 		)
 	}
 
+	close(p.stopAttestCh)
+
 	// Close connection after worker process has exited.
 	p.protocol.Close()
 
 	p.quitCh <- err
 	close(p.quitCh)
+
+	// Ensure the attestation worker is done.
+	<-p.quitAttestCh
+
+}
+
+func (p *process) attestationWorker(h *sandboxedHost) {
+	defer close(p.quitAttestCh)
+
+	if p.capabilityTEE == nil {
+		return
+	}
+
+	t := time.NewTicker(workerAttestInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-p.stopAttestCh:
+			return
+		case <-t.C:
+		}
+
+		p.logger.Info("regenerating CapabilityTEE")
+
+		switch p.capabilityTEE.Hardware {
+		case node.TEEHardwareIntelSGX:
+			capabilityTEE, err := h.updateCapabilityTEESgx(p)
+			if err != nil {
+				p.logger.Error("failed to regenerate CapabilityTEE",
+					"err", err,
+				)
+				continue
+			}
+
+			p.Lock()
+			p.capabilityTEE = capabilityTEE
+			p.Unlock()
+		}
+	}
+}
+
+func (p *process) getCapabilityTEE() *node.CapabilityTEE {
+	p.Lock()
+	defer p.Unlock()
+
+	return p.capabilityTEE
 }
 
 func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) ([]string, error) {
@@ -323,7 +378,7 @@ func (h *sandboxedHost) WaitForCapabilityTEE(ctx context.Context) (*node.Capabil
 	for {
 		activeWorker := h.activeWorker
 		if activeWorker != nil {
-			return activeWorker.capabilityTEE, nil
+			return activeWorker.getCapabilityTEE(), nil
 		}
 		if !h.activeWorkerAvailable.Wait(ctx) {
 			return nil, errors.New("aborted by context")
@@ -669,11 +724,13 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	}
 
 	p := &process{
-		process:  cmd.Process,
-		protocol: proto,
-		quitCh:   make(chan error),
-		waitCh:   waitCh,
-		logger:   logger,
+		process:      cmd.Process,
+		protocol:     proto,
+		quitCh:       make(chan error),
+		stopAttestCh: make(chan struct{}),
+		quitAttestCh: make(chan struct{}),
+		waitCh:       waitCh,
+		logger:       logger,
 	}
 	go p.worker()
 
@@ -691,6 +748,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	default:
 		return nil, node.ErrInvalidTEEHardware
 	}
+	go p.attestationWorker(h)
 
 	haveErrors = false
 
