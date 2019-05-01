@@ -39,7 +39,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	// Advance the epoch.
 	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees := func(expectedCompute, expectedTransactionScheduler int) {
+	ensureValidCommittees := func(expectedCompute, expectedStorage, expectedTransactionScheduler int) {
 		var compute, storage, transactionScheduler *api.Committee
 		var seen int
 		for seen < 3 {
@@ -56,14 +56,14 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 				case api.Compute:
 					require.Nil(compute, "haven't seen a compute committee yet")
 					compute = committee
-					require.Len(committee.Members, expectedCompute, "committee has all nodes")
+					require.Len(committee.Members, expectedCompute, "committee has all compute nodes")
 				case api.Storage:
 					require.Nil(storage, "haven't seen a storage committee yet")
-					require.Len(committee.Members, 1, "committee has one node")
+					require.Len(committee.Members, expectedStorage, "committee has all storage nodes")
 					storage = committee
 				case api.TransactionScheduler:
 					require.Nil(transactionScheduler, "haven't seen a transaction scheduler committee yet")
-					require.Len(committee.Members, expectedTransactionScheduler, "committee has all nodes")
+					require.Len(committee.Members, expectedTransactionScheduler, "committee has all transaction scheduler nodes")
 					transactionScheduler = committee
 				}
 
@@ -98,16 +98,26 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 		require.Nil(transactionScheduler, "fetched a transaction scheduler committee")
 	}
 
-	ensureValidCommittees(len(nodes), int(rt.Runtime.TransactionSchedulerGroupSize))
+	var nCompute, nStorage int
+	for _, n := range nodes {
+		if n.HasRoles(node.RoleComputeWorker) {
+			nCompute++
+		}
+		if n.HasRoles(node.RoleStorageWorker) {
+			nStorage++
+		}
+	}
+	ensureValidCommittees(nCompute, nStorage, int(rt.Runtime.TransactionSchedulerGroupSize))
 
 	// Re-register the runtime with less nodes.
 	rt.Runtime.ReplicaGroupSize = 2
 	rt.Runtime.ReplicaGroupBackupSize = 1
+	rt.Runtime.StorageGroupSize = 1
 	rt.MustRegister(t, registry)
 
 	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees(3, int(rt.Runtime.TransactionSchedulerGroupSize))
+	ensureValidCommittees(3, 1, int(rt.Runtime.TransactionSchedulerGroupSize))
 
 	// Cleanup the registry.
 	rt.Cleanup(t, registry)

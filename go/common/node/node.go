@@ -80,8 +80,12 @@ type Node struct {
 type RolesMask uint32
 
 const (
-	// ComputeWorker Role is Ekiden Compute Worker role.
-	ComputeWorker RolesMask = 1 << iota
+	// RoleComputeWorker is Ekiden Compute Worker role.
+	RoleComputeWorker RolesMask = 1 << 0
+	// RoleStorageWorker is Ekiden Storage node role.
+	RoleStorageWorker RolesMask = 1 << 1
+	// RoleTransactionScheduler is Ekiden Transaction Scheduler role.
+	RoleTransactionScheduler RolesMask = 1 << 2
 )
 
 // AddRoles adds the Node roles
