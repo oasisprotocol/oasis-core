@@ -387,7 +387,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 
 		var role node.RolesMask
 		if i < nCompute {
-			role = node.RoleComputeWorker
+			role = node.RoleComputeWorker | node.RoleTransactionScheduler
 		} else {
 			role = node.RoleStorageWorker
 		}
@@ -638,12 +638,13 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	}
 
 	rt.Runtime = &api.Runtime{
-		ID:                       rt.PrivateKey.Public(),
-		Code:                     []byte("tu ne cede malis, sed contra audentior ito"),
-		ReplicaGroupSize:         3,
-		ReplicaGroupBackupSize:   5,
-		ReplicaAllowedStragglers: 1,
-		StorageGroupSize:         3,
+		ID:                            rt.PrivateKey.Public(),
+		Code:                          []byte("tu ne cede malis, sed contra audentior ito"),
+		ReplicaGroupSize:              3,
+		ReplicaGroupBackupSize:        5,
+		ReplicaAllowedStragglers:      1,
+		StorageGroupSize:              3,
+		TransactionSchedulerGroupSize: 3,
 	}
 	if entity != nil {
 		rt.PrivateKey = entity.PrivateKey

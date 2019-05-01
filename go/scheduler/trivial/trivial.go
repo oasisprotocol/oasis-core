@@ -32,8 +32,9 @@ var (
 	_ api.Backend      = (*trivialScheduler)(nil)
 	_ api.BlockBackend = (*trivialScheduler)(nil)
 
-	rngContextCompute = []byte("EkS-Dummy-Compute")
-	rngContextStorage = []byte("EkS-Dummy-Storage")
+	rngContextCompute              = []byte("EkS-Dummy-Compute")
+	rngContextStorage              = []byte("EkS-Dummy-Storage")
+	rngContextTransactionScheduler = []byte("EkS-Dummy-TransactionScheduler")
 
 	errIncompatibleBackends = fmt.Errorf("scheduler/trivial: incompatible backend(s) for block operations")
 )
@@ -103,7 +104,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 	beacon := s.beacons[epoch]
 	runtimeTeeNodeList := s.nodeLists[epoch][rtID][rt.TEEHardware]
 
-	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage} {
+	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage, api.TransactionScheduler} {
 
 		// Select nodes with compatible roles
 		nodeList := []*node.Node{}
@@ -119,6 +120,12 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 				// #1583 will refactor this and select storage workers from
 				// the pool of all registered storage worker nodes.
 				nodeList = append(nodeList, n)
+			case api.TransactionScheduler:
+				// XXX: Transaction scheduler committee is completely ignored at the moment
+				// so we just select one of the compute nodes.
+				// #1626 will refactor this and select transaction scheduler workers from
+				// the pool of all registered transaction scheduler worker nodes.
+				nodeList = append(nodeList, n)
 			}
 		}
 		nrNodes := len(nodeList)
@@ -132,6 +139,9 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 		case api.Storage:
 			sz = int(rt.StorageGroupSize)
 			ctx = rngContextStorage
+		case api.TransactionScheduler:
+			sz = int(rt.TransactionSchedulerGroupSize)
+			ctx = rngContextTransactionScheduler
 		default:
 			return nil, fmt.Errorf("scheduler: invalid committee type: %v", kind)
 		}

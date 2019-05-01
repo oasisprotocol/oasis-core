@@ -84,6 +84,8 @@ const (
 	RoleComputeWorker RolesMask = 1 << 0
 	// RoleStorageWorker is Ekiden Storage node role.
 	RoleStorageWorker RolesMask = 1 << 1
+	// RoleTransactionScheduler is Ekiden Transaction Scheduler role.
+	RoleTransactionScheduler RolesMask = 1 << 2
 )
 
 // AddRoles adds the Node roles

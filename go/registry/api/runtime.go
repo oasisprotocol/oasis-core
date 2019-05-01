@@ -48,6 +48,9 @@ type Runtime struct {
 
 	// StorageGroupSize is the time of registration of the runtime.
 	RegistrationTime uint64 `codec:"registration_time"`
+
+	// TransactionSchedulerGroupSize the size of the TransactionScheduler group.
+	TransactionSchedulerGroupSize uint64 `codec:"transaction_scheduler_group_size"`
 }
 
 // String returns a string representation of itself.

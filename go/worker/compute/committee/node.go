@@ -299,7 +299,7 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsLeader() {
+	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		return ErrNotLeader
 	}
 
@@ -319,6 +319,19 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
 
 	return nil
+}
+
+// IsTransactionQueued checks if the given transaction is present in the
+// transaction scheduler queue and is waiting to be dispatched to a
+// compute committee.
+func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
+	// Check if we are a leader. Note that we may be in the middle of a
+	// transition, but this shouldn't matter as the client will retry.
+	if !n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
+		return false, ErrNotLeader
+	}
+
+	return n.incomingQueue.IsQueued(id), nil
 }
 
 func (n *Node) transition(state NodeState) {
@@ -363,12 +376,12 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 	epoch := n.group.GetEpochSnapshot()
 
 	// Clear incoming queue if we are not a leader.
-	if !epoch.IsLeader() {
+	if !epoch.IsTransactionSchedulerLeader() {
 		n.incomingQueue.Clear()
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
 
-	if epoch.IsMember() {
+	if epoch.IsComputeMember() {
 		n.transition(StateWaitingForBatch{})
 	} else {
 		n.transition(StateNotReady{})
@@ -551,7 +564,7 @@ func (n *Node) abortBatch(reason error) {
 	state.cancel()
 
 	// If we are a leader, put the batch back into the incoming queue.
-	if n.group.GetEpochSnapshot().IsLeader() {
+	if n.group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		if err := n.incomingQueue.AddBatch(state.batch); err != nil {
 			n.logger.Warn("failed to add batch back into the incoming queue",
 				"err", err,
@@ -598,7 +611,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	// Commit outputs and state to storage. If we are a regular worker, then we only
 	// insert into local cache.
 	var opts storage.InsertOptions
-	if !epoch.IsLeader() && !epoch.IsBackupWorker() {
+	if !epoch.IsComputeLeader() && !epoch.IsComputeBackupWorker() {
 		opts.LocalOnly = true
 	}
 
@@ -707,7 +720,7 @@ func (n *Node) handleNewEvent(ev *roothash.Event) {
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
-	if n.group.GetEpochSnapshot().IsBackupWorker() {
+	if n.group.GetEpochSnapshot().IsComputeBackupWorker() {
 		// Backup worker, start processing a batch.
 		n.logger.Info("backup worker activating and processing batch",
 			"input_hash", dis.BatchHash,
@@ -733,8 +746,9 @@ func (n *Node) checkIncomingQueue(force bool) {
 		return
 	}
 
+	epochSnapshot := n.group.GetEpochSnapshot()
 	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !n.group.GetEpochSnapshot().IsLeader() || n.currentBlock == nil {
+	if !epochSnapshot.IsTransactionSchedulerLeader() || n.currentBlock == nil {
 		return
 	}
 
@@ -796,8 +810,10 @@ func (n *Node) checkIncomingQueue(force bool) {
 	}
 	spanPublish.Finish()
 
-	// Start processing the batch locally.
-	n.startProcessingBatch(batch)
+	if epochSnapshot.IsComputeLeader() || epochSnapshot.IsComputeWorker() {
+		// Start processing the batch locally.
+		n.startProcessingBatch(batch)
+	}
 
 	processOk = true
 }
@@ -810,8 +826,8 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 
 	epoch := n.group.GetEpochSnapshot()
 
-	// We can only receive external batches if we are a worker or a backup worker.
-	if !epoch.IsWorker() && !epoch.IsBackupWorker() {
+	// We can only receive external batches if we are a compute member.
+	if !epoch.IsComputeMember() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
 	}

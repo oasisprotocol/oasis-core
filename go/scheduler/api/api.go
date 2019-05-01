@@ -111,6 +111,9 @@ const (
 
 	// Storage is a storage committee.
 	Storage
+
+	// TransactionScheduler is a transaction scheduler committee.
+	TransactionScheduler
 )
 
 // String returns a string representation of a CommitteeKind.

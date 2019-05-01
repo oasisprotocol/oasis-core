@@ -27,13 +27,14 @@ import (
 )
 
 const (
-	cfgID                       = "runtime.id"
-	cfgTEEHardware              = "runtime.tee_hardware"
-	cfgReplicaGroupSize         = "runtime.replica_group_size"
-	cfgReplicaGroupBackupSize   = "runtime.replica_group_backup_size"
-	cfgReplicaAllowedStragglers = "runtime.replica_allowed_stragglers"
-	cfgStorageGroupSize         = "runtime.storage_group_size"
-	cfgEntity                   = "entity"
+	cfgID                            = "runtime.id"
+	cfgTEEHardware                   = "runtime.tee_hardware"
+	cfgReplicaGroupSize              = "runtime.replica_group_size"
+	cfgReplicaGroupBackupSize        = "runtime.replica_group_backup_size"
+	cfgReplicaAllowedStragglers      = "runtime.replica_allowed_stragglers"
+	cfgStorageGroupSize              = "runtime.storage_group_size"
+	cfgTransactionSchedulerGroupSize = "runtime.transaction_scheduler_group_size"
+	cfgEntity                        = "entity"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -248,14 +249,15 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 	}
 
 	return &registry.Runtime{
-		ID:                       id,
-		Code:                     nil, // TBD
-		TEEHardware:              teeHardware,
-		ReplicaGroupSize:         uint64(viper.GetInt64(cfgReplicaGroupSize)),
-		ReplicaGroupBackupSize:   uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
-		ReplicaAllowedStragglers: uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
-		StorageGroupSize:         uint64(viper.GetInt64(cfgStorageGroupSize)),
-		RegistrationTime:         ent.RegistrationTime,
+		ID:                            id,
+		Code:                          nil, // TBD
+		TEEHardware:                   teeHardware,
+		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
+		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
+		ReplicaAllowedStragglers:      uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
+		StorageGroupSize:              uint64(viper.GetInt64(cfgStorageGroupSize)),
+		TransactionSchedulerGroupSize: uint64(viper.GetInt64(cfgTransactionSchedulerGroupSize)),
+		RegistrationTime:              ent.RegistrationTime,
 	}, privKey, nil
 }
 
@@ -288,6 +290,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgReplicaGroupBackupSize, 0, "Number of backup workers in the runtime replica group")
 		cmd.Flags().Uint64(cfgReplicaAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime replica group")
 		cmd.Flags().Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+		cmd.Flags().Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
 		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
@@ -298,6 +301,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgReplicaGroupBackupSize,
 		cfgReplicaAllowedStragglers,
 		cfgStorageGroupSize,
+		cfgTransactionSchedulerGroupSize,
 		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
