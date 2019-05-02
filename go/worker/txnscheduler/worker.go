@@ -19,6 +19,7 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
@@ -66,6 +67,7 @@ type Worker struct {
 	scheduler    scheduler.Backend
 	syncable     common.Syncable
 	keyManager   *keymanager.KeyManager
+	compute      *compute.Worker
 	p2p          *p2p.P2P
 	grpc         *grpc.Server
 	registration *registration.Registration
@@ -208,6 +210,9 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		"runtime_id", rtCfg.ID,
 	)
 
+	// Get compute committee node for the given runtime.
+	computeNode := w.compute.GetRuntime(rtCfg.ID).GetNode()
+
 	// Create committee node for the given runtime.
 	nodeCfg := cfg.Committee
 
@@ -220,6 +225,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		w.epochtime,
 		w.scheduler,
 		w.syncable,
+		computeNode,
 		w.p2p,
 		nodeCfg,
 	)
@@ -250,6 +256,7 @@ func newWorker(
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
+	compute *compute.Worker,
 	p2p *p2p.P2P,
 	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
@@ -281,6 +288,7 @@ func newWorker(
 		epochtime:       epochtime,
 		scheduler:       scheduler,
 		syncable:        syncable,
+		compute:         compute,
 		p2p:             p2p,
 		registration:    registration,
 		keyManager:      keyManager,

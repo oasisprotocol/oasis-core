@@ -210,12 +210,13 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 }
 
 // PublishBatch publishes a batch to all members in the committee.
-func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash hash.Hash, hdr block.Header) error {
+// Returns whether to publish the batch to ourselves.
+func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash hash.Hash, hdr block.Header) (bool, error) {
 	g.RLock()
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil || g.activeEpoch.role != scheduler.Leader {
-		return errors.New("not leader")
+		return false, errors.New("not leader")
 	}
 
 	pubCtx := g.activeEpoch.roundCtx
@@ -226,14 +227,14 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 	}
 
 	// Publish batch to all workers in the compute committee.
+	publishToSelf := false
 	publicIdentity := g.identity.NodeKey.Public()
 	for index, member := range g.activeEpoch.computeCommittee.Members {
 		if member.Role != scheduler.Leader && member.Role != scheduler.Worker {
 			continue
 		}
 		if member.PublicKey.Equal(publicIdentity) {
-			// Skip self, because we don't keep our own P2P address and because
-			// we'll start it locally after this.
+			publishToSelf = true
 			continue
 		}
 
@@ -249,7 +250,7 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 		})
 	}
 
-	return nil
+	return publishToSelf, nil
 }
 
 // NewGroup creates a new group.

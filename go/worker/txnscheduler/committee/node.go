@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
@@ -116,13 +117,14 @@ type Config struct {
 type Node struct {
 	runtimeID signature.PublicKey
 
-	identity  *identity.Identity
-	storage   storage.Backend
-	roothash  roothash.Backend
-	registry  registry.Backend
-	epochtime epochtime.Backend
-	scheduler scheduler.Backend
-	syncable  common.Syncable
+	identity    *identity.Identity
+	storage     storage.Backend
+	roothash    roothash.Backend
+	registry    registry.Backend
+	epochtime   epochtime.Backend
+	scheduler   scheduler.Backend
+	syncable    common.Syncable
+	computeNode *computeCommittee.Node
 
 	cfg Config
 
@@ -410,7 +412,8 @@ func (n *Node) checkIncomingQueue(force bool) {
 		opentracing.Tag{Key: "header", Value: n.currentBlock.Header},
 		opentracing.ChildOf(n.batchSpanCtx),
 	)
-	if err := n.group.PublishBatch(n.batchSpanCtx, batchID, n.currentBlock.Header); err != nil {
+	publishToSelf, err := n.group.PublishBatch(n.batchSpanCtx, batchID, n.currentBlock.Header)
+	if err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
@@ -421,7 +424,9 @@ func (n *Node) checkIncomingQueue(force bool) {
 
 	n.batchSent()
 
-	// TODO: Send batch to our own compute node.
+	if publishToSelf {
+		n.computeNode.HandleBatchFromTransactionScheduler(batch, n.currentBlock.Header)
+	}
 
 	processOk = true
 }
@@ -500,6 +505,7 @@ func NewNode(
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
+	computeNode *computeCommittee.Node,
 	p2p *p2p.P2P,
 	cfg Config,
 ) (*Node, error) {
@@ -518,6 +524,7 @@ func NewNode(
 		epochtime:        epochtime,
 		scheduler:        scheduler,
 		syncable:         syncable,
+		computeNode:      computeNode,
 		cfg:              cfg,
 		ctx:              ctx,
 		cancelCtx:        cancel,

@@ -121,6 +121,13 @@ type externalBatch struct {
 	spanCtx opentracing.SpanContext
 }
 
+// internalBatch is a request to the worker to process a batch from the
+// transaction scheduler on the same node.
+type internalBatch struct {
+	batch  runtime.Batch
+	header block.Header
+}
+
 // Node is a committee node.
 type Node struct {
 	runtimeID signature.PublicKey
@@ -144,6 +151,7 @@ type Node struct {
 	initCh    chan struct{}
 
 	incomingExtBatch chan *externalBatch
+	incomingIntBatch chan *internalBatch
 	group            *Group
 
 	// No locking required, the variables in the next group are only accessed
@@ -276,6 +284,11 @@ func (n *Node) queueExternalBatch(ctx context.Context, batchHash hash.Hash, hdr 
 	}
 
 	return respCh, nil
+}
+
+// HandleBatchFromTransactionScheduler processes a batch from the transaction scheduler on the same node.
+func (n *Node) HandleBatchFromTransactionScheduler(batch runtime.Batch, hdr block.Header) {
+	n.incomingIntBatch <- &internalBatch{batch, hdr}
 }
 
 func (n *Node) transition(state NodeState) {
@@ -709,6 +722,22 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 	return nil
 }
 
+func (n *Node) handleInternalBatch(batch *internalBatch) {
+	epoch := n.group.GetEpochSnapshot()
+
+	if !epoch.IsLeader() && !epoch.IsWorker() {
+		n.logger.Warn("transaction scheduler sent batch when compute is not leader or worker. dropping batch")
+		return
+	}
+
+	if !n.currentBlock.Header.MostlyEqual(&batch.header) {
+		n.logger.Warn("compute and transaction scheduler blocks out of sync. dropping batch")
+		return
+	}
+
+	n.startProcessingBatch(batch.batch)
+}
+
 func (n *Node) worker() {
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
@@ -793,6 +822,8 @@ func (n *Node) worker() {
 			// roothash discrepancy event).
 			err := n.handleExternalBatch(batch)
 			batch.ch <- err
+		case batch := <-n.incomingIntBatch:
+			n.handleInternalBatch(batch)
 		}
 	}
 }
@@ -833,6 +864,7 @@ func NewNode(
 		stopCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		incomingExtBatch: make(chan *externalBatch, 10),
+		incomingIntBatch: make(chan *internalBatch, 1),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
 		logger:           logging.GetLogger("worker/compute/committee").With("runtime_id", runtimeID),

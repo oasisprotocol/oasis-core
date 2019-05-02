@@ -218,6 +218,7 @@ func (n *Node) initAndStartWorkers() error {
 		n.Scheduler,
 		n.svcTmnt,
 		n.KeyManager,
+		n.ComputeWorker,
 		n.P2P,
 		n.WorkerRegistration,
 		workerCommonCfg,
