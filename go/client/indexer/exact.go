@@ -6,11 +6,18 @@ import (
 	"encoding/binary"
 	"path/filepath"
 
-	bolt "go.etcd.io/bbolt"
+	bolt "github.com/etcd-io/bbolt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+)
+
+// ExactBackendName is the name of the exact backend.
+const (
+	ExactBackendName = "exact"
+
+	exactIndexFile = "exact-tag-index.bolt.db"
 )
 
 var (
@@ -216,6 +223,15 @@ func (b *exactBackend) QueryTxn(ctx context.Context, runtimeID signature.PublicK
 	return b.queryBucket(runtimeID, bktIndexTxn, key, value)
 }
 
+func (b *exactBackend) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query Query) (Results, error) {
+	return nil, ErrUnsupported
+}
+
+func (b *exactBackend) Prune(runtimeID signature.PublicKey, round uint64) error {
+	// TODO: Support pruning for the exact backend.
+	return nil
+}
+
 func (b *exactBackend) Stop() {
 	if err := b.db.Close(); err != nil {
 		b.logger.Error("failed to close index",
@@ -225,14 +241,14 @@ func (b *exactBackend) Stop() {
 	b.db = nil
 }
 
-// NewExact creates a new exact indexer backend.
+// NewExactBackend creates a new exact indexer backend.
 func NewExactBackend(dataDir string) (Backend, error) {
 	b := &exactBackend{
 		logger: logging.GetLogger("client/indexer/exactBackend"),
 	}
 
 	var err error
-	if b.db, err = bolt.Open(filepath.Join(dataDir, "exact-tag-index.bolt.db"), 0600, nil); err != nil {
+	if b.db, err = bolt.Open(filepath.Join(dataDir, exactIndexFile), 0600, nil); err != nil {
 		return nil, err
 	}
 

@@ -81,6 +81,10 @@ type Backend interface {
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
 
+	// WatchPrunedBlocks returns a channel that produces a stream of pruned
+	// blocks.
+	WatchPrunedBlocks() (<-chan *PrunedBlock, *pubsub.Subscription, error)
+
 	// Commit commits to a result of processing a batch of runtime invocations.
 	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
 	Commit(context.Context, signature.PublicKey, *OpaqueCommitment) error
@@ -165,4 +169,12 @@ type MetricsMonitorable interface {
 	// All blocks from all runtimes will be pushed into the stream
 	// immediately as they are finalized.
 	WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription)
+}
+
+// PrunedBlock describes a block that was pruned.
+type PrunedBlock struct {
+	// RuntimeID is the runtime identifier of the block that was pruned.
+	RuntimeID signature.PublicKey
+	// Round is the block round.
+	Round uint64
 }

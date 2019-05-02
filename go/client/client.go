@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	"math"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,13 +40,19 @@ import (
 )
 
 const (
+	cfgIndexBackend  = "client.indexer.backend"
 	cfgIndexRuntimes = "client.indexer.runtimes"
-
-	// RoundLatest is a special round number always referring to the latest round.
-	RoundLatest uint64 = math.MaxUint64
 )
 
-var grpcResolverLock sync.Mutex
+var (
+	// ErrIndexerDisabled is an error when the indexer is disabled.
+	ErrIndexerDisabled = errors.New("client: indexer not enabled")
+	// ErrBadIndexOrCorrupted is an error when either the storage is corrupted or
+	// the specified transaction index was bad.
+	ErrBadIndexOrCorrupted = errors.New("bad transaction index or corrupted storage")
+
+	grpcResolverLock sync.Mutex
+)
 
 func newManualGrpcResolver() (*manual.Resolver, func()) {
 	// The gRPC manual resolver is supposed to allow for per-invocation resolver
@@ -298,14 +304,13 @@ func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, ro
 	return c.common.roothash.GetBlock(ctx, runtimeID, round)
 }
 
-func (c *Client) getTxnData(ctx context.Context, blk *block.Block, index uint32) ([]byte, []byte, error) {
+func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, [][]byte, error) {
 	// Fetch transaction input and output.
 	var inputHash storage.Key
 	copy(inputHash[:], blk.Header.InputHash[:])
 	var outputHash storage.Key
 	copy(outputHash[:], blk.Header.OutputHash[:])
 
-	// TODO: After the new MKVS is done, only fetch specific inputs/outputs.
 	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{inputHash, outputHash})
 	if err != nil {
 		return nil, nil, err
@@ -315,54 +320,73 @@ func (c *Client) getTxnData(ctx context.Context, blk *block.Block, index uint32)
 	if err := cbor.Unmarshal(txn[0], &inputs); err != nil {
 		return nil, nil, err
 	}
-	if int(index) >= len(inputs) {
-		return nil, nil, errors.New("bad transaction index or malformed inputs")
-	}
 
 	var outputs [][]byte
 	if err := cbor.Unmarshal(txn[1], &outputs); err != nil {
 		return nil, nil, err
 	}
-	if int(index) >= len(outputs) {
-		return nil, nil, errors.New("bad transaction index or malformed outputs")
+
+	return inputs, outputs, nil
+}
+
+func (c *Client) getTxnDataAtIndex(ctx context.Context, blk *block.Block, index uint32) ([]byte, []byte, error) {
+	inputs, outputs, err := c.getTxnData(ctx, blk)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	input := inputs[index]
-	output := outputs[index]
+	if int(index) >= len(inputs) {
+		return nil, nil, ErrBadIndexOrCorrupted
+	}
+	if int(index) >= len(outputs) {
+		return nil, nil, ErrBadIndexOrCorrupted
+	}
 
-	return input, output, nil
+	return inputs[index], outputs[index], nil
 }
 
 // GetTxn returns the transaction at a specific block round and index.
 //
 // Pass RoundLatest for the round to get the latest block.
-func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, round uint64, index uint32) (*block.Block, []byte, []byte, error) {
+func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, round uint64, index uint32) (*TxnResult, error) {
 	blk, err := c.GetBlock(ctx, runtimeID, round)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	input, output, err := c.getTxnData(ctx, blk, index)
+	input, output, err := c.getTxnDataAtIndex(ctx, blk, index)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	return blk, input, output, nil
+	return &TxnResult{
+		Block:     blk,
+		BlockHash: blk.Header.EncodedHash(),
+		Index:     index,
+		Input:     input,
+		Output:    output,
+	}, nil
 }
 
 // GetTxnByBlockHash returns the transaction at a specific block hash and index.
-func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash, index uint32) (*block.Block, []byte, []byte, error) {
+func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash, index uint32) (*TxnResult, error) {
 	blk, err := c.QueryBlock(ctx, runtimeID, indexer.TagBlockHash, blockHash[:])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	input, output, err := c.getTxnData(ctx, blk, index)
+	input, output, err := c.getTxnDataAtIndex(ctx, blk, index)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	return blk, input, output, nil
+	return &TxnResult{
+		Block:     blk,
+		BlockHash: blk.Header.EncodedHash(),
+		Index:     index,
+		Input:     input,
+		Output:    output,
+	}, nil
 }
 
 // GetTransactions returns a list of transactions under the given transaction root.
@@ -388,7 +412,7 @@ func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.Public
 // QueryBlock queries the block index of a given runtime.
 func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, error) {
 	if c.indexerBackend == nil {
-		return nil, errors.New("indexer not enabled")
+		return nil, ErrIndexerDisabled
 	}
 
 	round, err := c.indexerBackend.QueryBlock(ctx, runtimeID, key, value)
@@ -400,27 +424,80 @@ func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, 
 }
 
 // QueryTxn queries the transaction index of a given runtime.
-func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, uint32, []byte, []byte, error) {
+func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*TxnResult, error) {
 	if c.indexerBackend == nil {
-		return nil, 0, nil, nil, errors.New("indexer not enabled")
+		return nil, ErrIndexerDisabled
 	}
 
 	round, txnIdx, err := c.indexerBackend.QueryTxn(ctx, runtimeID, key, value)
 	if err != nil {
-		return nil, 0, nil, nil, err
+		return nil, err
 	}
 
 	blk, err := c.GetBlock(ctx, runtimeID, round)
 	if err != nil {
-		return nil, 0, nil, nil, err
+		return nil, err
 	}
 
-	input, output, err := c.getTxnData(ctx, blk, txnIdx)
+	input, output, err := c.getTxnDataAtIndex(ctx, blk, txnIdx)
 	if err != nil {
-		return nil, 0, nil, nil, err
+		return nil, err
 	}
 
-	return blk, txnIdx, input, output, nil
+	return &TxnResult{
+		Block:     blk,
+		BlockHash: blk.Header.EncodedHash(),
+		Index:     txnIdx,
+		Input:     input,
+		Output:    output,
+	}, nil
+}
+
+// QueryTxns queries the transaction index of a given runtime with a complex
+// query and returns multiple results.
+func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query indexer.Query) ([]*TxnResult, error) {
+	if c.indexerBackend == nil {
+		return nil, ErrIndexerDisabled
+	}
+
+	results, err := c.indexerBackend.QueryTxns(ctx, runtimeID, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var output []*TxnResult
+	for round, indices := range results {
+		// Fetch block for the given round.
+		var blk *block.Block
+		blk, err = c.GetBlock(ctx, runtimeID, round)
+		if err != nil {
+			return nil, err
+		}
+
+		var inputs, outputs [][]byte
+		inputs, outputs, err = c.getTxnData(ctx, blk)
+		if err != nil {
+			return nil, err
+		}
+
+		// Extract transaction data for the specified indices.
+		blockHash := blk.Header.EncodedHash()
+		for _, idx := range indices {
+			if int(idx) >= len(inputs) || int(idx) >= len(outputs) {
+				return nil, ErrBadIndexOrCorrupted
+			}
+
+			output = append(output, &TxnResult{
+				Block:     blk,
+				BlockHash: blockHash,
+				Index:     uint32(idx),
+				Input:     inputs[idx],
+				Output:    outputs[idx],
+			})
+		}
+	}
+
+	return output, nil
 }
 
 // CallEnclave proxies an EnclaveRPC call to the given endpoint.
@@ -502,11 +579,22 @@ func New(
 	// Initialize the tag indexer(s) when configured.
 	indexRuntimes := viper.GetStringSlice(cfgIndexRuntimes)
 	if indexRuntimes != nil {
+		var impl indexer.Backend
 		var err error
-		c.indexerBackend, err = indexer.NewExactBackend(dataDir)
+
+		backend := viper.GetString(cfgIndexBackend)
+		switch strings.ToLower(backend) {
+		case indexer.ExactBackendName:
+			impl, err = indexer.NewExactBackend(dataDir)
+		case indexer.BleveBackendName:
+			impl, err = indexer.NewBleveBackend(dataDir)
+		default:
+			return nil, errors.Errorf("client: unsupported indexer backend: %s", backend)
+		}
 		if err != nil {
 			return nil, err
 		}
+		c.indexerBackend = impl
 
 		for _, rawID := range indexRuntimes {
 			var id signature.PublicKey
@@ -538,10 +626,12 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgIndexBackend, indexer.BleveBackendName, "Tag indexer backend")
 		cmd.Flags().StringSlice(cfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
 	}
 
 	for _, v := range []string{
+		cfgIndexBackend,
 		cfgIndexRuntimes,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck

@@ -7,10 +7,11 @@ import (
 	"errors"
 	"path/filepath"
 
-	bolt "go.etcd.io/bbolt"
+	bolt "github.com/etcd-io/bbolt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
@@ -37,11 +38,14 @@ func decodeUint64(value []byte) uint64 {
 }
 
 // Prune erases indices at the specific tendermint height.
-func (b *blockIndexer) Prune(height int64) error {
+//
+// Returns a list of pruned rounds.
+func (b *blockIndexer) Prune(height int64) ([]*api.PrunedBlock, error) {
 	b.logger.Debug("pruning indices",
 		"height", height,
 	)
 
+	var blocks []*api.PrunedBlock
 	encHeight := encodeUint64(uint64(height))
 
 	txErr := b.db.Update(func(tx *bolt.Tx) error {
@@ -72,6 +76,13 @@ func (b *blockIndexer) Prune(height int64) error {
 				return err
 			}
 
+			var runtimeID signature.PublicKey
+			_ = runtimeID.UnmarshalBinary(name)
+			blocks = append(blocks, &api.PrunedBlock{
+				RuntimeID: runtimeID,
+				Round:     decodeUint64(encRound),
+			})
+
 			return nil
 		})
 	})
@@ -80,14 +91,14 @@ func (b *blockIndexer) Prune(height int64) error {
 			"err", txErr,
 			"height", height,
 		)
-		return txErr
+		return nil, txErr
 	}
 
 	b.logger.Debug("indices pruned",
 		"height", height,
 	)
 
-	return nil
+	return blocks, nil
 }
 
 // Index indexes a roothash block at the given tendermint height.

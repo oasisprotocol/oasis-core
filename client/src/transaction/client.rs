@@ -18,13 +18,9 @@ use super::{
     api,
     block_watcher::BlockWatcher,
     snapshot::{BlockSnapshot, TransactionSnapshot},
+    types::{Query, TxnResult},
 };
 use crate::BoxFuture;
-
-/// Special round number always referring to the latest round.
-pub const ROUND_LATEST: u64 = u64::max_value();
-/// Tag used for storing the Ekiden block hash.
-pub const TAG_BLOCK_HASH: &'static [u8] = b"hblk";
 
 /// Transaction client error.
 #[derive(Debug, Fail)]
@@ -237,14 +233,15 @@ impl TxnClient {
                 let storage_client = self.storage_client.clone();
                 Box::new(
                     resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |mut rsp| {
+                        .and_then(move |rsp| {
+                            let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
                             TransactionSnapshot::new(
                                 storage_client,
-                                serde_cbor::from_slice(&rsp.block)?,
-                                Hash::from(rsp.take_block_hash()),
+                                rsp.block,
+                                rsp.block_hash,
                                 index,
-                                rsp.take_input(),
-                                rsp.take_output(),
+                                rsp.input,
+                                rsp.output,
                             )
                         }),
                 )
@@ -277,14 +274,15 @@ impl TxnClient {
                 let storage_client = self.storage_client.clone();
                 Box::new(
                     resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |mut rsp| {
+                        .and_then(move |rsp| {
+                            let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
                             TransactionSnapshot::new(
                                 storage_client,
-                                serde_cbor::from_slice(&rsp.block)?,
-                                Hash::from(rsp.take_block_hash()),
+                                rsp.block,
+                                rsp.block_hash,
                                 index,
-                                rsp.take_input(),
-                                rsp.take_output(),
+                                rsp.input,
+                                rsp.output,
                             )
                         }),
                 )
@@ -375,15 +373,59 @@ impl TxnClient {
                 let storage_client = self.storage_client.clone();
                 Box::new(
                     resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |mut rsp| {
+                        .and_then(move |rsp| {
+                            let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
                             TransactionSnapshot::new(
                                 storage_client,
-                                serde_cbor::from_slice(&rsp.block)?,
-                                Hash::from(rsp.take_block_hash()),
-                                rsp.txn_index,
-                                rsp.take_input(),
-                                rsp.take_output(),
+                                rsp.block,
+                                rsp.block_hash,
+                                rsp.index,
+                                rsp.input,
+                                rsp.output,
                             )
+                        }),
+                )
+            }
+            Err(error) => Box::new(future::err(
+                TxnClientError::CallFailed(format!("{}", error)).into(),
+            )),
+        };
+        drop(span);
+        result
+    }
+
+    /// Query the transaction index with a complex query and returns multiple results.
+    pub fn query_txns(&self, query: Query) -> BoxFuture<Vec<TransactionSnapshot>> {
+        let (span, options) = self.prepare_options("TxnClient::query_txn");
+        let mut request = api::client::QueryTxnsRequest::new();
+        request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        match serde_cbor::to_vec(&query) {
+            Ok(query) => request.set_query(query),
+            Err(error) => return Box::new(future::err(error.into())),
+        }
+
+        let result: BoxFuture<Vec<TransactionSnapshot>> = match self
+            .client
+            .query_txns_async_opt(&request, options)
+        {
+            Ok(resp) => {
+                let storage_client = self.storage_client.clone();
+                Box::new(
+                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
+                        .and_then(move |rsp| {
+                            let rsp: Vec<TxnResult> = serde_cbor::from_slice(&rsp.results)?;
+                            rsp.into_iter()
+                                .map(|tx| {
+                                    TransactionSnapshot::new(
+                                        storage_client.clone(),
+                                        tx.block,
+                                        tx.block_hash,
+                                        tx.index,
+                                        tx.input,
+                                        tx.output,
+                                    )
+                                })
+                                .collect::<Result<_, _>>()
                         }),
                 )
             }
