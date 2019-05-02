@@ -10,8 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
@@ -123,6 +125,10 @@ func testSandboxedHost(t *testing.T, host Host) {
 	t.Run("InterruptWorker", func(t *testing.T) {
 		testInterruptWorker(t, host)
 	})
+
+	t.Run("CheckTxRequest", func(t *testing.T) {
+		testCheckTxRequest(t, host)
+	})
 }
 
 func testWaitForCapabilityTEE(t *testing.T, host Host) {
@@ -151,6 +157,70 @@ func testSimpleRequest(t *testing.T, host Host) {
 	case rsp := <-rspCh:
 		require.NotNil(t, rsp, "worker channel should not be closed while waiting for response")
 		require.NotNil(t, rsp.Empty, "worker response to ping should return an Empty body")
+	case <-ctx.Done():
+		require.Fail(t, "timed out while waiting for response from worker")
+	}
+}
+
+// NOTE: This test only works with Ekiden's simple-keyvalue runtime.
+func testCheckTxRequest(t *testing.T, host Host) {
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+
+	type KeyValue struct {
+		Key   string `codec:"key"`
+		Value string `codec:"value"`
+	}
+
+	// TxnCall is meant for deserializing CBOR of the corresponding Rust struct and is specific
+	// to the simple-keyvalue runtime.
+	type TxnCall struct {
+		Method string   `codec:"method"`
+		Args   KeyValue `codec:"args"`
+	}
+
+	// Create a batch of transactions, including a valid one, an invalid one and one where the
+	// method is missing.
+	txnCallValid := TxnCall{Method: "insert", Args: KeyValue{Key: "foo", Value: "bar"}}
+	// The simple-keyvalue runtime's insert method accepts values <= 128 bytes.
+	tooBigValue := string(make([]byte, 129))
+	txnCallInvalid := TxnCall{Method: "insert", Args: KeyValue{Key: "foo", Value: tooBigValue}}
+	txnCallMissing := TxnCall{Method: "missing_method", Args: KeyValue{Key: "foo", Value: "bar"}}
+	batch := runtime.Batch([][]byte{cbor.Marshal(&txnCallValid), cbor.Marshal(&txnCallInvalid), cbor.Marshal(&txnCallMissing)})
+
+	rspCh, err := host.MakeRequest(ctx, &protocol.Body{
+		WorkerCheckTxBatchRequest: &protocol.WorkerCheckTxBatchRequest{
+			Calls: batch,
+		},
+	})
+	require.NoError(t, err, "MakeRequest")
+
+	select {
+	case rsp := <-rspCh:
+		require.NotNil(t, rsp, "worker channel should not be closed while waiting for response")
+		require.NotNil(t, rsp.WorkerCheckTxBatchResponse.Results, "worker should respond to check tx call")
+		require.Len(t, rsp.WorkerCheckTxBatchResponse.Results, 3, "worker should return a check tx call result for each txn")
+
+		txnOutputValidRaw := rsp.WorkerCheckTxBatchResponse.Results[0]
+		var txnOutputValid runtime.TxnOutput
+		cbor.MustUnmarshal(txnOutputValidRaw, &txnOutputValid)
+		require.NotNil(t, txnOutputValid.Success, "valid tx call should return success")
+		require.Nil(t, txnOutputValid.Error, "valid tx call should not return error")
+
+		txnOutputInvalidRaw := rsp.WorkerCheckTxBatchResponse.Results[1]
+		var txnOutputInvalid runtime.TxnOutput
+		cbor.MustUnmarshal(txnOutputInvalidRaw, &txnOutputInvalid)
+		require.Nil(t, txnOutputInvalid.Success, "invalid tx call should not return success")
+		require.NotNil(t, txnOutputInvalid.Error, "invalid tx call should return error")
+		require.Regexp(t, "^Value too big to be inserted", *txnOutputInvalid.Error, "invalid tx call should indicate that method was not found")
+
+		txnOutputMissingRaw := rsp.WorkerCheckTxBatchResponse.Results[2]
+		var txnOutputMissing runtime.TxnOutput
+		cbor.MustUnmarshal(txnOutputMissingRaw, &txnOutputMissing)
+		require.Nil(t, txnOutputMissing.Success, "tx call for a missing method should not return success")
+		require.NotNil(t, txnOutputMissing.Error, "tx call for a missing method should return error")
+		require.Regexp(t, "^method not found", *txnOutputMissing.Error, "tx call for a missing method should indicate that method was not found")
+
 	case <-ctx.Done():
 		require.Fail(t, "timed out while waiting for response from worker")
 	}
