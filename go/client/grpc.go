@@ -5,6 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pbClient "github.com/oasislabs/ekiden/go/grpc/client"
@@ -112,16 +113,13 @@ func (s *grpcServer) GetTxn(ctx context.Context, req *pbClient.GetTxnRequest) (*
 		return nil, err
 	}
 
-	blk, input, output, err := s.client.GetTxn(ctx, id, req.GetRound(), req.GetIndex())
+	tx, err := s.client.GetTxn(ctx, id, req.GetRound(), req.GetIndex())
 	if err != nil {
 		return nil, err
 	}
-	blockHash := blk.Header.EncodedHash()
+
 	return &pbClient.GetTxnResponse{
-		Block:     blk.MarshalCBOR(),
-		BlockHash: blockHash[:],
-		Input:     input,
-		Output:    output,
+		Result: tx.MarshalCBOR(),
 	}, nil
 }
 
@@ -136,16 +134,13 @@ func (s *grpcServer) GetTxnByBlockHash(ctx context.Context, req *pbClient.GetTxn
 		return nil, err
 	}
 
-	blk, input, output, err := s.client.GetTxnByBlockHash(ctx, id, blockHash, req.GetIndex())
+	tx, err := s.client.GetTxnByBlockHash(ctx, id, blockHash, req.GetIndex())
 	if err != nil {
 		return nil, err
 	}
-	blockHash = blk.Header.EncodedHash()
+
 	return &pbClient.GetTxnByBlockHashResponse{
-		Block:     blk.MarshalCBOR(),
-		BlockHash: blockHash[:],
-		Input:     input,
-		Output:    output,
+		Result: tx.MarshalCBOR(),
 	}, nil
 }
 
@@ -192,17 +187,34 @@ func (s *grpcServer) QueryTxn(ctx context.Context, req *pbClient.QueryTxnRequest
 		return nil, err
 	}
 
-	blk, txnIdx, input, output, err := s.client.QueryTxn(ctx, id, req.GetKey(), req.GetValue())
+	tx, err := s.client.QueryTxn(ctx, id, req.GetKey(), req.GetValue())
 	if err != nil {
 		return nil, err
 	}
-	blockHash := blk.Header.EncodedHash()
+
 	return &pbClient.QueryTxnResponse{
-		Block:     blk.MarshalCBOR(),
-		BlockHash: blockHash[:],
-		TxnIndex:  txnIdx,
-		Input:     input,
-		Output:    output,
+		Result: tx.MarshalCBOR(),
+	}, nil
+}
+
+func (s *grpcServer) QueryTxns(ctx context.Context, req *pbClient.QueryTxnsRequest) (*pbClient.QueryTxnsResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	var query Query
+	if err := query.UnmarshalCBOR(req.GetQuery()); err != nil {
+		return nil, err
+	}
+
+	results, err := s.client.QueryTxns(ctx, id, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbClient.QueryTxnsResponse{
+		Results: cbor.Marshal(results),
 	}, nil
 }
 

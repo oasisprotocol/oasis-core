@@ -33,8 +33,11 @@ func TestBlockIndexer(t *testing.T) {
 	require.NoError(t, err, "GetBlockHeight")
 	require.EqualValues(t, 42, height, "GetBlockHeight")
 
-	err = idx.Prune(42)
+	pruned, err := idx.Prune(42)
 	require.NoError(t, err, "Prune")
+	require.Len(t, pruned, 1)
+	require.EqualValues(t, pruned[0].RuntimeID, id)
+	require.EqualValues(t, pruned[0].Round, 0)
 	_, err = idx.GetBlockHeight(id, 0)
 	require.Error(t, err, "GetBlockHeight")
 }

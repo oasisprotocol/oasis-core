@@ -60,6 +60,7 @@ type tendermintBackend struct {
 	lastBlockHeight int64
 
 	allBlockNotifier *pubsub.Broker
+	pruneNotifier    *pubsub.Broker
 	runtimeNotifiers map[signature.MapKey]*runtimeBrokers
 	blockIndex       *blockIndexer
 
@@ -172,6 +173,14 @@ func (r *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Eve
 	return ch, sub, nil
 }
 
+func (r *tendermintBackend) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubsub.Subscription, error) {
+	sub := r.pruneNotifier.Subscribe()
+	ch := make(chan *api.PrunedBlock)
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
+}
+
 func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, commit *api.OpaqueCommitment) error {
 	tx := app.Tx{
 		TxCommit: &app.TxCommit{
@@ -257,11 +266,16 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 			return
 		case height := <-pruneCh:
 			if r.blockIndex != nil {
-				err = r.blockIndex.Prune(height)
+				var blocks []*api.PrunedBlock
+				blocks, err = r.blockIndex.Prune(height)
 				if err != nil {
 					r.logger.Error("worker: failed to prune block index",
 						"err", err,
 					)
+				}
+
+				for _, p := range blocks {
+					r.pruneNotifier.Broadcast(p)
 				}
 			}
 			continue
@@ -372,6 +386,7 @@ func New(
 		logger:           logging.GetLogger("roothash/tendermint"),
 		service:          service,
 		allBlockNotifier: pubsub.NewBroker(false),
+		pruneNotifier:    pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
 		closedCh:         make(chan struct{}),
 	}

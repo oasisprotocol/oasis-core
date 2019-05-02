@@ -367,6 +367,7 @@ type memoryRootHash struct {
 	genesisBlocks map[signature.MapKey]*block.Block
 
 	allBlockNotifier *pubsub.Broker
+	pruneNotifier    *pubsub.Broker
 
 	closedCh  chan struct{}
 	closedWg  sync.WaitGroup
@@ -472,6 +473,14 @@ func (r *memoryRootHash) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscrip
 	return ch, sub
 }
 
+func (r *memoryRootHash) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubsub.Subscription, error) {
+	sub := r.pruneNotifier.Subscribe()
+	ch := make(chan *api.PrunedBlock)
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
+}
+
 func (r *memoryRootHash) Cleanup() {
 	r.closeOnce.Do(func() {
 		<-r.closedCh // Need to ensure no Add() in progress for the Wait().
@@ -573,6 +582,7 @@ func New(
 		runtimes:         make(map[signature.MapKey]*runtimeState),
 		genesisBlocks:    genesisBlocks,
 		allBlockNotifier: pubsub.NewBroker(false),
+		pruneNotifier:    pubsub.NewBroker(false),
 		closedCh:         make(chan struct{}),
 		roundTimeout:     roundTimeout,
 	}

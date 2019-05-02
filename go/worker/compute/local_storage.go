@@ -5,7 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 
-	bolt "go.etcd.io/bbolt"
+	bolt "github.com/etcd-io/bbolt"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"

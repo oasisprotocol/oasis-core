@@ -10,7 +10,9 @@ extern crate rustracing;
 #[cfg(not(target_env = "sgx"))]
 extern crate rustracing_jaeger;
 extern crate serde;
+extern crate serde_bytes;
 extern crate serde_cbor;
+extern crate serde_derive;
 #[macro_use]
 extern crate failure;
 extern crate io_context;

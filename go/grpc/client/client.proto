@@ -24,6 +24,9 @@ service Runtime {
     rpc QueryBlock(QueryBlockRequest) returns (QueryBlockResponse) {}
     // Query the transaction index of a given runtime.
     rpc QueryTxn(QueryTxnRequest) returns (QueryTxnResponse) {}
+    // Queries the transaction index of a given runtime with a complex
+    // query and returns multiple results.
+    rpc QueryTxns(QueryTxnsRequest) returns (QueryTxnsResponse) {}
 }
 
 message SubmitTxRequest {
@@ -84,14 +87,8 @@ message GetTxnRequest {
 }
 
 message GetTxnResponse {
-    // A CBOR-serialized block.
-    bytes block = 1;
-    // Block header hash.
-    bytes block_hash = 2;
-    // Transaction input.
-    bytes input = 3;
-    // Transaction output.
-    bytes output = 4;
+    // A CBOR-serialized TxnResult.
+    bytes result = 1;
 }
 
 message GetTxnByBlockHashRequest {
@@ -104,14 +101,8 @@ message GetTxnByBlockHashRequest {
 }
 
 message GetTxnByBlockHashResponse {
-    // A CBOR-serialized block.
-    bytes block = 1;
-    // Block header hash.
-    bytes block_hash = 2;
-    // Transaction input.
-    bytes input = 3;
-    // Transaction output.
-    bytes output = 4;
+    // A CBOR-serialized TxnResult.
+    bytes result = 1;
 }
 
 message GetTransactionsRequest {
@@ -152,14 +143,18 @@ message QueryTxnRequest {
 }
 
 message QueryTxnResponse {
-    // A CBOR-serialized block.
-    bytes block = 1;
-    // Block header hash.
-    bytes block_hash = 2;
-    // Transaction index.
-    uint32 txn_index = 3;
-    // Transaction input.
-    bytes input = 4;
-    // Transaction output.
-    bytes output = 5;
+    // A CBOR-serialized TxnResult.
+    bytes result = 1;
+}
+
+message QueryTxnsRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+    // A CBOR-serialized query.
+    bytes query = 2;
+}
+
+message QueryTxnsResponse {
+    // CBOR-serialized results.
+    bytes results = 1;
 }

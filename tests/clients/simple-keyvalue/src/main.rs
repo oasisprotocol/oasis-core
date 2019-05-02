@@ -12,7 +12,11 @@ use clap::{App, Arg};
 use grpcio::EnvBuilder;
 use tokio::runtime::Runtime;
 
-use ekiden_client::{create_txn_api_client, transaction::client::TAG_BLOCK_HASH, Node, TxnClient};
+use ekiden_client::{
+    create_txn_api_client,
+    transaction::{Query, QueryCondition, TAG_BLOCK_HASH},
+    Node, TxnClient,
+};
 use ekiden_runtime::{common::runtime::RuntimeId, storage::MKVS};
 use simple_keyvalue_api::{with_api, KeyValue};
 
@@ -156,6 +160,28 @@ fn main() {
         "Found transaction: index={} input={:?} output={:?}",
         snapshot.index, snapshot.input, snapshot.output
     );
+
+    // Test query_txns call.
+    println!("Querying transaction tags (kv_op=insert)...");
+    let query = Query {
+        round_min: Some(0),
+        round_max: Some(3),
+        conditions: vec![QueryCondition {
+            key: b"kv_op".to_vec(),
+            values: vec![b"insert".to_vec().into()],
+        }],
+        limit: None,
+    };
+    let txns = rt
+        .block_on(kv_client.txn_client().query_txns(query))
+        .expect("query transactions");
+    println!("Found transactions:");
+    for txn in txns {
+        println!(
+            "round={} index={} input={:?} output={:?}",
+            txn.block_snapshot.block.header.round, txn.index, txn.input, txn.output
+        );
+    }
 
     println!("Simple key/value client finished.");
 }

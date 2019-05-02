@@ -29,6 +29,16 @@ func ClientImplementationTests(
 		testSubmitTransaction(ctx, t, runtimeID, client, rtNode)
 	})
 
+	// We need to wait for the indexer to index the tags. We could have a channel
+	// to subscribe to these updates and this would not be needed.
+	time.Sleep(1 * time.Second)
+
+	t.Run("Query", func(t *testing.T) {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
+		defer cancelFunc()
+		testQuery(ctx, t, runtimeID, client, rtNode)
+	})
+
 	// These can't test anything useful, so just make sure the roundtrip works.
 	t.Run("WaitSync", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
@@ -49,83 +59,109 @@ func testSubmitTransaction(
 	ctx context.Context,
 	t *testing.T,
 	runtimeID signature.PublicKey,
-	client *client.Client,
+	c *client.Client,
 	rtNode *committee.Node,
 ) {
 	// Submit a test transaction.
 	testInput := []byte("hello world")
-	testOutput, err := client.SubmitTx(ctx, testInput, runtimeID)
+	testOutput, err := c.SubmitTx(ctx, testInput, runtimeID)
 
 	// Check if everything is in order.
 	require.NoError(t, err, "SubmitTx")
 	require.EqualValues(t, testInput, testOutput)
+}
 
-	// We need to wait for the indexer to index the tags. We could have a channel
-	// to subscribe to these updates and this would not be needed.
-	time.Sleep(1 * time.Second)
+func testQuery(
+	ctx context.Context,
+	t *testing.T,
+	runtimeID signature.PublicKey,
+	c *client.Client,
+	rtNode *committee.Node,
+) {
+	// Based on SubmitTx and the mock worker.
+	testInput := []byte("hello world")
+	testOutput := testInput
 
 	// Fetch blocks.
-	blk, err := client.GetBlock(ctx, runtimeID, 1)
+	blk, err := c.GetBlock(ctx, runtimeID, 1)
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 1, blk.Header.Round)
 
-	blk, err = client.GetBlock(ctx, runtimeID, 2)
+	blk, err = c.GetBlock(ctx, runtimeID, 2)
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 2, blk.Header.Round)
 
-	blk, err = client.GetBlock(ctx, runtimeID, 0xffffffffffffffff)
+	blk, err = c.GetBlock(ctx, runtimeID, 0xffffffffffffffff)
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 2, blk.Header.Round)
 
 	// Out of bounds block round.
-	_, err = client.GetBlock(ctx, runtimeID, 3)
+	_, err = c.GetBlock(ctx, runtimeID, 3)
 	require.Error(t, err, "GetBlock")
 
 	// Fetch transaction.
-	blk, input, output, err := client.GetTxn(ctx, runtimeID, 2, 0)
+	tx, err := c.GetTxn(ctx, runtimeID, 2, 0)
 	require.NoError(t, err, "GetTxn(0)")
-	require.EqualValues(t, 2, blk.Header.Round)
-	require.EqualValues(t, testInput, input)
-	require.EqualValues(t, testOutput, output)
+	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, testInput, tx.Input)
+	require.EqualValues(t, testOutput, tx.Output)
 
 	// Out of bounds transaction index.
-	_, _, _, err = client.GetTxn(ctx, runtimeID, 2, 1)
+	_, err = c.GetTxn(ctx, runtimeID, 2, 1)
 	require.Error(t, err, "GetTxn(1)")
 
 	// Get transaction by block hash and index.
-	blk, input, output, err = client.GetTxnByBlockHash(ctx, runtimeID, blk.Header.EncodedHash(), 0)
+	tx, err = c.GetTxnByBlockHash(ctx, runtimeID, blk.Header.EncodedHash(), 0)
 	require.NoError(t, err, "GetTxnByBlockHash")
-	require.EqualValues(t, 2, blk.Header.Round)
-	require.EqualValues(t, testInput, input)
-	require.EqualValues(t, testOutput, output)
+	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, testInput, tx.Input)
+	require.EqualValues(t, testOutput, tx.Output)
 
 	// Invalid block hash.
 	var invalidHash hash.Hash
 	invalidHash.Empty()
-	_, _, _, err = client.GetTxnByBlockHash(ctx, runtimeID, invalidHash, 0)
+	_, err = c.GetTxnByBlockHash(ctx, runtimeID, invalidHash, 0)
 	require.Error(t, err, "GetTxnByBlockHash(invalid)")
 
 	// Check that indexer has indexed block keys (check the mock worker for key/values).
-	blk, err = client.QueryBlock(ctx, runtimeID, []byte("foo"), []byte("bar"))
+	blk, err = c.QueryBlock(ctx, runtimeID, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 2, blk.Header.Round)
 
 	// Check that indexer has indexed txn keys (check the mock worker for key/values).
-	blk, index, input, output, err := client.QueryTxn(ctx, runtimeID, []byte("txn_foo"), []byte("txn_bar"))
+	tx, err = c.QueryTxn(ctx, runtimeID, []byte("txn_foo"), []byte("txn_bar"))
 	require.NoError(t, err, "QueryTxn")
-	require.EqualValues(t, 2, blk.Header.Round)
-	require.EqualValues(t, 0, index)
-	require.EqualValues(t, testInput, input)
-	require.EqualValues(t, testOutput, output)
+	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, 0, tx.Index)
+	require.EqualValues(t, testInput, tx.Input)
+	require.EqualValues(t, testOutput, tx.Output)
 
 	// Transactions (check the mock worker for content).
-	txns, err := client.GetTransactions(ctx, runtimeID, blk.Header.InputHash)
+	txns, err := c.GetTransactions(ctx, runtimeID, blk.Header.InputHash)
 	require.NoError(t, err, "GetTransactions(input)")
 	require.Len(t, txns, 1)
 	require.EqualValues(t, testInput, txns[0])
 
-	txns, err = client.GetTransactions(ctx, runtimeID, blk.Header.OutputHash)
+	txns, err = c.GetTransactions(ctx, runtimeID, blk.Header.OutputHash)
 	require.NoError(t, err, "GetTransactions(output)")
 	require.Len(t, txns, 1)
 	require.EqualValues(t, testOutput, txns[0])
+
+	// Test advanced transaction queries.
+	roundMin := uint64(0)
+	roundMax := uint64(3)
+	query := client.Query{
+		RoundMin: &roundMin,
+		RoundMax: &roundMax,
+		Conditions: []client.QueryCondition{
+			client.QueryCondition{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
+		},
+	}
+	results, err := c.QueryTxns(ctx, runtimeID, query)
+	require.NoError(t, err, "QueryTxns")
+	require.Len(t, results, 1)
+	require.EqualValues(t, 2, results[0].Block.Header.Round)
+	require.EqualValues(t, 0, results[0].Index)
+	require.EqualValues(t, testInput, results[0].Input)
+	require.EqualValues(t, testOutput, results[0].Output)
 }
