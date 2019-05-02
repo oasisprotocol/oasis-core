@@ -61,6 +61,8 @@ type Body struct {
 	WorkerCapabilityTEERakAvrResponse    *Empty
 	WorkerRPCCallRequest                 *WorkerRPCCallRequest
 	WorkerRPCCallResponse                *WorkerRPCCallResponse
+	WorkerCheckTxBatchRequest            *WorkerCheckTxBatchRequest
+	WorkerCheckTxBatchResponse           *WorkerCheckTxBatchResponse
 	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest
 	WorkerExecuteTxBatchResponse         *WorkerExecuteTxBatchResponse
 	WorkerAbortRequest                   *Empty
@@ -122,6 +124,20 @@ type WorkerRPCCallResponse struct {
 	StorageInserts []storage.Value `codec:"storage_inserts"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
+}
+
+// WorkerCheckTxBatchRequest is a worker check tx batch request message body.
+type WorkerCheckTxBatchRequest struct {
+	// Batch of runtime calls to check.
+	Calls runtime.Batch `codec:"calls"`
+	// Block on which the batch check should be based.
+	Block roothash.Block `codec:"block"`
+}
+
+// WorkerCheckTxBatchResponse is a worker check tx batch response message body.
+type WorkerCheckTxBatchResponse struct {
+	// Batch of runtime check results.
+	Results runtime.Batch `codec:"results"`
 }
 
 // ComputedBatch is a computed batch.

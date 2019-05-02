@@ -252,7 +252,7 @@ impl Dispatcher {
                     ));
                     let cas = Arc::new(PassthroughCAS::new(cas));
                     let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
-                    let txn_ctx = TxnContext::new(ctx, &block.header);
+                    let txn_ctx = TxnContext::new(ctx, &block.header, false);
                     let (outputs, tags) = StorageContext::enter(cas.clone(), &mut mkvs, || {
                         txn_dispatcher.dispatch_batch(&calls, txn_ctx)
                     });
@@ -293,6 +293,29 @@ impl Dispatcher {
                     // Send the result back.
                     protocol
                         .send_response(id, Body::WorkerExecuteTxBatchResponse { batch: result })
+                        .unwrap();
+                }
+                Ok((ctx, id, Body::WorkerCheckTxBatchRequest { calls, block })) => {
+                    debug!(self.logger, "Received check transaction batch request");
+
+                    // Create a new context and dispatch the batch.
+                    let ctx = ctx.freeze();
+                    let cas = Arc::new(ProtocolCAS::new(
+                        Context::create_child(&ctx),
+                        protocol.clone(),
+                    ));
+                    let cas = Arc::new(PassthroughCAS::new(cas));
+                    let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
+                    let txn_ctx = TxnContext::new(ctx, &block.header, true);
+                    let (outputs, _) = StorageContext::enter(cas.clone(), &mut mkvs, || {
+                        txn_dispatcher.dispatch_batch(&calls, txn_ctx)
+                    });
+
+                    debug!(self.logger, "Transaction batch check complete");
+
+                    // Send the result back.
+                    protocol
+                        .send_response(id, Body::WorkerCheckTxBatchResponse { results: outputs })
                         .unwrap();
                 }
                 Ok(_) => {
