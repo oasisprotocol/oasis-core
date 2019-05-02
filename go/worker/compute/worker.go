@@ -461,16 +461,16 @@ func newWorker(
 			w.netProxies[host.TracingProxyKey] = proxy
 		}
 
+		// Open the local storage.
+		if w.localStorage, err = newLocalStorage(dataDir); err != nil {
+			return nil, err
+		}
+
 		// Register all configured runtimes.
 		for _, rtCfg := range cfg.Runtimes {
 			if err = w.registerRuntime(&cfg, &rtCfg); err != nil {
 				return nil, err
 			}
-		}
-
-		// Open the local storage.
-		if w.localStorage, err = newLocalStorage(dataDir); err != nil {
-			return nil, err
 		}
 
 		// Register compute worker role.

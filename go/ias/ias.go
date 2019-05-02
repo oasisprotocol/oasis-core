@@ -3,6 +3,7 @@ package ias
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -19,7 +20,8 @@ import (
 )
 
 const (
-	cfgProxyAddress = "ias.proxy_addr"
+	cfgProxyAddress     = "ias.proxy_addr"
+	envUnsafeSkipVerify = "EKIDEN_UNSAFE_SKIP_AVR_VERIFY"
 )
 
 type mockAVR struct {
@@ -138,7 +140,10 @@ func New(identity *identity.Identity) (*IAS, error) {
 	if proxyAddr == "" {
 		s.logger.Warn("IAS proxy is not configured, all reports will be mocked")
 
-		ias.SetSkipVerify() // Disable signature verification as well.
+		if os.Getenv(envUnsafeSkipVerify) != "" {
+			s.logger.Warn("EKIDEN_UNSAFE_SKIP_AVR_VERIFY set, AVR signature validation bypassed")
+			ias.SetSkipVerify() // Disable signature verification as well.
+		}
 		s.spidInfo = &ias.SPIDInfo{}
 		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {

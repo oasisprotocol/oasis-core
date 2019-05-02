@@ -100,10 +100,12 @@ pub enum Body {
     WorkerShutdownRequest {},
     WorkerAbortRequest {},
     WorkerAbortResponse {},
-    WorkerCapabilityTEERakReportRequest {
+    WorkerCapabilityTEERakInitRequest {
         #[serde(with = "serde_bytes")]
         target_info: Vec<u8>,
     },
+    WorkerCapabilityTEERakInitResponse {},
+    WorkerCapabilityTEERakReportRequest {},
     WorkerCapabilityTEERakReportResponse {
         rak_pub: PublicKey,
         #[serde(with = "serde_bytes")]

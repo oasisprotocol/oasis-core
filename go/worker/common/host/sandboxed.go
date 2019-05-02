@@ -17,6 +17,7 @@ import (
 	"git.schwanenlied.me/yawning/dynlib.git"
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/ctxsync"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -47,6 +48,8 @@ const (
 	workerRespawnDelay = 1 * time.Second
 	// Worker interrupt timeout.
 	workerInterruptTimeout = 1 * time.Second
+	// Worker attest interval.
+	workerAttestInterval = 1 * time.Hour
 
 	// Path to bubblewrap sandbox.
 	workerBubblewrapBinary = "/usr/bin/bwrap"
@@ -96,11 +99,15 @@ type ProxySpecification struct {
 }
 
 type process struct {
+	sync.Mutex
+
 	process  *os.Process
 	protocol *protocol.Protocol
 
-	waitCh <-chan error
-	quitCh chan error
+	waitCh       <-chan error
+	stopAttestCh chan struct{}
+	quitAttestCh chan struct{}
+	quitCh       chan error
 
 	logger *logging.Logger
 
@@ -141,11 +148,60 @@ func (p *process) worker() {
 		)
 	}
 
+	close(p.stopAttestCh)
+
 	// Close connection after worker process has exited.
 	p.protocol.Close()
 
 	p.quitCh <- err
 	close(p.quitCh)
+
+	// Ensure the attestation worker is done.
+	<-p.quitAttestCh
+
+}
+
+func (p *process) attestationWorker(h *sandboxedHost) {
+	defer close(p.quitAttestCh)
+
+	if p.capabilityTEE == nil {
+		return
+	}
+
+	t := time.NewTicker(workerAttestInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-p.stopAttestCh:
+			return
+		case <-t.C:
+		}
+
+		p.logger.Info("regenerating CapabilityTEE")
+
+		switch p.capabilityTEE.Hardware {
+		case node.TEEHardwareIntelSGX:
+			capabilityTEE, err := h.updateCapabilityTEESgx(p)
+			if err != nil {
+				p.logger.Error("failed to regenerate CapabilityTEE",
+					"err", err,
+				)
+				continue
+			}
+
+			p.Lock()
+			p.capabilityTEE = capabilityTEE
+			p.Unlock()
+		}
+	}
+}
+
+func (p *process) getCapabilityTEE() *node.CapabilityTEE {
+	p.Lock()
+	defer p.Unlock()
+
+	return p.capabilityTEE
 }
 
 func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) ([]string, error) {
@@ -280,6 +336,15 @@ type interruptRequest struct {
 	ch  chan<- error
 }
 
+type teeState struct {
+	ias  *ias.IAS
+	aesm *aesm.Client
+
+	epidGID   uint32
+	spid      cias.SPID
+	quoteType *cias.SignatureType
+}
+
 // SandboxedHost is a worker Host that runs worker processes in a bubblewrap
 // sandbox.
 type sandboxedHost struct { // nolint: maligned
@@ -289,8 +354,7 @@ type sandboxedHost struct { // nolint: maligned
 
 	proxies     map[string]ProxySpecification
 	teeHardware node.TEEHardware
-	ias         *ias.IAS
-	aesm        *aesm.Client
+	teeState    *teeState
 	msgHandler  protocol.Handler
 
 	stopCh chan struct{}
@@ -314,7 +378,7 @@ func (h *sandboxedHost) WaitForCapabilityTEE(ctx context.Context) (*node.Capabil
 	for {
 		activeWorker := h.activeWorker
 		if activeWorker != nil {
-			return activeWorker.capabilityTEE, nil
+			return activeWorker.getCapabilityTEE(), nil
 		}
 		if !h.activeWorkerAvailable.Wait(ctx) {
 			return nil, errors.New("aborted by context")
@@ -339,39 +403,52 @@ func (h *sandboxedHost) Quit() <-chan struct{} {
 func (h *sandboxedHost) Cleanup() {
 }
 
-func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
+func (h *sandboxedHost) initCapabilityTEESgx(worker *process) error {
 	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
 	defer cancel()
 
-	quoteType, err := h.ias.GetQuoteSignatureType(ctx)
+	qi, err := h.teeState.aesm.InitQuote(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while getting IAS signature type")
+		return errors.Wrap(err, "worker: error while getting quote info from AESM")
+	}
+	h.teeState.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
+
+	if h.teeState.spid, err = h.teeState.ias.GetSPID(ctx); err != nil {
+		return errors.Wrap(err, "worker: error while getting IAS SPID")
+	}
+	if h.teeState.quoteType, err = h.teeState.ias.GetQuoteSignatureType(ctx); err != nil {
+		return errors.Wrap(err, "worker: error while getting IAS signature type")
 	}
 
-	spid, err := h.ias.GetSPID(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while getting IAS SPID")
+	if _, err = worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEERakInitRequest: &protocol.WorkerCapabilityTEERakInitRequest{
+				TargetInfo: qi.TargetInfo,
+			},
+		},
+	); err != nil {
+		return errors.Wrap(err, "worker: error while initializing RAK")
 	}
 
-	qi, err := h.aesm.InitQuote(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while getting quote info from AESM")
-	}
+	return nil
+}
 
-	sigRL, err := h.ias.GetSigRL(ctx, binary.LittleEndian.Uint32(qi.GID[:]))
+func (h *sandboxedHost) updateCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
+	defer cancel()
+
+	// Update the SigRL (Not cached, knowing if revoked is important).
+	sigRL, err := h.teeState.ias.GetSigRL(ctx, h.teeState.epidGID)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
 	}
-	if len(sigRL) == 0 {
-		sigRL = []byte("")
-	}
+	sigRL = cbor.FixSliceForSerde(sigRL)
 
 	rakQuoteRes, err := worker.protocol.Call(
 		ctx,
 		&protocol.Body{
-			WorkerCapabilityTEERakReportRequest: &protocol.WorkerCapabilityTEERakReportRequest{
-				TargetInfo: qi.TargetInfo,
-			},
+			WorkerCapabilityTEERakReportRequest: &protocol.Empty{},
 		},
 	)
 	if err != nil {
@@ -381,11 +458,11 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 	report := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Report
 	nonce := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Nonce
 
-	quote, err := h.aesm.GetQuote(
+	quote, err := h.teeState.aesm.GetQuote(
 		ctx,
 		report,
-		*quoteType,
-		spid,
+		*h.teeState.quoteType,
+		h.teeState.spid,
 		make([]byte, 16),
 		sigRL,
 	)
@@ -393,7 +470,7 @@ func (h *sandboxedHost) initCapabilityTEESgx(worker *process) (*node.CapabilityT
 		return nil, errors.Wrap(err, "worker: error while getting quote")
 	}
 
-	avr, sig, chain, err := h.ias.VerifyEvidence(ctx, quote, nil, nonce)
+	avr, sig, chain, err := h.teeState.ias.VerifyEvidence(ctx, quote, nil, nonce)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
 	}
@@ -647,11 +724,13 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	}
 
 	p := &process{
-		process:  cmd.Process,
-		protocol: proto,
-		quitCh:   make(chan error),
-		waitCh:   waitCh,
-		logger:   logger,
+		process:      cmd.Process,
+		protocol:     proto,
+		quitCh:       make(chan error),
+		stopAttestCh: make(chan struct{}),
+		quitAttestCh: make(chan struct{}),
+		waitCh:       waitCh,
+		logger:       logger,
 	}
 	go p.worker()
 
@@ -660,14 +739,16 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	case node.TEEHardwareInvalid:
 		// No initialization needed.
 	case node.TEEHardwareIntelSGX:
-		capabilityTEE, err := h.initCapabilityTEESgx(p)
-		if err != nil {
+		if err = h.initCapabilityTEESgx(p); err != nil {
 			return nil, errors.Wrap(err, "worker: error initializing SGX CapabilityTEE")
 		}
-		p.capabilityTEE = capabilityTEE
+		if p.capabilityTEE, err = h.updateCapabilityTEESgx(p); err != nil {
+			return nil, errors.Wrap(err, "worker: error updating SGX CapabilityTEE")
+		}
 	default:
 		return nil, node.ErrInvalidTEEHardware
 	}
+	go p.attestationWorker(h)
 
 	haveErrors = false
 
@@ -837,13 +918,15 @@ func NewSandboxedHost(
 	}
 
 	host := &sandboxedHost{
-		workerBinary:          workerBinary,
-		runtimeBinary:         runtimeBinary,
-		noSandbox:             noSandbox,
-		proxies:               knownProxies,
-		teeHardware:           teeHardware,
-		ias:                   ias,
-		aesm:                  aesmClient,
+		workerBinary:  workerBinary,
+		runtimeBinary: runtimeBinary,
+		noSandbox:     noSandbox,
+		proxies:       knownProxies,
+		teeHardware:   teeHardware,
+		teeState: &teeState{
+			ias:  ias,
+			aesm: aesmClient,
+		},
 		msgHandler:            msgHandler,
 		quitCh:                make(chan struct{}),
 		stopCh:                make(chan struct{}),
