@@ -123,6 +123,9 @@ func (r *Registration) InitialRegistrationCh() chan struct{} {
 }
 
 // RegisterRole enables registering Node roles.
+// hook is a callback that does the following:
+// - Use AddRole to add a role to the node descriptor
+// - Make other changes specific to the role, e.g. setting compute capabilities
 func (r *Registration) RegisterRole(hook func(*node.Node) error) {
 	r.Lock()
 	defer r.Unlock()
@@ -153,6 +156,11 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 		},
 		RegistrationTime: uint64(time.Now().Unix()),
 		Addresses:        addresses,
+	}
+	for _, runtime := range r.workerCommonCfg.Runtimes {
+		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
+			ID: runtime,
+		})
 	}
 
 	r.Lock()

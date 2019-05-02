@@ -32,7 +32,6 @@ const (
 	cfgWorkerRuntimeLoader = "worker.compute.runtime_loader"
 
 	cfgRuntimeBinary = "worker.compute.runtime.binary"
-	cfgRuntimeID     = "worker.compute.runtime.id"
 
 	// XXX: This is needed till the code can watch the registry for runtimes.
 	cfgRuntimeSGXIDs = "worker.compute.runtime.sgx_ids"
@@ -79,8 +78,7 @@ func New(
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
 	runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
-	runtimeIDs := viper.GetStringSlice(cfgRuntimeID)
-	if len(runtimeBinaries) != len(runtimeIDs) {
+	if len(runtimeBinaries) != len(workerCommonCfg.Runtimes) {
 		return nil, fmt.Errorf("runtime binary/id count mismatch")
 	}
 
@@ -90,10 +88,7 @@ func New(
 	}
 
 	for idx, runtimeBinary := range runtimeBinaries {
-		var runtimeID signature.PublicKey
-		if err = runtimeID.UnmarshalHex(runtimeIDs[idx]); err != nil {
-			return nil, err
-		}
+		runtimeID := workerCommonCfg.Runtimes[idx]
 
 		var teeHardware node.TEEHardware
 		if sgxRuntimeIDs[runtimeID.ToMapKey()] {
@@ -134,7 +129,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
 
 		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
-		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
 
 		// XXX: This is needed till the code can watch the registry for runtimes.
 		cmd.Flags().StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
@@ -152,7 +146,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgWorkerRuntimeLoader,
 
 		cfgRuntimeBinary,
-		cfgRuntimeID,
 
 		cfgRuntimeSGXIDs,
 

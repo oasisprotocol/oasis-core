@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 )
@@ -19,6 +20,8 @@ var (
 
 	cfgP2pPort      = "worker.p2p.port"
 	cfgP2pAddresses = "worker.p2p.addresses"
+
+	cfgRuntimeID = "worker.runtime.id"
 )
 
 // Config contains workers common config
@@ -27,6 +30,7 @@ type Config struct { // nolint: maligned
 	ClientAddresses []node.Address
 	P2PPort         uint16
 	P2PAddresses    []node.Address
+	Runtimes        []signature.PublicKey
 
 	logger *logging.Logger
 }
@@ -85,6 +89,19 @@ func (c *Config) GetNodeAddresses() ([]node.Address, error) {
 	return addresses, nil
 }
 
+func getRuntimes(runtimeIDsHex []string) ([]signature.PublicKey, error) {
+	var runtimes []signature.PublicKey
+	for _, runtimeHex := range runtimeIDsHex {
+		var runtime signature.PublicKey
+		if err := runtime.UnmarshalHex(runtimeHex); err != nil {
+			return nil, err
+		}
+
+		runtimes = append(runtimes, runtime)
+	}
+	return runtimes, nil
+}
+
 // NewConfig creates a new worker config.
 func NewConfig() (*Config, error) {
 	// Parse register address overrides.
@@ -96,12 +113,17 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	runtimes, err := getRuntimes(viper.GetStringSlice(cfgRuntimeID))
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
 		ClientAddresses: clientAddresses,
 		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
 		P2PAddresses:    p2pAddresses,
+		Runtimes:        runtimes,
 		logger:          logging.GetLogger("worker/config"),
 	}, nil
 }
@@ -116,6 +138,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
 		cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
+
+		cmd.Flags().StringSlice(cfgRuntimeID, []string{}, "Runtime ID")
 	}
 
 	for _, v := range []string{
@@ -124,6 +148,8 @@ func RegisterFlags(cmd *cobra.Command) {
 
 		cfgP2pAddresses,
 		cfgP2pPort,
+
+		cfgRuntimeID,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}

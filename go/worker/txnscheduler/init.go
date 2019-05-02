@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/keymanager"
@@ -23,8 +22,6 @@ import (
 
 const (
 	cfgWorkerEnabled = "worker.txnscheduler.enabled"
-
-	cfgRuntimeID = "worker.txnscheduler.runtime.id"
 
 	cfgMaxQueueSize      = "worker.txnscheduler.leader.max_queue_size"
 	cfgMaxBatchSize      = "worker.txnscheduler.leader.max_batch_size"
@@ -51,14 +48,8 @@ func New(
 ) (*Worker, error) {
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
-	runtimeIDs := viper.GetStringSlice(cfgRuntimeID)
 
-	for _, runtimeIDStr := range runtimeIDs {
-		var runtimeID signature.PublicKey
-		if err := runtimeID.UnmarshalHex(runtimeIDStr); err != nil {
-			return nil, err
-		}
-
+	for _, runtimeID := range workerCommonCfg.Runtimes {
 		runtimes = append(runtimes, RuntimeConfig{
 			ID: runtimeID,
 		})
@@ -91,8 +82,6 @@ func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable transaction scheduler process")
 
-		cmd.Flags().StringSlice(cfgRuntimeID, nil, "Runtime ID")
-
 		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the incoming queue")
 		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
 		cmd.Flags().String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
@@ -103,8 +92,6 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	for _, v := range []string{
 		cfgWorkerEnabled,
-
-		cfgRuntimeID,
 
 		cfgMaxQueueSize,
 		cfgMaxBatchSize,

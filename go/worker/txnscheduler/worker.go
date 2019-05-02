@@ -82,21 +82,6 @@ type Worker struct {
 	logger *logging.Logger
 }
 
-// getNodeRuntimes returns transaction scheduler node runtimes.
-func (w *Worker) getNodeRuntimes() []*node.Runtime {
-	var nodeRuntimes []*node.Runtime
-
-	for _, v := range w.runtimes {
-		rt := &node.Runtime{
-			ID: v.cfg.ID,
-		}
-		// rt.Capabililities is not set. Only compute nodes set it.
-		nodeRuntimes = append(nodeRuntimes, rt)
-	}
-
-	return nodeRuntimes
-}
-
 // Name returns the service name.
 func (w *Worker) Name() string {
 	return "txnscheduler worker"
@@ -331,7 +316,6 @@ func newWorker(
 		// Register transaction scheduler worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleTransactionScheduler)
-			n.Runtimes = w.getNodeRuntimes()
 
 			return nil
 		})

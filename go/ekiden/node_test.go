@@ -55,9 +55,8 @@ var (
 		{"worker.compute.enabled", true},
 		{"worker.compute.backend", "mock"},
 		{"worker.compute.runtime.binary", "mock-runtime"},
-		{"worker.compute.runtime.id", testRuntimeID},
+		{"worker.runtime.id", testRuntimeID},
 		{"worker.txnscheduler.enabled", true},
-		{"worker.txnscheduler.runtime.id", testRuntimeID},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 

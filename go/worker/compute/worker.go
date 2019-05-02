@@ -95,29 +95,6 @@ type Worker struct {
 	logger *logging.Logger
 }
 
-// getNodeRuntimes returns compute worker node runtimes.
-func (w *Worker) getNodeRuntimes() []*node.Runtime {
-	var nodeRuntimes []*node.Runtime
-
-	for _, v := range w.runtimes {
-		var err error
-
-		rt := &node.Runtime{
-			ID: v.cfg.ID,
-		}
-		if rt.Capabilities.TEE, err = v.workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
-			w.logger.Error("failed to obtain CapabilityTEE",
-				"err", err,
-				"runtime", rt.ID,
-			)
-			continue
-		}
-		nodeRuntimes = append(nodeRuntimes, rt)
-	}
-
-	return nodeRuntimes
-}
-
 // Name returns the service name.
 func (w *Worker) Name() string {
 	return "compute worker"
@@ -451,7 +428,18 @@ func newWorker(
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleComputeWorker)
-			n.Runtimes = w.getNodeRuntimes()
+
+			for _, rt := range n.Runtimes {
+				var err error
+
+				if rt.Capabilities.TEE, err = w.runtimes[rt.ID.ToMapKey()].workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
+					w.logger.Error("failed to obtain CapabilityTEE",
+						"err", err,
+						"runtime", rt.ID,
+					)
+					continue
+				}
+			}
 
 			return nil
 		})
