@@ -160,7 +160,7 @@ func (n *Node) initAndStartWorkers() error {
 
 	// Initialize the worker P2P.
 	p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
-	n.P2P, err = p2p.New(p2pCtx, n.Identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)
+	n.P2P, err = p2p.New(p2pCtx, n.Identity)
 	if err != nil {
 		return err
 	}
@@ -481,6 +481,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		keymanager.RegisterFlags,
 		client.RegisterFlags,
 		compute.RegisterFlags,
+		p2p.RegisterFlags,
 		registration.RegisterFlags,
 		txnscheduler.RegisterFlags,
 		workerCommon.RegisterFlags,

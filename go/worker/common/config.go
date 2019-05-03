@@ -18,9 +18,6 @@ var (
 	cfgClientPort      = "worker.client.port"
 	cfgClientAddresses = "worker.client.addresses"
 
-	cfgP2pPort      = "worker.p2p.port"
-	cfgP2pAddresses = "worker.p2p.addresses"
-
 	cfgRuntimeID = "worker.runtime.id"
 )
 
@@ -28,14 +25,13 @@ var (
 type Config struct { // nolint: maligned
 	ClientPort      uint16
 	ClientAddresses []node.Address
-	P2PPort         uint16
-	P2PAddresses    []node.Address
 	Runtimes        []signature.PublicKey
 
 	logger *logging.Logger
 }
 
-func parseAddressList(addresses []string) ([]node.Address, error) {
+// ParseAddressList parses addresses.
+func ParseAddressList(addresses []string) ([]node.Address, error) {
 	var output []node.Address
 	for _, rawAddress := range addresses {
 		rawIP, rawPort, err := net.SplitHostPort(rawAddress)
@@ -105,11 +101,7 @@ func getRuntimes(runtimeIDsHex []string) ([]signature.PublicKey, error) {
 // NewConfig creates a new worker config.
 func NewConfig() (*Config, error) {
 	// Parse register address overrides.
-	clientAddresses, err := parseAddressList(viper.GetStringSlice(cfgClientAddresses))
-	if err != nil {
-		return nil, err
-	}
-	p2pAddresses, err := parseAddressList(viper.GetStringSlice(cfgP2pAddresses))
+	clientAddresses, err := ParseAddressList(viper.GetStringSlice(cfgClientAddresses))
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +113,6 @@ func NewConfig() (*Config, error) {
 	return &Config{
 		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
 		ClientAddresses: clientAddresses,
-		P2PPort:         uint16(viper.GetInt(cfgP2pPort)),
-		P2PAddresses:    p2pAddresses,
 		Runtimes:        runtimes,
 		logger:          logging.GetLogger("worker/config"),
 	}, nil
@@ -136,18 +126,12 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-		cmd.Flags().Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")
-		cmd.Flags().StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-
 		cmd.Flags().StringSlice(cfgRuntimeID, []string{}, "Runtime ID")
 	}
 
 	for _, v := range []string{
 		cfgClientPort,
 		cfgClientAddresses,
-
-		cfgP2pAddresses,
-		cfgP2pPort,
 
 		cfgRuntimeID,
 	} {
