@@ -126,7 +126,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-		cmd.Flags().StringSlice(cfgRuntimeID, []string{}, "Runtime ID")
+		cmd.Flags().StringSlice(cfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
 	}
 
 	for _, v := range []string{
