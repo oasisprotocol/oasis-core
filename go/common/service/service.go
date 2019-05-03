@@ -101,6 +101,7 @@ func (c *contextCleanup) Cleanup() {
 	c.cancel()
 }
 
+// NewContextCleanup makes a context and a CleanupAble that cancels it.
 func NewContextCleanup(parent context.Context) (context.Context, CleanupAble) {
 	ctx, cancel := context.WithCancel(parent)
 	return ctx, &contextCleanup{cancel}
