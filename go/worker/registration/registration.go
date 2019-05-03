@@ -37,11 +37,13 @@ type Registration struct {
 	p2p           *p2p.P2P
 	entityPrivKey *signature.PrivateKey
 	ctx           context.Context
-	quitCh        chan struct{}
-	regCh         chan struct{}
-	logger        *logging.Logger
-	roleHooks     []func(*node.Node) error
-	syncable      common.Syncable
+	// Bandaid: Idempotent Stop for testing.
+	stopped   bool
+	quitCh    chan struct{}
+	regCh     chan struct{}
+	logger    *logging.Logger
+	roleHooks []func(*node.Node) error
+	syncable  common.Syncable
 }
 
 func (r *Registration) doNodeRegistration() {
@@ -269,6 +271,10 @@ func (r *Registration) Start() error {
 
 // Stop halts the service.
 func (r *Registration) Stop() {
+	if r.stopped {
+		return
+	}
+	r.stopped = true
 	close(r.quitCh)
 }
 
