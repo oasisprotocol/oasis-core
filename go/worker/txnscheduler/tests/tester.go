@@ -53,6 +53,7 @@ func WorkerImplementationTests(
 }
 
 func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
+	// TODO: Make this test independent of the ComputeWorker election once we have independent committee intervals.
 	// We'll be elected leader from the epoch transition in TestNode/ComputeWorker/InitialEpochTransition
 
 	// Hack: Drain the transition event if our test started before it arrived.

@@ -46,7 +46,6 @@ func WorkerImplementationTests(
 }
 
 func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
-	// TODO: move initial election to some common thing
 	// Perform an epoch transition, so that the node gets elected leader.
 	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
