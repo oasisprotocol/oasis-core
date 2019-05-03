@@ -13,7 +13,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 )
 
-const timeout = 1 * time.Second
+// Keep this above the test network's max batch timeout.
+const timeout = 2 * time.Second
 
 // ClientImplementationTests runs the client interface implementation tests.
 func ClientImplementationTests(
@@ -56,7 +57,7 @@ func testSubmitTransaction(
 	c *client.Client,
 ) {
 	// Submit a test transaction.
-	testInput := []byte("hello world")
+	testInput := []byte("octopus")
 	testOutput, err := c.SubmitTx(ctx, testInput, runtimeID)
 
 	// Check if everything is in order.
@@ -74,41 +75,44 @@ func testQuery(
 	require.NoError(t, err, "WaitBlockIndexed")
 
 	// Based on SubmitTx and the mock worker.
-	testInput := []byte("hello world")
+	testInput := []byte("octopus")
 	testOutput := testInput
 
 	// Fetch blocks.
 	blk, err := c.GetBlock(ctx, runtimeID, 1)
+	// Epoch transition from TestNode/ComputeWorker/InitialEpochTransition
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 1, blk.Header.Round)
 
 	blk, err = c.GetBlock(ctx, runtimeID, 2)
+	// Normal block from TestNode/TransactionSchedulerWorker/QueueCall
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 2, blk.Header.Round)
 
 	blk, err = c.GetBlock(ctx, runtimeID, 0xffffffffffffffff)
+	// Normal block from TestNode/Client/SubmitTx
 	require.NoError(t, err, "GetBlock")
-	require.EqualValues(t, 2, blk.Header.Round)
+	require.EqualValues(t, 3, blk.Header.Round)
 
 	// Out of bounds block round.
-	_, err = c.GetBlock(ctx, runtimeID, 3)
+	_, err = c.GetBlock(ctx, runtimeID, 4)
 	require.Error(t, err, "GetBlock")
 
 	// Fetch transaction.
-	tx, err := c.GetTxn(ctx, runtimeID, 2, 0)
+	tx, err := c.GetTxn(ctx, runtimeID, 3, 0)
 	require.NoError(t, err, "GetTxn(0)")
-	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, 3, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
 	// Out of bounds transaction index.
-	_, err = c.GetTxn(ctx, runtimeID, 2, 1)
+	_, err = c.GetTxn(ctx, runtimeID, 3, 1)
 	require.Error(t, err, "GetTxn(1)")
 
 	// Get transaction by block hash and index.
 	tx, err = c.GetTxnByBlockHash(ctx, runtimeID, blk.Header.EncodedHash(), 0)
 	require.NoError(t, err, "GetTxnByBlockHash")
-	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, 3, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
@@ -128,19 +132,22 @@ func testQuery(
 	require.NoError(t, err, "QueryTxn")
 	require.EqualValues(t, 2, tx.Block.Header.Round)
 	require.EqualValues(t, 0, tx.Index)
-	require.EqualValues(t, testInput, tx.Input)
-	require.EqualValues(t, testOutput, tx.Output)
+	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
+	require.EqualValues(t, []byte("hello world"), tx.Input)
+	require.EqualValues(t, []byte("hello world"), tx.Output)
 
 	// Transactions (check the mock worker for content).
 	txns, err := c.GetTransactions(ctx, runtimeID, blk.Header.InputHash)
 	require.NoError(t, err, "GetTransactions(input)")
 	require.Len(t, txns, 1)
-	require.EqualValues(t, testInput, txns[0])
+	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
+	require.EqualValues(t, []byte("hello world"), txns[0])
 
 	txns, err = c.GetTransactions(ctx, runtimeID, blk.Header.OutputHash)
 	require.NoError(t, err, "GetTransactions(output)")
 	require.Len(t, txns, 1)
-	require.EqualValues(t, testOutput, txns[0])
+	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
+	require.EqualValues(t, []byte("hello world"), txns[0])
 
 	// Test advanced transaction queries.
 	query := client.Query{
@@ -155,6 +162,7 @@ func testQuery(
 	require.Len(t, results, 1)
 	require.EqualValues(t, 2, results[0].Block.Header.Round)
 	require.EqualValues(t, 0, results[0].Index)
-	require.EqualValues(t, testInput, results[0].Input)
-	require.EqualValues(t, testOutput, results[0].Output)
+	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
+	require.EqualValues(t, []byte("hello world"), results[0].Input)
+	require.EqualValues(t, []byte("hello world"), results[0].Output)
 }
