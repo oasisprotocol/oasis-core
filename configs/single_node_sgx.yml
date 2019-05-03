@@ -85,6 +85,8 @@ registry:
 # Roothash backend.
 roothash:
   backend: tendermint
+  tendermint:
+    index_blocks: true
 
 # Tendermint backend configuration.
 tendermint:
@@ -92,6 +94,12 @@ tendermint:
     genesis_file: /tmp/ekiden-single-node-sgx/genesis.json
   consensus:
     timeout_commit: 1s
+
+# Client configuration.
+client:
+  indexer:
+    runtimes:
+      - "0000000000000000000000000000000000000000000000000000000000000000"
 
 # Tracing settings.
 #tracing:

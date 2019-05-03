@@ -140,6 +140,16 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
+  #########################
+  # Test single node config
+  #########################
+  - label: Test single node config
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/scripts/test_config.sh single_node
+    plugins:
+      <<: *docker_plugin_configuration
+
   ###############
   # E2E test jobs
   ###############
