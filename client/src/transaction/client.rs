@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use failure::{Error, Fallible};
 use futures::{future, prelude::*};
-use grpcio::Channel;
+use grpcio::{Channel, Error::RpcFailure, RpcStatus, RpcStatusCode};
 use rustracing::{sampler::AllSampler, tag};
 use rustracing_jaeger::{span::Span, Tracer};
 use serde::{de::DeserializeOwned, Serialize};
@@ -186,70 +186,72 @@ impl TxnClient {
     }
 
     // Retrieve block snapshot at specified round.
-    pub fn get_block(&self, round: u64) -> BoxFuture<BlockSnapshot> {
+    pub fn get_block(&self, round: u64) -> BoxFuture<Option<BlockSnapshot>> {
         let (span, options) = self.prepare_options("TxnClient::get_block");
         let mut request = api::client::GetBlockRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
         request.set_round(round);
 
-        let result: BoxFuture<BlockSnapshot> = match self
-            .client
-            .get_block_async_opt(&request, options)
-        {
-            Ok(resp) => {
-                let storage_client = self.storage_client.clone();
-                Box::new(
-                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |rsp| {
-                            Ok(BlockSnapshot::new(
-                                storage_client,
-                                serde_cbor::from_slice(&rsp.block)?,
-                                Hash::from(rsp.block_hash),
-                            ))
-                        }),
-                )
-            }
-            Err(error) => Box::new(future::err(
-                TxnClientError::CallFailed(format!("{}", error)).into(),
-            )),
-        };
+        let result: BoxFuture<Option<BlockSnapshot>> =
+            match self.client.get_block_async_opt(&request, options) {
+                Ok(resp) => {
+                    let storage_client = self.storage_client.clone();
+                    Box::new(resp.then(move |result| match result {
+                        Err(RpcFailure(RpcStatus {
+                            status: RpcStatusCode::NotFound,
+                            ..
+                        })) => Ok(None),
+                        Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
+                        Ok(rsp) => Ok(Some(BlockSnapshot::new(
+                            storage_client,
+                            serde_cbor::from_slice(&rsp.block)?,
+                            Hash::from(rsp.block_hash),
+                        ))),
+                    }))
+                }
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
         drop(span);
         result
     }
 
     // Retrieve transaction at specified block round and index.
-    pub fn get_txn(&self, round: u64, index: u32) -> BoxFuture<TransactionSnapshot> {
+    pub fn get_txn(&self, round: u64, index: u32) -> BoxFuture<Option<TransactionSnapshot>> {
         let (span, options) = self.prepare_options("TxnClient::get_txn");
         let mut request = api::client::GetTxnRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
         request.set_round(round);
         request.set_index(index);
 
-        let result: BoxFuture<TransactionSnapshot> = match self
-            .client
-            .get_txn_async_opt(&request, options)
-        {
-            Ok(resp) => {
-                let storage_client = self.storage_client.clone();
-                Box::new(
-                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |rsp| {
+        let result: BoxFuture<Option<TransactionSnapshot>> =
+            match self.client.get_txn_async_opt(&request, options) {
+                Ok(resp) => {
+                    let storage_client = self.storage_client.clone();
+                    Box::new(resp.then(move |result| match result {
+                        Err(RpcFailure(RpcStatus {
+                            status: RpcStatusCode::NotFound,
+                            ..
+                        })) => Ok(None),
+                        Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
+                        Ok(rsp) => {
                             let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
-                            TransactionSnapshot::new(
+                            Ok(Some(TransactionSnapshot::new(
                                 storage_client,
                                 rsp.block,
                                 rsp.block_hash,
                                 index,
                                 rsp.input,
                                 rsp.output,
-                            )
-                        }),
-                )
-            }
-            Err(error) => Box::new(future::err(
-                TxnClientError::CallFailed(format!("{}", error)).into(),
-            )),
-        };
+                            )?))
+                        }
+                    }))
+                }
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
         drop(span);
         result
     }
@@ -259,33 +261,37 @@ impl TxnClient {
         &self,
         block_hash: Hash,
         index: u32,
-    ) -> BoxFuture<TransactionSnapshot> {
+    ) -> BoxFuture<Option<TransactionSnapshot>> {
         let (span, options) = self.prepare_options("TxnClient::get_txn");
         let mut request = api::client::GetTxnByBlockHashRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
         request.set_block_hash(block_hash.as_ref().to_vec());
         request.set_index(index);
 
-        let result: BoxFuture<TransactionSnapshot> = match self
+        let result: BoxFuture<Option<TransactionSnapshot>> = match self
             .client
             .get_txn_by_block_hash_async_opt(&request, options)
         {
             Ok(resp) => {
                 let storage_client = self.storage_client.clone();
-                Box::new(
-                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |rsp| {
-                            let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
-                            TransactionSnapshot::new(
-                                storage_client,
-                                rsp.block,
-                                rsp.block_hash,
-                                index,
-                                rsp.input,
-                                rsp.output,
-                            )
-                        }),
-                )
+                Box::new(resp.then(move |result| match result {
+                    Err(RpcFailure(RpcStatus {
+                        status: RpcStatusCode::NotFound,
+                        ..
+                    })) => Ok(None),
+                    Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
+                    Ok(rsp) => {
+                        let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
+                        Ok(Some(TransactionSnapshot::new(
+                            storage_client,
+                            rsp.block,
+                            rsp.block_hash,
+                            index,
+                            rsp.input,
+                            rsp.output,
+                        )?))
+                    }
+                }))
             }
             Err(error) => Box::new(future::err(
                 TxnClientError::CallFailed(format!("{}", error)).into(),
@@ -317,7 +323,7 @@ impl TxnClient {
     }
 
     /// Query the block index.
-    pub fn query_block<K, V>(&self, key: K, value: V) -> BoxFuture<BlockSnapshot>
+    pub fn query_block<K, V>(&self, key: K, value: V) -> BoxFuture<Option<BlockSnapshot>>
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
@@ -328,33 +334,33 @@ impl TxnClient {
         request.set_key(key.as_ref().into());
         request.set_value(value.as_ref().into());
 
-        let result: BoxFuture<BlockSnapshot> = match self
-            .client
-            .query_block_async_opt(&request, options)
-        {
-            Ok(resp) => {
-                let storage_client = self.storage_client.clone();
-                Box::new(
-                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |rsp| {
-                            Ok(BlockSnapshot::new(
-                                storage_client,
-                                serde_cbor::from_slice(&rsp.block)?,
-                                Hash::from(rsp.block_hash),
-                            ))
-                        }),
-                )
-            }
-            Err(error) => Box::new(future::err(
-                TxnClientError::CallFailed(format!("{}", error)).into(),
-            )),
-        };
+        let result: BoxFuture<Option<BlockSnapshot>> =
+            match self.client.query_block_async_opt(&request, options) {
+                Ok(resp) => {
+                    let storage_client = self.storage_client.clone();
+                    Box::new(resp.then(move |result| match result {
+                        Err(RpcFailure(RpcStatus {
+                            status: RpcStatusCode::NotFound,
+                            ..
+                        })) => Ok(None),
+                        Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
+                        Ok(rsp) => Ok(Some(BlockSnapshot::new(
+                            storage_client,
+                            serde_cbor::from_slice(&rsp.block)?,
+                            Hash::from(rsp.block_hash),
+                        ))),
+                    }))
+                }
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
         drop(span);
         result
     }
 
     /// Query the transaction index.
-    pub fn query_txn<K, V>(&self, key: K, value: V) -> BoxFuture<TransactionSnapshot>
+    pub fn query_txn<K, V>(&self, key: K, value: V) -> BoxFuture<Option<TransactionSnapshot>>
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
@@ -365,31 +371,33 @@ impl TxnClient {
         request.set_key(key.as_ref().into());
         request.set_value(value.as_ref().into());
 
-        let result: BoxFuture<TransactionSnapshot> = match self
-            .client
-            .query_txn_async_opt(&request, options)
-        {
-            Ok(resp) => {
-                let storage_client = self.storage_client.clone();
-                Box::new(
-                    resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
-                        .and_then(move |rsp| {
+        let result: BoxFuture<Option<TransactionSnapshot>> =
+            match self.client.query_txn_async_opt(&request, options) {
+                Ok(resp) => {
+                    let storage_client = self.storage_client.clone();
+                    Box::new(resp.then(move |result| match result {
+                        Err(RpcFailure(RpcStatus {
+                            status: RpcStatusCode::NotFound,
+                            ..
+                        })) => Ok(None),
+                        Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
+                        Ok(rsp) => {
                             let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
-                            TransactionSnapshot::new(
+                            Ok(Some(TransactionSnapshot::new(
                                 storage_client,
                                 rsp.block,
                                 rsp.block_hash,
                                 rsp.index,
                                 rsp.input,
                                 rsp.output,
-                            )
-                        }),
-                )
-            }
-            Err(error) => Box::new(future::err(
-                TxnClientError::CallFailed(format!("{}", error)).into(),
-            )),
-        };
+                            )?))
+                        }
+                    }))
+                }
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
         drop(span);
         result
     }

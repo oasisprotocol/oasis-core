@@ -195,7 +195,7 @@ func (b *blockIndexer) GetBlockHeight(id signature.PublicKey, round uint64) (int
 	}
 
 	if len(value) == 0 {
-		return -1, errors.New("indexer: block not found")
+		return -1, api.ErrNotFound
 	}
 	if len(value) != 8 {
 		b.logger.Error("corrupted block index",
