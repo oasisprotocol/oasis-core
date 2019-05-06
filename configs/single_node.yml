@@ -33,6 +33,8 @@ worker:
     runtime:
       id: "0000000000000000000000000000000000000000000000000000000000000000"
       binary: target/debug/simple-keyvalue
+  storage:
+    enabled: true
   client:
     port: 9200
     addresses:

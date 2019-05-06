@@ -52,7 +52,8 @@ test_migration() {
 
     run_compute_node 1 ${runtime} &>/dev/null
 
-    wait_compute_nodes 1
+    wait_nodes 2 # 1 + storage
+
     set_epoch 1
     sleep 1
 
@@ -70,8 +71,14 @@ test_migration() {
         --address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --output_file ${TEST_BASE_DIR}/export-roothash.json
 
-    # Stop the validator nodes.
-    ps efh -C ekiden | grep -v "ekiden storage node" | awk '{print $1}' | xargs kill -9
+    # Stop all nodes.
+    ps efh -C ekiden | awk '{print $1}' | xargs kill -9
+
+    # Re-use storage db in the new storage node.
+    mkdir -p ${TEST_BASE_DIR}/committee-2/storage
+    chmod 700 ${TEST_BASE_DIR}/committee-2/storage
+    cp -a ${TEST_BASE_DIR}/committee-1/storage/storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage/
+    cp -a ${TEST_BASE_DIR}/committee-1/storage/mkvs_storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage/
 
     # Start the second network.
     run_backend_tendermint_committee \
@@ -79,13 +86,13 @@ test_migration() {
         id=2 \
         replica_group_size=1 \
         replica_group_backup_size=0 \
-        start_storage=false \
+        clear_storage=0 \
         roothash_genesis_blocks="${TEST_BASE_DIR}/export-roothash.json"
 
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
 
-    wait_compute_nodes 1
+    wait_nodes 2 # 1 + storage
     set_epoch 2
 
     # Start client and do state verification, checking that migration succeeded.
