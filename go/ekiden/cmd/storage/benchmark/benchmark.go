@@ -59,7 +59,7 @@ func doBenchmark(cmd *cobra.Command, args []string) {
 
 	// Initialize the various backends.
 	timeSource := mock.New()
-	storage, err := storage.New(timeSource, dataDir, nil)
+	storage, err := storage.New(context.Background(), dataDir, timeSource, nil, nil, nil)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,
