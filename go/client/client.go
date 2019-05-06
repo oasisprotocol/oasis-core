@@ -584,8 +584,6 @@ func New(
 
 		backend := viper.GetString(cfgIndexBackend)
 		switch strings.ToLower(backend) {
-		case indexer.ExactBackendName:
-			impl, err = indexer.NewExactBackend(dataDir)
 		case indexer.BleveBackendName:
 			impl, err = indexer.NewBleveBackend(dataDir)
 		default:

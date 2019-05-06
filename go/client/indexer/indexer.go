@@ -16,8 +16,6 @@ import (
 
 const (
 	storageTimeout = 5 * time.Second
-	// maxKeyValueLength is the maximum length of keys and values.
-	maxKeyValueLength = 255
 	// maxQueryLimit is the maximum number of results to return.
 	maxQueryLimit = 1000
 )

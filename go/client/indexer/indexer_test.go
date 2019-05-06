@@ -153,10 +153,6 @@ func testBackend(t *testing.T, factory func(string) (Backend, error)) {
 	})
 }
 
-func TestExactBackend(t *testing.T) {
-	testBackend(t, NewExactBackend)
-}
-
 func TestBleveBackend(t *testing.T) {
 	testBackend(t, NewBleveBackend)
 }
