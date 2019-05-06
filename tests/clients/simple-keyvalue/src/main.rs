@@ -76,6 +76,25 @@ fn main() {
         }
     }
 
+    // Test local_[set,get] calls.
+    let local_kv = KeyValue {
+        key: String::from("local_key"),
+        value: String::from("local_value"),
+    };
+    println!(
+        "Storing \"{}\" as key and \"{}\" as value to untrusted local storage...",
+        local_kv.key, local_kv.value
+    );
+    rt.block_on(kv_client.local_insert(local_kv)).unwrap();
+    let val = rt
+        .block_on(kv_client.local_get("local_key".to_string()))
+        .unwrap();
+    println!("Got \"{}\"", val);
+    assert_eq!(val, "local_value");
+
+    // Test local_get call.
+    println!("Geting \"local_key\"...");
+
     // Test get_latest_block call.
     println!("Getting latest block...");
     let snapshot = rt

@@ -28,4 +28,10 @@ runtime_api! {
 
     // (encrypted) Removes value associated with the given key and returns old value, if any.
     pub fn enc_remove(String) -> Option<String>;
+
+    // Inserts key and corresponding value to the runtime's untrusted local storage.
+    pub fn local_insert(KeyValue) -> ();
+
+    // Gets the value associated with given key from the runtime's untrusted local storage.
+    pub fn local_get(String) -> String;
 }
