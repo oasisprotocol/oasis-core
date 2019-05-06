@@ -147,11 +147,9 @@ func testQuery(
 	require.EqualValues(t, testOutput, txns[0])
 
 	// Test advanced transaction queries.
-	roundMin := uint64(0)
-	roundMax := uint64(3)
 	query := client.Query{
-		RoundMin: &roundMin,
-		RoundMax: &roundMax,
+		RoundMin: 0,
+		RoundMax: 3,
 		Conditions: []client.QueryCondition{
 			client.QueryCondition{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
 		},

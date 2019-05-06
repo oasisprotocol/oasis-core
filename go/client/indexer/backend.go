@@ -15,6 +15,11 @@ var (
 	_ cbor.Unmarshaler = (*Query)(nil)
 )
 
+const (
+	// maxQueryLimit is the maximum number of results to return.
+	maxQueryLimit = 1000
+)
+
 // Condition is a query condition.
 type Condition struct {
 	// Key is the tag key that should be matched.
@@ -28,9 +33,11 @@ type Condition struct {
 // Query is a complex query against the index.
 type Query struct {
 	// RoundMin is an optional minimum round (inclusive).
-	RoundMin *uint64 `codec:"round_min"`
+	RoundMin uint64 `codec:"round_min"`
 	// RoundMax is an optional maximum round (inclusive).
-	RoundMax *uint64 `codec:"round_max"`
+	//
+	// A zero value means that there is no upper limit.
+	RoundMax uint64 `codec:"round_max"`
 
 	// Conditions are the query conditions.
 	//
@@ -39,7 +46,9 @@ type Query struct {
 	Conditions []Condition `codec:"conditions"`
 
 	// Limit is the maximum number of results to return.
-	Limit *uint64 `codec:"limit"`
+	//
+	// A zero value means that the `maxQueryLimit` limit is used.
+	Limit uint64 `codec:"limit"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -61,7 +70,7 @@ type Results map[uint64][]int32
 // Backend is an indexer backend.
 type Backend interface {
 	// Index indexes a list of tags for the same block round of a given runtime.
-	Index(runtimeID signature.PublicKey, round uint64, tags []runtime.Tag) error
+	Index(ctx context.Context, runtimeID signature.PublicKey, round uint64, tags []runtime.Tag) error
 
 	// QueryBlock queries the block index of a given runtime.
 	QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (uint64, error)
@@ -79,7 +88,7 @@ type Backend interface {
 	WaitBlockIndexed(ctx context.Context, runtimeID signature.PublicKey, round uint64) error
 
 	// Prune removes entries associated with the given round.
-	Prune(runtimeID signature.PublicKey, round uint64) error
+	Prune(ctx context.Context, runtimeID signature.PublicKey, round uint64) error
 
 	// Stops the backend.
 	//

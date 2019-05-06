@@ -16,8 +16,6 @@ import (
 
 const (
 	storageTimeout = 5 * time.Second
-	// maxQueryLimit is the maximum number of results to return.
-	maxQueryLimit = 1000
 )
 
 var (
@@ -83,7 +81,7 @@ func (s *Service) worker() {
 				continue
 			}
 
-			if err = s.backend.Prune(pruned.RuntimeID, pruned.Round); err != nil {
+			if err = s.backend.Prune(context.TODO(), pruned.RuntimeID, pruned.Round); err != nil {
 				logger.Error("failed to prune index",
 					"round", pruned.Round,
 				)
@@ -95,7 +93,7 @@ func (s *Service) worker() {
 
 			// Fetch tags from storage.
 			if !blk.Header.TagHash.IsEmpty() {
-				ctx, cancel := context.WithTimeout(context.Background(), storageTimeout)
+				ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
 
 				var rawTags []byte
 				rawTags, err = s.storage.Get(ctx, storage.Key(blk.Header.TagHash))
@@ -126,7 +124,7 @@ func (s *Service) worker() {
 				Value:    blockHash[:],
 			})
 
-			if err = s.backend.Index(s.runtimeID, blk.Header.Round, tags); err != nil {
+			if err = s.backend.Index(context.TODO(), s.runtimeID, blk.Header.Round, tags); err != nil {
 				logger.Error("failed to index tags",
 					"err", err,
 					"round", blk.Header.Round,

@@ -25,16 +25,16 @@ pub struct QueryCondition {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Query {
     /// An optional minimum round (inclusive).
-    pub round_min: Option<u64>,
+    pub round_min: u64,
     /// An optional maximum round (exclusive).
-    pub round_max: Option<u64>,
+    pub round_max: u64,
     /// The query conditions.
     ///
     /// They are combined using an AND query which means that all of
     /// the conditions must be satisfied for an item to match.
     pub conditions: Vec<QueryCondition>,
     /// The maximum number of results to return.
-    pub limit: Option<u64>,
+    pub limit: u64,
 }
 
 // The transaction query result.

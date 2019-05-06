@@ -18,7 +18,7 @@ func testOperations(t *testing.T, backend Backend) {
 	var id signature.PublicKey
 	_ = id.UnmarshalBinary(make([]byte, signature.PublicKeySize))
 
-	err := backend.Index(id, 42, []runtime.Tag{
+	err := backend.Index(ctx, id, 42, []runtime.Tag{
 		runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("key"), Value: []byte("value")},
 		runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("key2"), Value: []byte("value2")},
 		runtime.Tag{TxnIndex: 0, Key: []byte("hello"), Value: []byte("world")},
@@ -65,7 +65,7 @@ func testOperations(t *testing.T, backend Backend) {
 	require.EqualValues(t, 42, round)
 	require.EqualValues(t, 0, txnIdx)
 
-	err = backend.Index(id, 43, []runtime.Tag{
+	err = backend.Index(ctx, id, 43, []runtime.Tag{
 		runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("key"), Value: []byte("value1")},
 		runtime.Tag{TxnIndex: 5, Key: []byte("foo"), Value: []byte("bar")},
 	})
@@ -85,11 +85,9 @@ func testOperations(t *testing.T, backend Backend) {
 	require.EqualValues(t, 42, round)
 
 	// Test advanced transaction queries.
-	roundMin := uint64(40)
-	roundMax := uint64(50)
 	query := Query{
-		RoundMin: &roundMin,
-		RoundMax: &roundMax,
+		RoundMin: 40,
+		RoundMax: 50,
 		Conditions: []Condition{
 			Condition{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
 		},
