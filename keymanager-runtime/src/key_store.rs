@@ -63,7 +63,7 @@ impl KeyStore {
 
     /// Get or create keys.
     pub fn get_or_create_keys(&self, contract_id: &ContractId) -> Fallible<ContractKey> {
-        StorageContext::with_current(|_cas, mkvs| {
+        StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
             with_encryption_key(mkvs, self.encryption_key.as_ref(), |mkvs| {
                 // NOTE: This is going away so background context is fine.
                 match mkvs.get(Context::background(), contract_id.as_ref()) {
@@ -88,7 +88,7 @@ impl KeyStore {
 
     /// Get the public part of the key.
     pub fn get_public_key(&self, contract_id: &ContractId) -> Fallible<Option<PublicKey>> {
-        StorageContext::with_current(|_cas, mkvs| {
+        StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
             with_encryption_key(mkvs, self.encryption_key.as_ref(), |mkvs| {
                 // NOTE: This is going away so background context is fine.
                 Ok(mkvs

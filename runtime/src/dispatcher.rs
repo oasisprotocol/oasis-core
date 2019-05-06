@@ -15,7 +15,7 @@ use crate::{
         logger::get_logger,
         roothash::Block,
     },
-    protocol::{Protocol, ProtocolCAS},
+    protocol::{Protocol, ProtocolCAS, ProtocolUntrustedLocalStorage},
     rak::RAK,
     rpc::{
         demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher,
@@ -222,10 +222,17 @@ impl Dispatcher {
             protocol.clone(),
         ));
         let cas = Arc::new(PassthroughCAS::new(cas));
+        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+            Context::create_child(&ctx),
+            protocol.clone(),
+        ));
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
-        let (outputs, tags) = StorageContext::enter(cas.clone(), &mut cache.mkvs, || {
-            txn_dispatcher.dispatch_batch(&calls, txn_ctx)
-        });
+        let (outputs, tags) = StorageContext::enter(
+            cas.clone(),
+            &mut cache.mkvs,
+            untrusted_local.clone(),
+            || txn_dispatcher.dispatch_batch(&calls, txn_ctx),
+        );
 
         if check_only {
             debug!(self.logger, "Transaction batch check complete");
@@ -333,10 +340,17 @@ impl Dispatcher {
                         .with_root(state_root)
                         .new(Context::create_child(&ctx), Box::new(read_syncer))
                         .unwrap();
+                    let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+                        Context::create_child(&ctx),
+                        protocol.clone(),
+                    ));
                     let rpc_ctx = RpcContext::new(session_info);
-                    let response = StorageContext::enter(cas.clone(), &mut mkvs, || {
-                        rpc_dispatcher.dispatch(req, rpc_ctx)
-                    });
+                    let response = StorageContext::enter(
+                        cas.clone(),
+                        &mut mkvs,
+                        untrusted_local.clone(),
+                        || rpc_dispatcher.dispatch(req, rpc_ctx),
+                    );
                     let response = RpcMessage::Response(response);
 
                     let (storage_log, new_state_root) = mkvs

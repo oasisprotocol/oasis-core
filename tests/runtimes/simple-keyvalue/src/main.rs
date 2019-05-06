@@ -43,7 +43,7 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"insert");
     ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs| {
+    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),
             args.key.as_bytes(),
@@ -62,7 +62,7 @@ fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"get");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs| {
+    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
         mkvs.get(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -77,7 +77,7 @@ fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"remove");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs| {
+    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
         mkvs.remove(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -101,7 +101,7 @@ where
     // NOTE: This is only for example purposes, the correct way would be
     //       to also generate a (deterministic) nonce.
 
-    StorageContext::with_current(|_cas, mkvs| {
+    StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
         Ok(with_encryption_key(mkvs, key.state_key.as_ref(), |mkvs| {
             f(ctx, mkvs)
         }))
