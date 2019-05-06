@@ -396,7 +396,7 @@ func (r *memoryRootHash) GetBlock(ctx context.Context, id signature.PublicKey, r
 
 	blk := s.blocks[round]
 	if blk == nil {
-		return nil, api.ErrInvalidArgument
+		return nil, api.ErrNotFound
 	}
 
 	if blk.Header.Round != round {

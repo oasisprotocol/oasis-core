@@ -96,10 +96,17 @@ fn main() {
         println!("Getting indexed block {}...", round);
         let snapshot = rt
             .block_on(kv_client.txn_client().get_block(round))
-            .expect("get block snapshot");
+            .expect("get block snapshot")
+            .expect("block must exist");
 
         println!("Retrieved block: {:?}", snapshot.block);
+        assert_eq!(snapshot.block.header.round, round);
     }
+
+    let snapshot = rt
+        .block_on(kv_client.txn_client().get_block(100000))
+        .expect("non-existent block must return None");
+    assert!(snapshot.is_none(), "non-existent block must return None");
 
     println!("Removing \"hello_key\" record from database...");
     let r = rt
@@ -124,13 +131,15 @@ fn main() {
     println!("Querying block tags (kv_hello=insert)...");
     let snapshot = rt
         .block_on(kv_client.txn_client().query_block(b"kv_hello", b"insert"))
-        .expect("query block snapshot");
+        .expect("query block snapshot")
+        .expect("block must exist");
     println!("Found block: {:?}", snapshot.block);
 
     println!("Querying block tags (kv_hello=get)...");
     let snapshot = rt
         .block_on(kv_client.txn_client().query_block(b"kv_hello", b"get"))
-        .expect("query block snapshot");
+        .expect("query block snapshot")
+        .expect("block must exist");
     println!("Found block: {:?}", snapshot.block);
 
     // Test query_block call by block hash.
@@ -141,7 +150,8 @@ fn main() {
                 .txn_client()
                 .query_block(TAG_BLOCK_HASH, snapshot.block_hash),
         )
-        .expect("query block snapshot");
+        .expect("query block snapshot")
+        .expect("block must exist");
     println!("Found block: {:?}", snapshot.block);
 
     // Test get_transactions call.
@@ -160,7 +170,8 @@ fn main() {
     println!("Querying transaction tags (kv_op=insert)...");
     let snapshot = rt
         .block_on(kv_client.txn_client().query_txn(b"kv_op", b"insert"))
-        .expect("query transaction snapshot");
+        .expect("query transaction snapshot")
+        .expect("transaction must exist");
     println!(
         "Found transaction: index={} input={:?} output={:?}",
         snapshot.index, snapshot.input, snapshot.output

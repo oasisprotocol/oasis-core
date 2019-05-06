@@ -26,6 +26,9 @@ var (
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("roothash: invalid argument")
 
+	// ErrNotFound is the error returned when a block is not found.
+	ErrNotFound = errors.New("roothash: block not found")
+
 	_ encoding.BinaryMarshaler   = (*OpaqueCommitment)(nil)
 	_ encoding.BinaryUnmarshaler = (*OpaqueCommitment)(nil)
 	_ cbor.Marshaler             = (*DiscrepancyDetectedEvent)(nil)

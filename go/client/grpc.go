@@ -4,12 +4,16 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/ekiden/go/client/indexer"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	pbClient "github.com/oasislabs/ekiden/go/grpc/client"
 	pbEnRPC "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
+	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 )
 
 var (
@@ -98,6 +102,9 @@ func (s *grpcServer) GetBlock(ctx context.Context, req *pbClient.GetBlockRequest
 
 	blk, err := s.client.GetBlock(ctx, id, req.GetRound())
 	if err != nil {
+		if err == roothash.ErrNotFound {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
 	}
 	blockHash := blk.Header.EncodedHash()
@@ -115,6 +122,9 @@ func (s *grpcServer) GetTxn(ctx context.Context, req *pbClient.GetTxnRequest) (*
 
 	tx, err := s.client.GetTxn(ctx, id, req.GetRound(), req.GetIndex())
 	if err != nil {
+		if err == ErrBadIndexOrCorrupted {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
 	}
 
@@ -136,6 +146,9 @@ func (s *grpcServer) GetTxnByBlockHash(ctx context.Context, req *pbClient.GetTxn
 
 	tx, err := s.client.GetTxnByBlockHash(ctx, id, blockHash, req.GetIndex())
 	if err != nil {
+		if err == ErrBadIndexOrCorrupted {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
 	}
 
@@ -172,6 +185,9 @@ func (s *grpcServer) QueryBlock(ctx context.Context, req *pbClient.QueryBlockReq
 
 	blk, err := s.client.QueryBlock(ctx, id, req.GetKey(), req.GetValue())
 	if err != nil {
+		if err == indexer.ErrNotFound {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
 	}
 	blockHash := blk.Header.EncodedHash()
@@ -189,6 +205,9 @@ func (s *grpcServer) QueryTxn(ctx context.Context, req *pbClient.QueryTxnRequest
 
 	tx, err := s.client.QueryTxn(ctx, id, req.GetKey(), req.GetValue())
 	if err != nil {
+		if err == indexer.ErrNotFound {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
 	}
 
