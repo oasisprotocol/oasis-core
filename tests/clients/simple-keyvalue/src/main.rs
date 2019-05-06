@@ -115,6 +115,11 @@ fn main() {
     }
     assert_eq!(r, None, "key should not exist anymore");
 
+    // Test wait_block_indexed call.
+    println!("Waiting for block to be indexed...");
+    rt.block_on(kv_client.txn_client().wait_block_indexed(2))
+        .expect("wait block indexed");
+
     // Test query_block call.
     println!("Querying block tags (kv_hello=insert)...");
     let snapshot = rt

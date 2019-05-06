@@ -24,9 +24,11 @@ service Runtime {
     rpc QueryBlock(QueryBlockRequest) returns (QueryBlockResponse) {}
     // Query the transaction index of a given runtime.
     rpc QueryTxn(QueryTxnRequest) returns (QueryTxnResponse) {}
-    // Queries the transaction index of a given runtime with a complex
+    // Query the transaction index of a given runtime with a complex
     // query and returns multiple results.
     rpc QueryTxns(QueryTxnsRequest) returns (QueryTxnsResponse) {}
+    // Wait for a block to be indexed by the indexer.
+    rpc WaitBlockIndexed(WaitBlockIndexedRequest) returns (WaitBlockIndexedResponse) {}
 }
 
 message SubmitTxRequest {
@@ -158,3 +160,12 @@ message QueryTxnsResponse {
     // CBOR-serialized results.
     bytes results = 1;
 }
+
+message WaitBlockIndexedRequest {
+    // Runtime identifier.
+    bytes runtime_id = 1;
+    // Round.
+    uint64 round = 2;
+}
+
+message WaitBlockIndexedResponse {}

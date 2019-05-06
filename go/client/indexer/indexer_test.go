@@ -27,6 +27,11 @@ func testOperations(t *testing.T, backend Backend) {
 	})
 	require.NoError(t, err, "Index")
 
+	err = backend.WaitBlockIndexed(ctx, id, 41)
+	require.NoError(t, err, "WaitBlockIndexed")
+	err = backend.WaitBlockIndexed(ctx, id, 42)
+	require.NoError(t, err, "WaitBlockIndexed")
+
 	_, err = backend.QueryBlock(ctx, id, []byte("key"), []byte("invalid"))
 	require.Equal(t, ErrNotFound, err, "QueryBlock must return a not found error")
 
@@ -123,6 +128,9 @@ func testLoadIndex(t *testing.T, backend Backend) {
 
 	var id signature.PublicKey
 	_ = id.UnmarshalBinary(make([]byte, signature.PublicKeySize))
+
+	err := backend.WaitBlockIndexed(ctx, id, 42)
+	require.NoError(t, err, "WaitBlockIndexed")
 
 	round, err := backend.QueryBlock(ctx, id, []byte("key"), []byte("value"))
 	require.NoError(t, err, "QueryBlock")

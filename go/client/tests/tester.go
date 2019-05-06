@@ -29,10 +29,6 @@ func ClientImplementationTests(
 		testSubmitTransaction(ctx, t, runtimeID, client, rtNode)
 	})
 
-	// We need to wait for the indexer to index the tags. We could have a channel
-	// to subscribe to these updates and this would not be needed.
-	time.Sleep(1 * time.Second)
-
 	t.Run("Query", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 		defer cancelFunc()
@@ -78,6 +74,9 @@ func testQuery(
 	c *client.Client,
 	rtNode *committee.Node,
 ) {
+	err := c.WaitBlockIndexed(ctx, runtimeID, 2)
+	require.NoError(t, err, "WaitBlockIndexed")
+
 	// Based on SubmitTx and the mock worker.
 	testInput := []byte("hello world")
 	testOutput := testInput
