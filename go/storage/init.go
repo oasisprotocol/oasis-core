@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
@@ -25,7 +28,8 @@ const (
 )
 
 // New constructs a new Backend based on the configuration flags.
-func New(timeSource epochtime.Backend, dataDir string, signingKey *signature.PrivateKey) (api.Backend, error) {
+func New(ctx context.Context, dataDir string, epochtimeBackend epochtime.Backend, schedulerBackend scheduler.Backend,
+	registryBackend registry.Backend, signingKey *signature.PrivateKey) (api.Backend, error) {
 	var impl api.Backend
 	var err error
 
@@ -40,16 +44,16 @@ func New(timeSource epochtime.Backend, dataDir string, signingKey *signature.Pri
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(timeSource, signingKey)
+		impl = memory.New(epochtimeBackend, signingKey)
 	case leveldb.BackendName:
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
 		mkvsDBDir := filepath.Join(dataDir, leveldb.MKVSDBFile)
-		impl, err = leveldb.New(dbDir, mkvsDBDir, timeSource, signingKey)
+		impl, err = leveldb.New(dbDir, mkvsDBDir, epochtimeBackend, signingKey)
 	case client.BackendName:
-		impl, err = client.New()
+		impl, err = client.New(ctx, epochtimeBackend, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
 		var remote api.Backend
-		remote, err = client.New()
+		remote, err = client.New(ctx, epochtimeBackend, schedulerBackend, registryBackend)
 		if err != nil {
 			return nil, err
 		}
