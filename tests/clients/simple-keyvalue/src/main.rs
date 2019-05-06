@@ -115,6 +115,11 @@ fn main() {
     }
     assert_eq!(r, None, "key should not exist anymore");
 
+    // Test wait_block_indexed call.
+    println!("Waiting for block to be indexed...");
+    rt.block_on(kv_client.txn_client().wait_block_indexed(2))
+        .expect("wait block indexed");
+
     // Test query_block call.
     println!("Querying block tags (kv_hello=insert)...");
     let snapshot = rt
@@ -164,13 +169,13 @@ fn main() {
     // Test query_txns call.
     println!("Querying transaction tags (kv_op=insert)...");
     let query = Query {
-        round_min: Some(0),
-        round_max: Some(3),
+        round_min: 0,
+        round_max: 3,
         conditions: vec![QueryCondition {
             key: b"kv_op".to_vec(),
             values: vec![b"insert".to_vec().into()],
         }],
-        limit: None,
+        limit: 0,
     };
     let txns = rt
         .block_on(kv_client.txn_client().query_txns(query))

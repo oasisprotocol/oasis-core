@@ -437,6 +437,27 @@ impl TxnClient {
         result
     }
 
+    /// Wait for a block to be indexed by the indexer.
+    pub fn wait_block_indexed(&self, round: u64) -> BoxFuture<()> {
+        let (span, options) = self.prepare_options("TxnClient::wait_block_indexed");
+        let mut request = api::client::WaitBlockIndexedRequest::new();
+        request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        request.set_round(round);
+
+        let result: BoxFuture<()> =
+            match self.client.wait_block_indexed_async_opt(&request, options) {
+                Ok(resp) => Box::new(
+                    resp.map(|_| ())
+                        .map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into()),
+                ),
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
+        drop(span);
+        result
+    }
+
     fn prepare_options(&self, span_name: &'static str) -> (Span, grpcio::CallOption) {
         // TODO: Use ekiden_tracing to get the tracer.
         let (tracer, _) = Tracer::new(AllSampler);

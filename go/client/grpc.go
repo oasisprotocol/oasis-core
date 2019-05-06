@@ -218,6 +218,19 @@ func (s *grpcServer) QueryTxns(ctx context.Context, req *pbClient.QueryTxnsReque
 	}, nil
 }
 
+func (s *grpcServer) WaitBlockIndexed(ctx context.Context, req *pbClient.WaitBlockIndexedRequest) (*pbClient.WaitBlockIndexedResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	err := s.client.WaitBlockIndexed(ctx, id, req.GetRound())
+	if err != nil {
+		return nil, err
+	}
+	return &pbClient.WaitBlockIndexedResponse{}, nil
+}
+
 func (s *grpcServer) CallEnclave(ctx context.Context, req *pbEnRPC.CallEnclaveRequest) (*pbEnRPC.CallEnclaveResponse, error) {
 	rsp, err := s.client.CallEnclave(ctx, req.Endpoint, req.Payload)
 	if err != nil {

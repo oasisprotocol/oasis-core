@@ -18,7 +18,7 @@ func testOperations(t *testing.T, backend Backend) {
 	var id signature.PublicKey
 	_ = id.UnmarshalBinary(make([]byte, signature.PublicKeySize))
 
-	err := backend.Index(id, 42, []runtime.Tag{
+	err := backend.Index(ctx, id, 42, []runtime.Tag{
 		runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("key"), Value: []byte("value")},
 		runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("key2"), Value: []byte("value2")},
 		runtime.Tag{TxnIndex: 0, Key: []byte("hello"), Value: []byte("world")},
@@ -26,6 +26,11 @@ func testOperations(t *testing.T, backend Backend) {
 		runtime.Tag{TxnIndex: 1, Key: []byte("hello"), Value: []byte("world")},
 	})
 	require.NoError(t, err, "Index")
+
+	err = backend.WaitBlockIndexed(ctx, id, 41)
+	require.NoError(t, err, "WaitBlockIndexed")
+	err = backend.WaitBlockIndexed(ctx, id, 42)
+	require.NoError(t, err, "WaitBlockIndexed")
 
 	_, err = backend.QueryBlock(ctx, id, []byte("key"), []byte("invalid"))
 	require.Equal(t, ErrNotFound, err, "QueryBlock must return a not found error")
@@ -60,7 +65,7 @@ func testOperations(t *testing.T, backend Backend) {
 	require.EqualValues(t, 42, round)
 	require.EqualValues(t, 0, txnIdx)
 
-	err = backend.Index(id, 43, []runtime.Tag{
+	err = backend.Index(ctx, id, 43, []runtime.Tag{
 		runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("key"), Value: []byte("value1")},
 		runtime.Tag{TxnIndex: 5, Key: []byte("foo"), Value: []byte("bar")},
 	})
@@ -80,11 +85,9 @@ func testOperations(t *testing.T, backend Backend) {
 	require.EqualValues(t, 42, round)
 
 	// Test advanced transaction queries.
-	roundMin := uint64(40)
-	roundMax := uint64(50)
 	query := Query{
-		RoundMin: &roundMin,
-		RoundMax: &roundMax,
+		RoundMin: 40,
+		RoundMax: 50,
 		Conditions: []Condition{
 			Condition{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
 		},
@@ -124,6 +127,9 @@ func testLoadIndex(t *testing.T, backend Backend) {
 	var id signature.PublicKey
 	_ = id.UnmarshalBinary(make([]byte, signature.PublicKeySize))
 
+	err := backend.WaitBlockIndexed(ctx, id, 42)
+	require.NoError(t, err, "WaitBlockIndexed")
+
 	round, err := backend.QueryBlock(ctx, id, []byte("key"), []byte("value"))
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 42, round)
@@ -151,10 +157,6 @@ func testBackend(t *testing.T, factory func(string) (Backend, error)) {
 
 		testLoadIndex(t, backend)
 	})
-}
-
-func TestExactBackend(t *testing.T) {
-	testBackend(t, NewExactBackend)
 }
 
 func TestBleveBackend(t *testing.T) {

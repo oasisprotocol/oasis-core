@@ -500,6 +500,15 @@ func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, q
 	return output, nil
 }
 
+// WaitBlockIndexed waits for a block to be indexed by the indexer.
+func (c *Client) WaitBlockIndexed(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
+	if c.indexerBackend == nil {
+		return ErrIndexerDisabled
+	}
+
+	return c.indexerBackend.WaitBlockIndexed(ctx, runtimeID, round)
+}
+
 // CallEnclave proxies an EnclaveRPC call to the given endpoint.
 //
 // The endpoint should be an URI in the form <endpoint-type>://<id> where the
@@ -584,8 +593,6 @@ func New(
 
 		backend := viper.GetString(cfgIndexBackend)
 		switch strings.ToLower(backend) {
-		case indexer.ExactBackendName:
-			impl, err = indexer.NewExactBackend(dataDir)
 		case indexer.BleveBackendName:
 			impl, err = indexer.NewBleveBackend(dataDir)
 		default:

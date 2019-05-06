@@ -36,6 +36,8 @@ var (
 )
 
 type bleveBackend struct {
+	backendCommon
+
 	logger *logging.Logger
 
 	index bleve.Index
@@ -76,7 +78,7 @@ func decodeID(id []byte) (runtimeID signature.PublicKey, round uint64, index int
 	return
 }
 
-func (b *bleveBackend) Index(runtimeID signature.PublicKey, round uint64, tags []runtime.Tag) error {
+func (b *bleveBackend) Index(ctx context.Context, runtimeID signature.PublicKey, round uint64, tags []runtime.Tag) error {
 	docs := make(map[int32]map[string]interface{})
 
 	for _, tag := range tags {
@@ -97,11 +99,27 @@ func (b *bleveBackend) Index(runtimeID signature.PublicKey, round uint64, tags [
 		tags[string(tag.Key)] = append(values, string(tag.Value))
 	}
 
+	batch := b.index.NewBatch()
 	for _, doc := range docs {
-		if err := b.index.Index(doc[fieldID].(string), doc); err != nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		if err := batch.Index(doc[fieldID].(string), doc); err != nil {
 			return err
 		}
 	}
+
+	if err := b.index.Batch(batch); err != nil {
+		return err
+	}
+
+	b.backendCommon.blockIndexedNotifier.Broadcast(&indexNotification{
+		runtimeID: runtimeID,
+		round:     round,
+	})
 
 	return nil
 }
@@ -197,16 +215,17 @@ func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.Public
 
 	// Filter by round.
 	var roundMin, roundMax *float64
-	if query.RoundMin != nil {
-		r := float64(*query.RoundMin)
+	if query.RoundMin > 0 {
+		r := float64(query.RoundMin)
 		roundMin = &r
 	}
-	if query.RoundMax != nil {
-		r := float64(*query.RoundMax)
+	if query.RoundMax > 0 {
+		r := float64(query.RoundMax)
 		roundMax = &r
 	}
 	if roundMin != nil || roundMax != nil {
-		qRound := bleve.NewNumericRangeQuery(roundMin, roundMax)
+		inclusive := true
+		qRound := bleve.NewNumericRangeInclusiveQuery(roundMin, roundMax, &inclusive, &inclusive)
 		qRound.SetField(fieldRound)
 		qs = append(qs, qRound)
 	}
@@ -236,8 +255,8 @@ func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.Public
 
 	q := bleve.NewConjunctionQuery(qs...)
 	rq := bleve.NewSearchRequest(q)
-	if query.Limit != nil {
-		rq.Size = int(*query.Limit)
+	if query.Limit > 0 {
+		rq.Size = int(query.Limit)
 	}
 	if rq.Size == 0 || rq.Size > maxQueryLimit {
 		rq.Size = maxQueryLimit
@@ -264,7 +283,7 @@ func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.Public
 	return results, nil
 }
 
-func (b *bleveBackend) Prune(runtimeID signature.PublicKey, round uint64) error {
+func (b *bleveBackend) WaitBlockIndexed(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
 	// Filter by runtime.
 	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
 	qRuntime.SetField(fieldRuntimeID)
@@ -277,7 +296,32 @@ func (b *bleveBackend) Prune(runtimeID signature.PublicKey, round uint64) error 
 
 	q := bleve.NewConjunctionQuery(qRuntime, qRound)
 	rq := bleve.NewSearchRequest(q)
-	result, err := b.index.Search(rq)
+	rq.Size = 1
+	result, err := b.index.SearchInContext(ctx, rq)
+	if err != nil {
+		return err
+	}
+	if len(result.Hits) > 0 {
+		return nil
+	}
+
+	return b.backendCommon.WaitBlockIndexed(ctx, runtimeID, round)
+}
+
+func (b *bleveBackend) Prune(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
+	// Filter by runtime.
+	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
+	qRuntime.SetField(fieldRuntimeID)
+
+	// Filter by round.
+	roundF := float64(round)
+	inclusive := true
+	qRound := bleve.NewNumericRangeInclusiveQuery(&roundF, &roundF, &inclusive, &inclusive)
+	qRound.SetField(fieldRound)
+
+	q := bleve.NewConjunctionQuery(qRuntime, qRound)
+	rq := bleve.NewSearchRequest(q)
+	result, err := b.index.SearchInContext(ctx, rq)
 	if err != nil {
 		return err
 	}
@@ -289,6 +333,12 @@ func (b *bleveBackend) Prune(runtimeID signature.PublicKey, round uint64) error 
 
 	batch := b.index.NewBatch()
 	for _, hit := range result.Hits {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		batch.Delete(hit.ID)
 	}
 
@@ -307,7 +357,8 @@ func (b *bleveBackend) Stop() {
 // NewBleveBackend creates a new bleve indexer backend.
 func NewBleveBackend(dataDir string) (Backend, error) {
 	b := &bleveBackend{
-		logger: logging.GetLogger("client/indexer/bleveBackend"),
+		backendCommon: newBackendCommon(),
+		logger:        logging.GetLogger("client/indexer/bleveBackend"),
 	}
 
 	mp := bleve.NewIndexMapping()
