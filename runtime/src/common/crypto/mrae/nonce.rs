@@ -5,11 +5,11 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use failure::{format_err, Fallible};
 
 /// Size of the nonce in bytes.
-pub const NONCE_SIZE: usize = 16;
+pub use super::deoxysii::NONCE_SIZE;
 /// Size of tag portion of the nonce in bytes. These bytes will never update.
-const TAG_SIZE: usize = 12;
+const TAG_SIZE: usize = 11;
 
-/// 128 bit nonce with a 96 bit tag and 32 bit counter. If the counter exceeds
+/// 120 bit nonce with a 88 bit tag and 32 bit counter. If the counter exceeds
 /// 32 bits, then the nonce is no longer valid and must be refreshed with a new
 /// random nonce. It is expected that all 128 bits are given randomly. However,
 /// the last 32 counting bits may wrap around to ensure 2^32 counts may be used
@@ -87,48 +87,48 @@ mod tests {
 
     #[test]
     fn test_increment_zero() {
-        let inner = [0; 16];
+        let inner = [0; 15];
         let mut nonce = Nonce::new(inner);
         nonce.increment().unwrap();
-        let mut expected = [0; 16];
-        expected[15] = 1;
+        let mut expected = [0; 15];
+        expected[14] = 1;
         assert_eq!(nonce.to_vec(), expected.to_vec());
     }
 
     #[test]
     fn test_increment_one() {
-        let mut start_value = [0; 16];
-        start_value[15] = 1;
+        let mut start_value = [0; 15];
+        start_value[14] = 1;
         let mut nonce = Nonce::new(start_value);
         nonce.increment().unwrap();
-        let mut expected = [0; 16];
-        expected[15] = 2;
+        let mut expected = [0; 15];
+        expected[14] = 2;
 
         assert_eq!(nonce.to_vec(), expected.to_vec());
     }
 
     #[test]
     fn test_increment_carry() {
-        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255];
+        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255];
         let mut nonce = Nonce::new(start_value);
         nonce.increment().unwrap();
-        let expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+        let expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
         assert_eq!(nonce.to_vec(), expected.to_vec());
     }
 
     #[test]
     fn test_increment_overflow() {
-        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
+        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
         let mut nonce = Nonce::new(start_value);
         nonce.increment().unwrap();
-        let expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert_eq!(nonce.to_vec(), expected.to_vec());
     }
 
     #[test]
     fn test_increment_exhaustion() {
-        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
-        let current_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 254];
+        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
+        let current_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 254];
         let mut nonce = Nonce {
             start_value,
             current_value,
@@ -140,13 +140,13 @@ mod tests {
 
     #[test]
     fn test_double_increment_exhaustion() {
-        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
-        let current_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 253];
+        let start_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
+        let current_value = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 253];
         let mut nonce = Nonce {
             start_value,
             current_value,
         };
-        let first_expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 254];
+        let first_expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 254];
         nonce.increment().unwrap();
         assert_eq!(nonce.to_vec(), first_expected.to_vec());
         assert_eq!(nonce.increment().is_err(), true);
