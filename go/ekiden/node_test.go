@@ -26,14 +26,17 @@ import (
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
 	stakingTests "github.com/oasislabs/ekiden/go/staking/tests"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
+	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
 	storageWorkerTests "github.com/oasislabs/ekiden/go/worker/storage/tests"
 )
 
-const testRuntimeID = "0000000000000000000000000000000000000000000000000000000000000000"
+const (
+	testRuntimeID    = "0000000000000000000000000000000000000000000000000000000000000000"
+	workerClientPort = "9010"
+)
 
 var (
 	testNodeConfig = []struct {
@@ -57,7 +60,7 @@ var (
 		{"worker.compute.runtime.binary", "mock-runtime"},
 		{"worker.compute.runtime.id", testRuntimeID},
 		{"worker.storage.enabled", true},
-		{"worker.client.port", 9010},
+		{"worker.client.port", workerClientPort},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 
@@ -295,7 +298,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 		key   string
 		value interface{}
 	}{
-		{"storage.debug.client.address", "localhost:9010"},
+		{"storage.debug.client.address", "localhost:" + workerClientPort},
 		{"storage.debug.client.tls", node.dataDir + "/tls_identity_cert.pem"},
 	}
 	for _, kv := range config {

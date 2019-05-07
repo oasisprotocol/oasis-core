@@ -33,6 +33,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
+	urkelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
 )
 
 const (
@@ -182,6 +183,9 @@ func (b *storageClientBackend) updateConnection() {
 		"node", leader,
 	)
 
+	// XXX: once static single storage node is no longer assumed, make sure
+	// to block storage requests on epoch transition, and retry them after
+	// the node committee for new epoch is known.
 	b.connectionState.client = client
 	b.connectionState.conn = conn
 	b.connectionState.node = leader
@@ -312,7 +316,20 @@ func (b *storageClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([]
 		return nil, err
 	}
 
-	return resp.GetData(), nil
+	rs := resp.GetData()
+
+	// Fix response by replacing empty parts with nils, as is expected/done by other backends.
+	fixedRs := [][]byte{}
+	for _, v := range rs {
+		if len(v) > 0 {
+			fixedRs = append(fixedRs, v)
+		} else {
+			fixedRs = append(fixedRs, nil)
+		}
+
+	}
+
+	return fixedRs, nil
 }
 
 func (b *storageClientBackend) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
@@ -530,8 +547,8 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 		return nil, err
 	}
 
-	var node api.Node
-	if err = node.UnmarshalBinary(resp.GetNode()); err != nil {
+	node, err := urkelDb.NodeUnmarshalBinary(resp.GetNode())
+	if err != nil {
 		return nil, err
 	}
 

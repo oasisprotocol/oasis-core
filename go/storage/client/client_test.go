@@ -7,18 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/beacon/insecure"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/memory"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	"github.com/oasislabs/ekiden/go/scheduler/trivial"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 func TestClientWorker(t *testing.T) {

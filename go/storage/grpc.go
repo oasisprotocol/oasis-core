@@ -57,7 +57,6 @@ func (s *grpcServer) GetBatch(ctx context.Context, req *pb.GetBatchRequest) (*pb
 	if err != nil {
 		return nil, err
 	}
-
 	return &pb.GetBatchResponse{Data: values}, nil
 }
 
