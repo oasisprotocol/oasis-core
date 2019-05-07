@@ -3,14 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use failure::Fallible;
 use io_context::Context;
+use zeroize::Zeroize;
 
 use crate::{
     common::crypto::{
         hash::Hash,
-        mrae::{
-            nonce::NONCE_SIZE,
-            sivaessha2::{SivAesSha2, KEY_SIZE},
-        },
+        mrae::deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE},
     },
     storage::{mkvs::WriteLog, CAS, MKVS},
 };
@@ -29,9 +27,9 @@ use self::trie::PatriciaTrie;
 /// the closure that's passed to that method.
 struct EncryptionContext {
     /// MRAE context.
-    mrae_ctx: SivAesSha2,
+    mrae_ctx: DeoxysII,
     /// Nonce for the MRAE context (should be unique for all time for a given key).
-    nonce: Vec<u8>,
+    nonce: [u8; NONCE_SIZE],
 }
 
 /// Pending database operation.
@@ -51,6 +49,8 @@ pub struct CASPatriciaTrie {
     /// Pending operations since the last root hash was set.
     pending_ops: HashMap<Vec<u8>, Operation>,
     /// Encryption context with which to perform all operations (optional).
+    /// XXX: The EncryptionContext includes the nonce.  Why is the nonce being
+    /// reused for all operations.
     enc_ctx: Option<EncryptionContext>,
 }
 
@@ -73,10 +73,7 @@ impl MKVS for CASPatriciaTrie {
     fn get(&self, _ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
-            Some(ref ctx) => ctx
-                .mrae_ctx
-                .seal(ctx.nonce.clone(), key.to_vec(), vec![])
-                .unwrap(),
+            Some(ref ctx) => ctx.mrae_ctx.seal(&ctx.nonce, key.to_vec(), vec![]),
             None => key.to_vec(),
         };
 
@@ -92,7 +89,7 @@ impl MKVS for CASPatriciaTrie {
             // Decrypt value using the encryption context.
             let ctx = self.enc_ctx.as_ref().unwrap();
 
-            let decrypted = ctx.mrae_ctx.open(ctx.nonce.clone(), value.unwrap(), vec![]);
+            let decrypted = ctx.mrae_ctx.open(&ctx.nonce, value.unwrap(), vec![]);
 
             decrypted.ok()
         } else {
@@ -106,19 +103,14 @@ impl MKVS for CASPatriciaTrie {
         let value = match self.enc_ctx {
             Some(ref ctx) => {
                 // Encrypt value using the encryption context.
-                ctx.mrae_ctx
-                    .seal(ctx.nonce.clone(), value.to_vec(), vec![])
-                    .unwrap()
+                ctx.mrae_ctx.seal(&ctx.nonce, value.to_vec(), vec![])
             }
             None => value.to_vec(),
         };
 
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
-            Some(ref ctx) => ctx
-                .mrae_ctx
-                .seal(ctx.nonce.clone(), key.to_vec(), vec![])
-                .unwrap(),
+            Some(ref ctx) => ctx.mrae_ctx.seal(&ctx.nonce, key.to_vec(), vec![]),
             None => key.to_vec(),
         };
 
@@ -133,10 +125,7 @@ impl MKVS for CASPatriciaTrie {
 
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
-            Some(ref ctx) => ctx
-                .mrae_ctx
-                .seal(ctx.nonce.clone(), key.to_vec(), vec![])
-                .unwrap(),
+            Some(ref ctx) => ctx.mrae_ctx.seal(&ctx.nonce, key.to_vec(), vec![]),
             None => key.to_vec(),
         };
 
@@ -172,21 +161,26 @@ impl MKVS for CASPatriciaTrie {
         self.pending_ops.clear();
     }
 
-    fn set_encryption_key(&mut self, key: Option<&[u8]>) {
+    fn set_encryption_key(&mut self, key: Option<&[u8]>, nonce: Option<&[u8]>) {
         if key.is_none() {
             self.enc_ctx = None;
             return;
         }
 
-        // Split the state_key into a MRAE key and nonce.
         let raw_key = key.unwrap();
-        let key: Vec<u8> = raw_key[..KEY_SIZE].to_vec();
-        let nonce: Vec<u8> = raw_key[KEY_SIZE..KEY_SIZE + NONCE_SIZE].to_vec();
+        let mut key = [0u8; KEY_SIZE];
+        key.copy_from_slice(&raw_key[..KEY_SIZE]);
+
+        let raw_nonce = nonce.unwrap();
+        let mut nonce = [0u8; NONCE_SIZE];
+        nonce.copy_from_slice(&raw_nonce[..NONCE_SIZE]);
 
         // Set up encryption context.
         self.enc_ctx = Some(EncryptionContext {
-            mrae_ctx: SivAesSha2::new(key).unwrap(),
+            mrae_ctx: DeoxysII::new(&key),
             nonce,
         });
+
+        key.zeroize();
     }
 }

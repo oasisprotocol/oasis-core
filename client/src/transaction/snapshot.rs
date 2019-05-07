@@ -139,8 +139,8 @@ impl MKVS for BlockSnapshot {
         unimplemented!("block snapshot is read-only");
     }
 
-    fn set_encryption_key(&mut self, key: Option<&[u8]>) {
-        MKVS::set_encryption_key(&mut self.mkvs, key)
+    fn set_encryption_key(&mut self, key: Option<&[u8]>, nonce: Option<&[u8]>) {
+        MKVS::set_encryption_key(&mut self.mkvs, key, nonce)
     }
 }
 

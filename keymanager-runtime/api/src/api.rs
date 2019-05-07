@@ -8,7 +8,7 @@ use ekiden_runtime::{common::crypto::signature::Signature, impl_bytes, runtime_a
 impl_bytes!(ContractId, 32, "A 256-bit contract identifier.");
 impl_bytes!(PrivateKey, 32, "A private key.");
 impl_bytes!(PublicKey, 32, "A public key.");
-impl_bytes!(StateKey, 64, "A state key.");
+impl_bytes!(StateKey, 32, "A state key.");
 
 /// Keys for a contract.
 #[derive(Clone, Serialize, Deserialize)]

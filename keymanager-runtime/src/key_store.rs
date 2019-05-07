@@ -4,9 +4,11 @@ use io_context::Context;
 use lazy_static::lazy_static;
 use serde_cbor;
 
-use ekiden_keymanager_api::{ContractId, ContractKey, PublicKey, SignedPublicKey, StateKey};
+use ekiden_keymanager_api::{
+    ContractId, ContractKey, PublicKey, SignedPublicKey, StateKey, PUBLIC_KEY_CONTEXT,
+};
 use ekiden_runtime::{
-    common::crypto::signature,
+    common::crypto::{mrae::deoxysii::NONCE_SIZE, signature},
     storage::{mkvs::with_encryption_key, StorageContext},
 };
 
@@ -21,10 +23,11 @@ const ENCRYPTION_KEY: &'static [u8] = include_bytes!(env!("KM_DUMMY_ENCRYPTION_K
 #[cfg(not(feature = "custom-keys"))]
 const ENCRYPTION_KEY: &'static [u8] = &[
     119, 206, 190, 82, 117, 21, 62, 84, 119, 212, 117, 60, 32, 158, 183, 32, 68, 55, 131, 112, 38,
-    169, 217, 219, 58, 109, 194, 211, 89, 39, 198, 204, 254, 104, 202, 114, 203, 213, 89, 44, 192,
-    168, 42, 136, 220, 230, 66, 74, 197, 220, 22, 146, 84, 121, 175, 216, 144, 182, 40, 179, 6, 73,
-    177, 9,
+    169, 217, 219, 58, 109, 194, 211, 89, 39, 198, 204,
 ];
+
+/// A temorary nonce to make storage work, till it is removed.
+const ENCRYPTION_NONCE: &'static [u8] = &[0u8; NONCE_SIZE];
 
 /// A dummy key for use in tests where integrity is not needed.
 /// Public Key: 0x9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f
@@ -64,9 +67,11 @@ impl KeyStore {
     /// Get or create keys.
     pub fn get_or_create_keys(&self, contract_id: &ContractId) -> Fallible<ContractKey> {
         StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
-            with_encryption_key(mkvs, self.encryption_key.as_ref(), |mkvs| {
-                // NOTE: This is going away so background context is fine.
-                match mkvs.get(Context::background(), contract_id.as_ref()) {
+            with_encryption_key(
+                mkvs,
+                self.encryption_key.as_ref(),
+                &ENCRYPTION_NONCE,
+                |mkvs| match mkvs.get(Context::background(), contract_id.as_ref()) {
                     Some(raw_key) => {
                         Ok(serde_cbor::from_slice(&raw_key).expect("state corruption"))
                     }
@@ -81,21 +86,25 @@ impl KeyStore {
 
                         Ok(key)
                     }
-                }
-            })
+                },
+            )
         })
     }
 
     /// Get the public part of the key.
     pub fn get_public_key(&self, contract_id: &ContractId) -> Fallible<Option<PublicKey>> {
         StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
-            with_encryption_key(mkvs, self.encryption_key.as_ref(), |mkvs| {
-                // NOTE: This is going away so background context is fine.
-                Ok(mkvs
-                    .get(Context::background(), contract_id.as_ref())
-                    .map(|raw_key| serde_cbor::from_slice(&raw_key).expect("state corruption"))
-                    .map(|key: ContractKey| key.input_keypair.get_pk()))
-            })
+            with_encryption_key(
+                mkvs,
+                self.encryption_key.as_ref(),
+                &ENCRYPTION_NONCE,
+                |mkvs| {
+                    Ok(mkvs
+                        .get(Context::background(), contract_id.as_ref())
+                        .map(|raw_key| serde_cbor::from_slice(&raw_key).expect("state corruption"))
+                        .map(|key: ContractKey| key.input_keypair.get_pk()))
+                },
+            )
         })
     }
 
@@ -113,8 +122,7 @@ impl KeyStore {
         Ok(SignedPublicKey {
             key,
             timestamp,
-            // XXX: PUBLIC_KEY_CONTEXT not used for backward compatibility.
-            signature: self.signing_key.sign(&[], &body)?,
+            signature: self.signing_key.sign(&PUBLIC_KEY_CONTEXT, &body)?,
         })
     }
 }

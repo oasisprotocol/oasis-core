@@ -487,6 +487,7 @@ dependencies = [
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "webpki 0.19.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "x25519-dalek 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zeroize 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

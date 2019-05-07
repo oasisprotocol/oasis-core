@@ -11,7 +11,7 @@ use io_context::Context as IoContext;
 
 use ekiden_keymanager_client::{ContractId, KeyManagerClient};
 use ekiden_runtime::{
-    common::crypto::hash::Hash,
+    common::crypto::{hash::Hash, mrae::deoxysii::NONCE_SIZE},
     executor::Executor,
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
@@ -98,13 +98,18 @@ where
     let result = rctx.km_client.get_or_create_keys(io_ctx, contract_id);
     let key = Executor::with_current(|executor| executor.block_on(result))?;
 
+    let nonce = [0u8; NONCE_SIZE];
+
     // NOTE: This is only for example purposes, the correct way would be
     //       to also generate a (deterministic) nonce.
 
     StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
-        Ok(with_encryption_key(mkvs, key.state_key.as_ref(), |mkvs| {
-            f(ctx, mkvs)
-        }))
+        Ok(with_encryption_key(
+            mkvs,
+            key.state_key.as_ref(),
+            &nonce,
+            |mkvs| f(ctx, mkvs),
+        ))
     })
 }
 

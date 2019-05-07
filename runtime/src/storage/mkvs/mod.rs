@@ -88,7 +88,7 @@ pub trait MKVS: Send + Sync {
     fn rollback(&mut self);
 
     /// Set encryption key.
-    fn set_encryption_key(&mut self, key: Option<&[u8]>);
+    fn set_encryption_key(&mut self, key: Option<&[u8]>, nonce: Option<&[u8]>);
 }
 
 /// Run specified closure with encryption key set, discard key afterwards.
@@ -96,15 +96,15 @@ pub trait MKVS: Send + Sync {
 /// # Examples
 ///
 /// ```rust,ignore
-/// with_encryption_key(&mut mkvs, &key, |mkvs| mkvs.get(b"foo"))
+/// with_encryption_key(&mut mkvs, &key, &nonce, |mkvs| mkvs.get(b"foo"))
 /// ```
-pub fn with_encryption_key<F, R>(mkvs: &mut MKVS, key: &[u8], f: F) -> R
+pub fn with_encryption_key<F, R>(mkvs: &mut MKVS, key: &[u8], nonce: &[u8], f: F) -> R
 where
     F: FnOnce(&mut MKVS) -> R,
 {
-    mkvs.set_encryption_key(Some(key));
+    mkvs.set_encryption_key(Some(key), Some(nonce));
     let result = f(mkvs);
-    mkvs.set_encryption_key(None);
+    mkvs.set_encryption_key(None, None);
 
     result
 }
