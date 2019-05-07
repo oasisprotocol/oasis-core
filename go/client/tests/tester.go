@@ -2,7 +2,9 @@
 package tests
 
 import (
+	"bytes"
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -71,7 +73,7 @@ func testQuery(
 	runtimeID signature.PublicKey,
 	c *client.Client,
 ) {
-	err := c.WaitBlockIndexed(ctx, runtimeID, 2)
+	err := c.WaitBlockIndexed(ctx, runtimeID, 3)
 	require.NoError(t, err, "WaitBlockIndexed")
 
 	// Based on SubmitTx and the mock worker.
@@ -159,7 +161,11 @@ func testQuery(
 	}
 	results, err := c.QueryTxns(ctx, runtimeID, query)
 	require.NoError(t, err, "QueryTxns")
-	require.Len(t, results, 1)
+	// One from TestNode/TransactionSchedulerWorker/QueueCall, one from TestNode/Client/SubmitTx
+	require.Len(t, results, 2)
+	sort.Slice(results, func(i, j int) bool {
+		return bytes.Compare(results[i].Input, results[j].Input) < 0
+	})
 	require.EqualValues(t, 2, results[0].Block.Header.Round)
 	require.EqualValues(t, 0, results[0].Index)
 	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
