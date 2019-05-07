@@ -33,19 +33,8 @@ func NewLevelDBNodeDB(dirname string) (NodeDB, error) {
 	return &leveldbNodeDB{db: db}, nil
 }
 
-func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
-	if ptr == nil || !ptr.IsClean() {
-		panic("urkel/db/leveldb: attempted to get invalid pointer from node database")
-	}
-
-	bytes, err := d.db.Get(append(nodeKeyPrefix, ptr.Hash[:]...), nil)
-	if err != nil {
-		if err == leveldb.ErrNotFound {
-			err = ErrNodeNotFound
-		}
-		return nil, err
-	}
-
+// NodeUnmarshalBinary unmarshales internal.Node
+func NodeUnmarshalBinary(bytes []byte) (internal.Node, error) {
 	// Nodes can be either Internal or Leaf nodes.
 	// Check the first byte and deserialize appropriately.
 	var node internal.Node
@@ -64,13 +53,28 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal
 			}
 			node = internal.Node(&inode)
 		default:
-			panic("urkel/db/leveldb: stored node is neither leaf nor internal node")
+			panic("urkel/utils: stored node is neither leaf nor internal node")
 		}
 	} else {
-		panic("urkel/db/leveldb: stored node is corrupt")
+		panic("urkel/utils: stored node is corrupt")
+	}
+	return node, nil
+}
+
+func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
+	if ptr == nil || !ptr.IsClean() {
+		panic("urkel/db/leveldb: attempted to get invalid pointer from node database")
 	}
 
-	return node, nil
+	bytes, err := d.db.Get(append(nodeKeyPrefix, ptr.Hash[:]...), nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			err = ErrNodeNotFound
+		}
+		return nil, err
+	}
+
+	return NodeUnmarshalBinary(bytes)
 }
 
 func (d *leveldbNodeDB) GetValue(id hash.Hash) ([]byte, error) {

@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
 	"github.com/cenkalti/backoff"
@@ -27,6 +26,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -50,28 +50,7 @@ var (
 	// ErrBadIndexOrCorrupted is an error when either the storage is corrupted or
 	// the specified transaction index was bad.
 	ErrBadIndexOrCorrupted = errors.New("bad transaction index or corrupted storage")
-
-	grpcResolverLock sync.Mutex
 )
-
-func newManualGrpcResolver() (*manual.Resolver, func()) {
-	// The gRPC manual resolver is supposed to allow for per-invocation resolver
-	// instances, by generating resolvers for randomized schemes, presumably at
-	// runtime.
-	//
-	// It has been said that there are primitives that can be used to protect
-	// shared datastructures from concurrent writes.
-	grpcResolverLock.Lock()
-	defer grpcResolverLock.Unlock()
-
-	resolver, cleanup := manual.GenerateAndRegisterManualResolver()
-
-	return resolver, func() {
-		grpcResolverLock.Lock()
-		defer grpcResolverLock.Unlock()
-		cleanup()
-	}
-}
 
 const (
 	maxRetryElapsedTime = 60 * time.Second
@@ -125,7 +104,7 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 
 	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
 
-	manualResolver, cleanup := newManualGrpcResolver()
+	manualResolver, cleanup := manual.ThreadSafeGenerateAndRegisterManualResolver()
 	defer cleanup()
 
 	address := manualResolver.Scheme() + ":///leader.node"

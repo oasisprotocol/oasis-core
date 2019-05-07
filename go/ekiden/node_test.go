@@ -26,12 +26,17 @@ import (
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
 	stakingTests "github.com/oasislabs/ekiden/go/staking/tests"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
-	workerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
+	computeWorkerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
+	storageWorkerTests "github.com/oasislabs/ekiden/go/worker/storage/tests"
 )
 
-const testRuntimeID = "0000000000000000000000000000000000000000000000000000000000000000"
+const (
+	testRuntimeID    = "0000000000000000000000000000000000000000000000000000000000000000"
+	workerClientPort = "9010"
+)
 
 var (
 	testNodeConfig = []struct {
@@ -54,6 +59,8 @@ var (
 		{"worker.compute.backend", "mock"},
 		{"worker.compute.runtime.binary", "mock-runtime"},
 		{"worker.compute.runtime.id", testRuntimeID},
+		{"worker.storage.enabled", true},
+		{"worker.client.port", workerClientPort},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 
@@ -160,6 +167,9 @@ func TestNode(t *testing.T) {
 		// register the node.
 		{"ComputeWorker", testComputeWorker},
 
+		// StorageWorker test case
+		{"StorageWorker", testStorageWorker},
+
 		// Client tests also need a functional runtime.
 		{"Client", testClient},
 
@@ -173,6 +183,9 @@ func TestNode(t *testing.T) {
 		{"Scheduler", testScheduler},
 		{"Staking", testStaking},
 		{"RootHash", testRootHash},
+
+		// TestStorageClient runs storage tests against a storage client connected to this node.
+		{"TestStorageClient", testStorageClient},
 	}
 
 	for _, tc := range testCases {
@@ -266,11 +279,38 @@ func testRootHash(t *testing.T, node *testNode) {
 func testComputeWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	workerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.committeeNode, timeSource, node.RootHash)
+	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.committeeNode, timeSource, node.RootHash)
+}
+
+func testStorageWorker(t *testing.T, node *testNode) {
+	storageWorkerTests.WorkerImplementationTests(t, node.StorageWorker)
 }
 
 func testClient(t *testing.T, node *testNode) {
 	clientTests.ClientImplementationTests(t, node.Client, node.runtimeID, node.committeeNode)
+}
+
+func testStorageClient(t *testing.T, node *testNode) {
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	ctx := context.Background()
+
+	config := []struct {
+		key   string
+		value interface{}
+	}{
+		{"storage.debug.client.address", "localhost:" + workerClientPort},
+		{"storage.debug.client.tls", node.dataDir + "/tls_identity_cert.pem"},
+	}
+	for _, kv := range config {
+		viper.Set(kv.key, kv.value)
+	}
+
+	debugClient, err := storageClient.New(ctx, timeSource, nil, nil)
+	require.NoError(t, err, "NewDebugStorageClient")
+
+	_, supportsExpiry := (node.Storage).(storage.SweepableBackend)
+
+	storageTests.StorageImplementationTests(t, debugClient, timeSource, supportsExpiry)
 }
 
 func init() {

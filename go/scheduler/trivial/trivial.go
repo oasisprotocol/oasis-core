@@ -61,10 +61,11 @@ type trivialSchedulerState struct {
 
 	logger *logging.Logger
 
-	nodeLists  map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
-	beacons    map[epochtime.EpochTime][]byte
-	runtimes   map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
-	committees map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
+	computeNodeLists map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
+	storageNodeLists map[epochtime.EpochTime][]*node.Node
+	beacons          map[epochtime.EpochTime][]byte
+	runtimes         map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
+	committees       map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
 
 	epoch     epochtime.EpochTime
 	lastElect epochtime.EpochTime
@@ -74,7 +75,7 @@ func (s *trivialSchedulerState) canElect() bool {
 	s.Lock()
 	defer s.Unlock()
 
-	return s.nodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil
+	return s.computeNodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil && s.storageNodeLists[s.epoch] != nil
 }
 
 func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
@@ -102,55 +103,38 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 	}
 
 	beacon := s.beacons[epoch]
-	runtimeTeeNodeList := s.nodeLists[epoch][rtID][rt.TEEHardware]
 
 	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage, api.TransactionScheduler} {
-
-		// Select nodes with compatible roles
-		nodeList := []*node.Node{}
-		for _, n := range runtimeTeeNodeList {
-			switch kind {
-			case api.Compute:
-				if n.HasRoles(node.RoleComputeWorker) {
-					nodeList = append(nodeList, n)
-				}
-			case api.Storage:
-				// XXX: Storage committee is completely ignored at the moment
-				// so we just select one of the compute nodes.
-				// #1583 will refactor this and select storage workers from
-				// the pool of all registered storage worker nodes.
-				nodeList = append(nodeList, n)
-			case api.TransactionScheduler:
-				// XXX: Transaction scheduler committee is completely ignored at the moment
-				// so we just select one of the compute nodes.
-				// #1626 will refactor this and select transaction scheduler workers from
-				// the pool of all registered transaction scheduler worker nodes.
-				nodeList = append(nodeList, n)
-			}
-		}
-		nrNodes := len(nodeList)
-
+		var nodeList []*node.Node
 		var sz int
 		var ctx []byte
 		switch kind {
 		case api.Compute:
+			nodeList = s.computeNodeLists[epoch][rtID][rt.TEEHardware]
 			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
 			ctx = rngContextCompute
 		case api.Storage:
+			nodeList = s.storageNodeLists[epoch]
 			sz = int(rt.StorageGroupSize)
 			ctx = rngContextStorage
 		case api.TransactionScheduler:
+			// XXX: Transaction scheduler committee is completely ignored at the moment
+			// so we just select one of the compute nodes.
+			// #1626 will refactor this and select transaction scheduler workers from
+			// the pool of all registered transaction scheduler worker nodes.
+			nodeList = s.computeNodeLists[epoch][rtID][rt.TEEHardware]
 			sz = int(rt.TransactionSchedulerGroupSize)
 			ctx = rngContextTransactionScheduler
 		default:
 			return nil, fmt.Errorf("scheduler: invalid committee type: %v", kind)
 		}
+		nrNodes := len(nodeList)
 
 		if sz == 0 {
 			return nil, fmt.Errorf("scheduler: empty committee not allowed")
 		}
 		if sz > nrNodes {
-			return nil, fmt.Errorf("scheduler: committee size %d exceeds available nodes %d", sz, nrNodes)
+			return nil, fmt.Errorf("scheduler: %v committee size %d exceeds available nodes %d", kind, sz, nrNodes)
 		}
 
 		drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], ctx)
@@ -198,9 +182,14 @@ func (s *trivialSchedulerState) prune() {
 		return
 	}
 
-	for epoch := range s.nodeLists {
+	for epoch := range s.computeNodeLists {
 		if epoch < pruneBefore {
-			delete(s.nodeLists, epoch)
+			delete(s.computeNodeLists, epoch)
+		}
+	}
+	for epoch := range s.storageNodeLists {
+		if epoch < pruneBefore {
+			delete(s.storageNodeLists, epoch)
 		}
 	}
 	for epoch := range s.beacons {
@@ -278,7 +267,7 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 
 	// Re-scheduling is not allowed, and if there are node lists already there
 	// is nothing to do.
-	if s.nodeLists[epoch] != nil {
+	if s.computeNodeLists[epoch] != nil || s.storageNodeLists[epoch] != nil {
 		return
 	}
 
@@ -286,47 +275,56 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 	for id := range s.runtimes[epoch] {
 		m[id] = make(map[node.TEEHardware][]*node.Node)
 	}
+	s.storageNodeLists[epoch] = []*node.Node{}
 
 	// Build the per-node -> per-runtime -> per-TEE implementation node
-	// lists for the epoch.  It is safe to do it this way as `nodes` is
+	// lists for the epoch. It is safe to do it this way as `nodes` is
 	// already sorted in the appropriate order.
 	for _, n := range nodes {
-		for _, rt := range n.Runtimes {
-			nls, ok := m[rt.ID.ToMapKey()]
-			if !ok {
-				s.logger.Warn("node supports unknown runtime",
-					"node", n,
-					"runtime", rt.ID,
-				)
-				continue
-			}
-
-			var (
-				hw   = node.TEEHardwareInvalid
-				caps = rt.Capabilities.TEE
-			)
-			switch caps {
-			case nil:
-				// No TEE support for this runtime on this node.
-			default:
-				if err := caps.Verify(ts); err != nil {
-					s.logger.Warn("failed to verify node TEE attestaion",
-						"err", err,
+		// Compute workers
+		if n.HasRoles(node.RoleComputeWorker) {
+			for _, rt := range n.Runtimes {
+				nls, ok := m[rt.ID.ToMapKey()]
+				if !ok {
+					s.logger.Warn("node supports unknown runtime",
 						"node", n,
-						"time_stamp", ts,
 						"runtime", rt.ID,
 					)
 					continue
 				}
 
-				hw = caps.Hardware
-			}
+				var (
+					hw   = node.TEEHardwareInvalid
+					caps = rt.Capabilities.TEE
+				)
+				switch caps {
+				case nil:
+					// No TEE support for this runtime on this node.
+				default:
+					if err := caps.Verify(ts); err != nil {
+						s.logger.Warn("failed to verify node TEE attestaion",
+							"err", err,
+							"node", n,
+							"time_stamp", ts,
+							"runtime", rt.ID,
+						)
+						continue
+					}
 
-			nls[hw] = append(nls[hw], n)
+					hw = caps.Hardware
+				}
+
+				nls[hw] = append(nls[hw], n)
+			}
+		}
+
+		// Storage workers
+		if n.HasRoles(node.RoleStorageWorker) {
+			s.storageNodeLists[epoch] = append(s.storageNodeLists[epoch], n)
 		}
 	}
 
-	s.nodeLists[epoch] = m
+	s.computeNodeLists[epoch] = m
 }
 
 func (s *trivialSchedulerState) updateBeaconLocked(epoch epochtime.EpochTime, beacon []byte) error {
@@ -446,7 +444,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		return nil, registry.ErrNoSuchRuntime
 	}
 
-	if nodeList := s.state.nodeLists[epoch]; nodeList == nil {
+	if nodeList := s.state.computeNodeLists[epoch]; nodeList == nil {
 		var nl *registry.NodeList
 		nl, err = reg.GetBlockNodeList(ctx, height)
 		if err != nil {
@@ -616,12 +614,13 @@ func New(ctx context.Context, timeSource epochtime.Backend, registryBackend regi
 		registry:   registryBackend,
 		beacon:     beacon,
 		state: &trivialSchedulerState{
-			nodeLists:  make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
-			beacons:    make(map[epochtime.EpochTime][]byte),
-			runtimes:   make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
-			committees: make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
-			epoch:      epochtime.EpochInvalid,
-			lastElect:  epochtime.EpochInvalid,
+			computeNodeLists: make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
+			storageNodeLists: make(map[epochtime.EpochTime][]*node.Node),
+			beacons:          make(map[epochtime.EpochTime][]byte),
+			runtimes:         make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
+			committees:       make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
+			epoch:            epochtime.EpochInvalid,
+			lastElect:        epochtime.EpochInvalid,
 		},
 		service:  service,
 		closedCh: make(chan struct{}),

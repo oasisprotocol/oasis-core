@@ -9,6 +9,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -65,6 +66,7 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 func New(
 	dataDir string,
 	ias *ias.IAS,
+	grpc *grpc.Server,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -133,7 +135,7 @@ func New(
 	}
 
 	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, syncable, ias, registration, keyManager, cfg, workerCommonCfg)
+		registry, epochtime, scheduler, syncable, ias, grpc, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
