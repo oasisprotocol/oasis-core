@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/keymanager"
@@ -35,6 +36,7 @@ const (
 // New creates a new worker.
 func New(
 	dataDir string,
+	grpc *grpc.Server,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -75,7 +77,7 @@ func New(
 	}
 
 	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, syncable, compute, p2p, registration, keyManager, cfg, workerCommonCfg)
+		registry, epochtime, scheduler, syncable, compute, grpc, p2p, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

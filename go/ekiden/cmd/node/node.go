@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/client"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/dummydebug"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
@@ -42,6 +43,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
+	workerStorage "github.com/oasislabs/ekiden/go/worker/storage"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 )
 
@@ -64,9 +66,10 @@ func Run(cmd *cobra.Command, args []string) {
 // WARNING: This is exposed for the benefit of tests and the interface
 // is not guaranteed to be stable.
 type Node struct {
-	svcMgr  *background.ServiceManager
-	grpcSrv *grpc.Server
-	svcTmnt tmService.TendermintService
+	svcMgr       *background.ServiceManager
+	grpcInternal *grpc.Server
+	grpcExternal *grpc.Server
+	svcTmnt      tmService.TendermintService
 
 	Identity   *identity.Identity
 	Beacon     beaconAPI.Backend
@@ -81,6 +84,7 @@ type Node struct {
 	KeyManager *keymanager.KeyManager
 
 	ComputeWorker              *compute.Worker
+	StorageWorker              *workerStorage.Storage
 	TransactionSchedulerWorker *txnscheduler.Worker
 	P2P                        *p2p.P2P
 	WorkerRegistration         *registration.Registration
@@ -126,7 +130,8 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
-	if n.Storage, err = storage.New(n.Epochtime, dataDir, nil); err != nil {
+
+	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Epochtime, n.Scheduler, n.Registry, n.Identity.NodeKey); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
@@ -135,8 +140,8 @@ func (n *Node) initBackends() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
 
-	// Initialize and register the gRPC services.
-	grpcSrv := n.grpcSrv.Server()
+	// Initialize and register the internal gRPC services.
+	grpcSrv := n.grpcInternal.Server()
 	registry.NewGRPCServer(grpcSrv, n.Registry)
 	roothash.NewGRPCServer(grpcSrv, n.RootHash)
 	scheduler.NewGRPCServer(grpcSrv, n.Scheduler)
@@ -148,7 +153,7 @@ func (n *Node) initBackends() error {
 	return nil
 }
 
-func (n *Node) initAndStartWorkers() error {
+func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	dataDir := cmdCommon.DataDir()
 
 	var err error
@@ -166,6 +171,13 @@ func (n *Node) initAndStartWorkers() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
 
+	// Create externally-accessible gRPC server.
+	n.grpcExternal, err = grpc.NewServerTCP("external", workerCommonCfg.ClientPort, n.Identity.TLSCertificate)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.grpcExternal)
+
 	// Initialize the worker registration.
 	n.WorkerRegistration, err = registration.New(
 		dataDir,
@@ -180,6 +192,18 @@ func (n *Node) initAndStartWorkers() error {
 		return err
 	}
 	n.svcMgr.Register(n.WorkerRegistration)
+
+	// Initialize the storage worker.
+	n.StorageWorker, err = workerStorage.New(
+		n.Epochtime,
+		n.Storage,
+		n.grpcExternal,
+		n.WorkerRegistration,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.StorageWorker)
 
 	// Initialize the compute worker.
 	n.ComputeWorker, err = compute.New(
@@ -202,6 +226,11 @@ func (n *Node) initAndStartWorkers() error {
 	}
 	n.svcMgr.Register(n.ComputeWorker)
 
+	// Start the storage worker.
+	if err = n.StorageWorker.Start(); err != nil {
+		return err
+	}
+
 	// Start the compute worker.
 	if err = n.ComputeWorker.Start(); err != nil {
 		return err
@@ -210,6 +239,7 @@ func (n *Node) initAndStartWorkers() error {
 	// Initialize the transaction scheduler.
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		dataDir,
+		n.grpcExternal,
 		n.Identity,
 		n.Storage,
 		n.RootHash,
@@ -236,6 +266,16 @@ func (n *Node) initAndStartWorkers() error {
 	// Start the worker registration service.
 	if err = n.WorkerRegistration.Start(); err != nil {
 		return err
+	}
+
+	// Only start the external gRPC server if any workers enabled
+	if n.StorageWorker.Enabled() || n.ComputeWorker.Enabled() {
+		if err = n.grpcExternal.Start(); err != nil {
+			logger.Error("failed to start external gRPC server",
+				"err", err,
+			)
+			return err
+		}
 	}
 
 	return nil
@@ -297,16 +337,16 @@ func NewNode() (*Node, error) {
 	}
 	node.svcMgr.RegisterCleanupOnly(tracingSvc, "tracing")
 
-	// Initialize the gRPC server.
+	// Initialize the internal gRPC server.
 	// Depends on global tracer.
-	node.grpcSrv, err = cmdGrpc.NewServerLocal()
+	node.grpcInternal, err = cmdGrpc.NewServerLocal()
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
 		)
 		return nil, err
 	}
-	node.svcMgr.Register(node.grpcSrv)
+	node.svcMgr.Register(node.grpcInternal)
 
 	// Initialize the metrics server.
 	metrics, err := metrics.New(node.svcMgr.Ctx)
@@ -410,7 +450,7 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 	node.svcMgr.RegisterCleanupOnly(node.Client, "client service")
-	client.NewGRPCServer(node.grpcSrv.Server(), node.Client)
+	client.NewGRPCServer(node.grpcInternal.Server(), node.Client)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -421,7 +461,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize and Start ekiden workers
-	if err = node.initAndStartWorkers(); err != nil {
+	if err = node.initAndStartWorkers(logger); err != nil {
 		logger.Error("failed to initialize workers",
 			"err", err,
 		)
@@ -439,9 +479,9 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Start the gRPC server.
-	if err = node.grpcSrv.Start(); err != nil {
-		logger.Error("failed to start gRPC server",
+	// Start the internal gRPC server.
+	if err = node.grpcInternal.Start(); err != nil {
+		logger.Error("failed to start internal gRPC server",
 			"err", err,
 		)
 		return nil, err
@@ -485,6 +525,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		registration.RegisterFlags,
 		txnscheduler.RegisterFlags,
 		workerCommon.RegisterFlags,
+		workerStorage.RegisterFlags,
 	} {
 		v(cmd)
 	}

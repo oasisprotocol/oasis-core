@@ -111,7 +111,7 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for the gRPC server, all runtimes and all proxies to terminate.
+	// Wait for all runtimes and all proxies to terminate.
 	go func() {
 		defer close(w.quitCh)
 		defer (w.cancelCtx)()
@@ -187,6 +187,11 @@ func (w *Worker) Stop() {
 	}
 }
 
+// Enabled returns if worker is enabled.
+func (w *Worker) Enabled() bool {
+	return w.enabled
+}
+
 // Quit returns a channel that will be closed when the service terminates.
 func (w *Worker) Quit() <-chan struct{} {
 	return w.quitCh
@@ -210,8 +215,8 @@ func (w *Worker) Cleanup() {
 	os.RemoveAll(w.socketDir)
 }
 
-// Initialized returns a channel that will be closed when the worker is
-// initialized and ready to service requests.
+// Initialized returns a channel that will be closed when the compute worker
+// is initialized and ready to service requests.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
 }

@@ -150,6 +150,7 @@ func (k *KeyManager) commitStateRoot(ctx context.Context, storageInserts []stora
 	ctx, cancel := context.WithTimeout(ctx, storageCommitTimeout)
 	defer cancel()
 
+	<-k.storage.Initialized()
 	if err := k.storage.InsertBatch(ctx, storageInserts, storage.InsertOptions{}); err != nil {
 		k.logger.Error("failed to commit state to storage",
 			"err", err,

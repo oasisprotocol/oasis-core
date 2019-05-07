@@ -124,11 +124,6 @@ func (w *Worker) Start() error {
 		close(w.initCh)
 	}()
 
-	// Start client gRPC server.
-	if err := w.grpc.Start(); err != nil {
-		return err
-	}
-
 	// Start runtime services.
 	for _, rt := range w.runtimes {
 		w.logger.Info("starting services for runtime",
@@ -161,6 +156,11 @@ func (w *Worker) Stop() {
 	w.grpc.Stop()
 }
 
+// Enabled returns if worker is enabled.
+func (w *Worker) Enabled() bool {
+	return w.enabled
+}
+
 // Quit returns a channel that will be closed when the service terminates.
 func (w *Worker) Quit() <-chan struct{} {
 	return w.quitCh
@@ -181,7 +181,7 @@ func (w *Worker) Cleanup() {
 	os.RemoveAll(w.socketDir)
 }
 
-// Initialized returns a channel that will be closed when the worker is
+// Initialized returns a channel that will be closed when the transaction scheduler is
 // initialized and ready to service requests.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
@@ -257,6 +257,7 @@ func newWorker(
 	scheduler scheduler.Backend,
 	syncable common.Syncable,
 	compute *compute.Worker,
+	grpc *grpc.Server,
 	p2p *p2p.P2P,
 	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
@@ -289,6 +290,7 @@ func newWorker(
 		scheduler:       scheduler,
 		syncable:        syncable,
 		compute:         compute,
+		grpc:            grpc,
 		p2p:             p2p,
 		registration:    registration,
 		keyManager:      keyManager,
@@ -306,12 +308,7 @@ func newWorker(
 			return nil, fmt.Errorf("txnscheduler/worker: no runtimes configured")
 		}
 
-		// Create client gRPC server.
-		grpc, err := grpc.NewServerTCP("worker-client", workerCommonCfg.ClientPort, identity.TLSCertificate)
-		if err != nil {
-			return nil, err
-		}
-		w.grpc = grpc
+		// Use existing gRPC server passed from the node.
 		newClientGRPCServer(grpc.Server(), w)
 
 		// Register all configured runtimes.

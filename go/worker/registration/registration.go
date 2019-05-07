@@ -193,6 +193,8 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 		}
 
 		r.logger.Info("node registered with the registry")
+	} else {
+		r.logger.Info("skipping node registration as no registerted role hooks")
 	}
 
 	return nil

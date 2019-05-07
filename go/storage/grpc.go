@@ -28,7 +28,8 @@ func (s *grpcServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetRespon
 
 	var k api.Key
 	copy(k[:], id)
-
+	// TODO: should these waits be here, or should the clients be updated to wait?
+	<-s.backend.Initialized()
 	v, err := s.backend.Get(ctx, k)
 	if err == api.ErrKeyNotFound || err == api.ErrKeyExpired {
 		return nil, status.Errorf(codes.NotFound, err.Error())
@@ -51,11 +52,11 @@ func (s *grpcServer) GetBatch(ctx context.Context, req *pb.GetBatchRequest) (*pb
 		keys = append(keys, k)
 	}
 
+	<-s.backend.Initialized()
 	values, err := s.backend.GetBatch(ctx, keys)
 	if err != nil {
 		return nil, err
 	}
-
 	return &pb.GetBatchResponse{Data: values}, nil
 }
 
@@ -71,6 +72,7 @@ func (s *grpcServer) GetReceipt(ctx context.Context, req *pb.GetReceiptRequest) 
 		keys = append(keys, k)
 	}
 
+	<-s.backend.Initialized()
 	signed, err := s.backend.GetReceipt(ctx, keys)
 	if err != nil {
 		return nil, err
@@ -80,6 +82,7 @@ func (s *grpcServer) GetReceipt(ctx context.Context, req *pb.GetReceiptRequest) 
 }
 
 func (s *grpcServer) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
+	<-s.backend.Initialized()
 	if err := s.backend.Insert(ctx, req.GetData(), req.GetExpiry(), api.InsertOptions{}); err != nil {
 		return nil, err
 	}
@@ -95,6 +98,7 @@ func (s *grpcServer) InsertBatch(ctx context.Context, req *pb.InsertBatchRequest
 		})
 	}
 
+	<-s.backend.Initialized()
 	if err := s.backend.InsertBatch(ctx, values, api.InsertOptions{}); err != nil {
 		return nil, err
 	}
@@ -103,6 +107,7 @@ func (s *grpcServer) InsertBatch(ctx context.Context, req *pb.InsertBatchRequest
 }
 
 func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysServer) error {
+	<-s.backend.Initialized()
 	ch, err := s.backend.GetKeys(stream.Context())
 	if err != nil {
 		return err
@@ -147,6 +152,7 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 		})
 	}
 
+	<-s.backend.Initialized()
 	signedReceipt, err := s.backend.Apply(ctx, root, expectedNewRoot, log)
 
 	if err != nil {
@@ -171,6 +177,7 @@ func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 		Depth: uint8(nid.GetDepth()),
 	}
 
+	<-s.backend.Initialized()
 	subtree, err := s.backend.GetSubtree(ctx, root, nodeID, maxDepth)
 	if err != nil {
 		return nil, err
@@ -193,6 +200,7 @@ func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 
 	startDepth := uint8(req.GetStartDepth())
 
+	<-s.backend.Initialized()
 	subtree, err := s.backend.GetPath(ctx, root, key, startDepth)
 	if err != nil {
 		return nil, err
@@ -219,6 +227,7 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 		Depth: uint8(nid.GetDepth()),
 	}
 
+	<-s.backend.Initialized()
 	node, err := s.backend.GetNode(ctx, root, nodeID)
 	if err != nil {
 		return nil, err
@@ -239,6 +248,7 @@ func (s *grpcServer) GetValue(ctx context.Context, req *pb.GetValueRequest) (*pb
 	var id hash.Hash
 	copy(id[:], req.GetId())
 
+	<-s.backend.Initialized()
 	value, err := s.backend.GetValue(ctx, root, id)
 	if err != nil {
 		return nil, err

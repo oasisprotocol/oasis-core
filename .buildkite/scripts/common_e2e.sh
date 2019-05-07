@@ -21,7 +21,6 @@ EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000
 # Sets:
 #   EKIDEN_COMMITTEE_DIR
 #   EKIDEN_TM_GENESIS_FILE
-#   EKIDEN_STORAGE_PORT
 #   EKIDEN_IAS_PROXY_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
@@ -33,7 +32,7 @@ EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
 #   replica_group_backup_size - runtime replica group backup size (default: 1)
-#   start_storage - start the storage node
+#   clear_storage - clear storage node dir (default: 1)
 #
 # Any additional arguments are passed to the validator Go node and
 # all compute nodes.
@@ -43,7 +42,7 @@ run_backend_tendermint_committee() {
     local id=1
     local replica_group_size=2
     local replica_group_backup_size=1
-    local start_storage=true
+    local clear_storage=1
     local roothash_genesis_blocks=""
     local nodes=3
     # Load named arguments that override defaults.
@@ -98,20 +97,6 @@ run_backend_tendermint_committee() {
         ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
         ${validator_files}
 
-    # Run the storage node.
-    local storage_datadir=${committee_dir}/storage
-    local storage_port=60000
-
-    if [ "$start_storage" = true ]; then
-        rm -Rf ${storage_datadir}
-
-        ${EKIDEN_NODE} \
-            storage node \
-            --datadir ${storage_datadir} \
-            --grpc.port ${storage_port} \
-            --log.file ${committee_dir}/storage.log \
-            &
-    fi
 
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001
@@ -135,7 +120,6 @@ run_backend_tendermint_committee() {
     # Export some variables so compute workers can find them.
     EKIDEN_COMMITTEE_DIR=${committee_dir}
     EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
-    EKIDEN_STORAGE_PORT=${storage_port}
     EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
     EKIDEN_TM_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
@@ -143,6 +127,38 @@ run_backend_tendermint_committee() {
 
     # Run the seed node.
     run_seed_node
+
+    # Run the storage node.
+    local storage_datadir=${committee_dir}/storage
+    local storage_port=60000
+    local storage_tm_port=60001
+
+    if [[ $clear_storage == 1 ]]; then
+        rm -Rf ${storage_datadir}
+    fi
+
+    ${EKIDEN_NODE} \
+        --log.level debug \
+        --log.file ${committee_dir}/storage.log \
+        --grpc.log.verbose_debug \
+        --epochtime.backend ${epochtime_backend} \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --metrics.mode none \
+        --storage.backend leveldb \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --worker.storage.enabled \
+        --worker.client.port ${storage_port} \
+        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --datadir ${storage_datadir} \
+        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${storage_tm_port} \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.debug.addr_book_lenient \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
+        &
 
     # Run the key manager node.
     run_keymanager_node 0
@@ -164,7 +180,6 @@ run_backend_tendermint_committee() {
             --beacon.backend tendermint \
             --metrics.mode none \
             --storage.backend client \
-            --storage.client.address 127.0.0.1:${storage_port} \
             --scheduler.backend trivial \
             --registry.backend tendermint \
             --roothash.backend tendermint \
@@ -193,8 +208,8 @@ run_backend_tendermint_committee() {
 
 # Run a compute node.
 #
-# Requires that EKIDEN_TM_GENESIS_FILE and EKIDEN_STORAGE_PORT are
-# set. Exits with an error otherwise.
+# Requires that EKIDEN_TM_GENESIS_FILE is set.
+# Exits with an error otherwise.
 #
 # Arguments:
 #   id - compute node index
@@ -208,8 +223,8 @@ run_compute_node() {
     shift || true
     local extra_args=$*
 
-    # Ensure the genesis file and storage port are available.
-    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" || "${EKIDEN_STORAGE_PORT:-}" == "" ]]; then
+    # Ensure the genesis file is available.
+    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" ]]; then
         echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
         exit 1
     fi
@@ -236,7 +251,6 @@ run_compute_node() {
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
@@ -275,7 +289,7 @@ cat_compute_logs() {
 #
 # Arguments:
 #   nodes - number of nodes to wait for
-wait_compute_nodes() {
+wait_nodes() {
     local nodes=$1
 
     ${EKIDEN_NODE} debug dummy wait-nodes \
@@ -323,11 +337,10 @@ run_keymanager_node() {
     let tm_port=13900
 
     ${EKIDEN_NODE} \
-        --log.level info \
+        --log.level debug \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --storage.client.address 127.0.0.1:${EKIDEN_STORAGE_PORT} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
@@ -352,8 +365,8 @@ run_keymanager_node() {
 
 # Run a seed node.
 #
-# Requires that EKIDEN_TM_GENESIS_FILE and EKIDEN_STORAGE_PORT are
-# set. Exits with an error otherwise.
+# Requires that EKIDEN_TM_GENESIS_FILE set.
+# Exits with an error otherwise.
 #
 # Sets:
 #   EKIDEN_SEED_NODE_ID
@@ -363,8 +376,8 @@ run_keymanager_node() {
 run_seed_node() {
     local extra_args=$*
 
-    # Ensure the genesis file and storage port are available.
-    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" || "${EKIDEN_STORAGE_PORT:-}" == "" ]]; then
+    # Ensure the genesis file is available.
+    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" ]]; then
         echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
         exit 1
     fi
