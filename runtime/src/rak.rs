@@ -7,7 +7,7 @@ use sgx_isa::Targetinfo;
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 use crate::common::crypto::hash::Hash;
 use crate::common::{
-    crypto::signature::{PrivateKey, PublicKey, Signature},
+    crypto::signature::{PrivateKey, PublicKey, Signature, Signer},
     sgx::avr,
     time::insecure_posix_time,
 };
@@ -270,15 +270,6 @@ impl RAK {
         inner.avr.clone()
     }
 
-    /// Generate a RAK signature with the private key over the context and message.
-    pub fn sign(&self, context: &[u8; 8], message: &[u8]) -> Fallible<Signature> {
-        let inner = self.inner.read().unwrap();
-        match inner.private_key {
-            Some(ref key) => Ok(key.sign(context, message)?),
-            None => Err(RAKError::NotConfigured.into()),
-        }
-    }
-
     /// Verify a provided RAK binding.
     pub fn verify_binding(avr: &avr::AuthenticatedAVR, rak: &PublicKey) -> Fallible<()> {
         if avr.report_data.len() < 32 {
@@ -289,5 +280,16 @@ impl RAK {
         }
 
         Ok(())
+    }
+}
+
+impl Signer for RAK {
+    /// Generate a RAK signature with the private key over the context and message.
+    fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature> {
+        let inner = self.inner.read().unwrap();
+        match inner.private_key {
+            Some(ref key) => Ok(key.sign(context, message)?),
+            None => Err(RAKError::NotConfigured.into()),
+        }
     }
 }

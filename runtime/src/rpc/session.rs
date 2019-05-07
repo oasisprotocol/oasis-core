@@ -9,7 +9,7 @@ use snow;
 use super::types::Message;
 use crate::{
     common::{
-        crypto::signature::{PublicKey, Signature},
+        crypto::signature::{PublicKey, Signature, Signer},
         sgx::avr,
     },
     rak::RAK,

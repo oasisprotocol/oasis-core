@@ -5,31 +5,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/enclaverpc"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
-const (
-	rpcCallTimeout       = 5 * time.Second
-	storageCommitTimeout = 1 * time.Second
-
-	stateRootFilename = "keymanager_state_root.json"
-)
+const rpcCallTimeout = 5 * time.Second
 
 // request is an internal request for a call to the key manager
 // runtime. We use an internal worker to prevent multiple requests
@@ -51,10 +41,6 @@ type KeyManager struct {
 	requestCh  chan *request
 
 	localStorage *host.LocalStorage
-
-	storage       storage.Backend
-	stateRoot     hash.Hash
-	stateRootPath string
 
 	// XXX: Change once we automatically discover the key manager for each runtime.
 	client *enclaverpc.Client
@@ -119,63 +105,6 @@ func (k *KeyManager) Quit() <-chan struct{} {
 func (k *KeyManager) Cleanup() {
 }
 
-func (k *KeyManager) loadStateRoot() error {
-	r, err := ioutil.ReadFile(k.stateRootPath)
-	if err != nil {
-		// If the file does not exist, start with an empty root.
-		if os.IsNotExist(err) {
-			k.stateRoot.Empty()
-
-			k.logger.Info("state root file does not exist, starting with empty",
-				"root", k.stateRoot.String(),
-			)
-			return nil
-		}
-		return err
-	}
-
-	var root hash.Hash
-	if err := json.Unmarshal(r, &root); err != nil {
-		k.logger.Error("corrupted state root file",
-			"err", err,
-			"data", string(r),
-		)
-		return err
-	}
-
-	k.stateRoot = root
-
-	k.logger.Info("loaded state root",
-		"root", k.stateRoot.String(),
-	)
-	return nil
-}
-
-func (k *KeyManager) commitStateRoot(ctx context.Context, storageInserts []storage.Value, root hash.Hash) error {
-	ctx, cancel := context.WithTimeout(ctx, storageCommitTimeout)
-	defer cancel()
-
-	<-k.storage.Initialized()
-	if err := k.storage.InsertBatch(ctx, storageInserts, storage.InsertOptions{}); err != nil {
-		k.logger.Error("failed to commit state to storage",
-			"err", err,
-		)
-		return err
-	}
-
-	r := json.Marshal(root)
-	if err := ioutil.WriteFile(k.stateRootPath, r, 0600); err != nil {
-		k.logger.Error("failed to persist state root",
-			"root", root.String(),
-			"err", err,
-		)
-		return err
-	}
-
-	k.stateRoot = root
-	return nil
-}
-
 func (k *KeyManager) worker() {
 	// Wait for the gRPC server and worker to terminate.
 	go func() {
@@ -185,6 +114,10 @@ func (k *KeyManager) worker() {
 		<-k.grpc.Quit()
 	}()
 
+	// TODO: There's no reason why this can't be made concurrent?
+	// TODO: Enforce access control?
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
 	for {
 		select {
 		case <-k.stopCh:
@@ -194,7 +127,7 @@ func (k *KeyManager) worker() {
 			rq := &protocol.Body{
 				WorkerRPCCallRequest: &protocol.WorkerRPCCallRequest{
 					Request:   callRq.data,
-					StateRoot: k.stateRoot,
+					StateRoot: emptyRoot,
 				},
 			}
 
@@ -227,12 +160,6 @@ func (k *KeyManager) worker() {
 						"response", response,
 					)
 					callRq.ch <- errors.New("keymanager: malformed response from worker")
-					break
-				}
-
-				// Commit new state root.
-				if err = k.commitStateRoot(callRq.ctx, rsp.StorageInserts, rsp.NewStateRoot); err != nil {
-					callRq.ch <- err
 					break
 				}
 
@@ -292,18 +219,15 @@ func newKeyManager(
 	port uint16,
 	ias *ias.IAS,
 	identity *identity.Identity,
-	storage storage.Backend,
 	client *enclaverpc.Client,
 ) (*KeyManager, error) {
 	km := &KeyManager{
-		enabled:       enabled,
-		quitCh:        make(chan struct{}),
-		stopCh:        make(chan struct{}),
-		requestCh:     make(chan *request, 10),
-		storage:       storage,
-		stateRootPath: filepath.Join(dataDir, stateRootFilename),
-		client:        client,
-		logger:        logging.GetLogger("keymanager"),
+		enabled:   enabled,
+		quitCh:    make(chan struct{}),
+		stopCh:    make(chan struct{}),
+		requestCh: make(chan *request, 10),
+		client:    client,
+		logger:    logging.GetLogger("keymanager"),
 	}
 
 	if enabled {
@@ -315,10 +239,6 @@ func newKeyManager(
 
 		if runtimeBinary == "" {
 			return nil, fmt.Errorf("keymanager: runtime binary not configured")
-		}
-
-		if err = km.loadStateRoot(); err != nil {
-			return nil, err
 		}
 
 		// Open the local storage.
@@ -334,7 +254,7 @@ func newKeyManager(
 			make(map[string]host.ProxySpecification),
 			teeHardware,
 			ias,
-			newHostHandler(storage, km.localStorage),
+			newHostHandler(km.localStorage),
 			false,
 		)
 		if err != nil {

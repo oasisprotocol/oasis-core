@@ -31,7 +31,7 @@ impl KeyManagerClient for MockClient {
         let key = match keys.get(&contract_id) {
             Some(key) => key.clone(),
             None => {
-                let key = ContractKey::generate();
+                let key = ContractKey::generate_mock();
                 keys.insert(contract_id, key.clone());
                 key
             }

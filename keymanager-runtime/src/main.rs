@@ -4,9 +4,14 @@ extern crate ekiden_runtime;
 extern crate failure;
 extern crate io_context;
 extern crate lazy_static;
+extern crate lru;
+extern crate rand;
 extern crate serde_cbor;
+extern crate sp800_185;
+extern crate x25519_dalek;
+extern crate zeroize;
 
-mod key_store;
+mod kdf;
 
 use failure::Fallible;
 
@@ -15,15 +20,22 @@ use ekiden_runtime::{
     register_runtime_rpc_methods, rpc::Context as RpcContext, RpcDispatcher, TxnDispatcher,
 };
 
-use self::key_store::KeyStore;
+use self::kdf::Kdf;
 
 // We have not implemented key-expiry yet. So give all keys the maximum expiry of 2^53-1
 // because (as a convenience) that is the maximum safe number to use in JavaScript and its
 // more than enough to account for enough time.
 static MAX_KEY_TIMESTAMP: u64 = (1 << 53) - 1;
 
-/// See `KeyStore::get_or_create_keys`.
-fn get_or_create_keys(contract_id: &ContractId, ctx: &mut RpcContext) -> Fallible<ContractKey> {
+/// Initialize the Kdf.
+fn init(ctx: &mut RpcContext) -> Fallible<()> {
+    Kdf::global().init(&ctx)
+}
+
+/// See `Kdf::get_or_create_keys`.
+fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<ContractKey> {
+    init(ctx)?; // HACK HACK HACK
+
     // Authenticate session info (this requires all clients are SGX enclaves).
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     let si = ctx.session_info.as_ref();
@@ -31,32 +43,34 @@ fn get_or_create_keys(contract_id: &ContractId, ctx: &mut RpcContext) -> Fallibl
     #[cfg(target_env = "sgx")]
     let _si = si.ok_or(KeyManagerError::NotAuthenticated)?;
 
-    // TODO: Namespace all keys based on si.authenticated_avr.mr_enclave so that the keys
-    //       are never released to an incorrect enclave.
+    // TODO: Namespace all keys based on the tuple (req.runtime_id,
+    // req.contract_id, si.authenticated_avr.mr_enclave) so that the keys
+    // are never released to an incorrect enclave.
 
-    KeyStore::global().get_or_create_keys(contract_id)
+    Kdf::global().get_or_create_keys(req)
 }
 
-/// See `KeyStore::get_public_key`.
-fn get_public_key(
-    contract_id: &ContractId,
-    _ctx: &mut RpcContext,
-) -> Fallible<Option<SignedPublicKey>> {
-    let ks = KeyStore::global();
-    let pk = ks.get_public_key(contract_id)?;
+/// See `Kdf::get_public_key`.
+fn get_public_key(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<Option<SignedPublicKey>> {
+    init(ctx)?; // HACK HACK HACK
+
+    let kdf = Kdf::global();
+    let pk = kdf.get_public_key(req)?;
     pk.map_or(Ok(None), |pk| {
-        Ok(Some(ks.sign_public_key(pk, Some(MAX_KEY_TIMESTAMP))?))
+        Ok(Some(kdf.sign_public_key(pk, Some(MAX_KEY_TIMESTAMP))?))
     })
 }
 
-/// See `KeyStore::get_public_key`.
+/// See `Kdf::get_public_key`.
 fn get_long_term_public_key(
-    contract_id: &ContractId,
-    _ctx: &mut RpcContext,
+    req: &RequestIds,
+    ctx: &mut RpcContext,
 ) -> Fallible<Option<SignedPublicKey>> {
-    let ks = KeyStore::global();
-    let pk = ks.get_public_key(contract_id)?;
-    pk.map_or(Ok(None), |pk| Ok(Some(ks.sign_public_key(pk, None)?)))
+    init(ctx)?; // HACK HACK HACK
+
+    let kdf = Kdf::global();
+    let pk = kdf.get_public_key(req)?;
+    pk.map_or(Ok(None), |pk| Ok(Some(kdf.sign_public_key(pk, None)?)))
 }
 
 fn main() {

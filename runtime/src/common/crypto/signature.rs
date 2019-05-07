@@ -40,9 +40,10 @@ impl PrivateKey {
 
         PublicKey(data)
     }
+}
 
-    /// Generates a signature with the private key over the context and message.
-    pub fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature> {
+impl Signer for PrivateKey {
+    fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature> {
         let digest = Hash::digest_bytes_list(&[context, message]);
 
         let mut result = [0u8; 64];
@@ -74,4 +75,10 @@ pub struct SignatureBundle {
     pub public_key: Option<PublicKey>,
     /// Actual signature.
     pub signature: Signature,
+}
+
+/// A abstract signer.
+pub trait Signer: Send + Sync {
+    /// Generates a signature over the context and message.
+    fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature>;
 }

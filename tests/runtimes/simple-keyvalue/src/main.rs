@@ -11,7 +11,10 @@ use io_context::Context as IoContext;
 
 use ekiden_keymanager_client::{ContractId, KeyManagerClient};
 use ekiden_runtime::{
-    common::crypto::{hash::Hash, mrae::deoxysii::NONCE_SIZE},
+    common::{
+        crypto::{hash::Hash, mrae::deoxysii::NONCE_SIZE},
+        runtime::RuntimeId,
+    },
     executor::Executor,
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
@@ -166,6 +169,7 @@ fn main() {
 
         // Create the key manager client.
         let km_client = Arc::new(ekiden_keymanager_client::RemoteClient::new_runtime(
+            RuntimeId::default(), // HACK: Tests always use the all 0 runtime ID.
             #[cfg(target_env = "sgx")]
             Some(KM_ENCLAVE_HASH),
             #[cfg(not(target_env = "sgx"))]

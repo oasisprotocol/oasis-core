@@ -11,7 +11,10 @@ use slog::Logger;
 
 use crate::{
     common::{
-        crypto::{hash::Hash, signature::Signature},
+        crypto::{
+            hash::Hash,
+            signature::{Signature, Signer},
+        },
         logger::get_logger,
         roothash::Block,
     },
@@ -344,7 +347,7 @@ impl Dispatcher {
                         Context::create_child(&ctx),
                         protocol.clone(),
                     ));
-                    let rpc_ctx = RpcContext::new(session_info);
+                    let rpc_ctx = RpcContext::new(self.rak.clone(), session_info);
                     let response = StorageContext::enter(
                         cas.clone(),
                         &mut mkvs,

@@ -441,7 +441,6 @@ func NewNode() (*Node, error) {
 		cmdCommon.DataDir(),
 		node.IAS,
 		node.Identity,
-		node.Storage,
 	)
 	if err != nil {
 		logger.Error("failed to initialize key manager",

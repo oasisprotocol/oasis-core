@@ -10,7 +10,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/enclaverpc"
 )
 
@@ -32,7 +31,6 @@ func New(
 	dataDir string,
 	ias *ias.IAS,
 	identity *identity.Identity,
-	storage storage.Backend,
 ) (*KeyManager, error) {
 	var teeHardware node.TEEHardware
 	s := viper.GetString(cfgTEEHardware)
@@ -63,7 +61,7 @@ func New(
 	}
 
 	return newKeyManager(dataDir, viper.GetBool(cfgEnabled), teeHardware, workerRuntimeLoaderBinary,
-		runtimeBinary, port, ias, identity, storage, client)
+		runtimeBinary, port, ias, identity, client)
 }
 
 // RegisterFlags registers the configuration flags with the provided
