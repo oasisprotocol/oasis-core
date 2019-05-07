@@ -73,7 +73,7 @@ func testQuery(
 	runtimeID signature.PublicKey,
 	c *client.Client,
 ) {
-	err := c.WaitBlockIndexed(ctx, runtimeID, 3)
+	err := c.WaitBlockIndexed(ctx, runtimeID, 4)
 	require.NoError(t, err, "WaitBlockIndexed")
 
 	// Based on SubmitTx and the mock worker.
@@ -87,34 +87,36 @@ func testQuery(
 	require.EqualValues(t, 1, blk.Header.Round)
 
 	blk, err = c.GetBlock(ctx, runtimeID, 2)
-	// Normal block from TestNode/TransactionSchedulerWorker/QueueCall
+	// Epoch transition from TestNode/TransactionSchedulerWorker/InitialEpochTransition
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 2, blk.Header.Round)
+
+	// Normal block from TestNode/TransactionSchedulerWorker/QueueCall
 
 	blk, err = c.GetBlock(ctx, runtimeID, 0xffffffffffffffff)
 	// Normal block from TestNode/Client/SubmitTx
 	require.NoError(t, err, "GetBlock")
-	require.EqualValues(t, 3, blk.Header.Round)
+	require.EqualValues(t, 4, blk.Header.Round)
 
 	// Out of bounds block round.
-	_, err = c.GetBlock(ctx, runtimeID, 4)
+	_, err = c.GetBlock(ctx, runtimeID, 5)
 	require.Error(t, err, "GetBlock")
 
 	// Fetch transaction.
-	tx, err := c.GetTxn(ctx, runtimeID, 3, 0)
+	tx, err := c.GetTxn(ctx, runtimeID, 4, 0)
 	require.NoError(t, err, "GetTxn(0)")
-	require.EqualValues(t, 3, tx.Block.Header.Round)
+	require.EqualValues(t, 4, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
 	// Out of bounds transaction index.
-	_, err = c.GetTxn(ctx, runtimeID, 3, 1)
+	_, err = c.GetTxn(ctx, runtimeID, 4, 1)
 	require.Error(t, err, "GetTxn(1)")
 
 	// Get transaction by block hash and index.
 	tx, err = c.GetTxnByBlockHash(ctx, runtimeID, blk.Header.EncodedHash(), 0)
 	require.NoError(t, err, "GetTxnByBlockHash")
-	require.EqualValues(t, 3, tx.Block.Header.Round)
+	require.EqualValues(t, 4, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
@@ -127,12 +129,12 @@ func testQuery(
 	// Check that indexer has indexed block keys (check the mock worker for key/values).
 	blk, err = c.QueryBlock(ctx, runtimeID, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "QueryBlock")
-	require.EqualValues(t, 2, blk.Header.Round)
+	require.EqualValues(t, 3, blk.Header.Round)
 
 	// Check that indexer has indexed txn keys (check the mock worker for key/values).
 	tx, err = c.QueryTxn(ctx, runtimeID, []byte("txn_foo"), []byte("txn_bar"))
 	require.NoError(t, err, "QueryTxn")
-	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, 3, tx.Block.Header.Round)
 	require.EqualValues(t, 0, tx.Index)
 	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
 	require.EqualValues(t, []byte("hello world"), tx.Input)
@@ -154,7 +156,7 @@ func testQuery(
 	// Test advanced transaction queries.
 	query := client.Query{
 		RoundMin: 0,
-		RoundMax: 3,
+		RoundMax: 4,
 		Conditions: []client.QueryCondition{
 			client.QueryCondition{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
 		},
@@ -166,7 +168,7 @@ func testQuery(
 	sort.Slice(results, func(i, j int) bool {
 		return bytes.Compare(results[i].Input, results[j].Input) < 0
 	})
-	require.EqualValues(t, 2, results[0].Block.Header.Round)
+	require.EqualValues(t, 3, results[0].Block.Header.Round)
 	require.EqualValues(t, 0, results[0].Index)
 	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
 	require.EqualValues(t, []byte("hello world"), results[0].Input)

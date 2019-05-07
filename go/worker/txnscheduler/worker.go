@@ -1,32 +1,15 @@
 package txnscheduler
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/keymanager"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
-)
-
-const (
-	proxySocketDirName = "proxy-sockets"
 )
 
 // RuntimeConfig is a single runtime's configuration.
@@ -55,44 +38,30 @@ func (r *Runtime) GetNode() *committee.Node {
 
 // Worker is a transaction scheduler handling many runtimes.
 type Worker struct {
-	enabled         bool
-	cfg             Config
-	workerCommonCfg *workerCommon.Config
+	enabled bool
+	cfg     Config
 
-	identity     *identity.Identity
-	storage      storage.Backend
-	roothash     roothash.Backend
-	registry     registry.Backend
-	epochtime    epochtime.Backend
-	scheduler    scheduler.Backend
-	consensus    common.ConsensusBackend
-	keyManager   *keymanager.KeyManager
-	compute      *compute.Worker
-	p2p          *p2p.P2P
-	grpc         *grpc.Server
+	commonWorker *workerCommon.Worker
 	registration *registration.Registration
+	compute      *compute.Worker
 
 	runtimes map[signature.MapKey]*Runtime
 
-	socketDir string
-
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	quitCh    chan struct{}
-	initCh    chan struct{}
+	quitCh chan struct{}
+	initCh chan struct{}
 
 	logger *logging.Logger
 }
 
 // Name returns the service name.
 func (w *Worker) Name() string {
-	return "txnscheduler worker"
+	return "transaction scheduler"
 }
 
 // Start starts the service.
 func (w *Worker) Start() error {
 	if !w.enabled {
-		w.logger.Info("not starting worker as it is disabled")
+		w.logger.Info("not starting transaction scheduler as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
 		close(w.initCh)
@@ -100,16 +69,13 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for the gRPC server, all runtimes and all proxies to terminate.
+	// Wait for all runtimes to terminate.
 	go func() {
 		defer close(w.quitCh)
-		defer (w.cancelCtx)()
 
 		for _, rt := range w.runtimes {
 			<-rt.node.Quit()
 		}
-
-		<-w.grpc.Quit()
 	}()
 
 	// Wait for all runtimes to be initialized and for the node
@@ -152,8 +118,6 @@ func (w *Worker) Stop() {
 
 		rt.node.Stop()
 	}
-
-	w.grpc.Stop()
 }
 
 // Enabled returns if worker is enabled.
@@ -175,10 +139,6 @@ func (w *Worker) Cleanup() {
 	for _, rt := range w.runtimes {
 		rt.node.Cleanup()
 	}
-
-	w.grpc.Cleanup()
-
-	os.RemoveAll(w.socketDir)
 }
 
 // Initialized returns a channel that will be closed when the transaction scheduler is
@@ -210,28 +170,23 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		"runtime_id", rtCfg.ID,
 	)
 
-	// Get compute committee node for the given runtime.
+	// Get other nodes from this runtime.
+	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
 	computeNode := w.compute.GetRuntime(rtCfg.ID).GetNode()
 
 	// Create committee node for the given runtime.
 	nodeCfg := cfg.Committee
 
 	node, err := committee.NewNode(
-		rtCfg.ID,
-		w.identity,
-		w.storage,
-		w.roothash,
-		w.registry,
-		w.epochtime,
-		w.scheduler,
-		w.consensus,
+		commonNode,
 		computeNode,
-		w.p2p,
 		nodeCfg,
 	)
 	if err != nil {
 		return err
 	}
+
+	commonNode.AddHooks(node)
 
 	rt := &Runtime{
 		cfg:  rtCfg,
@@ -247,60 +202,22 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 }
 
 func newWorker(
-	dataDir string,
 	enabled bool,
-	identity *identity.Identity,
-	storage storage.Backend,
-	roothash roothash.Backend,
-	registryInst registry.Backend,
-	epochtime epochtime.Backend,
-	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	commonWorker *workerCommon.Worker,
 	compute *compute.Worker,
-	grpc *grpc.Server,
-	p2p *p2p.P2P,
 	registration *registration.Registration,
-	keyManager *keymanager.KeyManager,
 	cfg Config,
-	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
-	startedOk := false
-	socketDir := filepath.Join(dataDir, proxySocketDirName)
-	err := common.Mkdir(socketDir)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if !startedOk {
-			os.RemoveAll(socketDir)
-		}
-	}()
-
-	ctx, cancelCtx := context.WithCancel(context.Background())
-
 	w := &Worker{
-		enabled:         enabled,
-		cfg:             cfg,
-		workerCommonCfg: workerCommonCfg,
-		identity:        identity,
-		storage:         storage,
-		roothash:        roothash,
-		registry:        registryInst,
-		epochtime:       epochtime,
-		scheduler:       scheduler,
-		consensus:       consensus,
-		compute:         compute,
-		grpc:            grpc,
-		p2p:             p2p,
-		registration:    registration,
-		keyManager:      keyManager,
-		runtimes:        make(map[signature.MapKey]*Runtime),
-		socketDir:       socketDir,
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		quitCh:          make(chan struct{}),
-		initCh:          make(chan struct{}),
-		logger:          logging.GetLogger("worker/txnscheduler"),
+		enabled:      enabled,
+		cfg:          cfg,
+		commonWorker: commonWorker,
+		registration: registration,
+		compute:      compute,
+		runtimes:     make(map[signature.MapKey]*Runtime),
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/txnscheduler"),
 	}
 
 	if enabled {
@@ -309,11 +226,11 @@ func newWorker(
 		}
 
 		// Use existing gRPC server passed from the node.
-		newClientGRPCServer(grpc.Server(), w)
+		newClientGRPCServer(commonWorker.Grpc.Server(), w)
 
 		// Register all configured runtimes.
 		for _, rtCfg := range cfg.Runtimes {
-			if err = w.registerRuntime(&cfg, &rtCfg); err != nil {
+			if err := w.registerRuntime(&cfg, &rtCfg); err != nil {
 				return nil, err
 			}
 		}
@@ -326,6 +243,5 @@ func newWorker(
 		})
 	}
 
-	startedOk = true
 	return w, nil
 }

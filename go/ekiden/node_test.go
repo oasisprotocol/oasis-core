@@ -289,7 +289,7 @@ func testComputeWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	require.NotNil(t, node.computeCommitteeNode)
-	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource, node.RootHash)
+	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource)
 }
 
 func testStorageWorker(t *testing.T, node *testNode) {

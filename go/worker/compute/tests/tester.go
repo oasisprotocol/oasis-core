@@ -10,7 +10,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
@@ -28,7 +27,6 @@ func WorkerImplementationTests(
 	runtimeID signature.PublicKey,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
-	roothash roothash.Backend,
 ) {
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -50,13 +48,13 @@ func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState
 	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
 	// Node should transition to WaitingForBatch state.
-	waitForNodeTransition(t, stateCh, "WaitingForBatch")
+	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 }
 
-func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState string) {
+func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState committee.StateName) {
 	select {
 	case newState := <-stateCh:
-		require.EqualValues(t, expectedState, newState.String())
+		require.EqualValues(t, expectedState, newState.Name())
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive transition to %s state", expectedState)
 	}

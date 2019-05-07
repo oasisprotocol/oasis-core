@@ -23,7 +23,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/version"
-	"github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/common/configparser"
 )
 
 var protocolName = protocol.ID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
@@ -247,7 +247,7 @@ func (p *P2P) handleConnection(conn libp2pNet.Conn) {
 
 // New creates a new P2P node.
 func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
-	addresses, err := common.ParseAddressList(viper.GetStringSlice(cfgP2pAddresses))
+	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgP2pAddresses))
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 		registerAddresses: registerAddresses,
 		host:              host,
 		handlers:          make(map[signature.MapKey]Handler),
-		logger:            logging.GetLogger("worker/p2p"),
+		logger:            logging.GetLogger("worker/common/p2p"),
 	}
 
 	p.host.Network().SetConnHandler(p.handleConnection)

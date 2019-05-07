@@ -9,22 +9,15 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -64,20 +57,12 @@ func (r *Runtime) GetNode() *committee.Node {
 
 // Worker is a compute worker handling many runtimes.
 type Worker struct {
-	enabled         bool
-	cfg             Config
-	workerCommonCfg *workerCommon.Config
+	enabled bool
+	cfg     Config
 
-	identity     *identity.Identity
-	storage      storage.Backend
-	roothash     roothash.Backend
-	registry     registry.Backend
-	epochtime    epochtime.Backend
-	scheduler    scheduler.Backend
-	consensus    common.ConsensusBackend
+	commonWorker *workerCommon.Worker
 	ias          *ias.IAS
 	keyManager   *keymanager.KeyManager
-	p2p          *p2p.P2P
 	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
@@ -257,7 +242,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			newHostHandler(rtCfg.ID, w.storage, w.keyManager, w.localStorage),
+			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
 			false,
 		)
 	case host.BackendUnconfined:
@@ -268,7 +253,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			newHostHandler(rtCfg.ID, w.storage, w.keyManager, w.localStorage),
+			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
 			true,
 		)
 	case host.BackendMock:
@@ -285,6 +270,9 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		"runtime_id", rtCfg.ID,
 	)
 
+	// Get other nodes from this runtime.
+	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
+
 	// Create worker host for the given runtime.
 	workerHost, err := w.newWorkerHost(cfg, rtCfg)
 	if err != nil {
@@ -295,21 +283,15 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	nodeCfg := cfg.Committee
 
 	node, err := committee.NewNode(
-		rtCfg.ID,
-		w.identity,
-		w.storage,
-		w.roothash,
-		w.registry,
-		w.epochtime,
-		w.scheduler,
-		w.consensus,
+		commonNode,
 		workerHost,
-		w.p2p,
 		nodeCfg,
 	)
 	if err != nil {
 		return err
 	}
+
+	commonNode.AddHooks(node)
 
 	rt := &Runtime{
 		cfg:        rtCfg,
@@ -328,19 +310,11 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 func newWorker(
 	dataDir string,
 	enabled bool,
-	identity *identity.Identity,
-	storage storage.Backend,
-	roothash roothash.Backend,
-	registryInst registry.Backend,
-	epochtime epochtime.Backend,
-	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	p2p *p2p.P2P,
-	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
+	registration *registration.Registration,
 	cfg Config,
-	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	startedOk := false
 	socketDir := filepath.Join(dataDir, proxySocketDirName)
@@ -357,28 +331,20 @@ func newWorker(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:         enabled,
-		cfg:             cfg,
-		workerCommonCfg: workerCommonCfg,
-		identity:        identity,
-		storage:         storage,
-		roothash:        roothash,
-		registry:        registryInst,
-		epochtime:       epochtime,
-		scheduler:       scheduler,
-		consensus:       consensus,
-		ias:             ias,
-		p2p:             p2p,
-		registration:    registration,
-		keyManager:      keyManager,
-		runtimes:        make(map[signature.MapKey]*Runtime),
-		netProxies:      make(map[string]NetworkProxy),
-		socketDir:       socketDir,
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		quitCh:          make(chan struct{}),
-		initCh:          make(chan struct{}),
-		logger:          logging.GetLogger("worker/compute"),
+		enabled:      enabled,
+		cfg:          cfg,
+		commonWorker: commonWorker,
+		ias:          ias,
+		keyManager:   keyManager,
+		registration: registration,
+		runtimes:     make(map[signature.MapKey]*Runtime),
+		netProxies:   make(map[string]NetworkProxy),
+		socketDir:    socketDir,
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/compute"),
 	}
 
 	if enabled {

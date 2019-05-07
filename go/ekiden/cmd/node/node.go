@@ -42,8 +42,8 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint"
 	tmService "github.com/oasislabs/ekiden/go/tendermint/service"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/compute"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	workerStorage "github.com/oasislabs/ekiden/go/worker/storage"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
@@ -70,7 +70,6 @@ func Run(cmd *cobra.Command, args []string) {
 type Node struct {
 	svcMgr       *background.ServiceManager
 	grpcInternal *grpc.Server
-	grpcExternal *grpc.Server
 	svcTmnt      tmService.TendermintService
 
 	Genesis    genesis.Provider
@@ -86,6 +85,7 @@ type Node struct {
 	Client     *client.Client
 	KeyManager *keymanager.KeyManager
 
+	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
 	StorageWorker              *workerStorage.Storage
 	TransactionSchedulerWorker *txnscheduler.Worker
@@ -161,11 +161,6 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	var err error
 
-	workerCommonCfg, err := workerCommon.NewConfig()
-	if err != nil {
-		return err
-	}
-
 	// Initialize the worker P2P.
 	p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 	n.P2P, err = p2p.New(p2pCtx, n.Identity)
@@ -174,14 +169,24 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
 
-	// Create externally-accessible gRPC server.
-	n.grpcExternal, err = grpc.NewServerTCP("external", workerCommonCfg.ClientPort, n.Identity.TLSCertificate)
+	// Start common worker.
+	n.CommonWorker, err = workerCommon.New(
+		n.Identity,
+		n.Storage,
+		n.RootHash,
+		n.Registry,
+		n.Scheduler,
+		n.svcTmnt,
+		n.P2P,
+	)
 	if err != nil {
 		return err
 	}
-	n.svcMgr.Register(n.grpcExternal)
+	n.svcMgr.Register(n.CommonWorker.Grpc)
+	n.svcMgr.Register(n.CommonWorker)
 
 	// Initialize the worker registration.
+	workerCommonCfg := n.CommonWorker.GetConfig()
 	n.WorkerRegistration, err = registration.New(
 		dataDir,
 		n.Epochtime,
@@ -189,7 +194,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.Identity,
 		n.svcTmnt,
 		n.P2P,
-		workerCommonCfg,
+		&workerCommonCfg,
 	)
 	if err != nil {
 		return err
@@ -200,7 +205,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.StorageWorker, err = workerStorage.New(
 		n.Epochtime,
 		n.Storage,
-		n.grpcExternal,
+		n.CommonWorker.Grpc,
 		n.WorkerRegistration,
 		n.svcTmnt,
 		n.Genesis,
@@ -213,23 +218,31 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	// Initialize the compute worker.
 	n.ComputeWorker, err = compute.New(
 		dataDir,
+		n.CommonWorker,
 		n.IAS,
-		n.Identity,
-		n.Storage,
-		n.RootHash,
-		n.Registry,
-		n.Epochtime,
-		n.Scheduler,
-		n.svcTmnt,
 		n.KeyManager,
-		n.P2P,
 		n.WorkerRegistration,
-		workerCommonCfg,
 	)
 	if err != nil {
 		return err
 	}
 	n.svcMgr.Register(n.ComputeWorker)
+
+	// Initialize the transaction scheduler.
+	n.TransactionSchedulerWorker, err = txnscheduler.New(
+		n.CommonWorker,
+		n.ComputeWorker,
+		n.WorkerRegistration,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.TransactionSchedulerWorker)
+
+	// Start the common worker.
+	if err = n.CommonWorker.Start(); err != nil {
+		return err
+	}
 
 	// Start the storage worker.
 	if err = n.StorageWorker.Start(); err != nil {
@@ -240,28 +253,6 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	if err = n.ComputeWorker.Start(); err != nil {
 		return err
 	}
-
-	// Initialize the transaction scheduler.
-	n.TransactionSchedulerWorker, err = txnscheduler.New(
-		dataDir,
-		n.grpcExternal,
-		n.Identity,
-		n.Storage,
-		n.RootHash,
-		n.Registry,
-		n.Epochtime,
-		n.Scheduler,
-		n.svcTmnt,
-		n.KeyManager,
-		n.ComputeWorker,
-		n.P2P,
-		n.WorkerRegistration,
-		workerCommonCfg,
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.TransactionSchedulerWorker)
 
 	// Start the transaction scheduler.
 	if err = n.TransactionSchedulerWorker.Start(); err != nil {
@@ -274,8 +265,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 
 	// Only start the external gRPC server if any workers enabled
-	if n.StorageWorker.Enabled() || n.ComputeWorker.Enabled() {
-		if err = n.grpcExternal.Start(); err != nil {
+	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() {
+		if err = n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,
 			)

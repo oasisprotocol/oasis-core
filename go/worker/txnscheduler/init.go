@@ -6,18 +6,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/keymanager"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
@@ -29,31 +19,18 @@ const (
 	cfgMaxBatchSize      = "worker.txnscheduler.leader.max_batch_size"
 	cfgMaxBatchSizeBytes = "worker.txnscheduler.leader.max_batch_size_bytes"
 	cfgMaxBatchTimeout   = "worker.txnscheduler.leader.max_batch_timeout"
-
-	cfgStorageCommitTimeout = "worker.txnscheduler.storage_commit_timeout"
 )
 
 // New creates a new worker.
 func New(
-	dataDir string,
-	grpc *grpc.Server,
-	identity *identity.Identity,
-	storage storage.Backend,
-	roothash roothash.Backend,
-	registry registry.Backend,
-	epochtime epochtime.Backend,
-	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
-	keyManager *keymanager.KeyManager,
+	commonWorker *workerCommon.Worker,
 	compute *compute.Worker,
-	p2p *p2p.P2P,
 	registration *registration.Registration,
-	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
 
-	for _, runtimeID := range workerCommonCfg.Runtimes {
+	for _, runtimeID := range commonWorker.GetConfig().Runtimes {
 		runtimes = append(runtimes, RuntimeConfig{
 			ID: runtimeID,
 		})
@@ -70,14 +47,11 @@ func New(
 			MaxBatchSize:      maxBatchSize,
 			MaxBatchSizeBytes: maxBatchSizeBytes,
 			MaxBatchTimeout:   maxBatchTimeout,
-
-			StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
 		},
 		Runtimes: runtimes,
 	}
 
-	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, consensus, compute, grpc, p2p, registration, keyManager, cfg, workerCommonCfg)
+	return newWorker(viper.GetBool(cfgWorkerEnabled), commonWorker, compute, registration, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
@@ -90,8 +64,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
 		cmd.Flags().String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 		cmd.Flags().Duration(cfgMaxBatchTimeout, 1*time.Second, "Maximum amount of time to wait for a batch")
-
-		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 	}
 
 	for _, v := range []string{
@@ -101,8 +73,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgMaxBatchSize,
 		cfgMaxBatchSizeBytes,
 		cfgMaxBatchTimeout,
-
-		cfgStorageCommitTimeout,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}

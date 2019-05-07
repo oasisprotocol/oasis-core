@@ -11,21 +11,16 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/tracing"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/common/committee"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
 )
 
 var (
@@ -40,64 +35,8 @@ var (
 		},
 		[]string{"runtime"},
 	)
-	discrepancyDetectedCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ekiden_worker_txnscheduler_discrepancy_detected_count",
-			Help: "Number of detected discrepancies",
-		},
-		[]string{"runtime"},
-	)
-	processedBlockCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ekiden_worker_txnscheduler_processed_block_count",
-			Help: "Number of processed roothash blocks",
-		},
-		[]string{"runtime"},
-	)
-	failedRoundCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ekiden_worker_txnscheduler_failed_round_count",
-			Help: "Number of failed roothash rounds",
-		},
-		[]string{"runtime"},
-	)
-	epochTransitionCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ekiden_worker_txnscheduler_epoch_transition_count",
-			Help: "Number of epoch transitions",
-		},
-		[]string{"runtime"},
-	)
-	abortedBatchCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ekiden_worker_txnscheduler_aborted_batch_count",
-			Help: "Number of aborted batches",
-		},
-		[]string{"runtime"},
-	)
-	storageCommitLatency = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "ekiden_worker_txnscheduler_storage_commit_latency",
-			Help: "Latency of storage commit calls (state + outputs)",
-		},
-		[]string{"runtime"},
-	)
-	batchProcessingTime = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "ekiden_worker_txnscheduler_batch_processing_time",
-			Help: "Time it takes for a batch to finalize",
-		},
-		[]string{"runtime"},
-	)
 	nodeCollectors = []prometheus.Collector{
 		incomingQueueSize,
-		discrepancyDetectedCount,
-		processedBlockCount,
-		failedRoundCount,
-		epochTransitionCount,
-		abortedBatchCount,
-		storageCommitLatency,
-		batchProcessingTime,
 	}
 
 	metricsOnce sync.Once
@@ -109,21 +48,11 @@ type Config struct {
 	MaxBatchSize      uint64
 	MaxBatchSizeBytes uint64
 	MaxBatchTimeout   time.Duration
-
-	StorageCommitTimeout time.Duration
 }
 
 // Node is a committee node.
 type Node struct {
-	runtimeID signature.PublicKey
-
-	identity    *identity.Identity
-	storage     storage.Backend
-	roothash    roothash.Backend
-	registry    registry.Backend
-	epochtime   epochtime.Backend
-	scheduler   scheduler.Backend
-	consensus   common.ConsensusBackend
+	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
 	cfg Config
@@ -136,14 +65,10 @@ type Node struct {
 	initCh    chan struct{}
 
 	incomingQueue *incomingQueue
-	group         *Group
 
-	// No locking required, the variables in the next group are only accessed
-	// and modified from the worker goroutine.
-	state          NodeState
-	currentBlock   *block.Block
-	batchStartTime time.Time
-	batchSpanCtx   opentracing.SpanContext
+	// Mutable and shared with common node's worker.
+	// Guarded by .commonNode.CrossNode.
+	state NodeState
 
 	stateTransitions *pubsub.Broker
 
@@ -192,15 +117,20 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 
 func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.runtimeID.String(),
+		"runtime": n.commonNode.RuntimeID.String(),
 	}
+}
+
+// HandlePeerMessage implements NodeHooks.
+func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) (bool, error) {
+	return false, nil
 }
 
 // QueueCall queues a call for processing by this node.
 func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsLeader() {
+	if !n.commonNode.Group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		return ErrNotLeader
 	}
 
@@ -228,25 +158,26 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.group.GetEpochSnapshot().IsLeader() {
+	if !n.commonNode.Group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		return false, ErrNotLeader
 	}
 
 	return n.incomingQueue.IsQueued(id), nil
 }
 
-func (n *Node) transition(state NodeState) {
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) transitionLocked(state NodeState) {
 	n.logger.Info("state transition",
 		"current_state", n.state,
 		"new_state", state,
 	)
 
 	// Validate state transition.
-	dests := validStateTransitions[n.state.String()]
+	dests := validStateTransitions[n.state.Name()]
 
 	var valid bool
 	for _, dest := range dests[:] {
-		if dest == state.String() {
+		if dest == state.Name() {
 			valid = true
 			break
 		}
@@ -260,106 +191,47 @@ func (n *Node) transition(state NodeState) {
 	n.stateTransitions.Broadcast(state)
 }
 
-func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
-	n.logger.Info("epoch transition has occurred",
-		"new_group_hash", groupHash,
-	)
-
-	epochTransitionCount.With(n.getMetricLabels()).Inc()
-
-	// Transition group.
-	if err := n.group.EpochTransition(n.ctx, groupHash, height); err != nil {
-		n.logger.Error("unable to handle epoch transition",
-			"err", err,
-		)
-	}
-
-	epoch := n.group.GetEpochSnapshot()
-
-	if epoch.IsLeader() {
-		n.transition(StateWaitingForBatch{})
+// HandleEpochTransitionLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
+	if epoch.IsTransactionSchedulerLeader() {
+		n.transitionLocked(StateWaitingForBatch{})
 	} else {
 		n.incomingQueue.Clear()
 		// Clear incoming queue if we are not a leader.
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
-		n.transition(StateNotReady{})
+		n.transitionLocked(StateNotReady{})
 	}
 	// TODO: Make non-leader members follow.
 }
 
-func (n *Node) handleNewBlock(blk *block.Block, height int64) {
-	processedBlockCount.With(n.getMetricLabels()).Inc()
+// HandleNewBlockEarlyLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
+}
 
-	header := blk.Header
-
-	// The first received block will be treated an epoch transition (if valid).
-	// This will refresh the committee on the first block,
-	// instead of waiting for the next epoch transition to occur.
-	// Helps in cases where node is restarted mid epoch.
-	firstBlockReceived := n.currentBlock == nil
-
-	// Update the current block.
-	n.currentBlock = blk
-
-	// Perform actions based on block type.
-	switch header.HeaderType {
-	case block.Normal:
-		if firstBlockReceived {
-			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransition(header.GroupHash, height)
-		} else {
-			// Normal block.
-			n.group.RoundTransition(n.ctx)
-		}
-	case block.RoundFailed:
-		if firstBlockReceived {
-			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransition(header.GroupHash, height)
-		} else {
-			// Round has failed.
-			n.logger.Warn("round has failed")
-			n.group.RoundTransition(n.ctx)
-
-			failedRoundCount.With(n.getMetricLabels()).Inc()
-		}
-	case block.EpochTransition:
-		// Process an epoch transition.
-		n.handleEpochTransition(header.GroupHash, height)
-	default:
-		n.logger.Error("invalid block type",
-			"block", blk,
-		)
-		return
-	}
-
+// HandleNewBlockLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	// Perform actions based on current state.
 	switch n.state.(type) {
 	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
 		n.logger.Info("considering the round finalized")
-		n.transition(StateWaitingForBatch{})
-
-		// Record time taken for successfully processing a batch.
-		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.batchStartTime).Seconds())
-		n.batchStartTime = time.Time{}
+		n.transitionLocked(StateWaitingForBatch{})
 	}
 }
 
-func (n *Node) batchSent() {
-	n.batchStartTime = time.Now()
-
-	n.transition(StateWaitingForFinalize{})
-}
-
-func (n *Node) checkIncomingQueue(force bool) {
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) checkIncomingQueueLocked(force bool) {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
 		return
 	}
 
-	epochSnapshot := n.group.GetEpochSnapshot()
+	epoch := n.commonNode.Group.GetEpochSnapshot()
 	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !epochSnapshot.IsLeader() || n.currentBlock == nil {
+	if !epoch.IsTransactionSchedulerLeader() || n.commonNode.CurrentBlock == nil {
 		return
 	}
 
@@ -386,15 +258,15 @@ func (n *Node) checkIncomingQueue(force bool) {
 		opentracing.Tag{Key: "batch", Value: batch},
 	)
 	defer batchSpan.Finish()
-	n.batchSpanCtx = batchSpan.Context()
+	batchSpanCtx := batchSpan.Context()
 
 	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Insert(batch)",
 		opentracing.Tag{Key: "batch", Value: batch},
-		opentracing.ChildOf(n.batchSpanCtx),
+		opentracing.ChildOf(batchSpanCtx),
 	)
 
 	// Commit batch to storage.
-	if err = n.storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
+	if err = n.commonNode.Storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
 		spanInsert.Finish()
 		n.logger.Error("failed to commit input batch to storage",
 			"err", err,
@@ -409,10 +281,10 @@ func (n *Node) checkIncomingQueue(force bool) {
 
 	spanPublish := opentracing.StartSpan("Publish(batchHash, header)",
 		opentracing.Tag{Key: "batchHash", Value: batchID},
-		opentracing.Tag{Key: "header", Value: n.currentBlock.Header},
-		opentracing.ChildOf(n.batchSpanCtx),
+		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
+		opentracing.ChildOf(batchSpanCtx),
 	)
-	publishToSelf, err := n.group.PublishBatch(n.batchSpanCtx, batchID, n.currentBlock.Header)
+	err = n.commonNode.Group.PublishBatch(batchSpanCtx, batchID, n.commonNode.CurrentBlock.Header)
 	if err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
@@ -420,12 +292,13 @@ func (n *Node) checkIncomingQueue(force bool) {
 		)
 		return
 	}
+	crash.Here(crashPointLeaderBatchPublishAfter)
 	spanPublish.Finish()
 
-	n.batchSent()
+	n.transitionLocked(StateWaitingForFinalize{})
 
-	if publishToSelf {
-		n.computeNode.HandleBatchFromTransactionScheduler(batch, n.currentBlock.Header)
+	if epoch.IsComputeLeader() || epoch.IsComputeWorker() {
+		n.computeNode.HandleBatchFromTransactionSchedulerLocked(batch, batchSpanCtx)
 	}
 
 	processOk = true
@@ -434,36 +307,18 @@ func (n *Node) checkIncomingQueue(force bool) {
 func (n *Node) worker() {
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
-	if n.consensus != nil {
+	if n.commonNode.Consensus != nil {
 		n.logger.Info("delaying committee node start until after initial synchronization")
 		select {
 		case <-n.quitCh:
 			return
-		case <-n.consensus.Synced():
+		case <-n.commonNode.Consensus.Synced():
 		}
 	}
 	n.logger.Info("starting committee node")
 
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
-
-	// Start watching roothash blocks.
-	var blocksAnn <-chan *roothash.AnnotatedBlock
-	var blocksPlain <-chan *block.Block
-	var blocksSub *pubsub.Subscription
-	var err error
-	if rh, ok := n.roothash.(roothash.BlockBackend); ok {
-		blocksAnn, blocksSub, err = rh.WatchAnnotatedBlocks(n.runtimeID)
-	} else {
-		blocksPlain, blocksSub, err = n.roothash.WatchBlocks(n.runtimeID)
-	}
-	if err != nil {
-		n.logger.Error("failed to subscribe to roothash blocks",
-			"err", err,
-		)
-		return
-	}
-	defer blocksSub.Close()
 
 	// Check incoming queue every MaxBatchTimeout.
 	incomingQueueTicker := time.NewTicker(n.cfg.MaxBatchTimeout)
@@ -480,33 +335,27 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case blk := <-blocksAnn:
-			// Received a block (annotated).
-			n.handleNewBlock(blk.Block, blk.Height)
-		case blk := <-blocksPlain:
-			// Received a block (plain).
-			n.handleNewBlock(blk, 0)
 		case <-incomingQueueTicker.C:
 			// Check incoming queue for a new batch.
-			n.checkIncomingQueue(true)
+			func() {
+				n.commonNode.CrossNode.Lock()
+				defer n.commonNode.CrossNode.Unlock()
+				n.checkIncomingQueueLocked(true)
+			}()
 		case <-incomingQueueSignal:
 			// Check incoming queue for a new batch.
-			n.checkIncomingQueue(false)
+			func() {
+				n.commonNode.CrossNode.Lock()
+				defer n.commonNode.CrossNode.Unlock()
+				n.checkIncomingQueueLocked(false)
+			}()
 		}
 	}
 }
 
 func NewNode(
-	runtimeID signature.PublicKey,
-	identity *identity.Identity,
-	storage storage.Backend,
-	roothash roothash.Backend,
-	registry registry.Backend,
-	epochtime epochtime.Backend,
-	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	commonNode *committee.Node,
 	computeNode *computeCommittee.Node,
-	p2p *p2p.P2P,
 	cfg Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
@@ -516,31 +365,19 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		runtimeID:        runtimeID,
-		identity:         identity,
-		storage:          storage,
-		roothash:         roothash,
-		registry:         registry,
-		epochtime:        epochtime,
-		scheduler:        scheduler,
-		consensus:        consensus,
+		commonNode:       commonNode,
 		computeNode:      computeNode,
 		cfg:              cfg,
 		ctx:              ctx,
 		cancelCtx:        cancel,
-		quitCh:           make(chan struct{}),
 		stopCh:           make(chan struct{}),
+		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		incomingQueue:    newIncomingQueue(cfg.MaxQueueSize, cfg.MaxBatchSize, cfg.MaxBatchSizeBytes),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
-		logger:           logging.GetLogger("worker/txnclient/committee").With("runtime_id", runtimeID),
+		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.RuntimeID),
 	}
-	group, err := NewGroup(identity, runtimeID, registry, scheduler, p2p)
-	if err != nil {
-		return nil, err
-	}
-	n.group = group
 
 	return n, nil
 }

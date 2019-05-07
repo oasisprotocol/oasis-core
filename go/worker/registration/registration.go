@@ -18,7 +18,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
 const (

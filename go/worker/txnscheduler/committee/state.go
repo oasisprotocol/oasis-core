@@ -1,62 +1,89 @@
 package committee
 
+// StateName is a symbolic state without the attached values.
+type StateName string
+
+const (
+	// NotReady is the name of StateNotReady.
+	NotReady = "NotReady"
+	// WaitingForBatch is the name of StateWaitingForBatch.
+	WaitingForBatch = "WaitingForBatch"
+	// WaitingForFinalize is the name of StateWaitingForFinalize.
+	WaitingForFinalize = "WaitingForFinalize"
+)
+
 // Valid state transitions.
-var validStateTransitions = map[string][]string{
+var validStateTransitions = map[StateName][]StateName{
 	// Transitions from NotReady state.
-	"NotReady": {
+	NotReady: {
 		// Epoch transition occurred and we are not in the committee.
-		"NotReady",
+		NotReady,
 		// Epoch transition occurred and we are in the committee.
-		"WaitingForBatch",
+		WaitingForBatch,
 	},
 
 	// Transitions from WaitingForBatch state.
-	"WaitingForBatch": {
-		"WaitingForBatch",
+	WaitingForBatch: {
+		WaitingForBatch,
 		// Batch has been successfully published.
-		"WaitingForFinalize",
+		WaitingForFinalize,
 		// Epoch transition occurred and we are no longer in the committee.
-		"NotReady",
+		NotReady,
 	},
 
 	// Transitions from WaitingForFinalize state.
-	"WaitingForFinalize": {
+	WaitingForFinalize: {
 		// Round has been finalized.
-		"WaitingForBatch",
+		WaitingForBatch,
 		// Epoch transition occurred and we are no longer in the committee.
-		"NotReady",
+		NotReady,
 	},
 }
 
 // NodeState is a node's state.
 type NodeState interface {
-	// String returns a string representation of the state.
-	String() string
+	// Name returns the name of the state.
+	Name() StateName
 }
 
 // StateNotReady is the not ready state.
 type StateNotReady struct {
 }
 
+// Name returns the name of the state.
+func (s StateNotReady) Name() StateName {
+	return NotReady
+}
+
 // String returns a string representation of the state.
 func (s StateNotReady) String() string {
-	return "NotReady"
+	return string(s.Name())
 }
 
 // StateWaitingForBatch is the waiting for batch state.
 type StateWaitingForBatch struct {
 }
 
+// Name returns the name of the state.
+func (s StateWaitingForBatch) Name() StateName {
+	return WaitingForBatch
+}
+
 // String returns a string representation of the state.
 func (s StateWaitingForBatch) String() string {
-	return "WaitingForBatch"
+	return string(s.Name())
 }
 
 // StateWaitingForFinalize is the waiting for finalize state.
 type StateWaitingForFinalize struct {
 }
 
+// Name returns the name of the state.
+func (s StateWaitingForFinalize) Name() StateName {
+	return WaitingForFinalize
+}
+
 // String returns a string representation of the state.
 func (s StateWaitingForFinalize) String() string {
-	return "WaitingForFinalize"
+	return string(s.Name())
 }

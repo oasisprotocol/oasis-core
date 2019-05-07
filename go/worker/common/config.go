@@ -1,10 +1,6 @@
 package common
 
 import (
-	"fmt"
-	"net"
-	"strconv"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -12,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/worker/common/configparser"
 )
 
 var (
@@ -28,36 +25,6 @@ type Config struct { // nolint: maligned
 	Runtimes        []signature.PublicKey
 
 	logger *logging.Logger
-}
-
-// ParseAddressList parses addresses.
-func ParseAddressList(addresses []string) ([]node.Address, error) {
-	var output []node.Address
-	for _, rawAddress := range addresses {
-		rawIP, rawPort, err := net.SplitHostPort(rawAddress)
-		if err != nil {
-			return nil, fmt.Errorf("malformed address: %s", err)
-		}
-
-		port, err := strconv.ParseUint(rawPort, 10, 16)
-		if err != nil {
-			return nil, fmt.Errorf("malformed port: %s", rawPort)
-		}
-
-		ip := net.ParseIP(rawIP)
-		if ip == nil {
-			return nil, fmt.Errorf("malformed ip address: %s", rawIP)
-		}
-
-		var address node.Address
-		if err := address.FromIP(ip, uint16(port)); err != nil {
-			return nil, fmt.Errorf("unknown address family: %s", rawIP)
-		}
-
-		output = append(output, address)
-	}
-
-	return output, nil
 }
 
 // GetNodeAddresses returns worker node addresses.
@@ -85,27 +52,14 @@ func (c *Config) GetNodeAddresses() ([]node.Address, error) {
 	return addresses, nil
 }
 
-func getRuntimes(runtimeIDsHex []string) ([]signature.PublicKey, error) {
-	var runtimes []signature.PublicKey
-	for _, runtimeHex := range runtimeIDsHex {
-		var runtime signature.PublicKey
-		if err := runtime.UnmarshalHex(runtimeHex); err != nil {
-			return nil, err
-		}
-
-		runtimes = append(runtimes, runtime)
-	}
-	return runtimes, nil
-}
-
-// NewConfig creates a new worker config.
-func NewConfig() (*Config, error) {
+// newConfig creates a new worker config.
+func newConfig() (*Config, error) {
 	// Parse register address overrides.
-	clientAddresses, err := ParseAddressList(viper.GetStringSlice(cfgClientAddresses))
+	clientAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgClientAddresses))
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := getRuntimes(viper.GetStringSlice(cfgRuntimeID))
+	runtimes, err := configparser.GetRuntimes(viper.GetStringSlice(cfgRuntimeID))
 	if err != nil {
 		return nil, err
 	}

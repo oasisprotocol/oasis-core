@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
@@ -53,16 +54,11 @@ func WorkerImplementationTests(
 }
 
 func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
-	// TODO: Make this test independent of the ComputeWorker election once we have independent committee intervals.
-	// We'll be elected leader from the epoch transition in TestNode/ComputeWorker/InitialEpochTransition
+	// Perform an epoch transition, so that the node gets elected leader.
+	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	// Hack: Drain the transition event if our test started before it arrived.
-	select {
-	case newState := <-stateCh:
-		require.EqualValues(t, "WaitingForBatch", newState.String())
-	case <-time.After(1 * time.Second):
-		// Then it's not coming.
-	}
+	// Node should transition to WaitingForBatch state.
+	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 }
 
 func testQueueCall(
@@ -89,11 +85,11 @@ func testQueueCall(
 	require.NoError(t, err, "QueueCall")
 
 	// Node should transition to WaitingForFinalize state.
-	waitForNodeTransition(t, stateCh, "WaitingForFinalize")
+	waitForNodeTransition(t, stateCh, committee.WaitingForFinalize)
 
 	// Node should transition to WaitingForBatch state and a block should be
 	// finalized containing our batch.
-	waitForNodeTransition(t, stateCh, "WaitingForBatch")
+	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 
 	select {
 	case blk := <-blocksCh:
@@ -113,10 +109,10 @@ func testQueueCall(
 	}
 }
 
-func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState string) {
+func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState committee.StateName) {
 	select {
 	case newState := <-stateCh:
-		require.EqualValues(t, expectedState, newState.String())
+		require.EqualValues(t, expectedState, newState.Name())
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive transition to %s state", expectedState)
 	}

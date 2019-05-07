@@ -7,20 +7,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
-	"github.com/oasislabs/ekiden/go/worker/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -59,18 +51,10 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 // New creates a new worker.
 func New(
 	dataDir string,
+	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	identity *identity.Identity,
-	storage storage.Backend,
-	roothash roothash.Backend,
-	registry registry.Backend,
-	epochtime epochtime.Backend,
-	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
 	keyManager *keymanager.KeyManager,
-	p2p *p2p.P2P,
 	registration *registration.Registration,
-	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)
 	workerRuntimeLoader := viper.GetString(cfgWorkerRuntimeLoader)
@@ -78,7 +62,7 @@ func New(
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
 	runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
-	if len(runtimeBinaries) != len(workerCommonCfg.Runtimes) {
+	if len(runtimeBinaries) != len(commonWorker.GetConfig().Runtimes) {
 		return nil, fmt.Errorf("runtime binary/id count mismatch")
 	}
 
@@ -88,7 +72,7 @@ func New(
 	}
 
 	for idx, runtimeBinary := range runtimeBinaries {
-		runtimeID := workerCommonCfg.Runtimes[idx]
+		runtimeID := commonWorker.GetConfig().Runtimes[idx]
 
 		var teeHardware node.TEEHardware
 		if sgxRuntimeIDs[runtimeID.ToMapKey()] {
@@ -114,8 +98,8 @@ func New(
 		Runtimes:                  runtimes,
 	}
 
-	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, consensus, ias, p2p, registration, keyManager, cfg, workerCommonCfg)
+	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), commonWorker,
+		ias, keyManager, registration, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided
