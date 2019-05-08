@@ -1,4 +1,4 @@
-package committee
+package batching
 
 import (
 	"fmt"
@@ -94,51 +94,4 @@ func TestAddBatch(t *testing.T) {
 		})
 	}
 	require.True(t, queue.Size() <= 51, "queue must not overflow")
-}
-
-func TestSignal(t *testing.T) {
-	queue := newIncomingQueue(51, 10, 100)
-
-	signalCh := queue.Signal()
-
-	err := queue.Add([]byte("hello world"))
-	require.NoError(t, err, "Add")
-
-	err = queue.Add([]byte("hello world 2"))
-	require.NoError(t, err, "Add")
-
-	// There should be one item in the channel.
-	select {
-	case _, ok := <-signalCh:
-		if !ok {
-			require.Fail(t, "Signal channel must not be closed")
-		}
-	default:
-		require.Fail(t, "Signal channel must have one item")
-	}
-
-	// Ensure the channel is empty (there was only one item).
-	select {
-	case _, ok := <-signalCh:
-		if ok {
-			require.Fail(t, "Signal channel must be empty")
-		} else {
-			require.Fail(t, "Signal channel must not be closed")
-		}
-	default:
-		// Ok.
-	}
-
-	err = queue.Add([]byte("hello world 4"))
-	require.NoError(t, err, "Add")
-
-	// There should be one item in the channel.
-	select {
-	case _, ok := <-signalCh:
-		if !ok {
-			require.Fail(t, "Signal channel must not be closed")
-		}
-	default:
-		require.Fail(t, "Signal channel must have one item")
-	}
 }

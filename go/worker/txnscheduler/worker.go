@@ -2,6 +2,7 @@ package txnscheduler
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -9,6 +10,7 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/registration"
+	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
 
@@ -19,9 +21,10 @@ type RuntimeConfig struct {
 
 // Config is the transaction scheduler configuration.
 type Config struct {
-	Backend   string
-	Committee committee.Config
-	Runtimes  []RuntimeConfig
+	Backend      string
+	Algorithm    api.Algorithm
+	FlushTimeout time.Duration
+	Runtimes     []RuntimeConfig
 }
 
 // Runtime is a single runtime.
@@ -177,13 +180,11 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
 	computeNode := w.compute.GetRuntime(rtCfg.ID).GetNode()
 
-	// Create committee node for the given runtime.
-	nodeCfg := cfg.Committee
-
 	node, err := committee.NewNode(
 		commonNode,
 		computeNode,
-		nodeCfg,
+		cfg.Algorithm,
+		cfg.FlushTimeout,
 	)
 	if err != nil {
 		return err
