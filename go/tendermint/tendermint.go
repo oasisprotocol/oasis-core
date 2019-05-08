@@ -163,6 +163,10 @@ func (t *tendermintService) Synced() <-chan struct{} {
 	return t.syncedCh
 }
 
+func (t *tendermintService) RegisterGenesisHook(hook func()) {
+	t.mux.RegisterGenesisHook(hook)
+}
+
 func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
 	message := cbor.Marshal(tx)
 	data := append([]byte{tag}, message...)

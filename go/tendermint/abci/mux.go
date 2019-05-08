@@ -196,6 +196,13 @@ func (a *ApplicationServer) Register(app Application) error {
 	return a.mux.doRegister(app)
 }
 
+// RegisterGenesisHook registers a function to be called when the
+// consensus backend is initialized from genesis (e.g., on fresh
+// start).
+func (a *ApplicationServer) RegisterGenesisHook(hook func()) {
+	a.mux.registerGenesisHook(hook)
+}
+
 // Pruner returns the ABCI state pruner.
 func (a *ApplicationServer) Pruner() StatePruner {
 	return a.mux.state.statePruner
@@ -220,6 +227,7 @@ func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneCo
 }
 
 type abciMux struct {
+	sync.RWMutex
 	types.BaseApplication
 
 	logger      *logging.Logger
@@ -233,6 +241,15 @@ type abciMux struct {
 
 	lastBeginBlock int64
 	currentTime    time.Time
+
+	genesisHooks []func()
+}
+
+func (mux *abciMux) registerGenesisHook(hook func()) {
+	mux.Lock()
+	defer mux.Unlock()
+
+	mux.genesisHooks = append(mux.genesisHooks, hook)
 }
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
@@ -395,6 +412,18 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	}
 
 	ctx.fireOnCommitHooks(mux.state)
+
+	// Dispatch registered genesis hooks.
+	mux.RLock()
+	defer mux.RUnlock()
+
+	mux.logger.Debug("Dispatching genesis hooks")
+
+	for _, hook := range mux.genesisHooks {
+		hook()
+	}
+
+	mux.logger.Debug("Genesis hook dispatch complete")
 
 	return resp
 }
