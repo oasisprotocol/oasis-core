@@ -26,6 +26,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/version"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 )
@@ -114,7 +115,7 @@ type Application interface {
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
-	InitChain(*Context, types.RequestInitChain) types.ResponseInitChain
+	InitChain(*Context, types.RequestInitChain, *genesis.Document)
 
 	// BeginBlock signals the beginning of a block.
 	//
@@ -434,6 +435,14 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			panic("mux: invalid defered genesis application state")
 		}
 
+		doc, err := parseGenesisAppState(initReq)
+		if err != nil {
+			mux.logger.Error("BeginBlock: corrupted defered genesis state",
+				"err", err,
+			)
+			panic("mux: invalid defered genesis application state")
+		}
+
 		ctx.outputType = ContextInitChain
 
 		for _, app := range mux.appsByLexOrder {
@@ -441,8 +450,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"app", app.Name(),
 			)
 
-			// I hope nothing wants to alter the validator set.
-			_ = app.InitChain(ctx, initReq)
+			app.InitChain(ctx, initReq, doc)
 		}
 
 		ctx.outputType = ContextBeginBlock
@@ -740,7 +748,7 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.BlockBackend) (bool
 }
 
 // Genesis returns the ABCI genesis state.
-func (s *ApplicationState) Genesis() *api.GenesisAppState {
+func (s *ApplicationState) Genesis() *genesis.Document {
 	_, b := s.checkTxTree.Get([]byte(stateKeyGenesisRequest))
 
 	var req types.RequestInitChain
@@ -915,32 +923,9 @@ func isP2PFilterQuery(s string) bool {
 	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
 }
 
-// UnmarshalGenesisAppState deserializes the specific application's genesis state
-// from the provided RequestInitChain.
-func UnmarshalGenesisAppState(req types.RequestInitChain, app Application, v interface{}) error {
-	// This is redundant, the application interface could toss the map around,
-	// but this isn't critical path, and doing it this way keeps the interface
-	// near-identical to that of upstream tendermint ABCI.
-	st, err := parseGenesisAppState(req)
-	if err != nil {
-		return err
-	}
-
-	return st.UnmarshalAppState(app.Name(), v)
-}
-
-func parseGenesisAppState(req types.RequestInitChain) (*api.GenesisAppState, error) {
-	b := req.AppStateBytes
-	if len(b) == 0 {
-		// No genesis state is treated as a success, return a new
-		// empty map for code commonality reasons.
-		return &api.GenesisAppState{
-			ABCIAppState: make(map[string][]byte),
-		}, nil
-	}
-
-	var st api.GenesisAppState
-	if err := json.Unmarshal(b, &st); err != nil {
+func parseGenesisAppState(req types.RequestInitChain) (*genesis.Document, error) {
+	var st genesis.Document
+	if err := json.Unmarshal(req.AppStateBytes, &st); err != nil {
 		return nil, err
 	}
 

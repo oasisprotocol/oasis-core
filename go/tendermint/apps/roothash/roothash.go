@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -129,14 +130,8 @@ func (app *rootHashApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
-	var st GenesisState
-	if err := abci.UnmarshalGenesisAppState(request, app, &st); err != nil {
-		app.logger.Error("InitChain: failed to unmarshal genesis state",
-			"err", err,
-		)
-		panic("roothash: invalid genesis state")
-	}
+func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+	st := doc.RootHash
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
 	// also needs to be done here since the genesis state can have runtime
@@ -155,8 +150,6 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 		)
 		app.onNewRuntime(ctx, tree, v, &st)
 	}
-
-	return types.ResponseInitChain{}
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
@@ -339,18 +332,9 @@ func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 }
 
 func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	var st *GenesisState
-	ensureGenesis := func() error {
-		var err error
-
-		if st == nil {
-			st = new(GenesisState)
-			if err = app.state.Genesis().UnmarshalAppState(app.Name(), st); err != nil {
-				st = nil
-			}
-		}
-
-		return err
+	var st *roothash.Genesis
+	ensureGenesis := func() {
+		st = &app.state.Genesis().RootHash
 	}
 
 	switch other.Name() {
@@ -372,10 +356,7 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 					return errors.Wrap(err, "roothash: failed to fetch new runtime")
 				}
 
-				if err = ensureGenesis(); err != nil {
-					return errors.Wrap(err, "roothash: failed to fetch genesis blocks")
-				}
-
+				ensureGenesis()
 				app.onNewRuntime(ctx, tree, rt, st)
 			}
 		}
@@ -384,7 +365,7 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 	return nil
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *GenesisState) {
+func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *roothash.Genesis) {
 	state := newMutableState(tree)
 
 	// Check if state already exists for the given runtime.

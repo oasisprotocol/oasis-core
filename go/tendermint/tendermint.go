@@ -3,8 +3,6 @@ package tendermint
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -34,9 +32,10 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
+	"github.com/oasislabs/ekiden/go/genesis"
+	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -45,7 +44,6 @@ import (
 const (
 	configDir = "config"
 
-	cfgCoreGenesisFile     = "tendermint.core.genesis_file"
 	cfgCoreListenAddress   = "tendermint.core.listen_address"
 	cfgCoreExternalAddress = "tendermint.core.external_address"
 
@@ -61,7 +59,6 @@ const (
 
 	cfgLogDebug = "tendermint.log.debug"
 
-	cfgDebugBootstrapAddress    = "tendermint.debug.bootstrap.address"
 	cfgDebugBootstrapNodeName   = "tendermint.debug.bootstrap.node_name"
 	cfgDebugBootstrapQuerySeeds = "tendermint.debug.bootstrap.query_seeds"
 	cfgDebugP2PAddrBookLenient  = "tendermint.debug.addr_book_lenient"
@@ -82,6 +79,7 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 
+	genesis                  genesis.Provider
 	nodeKey                  *signature.PrivateKey
 	dataDir                  string
 	isInitialized, isStarted bool
@@ -246,14 +244,6 @@ func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query)
 	return errors.New("tendermint: unsubscribe called with no backing service")
 }
 
-func (t *tendermintService) Genesis() (*tmrpctypes.ResultGenesis, error) {
-	if t.client == nil {
-		panic("client not available yet")
-	}
-
-	return t.client.Genesis()
-}
-
 func (t *tendermintService) IsSeed() bool {
 	// XXX: Probably should properly check and not rely on the flag.
 	return viper.GetBool(cfgP2PSeedMode)
@@ -357,7 +347,6 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit := viper.GetDuration(cfgConsensusTimeoutCommit)
 	emptyBlockInterval := viper.GetDuration(cfgConsensusEmptyBlockInterval)
-	tenderConfig.Genesis = viper.GetString(cfgCoreGenesisFile)
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
 	tenderConfig.Consensus.SkipTimeoutCommit = viper.GetBool(cfgConsensusSkipTimeoutCommit)
 	tenderConfig.Consensus.CreateEmptyBlocks = true
@@ -430,24 +419,48 @@ func (t *tendermintService) lazyInit() error {
 	return nil
 }
 
-func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.GenesisDoc, error) {
-	var genDoc *bootstrap.GenesisDocument
+// genesisToTendermint converts the Ekiden genesis block to tendermint's format.
+func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
+	// NOTE: The AppState MUST be encoded as JSON since its type is json.RawMessage
+	//       which requires it to be valid JSON. It may appear to work until you
+	//       try to restore from an existing data directory.
+	doc := tmtypes.GenesisDoc{
+		ChainID:         "0xa515",
+		GenesisTime:     d.Time,
+		ConsensusParams: tmtypes.DefaultConsensusParams(),
+		AppState:        json.Marshal(d),
+	}
 
-	genFile := tenderConfig.GenesisFile()
-	if addr := viper.GetString(cfgDebugBootstrapAddress); addr != "" {
+	var tmValidators []tmtypes.GenesisValidator
+	for _, v := range d.Validators {
+		pk := crypto.PublicKeyToTendermint(&v.PubKey)
+		validator := tmtypes.GenesisValidator{
+			Address: pk.Address(),
+			PubKey:  pk,
+			Power:   v.Power,
+			Name:    v.Name,
+		}
+		tmValidators = append(tmValidators, validator)
+	}
+
+	doc.Validators = tmValidators
+
+	return &doc, nil
+}
+
+func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.GenesisDoc, error) {
+	if bs, ok := t.genesis.(*bootstrap.Provider); ok {
 		t.Logger.Warn("The bootstrap provisioning server is NOT FOR PRODUCTION USE.")
+
 		var (
 			nodeAddr   = viper.GetString(cfgCoreExternalAddress)
 			nodeName   = viper.GetString(cfgDebugBootstrapNodeName)
 			querySeeds = viper.GetBool(cfgDebugBootstrapQuerySeeds)
 			err        error
 		)
-		if nodeName == "" {
-			genDoc, err = bootstrap.Client(addr)
-			if err != nil {
-				return nil, errors.Wrap(err, "tendermint: client bootstrap failed")
-			}
-		} else {
+
+		if nodeName != "" {
+			// Register as a validator node with the bootstrap server.
 			if err = common.IsAddrPort(nodeAddr); err != nil {
 				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node address")
 			}
@@ -455,17 +468,17 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node name")
 			}
 
-			validator := &bootstrap.GenesisValidator{
+			validator := &genesis.Validator{
 				PubKey:      t.nodeKey.Public(),
 				Name:        common.NormalizeFQDN(nodeName),
 				CoreAddress: nodeAddr,
 			}
-			genDoc, err = bootstrap.Validator(addr, validator)
-			if err != nil {
+			if err = bs.RegisterValidator(validator); err != nil {
 				return nil, errors.Wrap(err, "tendermint: validator bootstrap failed")
 			}
 		}
-		// Register itself as a seed node to the bootstrap server
+
+		// Register itself as a seed node to the bootstrap server.
 		if t.IsSeed() {
 			if err = common.IsAddrPort(nodeAddr); err != nil {
 				return nil, errors.Wrap(err, "tendermint: malformed bootstrap seed node address")
@@ -475,47 +488,37 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 				PubKey:      t.nodeKey.Public(),
 				CoreAddress: nodeAddr,
 			}
-			if err = bootstrap.Seed(addr, seed); err != nil {
+			if err = bs.RegisterSeed(seed); err != nil {
 				return nil, errors.Wrap(err, "tendermint: seed bootstrap failed")
 			}
 		}
 		// Query seed nodes from the bootstrap server
 		if querySeeds {
 			t.Logger.Debug("querying seeds")
-			seeds, err := bootstrap.GetSeeds(addr)
+			seeds, err := bs.GetSeeds()
 			if err != nil {
 				return nil, errors.Wrap(err, "tendermint: getting bootstrap seeds failed")
 			}
 			for _, seed := range seeds {
-				tenderConfig.P2P.Seeds = tenderConfig.P2P.Seeds + "," + seed.ToTendermint()
+				tmPub := crypto.PublicKeyToTendermint(&seed.PubKey)
+				seedIDLower := strings.ToLower(tmPub.Address().String())
+				seedID := fmt.Sprintf("%s@%s", seedIDLower, seed.CoreAddress)
+
+				tenderConfig.P2P.Seeds = tenderConfig.P2P.Seeds + "," + seedID
 				tenderConfig.P2P.Seeds = strings.TrimLeft(tenderConfig.P2P.Seeds, ",")
 			}
 			t.Logger.Debug("done querying seeds", "seeds", tenderConfig.P2P.Seeds)
 		}
-	} else if _, err := os.Lstat(genFile); err != nil && os.IsNotExist(err) {
-		t.Logger.Warn("Tendermint Genesis file not present. Running as a one-node validator.")
-		genDoc = &bootstrap.GenesisDocument{
-			Validators: []*bootstrap.GenesisValidator{
-				{
-					PubKey: t.nodeKey.Public(),
-					Name:   "ekiden-dummy",
-					Power:  10,
-				},
-			},
-			GenesisTime: time.Now(),
-		}
-	} else {
-		// The genesis document is just an array of GenesisValidator(s)
-		// in JSON format for now.
-		b, err := ioutil.ReadFile(genFile)
-		if err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to read genesis doc")
-		}
+	}
 
-		genDoc = new(bootstrap.GenesisDocument)
-		if err = json.Unmarshal(b, &genDoc); err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to parse genesis doc")
-		}
+	doc, err := t.genesis.GetGenesisDocument()
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
+	}
+
+	tmGenDoc, err := genesisToTendermint(doc)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
 	}
 
 	if t.IsSeed() {
@@ -524,7 +527,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
 		// sensitive string comparision to validate public keys.
 		var addrs []*tmp2p.NetAddress
-		for _, v := range genDoc.Validators {
+		for _, v := range doc.Validators {
 			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
 			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
 			vAddr := vPkAddrHex + "@" + v.CoreAddress
@@ -586,11 +589,6 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 				return nil, errors.Wrap(err, "tendermint: failed to add genesis validator to address book")
 			}
 		}
-	}
-
-	tmGenDoc, err := genDoc.ToTendermint()
-	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
 	}
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
@@ -659,11 +657,12 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(ctx context.Context, dataDir string, identity *identity.Identity) service.TendermintService {
+func New(ctx context.Context, dataDir string, identity *identity.Identity, genesis genesis.Provider) service.TendermintService {
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
 		nodeKey:               identity.NodeKey,
+		genesis:               genesis,
 		ctx:                   ctx,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
@@ -800,7 +799,6 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgCoreGenesisFile, "genesis.json", "tendermint core genesis file path")
 		cmd.Flags().String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 		cmd.Flags().String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 		cmd.Flags().Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
@@ -811,14 +809,12 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
 		cmd.Flags().String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
-		cmd.Flags().String(cfgDebugBootstrapAddress, "", "debug bootstrap server address:port")
 		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
 		cmd.Flags().Bool(cfgDebugBootstrapQuerySeeds, false, "if true, query bootstrap server for seed nodes")
 		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	}
 
 	for _, v := range []string{
-		cfgCoreGenesisFile,
 		cfgCoreListenAddress,
 		cfgCoreExternalAddress,
 		cfgConsensusTimeoutCommit,
@@ -829,8 +825,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgP2PSeedMode,
 		cfgP2PSeeds,
 		cfgLogDebug,
-		cfgDebugBootstrapAddress,
-		cfgDebugBootstrapNodeName,
 		cfgDebugBootstrapQuerySeeds,
 		cfgDebugP2PAddrBookLenient,
 	} {

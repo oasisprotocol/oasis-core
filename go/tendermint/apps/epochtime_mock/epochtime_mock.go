@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
@@ -87,8 +88,7 @@ func (app *epochTimeMockApplication) ForeignCheckTx(ctx *abci.Context, other abc
 	return nil
 }
 
-func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
-	return types.ResponseInitChain{}
+func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
 }
 
 func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {

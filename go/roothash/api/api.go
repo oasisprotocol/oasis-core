@@ -181,3 +181,9 @@ type PrunedBlock struct {
 	// Round is the block round.
 	Round uint64
 }
+
+// Genesis is the roothash genesis state.
+type Genesis struct {
+	// Blocks is the per-runtime map of genesis blocks.
+	Blocks map[signature.MapKey]*block.Block `codec:"blocks,omit_empty"`
+}

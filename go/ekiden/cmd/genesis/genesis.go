@@ -1,5 +1,5 @@
-// Package tendermint implements the tendermint sub-commands.
-package tendermint
+// Package genesis implements the genesis sub-commands.
+package genesis
 
 import (
 	"errors"
@@ -10,18 +10,15 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
+	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-	tmregistry "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
-	tmroothash "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
-	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
 )
 
 const (
@@ -33,13 +30,13 @@ const (
 )
 
 var (
-	tendermintCmd = &cobra.Command{
-		Use:   "tendermint",
-		Short: "tendermint backend utilities",
+	genesisCmd = &cobra.Command{
+		Use:   "genesis",
+		Short: "genesis block utilities",
 	}
 
 	initGenesisCmd = &cobra.Command{
-		Use:   "init_genesis",
+		Use:   "init",
 		Short: "initialize the genesis file",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			registerInitGenesisFlags(cmd)
@@ -47,7 +44,7 @@ var (
 		Run: doInitGenesis,
 	}
 
-	logger = logging.GetLogger("cmd/tendermint")
+	logger = logging.GetLogger("cmd/genesis")
 )
 
 func doInitGenesis(cmd *cobra.Command, args []string) {
@@ -74,7 +71,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	validators := make([]*bootstrap.GenesisValidator, 0, len(validatorFiles))
+	validators := make([]*genesis.Validator, 0, len(validatorFiles))
 	for _, v := range validatorFiles {
 		b, err := ioutil.ReadFile(v)
 		if err != nil {
@@ -85,7 +82,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		var validator bootstrap.GenesisValidator
+		var validator genesis.Validator
 		if err := json.Unmarshal(b, &validator); err != nil {
 			logger.Error("failed to parse genesis validator",
 				"err", err,
@@ -99,12 +96,13 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	// Build the genesis state, if any.
-	st := &api.GenesisAppState{
-		ABCIAppState: make(map[string][]byte),
+	doc := &genesis.Document{
+		Time:       time.Now(),
+		Validators: validators,
 	}
 	entities := viper.GetStringSlice(cfgEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
-	if err := AppendRegistryState(st, entities, runtimes, logger); err != nil {
+	if err := AppendRegistryState(doc, entities, runtimes, logger); err != nil {
 		logger.Error("failed to parse registry genesis state",
 			"err", err,
 		)
@@ -112,19 +110,11 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	roothash := viper.GetStringSlice(cfgRootHash)
-	if err := AppendRootHashState(st, roothash, logger); err != nil {
+	if err := AppendRootHashState(doc, roothash, logger); err != nil {
 		logger.Error("failed to parse roothash genesis state",
 			"err", err,
 		)
 		return
-	}
-
-	doc := &bootstrap.GenesisDocument{
-		Validators:  validators,
-		GenesisTime: time.Now(),
-	}
-	if len(st.ABCIAppState) > 0 {
-		doc.AppState = string(json.Marshal(st))
 	}
 
 	b := json.Marshal(doc)
@@ -140,8 +130,8 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 // AppendRegistryState appends the registry genesis state given a vector
 // of entity registrations and runtime registrations.
-func AppendRegistryState(st *api.GenesisAppState, entities, runtimes []string, l *logging.Logger) error {
-	regSt := &tmregistry.GenesisState{
+func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *logging.Logger) error {
+	regSt := registry.Genesis{
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
 	}
@@ -190,21 +180,19 @@ func AppendRegistryState(st *api.GenesisAppState, entities, runtimes []string, l
 		regSt.Runtimes = append(regSt.Runtimes, &rt)
 	}
 
-	if len(regSt.Entities) > 0 || len(regSt.Runtimes) > 0 {
-		st.ABCIAppState[tmregistry.AppName] = cbor.Marshal(regSt)
-	}
+	doc.Registry = regSt
 
 	return nil
 }
 
 // AppendRootHashState appends the roothash genesis state given a vector
 // of exported roothash blocks.
-func AppendRootHashState(st *api.GenesisAppState, roothash []string, l *logging.Logger) error {
-	rootSt := &tmroothash.GenesisState{
+func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
+	rootSt := roothash.Genesis{
 		Blocks: make(map[signature.MapKey]*block.Block),
 	}
 
-	for _, v := range roothash {
+	for _, v := range exports {
 		b, err := ioutil.ReadFile(v)
 		if err != nil {
 			l.Error("failed to load genesis roothash blocks",
@@ -237,9 +225,7 @@ func AppendRootHashState(st *api.GenesisAppState, roothash []string, l *logging.
 		}
 	}
 
-	if len(rootSt.Blocks) > 0 {
-		st.ABCIAppState[tmroothash.AppName] = cbor.Marshal(rootSt)
-	}
+	doc.RootHash = rootSt
 
 	return nil
 }
@@ -264,16 +250,16 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 	}
 }
 
-// Register registers the tendermint sub-command and all of it's children.
+// Register registers the genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	registerInitGenesisFlags(initGenesisCmd)
-	initProvisionValidatorCmd(tendermintCmd)
+	initProvisionValidatorCmd(genesisCmd)
 
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,
 	} {
-		tendermintCmd.AddCommand(v)
+		genesisCmd.AddCommand(v)
 	}
 
-	parentCmd.AddCommand(tendermintCmd)
+	parentCmd.AddCommand(genesisCmd)
 }

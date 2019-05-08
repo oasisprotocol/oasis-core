@@ -345,3 +345,12 @@ func VerifyTimestamp(timestamp uint64, now uint64) error {
 
 	return nil
 }
+
+// Genesis is the registry genesis state.
+type Genesis struct {
+	// Entities is the initial list of entities.
+	Entities []*entity.SignedEntity `codec:"entities,omit_empty"`
+
+	// Runtimes is the initial list of runtimes.
+	Runtimes []*SignedRuntime `codec:"runtimes,omit_empty"`
+}
