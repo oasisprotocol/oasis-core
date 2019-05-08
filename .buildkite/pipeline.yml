@@ -144,6 +144,7 @@ steps:
   # Test single node config
   #########################
   - label: Test single node config
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_config.sh single_node
