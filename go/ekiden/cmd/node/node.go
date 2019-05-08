@@ -186,6 +186,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.Storage,
 		n.grpcExternal,
 		n.WorkerRegistration,
+		n.svcTmnt,
+		n.Genesis,
 	)
 	if err != nil {
 		return err
