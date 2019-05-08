@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -25,7 +26,7 @@ type hostHandler struct {
 
 	storage      storage.Backend
 	keyManager   *keymanager.KeyManager
-	localStorage *localStorage
+	localStorage *host.LocalStorage
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -173,6 +174,6 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 	return nil, errMethodNotSupported
 }
 
-func newHostHandler(runtimeID signature.PublicKey, storage storage.Backend, keyManager *keymanager.KeyManager, localStorage *localStorage) protocol.Handler {
+func newHostHandler(runtimeID signature.PublicKey, storage storage.Backend, keyManager *keymanager.KeyManager, localStorage *host.LocalStorage) protocol.Handler {
 	return &hostHandler{runtimeID, storage, keyManager, localStorage}
 }

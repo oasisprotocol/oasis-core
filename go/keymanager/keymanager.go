@@ -50,6 +50,8 @@ type KeyManager struct {
 	quitCh     chan struct{}
 	requestCh  chan *request
 
+	localStorage *host.LocalStorage
+
 	storage       storage.Backend
 	stateRoot     hash.Hash
 	stateRootPath string
@@ -102,6 +104,9 @@ func (k *KeyManager) Stop() {
 
 	k.grpc.Stop()
 	k.workerHost.Stop()
+	if k.localStorage != nil {
+		k.localStorage.Stop()
+	}
 	close(k.stopCh)
 }
 
@@ -316,6 +321,11 @@ func newKeyManager(
 			return nil, err
 		}
 
+		// Open the local storage.
+		if km.localStorage, err = host.NewLocalStorage(dataDir, "km-local-storage.bolt.db"); err != nil {
+			return nil, err
+		}
+
 		// Create worker host for the keymanager runtime.
 		km.workerHost, err = host.NewSandboxedHost(
 			"keymanager",
@@ -324,7 +334,7 @@ func newKeyManager(
 			make(map[string]host.ProxySpecification),
 			teeHardware,
 			ias,
-			newHostHandler(storage),
+			newHostHandler(storage, km.localStorage),
 			false,
 		)
 		if err != nil {

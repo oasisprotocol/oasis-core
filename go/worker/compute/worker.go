@@ -73,7 +73,7 @@ type Worker struct {
 	netProxies map[string]NetworkProxy
 	socketDir  string
 
-	localStorage *localStorage
+	localStorage *host.LocalStorage
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -392,7 +392,7 @@ func newWorker(
 		}
 
 		// Open the local storage.
-		if w.localStorage, err = newLocalStorage(dataDir); err != nil {
+		if w.localStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
 			return nil, err
 		}
 

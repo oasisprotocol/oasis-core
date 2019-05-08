@@ -6,7 +6,9 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -17,7 +19,10 @@ var (
 )
 
 type hostHandler struct {
-	storage storage.Backend
+	runtimeID signature.PublicKey
+
+	storage      storage.Backend
+	localStorage *host.LocalStorage
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -46,10 +51,26 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 		return &protocol.Body{HostStorageGetBatchResponse: &protocol.HostStorageGetBatchResponse{Values: values}}, nil
 	}
+	// Local storage.
+	if body.HostLocalStorageGetRequest != nil {
+		value, err := h.localStorage.Get(h.runtimeID, body.HostLocalStorageGetRequest.Key)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
+	}
+	if body.HostLocalStorageSetRequest != nil {
+		if err := h.localStorage.Set(h.runtimeID, body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
+	}
 
 	return nil, errMethodNotSupported
 }
 
-func newHostHandler(storage storage.Backend) protocol.Handler {
-	return &hostHandler{storage}
+func newHostHandler(storage storage.Backend, localStorage *host.LocalStorage) protocol.Handler {
+	var tmpRuntimeID signature.PublicKey
+	_ = tmpRuntimeID.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	return &hostHandler{tmpRuntimeID, storage, localStorage}
 }
