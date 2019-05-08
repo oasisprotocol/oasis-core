@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
 	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
@@ -26,6 +27,9 @@ var (
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
 	ID signature.PublicKey `codec:"id"`
+
+	// Genesis is the runtime genesis information.
+	Genesis RuntimeGenesis
 
 	// Code is the runtime code body.
 	Code []byte `codec:"code"`
@@ -147,4 +151,16 @@ func SignRuntime(privateKey signature.PrivateKey, context []byte, runtime *Runti
 	return &SignedRuntime{
 		Signed: *signed,
 	}, nil
+}
+
+// RuntimeGenesis is the runtime genesis information that is used to
+// initialize runtime state in the first block.
+type RuntimeGenesis struct {
+	// StateRoot is the state root that should be used at genesis time. If
+	// the runtime should start with empty state, this must be set to the
+	// empty hash.
+	StateRoot hash.Hash `codec:"state_root"`
+
+	// StorageReceipt is the storage receipt for the state root.
+	StorageReceipt signature.Signature `codec:"storage_receipt"`
 }

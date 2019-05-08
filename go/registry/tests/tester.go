@@ -650,6 +650,9 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		rt.PrivateKey = entity.PrivateKey
 	}
 
+	// TODO: Test with non-empty state root when enabled.
+	rt.Runtime.Genesis.StateRoot.Empty()
+
 	return &rt, nil
 }
 

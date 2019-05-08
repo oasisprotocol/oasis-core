@@ -34,6 +34,7 @@ const (
 	cfgReplicaAllowedStragglers      = "runtime.replica_allowed_stragglers"
 	cfgStorageGroupSize              = "runtime.storage_group_size"
 	cfgTransactionSchedulerGroupSize = "runtime.transaction_scheduler_group_size"
+	cfgGenesisStateRoot              = "runtime.genesis.state_root"
 	cfgEntity                        = "entity"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
@@ -248,8 +249,22 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		return nil, nil, err
 	}
 
+	// TODO: Instead of specifying the state root directly, support specifying
+	//       an input file containing key/value pairs, derive the root and
+	//       support root upload.
+	gen := registry.RuntimeGenesis{}
+	switch stateRoot := viper.GetString(cfgGenesisStateRoot); stateRoot {
+	case "":
+		gen.StateRoot.Empty()
+	default:
+		if err = gen.StateRoot.UnmarshalHex(stateRoot); err != nil {
+			return nil, nil, fmt.Errorf("failed to parse state root: %s", err)
+		}
+	}
+
 	return &registry.Runtime{
 		ID:                            id,
+		Genesis:                       gen,
 		Code:                          nil, // TBD
 		TEEHardware:                   teeHardware,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
@@ -291,6 +306,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgReplicaAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime replica group")
 		cmd.Flags().Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
 		cmd.Flags().Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
+		cmd.Flags().String(cfgGenesisStateRoot, "", "State root to use for the genesis block")
 		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
@@ -302,6 +318,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgReplicaAllowedStragglers,
 		cfgStorageGroupSize,
 		cfgTransactionSchedulerGroupSize,
+		cfgGenesisStateRoot,
 		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

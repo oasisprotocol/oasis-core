@@ -383,6 +383,9 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	if genesisBlock == nil {
 		now := ctx.Now().Unix()
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
+		if !runtime.Genesis.StateRoot.IsEmpty() {
+			genesisBlock.Header.StateRoot = runtime.Genesis.StateRoot
+		}
 	}
 
 	// Create new state containing the genesis block.
