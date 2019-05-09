@@ -91,11 +91,6 @@ steps:
   - label: Deploy docker image (master branches only)
     branches: master
     command:
-      - .buildkite/scripts/promote_deployment_image_to.sh latest-testing
+      - .buildkite/scripts/promote_deployment_image_to.sh latest-beta
     env:
       DEPLOYMENT_VARIANT: testing
-
-  - label: Deploy production-track docker image (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/promote_deployment_image_to.sh latest
