@@ -19,6 +19,10 @@ log:
     tendermint: warn
     tendermint/context: error
 
+# Genesis.
+genesis:
+  file: /tmp/ekiden-single-node/genesis.json
+
 # Internal gRPC services.
 grpc:
   log:
@@ -85,8 +89,6 @@ roothash:
 
 # Tendermint backend configuration.
 tendermint:
-  core:
-    genesis_file: /tmp/ekiden-single-node/genesis.json
   consensus:
     timeout_commit: 1s
 

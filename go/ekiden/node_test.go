@@ -288,6 +288,7 @@ func testRootHash(t *testing.T, node *testNode) {
 func testComputeWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
+	require.NotNil(t, node.computeCommitteeNode)
 	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource, node.RootHash)
 }
 
@@ -298,6 +299,7 @@ func testStorageWorker(t *testing.T, node *testNode) {
 func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
+	require.NotNil(t, node.txnschedulerCommitteeNode)
 	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash)
 }
 
@@ -330,4 +332,5 @@ func testStorageClient(t *testing.T, node *testNode) {
 
 func init() {
 	_ = testRuntime.ID.UnmarshalHex(testRuntimeID)
+	testRuntime.Genesis.StateRoot.Empty()
 }

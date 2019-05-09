@@ -581,7 +581,9 @@ func (b *storageClientBackend) Cleanup() {
 
 	b.cancelFn()
 	b.connectionState.resolverCleanupCb()
-	b.connectionState.conn.Close()
+	if b.connectionState.conn != nil {
+		b.connectionState.conn.Close()
+	}
 }
 
 func (b *storageClientBackend) Initialized() <-chan struct{} {

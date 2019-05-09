@@ -44,6 +44,16 @@ func (h *Hash) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// UnmarshalHex deserializes a hexadecimal text string into the given type.
+func (h *Hash) UnmarshalHex(text string) error {
+	b, err := hex.DecodeString(text)
+	if err != nil {
+		return err
+	}
+
+	return h.UnmarshalBinary(b)
+}
+
 // From sets the hash to that of an arbitrary CBOR serializeable interface.
 func (h *Hash) From(v interface{}) {
 	h.FromBytes(cbor.Marshal(v))

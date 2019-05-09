@@ -1,13 +1,18 @@
 package storage
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageApi "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/registration"
@@ -34,6 +39,8 @@ func New(
 	sb storageApi.Backend,
 	g *grpc.Server,
 	r *registration.Registration,
+	consensus common.ConsensusBackend,
+	genesis genesis.Provider,
 ) (*Storage, error) {
 
 	s := &Storage{
@@ -47,6 +54,24 @@ func New(
 	}
 
 	if s.enabled {
+		// Populate storage from genesis.
+		consensus.RegisterGenesisHook(func() {
+			doc, err := genesis.GetGenesisDocument()
+			if err != nil {
+				s.logger.Error("failed to get genesis document",
+					"err", err,
+				)
+				panic("failed to get genesis document")
+			}
+
+			if err = s.initGenesis(&doc.Storage); err != nil {
+				s.logger.Error("failed to initialize storage from genesis",
+					"err", err,
+				)
+				panic("storage: failed to initialize storage from genesis")
+			}
+		})
+
 		// Attach storage worker to gRPC server.
 		storage.NewGRPCServer(s.grpc.Server(), s.storage)
 
@@ -113,6 +138,20 @@ func (s *Storage) Quit() <-chan struct{} {
 
 // Cleanup performs the service specific post-termination cleanup.
 func (s *Storage) Cleanup() {
+}
+
+func (s *Storage) initGenesis(gen *storageApi.Genesis) error {
+	ctx := context.Background()
+
+	s.logger.Info("initializing storage from genesis")
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+	if _, err := s.storage.Apply(ctx, emptyRoot, emptyRoot, gen.State); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // RegisterFlags registers the configuration flags with the provided

@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
@@ -121,14 +122,8 @@ func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
-	var st GenesisState
-	if err := abci.UnmarshalGenesisAppState(request, app, &st); err != nil {
-		app.logger.Error("InitChain: failed to unmarshal genesis state",
-			"err", err,
-		)
-		panic("registry: invalid genesis state")
-	}
+func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+	st := doc.Registry
 
 	app.logger.Debug("InitChain: Genesis state",
 		"state", string(json.Marshal(st)),
@@ -163,8 +158,6 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	if len(st.Entities) > 0 || len(st.Runtimes) > 0 {
 		ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 	}
-
-	return types.ResponseInitChain{}
 }
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {

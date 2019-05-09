@@ -123,7 +123,7 @@ type Node struct {
 	registry    registry.Backend
 	epochtime   epochtime.Backend
 	scheduler   scheduler.Backend
-	syncable    common.Syncable
+	consensus   common.ConsensusBackend
 	computeNode *computeCommittee.Node
 
 	cfg Config
@@ -434,12 +434,12 @@ func (n *Node) checkIncomingQueue(force bool) {
 func (n *Node) worker() {
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
-	if n.syncable != nil {
+	if n.consensus != nil {
 		n.logger.Info("delaying committee node start until after initial synchronization")
 		select {
 		case <-n.quitCh:
 			return
-		case <-n.syncable.Synced():
+		case <-n.consensus.Synced():
 		}
 	}
 	n.logger.Info("starting committee node")
@@ -504,7 +504,7 @@ func NewNode(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	computeNode *computeCommittee.Node,
 	p2p *p2p.P2P,
 	cfg Config,
@@ -523,7 +523,7 @@ func NewNode(
 		registry:         registry,
 		epochtime:        epochtime,
 		scheduler:        scheduler,
-		syncable:         syncable,
+		consensus:        consensus,
 		computeNode:      computeNode,
 		cfg:              cfg,
 		ctx:              ctx,

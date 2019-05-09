@@ -1,4 +1,4 @@
-package tendermint
+package bootstrap
 
 import (
 	"os"
@@ -9,18 +9,19 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/tendermint"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
+	cmdGenesis "github.com/oasislabs/ekiden/go/ekiden/cmd/genesis"
+	"github.com/oasislabs/ekiden/go/genesis"
+	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 )
 
 const (
-	cfgBootstrapAddress    = "debug.tendermint.bootstrap.address"
-	cfgBootstrapValidators = "debug.tendermint.bootstrap.validators"
-	cfgBootstrapSeeds      = "debug.tendermint.bootstrap.seeds"
-	cfgBootstrapRuntime    = "debug.tendermint.bootstrap.runtime"
-	cfgBootstrapEntity     = "debug.tendermint.bootstrap.entity"
-	cfgBootstrapRootHash   = "debug.tendermint.bootstrap.roothash"
+	cfgBootstrapAddress    = "debug.bootstrap.address"
+	cfgBootstrapValidators = "debug.bootstrap.validators"
+	cfgBootstrapSeeds      = "debug.bootstrap.seeds"
+	cfgBootstrapRuntime    = "debug.bootstrap.runtime"
+	cfgBootstrapEntity     = "debug.bootstrap.entity"
+	cfgBootstrapRootHash   = "debug.bootstrap.roothash"
+	cfgBootstrapStorage    = "debug.bootstrap.storage"
 )
 
 var (
@@ -39,7 +40,7 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	logger := logging.GetLogger("cmd/debug/tendermint/bootstrap")
+	logger := logging.GetLogger("cmd/debug/bootstrap")
 	logger.Warn("The bootstrap provisioning server is NOT FOR PRODUCTION USE.")
 
 	dataDir := cmdCommon.DataDir()
@@ -55,12 +56,10 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	st := &api.GenesisAppState{
-		ABCIAppState: make(map[string][]byte),
-	}
+	template := &genesis.Document{}
 	entities := viper.GetStringSlice(cfgBootstrapEntity)
 	runtimes := viper.GetStringSlice(cfgBootstrapRuntime)
-	if err := tendermint.AppendRegistryState(st, entities, runtimes, logger); err != nil {
+	if err := cmdGenesis.AppendRegistryState(template, entities, runtimes, logger); err != nil {
 		logger.Error("failed to parse registry genesis state",
 			"err", err,
 		)
@@ -68,15 +67,19 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 	}
 
 	roothash := viper.GetStringSlice(cfgBootstrapRootHash)
-	if err := tendermint.AppendRootHashState(st, roothash, logger); err != nil {
+	if err := cmdGenesis.AppendRootHashState(template, roothash, logger); err != nil {
 		logger.Error("failed to parse roothash genesis state",
 			"err", err,
 		)
 		os.Exit(1)
 	}
 
-	if len(st.ABCIAppState) == 0 {
-		st = nil
+	storage := viper.GetStringSlice(cfgBootstrapStorage)
+	if err := cmdGenesis.AppendStorageState(template, storage, logger); err != nil {
+		logger.Error("failed to parse storage genesis state",
+			"err", err,
+		)
+		os.Exit(1)
 	}
 
 	bootstrapSeeds := viper.GetInt(cfgBootstrapSeeds)
@@ -84,7 +87,7 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 	svcMgr := background.NewServiceManager(logger)
 
 	bootstrapAddr := viper.GetString(cfgBootstrapAddress)
-	srv, err := bootstrap.NewServer(bootstrapAddr, bootstrapValidators, bootstrapSeeds, st, dataDir)
+	srv, err := bootstrap.NewServer(bootstrapAddr, bootstrapValidators, bootstrapSeeds, template, dataDir)
 	if err != nil {
 		logger.Error("failed to initialize bootstrap server",
 			"err", err,
@@ -113,6 +116,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgBootstrapEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRuntime, nil, "path to runtime registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRootHash, nil, "path to roothash genesis blocks file")
+		cmd.Flags().StringSlice(cfgBootstrapStorage, nil, "path to storage genesis state file")
 	}
 
 	for _, v := range []string{
@@ -122,12 +126,14 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 		cfgBootstrapRuntime,
 		cfgBootstrapEntity,
 		cfgBootstrapRootHash,
+		cfgBootstrapStorage,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
 }
 
-func registerBootstrap(parentCmd *cobra.Command) {
+// Register registers the bootstrap sub-command and all of it's children.
+func Register(parentCmd *cobra.Command) {
 	registerBootstrapFlags(bootstrapCmd)
 
 	parentCmd.AddCommand(bootstrapCmd)

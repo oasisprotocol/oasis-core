@@ -1,4 +1,4 @@
-package tendermint
+package genesis
 
 import (
 	"errors"
@@ -15,7 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/tendermint/bootstrap"
+	"github.com/oasislabs/ekiden/go/genesis"
 )
 
 const (
@@ -83,7 +83,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	validator := bootstrap.GenesisValidator{
+	validator := genesis.Validator{
 		PubKey: id.NodeKey.Public(),
 	}
 
@@ -137,7 +137,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 }
 
-func provisionInteractive(validator *bootstrap.GenesisValidator) error {
+func provisionInteractive(validator *genesis.Validator) error {
 	var qs []*survey.Question
 
 	nodeName := viper.GetString(cfgNodeName)
@@ -176,7 +176,7 @@ func registerProvisionValidatorFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().BoolP(cfgInteractive, "i", false, "interactive")
 		cmd.Flags().String(cfgNodeName, "", "validator node name")
-		cmd.Flags().String(cfgNodeAddr, "", "validator node Tendermint core address")
+		cmd.Flags().String(cfgNodeAddr, "", "validator node core address")
 		cmd.Flags().String(cfgValidatorFile, "", "validator identity file")
 	}
 

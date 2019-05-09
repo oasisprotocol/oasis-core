@@ -10,7 +10,6 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
@@ -86,22 +85,4 @@ type QueryGetByIDRequest struct {
 // QueryGetByEpochRequest is a request for fetching things by epoch.
 type QueryGetByEpochRequest struct {
 	Epoch epochtime.EpochTime
-}
-
-// GenesisAppState is the encoded ABCI mux genesis application state.
-type GenesisAppState struct {
-	// ABCIAppState is the per-ABCI application genesis state if any, by
-	// ABCI application name.
-	ABCIAppState map[string][]byte `json:"abci_app_state,omit_empty"`
-}
-
-// UnmarshalAppState deserializes the specific application's genesis state.
-func (st *GenesisAppState) UnmarshalAppState(appName string, v interface{}) error {
-	b, ok := st.ABCIAppState[appName]
-	if !ok {
-		// No state for the app is treated as a success.
-		return nil
-	}
-
-	return cbor.Unmarshal(b, v)
 }

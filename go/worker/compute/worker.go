@@ -74,7 +74,7 @@ type Worker struct {
 	registry     registry.Backend
 	epochtime    epochtime.Backend
 	scheduler    scheduler.Backend
-	syncable     common.Syncable
+	consensus    common.ConsensusBackend
 	ias          *ias.IAS
 	keyManager   *keymanager.KeyManager
 	p2p          *p2p.P2P
@@ -103,7 +103,7 @@ func (w *Worker) Name() string {
 // Start starts the service.
 func (w *Worker) Start() error {
 	if !w.enabled {
-		w.logger.Info("not starting worker as it is disabled")
+		w.logger.Info("not starting compute worker as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
 		close(w.initCh)
@@ -302,7 +302,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		w.registry,
 		w.epochtime,
 		w.scheduler,
-		w.syncable,
+		w.consensus,
 		workerHost,
 		w.p2p,
 		nodeCfg,
@@ -334,7 +334,7 @@ func newWorker(
 	registryInst registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	ias *ias.IAS,
 	p2p *p2p.P2P,
 	registration *registration.Registration,
@@ -366,7 +366,7 @@ func newWorker(
 		registry:        registryInst,
 		epochtime:       epochtime,
 		scheduler:       scheduler,
-		syncable:        syncable,
+		consensus:       consensus,
 		ias:             ias,
 		p2p:             p2p,
 		registration:    registration,

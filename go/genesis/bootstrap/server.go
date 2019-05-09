@@ -1,5 +1,3 @@
-// Package bootstrap implements the genesis validator/document and
-// the testnet (debug) bootstrap service.
 package bootstrap
 
 import (
@@ -10,19 +8,16 @@ import (
 	golog "log"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 )
 
 const (
@@ -31,58 +26,10 @@ const (
 	genesisURIPath   = "/bootstrap/vi/genesis"
 )
 
-// GenesisDocument is the ekiden format tendermint GenesisDocument.
-type GenesisDocument struct {
-	Validators  []*GenesisValidator `codec:"validators"`
-	GenesisTime time.Time           `codec:"genesis_time"`
-	AppState    string              `codec:"app_state,omit_empty"`
-}
-
-// ToTendermint converts the GenesisDocument to tendermint's format.
-func (d *GenesisDocument) ToTendermint() (*tmtypes.GenesisDoc, error) {
-	doc := tmtypes.GenesisDoc{
-		ChainID:         "0xa515",
-		GenesisTime:     d.GenesisTime,
-		ConsensusParams: tmtypes.DefaultConsensusParams(),
-		AppState:        []byte(d.AppState),
-	}
-
-	var tmValidators []tmtypes.GenesisValidator
-	for _, v := range d.Validators {
-		pk := crypto.PublicKeyToTendermint(&v.PubKey)
-		validator := tmtypes.GenesisValidator{
-			Address: pk.Address(),
-			PubKey:  pk,
-			Power:   v.Power,
-			Name:    v.Name,
-		}
-		tmValidators = append(tmValidators, validator)
-	}
-
-	doc.Validators = tmValidators
-
-	return &doc, nil
-}
-
-// GenesisValidator is the ekiden format tendermint GenesisValidator
-type GenesisValidator struct {
-	PubKey      signature.PublicKey `codec:"pub_key"`
-	Name        string              `codec:"name"`
-	Power       int64               `codec:"power"`
-	CoreAddress string              `codec:"core_address"`
-}
-
-// SeedNode is a struct with seed node info
+// SeedNode is a struct with seed node info.
 type SeedNode struct {
 	PubKey      signature.PublicKey `codec:"pub_key"`
 	CoreAddress string              `codec:"core_address"`
-}
-
-// ToTendermint converts the SeedNode to tendermint's format.
-func (s *SeedNode) ToTendermint() string {
-	tmPub := crypto.PublicKeyToTendermint(&s.PubKey)
-	seedIDLower := strings.ToLower(tmPub.Address().String())
-	return fmt.Sprintf("%s@%s", seedIDLower, s.CoreAddress)
 }
 
 type server struct {
@@ -98,10 +45,10 @@ type server struct {
 	genesisPath   string
 	genesisDoc    []byte
 	genesisTime   time.Time
-	validators    []*GenesisValidator
+	validators    []*genesis.Validator
 	seeds         []*SeedNode
 	seedsPath     string
-	appState      string
+	template      *genesis.Document
 	numValidators int
 	numSeeds      int
 }
@@ -143,7 +90,7 @@ func (s *server) handleValidator(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var validator GenesisValidator
+	var validator genesis.Validator
 	if err = json.Unmarshal(b, &validator); err != nil {
 		http.Error(w, "malformed validator: "+err.Error(), http.StatusBadRequest)
 		return
@@ -160,7 +107,7 @@ func (s *server) handleValidator(w http.ResponseWriter, req *http.Request) {
 		"validator", string(b),
 	)
 
-	// Check if validator already exists
+	// Check if validator already exists.
 	var foundValidator bool
 	for _, v := range s.validators {
 		if v.PubKey.Equal(validator.PubKey) {
@@ -331,17 +278,16 @@ func (s *server) buildGenesis() {
 	s.Lock()
 	defer s.Unlock()
 
-	doc := &GenesisDocument{
-		Validators:  s.validators,
-		GenesisTime: time.Now(),
-		AppState:    s.appState,
-	}
+	// Build a genesis document from a template.
+	doc := *s.template
+	doc.Validators = s.validators
+	doc.Time = time.Now()
 
 	if s.genesisDoc == nil {
-		s.genesisTime = doc.GenesisTime
+		s.genesisTime = doc.Time
 		defer close(s.genesisBootstrapChan)
 	} else {
-		doc.GenesisTime = s.genesisTime
+		doc.Time = s.genesisTime
 	}
 
 	s.genesisDoc = json.Marshal(doc)
@@ -355,7 +301,7 @@ func (s *server) buildGenesis() {
 }
 
 // NewServer initializes a new testnet (debug) bootstrap server instance.
-func NewServer(addr string, numValidators int, numSeeds int, appState *api.GenesisAppState, dataDir string) (service.BackgroundService, error) {
+func NewServer(addr string, numValidators int, numSeeds int, template *genesis.Document, dataDir string) (service.BackgroundService, error) {
 	baseSvc := *service.NewBaseBackgroundService("tendermint/bootstrap/server")
 	s := &server{
 		BaseBackgroundService: baseSvc,
@@ -368,9 +314,7 @@ func NewServer(addr string, numValidators int, numSeeds int, appState *api.Genes
 		seedBootstrapChan:    make(chan struct{}),
 		numValidators:        numValidators,
 		numSeeds:             numSeeds,
-	}
-	if appState != nil {
-		s.appState = string(json.Marshal(appState))
+		template:             template,
 	}
 
 	// Load the old state iff it exists.
@@ -381,7 +325,7 @@ func NewServer(addr string, numValidators int, numSeeds int, appState *api.Genes
 		b, err := ioutil.ReadFile(s.genesisPath)
 
 		if err == nil {
-			var doc GenesisDocument
+			var doc genesis.Document
 			if err = json.Unmarshal(b, &doc); err != nil {
 				s.logger.Error("corrupted genesis document",
 					"err", err,
@@ -393,17 +337,10 @@ func NewServer(addr string, numValidators int, numSeeds int, appState *api.Genes
 					"genesis_doc", string(b),
 				)
 
-				if doc.AppState != s.appState {
-					s.logger.Warn("appState mismatch, using persisted value",
-						"provided", appState,
-						"saved", doc.AppState,
-					)
-				}
-
 				s.genesisDoc = b
-				s.genesisTime = doc.GenesisTime
+				s.genesisTime = doc.Time
 				s.validators = doc.Validators
-				s.appState = doc.AppState
+				s.template = &doc
 				close(s.genesisBootstrapChan)
 			}
 		}
@@ -441,8 +378,8 @@ func NewServer(addr string, numValidators int, numSeeds int, appState *api.Genes
 	return s, nil
 }
 
-// Client retrives the genesis document from the specified server.
-func Client(addr string) (*GenesisDocument, error) {
+// getGenesis retrives the genesis document from the specified server.
+func getGenesis(addr string) (*genesis.Document, error) {
 	resp, err := http.Get("http://" + addr + genesisURIPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint/bootstrap: HTTP GET failed")
@@ -458,7 +395,7 @@ func Client(addr string) (*GenesisDocument, error) {
 		return nil, errors.Wrap(err, "tendermint/bootstrap: failed to read body")
 	}
 
-	var doc GenesisDocument
+	var doc genesis.Document
 	if err = json.Unmarshal(b, &doc); err != nil {
 		return nil, errors.Wrap(err, "tendermint/bootstrap: failed to parse genesis document")
 	}
@@ -466,8 +403,8 @@ func Client(addr string) (*GenesisDocument, error) {
 	return &doc, nil
 }
 
-// GetSeeds retrives the bootstrapped seeds from the specified server.
-func GetSeeds(addr string) ([]*SeedNode, error) {
+// getSeeds retrives the bootstrapped seeds from the specified server.
+func getSeeds(addr string) ([]*SeedNode, error) {
 	resp, err := http.Get("http://" + addr + seedURIPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint/bootstrap: HTTP GET failed")
@@ -491,25 +428,25 @@ func GetSeeds(addr string) ([]*SeedNode, error) {
 	return seedNodes, nil
 }
 
-// Validator posts the node's GenesisValidator to the specified server,
-// and retrives the genesis document.
-func Validator(addr string, validator *GenesisValidator) (*GenesisDocument, error) {
+// registerValidator posts the node's GenesisValidator to the specified server,
+// annoucing itself as a validator.
+func registerValidator(addr string, validator *genesis.Validator) error {
 	b := json.Marshal(validator)
 	resp, err := http.Post("http://"+addr+validatorURIPath, "application/json", bytes.NewBuffer(b))
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/bootstrap: HTTP POST failed")
+		return errors.Wrap(err, "tendermint/bootstrap: HTTP POST failed")
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Wrap(statusToError(resp.StatusCode), "tendermint/bootstrap: HTTP POST failed")
+		return errors.Wrap(statusToError(resp.StatusCode), "tendermint/bootstrap: HTTP POST failed")
 	}
 
-	return Client(addr)
+	return nil
 }
 
-// Seed posts the node's data to the specified server announcing
+// registerSeed posts the node's data to the specified server announcing
 // itself as a seed node.
-func Seed(addr string, seed *SeedNode) error {
+func registerSeed(addr string, seed *SeedNode) error {
 	b := json.Marshal(seed)
 	resp, err := http.Post("http://"+addr+seedURIPath, "application/json", bytes.NewBuffer(b))
 	if err != nil {

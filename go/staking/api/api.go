@@ -394,16 +394,16 @@ func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
 	return amount, nil
 }
 
-// GenesisState is the initial ledger balances at genesis for use in the genesis
+// Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
-type GenesisState struct {
+type Genesis struct {
 	Ledger map[signature.MapKey]*Quantity `codec:"ledger"`
 }
 
-// NewGenesisState constructs a initial ledger from a hex public key to initial
+// NewGenesis constructs a initial ledger from a hex public key to initial
 // balance map.
-func NewGenesisState(m map[string]string) (*GenesisState, error) {
-	s := &GenesisState{
+func NewGenesis(m map[string]string) (*Genesis, error) {
+	s := &Genesis{
 		Ledger: make(map[signature.MapKey]*Quantity),
 	}
 

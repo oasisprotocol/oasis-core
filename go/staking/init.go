@@ -30,9 +30,9 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 	)
 
 	// Pull in the debug genesis state if configured.
-	var debugGenesisState *api.GenesisState
+	var debugGenesisState *api.Genesis
 	if m := viper.GetStringMapString(cfgDebugGenesisState); len(m) > 0 {
-		if debugGenesisState, err = api.NewGenesisState(m); err != nil {
+		if debugGenesisState, err = api.NewGenesis(m); err != nil {
 			return nil, err
 		}
 	}
@@ -55,7 +55,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgBackend, memory.BackendName, "Staking backend")
 
 		// cfgDebugGenesisState isn't for anything but test cases.
-		cmd.Flags().StringToString(cfgDebugGenesisState, nil, "(Debug only) Staking gensis state")
+		cmd.Flags().StringToString(cfgDebugGenesisState, nil, "(Debug only) Staking genesis state")
 		_ = cmd.Flags().MarkHidden(cfgDebugGenesisState)
 	}
 

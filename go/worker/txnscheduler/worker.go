@@ -65,7 +65,7 @@ type Worker struct {
 	registry     registry.Backend
 	epochtime    epochtime.Backend
 	scheduler    scheduler.Backend
-	syncable     common.Syncable
+	consensus    common.ConsensusBackend
 	keyManager   *keymanager.KeyManager
 	compute      *compute.Worker
 	p2p          *p2p.P2P
@@ -224,7 +224,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		w.registry,
 		w.epochtime,
 		w.scheduler,
-		w.syncable,
+		w.consensus,
 		computeNode,
 		w.p2p,
 		nodeCfg,
@@ -255,7 +255,7 @@ func newWorker(
 	registryInst registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	compute *compute.Worker,
 	grpc *grpc.Server,
 	p2p *p2p.P2P,
@@ -288,7 +288,7 @@ func newWorker(
 		registry:        registryInst,
 		epochtime:       epochtime,
 		scheduler:       scheduler,
-		syncable:        syncable,
+		consensus:       consensus,
 		compute:         compute,
 		grpc:            grpc,
 		p2p:             p2p,

@@ -19,7 +19,6 @@ import (
 
 var (
 	stateFilename string
-	dataDir       string
 
 	tmCmd = &cobra.Command{
 		Use:   "tendermint",
@@ -85,7 +84,7 @@ func showNodeID(cmd *cobra.Command, args []string) {
 	}
 
 	tenderConfig := tmconfig.DefaultConfig()
-	tendermintDataDir := filepath.Join(dataDir, "tendermint")
+	tendermintDataDir := filepath.Join(cmdCommon.DataDir(), "tendermint")
 	tenderConfig.SetRoot(tendermintDataDir)
 
 	// LoadFilePV will already exit on errors
@@ -96,9 +95,7 @@ func showNodeID(cmd *cobra.Command, args []string) {
 
 // Register registers the tendermint sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	registerBootstrap(tmCmd)
 	tmDumpMuxStateCmd.Flags().StringVarP(&stateFilename, "state", "s", "abci-mux-state.bolt.db", "ABCI mux state file to dump")
-	tmShowNodeIDCmd.Flags().StringVar(&dataDir, "dataDir", "", "data directory")
 	tmCmd.AddCommand(tmShowNodeIDCmd)
 	tmCmd.AddCommand(tmDumpMuxStateCmd)
 	parentCmd.AddCommand(tmCmd)
