@@ -536,7 +536,7 @@ func (b *memoryBackend) setLedgerEntryLocked(ent *ledgerEntry) {
 }
 
 // New constructs a new mmeory backed staking Backend instance.
-func New(debugGenesisState *api.GenesisState) (api.Backend, error) {
+func New(debugGenesisState *api.Genesis) (api.Backend, error) {
 	b := &memoryBackend{
 		logger:           logging.GetLogger("staking/memory"),
 		totalSupply:      api.NewQuantity(),

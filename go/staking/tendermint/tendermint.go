@@ -291,7 +291,7 @@ func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventD
 }
 
 // New constructs a new tendermint backed staking Backend instance.
-func New(ctx context.Context, debugGenesisState *api.GenesisState, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, debugGenesisState *api.Genesis, service service.TendermintService) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
 	app := app.New(debugGenesisState)
 	if err := service.RegisterApplication(app); err != nil {

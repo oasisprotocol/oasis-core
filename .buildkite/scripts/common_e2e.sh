@@ -20,7 +20,7 @@ EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000
 #
 # Sets:
 #   EKIDEN_COMMITTEE_DIR
-#   EKIDEN_TM_GENESIS_FILE
+#   EKIDEN_GENESIS_FILE
 #   EKIDEN_IAS_PROXY_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
@@ -59,7 +59,7 @@ run_backend_tendermint_committee() {
 
         let port=(idx-1)+26656
         ${EKIDEN_NODE} \
-            tendermint provision_validator \
+            genesis provision_validator \
             --datadir ${datadir} \
             --node_addr 127.0.0.1:${port} \
             --node_name ekiden-committee-node-${idx} \
@@ -90,7 +90,7 @@ run_backend_tendermint_committee() {
     rm -Rf ${genesis_file}
 
     ${EKIDEN_NODE} \
-        tendermint init_genesis \
+        genesis init \
         --genesis_file ${genesis_file} \
         --entity ${entity_dir}/entity_genesis.json \
         --runtime ${entity_dir}/runtime_genesis.json \
@@ -121,7 +121,7 @@ run_backend_tendermint_committee() {
     EKIDEN_COMMITTEE_DIR=${committee_dir}
     EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
     EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
-    EKIDEN_TM_GENESIS_FILE=${genesis_file}
+    EKIDEN_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
     EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
 
@@ -153,7 +153,7 @@ run_backend_tendermint_committee() {
         --worker.client.port ${storage_port} \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${storage_datadir} \
-        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${storage_tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
@@ -184,7 +184,7 @@ run_backend_tendermint_committee() {
             --registry.backend tendermint \
             --roothash.backend tendermint \
             --roothash.tendermint.index_blocks \
-            --tendermint.core.genesis_file ${genesis_file} \
+            --genesis.file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
             --tendermint.debug.addr_book_lenient \
@@ -208,7 +208,7 @@ run_backend_tendermint_committee() {
 
 # Run a compute node.
 #
-# Requires that EKIDEN_TM_GENESIS_FILE is set.
+# Requires that EKIDEN_GENESIS_FILE is set.
 # Exits with an error otherwise.
 #
 # Arguments:
@@ -224,7 +224,7 @@ run_compute_node() {
     local extra_args=$*
 
     # Ensure the genesis file is available.
-    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" ]]; then
+    if [[ "${EKIDEN_GENESIS_FILE:-}" == "" ]]; then
         echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
         exit 1
     fi
@@ -258,7 +258,7 @@ run_compute_node() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
-        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
@@ -348,7 +348,7 @@ run_keymanager_node() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
-        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
@@ -365,7 +365,7 @@ run_keymanager_node() {
 
 # Run a seed node.
 #
-# Requires that EKIDEN_TM_GENESIS_FILE set.
+# Requires that EKIDEN_GENESIS_FILE set.
 # Exits with an error otherwise.
 #
 # Sets:
@@ -377,7 +377,7 @@ run_seed_node() {
     local extra_args=$*
 
     # Ensure the genesis file is available.
-    if [[ "${EKIDEN_TM_GENESIS_FILE:-}" == "" ]]; then
+    if [[ "${EKIDEN_GENESIS_FILE:-}" == "" ]]; then
         echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
         exit 1
     fi
@@ -393,7 +393,7 @@ run_seed_node() {
     ${EKIDEN_NODE} \
         --log.level info \
         --metrics.mode none \
-        --tendermint.core.genesis_file ${EKIDEN_TM_GENESIS_FILE} \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \
@@ -408,7 +408,7 @@ run_seed_node() {
     done
 
     EKIDEN_SEED_NODE_ID=$(${EKIDEN_NODE} debug tendermint show-node-id \
-        --dataDir ${data_dir})
+        --datadir ${data_dir})
     export EKIDEN_SEED_NODE_ID
     export EKIDEN_SEED_NODE_PORT
 }

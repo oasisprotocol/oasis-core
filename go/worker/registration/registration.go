@@ -39,17 +39,17 @@ type Registration struct {
 	regCh         chan struct{}
 	logger        *logging.Logger
 	roleHooks     []func(*node.Node) error
-	syncable      common.Syncable
+	consensus     common.ConsensusBackend
 }
 
 func (r *Registration) doNodeRegistration() {
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
-	if r.syncable != nil {
+	if r.consensus != nil {
 		select {
 		case <-r.quitCh:
 			return
-		case <-r.syncable.Synced():
+		case <-r.consensus.Synced():
 		}
 	}
 
@@ -214,7 +214,7 @@ func New(
 	epochtime epochtime.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {
 	ctx := context.Background()
@@ -235,7 +235,7 @@ func New(
 		regCh:           make(chan struct{}),
 		ctx:             ctx,
 		logger:          logging.GetLogger("worker/registration"),
-		syncable:        syncable,
+		consensus:       consensus,
 		roleHooks:       []func(*node.Node) error{},
 	}
 

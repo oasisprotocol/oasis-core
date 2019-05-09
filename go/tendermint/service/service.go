@@ -6,6 +6,7 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/service"
@@ -15,14 +16,11 @@ import (
 // TendermintService provides Tendermint access to Ekiden backends.
 type TendermintService interface {
 	service.BackgroundService
+	common.ConsensusBackend
 
 	// Started returns the channel that will be closed when the
 	// tendermint service has been started.
 	Started() <-chan struct{}
-
-	// Synced returns the channel that will be closed when the
-	// tendermint service finishes fast sync.
-	Synced() <-chan struct{}
 
 	// RegisterApplication registers an ABCI multiplexer application
 	// with this service instance.
@@ -61,9 +59,6 @@ type TendermintService interface {
 
 	// Unsubscribe unsubscribes from tendermint events.
 	Unsubscribe(subscriber string, query tmpubsub.Query) error
-
-	// Genesis returns the tendermint genesis block information.
-	Genesis() (*tmrpctypes.ResultGenesis, error)
 
 	// IsSeed returns if the tendermint service is set up as a seed node.
 	IsSeed() bool

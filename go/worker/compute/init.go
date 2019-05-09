@@ -73,7 +73,7 @@ func New(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	keyManager *keymanager.KeyManager,
 	registration *registration.Registration,
 	workerCommonCfg *workerCommon.Config,
@@ -135,7 +135,7 @@ func New(
 	}
 
 	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), identity, storage, roothash,
-		registry, epochtime, scheduler, syncable, ias, grpc, registration, keyManager, cfg, workerCommonCfg)
+		registry, epochtime, scheduler, consensus, ias, grpc, registration, keyManager, cfg, workerCommonCfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

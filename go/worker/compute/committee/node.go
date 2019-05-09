@@ -148,7 +148,7 @@ type Node struct {
 	epochtime  epochtime.Backend
 	scheduler  scheduler.Backend
 	workerHost host.Host
-	syncable   common.Syncable
+	consensus  common.ConsensusBackend
 
 	cfg Config
 
@@ -861,12 +861,12 @@ func (n *Node) handleExternalBatch(batch *externalBatch) error {
 func (n *Node) worker() {
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
-	if n.syncable != nil {
+	if n.consensus != nil {
 		n.logger.Info("delaying committee node start until after initial synchronization")
 		select {
 		case <-n.quitCh:
 			return
-		case <-n.syncable.Synced():
+		case <-n.consensus.Synced():
 		}
 	}
 	n.logger.Info("starting committee node")
@@ -967,7 +967,7 @@ func NewNode(
 	registry registry.Backend,
 	epochtime epochtime.Backend,
 	scheduler scheduler.Backend,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	worker host.Host,
 	p2p *p2p.P2P,
 	cfg Config,
@@ -986,7 +986,7 @@ func NewNode(
 		registry:         registry,
 		epochtime:        epochtime,
 		scheduler:        scheduler,
-		syncable:         syncable,
+		consensus:        consensus,
 		workerHost:       worker,
 		cfg:              cfg,
 		ctx:              ctx,

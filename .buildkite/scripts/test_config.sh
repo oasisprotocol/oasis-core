@@ -26,7 +26,11 @@ chmod -R go-rwx "${data_dir}"
 
 # Start the Ekiden node.
 ${ekiden_node} --config configs/${config}.yml &
-sleep 1
+
+# Wait for the node to be registered.
+${ekiden_node} debug dummy wait-nodes \
+    --address unix:${data_dir}/internal.sock \
+    --nodes 1
 
 # Run the simple key/value client against the node.
 ${client} \

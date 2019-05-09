@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
@@ -70,15 +71,13 @@ func (app *beaconApplication) ForeignCheckTx(ctx *abci.Context, other abci.Appli
 	return nil
 }
 
-func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInitChain) types.ResponseInitChain {
+func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) {
 	// Note: If we ever decide that we need a beacon for the 0th epoch
 	// (that is *only* for the genesis state), it should be initiailized
 	// here.
 	//
 	// It is not super important for now as the epoch will transition
 	// immediately on the first block under normal circumstances.
-
-	return types.ResponseInitChain{}
 }
 
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) {

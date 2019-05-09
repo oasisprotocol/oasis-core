@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/genesis"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
@@ -25,7 +26,7 @@ type stakingApplication struct {
 
 	state *abci.ApplicationState
 
-	debugGenesisState *staking.GenesisState
+	debugGenesisState *staking.Genesis
 }
 
 func (app *stakingApplication) Name() string {
@@ -78,18 +79,10 @@ func (app *stakingApplication) ForeignCheckTx(ctx *abci.Context, other abci.Appl
 	return nil
 }
 
-func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain) types.ResponseInitChain {
-	var s staking.GenesisState
-	if err := abci.UnmarshalGenesisAppState(request, app, &s); err != nil {
-		app.logger.Error("InitChain: failed to unmarshal genesis state",
-			"err", err,
-		)
-		panic("staking: invalid genesis state")
-	}
-
-	st := &s
+func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+	st := &doc.Staking
 	if app.debugGenesisState != nil {
-		if len(s.Ledger) > 0 {
+		if len(st.Ledger) > 0 {
 			app.logger.Error("InitChain: debug genesis state and actual genesis state provided")
 			panic("staking: multiple genesis states specified")
 		}
@@ -122,8 +115,6 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	app.logger.Debug("InitChain: setting total supply",
 		"totalSupply", totalSupply,
 	)
-
-	return types.ResponseInitChain{}
 }
 
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
@@ -480,7 +471,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 }
 
 // New constructs a new staking application instance.
-func New(debugGenesisState *staking.GenesisState) abci.Application {
+func New(debugGenesisState *staking.Genesis) abci.Application {
 	return &stakingApplication{
 		logger:            logging.GetLogger("tendermint/staking"),
 		debugGenesisState: debugGenesisState,

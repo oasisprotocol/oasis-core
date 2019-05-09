@@ -62,7 +62,7 @@ type clientCommon struct {
 	storage    storage.Backend
 	scheduler  scheduler.Backend
 	registry   registry.Backend
-	syncable   common.Syncable
+	consensus  common.ConsensusBackend
 	keyManager *keymanager.KeyManager
 
 	ctx context.Context
@@ -246,22 +246,22 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 	}
 }
 
-// WaitSync waits on the syncable given at construction to finish syncing.
+// WaitSync waits on the consensus backend given at construction to finish syncing.
 func (c *Client) WaitSync(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-c.common.syncable.Synced():
+	case <-c.common.consensus.Synced():
 		return nil
 	}
 }
 
-// IsSynced checks if the syncable given at construction has finished syncing.
+// IsSynced checks if the consensus backend given at construction has finished syncing.
 func (c *Client) IsSynced(ctx context.Context) (bool, error) {
 	select {
 	case <-ctx.Done():
 		return false, ctx.Err()
-	case <-c.common.syncable.Synced():
+	case <-c.common.consensus.Synced():
 		return true, nil
 	default:
 		return false, nil
@@ -546,7 +546,7 @@ func New(
 	storage storage.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
-	syncable common.Syncable,
+	consensus common.ConsensusBackend,
 	keyManager *keymanager.KeyManager,
 ) (*Client, error) {
 	c := &Client{
@@ -555,7 +555,7 @@ func New(
 			storage:    storage,
 			scheduler:  scheduler,
 			registry:   registry,
-			syncable:   syncable,
+			consensus:  consensus,
 			keyManager: keyManager,
 			ctx:        ctx,
 		},

@@ -16,6 +16,9 @@ export RUST_BACKTRACE="1"
 # from private github repos.
 ########################################
 eval `ssh-agent -s`
-trap_add "kill ${SSH_AGENT_PID} || true" EXIT
+cleanup_ssh_agent() {
+    kill ${SSH_AGENT_PID} || true
+}
+trap_add "cleanup_ssh_agent" EXIT
 
 ssh-add || true

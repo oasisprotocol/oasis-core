@@ -26,6 +26,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/version"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
 )
@@ -114,7 +115,7 @@ type Application interface {
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
-	InitChain(*Context, types.RequestInitChain) types.ResponseInitChain
+	InitChain(*Context, types.RequestInitChain, *genesis.Document)
 
 	// BeginBlock signals the beginning of a block.
 	//
@@ -195,6 +196,13 @@ func (a *ApplicationServer) Register(app Application) error {
 	return a.mux.doRegister(app)
 }
 
+// RegisterGenesisHook registers a function to be called when the
+// consensus backend is initialized from genesis (e.g., on fresh
+// start).
+func (a *ApplicationServer) RegisterGenesisHook(hook func()) {
+	a.mux.registerGenesisHook(hook)
+}
+
 // Pruner returns the ABCI state pruner.
 func (a *ApplicationServer) Pruner() StatePruner {
 	return a.mux.state.statePruner
@@ -219,6 +227,7 @@ func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneCo
 }
 
 type abciMux struct {
+	sync.RWMutex
 	types.BaseApplication
 
 	logger      *logging.Logger
@@ -232,6 +241,15 @@ type abciMux struct {
 
 	lastBeginBlock int64
 	currentTime    time.Time
+
+	genesisHooks []func()
+}
+
+func (mux *abciMux) registerGenesisHook(hook func()) {
+	mux.Lock()
+	defer mux.Unlock()
+
+	mux.genesisHooks = append(mux.genesisHooks, hook)
 }
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
@@ -395,6 +413,18 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	ctx.fireOnCommitHooks(mux.state)
 
+	// Dispatch registered genesis hooks.
+	mux.RLock()
+	defer mux.RUnlock()
+
+	mux.logger.Debug("Dispatching genesis hooks")
+
+	for _, hook := range mux.genesisHooks {
+		hook()
+	}
+
+	mux.logger.Debug("Genesis hook dispatch complete")
+
 	return resp
 }
 
@@ -434,6 +464,14 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			panic("mux: invalid defered genesis application state")
 		}
 
+		doc, err := parseGenesisAppState(initReq)
+		if err != nil {
+			mux.logger.Error("BeginBlock: corrupted defered genesis state",
+				"err", err,
+			)
+			panic("mux: invalid defered genesis application state")
+		}
+
 		ctx.outputType = ContextInitChain
 
 		for _, app := range mux.appsByLexOrder {
@@ -441,8 +479,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"app", app.Name(),
 			)
 
-			// I hope nothing wants to alter the validator set.
-			_ = app.InitChain(ctx, initReq)
+			app.InitChain(ctx, initReq, doc)
 		}
 
 		ctx.outputType = ContextBeginBlock
@@ -740,7 +777,7 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.BlockBackend) (bool
 }
 
 // Genesis returns the ABCI genesis state.
-func (s *ApplicationState) Genesis() *api.GenesisAppState {
+func (s *ApplicationState) Genesis() *genesis.Document {
 	_, b := s.checkTxTree.Get([]byte(stateKeyGenesisRequest))
 
 	var req types.RequestInitChain
@@ -915,32 +952,9 @@ func isP2PFilterQuery(s string) bool {
 	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
 }
 
-// UnmarshalGenesisAppState deserializes the specific application's genesis state
-// from the provided RequestInitChain.
-func UnmarshalGenesisAppState(req types.RequestInitChain, app Application, v interface{}) error {
-	// This is redundant, the application interface could toss the map around,
-	// but this isn't critical path, and doing it this way keeps the interface
-	// near-identical to that of upstream tendermint ABCI.
-	st, err := parseGenesisAppState(req)
-	if err != nil {
-		return err
-	}
-
-	return st.UnmarshalAppState(app.Name(), v)
-}
-
-func parseGenesisAppState(req types.RequestInitChain) (*api.GenesisAppState, error) {
-	b := req.AppStateBytes
-	if len(b) == 0 {
-		// No genesis state is treated as a success, return a new
-		// empty map for code commonality reasons.
-		return &api.GenesisAppState{
-			ABCIAppState: make(map[string][]byte),
-		}, nil
-	}
-
-	var st api.GenesisAppState
-	if err := json.Unmarshal(b, &st); err != nil {
+func parseGenesisAppState(req types.RequestInitChain) (*genesis.Document, error) {
+	var st genesis.Document
+	if err := json.Unmarshal(req.AppStateBytes, &st); err != nil {
 		return nil, err
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	"github.com/oasislabs/ekiden/go/epochtime"
 	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	"github.com/oasislabs/ekiden/go/registry"
@@ -67,6 +68,7 @@ type Node struct {
 	grpcExternal *grpc.Server
 	svcTmnt      service.TendermintService
 
+	Genesis    genesis.Provider
 	Identity   *identity.Identity
 	Beacon     beaconAPI.Backend
 	Epochtime  epochtimeAPI.Backend
@@ -184,6 +186,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.Storage,
 		n.grpcExternal,
 		n.WorkerRegistration,
+		n.svcTmnt,
+		n.Genesis,
 	)
 	if err != nil {
 		return err
@@ -334,8 +338,18 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
+	// Initialize the genesis provider.
+	genesis, err := genesis.New(node.Identity)
+	if err != nil {
+		logger.Error("failed to initialize the genesis provider",
+			"err", err,
+		)
+		return nil, err
+	}
+	node.Genesis = genesis
+
 	// Initialize tendermint.
-	node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity)
+	node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
 	node.svcMgr.Register(node.svcTmnt)
 
 	// Initialize the varous node backends.
@@ -467,6 +481,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		tracing.RegisterFlags,
 		cmdGrpc.RegisterServerLocalFlags,
 		pprof.RegisterFlags,
+		genesis.RegisterFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
 		registry.RegisterFlags,
