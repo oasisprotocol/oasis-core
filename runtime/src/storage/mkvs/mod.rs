@@ -1,7 +1,9 @@
 //! Merklized key-value store.
 use failure::Fallible;
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{self, ser::SerializeSeq, Serializer};
+use serde_bytes::Bytes;
+use serde_derive::Deserialize;
 
 use crate::common::crypto::hash::Hash;
 
@@ -16,21 +18,35 @@ pub enum LogEntryKind {
 }
 
 /// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct LogEntry {
     /// The key that was inserted or deleted.
+    #[serde(with = "serde_bytes")]
     pub key: Vec<u8>,
-    /// The inserted value, or `None` if the key was deleted.
-    pub value: Option<Vec<u8>>,
+    /// The inserted value (empty if the key was deleted).
+    #[serde(with = "serde_bytes")]
+    pub value: Vec<u8>,
 }
 
 impl LogEntry {
     pub fn kind(&self) -> LogEntryKind {
-        if self.value.is_none() {
+        if self.value.is_empty() {
             LogEntryKind::Delete
         } else {
             LogEntryKind::Insert
         }
+    }
+}
+
+impl serde::Serialize for LogEntry {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(2))?;
+        seq.serialize_element(&Bytes::new(&self.key))?;
+        seq.serialize_element(&Bytes::new(&self.value))?;
+        seq.end()
     }
 }
 

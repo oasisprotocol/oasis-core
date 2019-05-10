@@ -58,7 +58,7 @@ fn test_basic() {
         log,
         [LogEntry {
             key: key_zero.to_vec(),
-            value: Some(value_zero.to_vec()),
+            value: value_zero.to_vec(),
         }]
         .to_vec()
     );
@@ -125,11 +125,11 @@ fn test_basic() {
         [
             LogEntry {
                 key: key_one.to_vec(),
-                value: Some(value_one.to_vec()),
+                value: value_one.to_vec(),
             },
             LogEntry {
                 key: key_zero.to_vec(),
-                value: Some(value_zero.to_vec()),
+                value: value_zero.to_vec(),
             }
         ]
         .to_vec()
@@ -148,7 +148,7 @@ fn test_basic() {
         log,
         [LogEntry {
             key: key_one.to_vec(),
-            value: None,
+            value: Vec::new(),
         }]
         .to_vec()
     );
