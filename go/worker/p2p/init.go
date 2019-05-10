@@ -22,6 +22,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgP2pAddresses,
 		cfgP2pPort,
 	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
 }
