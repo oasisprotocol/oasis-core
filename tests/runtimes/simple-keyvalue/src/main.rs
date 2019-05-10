@@ -6,7 +6,7 @@ extern crate simple_keyvalue_api;
 
 use std::sync::Arc;
 
-use failure::Fallible;
+use failure::{format_err, Fallible};
 use io_context::Context as IoContext;
 
 use ekiden_keymanager_client::{ContractId, KeyManagerClient};
@@ -19,7 +19,7 @@ use ekiden_runtime::{
         mkvs::{with_encryption_key, MKVS},
         StorageContext,
     },
-    transaction::Context as TxnContext,
+    transaction::{dispatcher::CheckOnlySuccess, Context as TxnContext},
     Protocol, RpcDispatcher, TxnDispatcher,
 };
 use simple_keyvalue_api::{with_api, KeyValue};
@@ -33,6 +33,12 @@ struct Context {
 
 /// Insert a key/value pair.
 fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    if args.value.as_bytes().len() > 128 {
+        return Err(format_err!("Value too big to be inserted."));
+    }
+    if ctx.check_only {
+        return Err(CheckOnlySuccess.into());
+    }
     ctx.emit_block_tag(b"kv_hello", b"insert");
     ctx.emit_txn_tag(b"kv_op", b"insert");
     ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
@@ -45,6 +51,9 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 
 /// Retrieve a key/value pair.
 fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess.into());
+    }
     ctx.emit_block_tag(b"kv_hello", b"get");
     ctx.emit_txn_tag(b"kv_op", b"get");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
@@ -55,6 +64,9 @@ fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 
 /// Remove a key/value pair.
 fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess.into());
+    }
     ctx.emit_block_tag(b"kv_hello", b"remove");
     ctx.emit_txn_tag(b"kv_op", b"remove");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());

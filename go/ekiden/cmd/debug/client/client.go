@@ -26,6 +26,12 @@ var (
 		Run:   doIsSynced,
 	}
 
+	clientWaitSyncCmd = &cobra.Command{
+		Use:   "wait-sync",
+		Short: "wait for the node to complete initial syncing",
+		Run:   doWaitSync,
+	}
+
 	logger = logging.GetLogger("cmd/client")
 )
 
@@ -68,10 +74,27 @@ func doIsSynced(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doWaitSync(cmd *cobra.Command, args []string) {
+	conn, client := doConnect(cmd)
+	defer conn.Close()
+
+	logger.Debug("waiting for sync status")
+
+	// Use background context to block until the result comes in.
+	_, err := client.WaitSync(context.Background(), &clientGrpc.WaitSyncRequest{})
+	if err != nil {
+		logger.Error("failed to wait for sync status",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+}
+
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	cmdGrpc.RegisterClientFlags(clientCmd, true)
 
 	clientCmd.AddCommand(clientIsSyncedCmd)
+	clientCmd.AddCommand(clientWaitSyncCmd)
 	parentCmd.AddCommand(clientCmd)
 }

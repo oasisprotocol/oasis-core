@@ -19,6 +19,10 @@ pub struct Context<'a> {
     /// Runtime-specific context.
     pub runtime: Box<Any>,
 
+    /// Flag indicating whether to only perform transaction check rather than
+    /// running the transaction.
+    pub check_only: bool,
+
     /// List of emitted tags.
     pub(crate) tags: Vec<Tag>,
     /// Index of the current transaction. Set by the dispatcher while
@@ -28,11 +32,12 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     /// Construct new transaction context.
-    pub fn new(io_ctx: Arc<IoContext>, header: &'a Header) -> Self {
+    pub fn new(io_ctx: Arc<IoContext>, header: &'a Header, check_only: bool) -> Self {
         Self {
             io_ctx,
             header,
             runtime: Box::new(NoRuntimeContext),
+            check_only,
             tags: Vec::new(),
             txn_index: TAG_TXN_INDEX_BLOCK,
         }

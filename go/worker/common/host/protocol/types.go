@@ -61,8 +61,10 @@ type Body struct {
 	WorkerCapabilityTEERakAvrResponse    *Empty
 	WorkerRPCCallRequest                 *WorkerRPCCallRequest
 	WorkerRPCCallResponse                *WorkerRPCCallResponse
-	WorkerRuntimeCallBatchRequest        *WorkerRuntimeCallBatchRequest
-	WorkerRuntimeCallBatchResponse       *WorkerRuntimeCallBatchResponse
+	WorkerCheckTxBatchRequest            *WorkerCheckTxBatchRequest
+	WorkerCheckTxBatchResponse           *WorkerCheckTxBatchResponse
+	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest
+	WorkerExecuteTxBatchResponse         *WorkerExecuteTxBatchResponse
 	WorkerAbortRequest                   *Empty
 	WorkerAbortResponse                  *Empty
 
@@ -124,6 +126,20 @@ type WorkerRPCCallResponse struct {
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
 
+// WorkerCheckTxBatchRequest is a worker check tx batch request message body.
+type WorkerCheckTxBatchRequest struct {
+	// Batch of runtime calls to check.
+	Calls runtime.Batch `codec:"calls"`
+	// Block on which the batch check should be based.
+	Block roothash.Block `codec:"block"`
+}
+
+// WorkerCheckTxBatchResponse is a worker check tx batch response message body.
+type WorkerCheckTxBatchResponse struct {
+	// Batch of runtime check results.
+	Results runtime.Batch `codec:"results"`
+}
+
 // ComputedBatch is a computed batch.
 type ComputedBatch struct {
 	// Batch of runtime outputs.
@@ -144,16 +160,16 @@ func (b *ComputedBatch) String() string {
 	return "<ComputedBatch>"
 }
 
-// WorkerRuntimeCallBatchRequest is a worker batch runtime call request message body.
-type WorkerRuntimeCallBatchRequest struct {
+// WorkerExecuteTxBatchRequest is a worker execute tx batch request message body.
+type WorkerExecuteTxBatchRequest struct {
 	// Batch of runtime calls.
 	Calls runtime.Batch `codec:"calls"`
 	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }
 
-// WorkerRuntimeCallBatchResponse is a worker batch runtime call response message body.
-type WorkerRuntimeCallBatchResponse struct {
+// WorkerExecuteTxBatchResponse is a worker execute tx batch response message body.
+type WorkerExecuteTxBatchResponse struct {
 	Batch ComputedBatch `codec:"batch"`
 }
 

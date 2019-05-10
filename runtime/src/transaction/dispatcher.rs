@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use failure::{Fallible, ResultExt};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_cbor::{self, Value};
+use serde_cbor::{self, SerializerOptions, Value};
 
 use super::{
     context::Context,
@@ -20,6 +20,11 @@ enum DispatchError {
     #[fail(display = "method not found: {}", method)]
     MethodNotFound { method: String },
 }
+
+/// Error indicating that performing a transaction check was successful.
+#[derive(Debug, Fail)]
+#[fail(display = "transaction check successful")]
+pub struct CheckOnlySuccess;
 
 /// Custom batch handler.
 ///
@@ -257,10 +262,24 @@ impl Dispatcher {
     pub fn dispatch(&self, call: &Vec<u8>, ctx: &mut Context) -> Vec<u8> {
         let rsp = match self.dispatch_fallible(call, ctx) {
             Ok(response) => TxnOutput::Success(response),
-            Err(error) => TxnOutput::Error(format!("{}", error)),
+            Err(error) => {
+                if let Some(check_msg) = error.downcast_ref::<CheckOnlySuccess>() {
+                    TxnOutput::Success(serde_cbor::Value::String(format!("{}", check_msg)))
+                } else {
+                    TxnOutput::Error(format!("{}", error))
+                }
+            }
         };
 
-        serde_cbor::to_vec(&rsp).unwrap()
+        serde_cbor::to_vec_with_options(
+            &rsp,
+            &SerializerOptions {
+                packed: false,
+                enum_as_map: true,
+                self_describe: false,
+            },
+        )
+        .unwrap()
     }
 
     fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<Value> {
@@ -339,7 +358,7 @@ mod tests {
             timestamp: TEST_TIMESTAMP,
             ..Default::default()
         };
-        let mut ctx = Context::new(IoContext::background().freeze(), &header);
+        let mut ctx = Context::new(IoContext::background().freeze(), &header, false);
 
         // Call runtime.
         let result = dispatcher.dispatch(&call_encoded, &mut ctx);
