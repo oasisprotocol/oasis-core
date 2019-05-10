@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry/entity"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry/runtime"
 )
 
@@ -18,6 +19,7 @@ var (
 // Register registers the registry sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	entity.Register(registryCmd)
+	node.Register(registryCmd)
 	runtime.Register(registryCmd)
 
 	parentCmd.AddCommand(registryCmd)
