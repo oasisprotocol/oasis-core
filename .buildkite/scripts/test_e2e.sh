@@ -85,6 +85,9 @@ run_client_km_restart() {
         # Keep the data directory.
         run_keymanager_node 1
         sleep 3
+        # Wait for the key manager node to be synced.
+        ${EKIDEN_NODE} debug client wait-sync \
+            --address unix:${EKIDEN_COMMITTEE_DIR}/key-manager/internal.sock
 
         # Run client on a different key so that it will require another
         # trip to the key manager.
