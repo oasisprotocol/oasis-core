@@ -9,10 +9,13 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -21,6 +24,11 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
+)
+
+const (
+	cfgProfileCPU = "benchmark.profile_cpu"
+	cfgProfileMEM = "benchmark.profile_mem"
 )
 
 var (
@@ -41,10 +49,11 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 	logger := logging.GetLogger("cmd/storage/benchmark")
 
+	var err error
+
 	// Initialize the data directory.
 	dataDir := cmdCommon.DataDir()
 	if dataDir == "" {
-		var err error
 		dataDir, err = ioutil.TempDir("", "storage-benchmark")
 		if err != nil {
 			logger.Error("failed to initialize data directory",
@@ -82,6 +91,25 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	// Wait for storage initialization.
 	<-storage.Initialized()
 
+	if viper.GetBool(cfgProfileCPU) {
+		// Enable CPU profiling.
+		prof, perr := os.Create("storage-bench-profile.prof")
+		if perr != nil {
+			logger.Error("failed to create file for CPU profiler output",
+				"err", perr,
+			)
+			return
+		}
+		defer prof.Close()
+		if perr = pprof.StartCPUProfile(prof); perr != nil {
+			logger.Error("failed to start CPU profiler",
+				"err", perr,
+			)
+			return
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	// Benchmark CAS storage first.
 	for _, sz := range []int{
 		256, 512, 1024, 4096, 8192, 16384, 32768,
@@ -89,7 +117,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		buf := make([]byte, sz)
 
 		// Insert.
-		var err error
 		res := testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			for i := 0; i < b.N; i++ {
@@ -168,7 +195,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		newRoot.Empty()
 
 		// Apply.
-		var err error
 		res := testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			var root, unknown hash.Hash
@@ -263,7 +289,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 			256, 512, 1024, 4096, 8192, 16384,
 		} {
 			// Apply batch.
-			var err error
 			res := testing.Benchmark(func(b *testing.B) {
 				b.SetBytes(int64(bsz * sz))
 				var root, unknown hash.Hash
@@ -299,10 +324,80 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 			}
 		}
 	}
+
+	// Benchmark concurrent MKVS Apply with same write log.
+	testValues := [][]byte{
+		[]byte("Thou seest Me as Time who kills, Time who brings all to doom,"),
+		[]byte("The Slayer Time, Ancient of Days, come hither to consume;"),
+		[]byte("Excepting thee, of all these hosts of hostile chiefs arrayed,"),
+		[]byte("There shines not one shall leave alive the battlefield!"),
+	}
+	expectedNewRoot := [...]byte{82, 3, 202, 16, 125, 182, 175, 25, 51, 188, 131, 181, 118, 76, 249, 15, 53, 89, 59, 224, 95, 75, 239, 182, 157, 30, 80, 48, 237, 108, 90, 22}
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	var wl storageAPI.WriteLog
+	blen := 0
+	for i, v := range testValues {
+		wl = append(wl, storageAPI.LogEntry{Key: []byte(strconv.Itoa(i)), Value: v})
+		blen = blen + len(v)
+	}
+
+	var cerr error
+	res := testing.Benchmark(func(b *testing.B) {
+		b.SetBytes(int64(blen))
+		b.SetParallelism(100)
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, cerr = storage.Apply(context.Background(), emptyRoot, expectedNewRoot, wl)
+				if cerr != nil {
+					b.Fatalf("failed to Apply(): %v", cerr)
+				}
+			}
+		})
+	})
+	if cerr != nil {
+		logger.Error("failed to Apply() concurrently", "err", cerr)
+	} else {
+		logger.Info("ApplyConcurrently",
+			"sz", blen,
+			"ns_per_op", res.NsPerOp(),
+		)
+	}
+
+	if viper.GetBool(cfgProfileMEM) {
+		// Write memory profiling data.
+		mprof, merr := os.Create("storage-bench-mem-profile.prof")
+		if merr != nil {
+			logger.Error("failed to create file for memory profiler output",
+				"err", merr,
+			)
+			return
+		}
+		defer mprof.Close()
+		runtime.GC()
+		if merr = pprof.WriteHeapProfile(mprof); merr != nil {
+			logger.Error("failed to write heap profile",
+				"err", merr,
+			)
+		}
+	}
 }
 
 // RegisterFlags registers the flags used by the benchmark sub-command.
 func RegisterFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
+		cmd.Flags().Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
+	}
+
+	for _, v := range []string{
+		cfgProfileCPU,
+		cfgProfileMEM,
+	} {
+		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
+	}
+
 	for _, v := range []func(*cobra.Command){
 		storage.RegisterFlags,
 	} {

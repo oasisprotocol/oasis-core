@@ -20,7 +20,7 @@ func TestLRUCapacityEntries(t *testing.T) {
 	)
 
 	cache, err := New(
-		Capacity(cacheSize, false),
+		Capacity(uint64(cacheSize), false),
 		OnEvict(func(k, v interface{}) {
 			evictedKey, evictedValue = k, v
 			nrEvictCallbacks++
@@ -80,7 +80,7 @@ func TestLRUCapacityEntries(t *testing.T) {
 	require.True(ok, "Get - update")
 	require.Equal(updateVal, v, "Get - update")
 
-	require.Equal(cacheSize, cache.Size(), "Size")
+	require.Equal(uint64(cacheSize), cache.Size(), "Size")
 }
 
 func TestLRUCapacityBytes(t *testing.T) {
@@ -89,7 +89,7 @@ func TestLRUCapacityBytes(t *testing.T) {
 	const cacheSize = 5
 
 	cache, err := New(
-		Capacity(cacheSize*sha256.Size, true),
+		Capacity(uint64(cacheSize*sha256.Size), true),
 	)
 	require.NoError(err, "New")
 
@@ -119,8 +119,8 @@ type testEntry struct {
 	value []byte
 }
 
-func (e *testEntry) Size() int {
-	return len(e.value)
+func (e *testEntry) Size() uint64 {
+	return uint64(len(e.value))
 }
 
 func makeEntries(nr int) []*testEntry {

@@ -246,3 +246,8 @@ func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 
 	return log, root, nil
 }
+
+// Size calculates the size of the tree in bytes.
+func (t *Tree) Size() uint64 {
+	return t.cache.valueSize
+}
