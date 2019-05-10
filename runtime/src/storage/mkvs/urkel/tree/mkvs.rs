@@ -8,6 +8,8 @@ use crate::{
 unsafe impl Send for UrkelTree {}
 unsafe impl Sync for UrkelTree {}
 
+// TODO: We should likely change the MKVS interface to propagate errors instead of unwrapping.
+
 impl MKVS for UrkelTree {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         let _lock = self.lock.lock().unwrap();

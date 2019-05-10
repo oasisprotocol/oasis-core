@@ -77,9 +77,7 @@ impl ReadSync for HostReadSyncer {
         };
         match self.protocol.make_request(ctx, req) {
             Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {
-                let mut node = NodeBox::Internal(InternalNode {
-                    ..Default::default()
-                });
+                let mut node = NodeBox::default();
                 node.unmarshal_binary(serialized.as_slice())?;
                 Ok(Rc::new(RefCell::new(node)))
             }

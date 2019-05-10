@@ -5,6 +5,7 @@ mod stats;
 mod subtree;
 mod sync;
 
+pub use super::tree::{NodeBox, NodeID, NodeRef, Value};
 pub use errors::*;
 pub use host::*;
 pub use noop::*;
