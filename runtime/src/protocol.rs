@@ -119,7 +119,10 @@ impl Protocol {
         // Write message to stream and wait for the response.
         self.encode_message(message)?;
 
-        Ok(rx.recv()?)
+        match rx.recv()? {
+            Body::Error { message } => Err(format_err!("{}", message)),
+            body => Ok(body),
+        }
     }
 
     /// Send an async response to a previous request back to the worker host.
