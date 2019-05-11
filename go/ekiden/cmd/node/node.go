@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/beacon"
 	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/client"
+	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -274,6 +275,9 @@ func NewNode() (*Node, error) {
 		return nil, errors.New("data directory not configured")
 	}
 
+	// Load configured values for all registered crash points.
+	crash.LoadViperArgValues()
+
 	var err error
 
 	// Generate/Load the node identity.
@@ -497,6 +501,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		registration.RegisterFlags,
 		workerCommon.RegisterFlags,
 		workerStorage.RegisterFlags,
+		crash.RegisterFlags,
 	} {
 		v(cmd)
 	}
