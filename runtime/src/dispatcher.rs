@@ -22,7 +22,7 @@ use crate::{
     },
     storage::{
         cas::PassthroughCAS,
-        mkvs::{CASPatriciaTrie, MKVS},
+        mkvs::{urkel::sync::HostReadSyncer, UrkelTree},
         StorageContext,
     },
     transaction::{dispatcher::Dispatcher as TxnDispatcher, Context as TxnContext},
@@ -169,9 +169,20 @@ impl Dispatcher {
                             RpcMessage::Request(req) => {
                                 // Request, dispatch.
                                 // TODO: Add LRU cache.
-                                let cas = Arc::new(ProtocolCAS::new(ctx, protocol.clone()));
+                                let ctx = ctx.freeze();
+                                let cas = Arc::new(ProtocolCAS::new(
+                                    Context::create_child(&ctx),
+                                    protocol.clone(),
+                                ));
                                 let cas = Arc::new(PassthroughCAS::new(cas));
-                                let mut mkvs = CASPatriciaTrie::new(cas.clone(), &state_root);
+                                let read_syncer = HostReadSyncer::new(
+                                    Context::create_child(&ctx),
+                                    protocol.clone(),
+                                );
+                                let mut mkvs = UrkelTree::make()
+                                    .with_root(state_root)
+                                    .new(Box::new(read_syncer))
+                                    .unwrap();
                                 let rpc_ctx = RpcContext::new(session_info);
                                 let response =
                                     StorageContext::enter(cas.clone(), &mut mkvs, || {
@@ -179,7 +190,7 @@ impl Dispatcher {
                                     });
                                 let response = RpcMessage::Response(response);
 
-                                let new_state_root =
+                                let (storage_log, new_state_root) =
                                     mkvs.commit().expect("mkvs commit must succeed");
 
                                 debug!(self.logger, "RPC call dispatch complete"; "new_state_root" => ?new_state_root);
@@ -191,6 +202,7 @@ impl Dispatcher {
                                         protocol_response = Body::WorkerRPCCallResponse {
                                             response: buffer,
                                             storage_inserts: cas.take_inserts(),
+                                            storage_log: storage_log,
                                             new_state_root,
                                         };
                                     }
@@ -211,6 +223,7 @@ impl Dispatcher {
                                         protocol_response = Body::WorkerRPCCallResponse {
                                             response: buffer,
                                             storage_inserts: vec![],
+                                            storage_log: vec![],
                                             new_state_root: state_root,
                                         };
                                     }
@@ -234,6 +247,7 @@ impl Dispatcher {
                         protocol_response = Body::WorkerRPCCallResponse {
                             response: buffer,
                             storage_inserts: vec![],
+                            storage_log: vec![],
                             new_state_root: state_root,
                         };
                     }
@@ -251,13 +265,19 @@ impl Dispatcher {
                         protocol.clone(),
                     ));
                     let cas = Arc::new(PassthroughCAS::new(cas));
-                    let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
+                    let read_syncer =
+                        HostReadSyncer::new(Context::create_child(&ctx), protocol.clone());
+                    let mut mkvs = UrkelTree::make()
+                        .with_root(block.header.state_root)
+                        .new(Box::new(read_syncer))
+                        .unwrap();
                     let txn_ctx = TxnContext::new(ctx, &block.header, false);
                     let (outputs, tags) = StorageContext::enter(cas.clone(), &mut mkvs, || {
                         txn_dispatcher.dispatch_batch(&calls, txn_ctx)
                     });
 
-                    let new_state_root = mkvs.commit().expect("mkvs commit must succeed");
+                    let (storage_log, new_state_root) =
+                        mkvs.commit().expect("mkvs commit must succeed");
                     txn_dispatcher.finalize(new_state_root);
 
                     debug!(self.logger, "Transaction batch dispatch complete"; "new_state_root" => ?new_state_root);
@@ -285,6 +305,7 @@ impl Dispatcher {
                     let result = ComputedBatch {
                         outputs,
                         storage_inserts: cas.take_inserts(),
+                        storage_log: storage_log,
                         new_state_root,
                         tags,
                         rak_sig,
@@ -305,7 +326,13 @@ impl Dispatcher {
                         protocol.clone(),
                     ));
                     let cas = Arc::new(PassthroughCAS::new(cas));
-                    let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
+                    //let mut mkvs = CASPatriciaTrie::new(cas.clone(), &block.header.state_root);
+                    let read_syncer =
+                        HostReadSyncer::new(Context::create_child(&ctx), protocol.clone());
+                    let mut mkvs = UrkelTree::make()
+                        .with_root(block.header.state_root)
+                        .new(Box::new(read_syncer))
+                        .unwrap();
                     let txn_ctx = TxnContext::new(ctx, &block.header, true);
                     let (outputs, _) = StorageContext::enter(cas.clone(), &mut mkvs, || {
                         txn_dispatcher.dispatch_batch(&calls, txn_ctx)

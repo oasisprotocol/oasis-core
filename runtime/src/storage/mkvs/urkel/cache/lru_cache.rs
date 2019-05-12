@@ -238,7 +238,7 @@ impl Cache for LRUCache {
         }
     }
 
-    fn get_pending_root(&mut self) -> NodePtrRef {
+    fn get_pending_root(&self) -> NodePtrRef {
         self.pending_root.clone()
     }
 

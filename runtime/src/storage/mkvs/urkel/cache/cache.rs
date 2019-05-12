@@ -27,7 +27,7 @@ pub trait Cache {
     fn stats(&self) -> CacheStats;
 
     /// Get a pointer to the current uncommitted root node.
-    fn get_pending_root(&mut self) -> NodePtrRef;
+    fn get_pending_root(&self) -> NodePtrRef;
     /// Set the root node for the tree to the given pointer.
     fn set_pending_root(&mut self, new_root: NodePtrRef);
     /// Set the root hash of the tree after committing.

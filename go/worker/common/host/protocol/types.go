@@ -69,16 +69,21 @@ type Body struct {
 	WorkerAbortResponse                  *Empty
 
 	// Host interface.
-	HostRPCCallRequest          *HostRPCCallRequest
-	HostRPCCallResponse         *HostRPCCallResponse
-	HostStorageGetRequest       *HostStorageGetRequest
-	HostStorageGetResponse      *HostStorageGetResponse
-	HostStorageGetBatchRequest  *HostStorageGetBatchRequest
-	HostStorageGetBatchResponse *HostStorageGetBatchResponse
-	HostLocalStorageGetRequest  *HostLocalStorageGetRequest
-	HostLocalStorageGetResponse *HostLocalStorageGetResponse
-	HostLocalStorageSetRequest  *HostLocalStorageSetRequest
-	HostLocalStorageSetResponse *Empty
+	HostRPCCallRequest                *HostRPCCallRequest
+	HostRPCCallResponse               *HostRPCCallResponse
+	HostStorageGetRequest             *HostStorageGetRequest
+	HostStorageGetResponse            *HostStorageGetResponse
+	HostStorageGetBatchRequest        *HostStorageGetBatchRequest
+	HostStorageGetBatchResponse       *HostStorageGetBatchResponse
+	HostStorageSyncGetSubtreeRequest  *HostStorageSyncGetSubtreeRequest
+	HostStorageSyncGetPathRequest     *HostStorageSyncGetPathRequest
+	HostStorageSyncGetNodeRequest     *HostStorageSyncGetNodeRequest
+	HostStorageSyncGetValueRequest    *HostStorageSyncGetValueRequest
+	HostStorageSyncSerializedResponse *HostStorageSyncSerializedResponse
+	HostLocalStorageGetRequest        *HostLocalStorageGetRequest
+	HostLocalStorageGetResponse       *HostLocalStorageGetResponse
+	HostLocalStorageSetRequest        *HostLocalStorageSetRequest
+	HostLocalStorageSetResponse       *Empty
 }
 
 // Empty is an empty message body.
@@ -122,6 +127,8 @@ type WorkerRPCCallResponse struct {
 	Response []byte `codec:"response"`
 	// Batch of storage inserts.
 	StorageInserts []storage.Value `codec:"storage_inserts"`
+	// Batch of storage write operations.
+	StorageLog storage.WriteLog `codec:"storage_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
@@ -146,6 +153,8 @@ type ComputedBatch struct {
 	Outputs runtime.Batch `codec:"outputs"`
 	// Batch of storage inserts.
 	StorageInserts []storage.Value `codec:"storage_inserts"`
+	// Batch of storage write operations.
+	StorageLog storage.WriteLog `codec:"storage_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 	// Tags are runtime-specific indexable tags.
@@ -207,6 +216,39 @@ type HostStorageGetBatchRequest struct {
 // HostStorageGetBatchResponse is a host storage batch get response message body.
 type HostStorageGetBatchResponse struct {
 	Values [][]byte `codec:"values"`
+}
+
+// HostStorageSyncGetSubtreeRequest is a host storage read syncer get subtree request message body.
+type HostStorageSyncGetSubtreeRequest struct {
+	RootHash  hash.Hash `codec:"root_hash"`
+	NodePath  hash.Hash `codec:"node_path"`
+	NodeDepth uint8     `codec:"node_depth"`
+	MaxDepth  uint8     `codec:"max_depth"`
+}
+
+// HostStorageSyncGetPathRequest is a host storage read syncer get path request message body.
+type HostStorageSyncGetPathRequest struct {
+	RootHash   hash.Hash `codec:"root_hash"`
+	Key        hash.Hash `codec:"key"`
+	StartDepth uint8     `codec:"start_depth"`
+}
+
+// HostStorageSyncGetNodeRequest is a host storage read syncer get node request message body.
+type HostStorageSyncGetNodeRequest struct {
+	RootHash  hash.Hash `codec:"root_hash"`
+	NodePath  hash.Hash `codec:"node_path"`
+	NodeDepth uint8     `codec:"node_depth"`
+}
+
+// HostStorageSyncGetValueRequest is a host storage read syncer get value message body.
+type HostStorageSyncGetValueRequest struct {
+	RootHash hash.Hash `codec:"root_hash"`
+	ValueID  hash.Hash `codec:"value_id"`
+}
+
+// HostStorageSyncSerializedResponse is a host storage read syncer response body containing serialized data.
+type HostStorageSyncSerializedResponse struct {
+	Serialized []byte `codec:"serialized"`
 }
 
 // HostLocalStorageGetRequest is a host local storage get request message body.

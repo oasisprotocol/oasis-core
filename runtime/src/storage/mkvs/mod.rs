@@ -1,10 +1,59 @@
 //! Merklized key-value store.
 use failure::Fallible;
 
+use serde::{self, ser::SerializeSeq, Serializer};
+use serde_bytes::Bytes;
+use serde_derive::Deserialize;
+
 use crate::common::crypto::hash::Hash;
 
 pub mod cas_patricia_trie;
 pub mod urkel;
+
+/// The type of entry in the log.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum LogEntryKind {
+    Insert,
+    Delete,
+}
+
+/// An entry in the write log, describing a single update.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+pub struct LogEntry {
+    /// The key that was inserted or deleted.
+    #[serde(with = "serde_bytes")]
+    pub key: Vec<u8>,
+    /// The inserted value (empty if the key was deleted).
+    #[serde(with = "serde_bytes")]
+    pub value: Vec<u8>,
+}
+
+impl LogEntry {
+    pub fn kind(&self) -> LogEntryKind {
+        if self.value.is_empty() {
+            LogEntryKind::Delete
+        } else {
+            LogEntryKind::Insert
+        }
+    }
+}
+
+impl serde::Serialize for LogEntry {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(2))?;
+        seq.serialize_element(&Bytes::new(&self.key))?;
+        seq.serialize_element(&Bytes::new(&self.value))?;
+        seq.end()
+    }
+}
+
+/// The write log.
+///
+/// The keys in the write log must be unique.
+pub type WriteLog = Vec<LogEntry>;
 
 /// Merklized key-value store.
 pub trait MKVS: Send + Sync {
@@ -26,7 +75,7 @@ pub trait MKVS: Send + Sync {
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(&mut self) -> Fallible<Hash>;
+    fn commit(&mut self) -> Fallible<(WriteLog, Hash)>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);

@@ -10,6 +10,7 @@ mod errors;
 mod insert;
 mod lookup;
 mod marshal;
+mod mkvs;
 mod remove;
 mod sync;
 

@@ -7,6 +7,8 @@ type WriteLog []LogEntry
 
 // LogEntry is a write log entry.
 type LogEntry struct {
+	_struct struct{} `codec:",toarray"` // nolint
+
 	Key   []byte
 	Value []byte
 }
@@ -21,7 +23,7 @@ const (
 
 // Type returns the type of the write log entry.
 func (k *LogEntry) Type() LogEntryType {
-	if k.Value == nil {
+	if len(k.Value) == 0 {
 		return LogDelete
 	}
 

@@ -11,10 +11,10 @@ impl UrkelTree {
         let mut stats = UrkelStats {
             left_subtree_max_depths: BTreeMap::new(),
             right_subtree_max_depths: BTreeMap::new(),
-            cache: self.cache.stats(),
+            cache: self.cache.borrow_mut().stats(),
             ..Default::default()
         };
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
         self._stats(&mut stats, pending_root, Hash::empty_hash(), 0, max_depth);
         stats
     }
@@ -37,6 +37,7 @@ impl UrkelTree {
 
         let node_ref = self
             .cache
+            .borrow_mut()
             .deref_node_ptr(
                 NodeID {
                     path: path,
@@ -88,6 +89,7 @@ impl UrkelTree {
                 let node_ref = node_ref.unwrap();
                 let value = self
                     .cache
+                    .borrow_mut()
                     .deref_value_ptr(noderef_as!(node_ref, Leaf).value.clone());
                 let value = match value {
                     Err(err) => panic!("{}", err),
@@ -106,12 +108,12 @@ impl UrkelTree {
 
     /// Get an object that can be formatted using `{:#?}`.
     pub fn get_dumpable(&mut self) -> NodePtrRef {
-        self.cache.get_pending_root().clone()
+        self.cache.borrow().get_pending_root().clone()
     }
 
     /// Dump the tree into the given writer.
     pub fn dump(&mut self, w: &mut impl ::std::io::Write) -> ::std::io::Result<()> {
-        let pending_root = self.cache.get_pending_root();
+        let pending_root = self.cache.borrow().get_pending_root();
         self._dump(w, pending_root, Hash::empty_hash(), 0)?;
         writeln!(w, "")
     }
@@ -127,6 +129,7 @@ impl UrkelTree {
 
         let node = self
             .cache
+            .borrow_mut()
             .deref_node_ptr(
                 NodeID {
                     path: path,
@@ -175,6 +178,7 @@ impl UrkelTree {
                 };
                 let value = self
                     .cache
+                    .borrow_mut()
                     .deref_value_ptr(noderef_as!(some_node_ref, Leaf).value.clone());
                 match value {
                     Err(err) => write!(w, "<ERROR: {}>", err.as_fail()),

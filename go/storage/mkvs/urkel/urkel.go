@@ -236,7 +236,7 @@ func (t *Tree) Commit() (WriteLog, hash.Hash, error) {
 			continue
 		}
 
-		log = append(log, LogEntry{entry.key, entry.value})
+		log = append(log, LogEntry{Key: entry.key, Value: entry.value})
 	}
 	t.pendingWriteLog = make(map[hash.Hash]*pendingLogEntry)
 	t.cache.setSyncRoot(root)

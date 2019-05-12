@@ -11,7 +11,7 @@ use crate::{
             sivaessha2::{SivAesSha2, KEY_SIZE},
         },
     },
-    storage::{CAS, MKVS},
+    storage::{mkvs::WriteLog, CAS, MKVS},
 };
 
 pub mod nibble;
@@ -145,7 +145,7 @@ impl MKVS for CASPatriciaTrie {
         previous_value
     }
 
-    fn commit(&mut self) -> Fallible<Hash> {
+    fn commit(&mut self) -> Fallible<(WriteLog, Hash)> {
         // Commit all pending writes to the trie.
         let mut root_hash = self.root_hash.clone();
         for (key, value) in self.pending_ops.drain() {
@@ -161,7 +161,10 @@ impl MKVS for CASPatriciaTrie {
 
         self.root_hash = root_hash;
 
-        Ok(self.root_hash.clone().unwrap_or_else(|| Hash::empty_hash()))
+        Ok((
+            Vec::new(),
+            self.root_hash.clone().unwrap_or_else(|| Hash::empty_hash()),
+        ))
     }
 
     fn rollback(&mut self) {

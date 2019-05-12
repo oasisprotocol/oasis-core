@@ -46,6 +46,12 @@ pub enum NodeBox {
     Leaf(LeafNode),
 }
 
+impl Default for NodeBox {
+    fn default() -> Self {
+        NodeBox::Internal(Default::default())
+    }
+}
+
 impl Node for NodeBox {
     fn is_clean(&self) -> bool {
         match self {

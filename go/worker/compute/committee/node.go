@@ -639,6 +639,13 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 			return err
 		}
 
+		if _, err := n.storage.Apply(ctx, n.currentBlock.Header.StateRoot, batch.NewStateRoot, batch.StorageLog); err != nil {
+			n.logger.Error("failed to apply write log to storage",
+				"err", err,
+			)
+			return err
+		}
+
 		if opts.LocalOnly {
 			return nil
 		}
