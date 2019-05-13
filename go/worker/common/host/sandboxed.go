@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"git.schwanenlied.me/yawning/dynlib.git"
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -255,7 +254,7 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 	}
 
 	// Resolve worker binary library dependencies so we can mount them in.
-	cache, err := dynlib.LoadCache()
+	cache, err := loadCache()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load dynamic library loader cache")
 	}
