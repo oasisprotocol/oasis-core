@@ -220,7 +220,7 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		return 0, err
 	}
 	var rightHash hash.Hash
-	if err := rightHash.UnmarshalBinary(data[1+hash.Size:]); err != nil {
+	if err := rightHash.UnmarshalBinary(data[1+hash.Size : 1+hash.Size*2]); err != nil {
 		return 0, err
 	}
 
