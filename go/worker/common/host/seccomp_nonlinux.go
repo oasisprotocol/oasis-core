@@ -1,3 +1,5 @@
+// +build !linux
+
 package host
 
 import (
@@ -7,5 +9,5 @@ import (
 )
 
 func generateSeccompPolicy(out *os.File) error {
-	return errors.New("seccomp policy not implemented for darwin")
+	return errors.New("generateSeccompPolicy only implemented for Linux")
 }
