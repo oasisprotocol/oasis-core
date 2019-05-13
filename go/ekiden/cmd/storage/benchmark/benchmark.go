@@ -190,7 +190,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 				// Open the receipt and obtain the new root from it.
 				b.StopTimer()
 				var rb storageAPI.MKVSReceiptBody
-				if err = mkvsReceipt.Open(storageAPI.MKVSReceiptSignatureContext, &rb); err != nil {
+				if err = mkvsReceipt.Open(&rb); err != nil {
 					b.Fatalf("failed to Open(): %v", err)
 				}
 				newRoot = rb.Root

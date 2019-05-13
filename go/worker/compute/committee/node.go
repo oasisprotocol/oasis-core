@@ -662,7 +662,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		// TODO: Ensure that the receipt is actually signed by the
 		// storage node.  For now accept a signature from anyone.
 		var receipt storage.Receipt
-		if err = signedReceipt.Open(storage.ReceiptSignatureContext, &receipt); err != nil {
+		if err = signedReceipt.Open(&receipt); err != nil {
 			n.logger.Error("failed to open signed receipt",
 				"err", err,
 			)
