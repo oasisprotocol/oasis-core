@@ -40,9 +40,4 @@ impl MKVS for UrkelTree {
         let _guard = lock.lock().unwrap();
         self.pending_write_log.clear();
     }
-
-    fn set_encryption_key(&mut self, _key: Option<&[u8]>, _nonce: Option<&[u8]>) {
-        let _lock = self.lock.lock().unwrap();
-        // XXX: This should probably panic or something?
-    }
 }

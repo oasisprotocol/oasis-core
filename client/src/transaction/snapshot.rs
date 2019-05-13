@@ -138,10 +138,6 @@ impl MKVS for BlockSnapshot {
     fn rollback(&mut self) {
         unimplemented!("block snapshot is read-only");
     }
-
-    fn set_encryption_key(&mut self, key: Option<&[u8]>, nonce: Option<&[u8]>) {
-        MKVS::set_encryption_key(&mut self.mkvs, key, nonce)
-    }
 }
 
 #[derive(Clone)]

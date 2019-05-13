@@ -116,23 +116,22 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue
 
-    # TODO: this breaks with #1651 until encryption can be fixed again!
-    # # Database encryption test.
-    # run_test \
-    #     scenario=scenario_basic \
-    #     name="e2e-${backend_name}-basic-enc" \
-    #     backend_runner=$backend_runner \
-    #     runtime=simple-keyvalue \
-    #     client=simple-keyvalue-enc
+     # Database encryption test.
+    run_test \
+        scenario=scenario_basic \
+        name="e2e-${backend_name}-basic-enc" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-enc
 
-    # # Database encryption test with restarting key manager.
-    # run_test \
-    #     scenario=scenario_basic \
-    #     name="e2e-${backend_name}-km-restart" \
-    #     backend_runner=$backend_runner \
-    #     runtime=simple-keyvalue \
-    #     client=simple-keyvalue-enc \
-    #     client_runner=run_client_km_restart
+    # Database encryption test with restarting key manager.
+    run_test \
+        scenario=scenario_basic \
+        name="e2e-${backend_name}-km-restart" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-enc \
+        client_runner=run_client_km_restart
 
     # Discrepancy scenario.
     # NOTE: This scenario currently fails on SGX due to the way discrepancy
