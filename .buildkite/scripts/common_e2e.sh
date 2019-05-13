@@ -45,6 +45,7 @@ run_backend_tendermint_committee() {
     local clear_storage=1
     local roothash_genesis_blocks=""
     local nodes=3
+    local runtime_genesis=""
     # Load named arguments that override defaults.
     local "${@}"
 
@@ -81,6 +82,7 @@ run_backend_tendermint_committee() {
         --runtime.id ${EKIDEN_RUNTIME_ID} \
         --runtime.replica_group_size ${replica_group_size} \
         --runtime.replica_group_backup_size ${replica_group_backup_size} \
+        ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}} \
         ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --entity ${entity_dir} \
         --datadir ${entity_dir}
@@ -95,6 +97,7 @@ run_backend_tendermint_committee() {
         --entity ${entity_dir}/entity_genesis.json \
         --runtime ${entity_dir}/runtime_genesis.json \
         ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
+        ${runtime_genesis:+--storage ${runtime_genesis}} \
         ${validator_files}
 
 

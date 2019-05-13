@@ -1,6 +1,6 @@
 //! Merklized key-value store.
+use base64;
 use failure::Fallible;
-
 use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::Bytes;
 use serde_derive::Deserialize;
@@ -43,9 +43,15 @@ impl serde::Serialize for LogEntry {
     where
         S: Serializer,
     {
+        let is_human_readable = serializer.is_human_readable();
         let mut seq = serializer.serialize_seq(Some(2))?;
-        seq.serialize_element(&Bytes::new(&self.key))?;
-        seq.serialize_element(&Bytes::new(&self.value))?;
+        if is_human_readable {
+            seq.serialize_element(&base64::encode(&self.key))?;
+            seq.serialize_element(&base64::encode(&self.value))?;
+        } else {
+            seq.serialize_element(&Bytes::new(&self.key))?;
+            seq.serialize_element(&Bytes::new(&self.value))?;
+        }
         seq.end()
     }
 }

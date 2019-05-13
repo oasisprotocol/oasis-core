@@ -106,8 +106,8 @@ type SignedReceipt struct {
 }
 
 // Open first verifies the blob signature then unmarshals the blob.
-func (s *SignedReceipt) Open(context []byte, receipt *Receipt) error {
-	return s.Signed.Open(context, receipt)
+func (s *SignedReceipt) Open(receipt *Receipt) error {
+	return s.Signed.Open(ReceiptSignatureContext, receipt)
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -161,8 +161,8 @@ func (rb *MKVSReceiptBody) UnmarshalCBOR(data []byte) error {
 }
 
 // Open first verifies the blob signature then unmarshals the blob.
-func (s *MKVSReceipt) Open(context []byte, receipt *MKVSReceiptBody) error {
-	return s.Signed.Open(context, receipt)
+func (s *MKVSReceipt) Open(receipt *MKVSReceiptBody) error {
+	return s.Signed.Open(MKVSReceiptSignatureContext, receipt)
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
