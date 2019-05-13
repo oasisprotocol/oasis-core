@@ -17,7 +17,7 @@ set -euxo pipefail
 pushd go
   make generate
 
-  MODIFIED=`git diff --name-only HEAD | grep .pb.go`
+  MODIFIED=$(git diff --name-only HEAD | grep .pb.go) || true
   if [ ! -z $MODIFIED ]; then
       echo "GRPC generated files differ from the ones provided in this commit"
       echo "Please run \"make generate\" and try again"
