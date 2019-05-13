@@ -1,3 +1,5 @@
+// +build linux
+
 package host
 
 import (
@@ -318,6 +320,7 @@ var syscallAllArgsWhitelist = []string{
 	"modify_ldt",
 }
 
+// +build linux
 // Generate a new worker SECCOMP policy and write it in BPF format to specified
 // file descriptor.
 func generateSeccompPolicy(out *os.File) error {
