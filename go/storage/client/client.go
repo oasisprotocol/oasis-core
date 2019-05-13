@@ -10,10 +10,10 @@ package client
 import (
 	"context"
 	"crypto/x509"
-	"errors"
 	"io"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -445,7 +445,6 @@ func (b *storageClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo
 	return kiCh, nil
 }
 
-// Apply(context.Context, hash.Hash, hash.Hash, WriteLog) (*MKVSReceipt, error)
 func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
 	var req storage.ApplyRequest
 	req.Root = root[:]
@@ -472,7 +471,7 @@ func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expect
 
 	var receipt api.MKVSReceipt
 	if err = receipt.UnmarshalCBOR(resp.GetReceipt()); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "storage client: failed to unmarshal receipt")
 	}
 
 	return &receipt, nil
@@ -498,7 +497,7 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 
 	var subtree api.Subtree
 	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "storage client: failed to unmarshal subtree")
 	}
 
 	return &subtree, nil
@@ -524,7 +523,7 @@ func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key 
 
 	var subtree api.Subtree
 	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "storage client: failed to unmarshal subtree")
 	}
 
 	return &subtree, nil
@@ -549,7 +548,7 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 
 	node, err := urkelDb.NodeUnmarshalBinary(resp.GetNode())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "storage client: failed to unmarshal node")
 	}
 
 	return node, nil

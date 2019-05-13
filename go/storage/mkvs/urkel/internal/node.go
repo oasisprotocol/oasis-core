@@ -6,8 +6,9 @@ import (
 	"container/list"
 	"encoding"
 	"encoding/binary"
-	"errors"
 	"fmt"
+
+	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 )
@@ -217,11 +218,11 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 
 	var leftHash hash.Hash
 	if err := leftHash.UnmarshalBinary(data[1 : 1+hash.Size]); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "urkel: failed to unmarshal left hash")
 	}
 	var rightHash hash.Hash
 	if err := rightHash.UnmarshalBinary(data[1+hash.Size : 1+hash.Size*2]); err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "urkel: failed to unmarshal right hash")
 	}
 
 	n.Clean = true
@@ -345,7 +346,7 @@ func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
 
 	var key hash.Hash
 	if err := key.UnmarshalBinary(data[1 : 1+hash.Size]); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "urkel: failed to unmarshal hash")
 	}
 
 	value := &Value{}

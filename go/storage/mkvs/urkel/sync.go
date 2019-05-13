@@ -3,6 +3,8 @@ package urkel
 import (
 	"context"
 
+	"github.com/pkg/errors"
+
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
@@ -33,7 +35,7 @@ func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeI
 	st := &syncer.Subtree{}
 	rootPtr, err := t.doGetSubtree(ctx, subtreeRoot, 0, path, st, maxDepth)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "urkel: failed to get subtree")
 	}
 	st.Root = rootPtr
 	if !st.Root.Valid {
@@ -135,7 +137,7 @@ func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, start
 	st := &syncer.Subtree{}
 	rootPtr, err := t.doGetPath(ctx, subtreeRoot, startDepth, key, st)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "urkel: failed to get path")
 	}
 	st.Root = rootPtr
 	if !st.Root.Valid {

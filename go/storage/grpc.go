@@ -2,8 +2,8 @@ package storage
 
 import (
 	"context"
-	"errors"
 
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -139,10 +139,14 @@ func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysSe
 
 func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
 	var root hash.Hash
-	copy(root[:], req.GetRoot())
+	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+	}
 
 	var expectedNewRoot hash.Hash
-	copy(expectedNewRoot[:], req.GetExpectedNewRoot())
+	if err := expectedNewRoot.UnmarshalBinary(req.GetExpectedNewRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal expected new root")
+	}
 
 	var log api.WriteLog
 	for _, item := range req.GetLog() {
@@ -164,13 +168,17 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 
 func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
 	var root hash.Hash
-	copy(root[:], req.GetRoot())
+	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+	}
 
 	maxDepth := uint8(req.GetMaxDepth())
 
 	nid := req.GetId()
 	var path hash.Hash
-	copy(path[:], nid.GetPath())
+	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
+	}
 
 	nodeID := api.NodeID{
 		Path:  path,
@@ -193,10 +201,14 @@ func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 
 func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.GetPathResponse, error) {
 	var root hash.Hash
-	copy(root[:], req.GetRoot())
+	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+	}
 
 	var key hash.Hash
-	copy(key[:], req.GetKey())
+	if err := key.UnmarshalBinary(req.GetKey()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal key")
+	}
 
 	startDepth := uint8(req.GetStartDepth())
 
@@ -216,11 +228,15 @@ func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 
 func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
 	var root hash.Hash
-	copy(root[:], req.GetRoot())
+	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+	}
 
 	nid := req.GetId()
 	var path hash.Hash
-	copy(path[:], nid.GetPath())
+	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
+	}
 
 	nodeID := api.NodeID{
 		Path:  path,
@@ -243,10 +259,14 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 
 func (s *grpcServer) GetValue(ctx context.Context, req *pb.GetValueRequest) (*pb.GetValueResponse, error) {
 	var root hash.Hash
-	copy(root[:], req.GetRoot())
+	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+	}
 
 	var id hash.Hash
-	copy(id[:], req.GetId())
+	if err := id.UnmarshalBinary(req.GetId()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
+	}
 
 	<-s.backend.Initialized()
 	value, err := s.backend.GetValue(ctx, root, id)
