@@ -254,7 +254,7 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 	}
 
 	// Resolve worker binary library dependencies so we can mount them in.
-	cache, err := loadCache()
+	cache, err := loadDynlibCache()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load dynamic library loader cache")
 	}

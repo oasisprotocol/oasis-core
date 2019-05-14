@@ -12,6 +12,6 @@ func (Cache) ResolveLibraries(binaries []string, extraLibs []string, ldLibraryPa
 	return nil, errors.New("ResolveLibraries not implemented for darwin")
 }
 
-func loadCache() (*Cache, error) {
+func loadDynlibCache() (*Cache, error) {
 	return nil, errors.New("darwin does not implement dynlib")
 }
