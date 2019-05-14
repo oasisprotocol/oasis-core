@@ -25,6 +25,7 @@ import (
 const (
 	cfgBackend             = "storage.backend"
 	cfgDebugMockSigningKey = "storage.debug.mock_signing_key"
+	cfgCrashEnabled        = "storage.crash.enabled"
 )
 
 // New constructs a new Backend based on the configuration flags.
@@ -61,6 +62,12 @@ func New(ctx context.Context, dataDir string, epochtimeBackend epochtime.Backend
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
+
+	crashEnabled := viper.GetBool(cfgCrashEnabled)
+	if crashEnabled {
+		impl = newCrashingWrapper(impl)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +81,7 @@ func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgBackend, memory.BackendName, "Storage backend")
 		cmd.Flags().Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
+		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 	}
 
 	for _, v := range []string{

@@ -9,6 +9,7 @@ import (
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -366,6 +367,7 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 			SpanContext: scBinary,
 		})
 	}
+	crash.Here(crashPointLeaderBatchPublishAfter)
 
 	return nil
 }
