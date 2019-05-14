@@ -383,7 +383,7 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
 
-	if epoch.IsComputeMember() {
+	if epoch.IsComputeMember() || epoch.IsTransactionSchedulerLeader() {
 		n.transition(StateWaitingForBatch{})
 	} else {
 		n.transition(StateNotReady{})
@@ -831,6 +831,9 @@ func (n *Node) checkIncomingQueue(force bool) {
 	if epochSnapshot.IsComputeLeader() || epochSnapshot.IsComputeWorker() {
 		// Start processing the batch locally.
 		n.startProcessingBatch(batch)
+	} else if epochSnapshot.IsTransactionSchedulerLeader() && !epochSnapshot.IsComputeMember() {
+		// Wait for commit.
+		n.transition(StateWaitingForFinalize{})
 	}
 
 	processOk = true
