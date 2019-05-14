@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -65,7 +65,7 @@ type Worker struct {
 
 	commonWorker *workerCommon.Worker
 	ias          *ias.IAS
-	keyManager   *keymanager.KeyManager
+	keyManager   *keymanager.Client
 	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
@@ -315,7 +315,7 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	keyManager *keymanager.KeyManager,
+	keyManager *keymanager.Client,
 	registration *registration.Registration,
 	cfg Config,
 ) (*Worker, error) {

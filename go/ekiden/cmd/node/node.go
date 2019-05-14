@@ -28,7 +28,7 @@ import (
 	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
 	"github.com/oasislabs/ekiden/go/registry"
 	registryAPI "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash"
@@ -44,6 +44,7 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/compute"
+	"github.com/oasislabs/ekiden/go/worker/keymanager"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	workerStorage "github.com/oasislabs/ekiden/go/worker/storage"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
@@ -83,7 +84,7 @@ type Node struct {
 	Storage    storageAPI.Backend
 	IAS        *ias.IAS
 	Client     *client.Client
-	KeyManager *keymanager.KeyManager
+	KeyManager *keymanagerClient.Client
 
 	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
@@ -437,7 +438,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize the key manager service.
-	node.KeyManager, err = keymanager.New(
+	kmSvc, err := keymanager.New(
 		cmdCommon.DataDir(),
 		node.IAS,
 		node.Identity,
@@ -448,7 +449,16 @@ func NewNode() (*Node, error) {
 		)
 		return nil, err
 	}
-	node.svcMgr.Register(node.KeyManager)
+	node.svcMgr.Register(kmSvc)
+
+	// Initialize the key manager client service.
+	node.KeyManager, err = keymanagerClient.New()
+	if err != nil {
+		logger.Error("failed to initialize key manager client",
+			"err", err,
+		)
+		return nil, err
+	}
 
 	// Initialize the client.
 	node.Client, err = client.New(
@@ -503,7 +513,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Start the key manager service.
-	if err = node.KeyManager.Start(); err != nil {
+	if err = kmSvc.Start(); err != nil {
 		logger.Error("failed to start key manager service",
 			"err", err,
 		)
@@ -535,6 +545,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		tendermint.RegisterFlags,
 		ias.RegisterFlags,
 		keymanager.RegisterFlags,
+		keymanagerClient.RegisterFlags,
 		client.RegisterFlags,
 		compute.RegisterFlags,
 		p2p.RegisterFlags,
