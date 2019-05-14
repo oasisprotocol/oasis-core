@@ -123,6 +123,8 @@ func (k CommitteeKind) String() string {
 		return "compute"
 	case Storage:
 		return "storage"
+	case TransactionScheduler:
+		return "transaction"
 	default:
 		return fmt.Sprintf("unknown kind: %d", k)
 	}
@@ -152,6 +154,8 @@ func (c *Committee) ToProto() *pbSched.Committee {
 		pb.Kind = pbSched.Committee_COMPUTE
 	case Storage:
 		pb.Kind = pbSched.Committee_STORAGE
+	case TransactionScheduler:
+		pb.Kind = pbSched.Committee_TRANSACTION
 	default:
 		panic("scheduler: invalid committee kind")
 	}
