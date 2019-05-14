@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -7,11 +10,12 @@ use crate::{
 
 impl UrkelTree {
     /// Remove a key from the tree and return true if the tree was modified.
-    pub fn remove(&mut self, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
+    pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
+        let ctx = ctx.freeze();
         let hkey = Hash::digest_bytes(key);
         let pending_root = self.cache.borrow().get_pending_root();
 
-        let (new_root, changed, old_val) = self._remove(pending_root, 0, hkey)?;
+        let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, hkey)?;
         match self.pending_write_log.get_mut(&hkey) {
             None => {
                 self.pending_write_log.insert(
@@ -34,11 +38,13 @@ impl UrkelTree {
 
     fn _remove(
         &mut self,
+        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
         key: Hash,
     ) -> Fallible<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
+            ctx,
             NodeID {
                 path: key,
                 depth: depth,
@@ -62,7 +68,7 @@ impl UrkelTree {
                         noderef_as!(node_ref, Internal).left.clone()
                     };
 
-                    let (child, changed, old_val) = self._remove(child, depth + 1, key)?;
+                    let (child, changed, old_val) = self._remove(ctx, child, depth + 1, key)?;
 
                     if go_right {
                         noderef_as_mut!(node_ref, Internal).right = child;
@@ -82,6 +88,7 @@ impl UrkelTree {
                 };
 
                 let left_ref = self.cache.borrow_mut().deref_node_ptr(
+                    ctx,
                     lr_id.clone(),
                     int_left.clone(),
                     None,
@@ -89,6 +96,7 @@ impl UrkelTree {
                 match left_ref {
                     None => {
                         let right_ref = self.cache.borrow_mut().deref_node_ptr(
+                            ctx,
                             lr_id,
                             int_right.clone(),
                             None,
@@ -109,6 +117,7 @@ impl UrkelTree {
                     Some(left_ref) => {
                         if let NodeBox::Leaf(_) = *left_ref.borrow() {
                             let right_ref = self.cache.borrow_mut().deref_node_ptr(
+                                ctx,
                                 lr_id,
                                 int_right.clone(),
                                 None,

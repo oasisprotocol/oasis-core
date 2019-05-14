@@ -1,6 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -9,12 +10,13 @@ use crate::{
 
 impl UrkelTree {
     /// Insert a key/value pair into the tree.
-    pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Fallible<Option<Vec<u8>>> {
+    pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Fallible<Option<Vec<u8>>> {
+        let ctx = ctx.freeze();
         let hkey = Hash::digest_bytes(key);
         let pending_root = self.cache.borrow().get_pending_root();
         let boxed_val = value.to_vec();
 
-        let (new_root, old_val) = self._insert(pending_root, 0, hkey, boxed_val.clone())?;
+        let (new_root, old_val) = self._insert(&ctx, pending_root, 0, hkey, boxed_val.clone())?;
         let existed = old_val != None;
         match self.pending_write_log.get_mut(&hkey) {
             None => {
@@ -38,12 +40,14 @@ impl UrkelTree {
 
     fn _insert(
         &mut self,
+        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
         key: Hash,
         val: Value,
     ) -> Fallible<(NodePtrRef, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
+            ctx,
             NodeID {
                 path: key,
                 depth: depth,
@@ -70,7 +74,7 @@ impl UrkelTree {
                     }
                     _ => unreachable!(),
                 };
-                let (new_root, old_val) = self._insert(rec_node, depth + 1, key, val)?;
+                let (new_root, old_val) = self._insert(ctx, rec_node, depth + 1, key, val)?;
 
                 if go_right {
                     noderef_as_mut!(node_ref, Internal).right = new_root;
@@ -133,7 +137,7 @@ impl UrkelTree {
                         )
                     }
                 } else {
-                    let (new_root, _) = self._insert(ptr.clone(), depth + 1, key, val)?;
+                    let (new_root, _) = self._insert(ctx, ptr.clone(), depth + 1, key, val)?;
                     if existing_bit {
                         (none_ptr.clone(), new_root) // (left, right)
                     } else {

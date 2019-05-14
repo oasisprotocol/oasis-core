@@ -12,17 +12,13 @@ use crate::{
 
 /// A proxy read syncer which forwards calls to the runtime host.
 pub struct HostReadSyncer {
-    ctx: Arc<Context>,
     protocol: Arc<Protocol>,
 }
 
 impl HostReadSyncer {
     /// Construct a new host proxy instance.
-    pub fn new(context: Context, protocol: Arc<Protocol>) -> HostReadSyncer {
-        HostReadSyncer {
-            ctx: context.freeze(),
-            protocol: protocol,
-        }
+    pub fn new(protocol: Arc<Protocol>) -> HostReadSyncer {
+        HostReadSyncer { protocol: protocol }
     }
 }
 
@@ -31,8 +27,13 @@ impl ReadSync for HostReadSyncer {
         self
     }
 
-    fn get_subtree(&mut self, root_hash: Hash, id: NodeID, max_depth: u8) -> Fallible<Subtree> {
-        let ctx = Context::create_child(&self.ctx);
+    fn get_subtree(
+        &mut self,
+        ctx: Context,
+        root_hash: Hash,
+        id: NodeID,
+        max_depth: u8,
+    ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetSubtreeRequest {
             root_hash: root_hash,
             node_path: id.path,
@@ -50,8 +51,13 @@ impl ReadSync for HostReadSyncer {
         }
     }
 
-    fn get_path(&mut self, root_hash: Hash, key: Hash, start_depth: u8) -> Fallible<Subtree> {
-        let ctx = Context::create_child(&self.ctx);
+    fn get_path(
+        &mut self,
+        ctx: Context,
+        root_hash: Hash,
+        key: Hash,
+        start_depth: u8,
+    ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetPathRequest {
             root_hash: root_hash,
             key: key,
@@ -68,8 +74,7 @@ impl ReadSync for HostReadSyncer {
         }
     }
 
-    fn get_node(&mut self, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
-        let ctx = Context::create_child(&self.ctx);
+    fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
         let req = Body::HostStorageSyncGetNodeRequest {
             root_hash: root_hash,
             node_path: id.path,
@@ -86,8 +91,7 @@ impl ReadSync for HostReadSyncer {
         }
     }
 
-    fn get_value(&mut self, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        let ctx = Context::create_child(&self.ctx);
+    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
         let req = Body::HostStorageSyncGetValueRequest {
             root_hash: root_hash,
             value_id: id,

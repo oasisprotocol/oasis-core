@@ -6,6 +6,7 @@ use std::{
 };
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -56,8 +57,8 @@ impl UrkelOptions {
     }
 
     /// Commit the options set so far into a newly constructed tree instance.
-    pub fn new(self, read_syncer: Box<dyn ReadSync>) -> Fallible<UrkelTree> {
-        UrkelTree::new(read_syncer, &self)
+    pub fn new(self, ctx: Context, read_syncer: Box<dyn ReadSync>) -> Fallible<UrkelTree> {
+        UrkelTree::new(ctx, read_syncer, &self)
     }
 }
 
@@ -93,7 +94,12 @@ pub struct UrkelTree {
 
 impl UrkelTree {
     /// Construct a new tree instance using the given read syncer and options struct.
-    pub fn new(read_syncer: Box<dyn ReadSync>, opts: &UrkelOptions) -> Fallible<UrkelTree> {
+    pub fn new(
+        ctx: Context,
+        read_syncer: Box<dyn ReadSync>,
+        opts: &UrkelOptions,
+    ) -> Fallible<UrkelTree> {
+        let ctx = ctx.freeze();
         let tree = UrkelTree {
             cache: RefCell::new(LRUCache::new(
                 opts.node_capacity,
@@ -117,7 +123,7 @@ impl UrkelTree {
                     ..Default::default()
                 })));
             tree.cache.borrow_mut().set_sync_root(root_hash);
-            let ptr = tree.cache.borrow_mut().prefetch(root_hash, 0)?;
+            let ptr = tree.cache.borrow_mut().prefetch(&ctx, root_hash, 0)?;
             if !ptr.borrow().is_null() {
                 tree.cache.borrow_mut().set_pending_root(ptr);
             }

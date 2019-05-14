@@ -44,7 +44,11 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
 
     let existing = StorageContext::with_current(|_cas, mkvs| {
-        mkvs.insert(args.key.as_bytes(), args.value.as_bytes())
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            args.key.as_bytes(),
+            args.value.as_bytes(),
+        )
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
@@ -58,7 +62,9 @@ fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"get");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs| mkvs.get(args.as_bytes()));
+    let existing = StorageContext::with_current(|_cas, mkvs| {
+        mkvs.get(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+    });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
@@ -71,14 +77,16 @@ fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"remove");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs| mkvs.remove(args.as_bytes()));
+    let existing = StorageContext::with_current(|_cas, mkvs| {
+        mkvs.remove(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+    });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// Helper for doing encrypted MKVS operations.
 fn with_encryption<F, R>(ctx: &mut TxnContext, key: &[u8], f: F) -> Fallible<R>
 where
-    F: FnOnce(&mut MKVS) -> R,
+    F: FnOnce(&mut TxnContext, &mut MKVS) -> R,
 {
     let rctx = runtime_context!(ctx, Context);
 
@@ -94,27 +102,37 @@ where
     //       to also generate a (deterministic) nonce.
 
     StorageContext::with_current(|_cas, mkvs| {
-        Ok(with_encryption_key(mkvs, key.state_key.as_ref(), f))
+        Ok(with_encryption_key(mkvs, key.state_key.as_ref(), |mkvs| {
+            f(ctx, mkvs)
+        }))
     })
 }
 
 /// (encrypted) Insert a key/value pair.
 fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
-    let existing = with_encryption(ctx, args.key.as_bytes(), |mkvs| {
-        mkvs.insert(args.key.as_bytes(), args.value.as_bytes())
+    let existing = with_encryption(ctx, args.key.as_bytes(), |ctx, mkvs| {
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            args.key.as_bytes(),
+            args.value.as_bytes(),
+        )
     })?;
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// (encrypted) Retrieve a key/value pair.
 fn enc_get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
-    let existing = with_encryption(ctx, args.as_bytes(), |mkvs| mkvs.get(args.as_bytes()))?;
+    let existing = with_encryption(ctx, args.as_bytes(), |ctx, mkvs| {
+        mkvs.get(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+    })?;
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// (encrypted) Remove a key/value pair.
 fn enc_remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
-    let existing = with_encryption(ctx, args.as_bytes(), |mkvs| mkvs.remove(args.as_bytes()))?;
+    let existing = with_encryption(ctx, args.as_bytes(), |ctx, mkvs| {
+        mkvs.remove(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+    })?;
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 

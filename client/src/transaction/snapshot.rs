@@ -16,6 +16,7 @@ use ekiden_runtime::{
     transaction::types::{TxnCall, TxnOutput},
 };
 use failure::{Fallible, ResultExt};
+use io_context::Context;
 use serde_cbor;
 
 use super::{api, client::TxnClientError};
@@ -71,7 +72,7 @@ impl Clone for BlockSnapshot {
         let read_syncer = self.read_syncer.clone();
         let mkvs = UrkelTree::make()
             .with_root(self.block.header.state_root)
-            .new(Box::new(read_syncer.clone()))
+            .new(Context::background(), Box::new(read_syncer.clone()))
             .expect("prefetching disabled so new must always succeed");
 
         Self {
@@ -94,7 +95,7 @@ impl BlockSnapshot {
         let read_syncer = RemoteReadSync(storage_client);
         let mkvs = UrkelTree::make()
             .with_root(block.header.state_root)
-            .new(Box::new(read_syncer.clone()))
+            .new(Context::background(), Box::new(read_syncer.clone()))
             .expect("prefetching disabled so new must always succeed");
 
         Self {
@@ -118,19 +119,19 @@ impl CAS for BlockSnapshot {
 }
 
 impl MKVS for BlockSnapshot {
-    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        MKVS::get(&self.mkvs, key)
+    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
+        MKVS::get(&self.mkvs, ctx, key)
     }
 
-    fn insert(&mut self, _key: &[u8], _value: &[u8]) -> Option<Vec<u8>> {
+    fn insert(&mut self, _ctx: Context, _key: &[u8], _value: &[u8]) -> Option<Vec<u8>> {
         unimplemented!("block snapshot is read-only");
     }
 
-    fn remove(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+    fn remove(&mut self, _ctx: Context, _key: &[u8]) -> Option<Vec<u8>> {
         unimplemented!("block snapshot is read-only");
     }
 
-    fn commit(&mut self) -> Fallible<(WriteLog, Hash)> {
+    fn commit(&mut self, _ctx: Context) -> Fallible<(WriteLog, Hash)> {
         unimplemented!("block snapshot is read-only");
     }
 
@@ -174,7 +175,13 @@ impl ReadSync for RemoteReadSync {
         self
     }
 
-    fn get_subtree(&mut self, root_hash: Hash, id: NodeID, max_depth: u8) -> Fallible<Subtree> {
+    fn get_subtree(
+        &mut self,
+        _ctx: Context,
+        root_hash: Hash,
+        id: NodeID,
+        max_depth: u8,
+    ) -> Fallible<Subtree> {
         let mut request = api::storage::GetSubtreeRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
         request.set_id({
@@ -195,7 +202,13 @@ impl ReadSync for RemoteReadSync {
         Ok(st)
     }
 
-    fn get_path(&mut self, root_hash: Hash, key: Hash, start_depth: u8) -> Fallible<Subtree> {
+    fn get_path(
+        &mut self,
+        _ctx: Context,
+        root_hash: Hash,
+        key: Hash,
+        start_depth: u8,
+    ) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
         request.set_key(key.as_ref().to_vec());
@@ -211,7 +224,7 @@ impl ReadSync for RemoteReadSync {
         Ok(st)
     }
 
-    fn get_node(&mut self, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
+    fn get_node(&mut self, _ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
         let mut request = api::storage::GetNodeRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
         request.set_id({
@@ -231,7 +244,7 @@ impl ReadSync for RemoteReadSync {
         Ok(Rc::new(RefCell::new(node)))
     }
 
-    fn get_value(&mut self, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
+    fn get_value(&mut self, _ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
         let mut request = api::storage::GetValueRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
         request.set_id(id.as_ref().to_vec());

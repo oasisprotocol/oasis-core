@@ -1,6 +1,7 @@
 use std::any::Any;
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -15,19 +16,31 @@ impl ReadSync for NoopReadSyncer {
         self
     }
 
-    fn get_subtree(&mut self, _root_hash: Hash, _id: NodeID, _max_depth: u8) -> Fallible<Subtree> {
+    fn get_subtree(
+        &mut self,
+        _ctx: Context,
+        _root_hash: Hash,
+        _id: NodeID,
+        _max_depth: u8,
+    ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }
 
-    fn get_path(&mut self, _root_hash: Hash, _key: Hash, _start_depth: u8) -> Fallible<Subtree> {
+    fn get_path(
+        &mut self,
+        _ctx: Context,
+        _root_hash: Hash,
+        _key: Hash,
+        _start_depth: u8,
+    ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }
 
-    fn get_node(&mut self, _root_hash: Hash, _id: NodeID) -> Fallible<NodeRef> {
+    fn get_node(&mut self, _ctx: Context, _root_hash: Hash, _id: NodeID) -> Fallible<NodeRef> {
         Err(SyncerError::Unsupported.into())
     }
 
-    fn get_value(&mut self, _root_hash: Hash, _id: Hash) -> Fallible<Option<Value>> {
+    fn get_value(&mut self, _ctx: Context, _root_hash: Hash, _id: Hash) -> Fallible<Option<Value>> {
         Err(SyncerError::Unsupported.into())
     }
 }

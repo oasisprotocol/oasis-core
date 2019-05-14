@@ -1,6 +1,7 @@
 use std::any::Any;
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -39,23 +40,35 @@ impl ReadSync for StatsCollector {
         self
     }
 
-    fn get_subtree(&mut self, root_hash: Hash, id: NodeID, max_depth: u8) -> Fallible<Subtree> {
+    fn get_subtree(
+        &mut self,
+        ctx: Context,
+        root_hash: Hash,
+        id: NodeID,
+        max_depth: u8,
+    ) -> Fallible<Subtree> {
         self.subtree_fetches += 1;
-        self.rs.get_subtree(root_hash, id, max_depth)
+        self.rs.get_subtree(ctx, root_hash, id, max_depth)
     }
 
-    fn get_path(&mut self, root_hash: Hash, key: Hash, start_depth: u8) -> Fallible<Subtree> {
+    fn get_path(
+        &mut self,
+        ctx: Context,
+        root_hash: Hash,
+        key: Hash,
+        start_depth: u8,
+    ) -> Fallible<Subtree> {
         self.path_fetches += 1;
-        self.rs.get_path(root_hash, key, start_depth)
+        self.rs.get_path(ctx, root_hash, key, start_depth)
     }
 
-    fn get_node(&mut self, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
+    fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
         self.node_fetches += 1;
-        self.rs.get_node(root_hash, id)
+        self.rs.get_node(ctx, root_hash, id)
     }
 
-    fn get_value(&mut self, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
+    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
         self.value_fetches += 1;
-        self.rs.get_value(root_hash, id)
+        self.rs.get_value(ctx, root_hash, id)
     }
 }
