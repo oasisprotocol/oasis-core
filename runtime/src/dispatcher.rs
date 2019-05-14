@@ -129,6 +129,13 @@ impl Dispatcher {
             );
         }
 
+        // Create common MKVS to use as a cache as long as the root stays the same.
+        let mut cache = Cache::new(
+            &Context::background().freeze(),
+            &protocol,
+            Hash::empty_hash(),
+        );
+
         'dispatch: loop {
             match rx.recv() {
                 Ok((
@@ -152,11 +159,29 @@ impl Dispatcher {
                 }
                 Ok((ctx, id, Body::WorkerExecuteTxBatchRequest { calls, block })) => {
                     // Transaction execution.
-                    self.dispatch_txn(&mut txn_dispatcher, &protocol, ctx, id, calls, block, false);
+                    self.dispatch_txn(
+                        &mut cache,
+                        &mut txn_dispatcher,
+                        &protocol,
+                        ctx,
+                        id,
+                        calls,
+                        block,
+                        false,
+                    );
                 }
                 Ok((ctx, id, Body::WorkerCheckTxBatchRequest { calls, block })) => {
                     // Transaction check.
-                    self.dispatch_txn(&mut txn_dispatcher, &protocol, ctx, id, calls, block, true);
+                    self.dispatch_txn(
+                        &mut cache,
+                        &mut txn_dispatcher,
+                        &protocol,
+                        ctx,
+                        id,
+                        calls,
+                        block,
+                        true,
+                    );
                 }
                 Ok(_) => {
                     error!(self.logger, "Unsupported request type");
@@ -174,6 +199,7 @@ impl Dispatcher {
 
     fn dispatch_txn(
         &self,
+        cache: &mut Cache,
         txn_dispatcher: &mut TxnDispatcher,
         protocol: &Arc<Protocol>,
         ctx: Context,
@@ -189,18 +215,15 @@ impl Dispatcher {
 
         // Create a new context and dispatch the batch.
         let ctx = ctx.freeze();
+        cache.maybe_replace(&ctx, protocol, block.header.state_root);
+
         let cas = Arc::new(ProtocolCAS::new(
             Context::create_child(&ctx),
             protocol.clone(),
         ));
         let cas = Arc::new(PassthroughCAS::new(cas));
-        let read_syncer = HostReadSyncer::new(protocol.clone());
-        let mut mkvs = UrkelTree::make()
-            .with_root(block.header.state_root)
-            .new(Context::create_child(&ctx), Box::new(read_syncer))
-            .unwrap();
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
-        let (outputs, tags) = StorageContext::enter(cas.clone(), &mut mkvs, || {
+        let (outputs, tags) = StorageContext::enter(cas.clone(), &mut cache.mkvs, || {
             txn_dispatcher.dispatch_batch(&calls, txn_ctx)
         });
 
@@ -212,10 +235,12 @@ impl Dispatcher {
                 .send_response(id, Body::WorkerCheckTxBatchResponse { results: outputs })
                 .unwrap();
         } else {
-            let (storage_log, new_state_root) = mkvs
+            let (storage_log, new_state_root) = cache
+                .mkvs
                 .commit(Context::create_child(&ctx))
                 .expect("mkvs commit must succeed");
             txn_dispatcher.finalize(new_state_root);
+            cache.state_root = new_state_root;
 
             debug!(self.logger, "Transaction batch execution complete";
                 "new_state_root" => ?new_state_root
@@ -297,7 +322,6 @@ impl Dispatcher {
             match message {
                 RpcMessage::Request(req) => {
                     // Request, dispatch.
-                    // TODO: Add LRU cache.
                     let ctx = ctx.freeze();
                     let cas = Arc::new(ProtocolCAS::new(
                         Context::create_child(&ctx),
@@ -379,5 +403,31 @@ impl Dispatcher {
         }
 
         protocol.send_response(id, protocol_response).unwrap();
+    }
+}
+
+struct Cache {
+    mkvs: UrkelTree,
+    state_root: Hash,
+}
+
+impl Cache {
+    fn new(ctx: &Arc<Context>, protocol: &Arc<Protocol>, state_root: Hash) -> Self {
+        let read_syncer = HostReadSyncer::new(protocol.clone());
+        let mkvs = UrkelTree::make()
+            .with_capacity(100_000, 10_000_000)
+            .with_root(state_root)
+            .new(Context::create_child(ctx), Box::new(read_syncer))
+            .unwrap();
+
+        Self { mkvs, state_root }
+    }
+
+    fn maybe_replace(&mut self, ctx: &Arc<Context>, protocol: &Arc<Protocol>, state_root: Hash) {
+        if self.state_root == state_root {
+            return;
+        }
+
+        *self = Self::new(ctx, protocol, state_root);
     }
 }
