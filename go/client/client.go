@@ -104,10 +104,9 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 
 	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
 
-	manualResolver, cleanup := manual.ThreadSafeGenerateAndRegisterManualResolver()
+	manualResolver, address, cleanup := manual.NewManualResolver()
 	defer cleanup()
 
-	address := manualResolver.Scheme() + ":///leader.node"
 	conn, err := grpc.DialContext(submitCtx.ctx, address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		resultCh <- err

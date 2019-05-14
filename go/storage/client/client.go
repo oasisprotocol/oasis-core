@@ -161,8 +161,7 @@ func (b *storageClientBackend) updateConnection() {
 	// cleanup previous resolver
 	b.connectionState.resolverCleanupCb()
 
-	manualResolver, cleanupCb := manual.ThreadSafeGenerateAndRegisterManualResolver()
-	address := manualResolver.Scheme() + ":///storage.node"
+	manualResolver, address, cleanupCb := manual.NewManualResolver()
 
 	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
