@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use failure::Fallible;
+use io_context::Context;
 use lazy_static::lazy_static;
 use serde_cbor;
 
@@ -64,13 +65,19 @@ impl KeyStore {
     pub fn get_or_create_keys(&self, contract_id: &ContractId) -> Fallible<ContractKey> {
         StorageContext::with_current(|_cas, mkvs| {
             with_encryption_key(mkvs, self.encryption_key.as_ref(), |mkvs| {
-                match mkvs.get(contract_id.as_ref()) {
+                // NOTE: This is going away so background context is fine.
+                match mkvs.get(Context::background(), contract_id.as_ref()) {
                     Some(raw_key) => {
                         Ok(serde_cbor::from_slice(&raw_key).expect("state corruption"))
                     }
                     None => {
                         let key = ContractKey::generate();
-                        mkvs.insert(contract_id.as_ref(), &serde_cbor::to_vec(&key).unwrap());
+                        // NOTE: This is going away so background context is fine.
+                        mkvs.insert(
+                            Context::background(),
+                            contract_id.as_ref(),
+                            &serde_cbor::to_vec(&key).unwrap(),
+                        );
 
                         Ok(key)
                     }
@@ -83,8 +90,9 @@ impl KeyStore {
     pub fn get_public_key(&self, contract_id: &ContractId) -> Fallible<Option<PublicKey>> {
         StorageContext::with_current(|_cas, mkvs| {
             with_encryption_key(mkvs, self.encryption_key.as_ref(), |mkvs| {
+                // NOTE: This is going away so background context is fine.
                 Ok(mkvs
-                    .get(contract_id.as_ref())
+                    .get(Context::background(), contract_id.as_ref())
                     .map(|raw_key| serde_cbor::from_slice(&raw_key).expect("state corruption"))
                     .map(|key: ContractKey| key.input_keypair.get_pk()))
             })

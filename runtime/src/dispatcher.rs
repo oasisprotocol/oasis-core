@@ -194,12 +194,12 @@ impl Dispatcher {
             protocol.clone(),
         ));
         let cas = Arc::new(PassthroughCAS::new(cas));
-        let read_syncer = HostReadSyncer::new(Context::create_child(&ctx), protocol.clone());
+        let read_syncer = HostReadSyncer::new(protocol.clone());
         let mut mkvs = UrkelTree::make()
             .with_root(block.header.state_root)
-            .new(Box::new(read_syncer))
+            .new(Context::create_child(&ctx), Box::new(read_syncer))
             .unwrap();
-        let txn_ctx = TxnContext::new(ctx, &block.header, check_only);
+        let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
         let (outputs, tags) = StorageContext::enter(cas.clone(), &mut mkvs, || {
             txn_dispatcher.dispatch_batch(&calls, txn_ctx)
         });
@@ -212,7 +212,9 @@ impl Dispatcher {
                 .send_response(id, Body::WorkerCheckTxBatchResponse { results: outputs })
                 .unwrap();
         } else {
-            let (storage_log, new_state_root) = mkvs.commit().expect("mkvs commit must succeed");
+            let (storage_log, new_state_root) = mkvs
+                .commit(Context::create_child(&ctx))
+                .expect("mkvs commit must succeed");
             txn_dispatcher.finalize(new_state_root);
 
             debug!(self.logger, "Transaction batch execution complete";
@@ -302,11 +304,10 @@ impl Dispatcher {
                         protocol.clone(),
                     ));
                     let cas = Arc::new(PassthroughCAS::new(cas));
-                    let read_syncer =
-                        HostReadSyncer::new(Context::create_child(&ctx), protocol.clone());
+                    let read_syncer = HostReadSyncer::new(protocol.clone());
                     let mut mkvs = UrkelTree::make()
                         .with_root(state_root)
-                        .new(Box::new(read_syncer))
+                        .new(Context::create_child(&ctx), Box::new(read_syncer))
                         .unwrap();
                     let rpc_ctx = RpcContext::new(session_info);
                     let response = StorageContext::enter(cas.clone(), &mut mkvs, || {
@@ -314,8 +315,9 @@ impl Dispatcher {
                     });
                     let response = RpcMessage::Response(response);
 
-                    let (storage_log, new_state_root) =
-                        mkvs.commit().expect("mkvs commit must succeed");
+                    let (storage_log, new_state_root) = mkvs
+                        .commit(Context::create_child(&ctx))
+                        .expect("mkvs commit must succeed");
 
                     debug!(self.logger, "RPC call dispatch complete"; "new_state_root" => ?new_state_root);
 

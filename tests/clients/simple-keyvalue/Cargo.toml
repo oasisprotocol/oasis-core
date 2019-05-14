@@ -11,3 +11,4 @@ simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
 tokio = "0.1.17"
 grpcio = "0.4.4"
+io-context = "0.2.0"

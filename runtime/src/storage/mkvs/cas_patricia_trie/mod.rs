@@ -2,6 +2,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::{
@@ -69,7 +70,7 @@ impl CASPatriciaTrie {
 }
 
 impl MKVS for CASPatriciaTrie {
-    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+    fn get(&self, _ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
             Some(ref ctx) => ctx
@@ -99,8 +100,8 @@ impl MKVS for CASPatriciaTrie {
         }
     }
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-        let previous_value = self.get(key);
+    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+        let previous_value = self.get(ctx, key);
 
         let value = match self.enc_ctx {
             Some(ref ctx) => {
@@ -127,8 +128,8 @@ impl MKVS for CASPatriciaTrie {
         previous_value
     }
 
-    fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-        let previous_value = self.get(key);
+    fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
+        let previous_value = self.get(ctx, key);
 
         // Encrypt key using the encryption context, if it's present.
         let key = match self.enc_ctx {
@@ -145,7 +146,7 @@ impl MKVS for CASPatriciaTrie {
         previous_value
     }
 
-    fn commit(&mut self) -> Fallible<(WriteLog, Hash)> {
+    fn commit(&mut self, _ctx: Context) -> Fallible<(WriteLog, Hash)> {
         // Commit all pending writes to the trie.
         let mut root_hash = self.root_hash.clone();
         for (key, value) in self.pending_ops.drain() {

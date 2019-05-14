@@ -1,6 +1,7 @@
 //! Merklized key-value store.
 use base64;
 use failure::Fallible;
+use io_context::Context;
 use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::Bytes;
 use serde_derive::Deserialize;
@@ -64,7 +65,7 @@ pub type WriteLog = Vec<LogEntry>;
 /// Merklized key-value store.
 pub trait MKVS: Send + Sync {
     /// Fetch entry with given key.
-    fn get(&self, key: &[u8]) -> Option<Vec<u8>>;
+    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Update entry with given key.
     ///
@@ -74,14 +75,14 @@ pub trait MKVS: Send + Sync {
     /// returned.
     ///
     /// [`None`]: std::option::Option
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>>;
+    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>>;
 
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
-    fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
+    fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(&mut self) -> Fallible<(WriteLog, Hash)>;
+    fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);
