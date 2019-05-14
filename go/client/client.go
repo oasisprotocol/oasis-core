@@ -104,10 +104,9 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 
 	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
 
-	manualResolver, cleanup := manual.ThreadSafeGenerateAndRegisterManualResolver()
+	manualResolver, address, cleanup := manual.NewManualResolver()
 	defer cleanup()
 
-	address := manualResolver.Scheme() + ":///leader.node"
 	conn, err := grpc.DialContext(submitCtx.ctx, address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
 		resultCh <- err
@@ -284,6 +283,10 @@ func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, ro
 }
 
 func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, [][]byte, error) {
+	if blk.Header.InputHash.IsEmpty() {
+		return [][]byte{}, [][]byte{}, nil
+	}
+
 	// Fetch transaction input and output.
 	var inputHash storage.Key
 	copy(inputHash[:], blk.Header.InputHash[:])
@@ -297,12 +300,12 @@ func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, []
 
 	var inputs [][]byte
 	if err := cbor.Unmarshal(txn[0], &inputs); err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "client: failed to unmarshal transaction inputs")
 	}
 
 	var outputs [][]byte
 	if err := cbor.Unmarshal(txn[1], &outputs); err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "client: failed to unmarshal transaction outputs")
 	}
 
 	return inputs, outputs, nil
@@ -370,19 +373,23 @@ func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.Publ
 
 // GetTransactions returns a list of transactions under the given transaction root.
 func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.PublicKey, root hash.Hash) ([][]byte, error) {
+	if root.IsEmpty() {
+		return [][]byte{}, nil
+	}
+
 	// Fetch transaction input and output.
 	var key storage.Key
 	copy(key[:], root[:])
 
 	// TODO: Change after transactions are in MKVS.
-	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{key})
+	txn, err := c.common.storage.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
 
 	var txns [][]byte
-	if err := cbor.Unmarshal(txn[0], &txns); err != nil {
-		return nil, err
+	if err := cbor.Unmarshal(txn, &txns); err != nil {
+		return nil, errors.Wrap(err, "client: failed to unmarshal transactions")
 	}
 
 	return txns, nil

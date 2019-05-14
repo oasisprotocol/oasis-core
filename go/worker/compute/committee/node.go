@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -223,6 +224,7 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 // The block header determines what block the batch should be
 // computed against.
 func (n *Node) HandleBatchFromCommittee(ctx context.Context, batchHash hash.Hash, hdr block.Header) error {
+	crash.Here(crashPointBatchReceiveAfter)
 	respCh, err := n.queueExternalBatch(ctx, batchHash, hdr)
 	if err != nil {
 		return err
@@ -340,6 +342,7 @@ func (n *Node) handleEpochTransition(groupHash hash.Hash, height int64) {
 }
 
 func (n *Node) handleNewBlock(blk *block.Block, height int64) {
+	crash.Here(crashPointRoothashReceiveAfter)
 	processedBlockCount.With(n.getMetricLabels()).Inc()
 
 	header := blk.Header
@@ -468,6 +471,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 			)
 			return
 		}
+		crash.Here(crashPointBatchProcessStartAfter)
 
 		select {
 		case response := <-ch:
@@ -514,6 +518,8 @@ func (n *Node) abortBatch(reason error) {
 	// Cancel the batch processing context and wait for it to finish.
 	state.cancel()
 
+	crash.Here(crashPointBatchAbortAfter)
+
 	// TODO: Return transactions to transaction scheduler.
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
@@ -526,6 +532,8 @@ func (n *Node) abortBatch(reason error) {
 func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	// We must be in ProcessingBatch state if we are here.
 	state := n.state.(StateProcessingBatch)
+
+	crash.Here(crashPointBatchProposeBefore)
 
 	n.logger.Debug("proposing batch",
 		"batch", batch,
@@ -581,6 +589,13 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 			return err
 		}
 
+		if _, err := n.storage.Apply(ctx, n.currentBlock.Header.StateRoot, batch.NewStateRoot, batch.StorageLog); err != nil {
+			n.logger.Error("failed to apply write log to storage",
+				"err", err,
+			)
+			return err
+		}
+
 		if opts.LocalOnly {
 			return nil
 		}
@@ -597,7 +612,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		// TODO: Ensure that the receipt is actually signed by the
 		// storage node.  For now accept a signature from anyone.
 		var receipt storage.Receipt
-		if err = signedReceipt.Open(storage.ReceiptSignatureContext, &receipt); err != nil {
+		if err = signedReceipt.Open(&receipt); err != nil {
 			n.logger.Error("failed to open signed receipt",
 				"err", err,
 			)
@@ -647,6 +662,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		n.abortBatch(err)
 		return
 	}
+	crash.Here(crashPointBatchProposeAfter)
 }
 
 func (n *Node) handleNewEvent(ev *roothash.Event) {
@@ -659,6 +675,8 @@ func (n *Node) handleNewEvent(ev *roothash.Event) {
 		"input_hash", dis.BatchHash,
 		"header", dis.BlockHeader,
 	)
+
+	crash.Here(crashPointDiscrepancyDetectedAfter)
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 

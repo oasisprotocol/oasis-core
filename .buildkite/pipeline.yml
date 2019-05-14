@@ -43,6 +43,8 @@ steps:
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/go/lint_ekiden.sh
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin_configuration
 

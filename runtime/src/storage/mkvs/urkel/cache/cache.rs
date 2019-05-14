@@ -1,6 +1,7 @@
-use std::any::Any;
+use std::{any::Any, sync::Arc};
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -27,7 +28,7 @@ pub trait Cache {
     fn stats(&self) -> CacheStats;
 
     /// Get a pointer to the current uncommitted root node.
-    fn get_pending_root(&mut self) -> NodePtrRef;
+    fn get_pending_root(&self) -> NodePtrRef;
     /// Set the root node for the tree to the given pointer.
     fn set_pending_root(&mut self, new_root: NodePtrRef);
     /// Set the root hash of the tree after committing.
@@ -53,12 +54,13 @@ pub trait Cache {
     /// Convert a node path into a node pointer.
     ///
     /// Calling this method may invoke the underlying read syncer.
-    fn deref_node_id(&mut self, node_id: NodeID) -> Fallible<NodePtrRef>;
+    fn deref_node_id(&mut self, ctx: &Arc<Context>, node_id: NodeID) -> Fallible<NodePtrRef>;
     /// Dereference a node pointer into a concrete node object.
     ///
     /// Calling this method may invoke the underlying read syncer.
     fn deref_node_ptr(
         &mut self,
+        ctx: &Arc<Context>,
         node_id: NodeID,
         node_ptr: NodePtrRef,
         key: Option<Hash>,
@@ -66,7 +68,7 @@ pub trait Cache {
     /// Dereference a value pointer into a concrete value.
     ///
     /// Calling this method may invoke the underlying read syncer.
-    fn deref_value_ptr(&mut self, val: ValuePtrRef) -> Fallible<Option<Value>>;
+    fn deref_value_ptr(&mut self, ctx: &Arc<Context>, val: ValuePtrRef) -> Fallible<Option<Value>>;
 
     /// Commit a node into the cache.
     ///
@@ -84,6 +86,7 @@ pub trait Cache {
     /// Call this to resurrect a subtree summary as returned by a read syncer.
     fn reconstruct_subtree(
         &mut self,
+        ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
         depth: u8,
@@ -91,7 +94,7 @@ pub trait Cache {
     ) -> Fallible<NodePtrRef>;
 
     /// Prefetch a subtree from the read syncer.
-    fn prefetch(&mut self, root: Hash, depth: u8) -> Fallible<NodePtrRef>;
+    fn prefetch(&mut self, ctx: &Arc<Context>, root: Hash, depth: u8) -> Fallible<NodePtrRef>;
 }
 
 /// Cacheable objects must implement this trait to enable the cache to cache them.

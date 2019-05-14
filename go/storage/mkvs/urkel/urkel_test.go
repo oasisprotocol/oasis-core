@@ -41,7 +41,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	log, root, err := tree.Commit()
 	require.NoError(t, err, "Commit")
 	require.Equal(t, "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08", root.String())
-	require.Equal(t, log, WriteLog{LogEntry{keyZero, valueZero}})
+	require.Equal(t, log, WriteLog{LogEntry{Key: keyZero, Value: valueZero}})
 	require.Equal(t, log[0].Type(), LogInsert)
 
 	keyOne := []byte("moo")
@@ -55,7 +55,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	log, root, err = tree.Commit()
 	require.NoError(t, err, "Commit")
 	require.Equal(t, "839bb81bff8bc8bb0bee99405a094bcb1d983f9f830cc3e3475e07cb7da4b90c", root.String())
-	require.Equal(t, log, WriteLog{LogEntry{keyOne, valueOne}})
+	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: valueOne}})
 	require.Equal(t, log[0].Type(), LogInsert)
 
 	// Create a new tree backed by the same database.
@@ -78,7 +78,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	log, root, err = tree.Commit()
 	require.NoError(t, err, "Commit")
 	require.Equal(t, "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08", root.String())
-	require.Equal(t, log, WriteLog{LogEntry{keyOne, nil}})
+	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: nil}})
 	require.Equal(t, log[0].Type(), LogDelete)
 }
 

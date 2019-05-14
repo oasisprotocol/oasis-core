@@ -1,19 +1,26 @@
+use std::sync::Arc;
+
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*},
+    storage::mkvs::{
+        urkel::{cache::*, tree::*},
+        LogEntry, WriteLog,
+    },
 };
 
 impl UrkelTree {
     /// Commit tree updates to the underlying database and return
     /// the write log and new merkle root.
-    pub fn commit(&mut self) -> Fallible<(WriteLog, Hash)> {
+    pub fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)> {
+        let ctx = ctx.freeze();
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
-        let pending_root = self.cache.get_pending_root();
-        let new_hash = _commit(pending_root.clone(), &mut update_list)?;
+        let pending_root = self.cache.borrow().get_pending_root();
+        let new_hash = _commit(&ctx, pending_root.clone(), &mut update_list)?;
 
-        update_list.commit(&mut self.cache);
+        update_list.commit(&mut self.cache.borrow_mut());
 
         let mut log: WriteLog = Vec::new();
         for (_, entry) in self.pending_write_log.iter() {
@@ -24,17 +31,21 @@ impl UrkelTree {
             }
             log.push(LogEntry {
                 key: entry.key.clone(),
-                value: entry.value.clone(),
+                value: entry.value.clone().unwrap_or_default(),
             });
         }
         self.pending_write_log.clear();
-        self.cache.set_sync_root(new_hash);
+        self.cache.borrow_mut().set_sync_root(new_hash);
 
         Ok((log, new_hash))
     }
 }
 
-pub fn _commit<C: Cache>(ptr: NodePtrRef, update_list: &mut UpdateList<C>) -> Fallible<Hash> {
+pub fn _commit<C: Cache>(
+    ctx: &Arc<Context>,
+    ptr: NodePtrRef,
+    update_list: &mut UpdateList<C>,
+) -> Fallible<Hash> {
     if ptr.borrow().clean {
         return Ok(ptr.borrow().hash);
     }
@@ -51,8 +62,8 @@ pub fn _commit<C: Cache>(ptr: NodePtrRef, update_list: &mut UpdateList<C>) -> Fa
                 let int_left = noderef_as!(some_node_ref, Internal).left.clone();
                 let int_right = noderef_as!(some_node_ref, Internal).right.clone();
 
-                _commit(int_left.clone(), update_list)?;
-                _commit(int_right.clone(), update_list)?;
+                _commit(ctx, int_left.clone(), update_list)?;
+                _commit(ctx, int_right.clone(), update_list)?;
 
                 some_node_ref.borrow_mut().update_hash();
                 ptr.borrow_mut().hash = some_node_ref.borrow().get_hash();

@@ -3,6 +3,7 @@ extern crate clap;
 extern crate ekiden_client;
 extern crate ekiden_runtime;
 extern crate grpcio;
+extern crate io_context;
 extern crate simple_keyvalue_api;
 extern crate tokio;
 
@@ -10,6 +11,7 @@ use std::sync::Arc;
 
 use clap::{App, Arg};
 use grpcio::EnvBuilder;
+use io_context::Context;
 use tokio::runtime::Runtime;
 
 use ekiden_client::{
@@ -82,7 +84,7 @@ fn main() {
     println!("Retrieved block: {:?}", snapshot.block);
     println!("Accessing read-only state snapshot...");
     let r = snapshot
-        .get("hello_key".as_bytes())
+        .get(Context::background(), "hello_key".as_bytes())
         .expect("read-only state get");
     println!(
         "Got \"{}\" ({:?})",

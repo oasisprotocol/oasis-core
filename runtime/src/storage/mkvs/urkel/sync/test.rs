@@ -1,18 +1,23 @@
+use io_context::Context;
+
 use crate::storage::mkvs::urkel::{marshal::*, sync::*, tree::*};
 
 #[test]
 fn test_simple() {
     let mut tree = UrkelTree::make()
-        .new(Box::new(NoopReadSyncer {}))
+        .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
 
-    tree.insert(b"foo", b"bar").expect("insert");
-    tree.insert(b"moo", b"boo").expect("insert");
+    tree.insert(Context::background(), b"foo", b"bar")
+        .expect("insert");
+    tree.insert(Context::background(), b"moo", b"boo")
+        .expect("insert");
 
-    let (_, root) = tree.commit().expect("commit");
+    let (_, root) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
 
     let st = tree
         .get_subtree(
+            Context::background(),
             root,
             NodeID {
                 path: root,

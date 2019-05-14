@@ -1,6 +1,7 @@
-use std::{any::Any, cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{any::Any, cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -238,7 +239,7 @@ impl Cache for LRUCache {
         }
     }
 
-    fn get_pending_root(&mut self) -> NodePtrRef {
+    fn get_pending_root(&self) -> NodePtrRef {
         self.pending_root.clone()
     }
 
@@ -304,10 +305,10 @@ impl Cache for LRUCache {
         self.lru_values.remove(ptr);
     }
 
-    fn deref_node_id(&mut self, node_id: NodeID) -> Fallible<NodePtrRef> {
+    fn deref_node_id(&mut self, ctx: &Arc<Context>, node_id: NodeID) -> Fallible<NodePtrRef> {
         let mut cur_ptr = self.pending_root.clone();
         for d in 0..node_id.depth {
-            let node = self.deref_node_ptr(node_id.at_depth(d), cur_ptr.clone(), None)?;
+            let node = self.deref_node_ptr(ctx, node_id.at_depth(d), cur_ptr.clone(), None)?;
             let node = match node {
                 None => return Ok(NodePointer::null_ptr()),
                 Some(node) => node,
@@ -326,6 +327,7 @@ impl Cache for LRUCache {
 
     fn deref_node_ptr(
         &mut self,
+        ctx: &Arc<Context>,
         node_id: NodeID,
         ptr: NodePtrRef,
         key: Option<Hash>,
@@ -340,15 +342,23 @@ impl Cache for LRUCache {
 
         match key {
             None => {
-                let node_ref = self.read_syncer.get_node(self.sync_root, node_id)?;
+                let node_ref = self.read_syncer.get_node(
+                    Context::create_child(ctx),
+                    self.sync_root,
+                    node_id,
+                )?;
                 node_ref.borrow_mut().validate(ptr.hash)?;
                 ptr.node = Some(node_ref.clone());
             }
             Some(key) => {
-                let subtree = self
-                    .read_syncer
-                    .get_path(self.sync_root, key, node_id.depth)?;
+                let subtree = self.read_syncer.get_path(
+                    Context::create_child(ctx),
+                    self.sync_root,
+                    key,
+                    node_id.depth,
+                )?;
                 let new_ptr = self.reconstruct_subtree(
+                    ctx,
                     ptr.hash,
                     &subtree,
                     node_id.depth,
@@ -364,7 +374,7 @@ impl Cache for LRUCache {
         Ok(ptr.node.clone())
     }
 
-    fn deref_value_ptr(&mut self, val: ValuePtrRef) -> Fallible<Option<Value>> {
+    fn deref_value_ptr(&mut self, ctx: &Arc<Context>, val: ValuePtrRef) -> Fallible<Option<Value>> {
         if self.use_value(val.clone()) || val.borrow().value != None {
             return Ok(val.borrow().value.clone());
         }
@@ -375,7 +385,9 @@ impl Cache for LRUCache {
                 return Ok(None);
             }
 
-            let value = self.read_syncer.get_value(self.sync_root, val.hash)?;
+            let value =
+                self.read_syncer
+                    .get_value(Context::create_child(ctx), self.sync_root, val.hash)?;
             val.value = value;
             let hash = val.hash;
             val.validate(hash)?;
@@ -426,6 +438,7 @@ impl Cache for LRUCache {
 
     fn reconstruct_subtree(
         &mut self,
+        ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
         depth: u8,
@@ -437,7 +450,7 @@ impl Cache for LRUCache {
         }
 
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
-        let new_root = _commit(ptr.clone(), &mut update_list)?;
+        let new_root = _commit(ctx, ptr.clone(), &mut update_list)?;
         if new_root != root {
             Err(CacheError::SyncerBadRoot {
                 expected_root: root,
@@ -450,12 +463,18 @@ impl Cache for LRUCache {
         }
     }
 
-    fn prefetch(&mut self, subtree_hash: Hash, depth: u8) -> Fallible<NodePtrRef> {
+    fn prefetch(
+        &mut self,
+        ctx: &Arc<Context>,
+        subtree_hash: Hash,
+        depth: u8,
+    ) -> Fallible<NodePtrRef> {
         if self.prefetch_depth == 0 {
             return Ok(NodePointer::null_ptr());
         }
 
         let result = self.read_syncer.get_subtree(
+            Context::create_child(ctx),
             self.sync_root,
             NodeID {
                 path: subtree_hash,
@@ -475,6 +494,6 @@ impl Cache for LRUCache {
             }
             Ok(ref st) => st,
         };
-        self.reconstruct_subtree(subtree_hash, st, 0, self.prefetch_depth)
+        self.reconstruct_subtree(ctx, subtree_hash, st, 0, self.prefetch_depth)
     }
 }

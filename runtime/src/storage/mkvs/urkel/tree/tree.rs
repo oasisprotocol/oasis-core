@@ -1,6 +1,12 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use failure::Fallible;
+use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -12,37 +18,6 @@ pub struct PendingLogEntry {
     pub value: Option<Vec<u8>>,
     pub existed: bool,
 }
-
-/// The type of entry in the log.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum LogEntryKind {
-    Insert,
-    Delete,
-}
-
-/// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LogEntry {
-    /// The key that was inserted or deleted.
-    pub key: Vec<u8>,
-    /// The inserted value, or `None` if the key was deleted.
-    pub value: Option<Vec<u8>>,
-}
-
-impl LogEntry {
-    pub fn kind(&self) -> LogEntryKind {
-        if self.value.is_none() {
-            LogEntryKind::Delete
-        } else {
-            LogEntryKind::Insert
-        }
-    }
-}
-
-/// The write log.
-///
-/// The keys in the write log must be unique.
-pub type WriteLog = Vec<LogEntry>;
 
 /// A container for the parameters used to construct a new Urkel tree instance.
 pub struct UrkelOptions {
@@ -82,8 +57,8 @@ impl UrkelOptions {
     }
 
     /// Commit the options set so far into a newly constructed tree instance.
-    pub fn new(self, read_syncer: Box<dyn ReadSync>) -> Fallible<UrkelTree> {
-        UrkelTree::new(read_syncer, &self)
+    pub fn new(self, ctx: Context, read_syncer: Box<dyn ReadSync>) -> Fallible<UrkelTree> {
+        UrkelTree::new(ctx, read_syncer, &self)
     }
 }
 
@@ -112,31 +87,45 @@ pub struct UrkelStats {
 
 /// An Urkel tree-based MKVS implementation.
 pub struct UrkelTree {
-    pub cache: Box<LRUCache>,
+    pub cache: RefCell<Box<LRUCache>>,
     pub pending_write_log: BTreeMap<Hash, PendingLogEntry>,
+    pub lock: Arc<Mutex<isize>>,
 }
 
 impl UrkelTree {
     /// Construct a new tree instance using the given read syncer and options struct.
-    pub fn new(read_syncer: Box<dyn ReadSync>, opts: &UrkelOptions) -> Fallible<UrkelTree> {
-        let mut tree = UrkelTree {
-            cache: LRUCache::new(opts.node_capacity, opts.value_capacity, read_syncer),
+    pub fn new(
+        ctx: Context,
+        read_syncer: Box<dyn ReadSync>,
+        opts: &UrkelOptions,
+    ) -> Fallible<UrkelTree> {
+        let ctx = ctx.freeze();
+        let tree = UrkelTree {
+            cache: RefCell::new(LRUCache::new(
+                opts.node_capacity,
+                opts.value_capacity,
+                read_syncer,
+            )),
             pending_write_log: BTreeMap::new(),
+            lock: Arc::new(Mutex::new(0)),
         };
 
-        tree.cache.set_prefetch_depth(opts.prefetch_depth);
+        tree.cache
+            .borrow_mut()
+            .set_prefetch_depth(opts.prefetch_depth);
 
         if let Some(root_hash) = opts.root_hash {
             tree.cache
+                .borrow_mut()
                 .set_pending_root(Rc::new(RefCell::new(NodePointer {
                     clean: true,
                     hash: root_hash,
                     ..Default::default()
                 })));
-            tree.cache.set_sync_root(root_hash);
-            let ptr = tree.cache.prefetch(root_hash, 0)?;
+            tree.cache.borrow_mut().set_sync_root(root_hash);
+            let ptr = tree.cache.borrow_mut().prefetch(&ctx, root_hash, 0)?;
             if !ptr.borrow().is_null() {
-                tree.cache.set_pending_root(ptr);
+                tree.cache.borrow_mut().set_pending_root(ptr);
             }
         }
 
@@ -151,10 +140,5 @@ impl UrkelTree {
             prefetch_depth: 0,
             root_hash: None,
         }
-    }
-
-    /// Return the read syncer used by this tree.
-    pub fn get_read_syncer(&self) -> &Box<dyn ReadSync> {
-        self.cache.get_read_syncer()
     }
 }

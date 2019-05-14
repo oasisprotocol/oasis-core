@@ -2,6 +2,7 @@ extern crate byteorder;
 extern crate ekiden_keymanager_api;
 extern crate ekiden_runtime;
 extern crate failure;
+extern crate io_context;
 extern crate lazy_static;
 extern crate serde_cbor;
 

@@ -25,6 +25,8 @@ var validStateTransitions = map[string][]string{
 		"WaitingForBlock",
 		// Received batch, current block is up to date.
 		"ProcessingBatch",
+		// Sent a batch as transaction scheduler leader.
+		"WaitingForFinalize",
 		// Epoch transition occurred and we are no longer in the committee.
 		"NotReady",
 	},

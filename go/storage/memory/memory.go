@@ -188,7 +188,11 @@ func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRo
 		}
 
 		for _, entry := range log {
-			err = tree.Insert(entry.Key, entry.Value)
+			if len(entry.Value) == 0 {
+				err = tree.Remove(entry.Key)
+			} else {
+				err = tree.Insert(entry.Key, entry.Value)
+			}
 			if err != nil {
 				return nil, err
 			}

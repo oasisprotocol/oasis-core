@@ -129,7 +129,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 
 	// Check the MKVS receipt and obtain the new root from it.
 	var rb api.MKVSReceiptBody
-	err = mkvsReceipt.Open(api.MKVSReceiptSignatureContext, &rb)
+	err = mkvsReceipt.Open(&rb)
 	require.NoError(t, err, "mkvsReceipt.Open()")
 	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version")
 	require.NotEqual(t, root, rb.Root, "mkvs receipt root")
@@ -154,7 +154,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	mkvsReceipt, err = backend.Apply(context.Background(), root, rb.Root, wl)
 	require.NoError(t, err, "Apply()")
 	require.NotNil(t, mkvsReceipt, "mkvsReceipt")
-	err = mkvsReceipt.Open(api.MKVSReceiptSignatureContext, &rb)
+	err = mkvsReceipt.Open(&rb)
 	require.NoError(t, err, "mkvsReceipt.Open()")
 	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version")
 	require.NotEqual(t, root, rb.Root, "mkvs receipt root")

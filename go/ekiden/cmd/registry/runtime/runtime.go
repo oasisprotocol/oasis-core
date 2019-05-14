@@ -3,6 +3,7 @@ package runtime
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
@@ -22,8 +24,11 @@ import (
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
+	epochtimeMock "github.com/oasislabs/ekiden/go/epochtime/mock"
 	grpcRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
+	storageMemory "github.com/oasislabs/ekiden/go/storage/memory"
 )
 
 const (
@@ -34,7 +39,7 @@ const (
 	cfgReplicaAllowedStragglers      = "runtime.replica_allowed_stragglers"
 	cfgStorageGroupSize              = "runtime.storage_group_size"
 	cfgTransactionSchedulerGroupSize = "runtime.transaction_scheduler_group_size"
-	cfgGenesisStateRoot              = "runtime.genesis.state_root"
+	cfgGenesisState                  = "runtime.genesis.state"
 	cfgEntity                        = "entity"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
@@ -249,17 +254,63 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		return nil, nil, err
 	}
 
-	// TODO: Instead of specifying the state root directly, support specifying
-	//       an input file containing key/value pairs, derive the root and
-	//       support root upload.
+	// TODO: Support root upload when registering.
 	gen := registry.RuntimeGenesis{}
-	switch stateRoot := viper.GetString(cfgGenesisStateRoot); stateRoot {
+	switch state := viper.GetString(cfgGenesisState); state {
 	case "":
 		gen.StateRoot.Empty()
 	default:
-		if err = gen.StateRoot.UnmarshalHex(stateRoot); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse state root: %s", err)
+		var b []byte
+		b, err = ioutil.ReadFile(state)
+		if err != nil {
+			logger.Error("failed to load runtime genesis storage state",
+				"err", err,
+				"filename", state,
+			)
+			return nil, nil, err
 		}
+
+		var log storage.WriteLog
+		if err = json.Unmarshal(b, &log); err != nil {
+			logger.Error("failed to parse runtime genesis storage state",
+				"err", err,
+				"filename", state,
+			)
+			return nil, nil, err
+		}
+
+		// Construct an in-memory storage backend and compute the root. We
+		// need a dummy time source and receipt signing key for this.
+		timeSource := epochtimeMock.New()
+		var sk signature.PrivateKey
+		if sk, err = signature.NewPrivateKey(rand.Reader); err != nil {
+			logger.Error("failed to generate dummy receipt signing key",
+				"err", err,
+			)
+			return nil, nil, err
+		}
+
+		backend := storageMemory.New(timeSource, &sk)
+		defer backend.Cleanup()
+
+		var root hash.Hash
+		root.Empty()
+		var r *storage.MKVSReceipt
+		if r, err = backend.Apply(context.Background(), root, root, log); err != nil {
+			logger.Error("failed to apply runtime genesis storage state",
+				"err", err,
+				"filename", state,
+			)
+			return nil, nil, err
+		}
+
+		var receipt storage.MKVSReceiptBody
+		if err = r.Open(&receipt); err != nil {
+			return nil, nil, err
+		}
+
+		gen.StateRoot = receipt.Root
+
 	}
 
 	return &registry.Runtime{
@@ -306,7 +357,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgReplicaAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime replica group")
 		cmd.Flags().Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
 		cmd.Flags().Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
-		cmd.Flags().String(cfgGenesisStateRoot, "", "State root to use for the genesis block")
+		cmd.Flags().String(cfgGenesisState, "", "Runtime state at genesis")
 		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
@@ -318,7 +369,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgReplicaAllowedStragglers,
 		cfgStorageGroupSize,
 		cfgTransactionSchedulerGroupSize,
-		cfgGenesisStateRoot,
+		cfgGenesisState,
 		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

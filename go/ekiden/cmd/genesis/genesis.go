@@ -255,8 +255,8 @@ func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logge
 			return err
 		}
 
-		var kv map[string][]byte
-		if err = json.Unmarshal(b, &kv); err != nil {
+		var log storage.WriteLog
+		if err = json.Unmarshal(b, &log); err != nil {
 			l.Error("failed to parse genesis storage state",
 				"err", err,
 				"filename", v,
@@ -264,10 +264,7 @@ func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logge
 			return err
 		}
 
-		// NOTE: The order of inserts does not matter.
-		for key, value := range kv {
-			storageSt.State = append(storageSt.State, storage.LogEntry{Key: []byte(key), Value: value})
-		}
+		storageSt.State = append(storageSt.State, log...)
 	}
 
 	doc.Storage = storageSt
