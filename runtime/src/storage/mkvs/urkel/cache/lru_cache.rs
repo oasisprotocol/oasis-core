@@ -466,7 +466,8 @@ impl Cache for LRUCache {
     fn prefetch(
         &mut self,
         ctx: &Arc<Context>,
-        subtree_hash: Hash,
+        subtree_root: Hash,
+        subtree_path: Hash,
         depth: u8,
     ) -> Fallible<NodePtrRef> {
         if self.prefetch_depth == 0 {
@@ -477,7 +478,7 @@ impl Cache for LRUCache {
             Context::create_child(ctx),
             self.sync_root,
             NodeID {
-                path: subtree_hash,
+                path: subtree_path,
                 depth: depth,
             },
             self.prefetch_depth,
@@ -494,6 +495,6 @@ impl Cache for LRUCache {
             }
             Ok(ref st) => st,
         };
-        self.reconstruct_subtree(ctx, subtree_hash, st, 0, self.prefetch_depth)
+        self.reconstruct_subtree(ctx, subtree_root, st, 0, self.prefetch_depth)
     }
 }
