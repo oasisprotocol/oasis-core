@@ -5,7 +5,7 @@ use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, sync::*, tree::*, utils},
+    storage::mkvs::urkel::{cache::*, sync::*, tree::*},
 };
 
 impl ReadSync for UrkelTree {
@@ -18,7 +18,7 @@ impl ReadSync for UrkelTree {
         ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -34,7 +34,7 @@ impl ReadSync for UrkelTree {
             return Err(SyncerError::NodeNotFound.into());
         }
 
-        let path = Hash::empty_hash();
+        let path = Key::new();
         let mut subtree = Subtree::new();
 
         let root_ptr = self._get_subtree(&ctx, subtree_root, 0, path, &mut subtree, max_depth)?;
@@ -50,8 +50,8 @@ impl ReadSync for UrkelTree {
         &mut self,
         ctx: Context,
         root: Root,
-        key: Hash,
-        start_depth: u8,
+        key: &Key,
+        start_depth: DepthType,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
         if root != self.cache.borrow().get_sync_root() {
@@ -118,15 +118,15 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
-        path: Hash,
+        depth: DepthType,
+        path: Key,
         st: &mut Subtree,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<SubtreePointer> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             NodeID {
-                path: path,
+                path: &path,
                 depth: depth,
             },
             ptr.clone(),
@@ -160,11 +160,19 @@ impl UrkelTree {
                     ..Default::default()
                 };
 
+                summary.leaf_node = self._get_subtree(
+                    ctx,
+                    noderef_as!(node_ref, Internal).leaf_node.clone(),
+                    depth,
+                    path.set_bit(depth, false),
+                    st,
+                    max_depth,
+                )?;
                 summary.left = self._get_subtree(
                     ctx,
                     noderef_as!(node_ref, Internal).left.clone(),
                     depth + 1,
-                    utils::set_key_bit(&path, depth, false),
+                    path.set_bit(depth, false),
                     st,
                     max_depth,
                 )?;
@@ -172,7 +180,7 @@ impl UrkelTree {
                     ctx,
                     noderef_as!(node_ref, Internal).right.clone(),
                     depth + 1,
-                    utils::set_key_bit(&path, depth, true),
+                    path.set_bit(depth, true),
                     st,
                     max_depth,
                 )?;
@@ -199,9 +207,9 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
-        path: Hash,
-        key: Option<Hash>,
+        depth: DepthType,
+        path: &Key,
+        key: Option<&Key>,
         st: &mut Subtree,
     ) -> Fallible<SubtreePointer> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
@@ -221,7 +229,7 @@ impl UrkelTree {
             Some(node_ref) => node_ref,
         };
 
-        if key.is_none() {
+        if key.is_none() && depth < key.bit_length() {
             // Off-path nodes are always full nodes.
             let idx = st.add_full_node(node_ref.borrow().extract())?;
             return Ok(SubtreePointer {
@@ -249,6 +257,13 @@ impl UrkelTree {
                     ..Default::default()
                 };
 
+                summary.leaf_node = self._get_path(
+                    ctx,
+                    noderef_as!(node_ref, Internal).leaf_node.clone(),
+                    depth,
+                    key,
+                    st,
+                )?;
                 summary.left = self._get_path(
                     ctx,
                     noderef_as!(node_ref, Internal).left.clone(),

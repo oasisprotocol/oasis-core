@@ -3,44 +3,53 @@ use std::sync::Arc;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*, utils::*},
-};
+use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Get an existing key.
     pub fn get(&self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
-        let hkey = Hash::digest_bytes(key);
+        let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
-        Ok(self._get(&ctx, pending_root, 0, hkey)?)
+        Ok(self._get(&ctx, pending_root, 0, boxed_key)?)
     }
 
     fn _get(
         &self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
-        key: Hash,
+        depth: DepthType,
+        key: Key,
     ) -> Fallible<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             NodeID {
-                path: key,
+                path: &key,
                 depth: depth,
             },
             ptr,
-            Some(key),
+            Some(&key),
         )?;
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
+                // Reached a nil node, there is nothing here.
                 return Ok(None);
             }
             NodeKind::Internal => {
+                // Internal node.
+                // Is lookup key a prefix of longer stored keys? Look in node_ref.leaf_node.
                 let node_ref = node_ref.unwrap();
-                if get_key_bit(&key, depth) {
+                if key.bit_length() == depth {
+                    return self._get(
+                        ctx,
+                        noderef_as!(node_ref, Internal).leaf_node.clone(),
+                        depth,
+                        key,
+                    );
+                }
+                // Continue recursively based on a bit value.
+                else if key.get_bit(depth) {
                     return self._get(
                         ctx,
                         noderef_as!(node_ref, Internal).right.clone(),
@@ -57,6 +66,7 @@ impl UrkelTree {
                 }
             }
             NodeKind::Leaf => {
+                // Reached a leaf node, check if key matches.
                 let node_ref = node_ref.unwrap();
                 if noderef_as!(node_ref, Leaf).key == key {
                     return Ok(self

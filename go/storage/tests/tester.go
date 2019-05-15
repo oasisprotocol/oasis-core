@@ -100,8 +100,9 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	<-backend.Initialized()
 
 	// Test MKVS storage.
-	var rootHash hash.Hash
-	rootHash.Empty()
+	var root hash.Hash
+	root.Empty()
+
 	wl := prepareWriteLog(testValues)
 	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace)
 	var receipts []*api.Receipt
@@ -152,7 +153,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 		}
 	}
 
-	var emptyPath hash.Hash
+	var emptyPath = api.Key{}
 
 	newRoot := api.Root{
 		Namespace: namespace,

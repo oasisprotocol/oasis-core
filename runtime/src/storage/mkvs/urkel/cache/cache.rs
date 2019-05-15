@@ -37,14 +37,19 @@ pub trait Cache {
     fn set_sync_root(&mut self, root: Root);
 
     /// Set the maximum depth for subtree prefetch.
-    fn set_prefetch_depth(&mut self, depth: u8);
+    fn set_prefetch_depth(&mut self, depth: DepthType);
     /// Get the read syncer backing this cache.
     fn get_read_syncer(&self) -> &Box<dyn ReadSync>;
 
     /// Create a new internal node and returns a pointer to it.
-    fn new_internal_node(&mut self, left: NodePtrRef, right: NodePtrRef) -> NodePtrRef;
+    fn new_internal_node(
+        &mut self,
+        leaf_node: NodePtrRef,
+        left: NodePtrRef,
+        right: NodePtrRef,
+    ) -> NodePtrRef;
     /// Create a new leaf node and returns a pointer to it.
-    fn new_leaf_node(&mut self, key: Hash, val: Value) -> NodePtrRef;
+    fn new_leaf_node(&mut self, key: &Key, val: Value) -> NodePtrRef;
     /// Create a new value object and returns a pointer to it.
     fn new_value(&mut self, val: Value) -> ValuePtrRef;
 
@@ -65,7 +70,7 @@ pub trait Cache {
         ctx: &Arc<Context>,
         node_id: NodeID,
         node_ptr: NodePtrRef,
-        key: Option<Hash>,
+        key: Option<&Key>,
     ) -> Fallible<Option<NodeRef>>;
     /// Dereference a value pointer into a concrete value.
     ///
@@ -95,8 +100,8 @@ pub trait Cache {
         ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
-        depth: u8,
-        max_depth: u8,
+        depth: DepthType,
+        max_depth: DepthType,
     ) -> Fallible<NodePtrRef>;
 
     /// Prefetch a subtree from the read syncer.
@@ -104,8 +109,8 @@ pub trait Cache {
         &mut self,
         ctx: &Arc<Context>,
         subtree_root: Hash,
-        subtree_path: Hash,
-        depth: u8,
+        subtree_path: Key,
+        depth: DepthType,
     ) -> Fallible<NodePtrRef>;
 }
 

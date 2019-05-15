@@ -3,7 +3,11 @@
 package cachingclient
 
 import (
+	"bufio"
 	"context"
+	"io"
+	"os"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -92,7 +96,7 @@ func (b *cachingClientBackend) ApplyBatch(
 	return b.remote.ApplyBatch(ctx, ns, dstRound, ops)
 }
 
-func (b *cachingClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *cachingClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.DepthType) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -101,7 +105,7 @@ func (b *cachingClientBackend) GetSubtree(ctx context.Context, root api.Root, id
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *cachingClientBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *cachingClientBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.DepthType) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err

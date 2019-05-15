@@ -40,7 +40,7 @@ type cache struct {
 	// Maximum capacity of leaf values.
 	valueCapacity uint64
 	// Prefetch depth.
-	prefetchDepth uint8
+	prefetchDepth node.DepthType
 	// Persist all the nodes and values we obtain from the remote syncer?
 	persistEverythingFromSyncer bool
 	// Syncer remote GetNode timeout.
@@ -51,6 +51,9 @@ type cache struct {
 	lruNodes  *list.List
 	lruValues *list.List
 }
+
+// MaxPrefetchDepth is the maximum depth of the prefeteched tree
+const MaxPrefetchDepth = 255
 
 func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) *cache {
 	c := &cache{
@@ -109,9 +112,9 @@ func (c *cache) newLeafNodePtr(n *node.LeafNode) *node.Pointer {
 	}
 }
 
-func (c *cache) newLeafNode(key hash.Hash, val []byte) *node.Pointer {
+func (c *cache) newLeafNode(key node.Key, val []byte) *node.Pointer {
 	return c.newLeafNodePtr(&node.LeafNode{
-		Key:   key,
+		Key:   key[:],
 		Value: c.newValue(val),
 	})
 }
@@ -122,10 +125,11 @@ func (c *cache) newInternalNodePtr(n *node.InternalNode) *node.Pointer {
 	}
 }
 
-func (c *cache) newInternalNode(left *node.Pointer, right *node.Pointer) *node.Pointer {
+func (c *cache) newInternalNode(leafNode *node.Pointer, left *node.Pointer, right *node.Pointer) *node.Pointer {
 	return c.newInternalNodePtr(&node.InternalNode{
-		Left:  left,
-		Right: right,
+		LeafNode: leafNode,
+		Left:     left,
+		Right:    right,
 	})
 }
 
@@ -239,6 +243,10 @@ func (c *cache) removeNode(ptr *node.Pointer) {
 	switch n := ptr.Node.(type) {
 	case *node.InternalNode:
 		// Remove subtrees first.
+		if n.LeafNode != nil && n.LeafNode.Node != nil {
+			c.removeNode(n.LeafNode)
+			n.LeafNode = nil
+		}
 		if n.Left != nil && n.Left.Node != nil {
 			c.removeNode(n.Left)
 			n.Left = nil
@@ -298,7 +306,7 @@ func (c *cache) evictNodes(targetCapacity uint64) {
 
 func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, error) {
 	curPtr := c.pendingRoot
-	var d uint8
+	var d node.DepthType
 	for d = 0; d < id.Depth; d++ {
 		nd, err := c.derefNodePtr(ctx, id.AtDepth(d), curPtr, nil)
 		if err != nil {
@@ -309,7 +317,7 @@ func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, err
 		case nil:
 			return nil, nil
 		case *node.InternalNode:
-			if getKeyBit(id.Path, d) {
+			if id.Path.GetBit(d) {
 				curPtr = n.Right
 			} else {
 				curPtr = n.Left
@@ -326,7 +334,7 @@ func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, err
 //
 // This may result in node database accesses or remote syncing if the node
 // is not available locally.
-func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer, key *hash.Hash) (node.Node, error) {
+func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer, key node.Key) (node.Node, error) {
 	if ptr == nil {
 		return nil, nil
 	}
@@ -376,14 +384,14 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 			// If target key is known, we can try prefetching the whole path
 			// instead of one node at a time.
 			var st *syncer.Subtree
-			if st, err = c.rs.GetPath(ctx, c.syncRoot, *key, id.Depth); err != nil {
+			if st, err = c.rs.GetPath(ctx, c.syncRoot, key, id.Depth); err != nil {
 				return nil, err
 			}
 
 			// reconstructSubtree commits nodes to cache so a separate commitNode
 			// is not needed.
 			var newPtr *node.Pointer
-			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
+			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, id.Depth+MaxPrefetchDepth); err != nil {
 				return nil, err
 			}
 
@@ -415,7 +423,7 @@ func (c *cache) derefValue(ctx context.Context, v *node.Value) ([]byte, error) {
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*node.Pointer, error) {
+func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath node.Key, depth node.DepthType) (*node.Pointer, error) {
 	if c.prefetchDepth == 0 {
 		return nil, nil
 	}
@@ -442,7 +450,7 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 
 // reconstructSubtree reconstructs a tree summary received through a
 // remote syncer.
-func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*node.Pointer, error) {
+func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *syncer.Subtree, depth, maxDepth node.DepthType) (*node.Pointer, error) {
 	ptr, err := c.doReconstructSummary(st, st.Root, depth, maxDepth)
 	if err != nil {
 		return nil, err
@@ -498,8 +506,8 @@ func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *
 func (c *cache) doReconstructSummary(
 	st *syncer.Subtree,
 	sptr syncer.SubtreePointer,
-	depth uint8,
-	maxDepth uint8,
+	depth node.DepthType,
+	maxDepth node.DepthType,
 ) (*node.Pointer, error) {
 	if depth > maxDepth {
 		return nil, errors.New("urkel: maximum depth exceeded")
@@ -547,6 +555,10 @@ func (c *cache) doReconstructSummary(
 		return nil, nil
 	}
 
+	leafNode, err := c.doReconstructSummary(st, s.LeafNode, depth, maxDepth)
+	if err != nil {
+		return nil, err
+	}
 	left, err := c.doReconstructSummary(st, s.Left, depth+1, maxDepth)
 	if err != nil {
 		return nil, err
@@ -556,5 +568,5 @@ func (c *cache) doReconstructSummary(
 		return nil, err
 	}
 
-	return c.newInternalNode(left, right), nil
+	return c.newInternalNode(leafNode, left, right), nil
 }

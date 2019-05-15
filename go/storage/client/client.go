@@ -418,7 +418,7 @@ func (b *storageClientBackend) readWithClient(ctx context.Context, ns common.Nam
 	return nil, err
 }
 
-func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.DepthType) (*api.Subtree, error) {
 	var req storage.GetSubtreeRequest
 	req.Root = root.MarshalCBOR()
 	req.MaxDepth = uint32(maxDepth)
@@ -441,7 +441,7 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id
 	return &subtree, nil
 }
 
-func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.DepthType) (*api.Subtree, error) {
 	var req storage.GetPathRequest
 	req.Root = root.MarshalCBOR()
 	req.Key, _ = key.MarshalBinary()

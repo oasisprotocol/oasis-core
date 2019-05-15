@@ -123,6 +123,12 @@ type Root = urkelNode.Root
 // a node under a given root.
 type NodeID = urkelNode.ID
 
+// Key is a node's key spelled out from the root to the node.
+type Key = urkel.Key
+
+// Key is a node's key spelled out from the root to the node.
+type DepthType = urkel.DepthType
+
 // Node is either an InternalNode or a LeafNode.
 type Node = urkelNode.Node
 

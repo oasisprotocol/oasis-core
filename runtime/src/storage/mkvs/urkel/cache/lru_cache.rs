@@ -6,8 +6,10 @@ use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, sync::*, tree::*, utils::*},
+    storage::mkvs::urkel::{cache::*, sync::*, tree::*},
 };
+
+const MAX_PREFETCH_DEPTH: DepthType = 255;
 
 #[derive(Clone, Default)]
 pub struct CacheItemBox<Item: CacheItem + Default> {
@@ -127,7 +129,7 @@ pub struct LRUCache {
     internal_node_count: u64,
     leaf_node_count: u64,
 
-    prefetch_depth: u8,
+    prefetch_depth: DepthType,
 
     lru_values: LRUList<ValuePointer>,
     lru_nodes: LRUList<NodePointer>,
@@ -217,8 +219,8 @@ impl LRUCache {
         &mut self,
         st: &Subtree,
         sptr: &SubtreePointer,
-        depth: u8,
-        max_depth: u8,
+        depth: DepthType,
+        max_depth: DepthType,
     ) -> Fallible<NodePtrRef> {
         if depth > max_depth {
             return Err(CacheError::MaximumDepthExceeded.into());
@@ -245,11 +247,13 @@ impl LRUCache {
             return match summary {
                 None => Ok(NodePointer::null_ptr()),
                 Some(summary) => {
+                    let leaf_node =
+                        self._reconstruct_summary(st, &summary.leaf_node, depth, max_depth)?;
                     let left =
                         self._reconstruct_summary(st, &summary.left, depth + 1, max_depth)?;
                     let right =
                         self._reconstruct_summary(st, &summary.right, depth + 1, max_depth)?;
-                    Ok(self.new_internal_node(left, right))
+                    Ok(self.new_internal_node(leaf_node, left, right))
                 }
             };
         }
@@ -285,7 +289,7 @@ impl Cache for LRUCache {
         self.sync_root = root;
     }
 
-    fn set_prefetch_depth(&mut self, depth: u8) {
+    fn set_prefetch_depth(&mut self, depth: DepthType) {
         self.prefetch_depth = depth;
     }
 
@@ -293,8 +297,14 @@ impl Cache for LRUCache {
         &self.read_syncer
     }
 
-    fn new_internal_node(&mut self, left: NodePtrRef, right: NodePtrRef) -> NodePtrRef {
+    fn new_internal_node(
+        &mut self,
+        leaf_node: NodePtrRef,
+        left: NodePtrRef,
+        right: NodePtrRef,
+    ) -> NodePtrRef {
         let node = Rc::new(RefCell::new(NodeBox::Internal(InternalNode {
+            leaf_node: leaf_node,
             left: left,
             right: right,
             ..Default::default()
@@ -302,7 +312,7 @@ impl Cache for LRUCache {
         self.new_internal_node_ptr(Some(node))
     }
 
-    fn new_leaf_node(&mut self, key: Hash, val: Value) -> NodePtrRef {
+    fn new_leaf_node(&mut self, key: &Key, val: Value) -> NodePtrRef {
         let node = Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             key: key.clone(),
             value: self.new_value(val),
@@ -366,7 +376,7 @@ impl Cache for LRUCache {
             };
 
             if let NodeBox::Internal(ref n) = *node.borrow() {
-                if get_key_bit(&node_id.path, d) {
+                if node_id.path.get_bit(d) {
                     cur_ptr = n.right.clone();
                 } else {
                     cur_ptr = n.left.clone();
@@ -381,7 +391,7 @@ impl Cache for LRUCache {
         ctx: &Arc<Context>,
         node_id: NodeID,
         ptr: NodePtrRef,
-        key: Option<Hash>,
+        key: Option<&Key>,
     ) -> Fallible<Option<NodeRef>> {
         let ptr_ref = ptr;
         let ptr = ptr_ref.borrow();
@@ -428,7 +438,7 @@ impl Cache for LRUCache {
                     ptr.hash,
                     &subtree,
                     node_id.depth,
-                    (8 * Hash::len() - 1) as u8,
+                    node_id.depth + MAX_PREFETCH_DEPTH,
                 )?;
                 let new_ptr = new_ptr.borrow();
                 ptr.clean = new_ptr.clean;
@@ -518,8 +528,8 @@ impl Cache for LRUCache {
         ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
-        depth: u8,
-        max_depth: u8,
+        depth: DepthType,
+        max_depth: DepthType,
     ) -> Fallible<NodePtrRef> {
         let ptr = self._reconstruct_summary(st, &st.root, depth, max_depth)?;
         if ptr.borrow().is_null() {
@@ -544,8 +554,8 @@ impl Cache for LRUCache {
         &mut self,
         ctx: &Arc<Context>,
         subtree_root: Hash,
-        subtree_path: Hash,
-        depth: u8,
+        subtree_path: Key,
+        depth: DepthType,
     ) -> Fallible<NodePtrRef> {
         if self.prefetch_depth == 0 {
             return Ok(NodePointer::null_ptr());
@@ -555,7 +565,7 @@ impl Cache for LRUCache {
             Context::create_child(ctx),
             self.sync_root,
             NodeID {
-                path: subtree_path,
+                path: &subtree_path,
                 depth: depth,
             },
             self.prefetch_depth,

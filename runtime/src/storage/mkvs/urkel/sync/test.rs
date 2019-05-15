@@ -30,10 +30,10 @@ fn test_simple() {
                 ..Default::default()
             },
             NodeID {
-                path: Default::default(),
+                path: &Key::new(),
                 depth: 0,
             },
-            10,
+            24,
         )
         .expect("get_subtree");
 
@@ -57,7 +57,7 @@ impl ReadSync for DummySerialSyncer {
         ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree> {
         let obj = self.backing.get_subtree(ctx, root, id, max_depth)?;
         let bytes = obj.marshal_binary()?;
@@ -70,8 +70,8 @@ impl ReadSync for DummySerialSyncer {
         &mut self,
         ctx: Context,
         root: Root,
-        key: Hash,
-        start_depth: u8,
+        key: &Key,
+        start_depth: DepthType,
     ) -> Fallible<Subtree> {
         let obj = self.backing.get_path(ctx, root, key, start_depth)?;
         let bytes = obj.marshal_binary()?;

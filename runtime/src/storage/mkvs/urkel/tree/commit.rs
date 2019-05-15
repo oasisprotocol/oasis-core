@@ -68,9 +68,11 @@ pub fn _commit<C: Cache>(
             if some_node_ref.borrow().is_clean() {
                 ptr.borrow_mut().hash = some_node_ref.borrow().get_hash();
             } else {
+                let int_leaf_node = noderef_as!(some_node_ref, Internal).leaf_node.clone();
                 let int_left = noderef_as!(some_node_ref, Internal).left.clone();
                 let int_right = noderef_as!(some_node_ref, Internal).right.clone();
 
+                _commit(ctx, int_leaf_node.clone(), update_list)?;
                 _commit(ctx, int_left.clone(), update_list)?;
                 _commit(ctx, int_right.clone(), update_list)?;
 

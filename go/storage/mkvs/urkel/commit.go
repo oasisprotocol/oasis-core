@@ -47,23 +47,15 @@ func doCommit(
 			panic("urkel: non-clean pointer has clean node")
 		}
 
-		newSubtree := batch.MaybeStartSubtree(subtree, depth+1, n.Left)
-		if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, n.Left); err != nil {
-			return
-		}
-		if newSubtree != subtree {
-			if err = newSubtree.Commit(); err != nil {
+		for _, subNode := range []*internal.Pointer{n.LeafNode, n.Left, n.Right} {
+			newSubtree = batch.MaybeStartSubtree(subtree, depth+n.LabelBitLength, subNode)
+			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+n.LabelBitLength, subNode); err != nil {
 				return
 			}
-		}
-
-		newSubtree = batch.MaybeStartSubtree(subtree, depth+1, n.Right)
-		if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, n.Right); err != nil {
-			return
-		}
-		if newSubtree != subtree {
-			if err = newSubtree.Commit(); err != nil {
-				return
+			if newSubtree != subtree {
+				if err = newSubtree.Commit(); err != nil {
+					return
+				}
 			}
 		}
 

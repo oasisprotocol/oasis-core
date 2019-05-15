@@ -9,8 +9,7 @@ import (
 )
 
 func TestSerializationLeafNode(t *testing.T) {
-	var key hash.Hash
-	key.FromBytes([]byte("a golden key"))
+	var key Key = []byte("a golden key")
 	var valueHash hash.Hash
 	valueHash.FromBytes([]byte("value"))
 
@@ -38,14 +37,27 @@ func TestSerializationLeafNode(t *testing.T) {
 }
 
 func TestSerializationInternalNode(t *testing.T) {
+	var valueHash hash.Hash
+	valueHash.FromBytes([]byte("value"))
+	var leafNode = &LeafNode{
+		Key: []byte("a golden key"),
+		Value: &Value{
+			Clean: true,
+			Hash:  valueHash,
+			Value: []byte("value"),
+		},
+	}
+	leafNode.UpdateHash()
+
 	var leftHash hash.Hash
 	leftHash.FromBytes([]byte("everyone move to the left"))
 	var rightHash hash.Hash
 	rightHash.FromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
-		Left:  &Pointer{Clean: true, Hash: leftHash},
-		Right: &Pointer{Clean: true, Hash: rightHash},
+		LeafNode: &Pointer{Clean: true, Node: leafNode, Hash: leafNode.Hash},
+		Left:     &Pointer{Clean: true, Hash: leftHash},
+		Right:    &Pointer{Clean: true, Hash: rightHash},
 	}
 
 	rawIntNode, err := intNode.MarshalBinary()
@@ -56,17 +68,19 @@ func TestSerializationInternalNode(t *testing.T) {
 	require.NoError(t, err, "UnmarshalBinary")
 
 	require.True(t, decodedIntNode.Clean)
+	require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
 	require.Equal(t, intNode.Left.Hash, decodedIntNode.Left.Hash)
 	require.Equal(t, intNode.Right.Hash, decodedIntNode.Right.Hash)
+	require.True(t, decodedIntNode.LeafNode.Clean)
 	require.True(t, decodedIntNode.Left.Clean)
 	require.True(t, decodedIntNode.Right.Clean)
+	require.NotNil(t, decodedIntNode.LeafNode.Node)
 	require.Nil(t, decodedIntNode.Left.Node)
 	require.Nil(t, decodedIntNode.Right.Node)
 }
 
 func TestHashLeafNode(t *testing.T) {
-	var key hash.Hash
-	key.FromBytes([]byte("a golden key"))
+	var key Key = []byte("a golden key")
 	var valueHash hash.Hash
 	valueHash.FromBytes([]byte("value"))
 
@@ -81,28 +95,30 @@ func TestHashLeafNode(t *testing.T) {
 
 	leafNode.UpdateHash()
 
-	require.Equal(t, leafNode.Hash.String(), "63a651558d7a38c9cf03ac1be3c6d38964b8c39568a10a84056728d024d09646")
+	require.Equal(t, leafNode.Hash.String(), "1736c1ac9fe17539c40e8b4c4d73c5c5a4a6e808c0b8247ebf4b1802ceace4d2")
 }
 
 func TestHashInternalNode(t *testing.T) {
+	var leafNodeHash hash.Hash
+	leafNodeHash.FromBytes([]byte("everyone stop here"))
 	var leftHash hash.Hash
 	leftHash.FromBytes([]byte("everyone move to the left"))
 	var rightHash hash.Hash
 	rightHash.FromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
-		Left:  &Pointer{Clean: true, Hash: leftHash},
-		Right: &Pointer{Clean: true, Hash: rightHash},
+		LeafNode: &Pointer{Clean: true, Hash: leafNodeHash},
+		Left:     &Pointer{Clean: true, Hash: leftHash},
+		Right:    &Pointer{Clean: true, Hash: rightHash},
 	}
 
 	intNode.UpdateHash()
 
-	require.Equal(t, intNode.Hash.String(), "4aed14e40ba69eae81b78b441b277f834b6202097a11ad3ba668c46f44d3717b")
+	require.Equal(t, intNode.Hash.String(), "2046be7373eac5777c4dc7c7b1ac05974656b66dfba97eaead803f553ae2ee3c")
 }
 
 func TestExtractLeafNode(t *testing.T) {
-	var key hash.Hash
-	key.FromBytes([]byte("a golden key"))
+	var key Key = []byte("a golden key")
 	var valueHash hash.Hash
 	valueHash.FromBytes([]byte("value"))
 
