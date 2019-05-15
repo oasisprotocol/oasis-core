@@ -52,7 +52,7 @@ test_migration() {
 
     run_compute_node 1 ${runtime} &>/dev/null
 
-    wait_nodes 2 # 1 + storage
+    wait_nodes 3 # 1 + storage + km
 
     set_epoch 1
     sleep 1
@@ -92,7 +92,7 @@ test_migration() {
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
 
-    wait_nodes 2 # 1 + storage
+    wait_nodes 3 # 1 + storage + km
     set_epoch 2
 
     # Start client and do state verification, checking that migration succeeded.

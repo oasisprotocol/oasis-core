@@ -246,6 +246,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			rtCfg.TEEHardware,
 			w.ias,
 			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
+			nil,
 			false,
 		)
 	case host.BackendUnconfined:
@@ -257,6 +258,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			rtCfg.TEEHardware,
 			w.ias,
 			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
+			nil,
 			true,
 		)
 	case host.BackendMock:
@@ -406,11 +408,15 @@ func newWorker(
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleComputeWorker)
-
 			for _, rt := range n.Runtimes {
 				var err error
 
-				if rt.Capabilities.TEE, err = w.runtimes[rt.ID.ToMapKey()].workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
+				workerRT := w.runtimes[rt.ID.ToMapKey()]
+				if workerRT == nil {
+					continue
+				}
+
+				if rt.Capabilities.TEE, err = workerRT.workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
 					w.logger.Error("failed to obtain CapabilityTEE",
 						"err", err,
 						"runtime", rt.ID,

@@ -203,6 +203,19 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.WorkerRegistration)
 
+	// Initialize the key manager service.
+	kmSvc, kmEnabled, err := keymanager.New(
+		dataDir,
+		n.IAS,
+		n.CommonWorker.Grpc,
+		n.WorkerRegistration,
+		&workerCommonCfg,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(kmSvc)
+
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
 		n.Epochtime,
@@ -261,13 +274,18 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		return err
 	}
 
+	// Start the key manager worker.
+	if err = kmSvc.Start(); err != nil {
+		return err
+	}
+
 	// Start the worker registration service.
 	if err = n.WorkerRegistration.Start(); err != nil {
 		return err
 	}
 
 	// Only start the external gRPC server if any workers enabled
-	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() {
+	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || kmEnabled {
 		if err = n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,
@@ -437,20 +455,6 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize the key manager service.
-	kmSvc, err := keymanager.New(
-		cmdCommon.DataDir(),
-		node.IAS,
-		node.Identity,
-	)
-	if err != nil {
-		logger.Error("failed to initialize key manager",
-			"err", err,
-		)
-		return nil, err
-	}
-	node.svcMgr.Register(kmSvc)
-
 	// Initialize the key manager client service.
 	node.KeyManager, err = keymanagerClient.New()
 	if err != nil {
@@ -507,14 +511,6 @@ func NewNode() (*Node, error) {
 	// Start the internal gRPC server.
 	if err = node.grpcInternal.Start(); err != nil {
 		logger.Error("failed to start internal gRPC server",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	// Start the key manager service.
-	if err = kmSvc.Start(); err != nil {
-		logger.Error("failed to start key manager service",
 			"err", err,
 		)
 		return nil, err

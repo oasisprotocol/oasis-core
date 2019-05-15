@@ -23,19 +23,27 @@ var (
 	_ cbor.Unmarshaler = (*Runtime)(nil)
 )
 
+// RuntimeKind represents the runtime funtionality.
+type RuntimeKind uint32
+
+const (
+	// KindCompute is a generic compute runtime.
+	KindCompute RuntimeKind = 0
+
+	// KindKeyManager is a key manager runtime.
+	KindKeyManager RuntimeKind = 1
+)
+
 // Runtime represents a runtime.
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
 	ID signature.PublicKey `codec:"id"`
 
 	// Genesis is the runtime genesis information.
-	Genesis RuntimeGenesis
+	Genesis RuntimeGenesis `codec:"genesis"`
 
 	// Code is the runtime code body.
 	Code []byte `codec:"code"`
-
-	// TEEHardware specifies the runtime's TEE hardware requirements.
-	TEEHardware node.TEEHardware `codec:"tee_hardware"`
 
 	// ReplicaGroupSize is the size of the computation group.
 	ReplicaGroupSize uint64 `codec:"replica_group_size"`
@@ -55,11 +63,22 @@ type Runtime struct {
 
 	// TransactionSchedulerGroupSize the size of the TransactionScheduler group.
 	TransactionSchedulerGroupSize uint64 `codec:"transaction_scheduler_group_size"`
+
+	// Kind is the type of runtime.
+	Kind RuntimeKind `codec:"kind"`
+
+	// TEEHardware specifies the runtime's TEE hardware requirements.
+	TEEHardware node.TEEHardware `codec:"tee_hardware"`
 }
 
 // String returns a string representation of itself.
 func (c *Runtime) String() string {
 	return "<Runtime id=" + c.ID.String() + ">"
+}
+
+// IsCompute returns true iff the runtime is a generic compute runtime.
+func (c *Runtime) IsCompute() bool {
+	return c.Kind == KindCompute
 }
 
 // Clone returns a copy of itself.
@@ -91,6 +110,7 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
 	c.StorageGroupSize = pb.GetStorageGroupSize()
 	c.RegistrationTime = pb.GetRegistrationTime()
+	c.Kind = RuntimeKind(pb.GetKind())
 
 	return nil
 }
@@ -112,6 +132,7 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	pb.ReplicaAllowedStragglers = c.ReplicaAllowedStragglers
 	pb.StorageGroupSize = c.StorageGroupSize
 	pb.RegistrationTime = c.RegistrationTime
+	pb.Kind = uint32(c.Kind)
 
 	return pb
 }

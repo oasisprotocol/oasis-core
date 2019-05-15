@@ -252,33 +252,52 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
 func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, now time.Time) (*node.Node, error) {
 	// XXX: Ensure node is well-formed.
-	var node node.Node
+	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
 	}
-	if err := sigNode.Open(RegisterNodeSignatureContext, &node); err != nil {
+	if err := sigNode.Open(RegisterNodeSignatureContext, &n); err != nil {
 		logger.Error("RegisterNode: invalid signature",
 			"signed_node", sigNode,
 		)
 		return nil, ErrInvalidSignature
 	}
-	if sigNode.Signed.Signature.SanityCheck(node.EntityID) != nil {
+	if sigNode.Signed.Signature.SanityCheck(n.EntityID) != nil {
 		logger.Error("RegisterNode: not signed by entity",
 			"signed_node", sigNode,
-			"node", node,
+			"node", n,
 		)
 		return nil, ErrInvalidArgument
 	}
 
-	switch len(node.Runtimes) {
+	// TODO: Key manager nodes maybe should be restricted to only being a
+	// key manager at the expense of breaking some of our test configs.
+	needRuntimes := n.HasRoles(node.RoleComputeWorker | node.RoleKeyManager) // XXX: RoleTransactionSceduler?
+
+	switch len(n.Runtimes) {
 	case 0:
-		logger.Warn("RegisterNode: no runtimes in registration",
-			"node", node,
-		)
+		// TODO: This should be an registration failure, but the node registration
+		// integration tests do the wrong thing.
+		if needRuntimes {
+			logger.Error("RegisterNode: no runtimes in registration",
+				"node", n,
+			)
+		}
 	default:
+		rtMap := make(map[signature.MapKey]bool)
+
 		// If the node indicates TEE support for any of it's runtimes,
 		// validate the attestation evidence.
-		for _, rt := range node.Runtimes {
+		for _, rt := range n.Runtimes {
+			k := rt.ID.ToMapKey()
+			if rtMap[k] {
+				logger.Error("RegisterNode: duplicate runtime IDs",
+					"id", rt.ID,
+				)
+				return nil, ErrInvalidArgument
+			}
+			rtMap[k] = true
+
 			tee := rt.Capabilities.TEE
 			if tee == nil {
 				continue
@@ -286,7 +305,7 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 
 			if err := tee.Verify(now); err != nil {
 				logger.Error("RegisterNode: failed to validate attestation",
-					"node", node,
+					"node", n,
 					"runtime", rt.ID,
 					"err", err,
 				)
@@ -295,7 +314,7 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 		}
 	}
 
-	return &node, nil
+	return &n, nil
 }
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.

@@ -59,11 +59,12 @@ ias:
 keymanager:
   enabled: true
   tee_hardware: intel-sgx
-  loader: target/debug/ekiden-runtime-loader
-  runtime: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
-  port: 9003
+  runtime:
+    id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    binary: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
+    loader: target/debug/ekiden-runtime-loader
   client:
-    address: "127.0.0.1:9003"
+    address: "127.0.0.1:9200"
     certificate: /tmp/ekiden-single-node-sgx/tls_identity_cert.pem
 
 # Epochtime backend.

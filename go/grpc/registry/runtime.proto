@@ -20,6 +20,8 @@ message Runtime {
     uint64 replica_allowed_stragglers = 7;
 
     uint64 registration_time = 8;
+
+    uint32 kind = 9;
 }
 
 service RuntimeRegistry {

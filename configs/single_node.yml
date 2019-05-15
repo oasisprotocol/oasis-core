@@ -52,11 +52,12 @@ worker:
 # Key manager configuration.
 keymanager:
   enabled: true
-  loader: target/debug/ekiden-runtime-loader
-  runtime: target/debug/ekiden-keymanager-runtime
-  port: 9003
+  runtime:
+    id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    binary: target/debug/ekiden-keymanager-runtime
+    loader: target/debug/ekiden-runtime-loader
   client:
-    address: "127.0.0.1:9003"
+    address: "127.0.0.1:9200"
     certificate: /tmp/ekiden-single-node/tls_identity_cert.pem
 
 # Epochtime backend.

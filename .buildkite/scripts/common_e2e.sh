@@ -15,6 +15,8 @@ EKIDEN_RUNTIME_LOADER=${EKIDEN_RUNTIME_LOADER:-${EKIDEN_ROOT_PATH}/target/debug/
 EKIDEN_TEE_HARDWARE=${EKIDEN_TEE_HARDWARE:-""}
 # Runtime identifier.
 EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000000000000000000000000000"}
+# Keymanager runtime identifier.
+EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
 
 # Run a Tendermint validator committee and a storage node.
 #
@@ -357,11 +359,13 @@ run_keymanager_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
-        ${EKIDEN_TEE_HARDWARE:+--keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
-        --keymanager.enabled \
-        --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
-        --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
-        --keymanager.port 9003 \
+        ${EKIDEN_TEE_HARDWARE:+--worker.keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --worker.client.port 9003 \
+        --worker.keymanager.enabled \
+        --worker.keymanager.runtime.loader ${EKIDEN_RUNTIME_LOADER} \
+        --worker.keymanager.runtime.binary ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
+        --worker.keymanager.runtime.id ${EKIDEN_KM_RUNTIME_ID} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[key-manager] /" &

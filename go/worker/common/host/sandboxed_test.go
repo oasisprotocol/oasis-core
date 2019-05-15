@@ -77,6 +77,7 @@ func TestSandboxedHost(t *testing.T) {
 		tee,
 		ias,
 		&mockHostHandler{},
+		nil,
 		true,
 	)
 	require.NoError(t, err, "NewSandboxedHost")
@@ -94,6 +95,7 @@ func TestSandboxedHost(t *testing.T) {
 		tee,
 		ias,
 		&mockHostHandler{},
+		nil,
 		false,
 	)
 	require.NoError(t, err, "NewSandboxedHost")
