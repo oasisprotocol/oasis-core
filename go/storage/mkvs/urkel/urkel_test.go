@@ -18,7 +18,7 @@ import (
 
 const (
 	insertItems  = 1000
-	allItemsRoot = "5f101fe53bb5d0b17e8bcdd07e08078c66627e2bd0d8a9f64e967eb67fe7d420"
+	allItemsRoot = "410a4d112994762fe7887daf0e3ca6b307200b65677672132caf73163fd3100b"
 )
 
 func testBasic(t *testing.T, ndb db.NodeDB) {
@@ -41,7 +41,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 
 	log, root, err := tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08", root.String())
+	require.Equal(t, "c86e7119b52682fea21319c9c747e2197012b49f5050fce5e4aa82e5ced36236", root.String())
 	require.Equal(t, log, WriteLog{LogEntry{Key: keyZero, Value: valueZero}})
 	require.Equal(t, log[0].Type(), LogInsert)
 
@@ -55,7 +55,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 
 	log, root, err = tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "839bb81bff8bc8bb0bee99405a094bcb1d983f9f830cc3e3475e07cb7da4b90c", root.String())
+	require.Equal(t, "cc5f7c451f669131522718c3ece6ffa16004babfa9062fcb19a8402c4cab438b", root.String())
 	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: valueOne}})
 	require.Equal(t, log[0].Type(), LogInsert)
 
@@ -78,7 +78,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 
 	log, root, err = tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08", root.String())
+	require.Equal(t, "c86e7119b52682fea21319c9c747e2197012b49f5050fce5e4aa82e5ced36236", root.String())
 	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: nil}})
 	require.Equal(t, log[0].Type(), LogDelete)
 }
@@ -128,6 +128,7 @@ func testRemove(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
+	// First insert keys 0..n and remove them in order n..0.
 	var roots []hash.Hash
 	keys, values := generateKeyValuePairs()
 	for i := 0; i < len(keys); i++ {
@@ -149,6 +150,11 @@ func testRemove(t *testing.T, ndb db.NodeDB) {
 		err := tree.Remove(ctx, keys[i])
 		require.NoError(t, err, "Remove")
 
+		// Key should not exist anymore.
+		value, err := tree.Get(ctx, keys[i])
+		require.NoError(t, err, "Get")
+		require.Equal(t, []byte(nil), value)
+
 		_, root, err := tree.Commit(ctx)
 		require.NoError(t, err, "Commit")
 		require.Equal(t, roots[i-1], root, "root after removal at index %d", i)
@@ -158,6 +164,38 @@ func testRemove(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Remove")
 
 	_, root, err := tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+	require.True(t, root.IsEmpty())
+
+	// Now re-insert keys n..0, remove them in order 0..n.
+	for i := len(keys) - 1; i >= 0; i-- {
+		err = tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+
+		var value []byte
+		value, err = tree.Get(ctx, keys[i])
+		require.NoError(t, err, "Get")
+		require.Equal(t, values[i], value)
+
+		_, _, err = tree.Commit(ctx)
+		require.NoError(t, err, "Commit")
+	}
+
+	for i := 0; i < len(keys); i++ {
+		err = tree.Remove(ctx, keys[i])
+		require.NoError(t, err, "Remove")
+
+		// Key should not exist anymore.
+		var value []byte
+		value, err = tree.Get(ctx, keys[i])
+		require.NoError(t, err, "Get")
+		require.Equal(t, []byte(nil), value)
+
+		_, _, err = tree.Commit(ctx)
+		require.NoError(t, err, "Commit")
+	}
+
+	_, _, err = tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
 	require.True(t, root.IsEmpty())
 }
@@ -193,7 +231,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 
 	require.Equal(t, 0, stats.SubtreeFetches, "subtree fetches (no prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (no prefetch)")
-	require.Equal(t, 1216, stats.PathFetches, "path fetches (no prefetch)")
+	require.Equal(t, 40, stats.PathFetches, "path fetches (no prefetch)")
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (no prefetch)")
 
 	stats = syncer.NewStatsCollector(tree)
@@ -208,7 +246,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 
 	require.Equal(t, 1, stats.SubtreeFetches, "subtree fetches (with prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (with prefetch)")
-	require.Equal(t, 710, stats.PathFetches, "path fetches (no prefetch)")
+	require.Equal(t, 36, stats.PathFetches, "path fetches (with prefetch)")
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
@@ -226,10 +264,10 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	stats := tree.Stats(ctx, 0)
-	require.EqualValues(t, 1470, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 1532, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
 	require.EqualValues(t, 1000, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 511, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 508, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 func testNodeEviction(t *testing.T, ndb db.NodeDB) {
@@ -247,10 +285,10 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 
 	stats := tree.Stats(ctx, 0)
 	// Only a subset of nodes should remain in cache.
-	require.EqualValues(t, 313, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 199, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
+	require.EqualValues(t, 324, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 188, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 1770, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 1673, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 func testDebugDump(t *testing.T, ndb db.NodeDB) {
@@ -280,11 +318,11 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	}
 
 	stats := tree.Stats(ctx, 0)
-	require.EqualValues(t, 20, stats.MaxDepth, "MaxDepth")
-	require.EqualValues(t, 1470, stats.InternalNodeCount, "InternalNodeCount")
-	require.EqualValues(t, 1000, stats.LeafNodeCount, "LeafNodeCount")
-	require.EqualValues(t, 8890, stats.LeafValueSize, "LeafValueSize")
-	require.EqualValues(t, 471, stats.DeadNodeCount, "DeadNodeCount")
+	require.EqualValues(t, 56, stats.MaxDepth, "MaxDepth")
+	require.EqualValues(t, 1532, stats.InternalNodeCount, "InternalNodeCount")
+	require.EqualValues(t, 901, stats.LeafNodeCount, "LeafNodeCount")
+	require.EqualValues(t, 8107, stats.LeafValueSize, "LeafValueSize")
+	require.EqualValues(t, 632, stats.DeadNodeCount, "DeadNodeCount")
 	// Cached node counts will update on commit.
 	require.EqualValues(t, 0, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
 	require.EqualValues(t, 0, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
@@ -297,12 +335,12 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	// Values are not counted as cached until they are committed (since
 	// they cannot be evicted while uncommitted).
 	stats = tree.Stats(ctx, 0)
-	require.EqualValues(t, 20, stats.MaxDepth, "MaxDepth")
-	require.EqualValues(t, 1470, stats.InternalNodeCount, "InternalNodeCount")
-	require.EqualValues(t, 1000, stats.LeafNodeCount, "LeafNodeCount")
-	require.EqualValues(t, 8890, stats.LeafValueSize, "LeafValueSize")
-	require.EqualValues(t, 471, stats.DeadNodeCount, "DeadNodeCount")
-	require.EqualValues(t, 1470, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 56, stats.MaxDepth, "MaxDepth")
+	require.EqualValues(t, 1532, stats.InternalNodeCount, "InternalNodeCount")
+	require.EqualValues(t, 901, stats.LeafNodeCount, "LeafNodeCount")
+	require.EqualValues(t, 8107, stats.LeafValueSize, "LeafValueSize")
+	require.EqualValues(t, 632, stats.DeadNodeCount, "DeadNodeCount")
+	require.EqualValues(t, 1532, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
 	require.EqualValues(t, 1000, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	require.EqualValues(t, 8890, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
@@ -408,7 +446,7 @@ func TestSubtreeSerializationSimple(t *testing.T) {
 	_, root, err := tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
 
-	st, err := tree.GetSubtree(ctx, root, internal.NodeID{Path: root, Depth: 0}, 10)
+	st, err := tree.GetSubtree(ctx, root, internal.NodeID{Path: Key{}, Depth: 0}, 24)
 	require.NoError(t, err, "GetSubtree")
 
 	binary, err := st.MarshalBinary()

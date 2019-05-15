@@ -201,7 +201,7 @@ func (b *cachingClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 	return b.remote.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *cachingClientBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *cachingClientBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth uint8) (*api.Subtree, error) {
 	// TODO: Implement caching for MKVS operations (issue #1664).
 	return b.remote.GetPath(ctx, root, key, startDepth)
 }

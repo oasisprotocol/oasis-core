@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8, key hash.Hash, val []byte) (*internal.Pointer, bool, error) {
+// doInsert is a recursive function for inserting a key into the urkel tree.
+func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8, key internal.Key, val []byte) (*internal.Pointer, bool, error) {
+	//	fmt.Println("inserting key:", string(key), "depth:", depth)
 	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, nil)
 	if err != nil {
 		return nil, false, err
@@ -20,7 +21,12 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		return t.cache.newLeafNode(key, val), false, nil
 	case *internal.InternalNode:
 		var existed bool
-		if getKeyBit(key, depth) {
+		if key.BitLength() == int(depth) {
+			// Key to insert ends at this depth. Add it as a LeafNode reference
+			// to the existing internal node.
+			n.LeafNode, existed, err = t.doInsert(ctx, n.LeafNode, depth, key, val)
+		} else if key.GetBit(depth) {
+			// Otherwise, insert recursively based on a bit value.
 			n.Right, existed, err = t.doInsert(ctx, n.Right, depth+1, key, val)
 		} else {
 			n.Left, existed, err = t.doInsert(ctx, n.Left, depth+1, key, val)
@@ -29,7 +35,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 			return nil, false, err
 		}
 
-		if !n.Left.IsClean() || !n.Right.IsClean() {
+		if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
 			n.Clean = false
 			ptr.Clean = false
 		}
@@ -37,7 +43,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		return ptr, existed, nil
 	case *internal.LeafNode:
 		// If the key matches, we can just update the value.
-		if n.Key.Equal(&key) {
+		if n.Key.Equal(key) {
 			if n.Value.Equal(val) {
 				return ptr, true, nil
 			}
@@ -49,35 +55,62 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 			return ptr, true, nil
 		}
 
-		existingBit := getKeyBit(n.Key, depth)
-		newBit := getKeyBit(key, depth)
-
-		var left, right *internal.Pointer
-		if existingBit != newBit {
-			// No bit collision at this depth, create an internal node with
-			// two leaves.
-			if existingBit {
-				left = t.cache.newLeafNode(key, val)
+		// If the key mismatches, three cases are possible:
+		var leafNode, left, right *internal.Pointer
+		var existingBit bool
+		if key.BitLength() == int(depth) {
+			// Case 1: key is a prefix of n.Key
+			leafNode = t.cache.newLeafNode(key, val)
+			if n.Key.GetBit(depth) {
+				left = nil
 				right = ptr
 			} else {
 				left = ptr
-				right = t.cache.newLeafNode(key, val)
-			}
-		} else {
-			// Bit collision at this depth.
-			if existingBit {
-				left = nil
-				right, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
-			} else {
-				left, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
 				right = nil
 			}
-			if err != nil {
-				return nil, false, err
+		} else if n.Key.BitLength() == int(depth) {
+			// Case 2: n.Key is a prefix of key
+			leafNode = ptr
+			if key.GetBit(depth) {
+				left = nil
+				right = t.cache.newLeafNode(key, val)
+			} else {
+				left = t.cache.newLeafNode(key, val)
+				right = nil
+			}
+		} else {
+			// Case 3: length of common prefix of n.Key and key is shorter than
+			//         len(n.Key) and len(key)
+			existingBit = n.Key.GetBit(depth)
+			newBit := key.GetBit(depth)
+
+			if existingBit != newBit {
+				// Bits mismatched at this depth, create an internal node with
+				// two leaves.
+				if existingBit {
+					left = t.cache.newLeafNode(key, val)
+					right = ptr
+				} else {
+					left = ptr
+					right = t.cache.newLeafNode(key, val)
+				}
+			} else {
+				// Bits matched at this depth. Go into recursion and then create
+				// an internal node with two leaves.
+				if existingBit {
+					left = nil
+					right, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
+				} else {
+					left, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
+					right = nil
+				}
+				if err != nil {
+					return nil, false, err
+				}
 			}
 		}
 
-		return t.cache.newInternalNode(left, right), false, nil
+		return t.cache.newInternalNode(leafNode, left, right), false, nil
 	default:
 		panic(fmt.Sprintf("urkel: unknown node type: %+v", n))
 	}

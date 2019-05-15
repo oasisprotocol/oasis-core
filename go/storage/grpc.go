@@ -23,7 +23,7 @@ type grpcServer struct {
 func (s *grpcServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
 	id := req.GetId()
 	if len(id) != api.KeySize {
-		return nil, errors.New("storage: malformed key")
+		return nil, errors.New("storage:Get: empty key")
 	}
 
 	var k api.Key
@@ -44,7 +44,7 @@ func (s *grpcServer) GetBatch(ctx context.Context, req *pb.GetBatchRequest) (*pb
 	var keys []api.Key
 	for _, id := range req.GetIds() {
 		if len(id) != api.KeySize {
-			return nil, errors.New("storage: malformed key")
+			return nil, errors.New("storage:GetBatch: empty key")
 		}
 
 		var k api.Key
@@ -64,7 +64,7 @@ func (s *grpcServer) GetReceipt(ctx context.Context, req *pb.GetReceiptRequest) 
 	var keys []api.Key
 	for _, id := range req.GetIds() {
 		if len(id) != api.KeySize {
-			return nil, errors.New("storage: malformed key")
+			return nil, errors.New("storage:GetReceipt: empty key")
 		}
 
 		var k api.Key
@@ -213,13 +213,8 @@ func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 	maxDepth := uint8(req.GetMaxDepth())
 
 	nid := req.GetId()
-	var path hash.Hash
-	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
-	}
-
 	nodeID := api.NodeID{
-		Path:  path,
+		Path:  api.MKVSKey(nid.GetPath()),
 		Depth: uint8(nid.GetDepth()),
 	}
 
@@ -243,7 +238,7 @@ func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
-	var key hash.Hash
+	var key api.MKVSKey
 	if err := key.UnmarshalBinary(req.GetKey()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal key")
 	}
@@ -271,7 +266,7 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 	}
 
 	nid := req.GetId()
-	var path hash.Hash
+	var path api.MKVSKey
 	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
 	}

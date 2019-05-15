@@ -88,7 +88,7 @@ pub struct UrkelStats {
 /// An Urkel tree-based MKVS implementation.
 pub struct UrkelTree {
     pub cache: RefCell<Box<LRUCache>>,
-    pub pending_write_log: BTreeMap<Hash, PendingLogEntry>,
+    pub pending_write_log: BTreeMap<Key, PendingLogEntry>,
     pub lock: Arc<Mutex<isize>>,
 }
 
@@ -127,7 +127,7 @@ impl UrkelTree {
             let ptr = tree
                 .cache
                 .borrow_mut()
-                .prefetch(&ctx, root_hash, Hash::default(), 0)?;
+                .prefetch(&ctx, root_hash, Key::new(), 0)?;
             if !ptr.borrow().is_null() {
                 tree.cache.borrow_mut().set_pending_root(ptr);
             }

@@ -7,7 +7,7 @@ use crate::{
 
 #[test]
 fn test_serialization_leaf() {
-    let key = Hash::digest_bytes(b"a golden key");
+    let key = b"a golden key".to_vec();
     let value_hash = Hash::digest_bytes(b"value");
 
     let leaf_node = LeafNode {
@@ -85,7 +85,7 @@ fn test_serialization_internal() {
 
 #[test]
 fn test_hash_leaf() {
-    let key = Hash::digest_bytes(b"a golden key");
+    let key = b"a golden key".to_vec();
     let value_hash = Hash::digest_bytes(b"value");
 
     let mut leaf_node = LeafNode {
@@ -102,16 +102,22 @@ fn test_hash_leaf() {
     leaf_node.update_hash();
     assert_eq!(
         leaf_node.hash,
-        Hash::from_str("63a651558d7a38c9cf03ac1be3c6d38964b8c39568a10a84056728d024d09646").unwrap()
+        Hash::from_str("1736c1ac9fe17539c40e8b4c4d73c5c5a4a6e808c0b8247ebf4b1802ceace4d2").unwrap()
     );
 }
 
 #[test]
 fn test_hash_internal() {
+    let leaf_node_hash = Hash::digest_bytes(b"everyone stop here");
     let left_hash = Hash::digest_bytes(b"everyone move to the left");
     let right_hash = Hash::digest_bytes(b"everyone move to the right");
 
     let mut int_node = InternalNode {
+        leaf_node: Rc::new(RefCell::new(NodePointer {
+            clean: true,
+            hash: leaf_node_hash,
+            ..Default::default()
+        })),
         left: Rc::new(RefCell::new(NodePointer {
             clean: true,
             hash: left_hash,
@@ -128,6 +134,6 @@ fn test_hash_internal() {
     int_node.update_hash();
     assert_eq!(
         int_node.hash,
-        Hash::from_str("4aed14e40ba69eae81b78b441b277f834b6202097a11ad3ba668c46f44d3717b").unwrap()
+        Hash::from_str("2046be7373eac5777c4dc7c7b1ac05974656b66dfba97eaead803f553ae2ee3c").unwrap()
     );
 }

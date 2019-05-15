@@ -55,7 +55,7 @@ impl ReadSync for StatsCollector {
         &mut self,
         ctx: Context,
         root_hash: Hash,
-        key: Hash,
+        key: &Key,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         self.path_fetches += 1;

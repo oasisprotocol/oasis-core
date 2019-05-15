@@ -5,7 +5,7 @@ use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, sync::*, tree::*, utils},
+    storage::mkvs::urkel::{cache::*, sync::*, tree::*},
 };
 
 impl ReadSync for UrkelTree {
@@ -34,7 +34,7 @@ impl ReadSync for UrkelTree {
             return Err(SyncerError::NodeNotFound.into());
         }
 
-        let path = Hash::empty_hash();
+        let path = Key::new();
         let mut subtree = Subtree::new();
 
         let root_ptr = self._get_subtree(&ctx, subtree_root, 0, path, &mut subtree, max_depth)?;
@@ -50,7 +50,7 @@ impl ReadSync for UrkelTree {
         &mut self,
         ctx: Context,
         root_hash: Hash,
-        key: Hash,
+        key: &Key,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
@@ -128,14 +128,14 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
-        path: Hash,
+        path: Key,
         st: &mut Subtree,
         max_depth: u8,
     ) -> Fallible<SubtreePointer> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             NodeID {
-                path: path,
+                path: &path,
                 depth: depth,
             },
             ptr.clone(),
@@ -169,11 +169,19 @@ impl UrkelTree {
                     ..Default::default()
                 };
 
+                summary.leaf_node = self._get_subtree(
+                    ctx,
+                    noderef_as!(node_ref, Internal).leaf_node.clone(),
+                    depth,
+                    path.set_bit(depth, false),
+                    st,
+                    max_depth,
+                )?;
                 summary.left = self._get_subtree(
                     ctx,
                     noderef_as!(node_ref, Internal).left.clone(),
                     depth + 1,
-                    utils::set_key_bit(&path, depth, false),
+                    path.set_bit(depth, false),
                     st,
                     max_depth,
                 )?;
@@ -181,7 +189,7 @@ impl UrkelTree {
                     ctx,
                     noderef_as!(node_ref, Internal).right.clone(),
                     depth + 1,
-                    utils::set_key_bit(&path, depth, true),
+                    path.set_bit(depth, true),
                     st,
                     max_depth,
                 )?;
@@ -209,7 +217,7 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
-        key: Hash,
+        key: &Key,
         st: &mut Subtree,
     ) -> Fallible<SubtreePointer> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
@@ -232,7 +240,7 @@ impl UrkelTree {
             Some(node_ref) => node_ref,
         };
 
-        if !utils::get_key_bit(&key, depth) {
+        if depth < key.bit_length() && !key.get_bit(depth) {
             // Off-path nodes are always full nodes.
             let idx = st.add_full_node(node_ref.borrow().extract())?;
             return Ok(SubtreePointer {
@@ -249,6 +257,13 @@ impl UrkelTree {
                     ..Default::default()
                 };
 
+                summary.leaf_node = self._get_path(
+                    ctx,
+                    noderef_as!(node_ref, Internal).leaf_node.clone(),
+                    depth,
+                    key,
+                    st,
+                )?;
                 summary.left = self._get_path(
                     ctx,
                     noderef_as!(node_ref, Internal).left.clone(),

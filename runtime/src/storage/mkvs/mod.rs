@@ -18,7 +18,7 @@ pub enum LogEntryKind {
 }
 
 /// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Hash)]
 pub struct LogEntry {
     /// The key that was inserted or deleted.
     #[serde(with = "serde_bytes")]

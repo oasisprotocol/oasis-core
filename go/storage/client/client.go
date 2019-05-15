@@ -540,7 +540,7 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 	return &subtree, nil
 }
 
-func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth uint8) (*api.Subtree, error) {
 	var req storage.GetPathRequest
 	req.Root, _ = root.MarshalBinary()
 	req.Key, _ = key.MarshalBinary()

@@ -3,25 +3,22 @@ use std::sync::Arc;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*, utils::*},
-};
+use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Remove a key from the tree and return true if the tree was modified.
     pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
-        let hkey = Hash::digest_bytes(key);
+        let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
-        let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, hkey)?;
-        match self.pending_write_log.get_mut(&hkey) {
+        let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key)?;
+        match self.pending_write_log.get_mut(&boxed_key) {
             None => {
                 self.pending_write_log.insert(
-                    hkey,
+                    boxed_key.clone(),
                     PendingLogEntry {
-                        key: key.to_vec(),
+                        key: boxed_key,
                         value: None,
                         existed: changed,
                     },
@@ -41,7 +38,7 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
-        key: Hash,
+        key: &Key,
     ) -> Fallible<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
@@ -58,78 +55,115 @@ impl UrkelTree {
                 return Ok((NodePointer::null_ptr(), false, None));
             }
             NodeKind::Internal => {
+                // Remove from internal node and recursively collapse the path, if needed.
                 let node_ref = node_ref.unwrap();
                 let (changed, old_val) = {
-                    let go_right = get_key_bit(&key, depth);
-
-                    let child = if go_right {
-                        noderef_as!(node_ref, Internal).right.clone()
+                    let (new_child, changed, old_val) = if key.bit_length() == depth {
+                        self._remove(
+                            ctx,
+                            noderef_as!(node_ref, Internal).leaf_node.clone(),
+                            depth,
+                            key,
+                        )?
+                    } else if key.get_bit(depth) {
+                        self._remove(
+                            ctx,
+                            noderef_as!(node_ref, Internal).right.clone(),
+                            depth + 1,
+                            key,
+                        )?
                     } else {
-                        noderef_as!(node_ref, Internal).left.clone()
+                        self._remove(
+                            ctx,
+                            noderef_as!(node_ref, Internal).left.clone(),
+                            depth + 1,
+                            key,
+                        )?
                     };
 
-                    let (child, changed, old_val) = self._remove(ctx, child, depth + 1, key)?;
-
-                    if go_right {
-                        noderef_as_mut!(node_ref, Internal).right = child;
+                    if key.bit_length() == depth {
+                        noderef_as_mut!(node_ref, Internal).leaf_node = new_child;
+                    } else if key.get_bit(depth) {
+                        noderef_as_mut!(node_ref, Internal).right = new_child;
                     } else {
-                        noderef_as_mut!(node_ref, Internal).left = child;
+                        noderef_as_mut!(node_ref, Internal).left = new_child;
                     }
                     (changed, old_val)
                 };
-                let (int_left, int_right) = (
-                    noderef_as!(node_ref, Internal).left.clone(),
-                    noderef_as!(node_ref, Internal).right.clone(),
-                );
 
                 let lr_id = NodeID {
-                    path: key,
+                    path: &key,
                     depth: depth + 1,
                 };
 
-                let left_ref = self.cache.borrow_mut().deref_node_ptr(
+                let remaining_leaf = self.cache.borrow_mut().deref_node_ptr(
                     ctx,
-                    lr_id.clone(),
-                    int_left.clone(),
+                    NodeID {
+                        path: &key,
+                        depth: depth,
+                    },
+                    noderef_as!(node_ref, Internal).leaf_node.clone(),
                     None,
                 )?;
-                match left_ref {
-                    None => {
-                        let right_ref = self.cache.borrow_mut().deref_node_ptr(
-                            ctx,
-                            lr_id,
-                            int_right.clone(),
-                            None,
-                        )?;
-                        let right_ref = match right_ref {
+                let remaining_left = self.cache.borrow_mut().deref_node_ptr(
+                    ctx,
+                    lr_id.clone(),
+                    noderef_as!(node_ref, Internal).left.clone(),
+                    None,
+                )?;
+                let remaining_right = self.cache.borrow_mut().deref_node_ptr(
+                    ctx,
+                    lr_id.clone(),
+                    noderef_as!(node_ref, Internal).right.clone(),
+                    None,
+                )?;
+
+                // If only one child or leaf node remains collapse it, if it's a leaf.
+                match remaining_leaf {
+                    Some(_) => match remaining_left {
+                        Some(_) => (),
+                        None => match remaining_right {
                             None => {
-                                // No more children, delete the internal node as well.
-                                self.cache.borrow_mut().try_remove_node(ptr.clone());
-                                return Ok((NodePointer::null_ptr(), true, old_val));
+                                return Ok((
+                                    noderef_as!(node_ref, Internal).leaf_node.clone(),
+                                    true,
+                                    old_val,
+                                ))
                             }
-                            Some(node_ref) => node_ref,
-                        };
-                        if let NodeBox::Leaf(_) = *right_ref.borrow() {
-                            // Left is None, right is a leaf, merge nodes back.
-                            return Ok((int_right.clone(), true, old_val));
-                        };
-                    }
-                    Some(left_ref) => {
-                        if let NodeBox::Leaf(_) = *left_ref.borrow() {
-                            let right_ref = self.cache.borrow_mut().deref_node_ptr(
-                                ctx,
-                                lr_id,
-                                int_right.clone(),
-                                None,
-                            )?;
-                            if let None = right_ref {
-                                // Right is None, left is a leaf, merge nodes back.
-                                return Ok((int_left.clone(), true, old_val));
-                            };
-                        }
-                    }
+                            Some(_) => (),
+                        },
+                    },
+                    None => match remaining_left {
+                        Some(_) => match classify_noderef!(?remaining_left) {
+                            NodeKind::Leaf => match remaining_right {
+                                None => {
+                                    return Ok((
+                                        noderef_as!(node_ref, Internal).left.clone(),
+                                        true,
+                                        old_val,
+                                    ));
+                                }
+                                Some(_) => (),
+                            },
+                            _ => (),
+                        },
+                        None => match remaining_right {
+                            None => (),
+                            Some(_) => match classify_noderef!(?remaining_right) {
+                                NodeKind::Leaf => {
+                                    return Ok((
+                                        noderef_as!(node_ref, Internal).right.clone(),
+                                        true,
+                                        old_val,
+                                    ));
+                                }
+                                _ => (),
+                            },
+                        },
+                    },
                 };
 
+                // Two or more children including LeafNode remain, just mark dirty bit.
                 if changed {
                     if let NodeBox::Internal(ref mut int) = *node_ref.borrow_mut() {
                         int.clean = false;
@@ -142,7 +176,7 @@ impl UrkelTree {
             NodeKind::Leaf => {
                 // Remove from leaf node.
                 let node_ref = node_ref.unwrap();
-                if noderef_as!(node_ref, Leaf).key == key {
+                if noderef_as!(node_ref, Leaf).key == *key {
                     let old_val = noderef_as!(node_ref, Leaf).value.borrow().value.clone();
                     self.cache.borrow_mut().try_remove_node(ptr.clone());
                     return Ok((NodePointer::null_ptr(), true, old_val));

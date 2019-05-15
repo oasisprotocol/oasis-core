@@ -36,6 +36,7 @@ pub struct SubtreePointer {
 pub struct InternalNodeSummary {
     pub invalid: bool,
 
+    pub leaf_node: SubtreePointer,
     pub left: SubtreePointer,
     pub right: SubtreePointer,
 }
@@ -161,10 +162,11 @@ impl Marshal for SubtreePointer {
     }
 }
 
-const SUMMARY_NODE_LEN: usize = 2 * SUBTREE_POINTER_LEN;
+const SUMMARY_NODE_LEN: usize = 3 * SUBTREE_POINTER_LEN;
 impl Marshal for InternalNodeSummary {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(SUMMARY_NODE_LEN);
+        result.append(&mut self.leaf_node.marshal_binary()?);
         result.append(&mut self.left.marshal_binary()?);
         result.append(&mut self.right.marshal_binary()?);
         Ok(result)
@@ -175,7 +177,8 @@ impl Marshal for InternalNodeSummary {
             Err(SubtreeError::Malformed.into())
         } else {
             let mut size = 0usize;
-            size += self.left.unmarshal_binary(&data[0..])?;
+            size += self.leaf_node.unmarshal_binary(&data[size..])?;
+            size += self.left.unmarshal_binary(&data[size..])?;
             size += self.right.unmarshal_binary(&data[size..])?;
             self.invalid = false;
             Ok(size)

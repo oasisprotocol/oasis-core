@@ -268,7 +268,7 @@ func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth uint8) (*api.Subtree, error) {
 	// TODO: Don't create a new root every time (issue #1580).
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {

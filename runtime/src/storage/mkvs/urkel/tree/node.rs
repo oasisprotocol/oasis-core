@@ -24,12 +24,12 @@ pub trait Node {
 /// `NodeID` is a root-relative identifier which uniquely identifies a node
 /// under a given root.
 #[derive(Clone, Copy, Debug)]
-pub struct NodeID {
-    pub path: Hash,
+pub struct NodeID<'a> {
+    pub path: &'a Key,
     pub depth: u8,
 }
 
-impl NodeID {
+impl<'a> NodeID<'a> {
     /// Return a copy of this `NodeID` with a different depth.
     pub fn at_depth(&self, depth: u8) -> NodeID {
         NodeID {
@@ -156,6 +156,34 @@ impl NodePointer {
             ..Default::default()
         }))
     }
+
+    // Make deep copy of the Pointer to LeafNode excluding LRU and DBInternal.
+    //
+    // Panics, if it's called on non-leaf node pointer.
+    fn copy_leaf_ptr(&self) -> NodePtrRef {
+        if !self.has_node() {
+            return Rc::new(RefCell::new(NodePointer {
+                node: None,
+                hash: Hash::empty_hash(),
+                ..Default::default()
+            }));
+        }
+
+        if !self.clean {
+            panic!("urkel: copy_leaf_ptr called on dirty pointer");
+        }
+        if let Some(ref some_node) = self.node {
+            let nyoo = noderef_as!(some_node, Leaf).copy();
+            Rc::new(RefCell::new(NodePointer {
+                clean: true,
+                hash: self.hash,
+                node: Some(Rc::new(RefCell::new(NodeBox::Leaf(nyoo)))),
+                ..Default::default()
+            }))
+        } else {
+            panic!("urkel: copy_leaf_ptr called on a non-leaf pointer");
+        }
+    }
 }
 
 impl CacheItem for NodePointer {
@@ -189,6 +217,7 @@ impl Eq for NodePointer {}
 pub struct InternalNode {
     pub clean: bool,
     pub hash: Hash,
+    pub leaf_node: NodePtrRef,
     pub left: NodePtrRef,
     pub right: NodePtrRef,
 }
@@ -203,17 +232,20 @@ impl Node for InternalNode {
     }
 
     fn update_hash(&mut self) {
+        let hash_leaf_node = self.leaf_node.borrow().hash;
         let hash_left = self.left.borrow().hash;
         let hash_right = self.right.borrow().hash;
         self.hash = Hash::digest_bytes_list(&[
             &[NodeKind::Internal as u8],
+            hash_leaf_node.as_ref(),
             hash_left.as_ref(),
             hash_right.as_ref(),
         ]);
     }
 
     fn validate(&mut self, h: Hash) -> Fallible<()> {
-        if !self.left.borrow().clean || !self.right.borrow().clean {
+        if !self.leaf_node.borrow().clean || !self.left.borrow().clean || !self.right.borrow().clean
+        {
             Err(TreeError::DirtyPointers.into())
         } else {
             self.update_hash();
@@ -237,6 +269,7 @@ impl Node for InternalNode {
         Rc::new(RefCell::new(NodeBox::Internal(InternalNode {
             clean: true,
             hash: self.hash,
+            leaf_node: self.leaf_node.borrow().copy_leaf_ptr(),
             left: self.left.borrow().extract(),
             right: self.right.borrow().extract(),
         })))
@@ -248,7 +281,9 @@ impl PartialEq for InternalNode {
         if self.clean && other.clean {
             self.hash == other.hash
         } else {
-            self.left == other.left && self.right == other.right
+            self.leaf_node == other.leaf_node
+                && self.left == other.left
+                && self.right == other.right
         }
     }
 }
@@ -260,8 +295,21 @@ impl Eq for InternalNode {}
 pub struct LeafNode {
     pub clean: bool,
     pub hash: Hash,
-    pub key: Hash,
+    pub key: Key,
     pub value: ValuePtrRef,
+}
+
+impl LeafNode {
+    pub fn copy(&self) -> LeafNode {
+        let node = LeafNode {
+            clean: self.clean,
+            hash: self.hash.clone(),
+            key: self.key.to_owned(),
+            value: self.value.borrow().copy(),
+        };
+
+        return node;
+    }
 }
 
 impl Node for LeafNode {
@@ -306,7 +354,7 @@ impl Node for LeafNode {
         Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             clean: true,
             hash: self.hash,
-            key: self.key,
+            key: self.key.clone(),
             value: self.value.borrow().extract(),
         })))
     }
@@ -323,6 +371,45 @@ impl PartialEq for LeafNode {
 }
 
 impl Eq for LeafNode {}
+
+pub type Key = Vec<u8>;
+
+pub trait KeyTrait {
+    /// Get a single bit from the given hash.
+    fn get_bit(&self, bit: u8) -> bool;
+    /// Set a single bit in the given hash and return the result. If bit>self, it resizes new Key.
+    fn set_bit(&self, bit: u8, val: bool) -> Key;
+    /// Returns the length of the key in bits.
+    fn bit_length(&self) -> u8;
+}
+
+impl KeyTrait for Key {
+    fn get_bit(&self, bit: u8) -> bool {
+        (self[(bit / 8) as usize] & (1 << (7 - (bit % 8)))) != 0
+    }
+
+    fn set_bit(&self, bit: u8, val: bool) -> Key {
+        let mut k: Key;
+        if bit as usize >= self.len() * 8 {
+            k = vec![0; bit as usize / 8 + 1];
+            k[0..self.len()].clone_from_slice(&self);
+        } else {
+            k = self.clone();
+        }
+
+        let mask = (1 << (7 - (bit % 8))) as u8;
+        if val {
+            k[(bit / 8) as usize] |= mask;
+        } else {
+            k[(bit / 8) as usize] &= !mask;
+        }
+        k
+    }
+
+    fn bit_length(&self) -> u8 {
+        self.len() as u8 * 8
+    }
+}
 
 pub type Value = Vec<u8>;
 /// A reference-counted value pointer.
@@ -370,6 +457,16 @@ impl ValuePointer {
             ..Default::default()
         }))
     }
+
+    // Makes a deep copy of the Value.
+    pub fn copy(&self) -> ValuePtrRef {
+        Rc::new(RefCell::new(ValuePointer {
+            clean: true,
+            hash: self.hash.clone(),
+            value: self.value.clone().to_owned(),
+            ..Default::default()
+        }))
+    }
 }
 
 impl CacheItem for ValuePointer {
@@ -400,42 +497,3 @@ impl PartialEq for ValuePointer {
 }
 
 impl Eq for ValuePointer {}
-
-#[macro_export]
-macro_rules! classify_noderef {
-    (? $e:expr) => {{
-        let kind = match $e {
-            None => NodeKind::None,
-            Some(ref node) => classify_noderef!(node),
-        };
-        kind
-    }};
-    ($e:expr) => {{
-        // Ensure references don't leak outside this macro.
-        let kind = match *$e.borrow() {
-            NodeBox::Internal(_) => NodeKind::Internal,
-            NodeBox::Leaf(_) => NodeKind::Leaf,
-        };
-        kind
-    }};
-}
-
-#[macro_export]
-macro_rules! noderef_as {
-    ($ref:expr, $type:ident) => {
-        match *$ref.borrow() {
-            NodeBox::$type(ref deref) => deref,
-            _ => unreachable!(),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! noderef_as_mut {
-    ($ref:expr, $type:ident) => {
-        match *$ref.borrow_mut() {
-            NodeBox::$type(ref mut deref) => deref,
-            _ => unreachable!(),
-        }
-    };
-}

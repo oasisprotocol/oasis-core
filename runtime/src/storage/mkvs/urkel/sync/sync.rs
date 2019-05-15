@@ -36,7 +36,7 @@ pub trait ReadSync {
         &mut self,
         ctx: Context,
         root_hash: Hash,
-        key: Hash,
+        key: &Key,
         start_depth: u8,
     ) -> Fallible<Subtree>;
 

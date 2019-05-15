@@ -30,7 +30,7 @@ func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeI
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
-	path := hash.Hash{}
+	path := internal.Key{}
 
 	st := &syncer.Subtree{}
 	rootPtr, err := t.doGetSubtree(ctx, subtreeRoot, 0, path, st, maxDepth)
@@ -49,7 +49,7 @@ func (t *Tree) doGetSubtree(
 	ctx context.Context,
 	ptr *internal.Pointer,
 	depth uint8,
-	path hash.Hash,
+	path internal.Key,
 	st *syncer.Subtree,
 	maxDepth uint8,
 ) (syncer.SubtreePointer, error) {
@@ -82,15 +82,29 @@ func (t *Tree) doGetSubtree(
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
 
+		// Leaf node.
+		leafNodePtr, err := t.doGetSubtree(ctx, n.LeafNode, depth, path, st, maxDepth)
+		if err != nil {
+			return syncer.SubtreePointer{}, err
+		}
+		s.LeafNode = leafNodePtr
+
+		// To traverse subtrees resize path bit vector, if needed.
+		if path.BitLength() == int(depth) {
+			var newPath = make(Key, len(path)+1)
+			copy(newPath, path)
+			path = newPath
+		}
+
 		// Left subtree.
-		leftPtr, err := t.doGetSubtree(ctx, n.Left, depth+1, setKeyBit(path, depth, false), st, maxDepth)
+		leftPtr, err := t.doGetSubtree(ctx, n.Left, depth+1, path.SetBit(depth, false), st, maxDepth)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.Left = leftPtr
 
 		// Right subtree.
-		rightPtr, err := t.doGetSubtree(ctx, n.Right, depth+1, setKeyBit(path, depth, true), st, maxDepth)
+		rightPtr, err := t.doGetSubtree(ctx, n.Right, depth+1, path.SetBit(depth, true), st, maxDepth)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
@@ -121,7 +135,7 @@ func (t *Tree) doGetSubtree(
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*syncer.Subtree, error) {
 	if !root.Equal(&t.cache.pendingRoot.Hash) {
 		return nil, syncer.ErrInvalidRoot
 	}
@@ -151,7 +165,7 @@ func (t *Tree) doGetPath(
 	ctx context.Context,
 	ptr *internal.Pointer,
 	depth uint8,
-	key hash.Hash,
+	key internal.Key,
 	st *syncer.Subtree,
 ) (syncer.SubtreePointer, error) {
 	// Abort in case the context is cancelled.
@@ -161,7 +175,7 @@ func (t *Tree) doGetPath(
 	default:
 	}
 
-	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, &key)
+	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, key)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -169,7 +183,7 @@ func (t *Tree) doGetPath(
 		return syncer.SubtreePointer{Index: syncer.InvalidSubtreeIndex, Valid: true}, nil
 	}
 
-	if !getKeyBit(key, depth) {
+	if int(depth) < key.BitLength() && !key.GetBit(depth) {
 		// Off-path nodes are always full nodes.
 		idx, err := st.AddFullNode(node.Extract())
 		if err != nil {
@@ -182,6 +196,13 @@ func (t *Tree) doGetPath(
 	case *internal.InternalNode:
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
+
+		// Leaf node.
+		leafNodePtr, err := t.doGetPath(ctx, n.LeafNode, depth, key, st)
+		if err != nil {
+			return syncer.SubtreePointer{}, err
+		}
+		s.LeafNode = leafNodePtr
 
 		// Left subtree.
 		leftPtr, err := t.doGetPath(ctx, n.Left, depth+1, key, st)

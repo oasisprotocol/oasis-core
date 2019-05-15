@@ -75,24 +75,30 @@ func (s *SubtreePointer) Equal(other *SubtreePointer) bool {
 type InternalNodeSummary struct {
 	invalid bool
 
-	Left  SubtreePointer
-	Right SubtreePointer
+	LeafNode SubtreePointer
+	Left     SubtreePointer
+	Right    SubtreePointer
 }
 
 // MarshalBinary encodes an internal node summary into binary form.
 func (s *InternalNodeSummary) MarshalBinary() (data []byte, err error) {
+	var leafNode []byte
 	var left []byte
 	var right []byte
 
+	if leafNode, err = s.LeafNode.MarshalBinary(); err != nil {
+		return
+	}
 	if left, err = s.Left.MarshalBinary(); err != nil {
 		return
 	}
 	if right, err = s.Right.MarshalBinary(); err != nil {
 		return
 	}
-	data = make([]byte, len(left)+len(right))
-	copy(data[:len(left)], left)
-	copy(data[len(left):], right)
+	data = make([]byte, len(leafNode)+len(left)+len(right))
+	copy(data[:len(leafNode)], leafNode)
+	copy(data[len(leafNode):len(leafNode)+len(left)], left)
+	copy(data[len(leafNode)+len(left):], right)
 	return
 }
 
@@ -104,26 +110,32 @@ func (s *InternalNodeSummary) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node summary.
 func (s *InternalNodeSummary) SizedUnmarshalBinary(data []byte) (int, error) {
-	left := SubtreePointer{}
+	var leafNodeLen int
 	var leftLen int
 	var rightLen int
 	var err error
-	if leftLen, err = left.SizedUnmarshalBinary(data); err != nil {
+	leafNode := SubtreePointer{}
+	if leafNodeLen, err = leafNode.SizedUnmarshalBinary(data); err != nil {
+		return 0, err
+	}
+	left := SubtreePointer{}
+	if leftLen, err = left.SizedUnmarshalBinary(data[leafNodeLen:]); err != nil {
 		return 0, err
 	}
 	right := SubtreePointer{}
-	if rightLen, err = right.SizedUnmarshalBinary(data[leftLen:]); err != nil {
+	if rightLen, err = right.SizedUnmarshalBinary(data[leafNodeLen+leftLen:]); err != nil {
 		return 0, err
 	}
+	s.LeafNode = leafNode
 	s.Left = left
 	s.Right = right
 	s.invalid = false
-	return leftLen + rightLen, nil
+	return leafNodeLen + leftLen + rightLen, nil
 }
 
 // Equal compares a node summary with some other node summary.
 func (s *InternalNodeSummary) Equal(other *InternalNodeSummary) bool {
-	return s.Left.Equal(&other.Left) && s.Right.Equal(&other.Right)
+	return s.LeafNode.Equal(&other.LeafNode) && s.Left.Equal(&other.Left) && s.Right.Equal(&other.Right)
 }
 
 // Subtree is a compressed representation of a subtree.

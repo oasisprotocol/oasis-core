@@ -30,7 +30,7 @@ func (c *StatsCollector) GetSubtree(ctx context.Context, root hash.Hash, id inte
 	return c.rs.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (c *StatsCollector) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*Subtree, error) {
+func (c *StatsCollector) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*Subtree, error) {
 	c.PathFetches++
 	return c.rs.GetPath(ctx, root, key, startDepth)
 }

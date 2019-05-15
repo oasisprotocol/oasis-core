@@ -36,7 +36,7 @@ impl ReadSync for HostReadSyncer {
     ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetSubtreeRequest {
             root_hash: root_hash,
-            node_path: id.path,
+            node_path: id.path.clone(),
             node_depth: id.depth,
             max_depth: max_depth,
         };
@@ -55,12 +55,12 @@ impl ReadSync for HostReadSyncer {
         &mut self,
         ctx: Context,
         root_hash: Hash,
-        key: Hash,
+        key: &Key,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetPathRequest {
             root_hash: root_hash,
-            key: key,
+            key: key.clone(),
             start_depth: start_depth,
         };
         match self.protocol.make_request(ctx, req) {
@@ -77,7 +77,7 @@ impl ReadSync for HostReadSyncer {
     fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
         let req = Body::HostStorageSyncGetNodeRequest {
             root_hash: root_hash,
-            node_path: id.path,
+            node_path: id.path.clone(),
             node_depth: id.depth,
         };
         match self.protocol.make_request(ctx, req) {

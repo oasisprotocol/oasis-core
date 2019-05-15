@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8, key hash.Hash) (*internal.Pointer, bool, error) {
-	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, &key)
+func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8, key internal.Key) (*internal.Pointer, bool, error) {
+	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, key)
 	if err != nil {
 		return nil, false, err
 	}
@@ -19,9 +18,12 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		// Remove from nil node.
 		return nil, false, nil
 	case *internal.InternalNode:
-		// Remove from internal node.
+		// Remove from internal node and recursively collapse the path, if
+		// needed.
 		var changed bool
-		if getKeyBit(key, depth) {
+		if key.BitLength() == int(depth) {
+			n.LeafNode, changed, err = t.doRemove(ctx, n.LeafNode, depth, key)
+		} else if key.GetBit(depth) {
 			n.Right, changed, err = t.doRemove(ctx, n.Right, depth+1, key)
 		} else {
 			n.Left, changed, err = t.doRemove(ctx, n.Left, depth+1, key)
@@ -31,37 +33,35 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		}
 
 		lrID := internal.NodeID{Path: key, Depth: depth + 1}
-		if node, err = t.cache.derefNodePtr(ctx, lrID, n.Left, nil); err != nil {
+		remainingLeaf, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, n.LeafNode, nil)
+		if err != nil {
+			return nil, false, err
+		}
+		remainingLeft, err := t.cache.derefNodePtr(ctx, lrID, n.Left, nil)
+		if err != nil {
+			return nil, false, err
+		}
+		remainingRight, err := t.cache.derefNodePtr(ctx, lrID, n.Right, nil)
+		if err != nil {
 			return nil, false, err
 		}
 
-		switch node.(type) {
-		case nil:
-			if node, err = t.cache.derefNodePtr(ctx, lrID, n.Right, nil); err != nil {
-				return nil, false, err
-			}
-
-			switch node.(type) {
-			case nil:
-				// No more children, delete the internal node as well.
-				t.cache.tryRemoveNode(ptr)
-				return nil, true, nil
+		// If only one child or leaf node remains collapse it, if it's a leaf.
+		if remainingLeaf != nil && remainingLeft == nil && remainingRight == nil {
+			return n.LeafNode, true, nil
+		} else if remainingLeaf == nil && remainingLeft != nil && remainingRight == nil {
+			switch remainingLeft.(type) {
 			case *internal.LeafNode:
-				// Left is nil, right is leaf, merge nodes back.
-				return n.Right, true, nil
-			}
-		case *internal.LeafNode:
-			if node, err = t.cache.derefNodePtr(ctx, lrID, n.Right, nil); err != nil {
-				return nil, false, err
-			}
-
-			switch node.(type) {
-			case nil:
-				// Right is nil, left is leaf, merge nodes back.
 				return n.Left, true, nil
+			}
+		} else if remainingLeaf == nil && remainingLeft == nil && remainingRight != nil {
+			switch remainingRight.(type) {
+			case *internal.LeafNode:
+				return n.Right, true, nil
 			}
 		}
 
+		// Two or more children including LeafNode remain, just mark dirty bit.
 		if changed {
 			n.Clean = false
 			ptr.Clean = false
@@ -70,7 +70,7 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		return ptr, changed, nil
 	case *internal.LeafNode:
 		// Remove from leaf node.
-		if n.Key.Equal(&key) {
+		if n.Key.Equal(key) {
 			t.cache.tryRemoveNode(ptr)
 			return nil, true, nil
 		}

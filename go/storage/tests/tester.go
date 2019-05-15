@@ -121,7 +121,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	}
 	var root hash.Hash
 	root.Empty()
-	expectedNewRoot := [...]byte{82, 3, 202, 16, 125, 182, 175, 25, 51, 188, 131, 181, 118, 76, 249, 15, 53, 89, 59, 224, 95, 75, 239, 182, 157, 30, 80, 48, 237, 108, 90, 22}
+	expectedNewRoot := [...]byte{0x3a, 0x6f, 0xc8, 0x7f, 0x1b, 0x49, 0x97, 0xd4, 0x6e, 0x47, 0x69, 0x93, 0x24, 0x80, 0xb0, 0xa1, 0x97, 0xae, 0x95, 0x8a, 0x5c, 0xd4, 0x8b, 0x9c, 0xf, 0xc2, 0x86, 0xa3, 0xf3, 0xeb, 0x9b, 0xbf}
 
 	mkvsReceipt, err := backend.Apply(context.Background(), root, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply()")
@@ -136,7 +136,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	require.NotEqual(t, root, rb.Roots[0], "mkvs receipt root")
 	require.EqualValues(t, expectedNewRoot, rb.Roots[0], "mkvs receipt root")
 
-	var emptyPath hash.Hash
+	var emptyPath = api.MKVSKey{}
 
 	// Get a subtree summary of the new root.
 	st, err := backend.GetSubtree(context.Background(), rb.Roots[0], api.NodeID{Path: emptyPath, Depth: 0}, 10)

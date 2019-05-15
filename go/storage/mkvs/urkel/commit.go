@@ -59,6 +59,9 @@ func doCommit(ctx context.Context, cache *cache, upd *cacheUpdates, batch db.Bat
 			break
 		}
 
+		if _, err = doCommit(ctx, cache, upd, batch, n.LeafNode); err != nil {
+			return
+		}
 		if _, err = doCommit(ctx, cache, upd, batch, n.Left); err != nil {
 			return
 		}

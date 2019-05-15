@@ -2,10 +2,7 @@ use std::{cmp::max, collections::BTreeMap, iter::repeat, sync::Arc};
 
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*, utils::*},
-};
+use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Traverse the tree and return some statistics about it.
@@ -18,14 +15,7 @@ impl UrkelTree {
             ..Default::default()
         };
         let pending_root = self.cache.borrow().get_pending_root();
-        self._stats(
-            &ctx,
-            &mut stats,
-            pending_root,
-            Hash::empty_hash(),
-            0,
-            max_depth,
-        );
+        self._stats(&ctx, &mut stats, pending_root, Key::new(), 0, max_depth);
         stats
     }
 
@@ -34,7 +24,7 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         stats: &mut UrkelStats,
         ptr: NodePtrRef,
-        path: Hash,
+        path: Key,
         depth: u8,
         max_depth: u8,
     ) -> u8 {
@@ -52,7 +42,7 @@ impl UrkelTree {
             .deref_node_ptr(
                 ctx,
                 NodeID {
-                    path: path,
+                    path: &path,
                     depth: depth,
                 },
                 ptr,
@@ -73,7 +63,7 @@ impl UrkelTree {
                     ctx,
                     stats,
                     noderef_as!(node_ref, Internal).left.clone(),
-                    set_key_bit(&path, depth, false),
+                    path.set_bit(depth, false),
                     depth + 1,
                     max_depth,
                 );
@@ -87,7 +77,7 @@ impl UrkelTree {
                     ctx,
                     stats,
                     noderef_as!(node_ref, Internal).right.clone(),
-                    set_key_bit(&path, depth, true),
+                    path.set_bit(depth, true),
                     depth + 1,
                     max_depth,
                 );
@@ -129,7 +119,7 @@ impl UrkelTree {
     pub fn dump(&mut self, ctx: Context, w: &mut impl ::std::io::Write) -> ::std::io::Result<()> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
-        self._dump(&ctx, w, pending_root, Hash::empty_hash(), 0)?;
+        self._dump(&ctx, w, pending_root, Key::new(), 0)?;
         writeln!(w, "")
     }
 
@@ -138,7 +128,7 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         w: &mut impl ::std::io::Write,
         ptr: NodePtrRef,
-        path: Hash,
+        path: Key,
         depth: u8,
     ) -> ::std::io::Result<()> {
         let prefix = repeat(" ").take(depth as usize * 2).collect::<String>();
@@ -149,7 +139,7 @@ impl UrkelTree {
             .deref_node_ptr(
                 ctx,
                 NodeID {
-                    path: path,
+                    path: &path,
                     depth: depth,
                 },
                 ptr,
@@ -176,7 +166,7 @@ impl UrkelTree {
                     ctx,
                     w,
                     noderef_as!(some_node_ref, Internal).left.clone(),
-                    set_key_bit(&path, depth, false),
+                    path.set_bit(depth, false),
                     depth + 1,
                 )?;
                 writeln!(w, ",")?;
@@ -184,7 +174,7 @@ impl UrkelTree {
                     ctx,
                     w,
                     noderef_as!(some_node_ref, Internal).right.clone(),
-                    set_key_bit(&path, depth, true),
+                    path.set_bit(depth, true),
                     depth + 1,
                 )?;
                 writeln!(w, "")?;

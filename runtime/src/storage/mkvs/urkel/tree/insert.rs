@@ -3,25 +3,23 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*, utils::*},
-};
+use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Insert a key/value pair into the tree.
     pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Fallible<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
-        let hkey = Hash::digest_bytes(key);
         let pending_root = self.cache.borrow().get_pending_root();
+        let boxed_key = key.to_vec();
         let boxed_val = value.to_vec();
 
-        let (new_root, old_val) = self._insert(&ctx, pending_root, 0, hkey, boxed_val.clone())?;
+        let (new_root, old_val) =
+            self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val.clone())?;
         let existed = old_val != None;
-        match self.pending_write_log.get_mut(&hkey) {
+        match self.pending_write_log.get_mut(&boxed_key) {
             None => {
                 self.pending_write_log.insert(
-                    hkey,
+                    boxed_key,
                     PendingLogEntry {
                         key: key.to_vec(),
                         value: Some(boxed_val.clone()),
@@ -43,7 +41,7 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
-        key: Hash,
+        key: &Key,
         val: Value,
     ) -> Fallible<(NodePtrRef, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
@@ -63,10 +61,11 @@ impl UrkelTree {
             NodeKind::Internal => {
                 let node_ref = node_ref.unwrap();
 
-                let go_right = get_key_bit(&key, depth);
                 let rec_node = match *node_ref.borrow() {
                     NodeBox::Internal(ref int) => {
-                        if go_right {
+                        if key.bit_length() == depth {
+                            int.leaf_node.clone()
+                        } else if key.get_bit(depth) {
                             int.right.clone()
                         } else {
                             int.left.clone()
@@ -74,9 +73,16 @@ impl UrkelTree {
                     }
                     _ => unreachable!(),
                 };
-                let (new_root, old_val) = self._insert(ctx, rec_node, depth + 1, key, val)?;
+                let mut new_depth = depth + 1;
+                if key.bit_length() == depth {
+                    new_depth = depth;
+                }
 
-                if go_right {
+                let (new_root, old_val) = self._insert(ctx, rec_node, new_depth, key, val)?;
+
+                if key.bit_length() == depth {
+                    noderef_as_mut!(node_ref, Internal).leaf_node = new_root;
+                } else if key.get_bit(depth) {
                     noderef_as_mut!(node_ref, Internal).right = new_root;
                 } else {
                     noderef_as_mut!(node_ref, Internal).left = new_root;
@@ -91,10 +97,20 @@ impl UrkelTree {
                 return Ok((ptr.clone(), old_val));
             }
             NodeKind::Leaf => {
+                // If the key matches, we can just update the value.
                 let node_ref = node_ref.unwrap();
+                let mut pointers: (NodePtrRef, NodePtrRef, NodePtrRef); // leaf_node, left, right
+                let none_ptr = Rc::new(RefCell::new(NodePointer {
+                    node: None,
+                    ..Default::default()
+                }));
+
+                let mut leaf_key = Key::new();
                 if let NodeBox::Leaf(ref mut leaf) = *node_ref.borrow_mut() {
+                    leaf_key = leaf.key.clone();
+
                     // Should always succeed.
-                    if leaf.key == key {
+                    if leaf_key == *key {
                         match leaf.value.borrow().value {
                             // TODO check comparison; hash
                             Some(ref leaf_val) => {
@@ -113,41 +129,74 @@ impl UrkelTree {
                     }
                 }
 
-                let existing_bit = if let NodeBox::Leaf(ref leaf) = *node_ref.borrow() {
-                    get_key_bit(&leaf.key, depth)
-                } else {
-                    unreachable!();
-                };
-                let new_bit = get_key_bit(&key, depth);
-
-                let none_ptr = Rc::new(RefCell::new(NodePointer {
-                    node: None,
-                    ..Default::default()
-                }));
-                let pointers = if new_bit != existing_bit {
-                    if existing_bit {
+                // If the key mismatches, three cases are possible:
+                if key.bit_length() == depth {
+                    // Case 1: key is a prefix of n.Key
+                    pointers = if leaf_key.get_bit(depth) {
                         (
-                            /* left */ self.cache.borrow_mut().new_leaf_node(key, val),
+                            /* leaf_node */
+                            self.cache.borrow_mut().new_leaf_node(key, val),
+                            /* left */ none_ptr.clone(),
                             /* right */ ptr.clone(),
                         )
                     } else {
                         (
+                            /* leaf_node */
+                            self.cache.borrow_mut().new_leaf_node(key, val),
                             /* left */ ptr.clone(),
+                            /* right */ none_ptr.clone(),
+                        )
+                    }
+                } else if leaf_key.bit_length() == depth {
+                    // Case 2: n.Key is a prefix of key
+                    pointers = if key.get_bit(depth) {
+                        (
+                            /* leaf_node */ ptr.clone(),
+                            /* left */ none_ptr.clone(),
                             /* right */ self.cache.borrow_mut().new_leaf_node(key, val),
+                        )
+                    } else {
+                        (
+                            /* leaf_node */ ptr.clone(),
+                            /* left */ self.cache.borrow_mut().new_leaf_node(key, val),
+                            /* right */ none_ptr.clone(),
                         )
                     }
                 } else {
-                    let (new_root, _) = self._insert(ctx, ptr.clone(), depth + 1, key, val)?;
-                    if existing_bit {
-                        (none_ptr.clone(), new_root) // (left, right)
+                    // Case 3: length of common prefix of n.Key and key is shorter than
+                    //         len(n.Key) and len(key)
+                    pointers = if key.get_bit(depth) != leaf_key.get_bit(depth) {
+                        if leaf_key.get_bit(depth) {
+                            (
+                                /* leaf_node */ none_ptr.clone(),
+                                /* left */
+                                self.cache.borrow_mut().new_leaf_node(key, val),
+                                /* right */ ptr.clone(),
+                            )
+                        } else {
+                            (
+                                /* leaf_node */ none_ptr.clone(),
+                                /* left */ ptr.clone(),
+                                /* right */
+                                self.cache.borrow_mut().new_leaf_node(key, val),
+                            )
+                        }
                     } else {
-                        (new_root, none_ptr.clone()) // (left, right)
-                    }
-                };
+                        let (new_root, _) = self._insert(ctx, ptr.clone(), depth + 1, key, val)?;
+                        if leaf_key.get_bit(depth) {
+                            // (leaf_node, left, right)
+                            (none_ptr.clone(), none_ptr.clone(), new_root)
+                        } else {
+                            // (leaf_node, left, right)
+                            (none_ptr.clone(), new_root, none_ptr.clone())
+                        }
+                    };
+                }
+
                 let new_internal = self
                     .cache
                     .borrow_mut()
-                    .new_internal_node(pointers.0, pointers.1);
+                    .new_internal_node(pointers.0, pointers.1, pointers.2);
                 return Ok((new_internal.clone(), None));
             }
         }

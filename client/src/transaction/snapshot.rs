@@ -8,6 +8,7 @@ use ekiden_runtime::{
             urkel::{
                 marshal::Marshal,
                 sync::{NodeBox, NodeID, NodeRef, ReadSync, Subtree, Value},
+                Key,
             },
             UrkelTree, WriteLog,
         },
@@ -144,7 +145,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(root_hash.as_ref().to_vec());
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.as_ref().to_vec());
+            nid.set_path(id.path.clone());
             nid.set_depth(id.depth.into());
             nid
         });
@@ -164,12 +165,12 @@ impl ReadSync for RemoteReadSync {
         &mut self,
         _ctx: Context,
         root_hash: Hash,
-        key: Hash,
+        key: &Key,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
-        request.set_key(key.as_ref().to_vec());
+        request.set_key(key.marshal_binary().unwrap());
         request.set_start_depth(start_depth.into());
 
         let response = self
@@ -187,7 +188,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(root_hash.as_ref().to_vec());
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.as_ref().to_vec());
+            nid.set_path(id.path.clone());
             nid.set_depth(id.depth.into());
             nid
         });

@@ -9,8 +9,7 @@ import (
 )
 
 func TestSerializationLeafNode(t *testing.T) {
-	var key hash.Hash
-	key.FromBytes([]byte("a golden key"))
+	var key Key = []byte("a golden key")
 	var valueHash hash.Hash
 	valueHash.FromBytes([]byte("value"))
 
@@ -65,8 +64,7 @@ func TestSerializationInternalNode(t *testing.T) {
 }
 
 func TestHashLeafNode(t *testing.T) {
-	var key hash.Hash
-	key.FromBytes([]byte("a golden key"))
+	var key Key = []byte("a golden key")
 	var valueHash hash.Hash
 	valueHash.FromBytes([]byte("value"))
 
@@ -81,7 +79,7 @@ func TestHashLeafNode(t *testing.T) {
 
 	leafNode.UpdateHash()
 
-	require.Equal(t, leafNode.Hash.String(), "63a651558d7a38c9cf03ac1be3c6d38964b8c39568a10a84056728d024d09646")
+	require.Equal(t, leafNode.Hash.String(), "1736c1ac9fe17539c40e8b4c4d73c5c5a4a6e808c0b8247ebf4b1802ceace4d2")
 }
 
 func TestHashInternalNode(t *testing.T) {
@@ -97,12 +95,11 @@ func TestHashInternalNode(t *testing.T) {
 
 	intNode.UpdateHash()
 
-	require.Equal(t, intNode.Hash.String(), "4aed14e40ba69eae81b78b441b277f834b6202097a11ad3ba668c46f44d3717b")
+	require.Equal(t, intNode.Hash.String(), "51472b6931929c00f2f3150bcf23e6138d1991669b68958c6ca701e4c8b2f929")
 }
 
 func TestExtractLeafNode(t *testing.T) {
-	var key hash.Hash
-	key.FromBytes([]byte("a golden key"))
+	var key Key = []byte("a golden key")
 	var valueHash hash.Hash
 	valueHash.FromBytes([]byte("value"))
 

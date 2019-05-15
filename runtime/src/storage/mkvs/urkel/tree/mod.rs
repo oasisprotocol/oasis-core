@@ -1,8 +1,5 @@
 #[macro_use]
-mod tree;
-
-#[macro_use]
-mod node;
+mod macros;
 
 mod commit;
 mod debug;
@@ -11,8 +8,10 @@ mod insert;
 mod lookup;
 mod marshal;
 mod mkvs;
+mod node;
 mod remove;
 mod sync;
+mod tree;
 
 pub use commit::*;
 pub use debug::*;

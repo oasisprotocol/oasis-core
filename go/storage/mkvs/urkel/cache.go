@@ -72,9 +72,9 @@ func (c *cache) newLeafNodePtr(node *internal.LeafNode) *internal.Pointer {
 	}
 }
 
-func (c *cache) newLeafNode(key hash.Hash, val []byte) *internal.Pointer {
+func (c *cache) newLeafNode(key []byte, val []byte) *internal.Pointer {
 	return c.newLeafNodePtr(&internal.LeafNode{
-		Key:   key,
+		Key:   key[:],
 		Value: c.newValue(val),
 	})
 }
@@ -85,10 +85,11 @@ func (c *cache) newInternalNodePtr(node *internal.InternalNode) *internal.Pointe
 	}
 }
 
-func (c *cache) newInternalNode(left *internal.Pointer, right *internal.Pointer) *internal.Pointer {
+func (c *cache) newInternalNode(leafNode *internal.Pointer, left *internal.Pointer, right *internal.Pointer) *internal.Pointer {
 	return c.newInternalNodePtr(&internal.InternalNode{
-		Left:  left,
-		Right: right,
+		LeafNode: leafNode,
+		Left:     left,
+		Right:    right,
 	})
 }
 
@@ -180,9 +181,9 @@ func (c *cache) tryRemoveNode(ptr *internal.Pointer) {
 
 	switch n := ptr.Node.(type) {
 	case *internal.InternalNode:
-		// We can only remove internal nodes if they have no cached children
-		// as otherwise we would need to remove the whole subtree.
-		if (n.Left != nil && n.Left.Node != nil) || (n.Right != nil && n.Right.Node != nil) {
+		// We can only remove internal nodes if they have no cached children or
+		// leaf nodes as otherwise we would need to remove the whole subtree.
+		if (n.LeafNode != nil && n.LeafNode.Node != nil) || (n.Left != nil && n.Left.Node != nil) || (n.Right != nil && n.Right.Node != nil) {
 			return
 		}
 	}
@@ -247,7 +248,7 @@ func (c *cache) derefNodeID(ctx context.Context, id internal.NodeID) (*internal.
 		case nil:
 			return nil, nil
 		case *internal.InternalNode:
-			if getKeyBit(id.Path, d) {
+			if id.Path.GetBit(d) {
 				curPtr = n.Right
 			} else {
 				curPtr = n.Left
@@ -264,7 +265,7 @@ func (c *cache) derefNodeID(ctx context.Context, id internal.NodeID) (*internal.
 //
 // This may result in node database accesses or remote syncing if the node
 // is not available locally.
-func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *internal.Pointer, key *hash.Hash) (internal.Node, error) {
+func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *internal.Pointer, key internal.Key) (internal.Node, error) {
 	if ptr == nil {
 		return nil, nil
 	}
@@ -304,7 +305,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 			// If target key is known, we can try prefetching the whole path
 			// instead of one node at a time.
 			var st *syncer.Subtree
-			if st, err = c.rs.GetPath(ctx, c.syncRoot, *key, id.Depth); err != nil {
+			if st, err = c.rs.GetPath(ctx, c.syncRoot, key, id.Depth); err != nil {
 				return nil, err
 			}
 
@@ -368,7 +369,7 @@ func (c *cache) derefValue(ctx context.Context, v *internal.Value) ([]byte, erro
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*internal.Pointer, error) {
+func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath internal.Key, depth uint8) (*internal.Pointer, error) {
 	if c.prefetchDepth == 0 {
 		return nil, nil
 	}
@@ -481,6 +482,10 @@ func (c *cache) doReconstructSummary(
 		return nil, nil
 	}
 
+	leafNode, err := c.doReconstructSummary(st, s.LeafNode, depth, maxDepth)
+	if err != nil {
+		return nil, err
+	}
 	left, err := c.doReconstructSummary(st, s.Left, depth+1, maxDepth)
 	if err != nil {
 		return nil, err
@@ -490,5 +495,5 @@ func (c *cache) doReconstructSummary(
 		return nil, err
 	}
 
-	return c.newInternalNode(left, right), nil
+	return c.newInternalNode(leafNode, left, right), nil
 }

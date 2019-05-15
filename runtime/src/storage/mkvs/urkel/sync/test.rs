@@ -20,10 +20,10 @@ fn test_simple() {
             Context::background(),
             root,
             NodeID {
-                path: root,
+                path: &Key::new(),
                 depth: 0,
             },
-            10,
+            24,
         )
         .expect("get_subtree");
 

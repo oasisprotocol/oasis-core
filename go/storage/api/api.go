@@ -179,6 +179,9 @@ func (s *MKVSReceipt) UnmarshalCBOR(data []byte) error {
 // a node under a given root.
 type NodeID = urkel.NodeID
 
+// Key is a node's key spelled out from the root to the node.
+type MKVSKey = urkel.Key
+
 // Node is either an InternalNode or a LeafNode.
 type Node = urkel.Node
 
@@ -278,7 +281,8 @@ type Backend interface {
 
 // HashStorageKey generates a storage key from its value.
 //
-// All backends MUST use this method to hash values (generate keys).
+// All content addressable storage backends MUST use this method to hash values
+// (generate keys).
 func HashStorageKey(value []byte) Key {
 	sum := sha512.Sum512_256(value)
 	var k Key

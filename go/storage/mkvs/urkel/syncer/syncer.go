@@ -32,7 +32,7 @@ type ReadSyncer interface {
 	//
 	// It is the responsibility of the caller to validate that the subtree
 	// is correct and consistent.
-	GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*Subtree, error)
+	GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*Subtree, error)
 
 	// GetNode retrieves a specific node under the given root.
 	//
@@ -60,7 +60,7 @@ func (r *nopReadSyncer) GetSubtree(ctx context.Context, root hash.Hash, id inter
 	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*Subtree, error) {
+func (r *nopReadSyncer) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*Subtree, error) {
 	return nil, ErrUnsupported
 }
 
