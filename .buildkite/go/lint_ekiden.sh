@@ -15,6 +15,7 @@ set -euxo pipefail
 # Run golangci
 ##############
 pushd go
+  echo "PROTOC version "$(protoc --version)
   make generate
 
   MODIFIED=$(git diff --name-only HEAD | grep .pb.go) || true
