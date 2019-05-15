@@ -52,6 +52,9 @@ type Runtime struct {
 
 // GetNode returns the committee node for this runtime.
 func (r *Runtime) GetNode() *committee.Node {
+	if r == nil {
+		return nil
+	}
 	return r.node
 }
 
@@ -348,6 +351,10 @@ func newWorker(
 	}
 
 	if enabled {
+		if !w.commonWorker.Enabled() {
+			return nil, fmt.Errorf("txnscheduler/worker: requires common worker")
+		}
+
 		if cfg.WorkerRuntimeLoaderBinary == "" && cfg.Backend != host.BackendMock {
 			return nil, fmt.Errorf("compute/worker: no runtime loader binary configured and backend not host.BackendMock")
 		}

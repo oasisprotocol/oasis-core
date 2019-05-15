@@ -268,13 +268,15 @@ run_compute_node() {
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         --keymanager.client.address 127.0.0.1:9003 \
         --keymanager.client.certificate ${EKIDEN_COMMITTEE_DIR}/key-manager/tls_identity_cert.pem \
+        --worker.enabled \
         --worker.compute.enabled \
         --worker.compute.backend sandboxed \
         --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
         --worker.compute.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
-        --worker.compute.runtime.id ${EKIDEN_RUNTIME_ID} \
         ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
-        --worker.compute.leader.max_batch_size 1 \
+        --worker.txnscheduler.enabled \
+        --worker.txnscheduler.leader.max_batch_size 1 \
+        --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \

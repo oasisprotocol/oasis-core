@@ -12,6 +12,8 @@ import (
 )
 
 var (
+	cfgWorkerEnabled = "worker.enabled"
+
 	cfgClientPort      = "worker.client.port"
 	cfgClientAddresses = "worker.client.addresses"
 
@@ -76,6 +78,7 @@ func newConfig() (*Config, error) {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable worker processes")
 
 		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
@@ -84,6 +87,8 @@ func RegisterFlags(cmd *cobra.Command) {
 	}
 
 	for _, v := range []string{
+		cfgWorkerEnabled,
+
 		cfgClientPort,
 		cfgClientAddresses,
 

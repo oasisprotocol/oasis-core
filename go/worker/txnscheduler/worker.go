@@ -33,6 +33,9 @@ type Runtime struct {
 
 // GetNode returns the committee node for this runtime.
 func (r *Runtime) GetNode() *committee.Node {
+	if r == nil {
+		return nil
+	}
 	return r.node
 }
 
@@ -221,6 +224,10 @@ func newWorker(
 	}
 
 	if enabled {
+		if !w.commonWorker.Enabled() {
+			return nil, fmt.Errorf("txnscheduler/worker: requires common worker")
+		}
+
 		if len(cfg.Runtimes) == 0 {
 			return nil, fmt.Errorf("txnscheduler/worker: no runtimes configured")
 		}

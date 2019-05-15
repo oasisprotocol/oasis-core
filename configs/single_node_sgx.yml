@@ -30,15 +30,21 @@ grpc:
 
 # Worker configuration.
 worker:
+  enabled: true
   compute:
     enabled: true
     backend: sandboxed
     runtime_loader: target/debug/ekiden-runtime-loader
     runtime:
-      id: "0000000000000000000000000000000000000000000000000000000000000000"
       binary: target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs
       sgx_ids:
         - "0000000000000000000000000000000000000000000000000000000000000000"
+  runtime:
+    id: "0000000000000000000000000000000000000000000000000000000000000000"
+  storage:
+    enabled: true
+  txnscheduler:
+    enabled: true
   client:
     port: 9200
     addresses:

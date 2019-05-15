@@ -3,6 +3,8 @@ package common
 import (
 	"fmt"
 
+	"github.com/spf13/viper"
+
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc"
@@ -25,12 +27,16 @@ type Runtime struct {
 
 // GetNode returns the committee node for this runtime.
 func (r *Runtime) GetNode() *committee.Node {
+	if r == nil {
+		return nil
+	}
 	return r.node
 }
 
 // Worker is a garbage bag with lower level services and common runtime objects.
 type Worker struct {
-	cfg Config
+	enabled bool
+	cfg     Config
 
 	Identity  *identity.Identity
 	Storage   storage.Backend
@@ -56,6 +62,15 @@ func (w *Worker) Name() string {
 
 // Start starts the service.
 func (w *Worker) Start() error {
+	if !w.enabled {
+		w.logger.Info("not starting common worker as it is disabled")
+
+		// In case the worker is not enabled, close the init channel immediately.
+		close(w.initCh)
+
+		return nil
+	}
+
 	// Wait for the gRPC server and all runtimes to terminate.
 	go func() {
 		defer close(w.quitCh)
@@ -92,6 +107,11 @@ func (w *Worker) Start() error {
 
 // Stop halts the service.
 func (w *Worker) Stop() {
+	if !w.enabled {
+		close(w.quitCh)
+		return
+	}
+
 	for _, rt := range w.runtimes {
 		w.logger.Info("stopping services for runtime",
 			"runtime_id", rt.id,
@@ -103,6 +123,11 @@ func (w *Worker) Stop() {
 	w.Grpc.Stop()
 }
 
+// Enabled returns if worker is enabled.
+func (w *Worker) Enabled() bool {
+	return w.enabled
+}
+
 // Quit returns a channel that will be closed when the service terminates.
 func (w *Worker) Quit() <-chan struct{} {
 	return w.quitCh
@@ -110,6 +135,10 @@ func (w *Worker) Quit() <-chan struct{} {
 
 // Cleanup performs the service specific post-termination cleanup.
 func (w *Worker) Cleanup() {
+	if !w.enabled {
+		return
+	}
+
 	for _, rt := range w.runtimes {
 		rt.node.Cleanup()
 	}
@@ -174,6 +203,7 @@ func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
 }
 
 func newWorker(
+	enabled bool,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -185,6 +215,7 @@ func newWorker(
 	cfg Config,
 ) (*Worker, error) {
 	w := &Worker{
+		enabled:   enabled,
 		cfg:       cfg,
 		Identity:  identity,
 		Storage:   storage,
@@ -200,14 +231,16 @@ func newWorker(
 		logger:    logging.GetLogger("worker/common"),
 	}
 
-	if len(cfg.Runtimes) == 0 {
-		return nil, fmt.Errorf("common/worker: no runtimes configured")
-	}
+	if enabled {
+		if len(cfg.Runtimes) == 0 {
+			return nil, fmt.Errorf("common/worker: no runtimes configured")
+		}
 
-	// Register all configured runtimes.
-	for _, id := range cfg.Runtimes {
-		if err := w.registerRuntime(&cfg, id); err != nil {
-			return nil, err
+		// Register all configured runtimes.
+		for _, id := range cfg.Runtimes {
+			if err := w.registerRuntime(&cfg, id); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -235,5 +268,5 @@ func New(
 		return nil, err
 	}
 
-	return newWorker(identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, *cfg)
+	return newWorker(viper.GetBool(cfgWorkerEnabled), identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, *cfg)
 }
