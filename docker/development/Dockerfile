@@ -1,6 +1,11 @@
 FROM ubuntu:18.04
 
-ARG GO_VERSION=1.12
+# Package versions.
+ARG GO_VERSION=1.12.5
+ARG GO_PROTOC_VERSION=3.6.1
+ARG GO_PROTOC_GEN_GO_VERSION=1.2.0
+ARG GOLANGCILINT_VERSION=1.15.0
+
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
@@ -27,9 +32,9 @@ ENV GOPATH="/go"
 ENV PATH="${HOME}/.cargo/bin:/go/bin:/usr/local/go/bin:${PATH}"
 
 # Install protobuf (apt system v3.0 fails to compile our protos).
-RUN wget 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip' && \
-    unzip protoc-3.5.1-linux-x86_64.zip -x readme.txt -d /usr && \
-    rm protoc-3.5.1-linux-x86_64.zip && \
+RUN wget https://github.com/google/protobuf/releases/download/v${GO_PROTOC_VERSION}/protoc-${GO_PROTOC_VERSION}-linux-x86_64.zip && \
+    unzip protoc-${GO_PROTOC_VERSION}-linux-x86_64.zip -x readme.txt -d /usr && \
+    rm protoc-${GO_PROTOC_VERSION}-linux-x86_64.zip && \
     chmod a+rx /usr/bin/protoc
 
 # Install Rust.
@@ -45,14 +50,14 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
-    # Install a specific version of protoc-gen-go (1.2.0).
+    # Install a specific version of protoc-gen-go.
     go get -d github.com/golang/protobuf/protoc-gen-go && \
     cd /go/src/github.com/golang/protobuf && \
-    git checkout v1.2.0 && \
+    git checkout v${GO_PROTOC_GEN_GO_VERSION} && \
     cd protoc-gen-go && \
     go install && \
     # Install golangci-lint.
-    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v1.15.0 && \
+    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin
 
 # Install node / npm / truffle.
