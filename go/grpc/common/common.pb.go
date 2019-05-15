@@ -38,7 +38,7 @@ func (x Address_Transport) String() string {
 	return proto.EnumName(Address_Transport_name, int32(x))
 }
 func (Address_Transport) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{0, 0}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{0, 0}
 }
 
 type CapabilitiesTEE_Hardware int32
@@ -61,7 +61,7 @@ func (x CapabilitiesTEE_Hardware) String() string {
 	return proto.EnumName(CapabilitiesTEE_Hardware_name, int32(x))
 }
 func (CapabilitiesTEE_Hardware) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{6, 0}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{6, 0}
 }
 
 type Address struct {
@@ -77,7 +77,7 @@ func (m *Address) Reset()         { *m = Address{} }
 func (m *Address) String() string { return proto.CompactTextString(m) }
 func (*Address) ProtoMessage()    {}
 func (*Address) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{0}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{0}
 }
 func (m *Address) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Address.Unmarshal(m, b)
@@ -129,7 +129,7 @@ func (m *Certificate) Reset()         { *m = Certificate{} }
 func (m *Certificate) String() string { return proto.CompactTextString(m) }
 func (*Certificate) ProtoMessage()    {}
 func (*Certificate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{1}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{1}
 }
 func (m *Certificate) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Certificate.Unmarshal(m, b)
@@ -168,7 +168,7 @@ func (m *Entity) Reset()         { *m = Entity{} }
 func (m *Entity) String() string { return proto.CompactTextString(m) }
 func (*Entity) ProtoMessage()    {}
 func (*Entity) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{2}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{2}
 }
 func (m *Entity) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Entity.Unmarshal(m, b)
@@ -220,7 +220,7 @@ func (m *Node) Reset()         { *m = Node{} }
 func (m *Node) String() string { return proto.CompactTextString(m) }
 func (*Node) ProtoMessage()    {}
 func (*Node) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{3}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{3}
 }
 func (m *Node) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Node.Unmarshal(m, b)
@@ -308,7 +308,7 @@ func (m *NodeRuntime) Reset()         { *m = NodeRuntime{} }
 func (m *NodeRuntime) String() string { return proto.CompactTextString(m) }
 func (*NodeRuntime) ProtoMessage()    {}
 func (*NodeRuntime) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{4}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{4}
 }
 func (m *NodeRuntime) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeRuntime.Unmarshal(m, b)
@@ -353,7 +353,7 @@ func (m *Capabilities) Reset()         { *m = Capabilities{} }
 func (m *Capabilities) String() string { return proto.CompactTextString(m) }
 func (*Capabilities) ProtoMessage()    {}
 func (*Capabilities) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{5}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{5}
 }
 func (m *Capabilities) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Capabilities.Unmarshal(m, b)
@@ -393,7 +393,7 @@ func (m *CapabilitiesTEE) Reset()         { *m = CapabilitiesTEE{} }
 func (m *CapabilitiesTEE) String() string { return proto.CompactTextString(m) }
 func (*CapabilitiesTEE) ProtoMessage()    {}
 func (*CapabilitiesTEE) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{6}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{6}
 }
 func (m *CapabilitiesTEE) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CapabilitiesTEE.Unmarshal(m, b)
@@ -446,7 +446,7 @@ func (m *Signature) Reset()         { *m = Signature{} }
 func (m *Signature) String() string { return proto.CompactTextString(m) }
 func (*Signature) ProtoMessage()    {}
 func (*Signature) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{7}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{7}
 }
 func (m *Signature) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Signature.Unmarshal(m, b)
@@ -492,7 +492,7 @@ func (m *Signed) Reset()         { *m = Signed{} }
 func (m *Signed) String() string { return proto.CompactTextString(m) }
 func (*Signed) ProtoMessage()    {}
 func (*Signed) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_6707ad720a6f7f26, []int{8}
+	return fileDescriptor_common_4fb62f78d7bc7611, []int{8}
 }
 func (m *Signed) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Signed.Unmarshal(m, b)
@@ -540,9 +540,9 @@ func init() {
 	proto.RegisterEnum("common.CapabilitiesTEE_Hardware", CapabilitiesTEE_Hardware_name, CapabilitiesTEE_Hardware_value)
 }
 
-func init() { proto.RegisterFile("common/common.proto", fileDescriptor_common_6707ad720a6f7f26) }
+func init() { proto.RegisterFile("common/common.proto", fileDescriptor_common_4fb62f78d7bc7611) }
 
-var fileDescriptor_common_6707ad720a6f7f26 = []byte{
+var fileDescriptor_common_4fb62f78d7bc7611 = []byte{
 	// 567 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0xdd, 0x6e, 0xd3, 0x4c,
 	0x10, 0xad, 0x93, 0xd4, 0xb1, 0xc7, 0xfe, 0x5a, 0x77, 0x5b, 0x7d, 0x18, 0x81, 0xc0, 0x58, 0x42,

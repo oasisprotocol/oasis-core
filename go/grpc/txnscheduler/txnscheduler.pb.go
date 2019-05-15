@@ -37,7 +37,7 @@ func (m *SubmitTxRequest) Reset()         { *m = SubmitTxRequest{} }
 func (m *SubmitTxRequest) String() string { return proto.CompactTextString(m) }
 func (*SubmitTxRequest) ProtoMessage()    {}
 func (*SubmitTxRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_txnscheduler_52373e3785113982, []int{0}
+	return fileDescriptor_txnscheduler_ad5eb697c6a15f5b, []int{0}
 }
 func (m *SubmitTxRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SubmitTxRequest.Unmarshal(m, b)
@@ -81,7 +81,7 @@ func (m *SubmitTxResponse) Reset()         { *m = SubmitTxResponse{} }
 func (m *SubmitTxResponse) String() string { return proto.CompactTextString(m) }
 func (*SubmitTxResponse) ProtoMessage()    {}
 func (*SubmitTxResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_txnscheduler_52373e3785113982, []int{1}
+	return fileDescriptor_txnscheduler_ad5eb697c6a15f5b, []int{1}
 }
 func (m *SubmitTxResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SubmitTxResponse.Unmarshal(m, b)
@@ -115,7 +115,7 @@ func (m *IsTransactionQueuedRequest) Reset()         { *m = IsTransactionQueuedR
 func (m *IsTransactionQueuedRequest) String() string { return proto.CompactTextString(m) }
 func (*IsTransactionQueuedRequest) ProtoMessage()    {}
 func (*IsTransactionQueuedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_txnscheduler_52373e3785113982, []int{2}
+	return fileDescriptor_txnscheduler_ad5eb697c6a15f5b, []int{2}
 }
 func (m *IsTransactionQueuedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IsTransactionQueuedRequest.Unmarshal(m, b)
@@ -161,7 +161,7 @@ func (m *IsTransactionQueuedResponse) Reset()         { *m = IsTransactionQueued
 func (m *IsTransactionQueuedResponse) String() string { return proto.CompactTextString(m) }
 func (*IsTransactionQueuedResponse) ProtoMessage()    {}
 func (*IsTransactionQueuedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_txnscheduler_52373e3785113982, []int{3}
+	return fileDescriptor_txnscheduler_ad5eb697c6a15f5b, []int{3}
 }
 func (m *IsTransactionQueuedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IsTransactionQueuedResponse.Unmarshal(m, b)
@@ -309,10 +309,10 @@ var _TransactionScheduler_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("txnscheduler/txnscheduler.proto", fileDescriptor_txnscheduler_52373e3785113982)
+	proto.RegisterFile("txnscheduler/txnscheduler.proto", fileDescriptor_txnscheduler_ad5eb697c6a15f5b)
 }
 
-var fileDescriptor_txnscheduler_52373e3785113982 = []byte{
+var fileDescriptor_txnscheduler_ad5eb697c6a15f5b = []byte{
 	// 276 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x52, 0xc1, 0x4a, 0xc3, 0x40,
 	0x10, 0x35, 0x22, 0x92, 0x0e, 0x05, 0x65, 0xf5, 0x50, 0x52, 0xaa, 0x92, 0x53, 0xbd, 0x24, 0x52,

@@ -37,7 +37,7 @@ func (m *CallEnclaveRequest) Reset()         { *m = CallEnclaveRequest{} }
 func (m *CallEnclaveRequest) String() string { return proto.CompactTextString(m) }
 func (*CallEnclaveRequest) ProtoMessage()    {}
 func (*CallEnclaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_enclaverpc_0ce87728a7d6260d, []int{0}
+	return fileDescriptor_enclaverpc_aea909b8051ef96c, []int{0}
 }
 func (m *CallEnclaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CallEnclaveRequest.Unmarshal(m, b)
@@ -83,7 +83,7 @@ func (m *CallEnclaveResponse) Reset()         { *m = CallEnclaveResponse{} }
 func (m *CallEnclaveResponse) String() string { return proto.CompactTextString(m) }
 func (*CallEnclaveResponse) ProtoMessage()    {}
 func (*CallEnclaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_enclaverpc_0ce87728a7d6260d, []int{1}
+	return fileDescriptor_enclaverpc_aea909b8051ef96c, []int{1}
 }
 func (m *CallEnclaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CallEnclaveResponse.Unmarshal(m, b)
@@ -190,10 +190,10 @@ var _EnclaveRpc_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("enclaverpc/enclaverpc.proto", fileDescriptor_enclaverpc_0ce87728a7d6260d)
+	proto.RegisterFile("enclaverpc/enclaverpc.proto", fileDescriptor_enclaverpc_aea909b8051ef96c)
 }
 
-var fileDescriptor_enclaverpc_0ce87728a7d6260d = []byte{
+var fileDescriptor_enclaverpc_aea909b8051ef96c = []byte{
 	// 196 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x4e, 0xcd, 0x4b, 0xce,
 	0x49, 0x2c, 0x4b, 0x2d, 0x2a, 0x48, 0xd6, 0x47, 0x30, 0xf5, 0x0a, 0x8a, 0xf2, 0x4b, 0xf2, 0x85,

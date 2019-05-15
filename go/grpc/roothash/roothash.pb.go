@@ -34,7 +34,7 @@ func (m *Block) Reset()         { *m = Block{} }
 func (m *Block) String() string { return proto.CompactTextString(m) }
 func (*Block) ProtoMessage()    {}
 func (*Block) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{0}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{0}
 }
 func (m *Block) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Block.Unmarshal(m, b)
@@ -72,7 +72,7 @@ func (m *Nonce) Reset()         { *m = Nonce{} }
 func (m *Nonce) String() string { return proto.CompactTextString(m) }
 func (*Nonce) ProtoMessage()    {}
 func (*Nonce) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{1}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{1}
 }
 func (m *Nonce) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Nonce.Unmarshal(m, b)
@@ -123,7 +123,7 @@ func (m *Header) Reset()         { *m = Header{} }
 func (m *Header) String() string { return proto.CompactTextString(m) }
 func (*Header) ProtoMessage()    {}
 func (*Header) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{2}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{2}
 }
 func (m *Header) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Header.Unmarshal(m, b)
@@ -245,7 +245,7 @@ func (m *LatestBlockRequest) Reset()         { *m = LatestBlockRequest{} }
 func (m *LatestBlockRequest) String() string { return proto.CompactTextString(m) }
 func (*LatestBlockRequest) ProtoMessage()    {}
 func (*LatestBlockRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{3}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{3}
 }
 func (m *LatestBlockRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LatestBlockRequest.Unmarshal(m, b)
@@ -283,7 +283,7 @@ func (m *LatestBlockResponse) Reset()         { *m = LatestBlockResponse{} }
 func (m *LatestBlockResponse) String() string { return proto.CompactTextString(m) }
 func (*LatestBlockResponse) ProtoMessage()    {}
 func (*LatestBlockResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{4}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{4}
 }
 func (m *LatestBlockResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LatestBlockResponse.Unmarshal(m, b)
@@ -321,7 +321,7 @@ func (m *BlockRequest) Reset()         { *m = BlockRequest{} }
 func (m *BlockRequest) String() string { return proto.CompactTextString(m) }
 func (*BlockRequest) ProtoMessage()    {}
 func (*BlockRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{5}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{5}
 }
 func (m *BlockRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BlockRequest.Unmarshal(m, b)
@@ -359,7 +359,7 @@ func (m *BlockResponse) Reset()         { *m = BlockResponse{} }
 func (m *BlockResponse) String() string { return proto.CompactTextString(m) }
 func (*BlockResponse) ProtoMessage()    {}
 func (*BlockResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_roothash_ea8a28a424a3bb97, []int{6}
+	return fileDescriptor_roothash_27d7e5fee6084eae, []int{6}
 }
 func (m *BlockResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BlockResponse.Unmarshal(m, b)
@@ -529,9 +529,9 @@ var _RootHash_serviceDesc = grpc.ServiceDesc{
 	Metadata: "roothash/roothash.proto",
 }
 
-func init() { proto.RegisterFile("roothash/roothash.proto", fileDescriptor_roothash_ea8a28a424a3bb97) }
+func init() { proto.RegisterFile("roothash/roothash.proto", fileDescriptor_roothash_27d7e5fee6084eae) }
 
-var fileDescriptor_roothash_ea8a28a424a3bb97 = []byte{
+var fileDescriptor_roothash_27d7e5fee6084eae = []byte{
 	// 490 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0x4d, 0x6f, 0xd4, 0x3e,
 	0x10, 0xc6, 0xff, 0xfb, 0x67, 0x5f, 0x67, 0xdf, 0x2a, 0x83, 0x68, 0x80, 0x56, 0xad, 0x82, 0x10,

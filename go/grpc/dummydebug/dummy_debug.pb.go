@@ -35,7 +35,7 @@ func (m *SetEpochRequest) Reset()         { *m = SetEpochRequest{} }
 func (m *SetEpochRequest) String() string { return proto.CompactTextString(m) }
 func (*SetEpochRequest) ProtoMessage()    {}
 func (*SetEpochRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dummy_debug_5b10fa6826703de0, []int{0}
+	return fileDescriptor_dummy_debug_073e0af3deefc1a3, []int{0}
 }
 func (m *SetEpochRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetEpochRequest.Unmarshal(m, b)
@@ -72,7 +72,7 @@ func (m *SetEpochResponse) Reset()         { *m = SetEpochResponse{} }
 func (m *SetEpochResponse) String() string { return proto.CompactTextString(m) }
 func (*SetEpochResponse) ProtoMessage()    {}
 func (*SetEpochResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dummy_debug_5b10fa6826703de0, []int{1}
+	return fileDescriptor_dummy_debug_073e0af3deefc1a3, []int{1}
 }
 func (m *SetEpochResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetEpochResponse.Unmarshal(m, b)
@@ -104,7 +104,7 @@ func (m *WaitNodesRequest) Reset()         { *m = WaitNodesRequest{} }
 func (m *WaitNodesRequest) String() string { return proto.CompactTextString(m) }
 func (*WaitNodesRequest) ProtoMessage()    {}
 func (*WaitNodesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dummy_debug_5b10fa6826703de0, []int{2}
+	return fileDescriptor_dummy_debug_073e0af3deefc1a3, []int{2}
 }
 func (m *WaitNodesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WaitNodesRequest.Unmarshal(m, b)
@@ -141,7 +141,7 @@ func (m *WaitNodesResponse) Reset()         { *m = WaitNodesResponse{} }
 func (m *WaitNodesResponse) String() string { return proto.CompactTextString(m) }
 func (*WaitNodesResponse) ProtoMessage()    {}
 func (*WaitNodesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dummy_debug_5b10fa6826703de0, []int{3}
+	return fileDescriptor_dummy_debug_073e0af3deefc1a3, []int{3}
 }
 func (m *WaitNodesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WaitNodesResponse.Unmarshal(m, b)
@@ -278,10 +278,10 @@ var _DummyDebug_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("dummydebug/dummy_debug.proto", fileDescriptor_dummy_debug_5b10fa6826703de0)
+	proto.RegisterFile("dummydebug/dummy_debug.proto", fileDescriptor_dummy_debug_073e0af3deefc1a3)
 }
 
-var fileDescriptor_dummy_debug_5b10fa6826703de0 = []byte{
+var fileDescriptor_dummy_debug_073e0af3deefc1a3 = []byte{
 	// 226 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x49, 0x29, 0xcd, 0xcd,
 	0xad, 0x4c, 0x49, 0x4d, 0x2a, 0x4d, 0xd7, 0x07, 0x33, 0xe3, 0xc1, 0x6c, 0xbd, 0x82, 0xa2, 0xfc,

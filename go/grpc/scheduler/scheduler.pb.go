@@ -49,7 +49,7 @@ func (x CommitteeNode_Role) String() string {
 	return proto.EnumName(CommitteeNode_Role_name, int32(x))
 }
 func (CommitteeNode_Role) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{0, 0}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{0, 0}
 }
 
 type Committee_Kind int32
@@ -75,7 +75,7 @@ func (x Committee_Kind) String() string {
 	return proto.EnumName(Committee_Kind_name, int32(x))
 }
 func (Committee_Kind) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{1, 0}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{1, 0}
 }
 
 type CommitteeNode struct {
@@ -90,7 +90,7 @@ func (m *CommitteeNode) Reset()         { *m = CommitteeNode{} }
 func (m *CommitteeNode) String() string { return proto.CompactTextString(m) }
 func (*CommitteeNode) ProtoMessage()    {}
 func (*CommitteeNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{0}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{0}
 }
 func (m *CommitteeNode) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitteeNode.Unmarshal(m, b)
@@ -138,7 +138,7 @@ func (m *Committee) Reset()         { *m = Committee{} }
 func (m *Committee) String() string { return proto.CompactTextString(m) }
 func (*Committee) ProtoMessage()    {}
 func (*Committee) Descriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{1}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{1}
 }
 func (m *Committee) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Committee.Unmarshal(m, b)
@@ -197,7 +197,7 @@ func (m *CommitteeRequest) Reset()         { *m = CommitteeRequest{} }
 func (m *CommitteeRequest) String() string { return proto.CompactTextString(m) }
 func (*CommitteeRequest) ProtoMessage()    {}
 func (*CommitteeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{2}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{2}
 }
 func (m *CommitteeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitteeRequest.Unmarshal(m, b)
@@ -235,7 +235,7 @@ func (m *CommitteeResponse) Reset()         { *m = CommitteeResponse{} }
 func (m *CommitteeResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitteeResponse) ProtoMessage()    {}
 func (*CommitteeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{3}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{3}
 }
 func (m *CommitteeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitteeResponse.Unmarshal(m, b)
@@ -272,7 +272,7 @@ func (m *WatchRequest) Reset()         { *m = WatchRequest{} }
 func (m *WatchRequest) String() string { return proto.CompactTextString(m) }
 func (*WatchRequest) ProtoMessage()    {}
 func (*WatchRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{4}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{4}
 }
 func (m *WatchRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchRequest.Unmarshal(m, b)
@@ -303,7 +303,7 @@ func (m *WatchResponse) Reset()         { *m = WatchResponse{} }
 func (m *WatchResponse) String() string { return proto.CompactTextString(m) }
 func (*WatchResponse) ProtoMessage()    {}
 func (*WatchResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_scheduler_c19db92f3bb835fc, []int{5}
+	return fileDescriptor_scheduler_5269c60accb2a5c7, []int{5}
 }
 func (m *WatchResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchResponse.Unmarshal(m, b)
@@ -475,10 +475,10 @@ var _Scheduler_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("scheduler/scheduler.proto", fileDescriptor_scheduler_c19db92f3bb835fc)
+	proto.RegisterFile("scheduler/scheduler.proto", fileDescriptor_scheduler_5269c60accb2a5c7)
 }
 
-var fileDescriptor_scheduler_c19db92f3bb835fc = []byte{
+var fileDescriptor_scheduler_5269c60accb2a5c7 = []byte{
 	// 469 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x93, 0xdf, 0x6e, 0xda, 0x4c,
 	0x10, 0xc5, 0x59, 0xb0, 0x92, 0xcf, 0x43, 0x20, 0xce, 0xea, 0x93, 0xea, 0x24, 0x8d, 0x84, 0x7c,

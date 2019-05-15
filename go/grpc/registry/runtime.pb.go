@@ -42,7 +42,7 @@ func (m *Runtime) Reset()         { *m = Runtime{} }
 func (m *Runtime) String() string { return proto.CompactTextString(m) }
 func (*Runtime) ProtoMessage()    {}
 func (*Runtime) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{0}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{0}
 }
 func (m *Runtime) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Runtime.Unmarshal(m, b)
@@ -130,7 +130,7 @@ func (m *RegisterRuntimeRequest) Reset()         { *m = RegisterRuntimeRequest{}
 func (m *RegisterRuntimeRequest) String() string { return proto.CompactTextString(m) }
 func (*RegisterRuntimeRequest) ProtoMessage()    {}
 func (*RegisterRuntimeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{1}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{1}
 }
 func (m *RegisterRuntimeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RegisterRuntimeRequest.Unmarshal(m, b)
@@ -167,7 +167,7 @@ func (m *RegisterRuntimeResponse) Reset()         { *m = RegisterRuntimeResponse
 func (m *RegisterRuntimeResponse) String() string { return proto.CompactTextString(m) }
 func (*RegisterRuntimeResponse) ProtoMessage()    {}
 func (*RegisterRuntimeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{2}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{2}
 }
 func (m *RegisterRuntimeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RegisterRuntimeResponse.Unmarshal(m, b)
@@ -198,7 +198,7 @@ func (m *RuntimeRequest) Reset()         { *m = RuntimeRequest{} }
 func (m *RuntimeRequest) String() string { return proto.CompactTextString(m) }
 func (*RuntimeRequest) ProtoMessage()    {}
 func (*RuntimeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{3}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{3}
 }
 func (m *RuntimeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RuntimeRequest.Unmarshal(m, b)
@@ -236,7 +236,7 @@ func (m *RuntimeResponse) Reset()         { *m = RuntimeResponse{} }
 func (m *RuntimeResponse) String() string { return proto.CompactTextString(m) }
 func (*RuntimeResponse) ProtoMessage()    {}
 func (*RuntimeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{4}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{4}
 }
 func (m *RuntimeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RuntimeResponse.Unmarshal(m, b)
@@ -273,7 +273,7 @@ func (m *RuntimesRequest) Reset()         { *m = RuntimesRequest{} }
 func (m *RuntimesRequest) String() string { return proto.CompactTextString(m) }
 func (*RuntimesRequest) ProtoMessage()    {}
 func (*RuntimesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{5}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{5}
 }
 func (m *RuntimesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RuntimesRequest.Unmarshal(m, b)
@@ -304,7 +304,7 @@ func (m *RuntimesResponse) Reset()         { *m = RuntimesResponse{} }
 func (m *RuntimesResponse) String() string { return proto.CompactTextString(m) }
 func (*RuntimesResponse) ProtoMessage()    {}
 func (*RuntimesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{6}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{6}
 }
 func (m *RuntimesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RuntimesResponse.Unmarshal(m, b)
@@ -341,7 +341,7 @@ func (m *WatchRuntimesRequest) Reset()         { *m = WatchRuntimesRequest{} }
 func (m *WatchRuntimesRequest) String() string { return proto.CompactTextString(m) }
 func (*WatchRuntimesRequest) ProtoMessage()    {}
 func (*WatchRuntimesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{7}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{7}
 }
 func (m *WatchRuntimesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchRuntimesRequest.Unmarshal(m, b)
@@ -372,7 +372,7 @@ func (m *WatchRuntimesResponse) Reset()         { *m = WatchRuntimesResponse{} }
 func (m *WatchRuntimesResponse) String() string { return proto.CompactTextString(m) }
 func (*WatchRuntimesResponse) ProtoMessage()    {}
 func (*WatchRuntimesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_runtime_e38809f37bf92e98, []int{8}
+	return fileDescriptor_runtime_7fdb34b82a73cd4e, []int{8}
 }
 func (m *WatchRuntimesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchRuntimesResponse.Unmarshal(m, b)
@@ -610,9 +610,9 @@ var _RuntimeRegistry_serviceDesc = grpc.ServiceDesc{
 	Metadata: "registry/runtime.proto",
 }
 
-func init() { proto.RegisterFile("registry/runtime.proto", fileDescriptor_runtime_e38809f37bf92e98) }
+func init() { proto.RegisterFile("registry/runtime.proto", fileDescriptor_runtime_7fdb34b82a73cd4e) }
 
-var fileDescriptor_runtime_e38809f37bf92e98 = []byte{
+var fileDescriptor_runtime_7fdb34b82a73cd4e = []byte{
 	// 501 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x94, 0x51, 0x8f, 0xd2, 0x40,
 	0x14, 0x85, 0x85, 0xc5, 0x65, 0x73, 0x59, 0xd9, 0x65, 0x54, 0x2c, 0x7d, 0xd0, 0xda, 0x27, 0x92,

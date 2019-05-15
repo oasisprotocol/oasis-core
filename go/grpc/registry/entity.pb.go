@@ -44,7 +44,7 @@ func (x WatchEntityResponse_ChangeType) String() string {
 	return proto.EnumName(WatchEntityResponse_ChangeType_name, int32(x))
 }
 func (WatchEntityResponse_ChangeType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{9, 0}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{9, 0}
 }
 
 type WatchNodeResponse_ChangeType int32
@@ -67,7 +67,7 @@ func (x WatchNodeResponse_ChangeType) String() string {
 	return proto.EnumName(WatchNodeResponse_ChangeType_name, int32(x))
 }
 func (WatchNodeResponse_ChangeType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{20, 0}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{20, 0}
 }
 
 type RegisterRequest struct {
@@ -82,7 +82,7 @@ func (m *RegisterRequest) Reset()         { *m = RegisterRequest{} }
 func (m *RegisterRequest) String() string { return proto.CompactTextString(m) }
 func (*RegisterRequest) ProtoMessage()    {}
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{0}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{0}
 }
 func (m *RegisterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RegisterRequest.Unmarshal(m, b)
@@ -119,7 +119,7 @@ func (m *RegisterResponse) Reset()         { *m = RegisterResponse{} }
 func (m *RegisterResponse) String() string { return proto.CompactTextString(m) }
 func (*RegisterResponse) ProtoMessage()    {}
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{1}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{1}
 }
 func (m *RegisterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RegisterResponse.Unmarshal(m, b)
@@ -151,7 +151,7 @@ func (m *DeregisterRequest) Reset()         { *m = DeregisterRequest{} }
 func (m *DeregisterRequest) String() string { return proto.CompactTextString(m) }
 func (*DeregisterRequest) ProtoMessage()    {}
 func (*DeregisterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{2}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{2}
 }
 func (m *DeregisterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeregisterRequest.Unmarshal(m, b)
@@ -188,7 +188,7 @@ func (m *DeregisterResponse) Reset()         { *m = DeregisterResponse{} }
 func (m *DeregisterResponse) String() string { return proto.CompactTextString(m) }
 func (*DeregisterResponse) ProtoMessage()    {}
 func (*DeregisterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{3}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{3}
 }
 func (m *DeregisterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeregisterResponse.Unmarshal(m, b)
@@ -219,7 +219,7 @@ func (m *EntityRequest) Reset()         { *m = EntityRequest{} }
 func (m *EntityRequest) String() string { return proto.CompactTextString(m) }
 func (*EntityRequest) ProtoMessage()    {}
 func (*EntityRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{4}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{4}
 }
 func (m *EntityRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EntityRequest.Unmarshal(m, b)
@@ -257,7 +257,7 @@ func (m *EntityResponse) Reset()         { *m = EntityResponse{} }
 func (m *EntityResponse) String() string { return proto.CompactTextString(m) }
 func (*EntityResponse) ProtoMessage()    {}
 func (*EntityResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{5}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{5}
 }
 func (m *EntityResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EntityResponse.Unmarshal(m, b)
@@ -294,7 +294,7 @@ func (m *EntitiesRequest) Reset()         { *m = EntitiesRequest{} }
 func (m *EntitiesRequest) String() string { return proto.CompactTextString(m) }
 func (*EntitiesRequest) ProtoMessage()    {}
 func (*EntitiesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{6}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{6}
 }
 func (m *EntitiesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EntitiesRequest.Unmarshal(m, b)
@@ -325,7 +325,7 @@ func (m *EntitiesResponse) Reset()         { *m = EntitiesResponse{} }
 func (m *EntitiesResponse) String() string { return proto.CompactTextString(m) }
 func (*EntitiesResponse) ProtoMessage()    {}
 func (*EntitiesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{7}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{7}
 }
 func (m *EntitiesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EntitiesResponse.Unmarshal(m, b)
@@ -362,7 +362,7 @@ func (m *WatchEntityRequest) Reset()         { *m = WatchEntityRequest{} }
 func (m *WatchEntityRequest) String() string { return proto.CompactTextString(m) }
 func (*WatchEntityRequest) ProtoMessage()    {}
 func (*WatchEntityRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{8}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{8}
 }
 func (m *WatchEntityRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchEntityRequest.Unmarshal(m, b)
@@ -394,7 +394,7 @@ func (m *WatchEntityResponse) Reset()         { *m = WatchEntityResponse{} }
 func (m *WatchEntityResponse) String() string { return proto.CompactTextString(m) }
 func (*WatchEntityResponse) ProtoMessage()    {}
 func (*WatchEntityResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{9}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{9}
 }
 func (m *WatchEntityResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchEntityResponse.Unmarshal(m, b)
@@ -440,7 +440,7 @@ func (m *RegisterNodeRequest) Reset()         { *m = RegisterNodeRequest{} }
 func (m *RegisterNodeRequest) String() string { return proto.CompactTextString(m) }
 func (*RegisterNodeRequest) ProtoMessage()    {}
 func (*RegisterNodeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{10}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{10}
 }
 func (m *RegisterNodeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RegisterNodeRequest.Unmarshal(m, b)
@@ -477,7 +477,7 @@ func (m *RegisterNodeResponse) Reset()         { *m = RegisterNodeResponse{} }
 func (m *RegisterNodeResponse) String() string { return proto.CompactTextString(m) }
 func (*RegisterNodeResponse) ProtoMessage()    {}
 func (*RegisterNodeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{11}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{11}
 }
 func (m *RegisterNodeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RegisterNodeResponse.Unmarshal(m, b)
@@ -508,7 +508,7 @@ func (m *NodeRequest) Reset()         { *m = NodeRequest{} }
 func (m *NodeRequest) String() string { return proto.CompactTextString(m) }
 func (*NodeRequest) ProtoMessage()    {}
 func (*NodeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{12}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{12}
 }
 func (m *NodeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeRequest.Unmarshal(m, b)
@@ -546,7 +546,7 @@ func (m *NodeResponse) Reset()         { *m = NodeResponse{} }
 func (m *NodeResponse) String() string { return proto.CompactTextString(m) }
 func (*NodeResponse) ProtoMessage()    {}
 func (*NodeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{13}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{13}
 }
 func (m *NodeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeResponse.Unmarshal(m, b)
@@ -584,7 +584,7 @@ func (m *NodesRequest) Reset()         { *m = NodesRequest{} }
 func (m *NodesRequest) String() string { return proto.CompactTextString(m) }
 func (*NodesRequest) ProtoMessage()    {}
 func (*NodesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{14}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{14}
 }
 func (m *NodesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodesRequest.Unmarshal(m, b)
@@ -622,7 +622,7 @@ func (m *NodesResponse) Reset()         { *m = NodesResponse{} }
 func (m *NodesResponse) String() string { return proto.CompactTextString(m) }
 func (*NodesResponse) ProtoMessage()    {}
 func (*NodesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{15}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{15}
 }
 func (m *NodesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodesResponse.Unmarshal(m, b)
@@ -660,7 +660,7 @@ func (m *EntityNodesRequest) Reset()         { *m = EntityNodesRequest{} }
 func (m *EntityNodesRequest) String() string { return proto.CompactTextString(m) }
 func (*EntityNodesRequest) ProtoMessage()    {}
 func (*EntityNodesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{16}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{16}
 }
 func (m *EntityNodesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EntityNodesRequest.Unmarshal(m, b)
@@ -698,7 +698,7 @@ func (m *EntityNodesResponse) Reset()         { *m = EntityNodesResponse{} }
 func (m *EntityNodesResponse) String() string { return proto.CompactTextString(m) }
 func (*EntityNodesResponse) ProtoMessage()    {}
 func (*EntityNodesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{17}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{17}
 }
 func (m *EntityNodesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EntityNodesResponse.Unmarshal(m, b)
@@ -737,7 +737,7 @@ func (m *NodeTransportResponse) Reset()         { *m = NodeTransportResponse{} }
 func (m *NodeTransportResponse) String() string { return proto.CompactTextString(m) }
 func (*NodeTransportResponse) ProtoMessage()    {}
 func (*NodeTransportResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{18}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{18}
 }
 func (m *NodeTransportResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeTransportResponse.Unmarshal(m, b)
@@ -781,7 +781,7 @@ func (m *WatchNodeRequest) Reset()         { *m = WatchNodeRequest{} }
 func (m *WatchNodeRequest) String() string { return proto.CompactTextString(m) }
 func (*WatchNodeRequest) ProtoMessage()    {}
 func (*WatchNodeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{19}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{19}
 }
 func (m *WatchNodeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchNodeRequest.Unmarshal(m, b)
@@ -813,7 +813,7 @@ func (m *WatchNodeResponse) Reset()         { *m = WatchNodeResponse{} }
 func (m *WatchNodeResponse) String() string { return proto.CompactTextString(m) }
 func (*WatchNodeResponse) ProtoMessage()    {}
 func (*WatchNodeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{20}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{20}
 }
 func (m *WatchNodeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchNodeResponse.Unmarshal(m, b)
@@ -857,7 +857,7 @@ func (m *WatchNodeListRequest) Reset()         { *m = WatchNodeListRequest{} }
 func (m *WatchNodeListRequest) String() string { return proto.CompactTextString(m) }
 func (*WatchNodeListRequest) ProtoMessage()    {}
 func (*WatchNodeListRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{21}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{21}
 }
 func (m *WatchNodeListRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchNodeListRequest.Unmarshal(m, b)
@@ -889,7 +889,7 @@ func (m *WatchNodeListResponse) Reset()         { *m = WatchNodeListResponse{} }
 func (m *WatchNodeListResponse) String() string { return proto.CompactTextString(m) }
 func (*WatchNodeListResponse) ProtoMessage()    {}
 func (*WatchNodeListResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_entity_99f9aeb21736b8f5, []int{22}
+	return fileDescriptor_entity_5b8a196b6c45d564, []int{22}
 }
 func (m *WatchNodeListResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WatchNodeListResponse.Unmarshal(m, b)
@@ -1468,9 +1468,9 @@ var _EntityRegistry_serviceDesc = grpc.ServiceDesc{
 	Metadata: "registry/entity.proto",
 }
 
-func init() { proto.RegisterFile("registry/entity.proto", fileDescriptor_entity_99f9aeb21736b8f5) }
+func init() { proto.RegisterFile("registry/entity.proto", fileDescriptor_entity_5b8a196b6c45d564) }
 
-var fileDescriptor_entity_99f9aeb21736b8f5 = []byte{
+var fileDescriptor_entity_5b8a196b6c45d564 = []byte{
 	// 763 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x96, 0xdf, 0x4e, 0x1a, 0x4f,
 	0x14, 0xc7, 0x01, 0xfd, 0xa9, 0x1c, 0x10, 0x61, 0x00, 0xf5, 0x87, 0xa2, 0x66, 0xd2, 0x18, 0x2f,
