@@ -829,6 +829,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgP2PSeedMode,
 		cfgP2PSeeds,
 		cfgLogDebug,
+		cfgDebugBootstrapNodeName,
 		cfgDebugBootstrapQuerySeeds,
 		cfgDebugP2PAddrBookLenient,
 	} {
