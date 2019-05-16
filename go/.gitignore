@@ -3,3 +3,17 @@
 
 common/crypto/mrae/gen_vectors/gen_vectors
 ekiden/ekiden
+
+# Ignore output from protoc created via `go generate`.
+grpc/beacon/*.pb.go
+grpc/common/*.pb.go
+grpc/dummydebug/*.pb.go
+grpc/ias/*.pb.go
+grpc/registry/*.pb.go
+grpc/roothash/*.pb.go
+grpc/scheduler/*.pb.go
+grpc/storage/*.pb.go
+grpc/client/*.pb.go
+grpc/enclaverpc/*.pb.go
+grpc/txnscheduler/*.pb.go
+common/sgx/aesm/*.pb.go
