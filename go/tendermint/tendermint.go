@@ -464,6 +464,10 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		)
 
 		if nodeName != "" {
+			t.Logger.Debug("registering as a validator with the bootstrap server",
+				"node_name", nodeName,
+			)
+
 			// Register as a validator node with the bootstrap server.
 			if err = common.IsAddrPort(nodeAddr); err != nil {
 				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node address")
@@ -480,10 +484,14 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			if err = bs.RegisterValidator(validator); err != nil {
 				return nil, errors.Wrap(err, "tendermint: validator bootstrap failed")
 			}
+
+			t.Logger.Debug("registered as a validator")
 		}
 
 		// Register itself as a seed node to the bootstrap server.
 		if t.IsSeed() {
+			t.Logger.Debug("registering as a seed node with the bootstrap server")
+
 			if err = common.IsAddrPort(nodeAddr); err != nil {
 				return nil, errors.Wrap(err, "tendermint: malformed bootstrap seed node address")
 			}
@@ -495,6 +503,8 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			if err = bs.RegisterSeed(seed); err != nil {
 				return nil, errors.Wrap(err, "tendermint: seed bootstrap failed")
 			}
+
+			t.Logger.Debug("registered as a seed node")
 		}
 		// Query seed nodes from the bootstrap server
 		if querySeeds {
