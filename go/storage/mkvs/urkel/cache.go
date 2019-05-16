@@ -368,7 +368,7 @@ func (c *cache) derefValue(v *internal.Value) ([]byte, error) {
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(subtree hash.Hash, depth uint8) (*internal.Pointer, error) {
+func (c *cache) prefetch(subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*internal.Pointer, error) {
 	if c.prefetchDepth == 0 {
 		return nil, nil
 	}
@@ -377,7 +377,7 @@ func (c *cache) prefetch(subtree hash.Hash, depth uint8) (*internal.Pointer, err
 	ctx, cancel := context.WithTimeout(context.Background(), c.syncerPrefetchTimeout)
 	defer cancel()
 
-	st, err := c.rs.GetSubtree(ctx, c.syncRoot, internal.NodeID{Path: subtree, Depth: depth}, c.prefetchDepth)
+	st, err := c.rs.GetSubtree(ctx, c.syncRoot, internal.NodeID{Path: subtreePath, Depth: depth}, c.prefetchDepth)
 	switch err {
 	case nil:
 	case syncer.ErrUnsupported:
@@ -386,7 +386,7 @@ func (c *cache) prefetch(subtree hash.Hash, depth uint8) (*internal.Pointer, err
 		return nil, err
 	}
 
-	ptr, err := c.reconstructSubtree(subtree, st, 0, c.prefetchDepth)
+	ptr, err := c.reconstructSubtree(subtreeRoot, st, 0, c.prefetchDepth)
 	if err != nil {
 		return nil, err
 	}

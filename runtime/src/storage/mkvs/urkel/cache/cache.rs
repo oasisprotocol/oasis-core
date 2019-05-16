@@ -94,7 +94,13 @@ pub trait Cache {
     ) -> Fallible<NodePtrRef>;
 
     /// Prefetch a subtree from the read syncer.
-    fn prefetch(&mut self, ctx: &Arc<Context>, root: Hash, depth: u8) -> Fallible<NodePtrRef>;
+    fn prefetch(
+        &mut self,
+        ctx: &Arc<Context>,
+        subtree_root: Hash,
+        subtree_path: Hash,
+        depth: u8,
+    ) -> Fallible<NodePtrRef>;
 }
 
 /// Cacheable objects must implement this trait to enable the cache to cache them.
