@@ -11,6 +11,8 @@
 //! This will start the required services needed to communicate with
 //! the worker host.
 #![feature(test)]
+#![feature(box_into_pin)]
+#![feature(pin_into_inner)]
 
 #[macro_use]
 extern crate slog;
@@ -28,6 +30,8 @@ extern crate failure;
 extern crate base64;
 extern crate bincode;
 extern crate chrono;
+#[macro_use]
+extern crate intrusive_collections;
 extern crate io_context;
 extern crate pem_iterator;
 extern crate percent_encoding;
