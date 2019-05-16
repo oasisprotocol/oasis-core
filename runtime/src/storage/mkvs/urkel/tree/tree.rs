@@ -123,7 +123,11 @@ impl UrkelTree {
                     ..Default::default()
                 })));
             tree.cache.borrow_mut().set_sync_root(root_hash);
-            let ptr = tree.cache.borrow_mut().prefetch(&ctx, root_hash, 0)?;
+            // NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
+            let ptr = tree
+                .cache
+                .borrow_mut()
+                .prefetch(&ctx, root_hash, Hash::default(), 0)?;
             if !ptr.borrow().is_null() {
                 tree.cache.borrow_mut().set_pending_root(ptr);
             }

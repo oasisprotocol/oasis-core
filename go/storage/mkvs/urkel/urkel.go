@@ -123,7 +123,9 @@ func NewWithRoot(rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ..
 	t.cache.setSyncRoot(root)
 
 	// Try to prefetch the subtree at the root.
-	ptr, err := t.cache.prefetch(root, 0)
+	// NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
+	var path hash.Hash
+	ptr, err := t.cache.prefetch(root, path, 0)
 	if err != nil {
 		return nil, err
 	}
