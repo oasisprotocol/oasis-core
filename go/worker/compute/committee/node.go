@@ -596,12 +596,12 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 			"header", dis.BlockHeader,
 		)
 
-		// This may block if we are unable to fetch the batch from storage or if
-		// the external batch channel is full. Be sure to abort early in this case.
-		ctx, cancel := context.WithTimeout(n.ctx, queueExternalBatchTimeout)
-		defer cancel()
-
 		go func() {
+			// This may block if we are unable to fetch the batch from storage or if
+			// the external batch channel is full. Be sure to abort early in this case.
+			ctx, cancel := context.WithTimeout(n.ctx, queueExternalBatchTimeout)
+			defer cancel()
+
 			if err := n.queueBatchBlocking(ctx, *dis.BatchHash, *dis.BlockHeader); err != nil {
 				n.logger.Error("backup worker failed to queue external batch",
 					"err", err,
