@@ -191,7 +191,6 @@ func (g *Group) EpochTransition(ctx context.Context, computeGroupHash hash.Hash,
 			computeNodes = append(computeNodes, nil)
 		} else {
 			// Fetch peer node information from the registry.
-			// TODO: Might not have to fetch this in some cases.
 			n, err := g.registry.GetNode(ctx, node.PublicKey)
 			if err != nil {
 				return errors.Wrap(err, "failed to fetch node info")
