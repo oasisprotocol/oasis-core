@@ -171,6 +171,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Start common worker.
 	n.CommonWorker, err = workerCommon.New(
+		compute.Enabled() || txnscheduler.Enabled(),
 		n.Identity,
 		n.Storage,
 		n.RootHash,

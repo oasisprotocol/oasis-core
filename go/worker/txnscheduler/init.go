@@ -21,6 +21,11 @@ const (
 	cfgMaxBatchTimeout   = "worker.txnscheduler.leader.max_batch_timeout"
 )
 
+// Enabled reads our enabled flag from viper.
+func Enabled() bool {
+	return viper.GetBool(cfgWorkerEnabled)
+}
+
 // New creates a new worker.
 func New(
 	commonWorker *workerCommon.Worker,
@@ -51,7 +56,7 @@ func New(
 		Runtimes: runtimes,
 	}
 
-	return newWorker(viper.GetBool(cfgWorkerEnabled), commonWorker, compute, registration, cfg)
+	return newWorker(Enabled(), commonWorker, compute, registration, cfg)
 }
 
 // RegisterFlags registers the configuration flags with the provided

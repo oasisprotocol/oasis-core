@@ -30,7 +30,6 @@ grpc:
 
 # Worker configuration.
 worker:
-  enabled: true
   compute:
     enabled: true
     backend: sandboxed

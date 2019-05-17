@@ -352,7 +352,7 @@ func newWorker(
 
 	if enabled {
 		if !w.commonWorker.Enabled() {
-			return nil, fmt.Errorf("txnscheduler/worker: requires common worker")
+			panic("common worker should have been enabled for compute worker")
 		}
 
 		if cfg.WorkerRuntimeLoaderBinary == "" && cfg.Backend != host.BackendMock {

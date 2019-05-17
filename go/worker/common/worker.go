@@ -3,8 +3,6 @@ package common
 import (
 	"fmt"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc"
@@ -249,6 +247,7 @@ func newWorker(
 
 // New creates a new worker.
 func New(
+	enabled bool,
 	identity *identity.Identity,
 	storage storage.Backend,
 	roothash roothash.Backend,
@@ -268,5 +267,5 @@ func New(
 		return nil, err
 	}
 
-	return newWorker(viper.GetBool(cfgWorkerEnabled), identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, *cfg)
+	return newWorker(enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, *cfg)
 }

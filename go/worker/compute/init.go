@@ -48,6 +48,11 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	return m, nil
 }
 
+// Enabled reads our enabled flag from viper.
+func Enabled() bool {
+	return viper.GetBool(cfgWorkerEnabled)
+}
+
 // New creates a new worker.
 func New(
 	dataDir string,
@@ -98,7 +103,7 @@ func New(
 		Runtimes:                  runtimes,
 	}
 
-	return newWorker(dataDir, viper.GetBool(cfgWorkerEnabled), commonWorker,
+	return newWorker(dataDir, Enabled(), commonWorker,
 		ias, keyManager, registration, cfg)
 }
 
