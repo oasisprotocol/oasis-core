@@ -140,6 +140,7 @@ func (l *Level) Type() string {
 type Logger struct {
 	logger log.Logger
 	level  Level
+	module string
 }
 
 // Debug logs the message and key value pairs at the Debug log level.
@@ -248,22 +249,54 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 
 	// Swap all the early loggers to the initialized backend.
 	for _, l := range backend.earlyLoggers {
-		l.Swap(backend.baseLogger)
+		l.swapLogger.Swap(backend.baseLogger)
+
+		// Re-evaluate log level.
+		// NOTE: This introduces a potential race condition if loggers are used
+		//       before the logging system is initialized. Protecting the log
+		//       level with a mutex just for this one case seems overkill.
+		backend.setupLogLevelLocked(l.logger)
 	}
 	backend.earlyLoggers = nil
 
 	return nil
 }
 
+type earlyLogger struct {
+	swapLogger *log.SwapLogger
+	logger     *Logger
+}
+
 type logBackend struct {
 	sync.Mutex
 
 	baseLogger   log.Logger
-	earlyLoggers []*log.SwapLogger
+	earlyLoggers []*earlyLogger
 	defaultLevel Level
 	moduleLevels map[string]Level
 
 	initialized bool
+}
+
+func (b *logBackend) setupLogLevelLocked(l *Logger) {
+	// Check, whether there is a specific logging level set for the module.
+	// The longest prefix match of the module name provided in the config file will be taken.
+	// Otherwise, fallback to level defined by "default" key.
+	modulePrefixes := make([]string, 0, len(b.moduleLevels))
+	for k := range b.moduleLevels {
+		modulePrefixes = append(modulePrefixes, k)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(modulePrefixes)))
+
+	lvl := b.defaultLevel
+	for _, k := range modulePrefixes {
+		if strings.HasPrefix(l.module, k) {
+			lvl = b.moduleLevels[k]
+			break
+		}
+	}
+
+	l.level = lvl
 }
 
 func (b *logBackend) getLogger(module string, extraUnwind int) *Logger {
@@ -280,23 +313,6 @@ func (b *logBackend) getLogger(module string, extraUnwind int) *Logger {
 		logger = &log.SwapLogger{}
 	}
 
-	// Check, whether there is a specific logging level set for the module.
-	// The longest prefix match of the module name provided in the config file will be taken.
-	// Otherwise, fallback to level defined by "default" key.
-	modulePrefixes := make([]string, 0, len(backend.moduleLevels))
-	for k := range backend.moduleLevels {
-		modulePrefixes = append(modulePrefixes, k)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(modulePrefixes)))
-
-	lvl := backend.defaultLevel
-	for _, k := range modulePrefixes {
-		if strings.HasPrefix(module, k) {
-			lvl = backend.moduleLevels[k]
-			break
-		}
-	}
-
 	var keyvals []interface{}
 	if module != "" {
 		keyvals = append(keyvals, []interface{}{
@@ -310,14 +326,15 @@ func (b *logBackend) getLogger(module string, extraUnwind int) *Logger {
 	}...)
 	l := &Logger{
 		logger: log.WithPrefix(logger, keyvals...),
-		level:  lvl,
+		module: module,
 	}
+	b.setupLogLevelLocked(l)
 
 	if !b.initialized {
 		// Stash the logger so that it can be instantiated once logging
 		// is actually initialized.
 		sLog := logger.(*log.SwapLogger)
-		backend.earlyLoggers = append(backend.earlyLoggers, sLog)
+		b.earlyLoggers = append(b.earlyLoggers, &earlyLogger{swapLogger: sLog, logger: l})
 	}
 
 	return l
