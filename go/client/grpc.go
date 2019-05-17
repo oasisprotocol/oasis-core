@@ -231,6 +231,9 @@ func (s *grpcServer) QueryTxns(ctx context.Context, req *pbClient.QueryTxnsReque
 	if err != nil {
 		return nil, err
 	}
+	if results == nil {
+		results = make([]*TxnResult, 0)
+	}
 
 	return &pbClient.QueryTxnsResponse{
 		Results: cbor.Marshal(results),
