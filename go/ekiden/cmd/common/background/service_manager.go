@@ -70,6 +70,7 @@ func (m *ServiceManager) Wait() {
 // Stop stops all services.
 func (m *ServiceManager) Stop() {
 	close(m.stopCh)
+	m.cancelFn()
 }
 
 // Cleanup cleans up after all registered services.
