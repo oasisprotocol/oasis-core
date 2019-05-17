@@ -18,7 +18,7 @@ EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000
 # Keymanager runtime identifier.
 EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
 
-# Run a Tendermint validator committee and a storage node.
+# Run a Tendermint validator committee.
 #
 # Sets:
 #   EKIDEN_COMMITTEE_DIR
@@ -34,17 +34,13 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
 #   replica_group_backup_size - runtime replica group backup size (default: 1)
-#   clear_storage - clear storage node dir (default: 1)
 #
-# Any additional arguments are passed to the validator Go node and
-# all compute nodes.
 run_backend_tendermint_committee() {
     # Optional arguments with default values.
     local epochtime_backend="tendermint"
     local id=1
     local replica_group_size=2
     local replica_group_backup_size=1
-    local clear_storage=1
     local roothash_genesis_blocks=""
     local nodes=3
     local runtime_genesis=""
@@ -133,38 +129,6 @@ run_backend_tendermint_committee() {
     # Run the seed node.
     run_seed_node
 
-    # Run the storage node.
-    local storage_datadir=${committee_dir}/storage
-    local storage_port=60000
-    local storage_tm_port=60001
-
-    if [[ $clear_storage == 1 ]]; then
-        rm -Rf ${storage_datadir}
-    fi
-
-    ${EKIDEN_NODE} \
-        --log.level debug \
-        --log.file ${committee_dir}/storage.log \
-        --grpc.log.verbose_debug \
-        --epochtime.backend ${epochtime_backend} \
-        --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
-        --metrics.mode none \
-        --storage.backend leveldb \
-        --scheduler.backend trivial \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --worker.storage.enabled \
-        --worker.client.port ${storage_port} \
-        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${storage_datadir} \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:${storage_tm_port} \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        &
-
     # Run the key manager node.
     run_keymanager_node 0
 
@@ -228,7 +192,7 @@ run_compute_node() {
 
     # Ensure the genesis file is available.
     if [[ "${EKIDEN_GENESIS_FILE:-}" == "" ]]; then
-        echo "ERROR: Tendermint genesis and/or storage port file not configured. Did you use run_backend_tendermint_committee?"
+        echo "ERROR: Genesis file not configured. Did you use run_backend_tendermint_committee?"
         exit 1
     fi
 
@@ -280,6 +244,69 @@ run_compute_node() {
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
+}
+
+# Run a storage node.
+#
+# Requires that EKIDEN_GENESIS_FILE is set.
+# Exits with an error otherwise.
+#
+# Arguments:
+#   id - storage node index
+#
+# Optional named arguments:
+#   clear_storage - clear storage node dir (default: 1)
+#
+run_storage_node() {
+    # Process arguments.
+    local id=$1
+    shift || true
+
+    # Optional arguments with default values.
+    local clear_storage=1
+    # Load named arguments that override defaults.
+    local "$@"
+
+    # Ensure the genesis file is available.
+    if [[ "${EKIDEN_GENESIS_FILE:-}" == "" ]]; then
+        echo "ERROR: Genesis file not configured. Did you use run_backend_tendermint_committee?"
+        exit 1
+    fi
+
+    local data_dir=${EKIDEN_COMMITTEE_DIR}/storage-$id
+    if [[ $clear_storage == 1 ]]; then
+        rm -rf ${data_dir}
+    fi
+    local log_file=${EKIDEN_COMMITTEE_DIR}/storage-$id.log
+    rm -rf ${log_file}
+
+    # Generate port numbers.
+    let client_port=id+11100
+    let p2p_port=id+12100
+    let tm_port=id+13100
+
+    ${EKIDEN_NODE} \
+        --log.level debug \
+        --grpc.log.verbose_debug \
+        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --metrics.mode none \
+        --storage.backend leveldb \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.debug.addr_book_lenient \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
+        --worker.storage.enabled \
+        --worker.client.port ${client_port} \
+        --worker.p2p.port ${p2p_port} \
+        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --datadir ${data_dir} \
+        2>&1 | tee ${log_file} | sed "s/^/[storage-node-${id}] /" &
 }
 
 # Cat all compute node logs.

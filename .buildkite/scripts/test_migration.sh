@@ -51,8 +51,9 @@ test_migration() {
     sleep 1
 
     run_compute_node 1 ${runtime} &>/dev/null
-
-    wait_nodes 3 # 1 + storage + km
+    run_storage_node 1 &>/dev/null
+    # Wait for all nodes to start: 1 compute + 1 storage + key manager.
+    wait_nodes 3
 
     set_epoch 1
     sleep 1
@@ -75,10 +76,10 @@ test_migration() {
     ps efh -C ekiden | awk '{print $1}' | xargs kill -9
 
     # Re-use storage db in the new storage node.
-    mkdir -p ${TEST_BASE_DIR}/committee-2/storage
-    chmod 700 ${TEST_BASE_DIR}/committee-2/storage
-    cp -a ${TEST_BASE_DIR}/committee-1/storage/storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage/
-    cp -a ${TEST_BASE_DIR}/committee-1/storage/mkvs_storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage/
+    mkdir -p ${TEST_BASE_DIR}/committee-2/storage-1
+    chmod 700 ${TEST_BASE_DIR}/committee-2/storage-1
+    cp -a ${TEST_BASE_DIR}/committee-1/storage-1/storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage-1/
+    cp -a ${TEST_BASE_DIR}/committee-1/storage-1/mkvs_storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage-1/
 
     # Start the second network.
     run_backend_tendermint_committee \
@@ -86,13 +87,14 @@ test_migration() {
         id=2 \
         replica_group_size=1 \
         replica_group_backup_size=0 \
-        clear_storage=0 \
         roothash_genesis_blocks="${TEST_BASE_DIR}/export-roothash.json"
 
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
+    run_storage_node 1 clear_storage=0 &>/dev/null
+    # Wait for all nodes to start: 1 compute + 1 storage + key manager.
+    wait_nodes 2
 
-    wait_nodes 3 # 1 + storage + km
     set_epoch 2
 
     # Start client and do state verification, checking that migration succeeded.
