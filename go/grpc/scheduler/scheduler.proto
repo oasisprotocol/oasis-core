@@ -23,6 +23,7 @@ message Committee {
   enum Kind {
     COMPUTE = 0;
     STORAGE = 1;
+    TRANSACTION = 2;
   }
   Kind kind = 1;
   repeated CommitteeNode members = 2;
