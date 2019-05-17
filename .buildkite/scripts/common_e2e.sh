@@ -193,8 +193,6 @@ run_backend_tendermint_committee() {
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
             --tendermint.debug.addr_book_lenient \
-            --keymanager.client.address 127.0.0.1:9003 \
-            --keymanager.client.certificate ${committee_dir}/key-manager/tls_identity_cert.pem \
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
             --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
             --datadir ${datadir} \
@@ -268,8 +266,6 @@ run_compute_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
-        --keymanager.client.address 127.0.0.1:9003 \
-        --keymanager.client.certificate ${EKIDEN_COMMITTEE_DIR}/key-manager/tls_identity_cert.pem \
         --worker.compute.enabled \
         --worker.compute.backend sandboxed \
         --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \

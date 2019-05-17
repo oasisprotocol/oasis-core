@@ -456,7 +456,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize the key manager client service.
-	node.KeyManager, err = keymanagerClient.New()
+	node.KeyManager, err = keymanagerClient.New(node.Registry)
 	if err != nil {
 		logger.Error("failed to initialize key manager client",
 			"err", err,

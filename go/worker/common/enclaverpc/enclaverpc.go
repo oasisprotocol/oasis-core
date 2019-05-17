@@ -56,10 +56,15 @@ func NewClient(address string, certFile string, endpoint string) (*Client, error
 		return nil, err
 	}
 
-	c := &Client{
+	return NewFromConn(conn, endpoint), nil
+}
+
+// NewFromConn creates a new enclave RPC client instance with a pre-established
+// gRPC connection.
+func NewFromConn(conn *grpc.ClientConn, endpoint string) *Client {
+	return &Client{
 		conn:     conn,
 		client:   erpcGrpc.NewEnclaveRpcClient(conn),
 		endpoint: endpoint,
 	}
-	return c, nil
 }

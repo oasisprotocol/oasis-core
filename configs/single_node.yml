@@ -48,17 +48,12 @@ worker:
       - "127.0.0.1:9200"
   p2p:
     port: 9100
-
-# Key manager configuration.
-keymanager:
-  enabled: true
-  runtime:
-    id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    binary: target/debug/ekiden-keymanager-runtime
-    loader: target/debug/ekiden-runtime-loader
-  client:
-    address: "127.0.0.1:9200"
-    certificate: /tmp/ekiden-single-node/tls_identity_cert.pem
+  keymanager:
+    enabled: true
+    runtime:
+      id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      binary: target/debug/ekiden-keymanager-runtime
+      loader: target/debug/ekiden-runtime-loader
 
 # Epochtime backend.
 epochtime:
