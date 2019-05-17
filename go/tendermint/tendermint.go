@@ -143,7 +143,7 @@ func (t *tendermintService) Quit() <-chan struct{} {
 }
 
 func (t *tendermintService) Stop() {
-	if !t.initialized() && !t.started() {
+	if !t.initialized() || !t.started() {
 		return
 	}
 
@@ -164,6 +164,10 @@ func (t *tendermintService) Synced() <-chan struct{} {
 }
 
 func (t *tendermintService) RegisterGenesisHook(hook func()) {
+	if !t.initialized() {
+		return
+	}
+
 	t.mux.RegisterGenesisHook(hook)
 }
 
