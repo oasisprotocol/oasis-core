@@ -356,6 +356,19 @@ func NewNode() (*Node, error) {
 	node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
 	node.svcMgr.Register(node.svcTmnt)
 
+	// Initialize the various node backends.
+	// NOTE: These backends need to be initialized here as Tendermint seed nodes
+	//       need to sync blocks for some unbelievable reason, even though their
+	//       only purpose is to gather node addresses. Not initializing the
+	//       backends would cause local consensus failure due to the ABCI app
+	//       being different.
+	if err = node.initBackends(); err != nil {
+		logger.Error("failed to initialize backends",
+			"err", err,
+		)
+		return nil, err
+	}
+
 	if node.svcTmnt.IsSeed() {
 		// Tendermint nodes in seed mode crawl the network for
 		// peers. In case of incoming connections seed node will
@@ -364,15 +377,6 @@ func NewNode() (*Node, error) {
 		// were operating as it would be useless running a full
 		// node.
 		logger.Info("starting tendermint seed node")
-
-		// Ensure that tendermint service is started even if no
-		// backends require it.
-		if err = node.svcTmnt.ForceInitialize(); err != nil {
-			logger.Error("failed to initialize tendermint service",
-				"err", err,
-			)
-			return nil, err
-		}
 
 		// Start the tendermint service.
 		if err = node.svcTmnt.Start(); err != nil {
@@ -388,14 +392,6 @@ func NewNode() (*Node, error) {
 	}
 
 	logger.Info("starting ekiden node")
-
-	// Initialize the various node backends.
-	if err = node.initBackends(); err != nil {
-		logger.Error("failed to initialize backends",
-			"err", err,
-		)
-		return nil, err
-	}
 
 	// Initialize the IAS proxy client.
 	node.IAS, err = ias.New(node.Identity)
