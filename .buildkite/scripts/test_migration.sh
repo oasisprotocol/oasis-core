@@ -47,7 +47,8 @@ test_migration() {
         epochtime_backend=tendermint_mock \
         id=1 \
         replica_group_size=1 \
-        replica_group_backup_size=0
+        replica_group_backup_size=0 \
+        storage_group_size=1
     sleep 1
 
     run_compute_node 1 ${runtime} &>/dev/null
@@ -87,6 +88,7 @@ test_migration() {
         id=2 \
         replica_group_size=1 \
         replica_group_backup_size=0 \
+        storage_group_size=1 \
         roothash_genesis_blocks="${TEST_BASE_DIR}/export-roothash.json"
 
     # Finish starting the second network.

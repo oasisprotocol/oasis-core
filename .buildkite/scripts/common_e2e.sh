@@ -34,6 +34,7 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
 #   replica_group_backup_size - runtime replica group backup size (default: 1)
+#   storage_group_size - number of storage nodes for the runtime (default: 2)
 #
 run_backend_tendermint_committee() {
     # Optional arguments with default values.
@@ -41,6 +42,7 @@ run_backend_tendermint_committee() {
     local id=1
     local replica_group_size=2
     local replica_group_backup_size=1
+    local storage_group_size=2
     local roothash_genesis_blocks=""
     local nodes=3
     local runtime_genesis=""
@@ -80,6 +82,7 @@ run_backend_tendermint_committee() {
         --runtime.id ${EKIDEN_RUNTIME_ID} \
         --runtime.replica_group_size ${replica_group_size} \
         --runtime.replica_group_backup_size ${replica_group_backup_size} \
+        --runtime.storage_group_size ${storage_group_size} \
         ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}} \
         ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --entity ${entity_dir} \

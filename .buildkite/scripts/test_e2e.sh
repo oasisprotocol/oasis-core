@@ -46,9 +46,10 @@ scenario_basic() {
 
     # Initialize storage nodes.
     run_storage_node 1
+    run_storage_node 2
 
-    # Wait for all nodes to start: 3 compute + 1 storage + key manager.
-    wait_nodes 5
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
+    wait_nodes 6
 
     # Advance epoch to elect a new committee.
     set_epoch 1
@@ -66,9 +67,10 @@ scenario_discrepancy() {
 
     # Initialize storage nodes.
     run_storage_node 1
+    run_storage_node 2
 
-    # Wait for all nodes to start: 3 compute + 1 storage + key manager.
-    wait_nodes 5
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
+    wait_nodes 6
 
     # Advance epoch to elect a new committee.
     set_epoch 1
