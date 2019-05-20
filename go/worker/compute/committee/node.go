@@ -103,6 +103,20 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	batchRuntimeProcessingTime = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_batch_runtime_processing_time",
+			Help: "Time it takes for a batch to be processed by the runtime",
+		},
+		[]string{"runtime"},
+	)
+	batchSize = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_batch_size",
+			Help: "Number of transactions is a batch",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		incomingQueueSize,
 		discrepancyDetectedCount,
@@ -112,6 +126,8 @@ var (
 		abortedBatchCount,
 		storageCommitLatency,
 		batchProcessingTime,
+		batchRuntimeProcessingTime,
+		batchSize,
 	}
 
 	metricsOnce sync.Once
@@ -498,6 +514,7 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 	}
 
 	n.batchStartTime = time.Now()
+	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
 
 	n.transition(StateProcessingBatch{batch, cancel, done})
 
@@ -512,6 +529,11 @@ func (n *Node) startProcessingBatch(batch runtime.Batch) {
 		)
 		ctx = opentracing.ContextWithSpan(ctx, span)
 		defer span.Finish()
+
+		rtStartTime := time.Now()
+		defer func() {
+			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
+		}()
 
 		ch, err := n.workerHost.MakeRequest(ctx, rq)
 		if err != nil {
