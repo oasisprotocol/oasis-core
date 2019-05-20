@@ -135,13 +135,19 @@ test_suite() {
     #     client_runner=run_client_km_restart
 
     # Discrepancy scenario.
-    run_test \
-        scenario=scenario_discrepancy \
-        name="e2e-${backend_name}-discrepancy" \
-        backend_runner=$backend_runner \
-        runtime=simple-keyvalue \
-        client=simple-keyvalue \
-        on_success_hook=assert_no_round_timeouts
+    # NOTE: This scenario currently fails on SGX due to the way discrepancy
+    # injection is currently implemented.
+    # For more details, see:
+    # https://github.com/oasislabs/ekiden/issues/1730.
+    if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
+        run_test \
+            scenario=scenario_discrepancy \
+            name="e2e-${backend_name}-discrepancy" \
+            backend_runner=$backend_runner \
+            runtime=simple-keyvalue \
+            client=simple-keyvalue \
+            on_success_hook=assert_no_round_timeouts
+    fi
 }
 
 ##########################################
