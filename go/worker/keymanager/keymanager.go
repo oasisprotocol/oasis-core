@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc"
@@ -173,7 +174,43 @@ func (w *worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 }
 
 func (w *worker) onProcessStart(proto *protocol.Protocol) error {
-	// TODO: Call the key manager initialization routine.
+	// Initialize the key manager.
+	type InitRequest struct {
+		// TODO: At some point this needs the policy, checksum, peers, etc.
+	}
+	type InitCall struct { // nolint: maligned
+		Method string      `codec:"method"`
+		Args   InitRequest `codec:"args"`
+	}
+
+	call := InitCall{
+		Method: "init",
+		Args:   InitRequest{},
+	}
+	req := &protocol.Body{
+		WorkerLocalRPCCallRequest: &protocol.WorkerLocalRPCCallRequest{
+			Request:   cbor.Marshal(&call),
+			StateRoot: emptyRoot,
+		},
+	}
+
+	resp, err := proto.Call(w.ctx, req)
+	if err != nil {
+		w.logger.Error("failed to initialize key manager enclave",
+			"err", err,
+		)
+		return err
+	}
+
+	// TODO: Do something clever with the response.
+	/*
+		type InitResponse struct {
+			IsSecure bool   `codec:"is_secure"`
+			Checksum []byte `codec:"checksum"`
+		}
+	*/
+	_ = resp
+
 	return nil
 }
 

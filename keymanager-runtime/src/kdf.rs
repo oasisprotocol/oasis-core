@@ -32,9 +32,16 @@ lazy_static! {
     // Global KDF object.
     static ref KDF: Kdf = Kdf::new();
 
+    static ref CHECKSUM_CUSTOM: &'static [u8] = {
+        match BUILD_INFO.is_secure {
+            true => b"ekiden-validate-master-secret",
+            false => b"ekiden-validate-master-secret-insecure",
+        }
+    };
+
     static ref RUNTIME_KDF_CUSTOM: &'static [u8] = {
         match BUILD_INFO.is_secure {
-            true =>  b"ekiden-derive-runtime-secret",
+            true => b"ekiden-derive-runtime-secret",
             false => b"ekiden-derive-runtime-secret-insecure",
         }
     };
@@ -47,10 +54,10 @@ lazy_static! {
     };
 }
 
-/// A dummy key for use in tests where integrity is not needed.
+/// A dummy key for use in non-SGX tests where integrity is not needed.
 /// Public Key: 0x9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f
 #[cfg(not(target_env = "sgx"))]
-const SIGNING_KEY_PKCS8: &'static [u8] = &[
+const INSECURE_SIGNING_KEY_PKCS8: &'static [u8] = &[
     48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 124, 181, 54, 35, 91, 34, 238,
     29, 127, 17, 115, 64, 41, 135, 165, 19, 211, 246, 106, 37, 136, 149, 157, 187, 145, 157, 192,
     170, 25, 201, 141, 161, 35, 3, 33, 0, 157, 65, 168, 116, 184, 14, 57, 164, 12, 150, 68, 233,
@@ -69,6 +76,7 @@ pub struct Kdf {
 struct Inner {
     /// Master secret.
     master_secret: Option<MasterSecret>,
+    checksum: Option<Vec<u8>>,
     signer: Option<Arc<signature::Signer>>,
     cache: LruCache<Vec<u8>, ContractKey>,
 }
@@ -125,6 +133,7 @@ impl Kdf {
         Self {
             inner: RwLock::new(Inner {
                 master_secret: None,
+                checksum: None,
                 signer: None,
                 cache: LruCache::new(1024),
             }),
@@ -138,34 +147,47 @@ impl Kdf {
 
     /// Initialize the KDF internal state.
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    pub fn init(&self, ctx: &RpcContext) -> Fallible<()> {
-        // TODO: This is where replication cleverness should probably happen, if not
-        // in the caller.
+    pub fn init(&self, ctx: &RpcContext) -> Fallible<Vec<u8>> {
         let mut inner = self.inner.write().unwrap();
 
-        if inner.master_secret.is_some() {
-            return Ok(()); // HACK HACK HACK.
-                           //return Err(KeyManagerError::AlreadyInitialized.into());
+        // Initialization should be idempotent.
+        if inner.master_secret.is_none() {
+            let master_secret = match Self::load_master_secret() {
+                Some(master_secret) => master_secret,
+                None => Self::generate_master_secret(),
+            };
+            inner.master_secret = Some(MasterSecret::from(master_secret));
         }
 
-        // Failures past this point indicate a messed up worker host, and
-        // are fatal.
+        // (re)-generate the checksum, based on the possibly updated RAK.
+        let mut k = [0u8; 32];
+        let mut f = KMac::new_kmac256(
+            inner.master_secret.as_ref().unwrap().as_ref(),
+            &CHECKSUM_CUSTOM,
+        );
 
-        let master_secret = match Self::load_master_secret() {
-            Some(master_secret) => master_secret,
-            None => Self::generate_master_secret(),
-        };
-        inner.master_secret = Some(MasterSecret::from(master_secret));
+        #[cfg(target_env = "sgx")]
+        {
+            let signer: Arc<signature::Signer> = ctx.rak.clone();
+            inner.signer = Some(signer);
+
+            f.update(ctx.rak.public_key().unwrap().as_ref());
+        }
 
         #[cfg(not(target_env = "sgx"))]
-        let signer: Arc<signature::Signer> =
-            Arc::new(signature::PrivateKey::from_pkcs8(SIGNING_KEY_PKCS8).unwrap());
-        #[cfg(target_env = "sgx")]
-        let signer: Arc<signature::Signer> = ctx.rak.clone();
+        {
+            let priv_key =
+                Arc::new(signature::PrivateKey::from_pkcs8(INSECURE_SIGNING_KEY_PKCS8).unwrap());
 
-        inner.signer = Some(signer);
+            f.update(priv_key.public_key().as_ref());
 
-        return Ok(());
+            let signer: Arc<signature::Signer> = priv_key;
+            inner.signer = Some(signer);
+        }
+        f.finalize(&mut k);
+        inner.checksum = Some(k.to_vec());
+
+        return Ok(inner.checksum.as_ref().unwrap().clone());
     }
 
     // Get or create keys.

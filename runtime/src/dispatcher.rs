@@ -21,8 +21,10 @@ use crate::{
     protocol::{Protocol, ProtocolCAS, ProtocolUntrustedLocalStorage},
     rak::RAK,
     rpc::{
-        demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher,
-        types::Message as RpcMessage, Context as RpcContext,
+        demux::Demux as RpcDemux,
+        dispatcher::Dispatcher as RpcDispatcher,
+        types::{Message as RpcMessage, Request as RpcRequest},
+        Context as RpcContext,
     },
     storage::{
         cas::PassthroughCAS,
@@ -152,6 +154,24 @@ impl Dispatcher {
                     // RPC call.
                     self.dispatch_rpc(
                         &mut rpc_demux,
+                        &mut rpc_dispatcher,
+                        &protocol,
+                        ctx,
+                        id,
+                        request,
+                        state_root,
+                    );
+                }
+                Ok((
+                    ctx,
+                    id,
+                    Body::WorkerLocalRPCCallRequest {
+                        request,
+                        state_root,
+                    },
+                )) => {
+                    // Local RPC call.
+                    self.dispatch_local_rpc(
                         &mut rpc_dispatcher,
                         &protocol,
                         ctx,
@@ -418,6 +438,52 @@ impl Dispatcher {
                 new_state_root: state_root,
             };
         }
+
+        protocol.send_response(id, protocol_response).unwrap();
+    }
+
+    fn dispatch_local_rpc(
+        &self,
+        rpc_dispatcher: &mut RpcDispatcher,
+        protocol: &Arc<Protocol>,
+        ctx: Context,
+        id: u64,
+        request: Vec<u8>,
+        state_root: Hash,
+    ) {
+        debug!(self.logger, "Received local RPC call request"; "state_root" => ?state_root);
+
+        let req: RpcRequest = serde_cbor::from_slice(&request).unwrap();
+
+        // Request, dispatch.
+        let ctx = ctx.freeze();
+        let cas = Arc::new(ProtocolCAS::new(
+            Context::create_child(&ctx),
+            protocol.clone(),
+        ));
+        let cas = Arc::new(PassthroughCAS::new(cas));
+        let read_syncer = HostReadSyncer::new(protocol.clone());
+        let mut mkvs = UrkelTree::make()
+            .with_root(state_root)
+            .new(Context::create_child(&ctx), Box::new(read_syncer))
+            .unwrap();
+        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+            Context::create_child(&ctx),
+            protocol.clone(),
+        ));
+        let rpc_ctx = RpcContext::new(self.rak.clone(), None);
+        let response =
+            StorageContext::enter(cas.clone(), &mut mkvs, untrusted_local.clone(), || {
+                rpc_dispatcher.dispatch_local(req, rpc_ctx)
+            });
+        let response = RpcMessage::Response(response);
+
+        // Note: MKVS commit is omitted, this MUST be global side-effect free.
+
+        debug!(self.logger, "Local RPC call dispatch complete");
+
+        let response = serde_cbor::to_vec(&response).unwrap();
+        let protocol_response = Body::WorkerLocalRPCCallResponse { response };
 
         protocol.send_response(id, protocol_response).unwrap();
     }

@@ -14,6 +14,22 @@ impl_bytes!(PublicKey, 32, "A public key.");
 impl_bytes!(StateKey, 32, "A state key.");
 impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
 
+/// Key manager initialization request.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct InitRequest {
+    // TODO: Policy, peers, checksum, etc.
+}
+
+/// Key manager initialization response.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct InitResponse {
+    /// True iff the key manager thinks it's running in a secure mode.
+    pub is_secure: bool,
+    /// Checksum for validating replication.
+    #[serde(with = "serde_bytes")]
+    pub checksum: Vec<u8>,
+}
+
 /// Request runtime/contract id tuple.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RequestIds {

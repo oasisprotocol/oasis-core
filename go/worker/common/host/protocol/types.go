@@ -61,6 +61,8 @@ type Body struct {
 	WorkerCapabilityTEERakAvrResponse    *Empty
 	WorkerRPCCallRequest                 *WorkerRPCCallRequest
 	WorkerRPCCallResponse                *WorkerRPCCallResponse
+	WorkerLocalRPCCallRequest            *WorkerLocalRPCCallRequest
+	WorkerLocalRPCCallResponse           *WorkerLocalRPCCallResponse
 	WorkerCheckTxBatchRequest            *WorkerCheckTxBatchRequest
 	WorkerCheckTxBatchResponse           *WorkerCheckTxBatchResponse
 	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest
@@ -131,6 +133,20 @@ type WorkerRPCCallResponse struct {
 	StorageLog storage.WriteLog `codec:"storage_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
+}
+
+// WorkerLocalRPCCallRequest is a worker local RPC call request message body.
+type WorkerLocalRPCCallRequest struct {
+	// Request.
+	Request []byte `codec:"request"`
+	// State root hash.
+	StateRoot hash.Hash `codec:"state_root"`
+}
+
+// WorkerLocalRPCCallResponse is a worker local RPC call response message body.
+type WorkerLocalRPCCallResponse struct {
+	// Response.
+	Response []byte `codec:"response"`
 }
 
 // WorkerCheckTxBatchRequest is a worker check tx batch request message body.

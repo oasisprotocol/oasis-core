@@ -17,7 +17,12 @@ use failure::Fallible;
 
 use ekiden_keymanager_api::*;
 use ekiden_runtime::{
-    register_runtime_rpc_methods, rpc::Context as RpcContext, RpcDispatcher, TxnDispatcher,
+    register_runtime_rpc_methods,
+    rpc::{
+        dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
+        Context as RpcContext,
+    },
+    RpcDispatcher, TxnDispatcher, BUILD_INFO,
 };
 
 use self::kdf::Kdf;
@@ -28,14 +33,22 @@ use self::kdf::Kdf;
 static MAX_KEY_TIMESTAMP: u64 = (1 << 53) - 1;
 
 /// Initialize the Kdf.
-fn init(ctx: &mut RpcContext) -> Fallible<()> {
-    Kdf::global().init(&ctx)
+fn init(_req: &InitRequest, ctx: &mut RpcContext) -> Fallible<InitResponse> {
+    // TODO: Based on the InitRequest, and persisted state (if any):
+    //  * Load the persisted state.
+    //  * Generate a new master secret.
+    //  * Replicate the master secret.
+
+    let checksum = Kdf::global().init(&ctx)?;
+
+    Ok(InitResponse {
+        is_secure: BUILD_INFO.is_secure,
+        checksum,
+    })
 }
 
 /// See `Kdf::get_or_create_keys`.
 fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<ContractKey> {
-    init(ctx)?; // HACK HACK HACK
-
     // Authenticate session info (this requires all clients are SGX enclaves).
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     let si = ctx.session_info.as_ref();
@@ -43,17 +56,15 @@ fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<Contra
     #[cfg(target_env = "sgx")]
     let _si = si.ok_or(KeyManagerError::NotAuthenticated)?;
 
-    // TODO: Namespace all keys based on the tuple (req.runtime_id,
-    // req.contract_id, si.authenticated_avr.mr_enclave) so that the keys
-    // are never released to an incorrect enclave.
+    // TODO: Authenticate the source enclave based on the tuple
+    // (req.runtime_id, req.contract_id, si.authenticated_avr.mr_enclave)
+    // so that the keys are never released to an incorrect enclave.
 
     Kdf::global().get_or_create_keys(req)
 }
 
 /// See `Kdf::get_public_key`.
-fn get_public_key(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<Option<SignedPublicKey>> {
-    init(ctx)?; // HACK HACK HACK
-
+fn get_public_key(req: &RequestIds, _ctx: &mut RpcContext) -> Fallible<Option<SignedPublicKey>> {
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
     pk.map_or(Ok(None), |pk| {
@@ -64,10 +75,8 @@ fn get_public_key(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<Option<Sig
 /// See `Kdf::get_public_key`.
 fn get_long_term_public_key(
     req: &RequestIds,
-    ctx: &mut RpcContext,
+    _ctx: &mut RpcContext,
 ) -> Fallible<Option<SignedPublicKey>> {
-    init(ctx)?; // HACK HACK HACK
-
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
     pk.map_or(Ok(None), |pk| Ok(Some(kdf.sign_public_key(pk, None)?)))
@@ -77,6 +86,19 @@ fn main() {
     // Initializer.
     let init = |_: &_, _: &_, rpc: &mut RpcDispatcher, _txn: &mut TxnDispatcher| {
         with_api! { register_runtime_rpc_methods!(rpc, api); }
+
+        // TODO: Somone that cares can add macros for this, I do not.  Note
+        // that these are local methods, for use by the node key manager
+        // component.
+        rpc.add_method(
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: "init".to_string(),
+                },
+                init,
+            ),
+            true,
+        );
     };
 
     // Start the runtime.
