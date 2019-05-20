@@ -67,11 +67,35 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	batchRuntimeProcessingTime = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_batch_runtime_processing_time",
+			Help: "Time it takes for a batch to be processed by the runtime",
+		},
+		[]string{"runtime"},
+	)
+	batchSize = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_batch_size",
+			Help: "Number of transactions is a batch",
+		},
+		[]string{"runtime"},
+	)
+	roothashCommitLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_roothash_commit_latency",
+			Help: "Latency of roothash commit",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		discrepancyDetectedCount,
-		batchProcessingTime,
 		abortedBatchCount,
 		storageCommitLatency,
+		batchProcessingTime,
+		batchRuntimeProcessingTime,
+		batchSize,
+		roothashCommitLatency,
 	}
 
 	metricsOnce sync.Once
@@ -352,6 +376,7 @@ func (n *Node) startProcessingBatchLocked(batch runtime.Batch, batchSpanCtx open
 	}
 
 	batchStartTime := time.Now()
+	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
 	n.transitionLocked(StateProcessingBatch{batch, batchSpanCtx, batchStartTime, cancel, done})
 
 	// Request the worker host to process a batch. This is done in a separate
@@ -365,6 +390,11 @@ func (n *Node) startProcessingBatchLocked(batch runtime.Batch, batchSpanCtx open
 		)
 		ctx = opentracing.ContextWithSpan(ctx, span)
 		defer span.Finish()
+
+		rtStartTime := time.Now()
+		defer func() {
+			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
+		}()
 
 		ch, err := n.workerHost.MakeRequest(ctx, rq)
 		if err != nil {
@@ -563,6 +593,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(state.batchSpanCtx))
 	defer span.Finish()
 
+	start = time.Now()
 	if err := n.commonNode.Roothash.Commit(n.ctx, n.commonNode.RuntimeID, commit.ToOpaqueCommitment()); err != nil {
 		n.logger.Error("failed to submit commitment",
 			"err", err,
@@ -571,6 +602,8 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		return
 	}
 	crash.Here(crashPointBatchProposeAfter)
+
+	roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
 }
 
 // Guarded by n.commonNode.CrossNode.

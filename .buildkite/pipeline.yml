@@ -2,12 +2,11 @@
 # Build pipeline
 ################
 docker_plugin: &docker_plugin_configuration
-  oasislabs/docker#v2.1.0-oasis4:
+  oasislabs/docker#v3.0.1-oasis1:
     image: "oasislabs/testing:0.3.0"
     always_pull: true
     workdir: /workdir
     volumes:
-      - .:/workdir
       - /var/lib/buildkite-agent/.ssh:/root/.ssh
       - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
       - /var/lib/buildkite-agent/.codecov:/root/.codecov
@@ -157,8 +156,8 @@ steps:
   # E2E test jobs
   ###############
   - label: E2E tests (%n)
-    parallelism: 4
-    timeout_in_minutes: 20
+    parallelism: 2
+    timeout_in_minutes: 5
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -168,7 +167,7 @@ steps:
       <<: *docker_plugin_configuration
 
   - label: E2E migration tests
-    timeout_in_minutes: 20
+    timeout_in_minutes: 5
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
