@@ -117,6 +117,13 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	roothashCommitLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_roothash_commit_latency",
+			Help: "Latency of roothash commit",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		incomingQueueSize,
 		discrepancyDetectedCount,
@@ -128,6 +135,7 @@ var (
 		batchProcessingTime,
 		batchRuntimeProcessingTime,
 		batchSize,
+		roothashCommitLatency,
 	}
 
 	metricsOnce sync.Once
@@ -735,6 +743,7 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(n.batchSpanCtx))
 	defer span.Finish()
 
+	start = time.Now()
 	if err := n.roothash.Commit(n.ctx, n.runtimeID, commit.ToOpaqueCommitment()); err != nil {
 		n.logger.Error("failed to submit commitment",
 			"err", err,
@@ -743,6 +752,8 @@ func (n *Node) proposeBatch(batch *protocol.ComputedBatch) {
 		return
 	}
 	crash.Here(crashPointBatchProposeAfter)
+
+	roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
 }
 
 func (n *Node) handleNewEvent(ev *roothash.Event) {
