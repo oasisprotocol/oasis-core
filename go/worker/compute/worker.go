@@ -9,23 +9,15 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
-	"github.com/oasislabs/ekiden/go/worker/compute/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -60,26 +52,20 @@ type Runtime struct {
 
 // GetNode returns the committee node for this runtime.
 func (r *Runtime) GetNode() *committee.Node {
+	if r == nil {
+		return nil
+	}
 	return r.node
 }
 
 // Worker is a compute worker handling many runtimes.
 type Worker struct {
-	enabled         bool
-	cfg             Config
-	workerCommonCfg *workerCommon.Config
+	enabled bool
+	cfg     Config
 
-	identity     *identity.Identity
-	storage      storage.Backend
-	roothash     roothash.Backend
-	registry     registry.Backend
-	epochtime    epochtime.Backend
-	scheduler    scheduler.Backend
-	consensus    common.ConsensusBackend
+	commonWorker *workerCommon.Worker
 	ias          *ias.IAS
 	keyManager   *keymanager.KeyManager
-	p2p          *p2p.P2P
-	grpc         *grpc.Server
 	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
@@ -95,29 +81,6 @@ type Worker struct {
 	initCh    chan struct{}
 
 	logger *logging.Logger
-}
-
-// getNodeRuntimes returns compute worker node runtimes.
-func (w *Worker) getNodeRuntimes() []*node.Runtime {
-	var nodeRuntimes []*node.Runtime
-
-	for _, v := range w.runtimes {
-		var err error
-
-		rt := &node.Runtime{
-			ID: v.cfg.ID,
-		}
-		if rt.Capabilities.TEE, err = v.workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
-			w.logger.Error("failed to obtain CapabilityTEE",
-				"err", err,
-				"runtime", rt.ID,
-			)
-			continue
-		}
-		nodeRuntimes = append(nodeRuntimes, rt)
-	}
-
-	return nodeRuntimes
 }
 
 // Name returns the service name.
@@ -136,7 +99,7 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for the gRPC server, all runtimes and all proxies to terminate.
+	// Wait for all runtimes and all proxies to terminate.
 	go func() {
 		defer close(w.quitCh)
 		defer (w.cancelCtx)()
@@ -149,8 +112,6 @@ func (w *Worker) Start() error {
 		for _, proxy := range w.netProxies {
 			<-proxy.Quit()
 		}
-
-		<-w.grpc.Quit()
 	}()
 
 	// Start all the network proxies.
@@ -209,7 +170,6 @@ func (w *Worker) Stop() {
 		proxy.Stop()
 	}
 
-	w.grpc.Stop()
 	if w.localStorage != nil {
 		w.localStorage.Stop()
 	}
@@ -239,8 +199,6 @@ func (w *Worker) Cleanup() {
 	for _, proxy := range w.netProxies {
 		proxy.Cleanup()
 	}
-
-	w.grpc.Cleanup()
 
 	os.RemoveAll(w.socketDir)
 }
@@ -287,7 +245,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			newHostHandler(rtCfg.ID, w.storage, w.keyManager, w.localStorage),
+			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
 			false,
 		)
 	case host.BackendUnconfined:
@@ -298,7 +256,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			proxies,
 			rtCfg.TEEHardware,
 			w.ias,
-			newHostHandler(rtCfg.ID, w.storage, w.keyManager, w.localStorage),
+			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
 			true,
 		)
 	case host.BackendMock:
@@ -315,6 +273,9 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		"runtime_id", rtCfg.ID,
 	)
 
+	// Get other nodes from this runtime.
+	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
+
 	// Create worker host for the given runtime.
 	workerHost, err := w.newWorkerHost(cfg, rtCfg)
 	if err != nil {
@@ -325,21 +286,15 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	nodeCfg := cfg.Committee
 
 	node, err := committee.NewNode(
-		rtCfg.ID,
-		w.identity,
-		w.storage,
-		w.roothash,
-		w.registry,
-		w.epochtime,
-		w.scheduler,
-		w.consensus,
+		commonNode,
 		workerHost,
-		w.p2p,
 		nodeCfg,
 	)
 	if err != nil {
 		return err
 	}
+
+	commonNode.AddHooks(node)
 
 	rt := &Runtime{
 		cfg:        rtCfg,
@@ -358,19 +313,11 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 func newWorker(
 	dataDir string,
 	enabled bool,
-	identity *identity.Identity,
-	storage storage.Backend,
-	roothash roothash.Backend,
-	registryInst registry.Backend,
-	epochtime epochtime.Backend,
-	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	grpc *grpc.Server,
-	registration *registration.Registration,
 	keyManager *keymanager.KeyManager,
+	registration *registration.Registration,
 	cfg Config,
-	workerCommonCfg *workerCommon.Config,
 ) (*Worker, error) {
 	startedOk := false
 	socketDir := filepath.Join(dataDir, proxySocketDirName)
@@ -387,47 +334,33 @@ func newWorker(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:         enabled,
-		cfg:             cfg,
-		workerCommonCfg: workerCommonCfg,
-		identity:        identity,
-		storage:         storage,
-		roothash:        roothash,
-		registry:        registryInst,
-		epochtime:       epochtime,
-		scheduler:       scheduler,
-		consensus:       consensus,
-		ias:             ias,
-		grpc:            grpc,
-		registration:    registration,
-		keyManager:      keyManager,
-		runtimes:        make(map[signature.MapKey]*Runtime),
-		netProxies:      make(map[string]NetworkProxy),
-		socketDir:       socketDir,
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		quitCh:          make(chan struct{}),
-		initCh:          make(chan struct{}),
-		logger:          logging.GetLogger("worker/compute"),
+		enabled:      enabled,
+		cfg:          cfg,
+		commonWorker: commonWorker,
+		ias:          ias,
+		keyManager:   keyManager,
+		registration: registration,
+		runtimes:     make(map[signature.MapKey]*Runtime),
+		netProxies:   make(map[string]NetworkProxy),
+		socketDir:    socketDir,
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/compute"),
 	}
 
 	if enabled {
+		if !w.commonWorker.Enabled() {
+			panic("common worker should have been enabled for compute worker")
+		}
+
 		if cfg.WorkerRuntimeLoaderBinary == "" && cfg.Backend != host.BackendMock {
 			return nil, fmt.Errorf("compute/worker: no runtime loader binary configured and backend not host.BackendMock")
 		}
 		if len(cfg.Runtimes) == 0 {
 			return nil, fmt.Errorf("compute/worker: no runtimes configured")
 		}
-
-		// Use existing gRPC server passed from the node.
-		newClientGRPCServer(grpc.Server(), w)
-
-		// Create P2P node.
-		p2p, err := p2p.New(w.ctx, identity, workerCommonCfg.P2PPort, workerCommonCfg.P2PAddresses)
-		if err != nil {
-			return nil, err
-		}
-		w.p2p = p2p
 
 		// Create required network proxies.
 		metricsConfig := metrics.GetServiceConfig()
@@ -472,12 +405,19 @@ func newWorker(
 
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
-			// XXX: P2P will (probably?) be shared between different workers
-			// so should probably be set elsewhere in future.
-			n.P2P = w.p2p.Info()
-
 			n.AddRoles(node.RoleComputeWorker)
-			n.Runtimes = w.getNodeRuntimes()
+
+			for _, rt := range n.Runtimes {
+				var err error
+
+				if rt.Capabilities.TEE, err = w.runtimes[rt.ID.ToMapKey()].workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
+					w.logger.Error("failed to obtain CapabilityTEE",
+						"err", err,
+						"runtime", rt.ID,
+					)
+					continue
+				}
+			}
 
 			return nil
 		})

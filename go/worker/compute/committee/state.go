@@ -2,108 +2,151 @@ package committee
 
 import (
 	"context"
+	"time"
+
+	"github.com/opentracing/opentracing-go"
 
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
+// StateName is a symbolic state without the attached values.
+type StateName string
+
+const (
+	// NotReady is the name of StateNotReady.
+	NotReady StateName = "NotReady"
+	// WaitingForBatch is the name of StateWaitingForBatch.
+	WaitingForBatch = "WaitingForBatch"
+	// WaitingForBlock is the name of StateWaitingForBlock.
+	WaitingForBlock = "WaitingForBlock"
+	// ProcessingBatch is the name of StateProcessingBatch.
+	ProcessingBatch = "ProcessingBatch"
+	// WaitingForFinalize is the name of StateWaitingForFinalize.
+	WaitingForFinalize = "WaitingForFinalize"
+)
+
 // Valid state transitions.
-var validStateTransitions = map[string][]string{
+var validStateTransitions = map[StateName][]StateName{
 	// Transitions from NotReady state.
-	"NotReady": {
+	NotReady: {
 		// Epoch transition occurred and we are not in the committee.
-		"NotReady",
+		NotReady,
 		// Epoch transition occurred and we are in the committee.
-		"WaitingForBatch",
+		WaitingForBatch,
 	},
 
 	// Transitions from WaitingForBatch state.
-	"WaitingForBatch": {
-		"WaitingForBatch",
+	WaitingForBatch: {
+		WaitingForBatch,
 		// Received batch, need to catch up current block.
-		"WaitingForBlock",
+		WaitingForBlock,
 		// Received batch, current block is up to date.
-		"ProcessingBatch",
-		// Sent a batch as transaction scheduler leader.
-		"WaitingForFinalize",
+		ProcessingBatch,
 		// Epoch transition occurred and we are no longer in the committee.
-		"NotReady",
+		NotReady,
 	},
 
 	// Transitions from WaitingForBlock state.
-	"WaitingForBlock": {
+	WaitingForBlock: {
 		// Abort: seen newer block while waiting for block.
-		"WaitingForBatch",
+		WaitingForBatch,
 		// Seen block that we were waiting for.
-		"ProcessingBatch",
+		ProcessingBatch,
 	},
 
 	// Transitions from ProcessingBatch state.
-	"ProcessingBatch": {
+	ProcessingBatch: {
 		// Batch has been successfully processed or has been aborted.
-		"WaitingForFinalize",
+		WaitingForFinalize,
 	},
 
 	// Transitions from WaitingForFinalize state.
-	"WaitingForFinalize": {
+	WaitingForFinalize: {
 		// Round has been finalized.
-		"WaitingForBatch",
+		WaitingForBatch,
 		// Epoch transition occurred and we are no longer in the committee.
-		"NotReady",
+		NotReady,
 	},
 }
 
 // NodeState is a node's state.
 type NodeState interface {
-	// String returns a string representation of the state.
-	String() string
+	// Name returns the name of the state.
+	Name() StateName
 }
 
 // StateNotReady is the not ready state.
 type StateNotReady struct {
 }
 
+// Name returns the name of the state.
+func (s StateNotReady) Name() StateName {
+	return NotReady
+}
+
 // String returns a string representation of the state.
 func (s StateNotReady) String() string {
-	return "NotReady"
+	return string(s.Name())
 }
 
 // StateWaitingForBatch is the waiting for batch state.
 type StateWaitingForBatch struct {
 }
 
+// Name returns the name of the state.
+func (s StateWaitingForBatch) Name() StateName {
+	return WaitingForBatch
+}
+
 // String returns a string representation of the state.
 func (s StateWaitingForBatch) String() string {
-	return "WaitingForBatch"
+	return string(s.Name())
 }
 
 // StateWaitingForBlock is the waiting for block state.
 type StateWaitingForBlock struct {
 	// Batch that is waiting to be processed.
 	batch runtime.Batch
+	// Tracing for this batch.
+	batchSpanCtx opentracing.SpanContext
 	// Header of the block we are waiting for.
 	header *block.Header
 }
 
+// Name returns the name of the state.
+func (s StateWaitingForBlock) Name() StateName {
+	return WaitingForBlock
+}
+
 // String returns a string representation of the state.
 func (s StateWaitingForBlock) String() string {
-	return "WaitingForBlock"
+	return string(s.Name())
 }
 
 // StateProcessingBatch is the processing batch state.
 type StateProcessingBatch struct {
 	// Batch that is being processed.
 	batch runtime.Batch
+	// Tracing for this batch.
+	batchSpanCtx opentracing.SpanContext
+	// Timing for this batch.
+	batchStartTime time.Time
 	// Function for cancelling batch processing.
 	cancelFn context.CancelFunc
 	// Channel which will provide the result.
 	done chan *protocol.ComputedBatch
 }
 
+// Name returns the name of the state.
+func (s StateProcessingBatch) Name() StateName {
+	return ProcessingBatch
+}
+
 // String returns a string representation of the state.
 func (s StateProcessingBatch) String() string {
-	return "ProcessingBatch"
+	return string(s.Name())
 }
 
 func (s *StateProcessingBatch) cancel() {
@@ -115,9 +158,15 @@ func (s *StateProcessingBatch) cancel() {
 
 // StateWaitingForFinalize is the waiting for finalize state.
 type StateWaitingForFinalize struct {
+	batchStartTime time.Time
+}
+
+// Name returns the name of the state.
+func (s StateWaitingForFinalize) Name() StateName {
+	return WaitingForFinalize
 }
 
 // String returns a string representation of the state.
 func (s StateWaitingForFinalize) String() string {
-	return "WaitingForFinalize"
+	return string(s.Name())
 }

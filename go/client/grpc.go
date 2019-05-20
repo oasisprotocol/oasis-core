@@ -231,6 +231,10 @@ func (s *grpcServer) QueryTxns(ctx context.Context, req *pbClient.QueryTxnsReque
 	if err != nil {
 		return nil, err
 	}
+	// Prevent codec from sending empty slice as CBOR null.
+	if results == nil {
+		results = []*TxnResult{}
+	}
 
 	return &pbClient.QueryTxnsResponse{
 		Results: cbor.Marshal(results),

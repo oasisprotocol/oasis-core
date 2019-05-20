@@ -16,15 +16,17 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore"
 	"github.com/libp2p/go-libp2p-protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/version"
+	"github.com/oasislabs/ekiden/go/worker/common/configparser"
 )
 
-var protocolName = protocol.ID("/p2p/oasislabs.com/committee/compute/" + version.ComputeCommitteeProtocol.String())
+var protocolName = protocol.ID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
 
 // Handler is a handler for P2P messages.
 type Handler interface {
@@ -244,7 +246,13 @@ func (p *P2P) handleConnection(conn libp2pNet.Conn) {
 }
 
 // New creates a new P2P node.
-func New(ctx context.Context, identity *identity.Identity, port uint16, addresses []node.Address) (*P2P, error) {
+func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
+	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgP2pAddresses))
+	if err != nil {
+		return nil, err
+	}
+	port := uint16(viper.GetInt(cfgP2pPort))
+
 	// TODO: Should we use a separate key for authenticating P2P communication?
 	p2pKey, err := libp2pCrypto.UnmarshalEd25519PrivateKey((*identity.NodeKey)[:])
 	if err != nil {
@@ -301,7 +309,7 @@ func New(ctx context.Context, identity *identity.Identity, port uint16, addresse
 		registerAddresses: registerAddresses,
 		host:              host,
 		handlers:          make(map[signature.MapKey]Handler),
-		logger:            logging.GetLogger("worker/compute/p2p"),
+		logger:            logging.GetLogger("worker/common/p2p"),
 	}
 
 	p.host.Network().SetConnHandler(p.handleConnection)

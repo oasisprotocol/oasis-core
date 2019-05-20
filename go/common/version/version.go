@@ -30,9 +30,9 @@ func (v Version) String() string {
 }
 
 var (
-	// ComputeCommitteeProtocol versions the P2P protocol used by the
-	// compute committee members.
-	ComputeCommitteeProtocol = Version{Major: 0, Minor: 0, Patch: 1}
+	// CommitteeProtocol versions the P2P protocol used by the
+	// committee members.
+	CommitteeProtocol = Version{Major: 0, Minor: 0, Patch: 1}
 
 	// BackendProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc.
@@ -50,12 +50,12 @@ var (
 
 // Versions contains all known protocol versions.
 var Versions = struct {
-	ComputeCommitteeProtocol Version
-	BackendProtocol          Version
-	Tendermint               Version
-	ABCI                     Version
+	CommitteeProtocol Version
+	BackendProtocol   Version
+	Tendermint        Version
+	ABCI              Version
 }{
-	ComputeCommitteeProtocol,
+	CommitteeProtocol,
 	BackendProtocol,
 	Tendermint,
 	ABCI,

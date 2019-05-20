@@ -5,7 +5,6 @@ import (
 )
 
 const (
-	crashPointLeaderBatchPublishAfter  = "worker.compute.leader.batch.publish.after"
 	crashPointBatchReceiveAfter        = "worker.compute.batch.receive.after"
 	crashPointBatchProcessStartAfter   = "worker.compute.batch.process_start.after"
 	crashPointBatchAbortAfter          = "worker.compute.batch.abort.after"
@@ -17,7 +16,6 @@ const (
 
 func init() {
 	crash.RegisterCrashPoints(
-		crashPointLeaderBatchPublishAfter,
 		crashPointBatchReceiveAfter,
 		crashPointBatchProcessStartAfter,
 		crashPointBatchAbortAfter,

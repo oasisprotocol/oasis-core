@@ -18,6 +18,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
 const (
@@ -33,13 +34,16 @@ type Registration struct {
 	epochtime     epochtime.Backend
 	registry      registry.Backend
 	identity      *identity.Identity
+	p2p           *p2p.P2P
 	entityPrivKey *signature.PrivateKey
 	ctx           context.Context
-	quitCh        chan struct{}
-	regCh         chan struct{}
-	logger        *logging.Logger
-	roleHooks     []func(*node.Node) error
-	consensus     common.ConsensusBackend
+	// Bandaid: Idempotent Stop for testing.
+	stopped   bool
+	quitCh    chan struct{}
+	regCh     chan struct{}
+	logger    *logging.Logger
+	roleHooks []func(*node.Node) error
+	consensus common.ConsensusBackend
 }
 
 func (r *Registration) doNodeRegistration() {
@@ -121,6 +125,9 @@ func (r *Registration) InitialRegistrationCh() chan struct{} {
 }
 
 // RegisterRole enables registering Node roles.
+// hook is a callback that does the following:
+// - Use AddRole to add a role to the node descriptor
+// - Make other changes specific to the role, e.g. setting compute capabilities
 func (r *Registration) RegisterRole(hook func(*node.Node) error) {
 	r.Lock()
 	defer r.Unlock()
@@ -145,11 +152,17 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 		ID:         identityPublic,
 		EntityID:   r.entityPrivKey.Public(),
 		Expiration: uint64(epoch) + 2,
+		P2P:        r.p2p.Info(),
 		Certificate: &node.Certificate{
 			DER: r.identity.TLSCertificate.Certificate[0],
 		},
 		RegistrationTime: uint64(time.Now().Unix()),
 		Addresses:        addresses,
+	}
+	for _, runtime := range r.workerCommonCfg.Runtimes {
+		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
+			ID: runtime,
+		})
 	}
 
 	r.Lock()
@@ -215,6 +228,7 @@ func New(
 	registry registry.Backend,
 	identity *identity.Identity,
 	consensus common.ConsensusBackend,
+	p2p *p2p.P2P,
 	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {
 	ctx := context.Background()
@@ -236,6 +250,7 @@ func New(
 		ctx:             ctx,
 		logger:          logging.GetLogger("worker/registration"),
 		consensus:       consensus,
+		p2p:             p2p,
 		roleHooks:       []func(*node.Node) error{},
 	}
 
@@ -258,6 +273,10 @@ func (r *Registration) Start() error {
 
 // Stop halts the service.
 func (r *Registration) Stop() {
+	if r.stopped {
+		return
+	}
+	r.stopped = true
 	close(r.quitCh)
 }
 

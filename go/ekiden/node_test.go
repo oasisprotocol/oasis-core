@@ -28,9 +28,11 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
-	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
 	storageWorkerTests "github.com/oasislabs/ekiden/go/worker/storage/tests"
+	txnschedulerCommittee "github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
+	txnschedulerWorkerTests "github.com/oasislabs/ekiden/go/worker/txnscheduler/tests"
 )
 
 const (
@@ -58,9 +60,10 @@ var (
 		{"worker.compute.enabled", true},
 		{"worker.compute.backend", "mock"},
 		{"worker.compute.runtime.binary", "mock-runtime"},
-		{"worker.compute.runtime.id", testRuntimeID},
+		{"worker.runtime.id", testRuntimeID},
 		{"worker.storage.enabled", true},
 		{"worker.client.port", workerClientPort},
+		{"worker.txnscheduler.enabled", true},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 
@@ -77,8 +80,9 @@ var (
 type testNode struct {
 	*node.Node
 
-	runtimeID     signature.PublicKey
-	committeeNode *committee.Node
+	runtimeID                 signature.PublicKey
+	computeCommitteeNode      *computeCommittee.Node
+	txnschedulerCommitteeNode *txnschedulerCommittee.Node
 
 	entity        *entity.Entity
 	entityPrivKey *signature.PrivateKey
@@ -122,6 +126,7 @@ func newTestNode(t *testing.T) *testNode {
 	}
 
 	n := &testNode{
+		runtimeID:     testRuntime.ID,
 		dataDir:       dataDir,
 		entity:        entity,
 		entityPrivKey: entityPriv,
@@ -163,9 +168,8 @@ func TestNode(t *testing.T) {
 		// including the worker tests.
 		{"RegisterTestEntityRuntime", testRegisterEntityRuntime},
 
-		// ComputeWorker test case must run second as starting the worker will
-		// register the node.
 		{"ComputeWorker", testComputeWorker},
+		{"TransactionSchedulerWorker", testTransactionSchedulerWorker},
 
 		// StorageWorker test case
 		{"StorageWorker", testStorageWorker},
@@ -210,20 +214,25 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	err = node.Node.Registry.RegisterRuntime(context.Background(), signedRt)
 	require.NoError(err, "register test runtime")
 
-	// Get the runtime and the corresponding committee node instance.
-	node.runtimeID = node.ComputeWorker.GetConfig().Runtimes[0].ID
-	rt := node.ComputeWorker.GetRuntime(node.runtimeID)
-	require.NotNil(t, rt)
-	node.committeeNode = rt.GetNode()
+	// Get the runtime and the corresponding compute committee node instance.
+	require.Equal(node.ComputeWorker.GetConfig().Runtimes[0].ID, testRuntime.ID)
+	computeRT := node.ComputeWorker.GetRuntime(testRuntime.ID)
+	require.NotNil(t, computeRT)
+	node.computeCommitteeNode = computeRT.GetNode()
+
+	// Get the runtime and the corresponding transaction scheduler committee node instance.
+	require.Equal(node.TransactionSchedulerWorker.GetConfig().Runtimes[0].ID, testRuntime.ID)
+	txnschedulerRT := node.TransactionSchedulerWorker.GetRuntime(testRuntime.ID)
+	require.NotNil(t, txnschedulerRT)
+	node.txnschedulerCommitteeNode = txnschedulerRT.GetNode()
 }
 
 func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
-	// Stop the node and wait for it to fully stop. This is required
-	// as otherwise the node will re-register itself on each epoch
+	// Stop the registration service and wait for it to fully stop. This is required
+	// as otherwise it will re-register the node on each epoch
 	// transition.
-	node.committeeNode.Stop()
-	<-node.committeeNode.Quit()
-	node.committeeNode = nil
+	node.WorkerRegistration.Stop()
+	<-node.WorkerRegistration.Quit()
 
 	// Deregister the entity which should also deregister the node.
 	ts := registry.Timestamp(uint64(time.Now().Unix()))
@@ -279,16 +288,23 @@ func testRootHash(t *testing.T, node *testNode) {
 func testComputeWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	require.NotNil(t, node.committeeNode)
-	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.committeeNode, timeSource, node.RootHash)
+	require.NotNil(t, node.computeCommitteeNode)
+	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource)
 }
 
 func testStorageWorker(t *testing.T, node *testNode) {
 	storageWorkerTests.WorkerImplementationTests(t, node.StorageWorker)
 }
 
+func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+
+	require.NotNil(t, node.txnschedulerCommitteeNode)
+	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash)
+}
+
 func testClient(t *testing.T, node *testNode) {
-	clientTests.ClientImplementationTests(t, node.Client, node.runtimeID, node.committeeNode)
+	clientTests.ClientImplementationTests(t, node.Client, node.runtimeID)
 }
 
 func testStorageClient(t *testing.T, node *testNode) {

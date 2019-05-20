@@ -272,9 +272,10 @@ run_compute_node() {
         --worker.compute.backend sandboxed \
         --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
         --worker.compute.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
-        --worker.compute.runtime.id ${EKIDEN_RUNTIME_ID} \
         ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
-        --worker.compute.leader.max_batch_size 1 \
+        --worker.txnscheduler.enabled \
+        --worker.txnscheduler.leader.max_batch_size 1 \
+        --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \

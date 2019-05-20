@@ -2,19 +2,14 @@
 package tests
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
@@ -32,7 +27,6 @@ func WorkerImplementationTests(
 	runtimeID signature.PublicKey,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
-	roothash roothash.Backend,
 ) {
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -46,10 +40,6 @@ func WorkerImplementationTests(
 		testInitialEpochTransition(t, stateCh, epochtime)
 	})
 
-	t.Run("QueueCall", func(t *testing.T) {
-		testQueueCall(t, runtimeID, stateCh, rtNode, roothash)
-	})
-
 	// TODO: Add more tests.
 }
 
@@ -58,64 +48,13 @@ func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState
 	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
 	// Node should transition to WaitingForBatch state.
-	waitForNodeTransition(t, stateCh, "WaitingForBatch")
+	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 }
 
-func testQueueCall(
-	t *testing.T,
-	runtimeID signature.PublicKey,
-	stateCh <-chan committee.NodeState,
-	rtNode *committee.Node,
-	roothash roothash.Backend,
-) {
-	// Subscribe to roothash blocks.
-	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
-	require.NoError(t, err, "WatchBlocks")
-	defer sub.Close()
-
-	select {
-	case <-blocksCh:
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive block")
-	}
-
-	// Queue a test call.
-	testCall := []byte("hello world")
-	err = rtNode.QueueCall(context.Background(), testCall)
-	require.NoError(t, err, "QueueCall")
-
-	// Node should transition to ProcessingBatch state.
-	waitForNodeTransition(t, stateCh, "ProcessingBatch")
-
-	// Node should transition to WaitingForFinalize state.
-	waitForNodeTransition(t, stateCh, "WaitingForFinalize")
-
-	// Node should transition to WaitingForBatch state and a block should be
-	// finalized containing our batch.
-	waitForNodeTransition(t, stateCh, "WaitingForBatch")
-
-	select {
-	case blk := <-blocksCh:
-		// Check that correct block was generated.
-		var batchHash hash.Hash
-		batch := runtime.Batch([][]byte{testCall})
-		batchHash.From(batch)
-
-		require.EqualValues(t, block.Normal, blk.Header.HeaderType)
-		require.EqualValues(t, batchHash, blk.Header.InputHash)
-		// NOTE: Mock host produces output equal to input.
-		require.EqualValues(t, batchHash, blk.Header.OutputHash)
-		// NOTE: Mock host produces state root equal to input.
-		require.EqualValues(t, batchHash, blk.Header.StateRoot)
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive block")
-	}
-}
-
-func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState string) {
+func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState committee.StateName) {
 	select {
 	case newState := <-stateCh:
-		require.EqualValues(t, expectedState, newState.String())
+		require.EqualValues(t, expectedState, newState.Name())
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive transition to %s state", expectedState)
 	}

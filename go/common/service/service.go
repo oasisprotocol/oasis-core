@@ -2,6 +2,8 @@
 package service
 
 import (
+	"context"
+
 	"github.com/oasislabs/ekiden/go/common/logging"
 )
 
@@ -89,4 +91,18 @@ func NewCleanupOnlyService(svc CleanupAble, name string) BackgroundService {
 		BaseBackgroundService: *NewBaseBackgroundService(name),
 		svc:                   svc,
 	}
+}
+
+type contextCleanup struct {
+	cancel context.CancelFunc
+}
+
+func (c *contextCleanup) Cleanup() {
+	c.cancel()
+}
+
+// NewContextCleanup makes a context and a CleanupAble that cancels it.
+func NewContextCleanup(parent context.Context) (context.Context, CleanupAble) {
+	ctx, cancel := context.WithCancel(parent)
+	return ctx, &contextCleanup{cancel}
 }
