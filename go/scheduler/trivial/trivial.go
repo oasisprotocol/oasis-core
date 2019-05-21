@@ -61,11 +61,12 @@ type trivialSchedulerState struct {
 
 	logger *logging.Logger
 
-	computeNodeLists map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
-	storageNodeLists map[epochtime.EpochTime][]*node.Node
-	beacons          map[epochtime.EpochTime][]byte
-	runtimes         map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
-	committees       map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
+	computeNodeLists      map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
+	storageNodeLists      map[epochtime.EpochTime][]*node.Node
+	txnSchedulerNodeLists map[epochtime.EpochTime][]*node.Node
+	beacons               map[epochtime.EpochTime][]byte
+	runtimes              map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
+	committees            map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
 
 	epoch     epochtime.EpochTime
 	lastElect epochtime.EpochTime
@@ -75,7 +76,7 @@ func (s *trivialSchedulerState) canElect() bool {
 	s.Lock()
 	defer s.Unlock()
 
-	return s.computeNodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil && s.storageNodeLists[s.epoch] != nil
+	return s.computeNodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil && s.storageNodeLists[s.epoch] != nil && s.txnSchedulerNodeLists[s.epoch] != nil
 }
 
 func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
@@ -118,11 +119,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			sz = int(rt.StorageGroupSize)
 			ctx = rngContextStorage
 		case api.TransactionScheduler:
-			// XXX: Transaction scheduler committee is completely ignored at the moment
-			// so we just select one of the compute nodes.
-			// #1626 will refactor this and select transaction scheduler workers from
-			// the pool of all registered transaction scheduler worker nodes.
-			nodeList = s.computeNodeLists[epoch][rtID][rt.TEEHardware]
+			nodeList = s.txnSchedulerNodeLists[epoch]
 			sz = int(rt.TransactionSchedulerGroupSize)
 			ctx = rngContextTransactionScheduler
 		default:
@@ -190,6 +187,11 @@ func (s *trivialSchedulerState) prune() {
 	for epoch := range s.storageNodeLists {
 		if epoch < pruneBefore {
 			delete(s.storageNodeLists, epoch)
+		}
+	}
+	for epoch := range s.txnSchedulerNodeLists {
+		if epoch < pruneBefore {
+			delete(s.txnSchedulerNodeLists, epoch)
 		}
 	}
 	for epoch := range s.beacons {
@@ -267,7 +269,7 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 
 	// Re-scheduling is not allowed, and if there are node lists already there
 	// is nothing to do.
-	if s.computeNodeLists[epoch] != nil || s.storageNodeLists[epoch] != nil {
+	if s.computeNodeLists[epoch] != nil || s.storageNodeLists[epoch] != nil || s.txnSchedulerNodeLists[epoch] != nil {
 		return
 	}
 
@@ -276,6 +278,7 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 		m[id] = make(map[node.TEEHardware][]*node.Node)
 	}
 	s.storageNodeLists[epoch] = []*node.Node{}
+	s.txnSchedulerNodeLists[epoch] = []*node.Node{}
 
 	// Build the per-node -> per-runtime -> per-TEE implementation node
 	// lists for the epoch. It is safe to do it this way as `nodes` is
@@ -321,6 +324,11 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 		// Storage workers
 		if n.HasRoles(node.RoleStorageWorker) {
 			s.storageNodeLists[epoch] = append(s.storageNodeLists[epoch], n)
+		}
+
+		// Transaction scheduler workers
+		if n.HasRoles(node.RoleTransactionScheduler) {
+			s.txnSchedulerNodeLists[epoch] = append(s.txnSchedulerNodeLists[epoch], n)
 		}
 	}
 
@@ -614,13 +622,14 @@ func New(ctx context.Context, timeSource epochtime.Backend, registryBackend regi
 		registry:   registryBackend,
 		beacon:     beacon,
 		state: &trivialSchedulerState{
-			computeNodeLists: make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
-			storageNodeLists: make(map[epochtime.EpochTime][]*node.Node),
-			beacons:          make(map[epochtime.EpochTime][]byte),
-			runtimes:         make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
-			committees:       make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
-			epoch:            epochtime.EpochInvalid,
-			lastElect:        epochtime.EpochInvalid,
+			computeNodeLists:      make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
+			storageNodeLists:      make(map[epochtime.EpochTime][]*node.Node),
+			txnSchedulerNodeLists: make(map[epochtime.EpochTime][]*node.Node),
+			beacons:               make(map[epochtime.EpochTime][]byte),
+			runtimes:              make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
+			committees:            make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
+			epoch:                 epochtime.EpochInvalid,
+			lastElect:             epochtime.EpochInvalid,
 		},
 		service:  service,
 		closedCh: make(chan struct{}),
