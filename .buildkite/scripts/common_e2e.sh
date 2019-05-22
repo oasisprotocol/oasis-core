@@ -443,6 +443,13 @@ run_basic_client() {
     local log_file=${EKIDEN_COMMITTEE_DIR}/client.log
     rm -rf ${log_file}
 
+    # Wait for the socket to appear.
+    while [ ! -S "${EKIDEN_VALIDATOR_SOCKET}" ]
+    do
+      echo "Waiting for internal Ekiden node socket to appear..."
+      sleep 1
+    done
+
     ${WORKDIR}/target/debug/${client}-client \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
         --runtime-id ${EKIDEN_RUNTIME_ID} \
@@ -487,7 +494,6 @@ run_test() {
     local pre_init_hook=""
     local post_km_hook=""
     local on_success_hook="assert_basic_success"
-    local start_client_first=0
     local client_runner=run_basic_client
     local client="none"
     # Load named arguments that override defaults.
@@ -516,21 +522,13 @@ run_test() {
         $pre_init_hook
     fi
 
-    if [[ "${start_client_first}" == 0 ]]; then
-        # Start backend.
-        $backend_runner
-        sleep 1
-    fi
+    # Start backend.
+    $backend_runner
+    sleep 1
 
     # Run the client.
     $client_runner $runtime $client
     local client_pid=${EKIDEN_CLIENT_PID:-""}
-
-    if [[ "${start_client_first}" == 1 ]]; then
-        # Start backend.
-        $backend_runner
-        sleep 1
-    fi
 
     # Run post key-manager startup hook.
     if [[ "$post_km_hook" != "" ]]; then
