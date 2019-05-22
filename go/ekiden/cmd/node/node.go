@@ -422,6 +422,16 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
+	// Initialize the IAS proxy client.
+	// NOTE: See reason above why this needs to happen before seed node init.
+	node.IAS, err = ias.New(node.Identity)
+	if err != nil {
+		logger.Error("failed to initialize IAS proxy client",
+			"err", err,
+		)
+		return nil, err
+	}
+
 	if node.svcTmnt.IsSeed() {
 		// Tendermint nodes in seed mode crawl the network for
 		// peers. In case of incoming connections seed node will
@@ -445,15 +455,6 @@ func NewNode() (*Node, error) {
 	}
 
 	logger.Info("starting ekiden node")
-
-	// Initialize the IAS proxy client.
-	node.IAS, err = ias.New(node.Identity)
-	if err != nil {
-		logger.Error("failed to initialize IAS proxy client",
-			"err", err,
-		)
-		return nil, err
-	}
 
 	// Initialize the key manager client service.
 	node.KeyManager, err = keymanagerClient.New(node.Registry)

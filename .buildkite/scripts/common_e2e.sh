@@ -398,6 +398,12 @@ run_seed_node() {
         --log.level info \
         --metrics.mode none \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
         --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \
