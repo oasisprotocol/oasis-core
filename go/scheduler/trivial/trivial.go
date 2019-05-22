@@ -63,7 +63,7 @@ type trivialSchedulerState struct {
 
 	computeNodeLists      map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
 	storageNodeLists      map[epochtime.EpochTime][]*node.Node
-	txnSchedulerNodeLists map[epochtime.EpochTime][]*node.Node
+	txnSchedulerNodeLists map[epochtime.EpochTime]map[signature.MapKey][]*node.Node
 	beacons               map[epochtime.EpochTime][]byte
 	runtimes              map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
 	committees            map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
@@ -119,7 +119,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			sz = int(rt.StorageGroupSize)
 			ctx = rngContextStorage
 		case api.TransactionScheduler:
-			nodeList = s.txnSchedulerNodeLists[epoch]
+			nodeList = s.txnSchedulerNodeLists[epoch][rtID]
 			sz = int(rt.TransactionSchedulerGroupSize)
 			ctx = rngContextTransactionScheduler
 		default:
@@ -274,11 +274,12 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 	}
 
 	m := make(map[signature.MapKey]map[node.TEEHardware][]*node.Node)
+	s.txnSchedulerNodeLists[epoch] = make(map[signature.MapKey][]*node.Node)
 	for id := range s.runtimes[epoch] {
 		m[id] = make(map[node.TEEHardware][]*node.Node)
+		s.txnSchedulerNodeLists[epoch][id] = []*node.Node{}
 	}
 	s.storageNodeLists[epoch] = []*node.Node{}
-	s.txnSchedulerNodeLists[epoch] = []*node.Node{}
 
 	// Build the per-node -> per-runtime -> per-TEE implementation node
 	// lists for the epoch. It is safe to do it this way as `nodes` is
@@ -328,7 +329,18 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 
 		// Transaction scheduler workers
 		if n.HasRoles(node.RoleTransactionScheduler) {
-			s.txnSchedulerNodeLists[epoch] = append(s.txnSchedulerNodeLists[epoch], n)
+			for _, rt := range n.Runtimes {
+				rtID := rt.ID.ToMapKey()
+				nls, ok := s.txnSchedulerNodeLists[epoch][rtID]
+				if !ok {
+					s.logger.Warn("node supports unknown runtime",
+						"node", n,
+						"runtime", rt.ID,
+					)
+					continue
+				}
+				s.txnSchedulerNodeLists[epoch][rtID] = append(nls, n)
+			}
 		}
 	}
 
@@ -624,7 +636,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, registryBackend regi
 		state: &trivialSchedulerState{
 			computeNodeLists:      make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
 			storageNodeLists:      make(map[epochtime.EpochTime][]*node.Node),
-			txnSchedulerNodeLists: make(map[epochtime.EpochTime][]*node.Node),
+			txnSchedulerNodeLists: make(map[epochtime.EpochTime]map[signature.MapKey][]*node.Node),
 			beacons:               make(map[epochtime.EpochTime][]byte),
 			runtimes:              make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
 			committees:            make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),
