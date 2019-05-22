@@ -27,4 +27,6 @@ pub use tree::*;
 #[cfg(test)]
 mod node_test;
 #[cfg(test)]
+mod tree_bench;
+#[cfg(test)]
 mod tree_test;
