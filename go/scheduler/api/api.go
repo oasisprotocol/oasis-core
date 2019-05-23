@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -143,6 +144,15 @@ type Committee struct {
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `codec:"valid_for"`
+}
+
+// String returns a string representation of a Committee.
+func (c Committee) String() string {
+	members := make([]string, len(c.Members))
+	for i, m := range c.Members {
+		members[i] = fmt.Sprintf("%+v", m)
+	}
+	return fmt.Sprintf("&{Kind:%v Members:[%v] RuntimeID:%v ValidFor:%v}", c.Kind, strings.Join(members, " "), c.RuntimeID, c.ValidFor)
 }
 
 // ToProto serializes a Committee into a protobuf.
