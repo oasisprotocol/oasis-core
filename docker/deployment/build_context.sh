@@ -14,11 +14,6 @@ dst=$1
 EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1
 export EKIDEN_UNSAFE_SKIP_AVR_VERIFY
 
-extra_args=""
-if [ "${EKIDEN_KM_CUSTOM_KEYS:-1}" == "1" ]; then
-    extra_args="--features custom-keys"
-fi
-
 # Install ekiden-tools
 cargo install --force --path tools
 
@@ -27,8 +22,8 @@ make -C go
 cargo build -p ekiden-runtime-loader --release
 
 pushd keymanager-runtime
-    cargo build --release ${extra_args}
-    cargo build --release --target x86_64-fortanix-unknown-sgx ${extra_args}
+    cargo build --release
+    cargo build --release --target x86_64-fortanix-unknown-sgx
     cargo elf2sgxs --release
 popd
 
