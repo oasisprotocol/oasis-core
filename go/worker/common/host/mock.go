@@ -3,10 +3,13 @@ package host
 import (
 	"context"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -51,17 +54,29 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 		case body.WorkerExecuteTxBatchRequest != nil:
 			rq := body.WorkerExecuteTxBatchRequest
 
+			tags := []runtime.Tag{
+				runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("foo"), Value: []byte("bar")},
+				runtime.Tag{TxnIndex: 0, Key: []byte("txn_foo"), Value: []byte("txn_bar")},
+			}
+
+			tree := urkel.New(nil, nil)
+			_ = tree.Insert(block.IoKeyInputs, rq.Calls.MarshalCBOR())
+			_ = tree.Insert(block.IoKeyOutputs, rq.Calls.MarshalCBOR())
+			_ = tree.Insert(block.IoKeyTags, cbor.Marshal(tags))
+			ioWriteLog, ioRoot, err := tree.Commit()
+			if err != nil {
+				ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) failed to create I/O tree"}}
+				break
+			}
+
 			var stateRoot hash.Hash
-			stateRoot.From(rq.Calls)
+			stateRoot.Empty()
 
 			ch <- &protocol.Body{WorkerExecuteTxBatchResponse: &protocol.WorkerExecuteTxBatchResponse{
 				Batch: protocol.ComputedBatch{
-					Outputs:      rq.Calls,
+					IOWriteLog:   ioWriteLog,
+					IORoot:       ioRoot,
 					NewStateRoot: stateRoot,
-					Tags: []runtime.Tag{
-						runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("foo"), Value: []byte("bar")},
-						runtime.Tag{TxnIndex: 0, Key: []byte("txn_foo"), Value: []byte("txn_bar")},
-					},
 				},
 				// No RakSig in mock reponse.
 			}}

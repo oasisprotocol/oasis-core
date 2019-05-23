@@ -301,7 +301,7 @@ func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	require.NotNil(t, node.txnschedulerCommitteeNode)
-	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash)
+	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash, node.Storage)
 }
 
 func testClient(t *testing.T, node *testNode) {

@@ -653,19 +653,19 @@ func (app *rootHashApplication) tryFinalize(
 	}
 
 	if dErr, ok := (err).(errDiscrepancyDetected); ok {
-		inputHash := hash.Hash(dErr)
+		ioRoot := hash.Hash(dErr)
 
 		app.logger.Warn("discrepancy detected",
 			"round", blockNr,
-			"input_hash", inputHash,
+			"io_root", ioRoot,
 		)
 
 		ctx.EmitTag(TagUpdate, TagUpdateValue)
 		tagV := ValueDiscrepancyDetected{
 			ID: id,
 			Event: roothash.DiscrepancyDetectedEvent{
-				BatchHash:   &inputHash,
-				BlockHeader: &latestBlock.Header,
+				IORoot:      ioRoot,
+				BlockHeader: latestBlock.Header,
 			},
 		}
 		ctx.EmitTag(TagDiscrepancyDetected, tagV.MarshalCBOR())

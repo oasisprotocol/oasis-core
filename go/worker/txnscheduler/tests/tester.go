@@ -15,6 +15,8 @@ import (
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
@@ -33,6 +35,7 @@ func WorkerImplementationTests(
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
 	roothash roothash.Backend,
+	storage storage.Backend,
 ) {
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -47,7 +50,7 @@ func WorkerImplementationTests(
 	})
 
 	t.Run("QueueCall", func(t *testing.T) {
-		testQueueCall(t, runtimeID, stateCh, rtNode, roothash)
+		testQueueCall(t, runtimeID, stateCh, rtNode, roothash, storage)
 	})
 
 	// TODO: Add more tests.
@@ -67,6 +70,7 @@ func testQueueCall(
 	stateCh <-chan committee.NodeState,
 	rtNode *committee.Node,
 	roothash roothash.Backend,
+	storage storage.Backend,
 ) {
 	// Subscribe to roothash blocks.
 	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
@@ -94,16 +98,27 @@ func testQueueCall(
 	select {
 	case blk := <-blocksCh:
 		// Check that correct block was generated.
-		var batchHash hash.Hash
-		batch := runtime.Batch([][]byte{testCall})
-		batchHash.From(batch)
-
 		require.EqualValues(t, block.Normal, blk.Header.HeaderType)
-		require.EqualValues(t, batchHash, blk.Header.InputHash)
+
+		tree, err := urkel.NewWithRoot(storage, nil, blk.Header.IORoot)
+		require.NoError(t, err, "NewWithRoot")
+
+		rawInputs, err := tree.Get(block.IoKeyInputs)
+		require.NoError(t, err, "Get(inputs)")
+		rawOutputs, err := tree.Get(block.IoKeyOutputs)
+		require.NoError(t, err, "Get(outputs)")
+
+		batch := runtime.Batch([][]byte{testCall})
+		rawBatch := batch.MarshalCBOR()
+
+		require.EqualValues(t, rawBatch, rawInputs)
 		// NOTE: Mock host produces output equal to input.
-		require.EqualValues(t, batchHash, blk.Header.OutputHash)
-		// NOTE: Mock host produces state root equal to input.
-		require.EqualValues(t, batchHash, blk.Header.StateRoot)
+		require.EqualValues(t, rawBatch, rawOutputs)
+
+		// NOTE: Mock host produces an empty state root.
+		var stateRoot hash.Hash
+		stateRoot.Empty()
+		require.EqualValues(t, stateRoot, blk.Header.StateRoot)
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive block")
 	}

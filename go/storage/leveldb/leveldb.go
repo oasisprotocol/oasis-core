@@ -187,7 +187,7 @@ func (b *leveldbBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, erro
 	return kiChan, nil
 }
 
-func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+func (b *leveldbBackend) apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*hash.Hash, error) {
 	var r hash.Hash
 
 	// Check if we already have the expected new root in our local DB.
@@ -218,9 +218,13 @@ func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewR
 		}
 	}
 
+	return &r, nil
+}
+
+func (b *leveldbBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.MKVSReceipt, error) {
 	receipt := api.MKVSReceiptBody{
 		Version: 1,
-		Root:    r,
+		Roots:   roots,
 	}
 	signed, err := signature.SignSigned(*b.signingKey, api.MKVSReceiptSignatureContext, &receipt)
 	if err != nil {
@@ -230,6 +234,28 @@ func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewR
 	return &api.MKVSReceipt{
 		Signed: *signed,
 	}, nil
+}
+
+func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+	var roots []hash.Hash
+	for _, op := range ops {
+		root, err := b.apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
+		if err != nil {
+			return nil, err
+		}
+		roots = append(roots, *root)
+	}
+
+	return b.signReceipt(ctx, roots)
+}
+
+func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+	r, err := b.apply(ctx, root, expectedNewRoot, log)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.signReceipt(ctx, []hash.Hash{*r})
 }
 
 func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {

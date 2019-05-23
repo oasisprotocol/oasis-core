@@ -309,7 +309,7 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 			return nil, nil, err
 		}
 
-		gen.StateRoot = receipt.Root
+		gen.StateRoot = receipt.Roots[0]
 
 	}
 

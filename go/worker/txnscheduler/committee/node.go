@@ -15,9 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/tracing"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -260,21 +258,6 @@ func (n *Node) checkIncomingQueueLocked(force bool) {
 	defer batchSpan.Finish()
 	batchSpanCtx := batchSpan.Context()
 
-	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Insert(batch)",
-		opentracing.Tag{Key: "batch", Value: batch},
-		opentracing.ChildOf(batchSpanCtx),
-	)
-
-	// Commit batch to storage.
-	if err = n.commonNode.Storage.Insert(ctx, batch.MarshalCBOR(), 2, storage.InsertOptions{}); err != nil {
-		spanInsert.Finish()
-		n.logger.Error("failed to commit input batch to storage",
-			"err", err,
-		)
-		return
-	}
-	spanInsert.Finish()
-
 	// Dispatch batch to group.
 	var batchID hash.Hash
 	batchID.From(batch)
@@ -284,7 +267,7 @@ func (n *Node) checkIncomingQueueLocked(force bool) {
 		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
 		opentracing.ChildOf(batchSpanCtx),
 	)
-	err = n.commonNode.Group.PublishBatch(batchSpanCtx, batchID, n.commonNode.CurrentBlock.Header)
+	err = n.commonNode.Group.PublishBatch(batchSpanCtx, batch, n.commonNode.CurrentBlock.Header)
 	if err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",

@@ -191,6 +191,11 @@ func (b *cachingClientBackend) Apply(ctx context.Context, root hash.Hash, expect
 	return b.remote.Apply(ctx, root, expectedNewRoot, log)
 }
 
+func (b *cachingClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+	// TODO: Implement caching for MKVS operations (issue #1664).
+	return b.remote.ApplyBatch(ctx, ops)
+}
+
 func (b *cachingClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	// TODO: Implement caching for MKVS operations (issue #1664).
 	return b.remote.GetSubtree(ctx, root, id, maxDepth)

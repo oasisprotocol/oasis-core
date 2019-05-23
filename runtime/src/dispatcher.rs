@@ -16,7 +16,7 @@ use crate::{
             signature::{Signature, Signer},
         },
         logger::get_logger,
-        roothash::Block,
+        roothash::{Block, IO_KEY_INPUTS, IO_KEY_OUTPUTS, IO_KEY_TAGS},
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     rak::RAK,
@@ -27,7 +27,10 @@ use crate::{
         Context as RpcContext,
     },
     storage::{
-        mkvs::{urkel::sync::HostReadSyncer, UrkelTree},
+        mkvs::{
+            urkel::sync::{HostReadSyncer, NoopReadSyncer},
+            UrkelTree,
+        },
         StorageContext,
     },
     transaction::{
@@ -257,23 +260,52 @@ impl Dispatcher {
                 .send_response(id, Body::WorkerCheckTxBatchResponse { results: outputs })
                 .unwrap();
         } else {
-            let (write_log, new_state_root) = cache
+            // Finalize state.
+            let (state_write_log, new_state_root) = cache
                 .mkvs
                 .commit(Context::create_child(&ctx))
-                .expect("mkvs commit must succeed");
+                .expect("state commit must succeed");
             txn_dispatcher.finalize(new_state_root);
             cache.state_root = new_state_root;
 
+            // Generate I/O root.
+            let mut io_mkvs = UrkelTree::make()
+                .new(Context::create_child(&ctx), Box::new(NoopReadSyncer {}))
+                .unwrap();
+            io_mkvs
+                .insert(
+                    Context::create_child(&ctx),
+                    IO_KEY_INPUTS,
+                    &serde_cbor::to_vec(&calls).unwrap(),
+                )
+                .expect("input insert must succeed");
+            io_mkvs
+                .insert(
+                    Context::create_child(&ctx),
+                    IO_KEY_OUTPUTS,
+                    &serde_cbor::to_vec(&outputs).unwrap(),
+                )
+                .expect("output insert must succeed");
+            io_mkvs
+                .insert(
+                    Context::create_child(&ctx),
+                    IO_KEY_TAGS,
+                    &serde_cbor::to_vec(&tags).unwrap(),
+                )
+                .expect("tag insert must succeed");
+            let (io_write_log, io_root) = io_mkvs
+                .commit(Context::create_child(&ctx))
+                .expect("io commit must succeed");
+
             debug!(self.logger, "Transaction batch execution complete";
+                "io_root" => ?io_root,
                 "new_state_root" => ?new_state_root
             );
 
             let rak_sig = if self.rak.public_key().is_some() {
                 let rak_sig_message = BatchSigMessage {
                     previous_block: &block,
-                    input_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&calls).unwrap()),
-                    output_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&outputs).unwrap()),
-                    tags_hash: &Hash::digest_bytes(&serde_cbor::to_vec(&tags).unwrap()),
+                    io_root: &io_root,
                     state_root: &new_state_root,
                 };
                 self.rak
@@ -287,10 +319,10 @@ impl Dispatcher {
             };
 
             let result = ComputedBatch {
-                outputs,
-                write_log: write_log,
+                io_write_log,
+                io_root,
+                state_write_log,
                 new_state_root,
-                tags,
                 rak_sig,
             };
 

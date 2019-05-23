@@ -106,9 +106,7 @@ func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commit
 		rak := r.RoundState.ComputationGroup[id].Runtime.Capabilities.TEE.RAK
 		batchSigMessage := block.BatchSigMessage{
 			PreviousBlock: *r.RoundState.CurrentBlock,
-			InputHash:     header.InputHash,
-			OutputHash:    header.OutputHash,
-			TagsHash:      header.TagHash,
+			IORoot:        header.IORoot,
 			StateRoot:     header.StateRoot,
 		}
 		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), message.RakSig[:]) {
@@ -216,10 +214,10 @@ func (r *round) forceBackupTransition() error {
 		}
 
 		r.RoundState.State = stateDiscrepancyWaitingCommitments
-		return errDiscrepancyDetected(commit.Message.Header.InputHash)
+		return errDiscrepancyDetected(commit.Message.Header.IORoot)
 	}
 
-	return fmt.Errorf("tendermint/roothash: no input hash available for backup transition")
+	return fmt.Errorf("tendermint/roothash: no I/O root available for backup transition")
 }
 
 func (r *round) tryFinalizeFast() (*block.Header, error) {

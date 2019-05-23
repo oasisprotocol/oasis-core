@@ -13,6 +13,7 @@ service Storage {
     rpc GetKeys(GetKeysRequest) returns (stream GetKeysResponse) {}
     // MKVS
     rpc Apply(ApplyRequest) returns (ApplyResponse) {}
+    rpc ApplyBatch(ApplyBatchRequest) returns (ApplyBatchResponse) {}
     rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
     rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
     rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
@@ -78,6 +79,20 @@ message ApplyRequest {
 }
 
 message ApplyResponse {
+    bytes receipt = 1; // MKVSReceipt, serialized to CBOR
+}
+
+message ApplyOp {
+    bytes root = 1;
+    bytes expected_new_root = 2;
+    repeated LogEntry log = 3;
+}
+
+message ApplyBatchRequest {
+    repeated ApplyOp ops = 1;
+}
+
+message ApplyBatchResponse {
     bytes receipt = 1; // MKVSReceipt, serialized to CBOR
 }
 

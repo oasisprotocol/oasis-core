@@ -28,6 +28,13 @@ var (
 	// identifier is malformed.
 	ErrMalformedNamespace = errors.New("roothash: malformed namespace")
 
+	// IoKeyInputs is the key holding inputs in the I/O tree.
+	IoKeyInputs = []byte("i")
+	// IoKeyOutputs is the key holding outputs in the I/O tree.
+	IoKeyOutputs = []byte("o")
+	// IoKeyTags is the key holding tags in the I/O tree.
+	IoKeyTags = []byte("t")
+
 	_ encoding.BinaryMarshaler   = (*Namespace)(nil)
 	_ encoding.BinaryUnmarshaler = (*Namespace)(nil)
 	_ cbor.Marshaler             = (*Header)(nil)
@@ -102,16 +109,10 @@ type Header struct { // nolint: maligned
 	// GroupHash is the computation group hash.
 	GroupHash hash.Hash `codec:"group_hash"`
 
-	// InputHash is the input hash.
-	InputHash hash.Hash `codec:"input_hash"`
+	// IORoot is the I/O merkle root.
+	IORoot hash.Hash `codec:"io_root"`
 
-	// OutputHash is the output hash.
-	OutputHash hash.Hash `codec:"output_hash"`
-
-	// TagHash is the tag hash.
-	TagHash hash.Hash `codec:"tag_hash"`
-
-	// StateRoot is the state root hash.
+	// StateRoot is the state merkle root.
 	StateRoot hash.Hash `codec:"state_root"`
 
 	// CommitmentsHash is the Commitments hash.
@@ -163,13 +164,7 @@ func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
 	if err := h.GroupHash.UnmarshalBinary(pb.GetGroupHash()); err != nil {
 		return err
 	}
-	if err := h.InputHash.UnmarshalBinary(pb.GetInputHash()); err != nil {
-		return err
-	}
-	if err := h.OutputHash.UnmarshalBinary(pb.GetOutputHash()); err != nil {
-		return err
-	}
-	if err := h.TagHash.UnmarshalBinary(pb.GetTagHash()); err != nil {
+	if err := h.IORoot.UnmarshalBinary(pb.GetIoRoot()); err != nil {
 		return err
 	}
 	if err := h.StateRoot.UnmarshalBinary(pb.GetStateRoot()); err != nil {
@@ -198,9 +193,7 @@ func (h *Header) ToProto() *pbRoothash.Header {
 	pb.HeaderType = uint32(h.HeaderType)
 	pb.PreviousHash, _ = h.PreviousHash.MarshalBinary()
 	pb.GroupHash, _ = h.GroupHash.MarshalBinary()
-	pb.InputHash, _ = h.InputHash.MarshalBinary()
-	pb.OutputHash, _ = h.OutputHash.MarshalBinary()
-	pb.TagHash, _ = h.TagHash.MarshalBinary()
+	pb.IoRoot, _ = h.IORoot.MarshalBinary()
 	pb.StateRoot, _ = h.StateRoot.MarshalBinary()
 	pb.CommitmentsHash, _ = h.CommitmentsHash.MarshalBinary()
 	pb.StorageReceipt = cbor.Marshal(&h.StorageReceipt)
@@ -227,26 +220,13 @@ func (h *Header) EncodedHash() hash.Hash {
 	return hh
 }
 
-// KeysForStorageReceipt gets the storage keys required to request a
-// storage receipt.
-func (h *Header) KeysForStorageReceipt() []storage.Key {
-	keys := make([]storage.Key, 0, 4)
-
-	for _, h := range []hash.Hash{
-		h.InputHash,
-		h.OutputHash,
-		h.TagHash,
+// RootsForStorageReceipt gets the merkle roots that must be part of
+// a storage receipt.
+func (h *Header) RootsForStorageReceipt() []hash.Hash {
+	return []hash.Hash{
+		h.IORoot,
 		h.StateRoot,
-	} {
-		if h.IsEmpty() {
-			continue
-		}
-		var key storage.Key
-		copy(key[:], h[:])
-		keys = append(keys, key)
 	}
-
-	return keys
 }
 
 // VerifyStorageReceiptSignature validates that the storage receipt
@@ -255,8 +235,9 @@ func (h *Header) KeysForStorageReceipt() []storage.Key {
 // Note: Ensuring that the signature is signed by the keypair that is
 // expected is the responsibility of the caller.
 func (h *Header) VerifyStorageReceiptSignature() error {
-	receipt := storage.Receipt{
-		Keys: h.KeysForStorageReceipt(),
+	receipt := storage.MKVSReceiptBody{
+		Version: 1,
+		Roots:   h.RootsForStorageReceipt(),
 	}
 
 	signed := signature.Signed{
@@ -264,21 +245,21 @@ func (h *Header) VerifyStorageReceiptSignature() error {
 		Signature: h.StorageReceipt,
 	}
 
-	var check storage.SignedReceipt
-	return signed.Open(storage.ReceiptSignatureContext, &check)
+	var check storage.MKVSReceipt
+	return signed.Open(storage.MKVSReceiptSignatureContext, &check)
 }
 
 // VerifyStorageReceipt validates that the provided storage receipt
 // matches the header.
-func (h *Header) VerifyStorageReceipt(receipt *storage.Receipt) error {
-	keys := h.KeysForStorageReceipt()
-	if len(receipt.Keys) != len(keys) {
-		return errors.New("roothash: receipt has unexpected number of keys")
+func (h *Header) VerifyStorageReceipt(receipt *storage.MKVSReceiptBody) error {
+	roots := h.RootsForStorageReceipt()
+	if len(receipt.Roots) != len(roots) {
+		return errors.New("roothash: receipt has unexpected number of roots")
 	}
 
-	for idx, v := range keys {
-		if !bytes.Equal(v[:], receipt.Keys[idx][:]) {
-			return errors.New("roothash: receipt has unexpected keys")
+	for idx, v := range roots {
+		if !bytes.Equal(v[:], receipt.Roots[idx][:]) {
+			return errors.New("roothash: receipt has unexpected roots")
 		}
 	}
 
@@ -290,8 +271,6 @@ func (h *Header) VerifyStorageReceipt(receipt *storage.Receipt) error {
 // Keep the roothash RAK validation in sync with changes to this structure.
 type BatchSigMessage struct {
 	PreviousBlock Block     `codec:"previous_block"`
-	InputHash     hash.Hash `codec:"input_hash"`
-	OutputHash    hash.Hash `codec:"output_hash"`
-	TagsHash      hash.Hash `codec:"tags_hash"`
+	IORoot        hash.Hash `codec:"io_root"`
 	StateRoot     hash.Hash `codec:"state_root"`
 }

@@ -37,6 +37,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -283,28 +284,33 @@ func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, ro
 }
 
 func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, [][]byte, error) {
-	if blk.Header.InputHash.IsEmpty() {
+	if blk.Header.IORoot.IsEmpty() {
 		return [][]byte{}, [][]byte{}, nil
 	}
 
 	// Fetch transaction input and output.
-	var inputHash storage.Key
-	copy(inputHash[:], blk.Header.InputHash[:])
-	var outputHash storage.Key
-	copy(outputHash[:], blk.Header.OutputHash[:])
-
-	txn, err := c.common.storage.GetBatch(ctx, []storage.Key{inputHash, outputHash})
+	// TODO: Add context.
+	tree, err := urkel.NewWithRoot(c.common.storage, nil, blk.Header.IORoot)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "client: failed to fetch given io root")
+	}
+
+	rawInputs, err := tree.Get(block.IoKeyInputs)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "client: failed to fetch I/O inputs")
+	}
+	rawOutputs, err := tree.Get(block.IoKeyOutputs)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "client: failed to fetch I/O outputs")
 	}
 
 	var inputs [][]byte
-	if err := cbor.Unmarshal(txn[0], &inputs); err != nil {
+	if err := cbor.Unmarshal(rawInputs, &inputs); err != nil {
 		return nil, nil, errors.Wrap(err, "client: failed to unmarshal transaction inputs")
 	}
 
 	var outputs [][]byte
-	if err := cbor.Unmarshal(txn[1], &outputs); err != nil {
+	if err := cbor.Unmarshal(rawOutputs, &outputs); err != nil {
 		return nil, nil, errors.Wrap(err, "client: failed to unmarshal transaction outputs")
 	}
 
@@ -377,14 +383,15 @@ func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.Public
 		return [][]byte{}, nil
 	}
 
-	// Fetch transaction input and output.
-	var key storage.Key
-	copy(key[:], root[:])
-
-	// TODO: Change after transactions are in MKVS.
-	txn, err := c.common.storage.Get(ctx, key)
+	// TODO: Add context.
+	tree, err := urkel.NewWithRoot(c.common.storage, nil, root)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "client: failed to fetch given io root")
+	}
+
+	txn, err := tree.Get(block.IoKeyInputs)
+	if err != nil {
+		return nil, errors.Wrap(err, "client: failed to fetch I/O inputs")
 	}
 
 	var txns [][]byte

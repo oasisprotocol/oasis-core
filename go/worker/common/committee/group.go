@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -319,7 +320,7 @@ func (g *Group) HandlePeerMessage(peerID []byte, message p2p.Message) error {
 }
 
 // PublishBatch publishes a batch to all members in the compute committee.
-func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash hash.Hash, hdr block.Header) error {
+func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batch runtime.Batch, hdr block.Header) error {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -349,8 +350,8 @@ func (g *Group) PublishBatch(batchSpanCtx opentracing.SpanContext, batchHash has
 			RuntimeID: g.runtimeID,
 			GroupHash: g.activeEpoch.computeGroupHash,
 			LeaderBatchDispatch: &p2p.LeaderBatchDispatch{
-				BatchHash: batchHash,
-				Header:    hdr,
+				Batch:  batch,
+				Header: hdr,
 			},
 			SpanContext: scBinary,
 		})

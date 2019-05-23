@@ -24,15 +24,16 @@ message Header {
   uint32 header_type = 5;
   bytes previous_hash = 6;
   bytes group_hash = 7;
-  bytes input_hash = 8;
-  bytes output_hash = 9;
+  // Input hash was here with id 8.
+  // Output hash was here with id 9.
   bytes state_root = 10;
   bytes commitments_hash = 11;
 
   bytes storage_receipt = 12;
 
   uint64 round = 13;
-  bytes tag_hash = 14;
+  // Tag hash was here with id 14.
+  bytes io_root = 15;
 }
 
 message LatestBlockRequest {
