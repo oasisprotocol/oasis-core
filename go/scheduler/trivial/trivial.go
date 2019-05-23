@@ -105,7 +105,13 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 
 	beacon := s.beacons[epoch]
 
-	for _, kind := range []api.CommitteeKind{api.Compute, api.Storage, api.TransactionScheduler} {
+	// Only generic compute runtimes need to elect all the committees.
+	kinds := []api.CommitteeKind{api.Compute}
+	if rt.IsCompute() {
+		kinds = append(kinds, []api.CommitteeKind{api.Storage, api.TransactionScheduler}...)
+	}
+
+	for _, kind := range kinds {
 		var nodeList []*node.Node
 		var sz int
 		var ctx []byte

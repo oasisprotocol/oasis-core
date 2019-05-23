@@ -131,6 +131,15 @@ pub enum Body {
         storage_log: WriteLog,
         new_state_root: Hash,
     },
+    WorkerLocalRPCCallRequest {
+        #[serde(with = "serde_bytes")]
+        request: Vec<u8>,
+        state_root: Hash,
+    },
+    WorkerLocalRPCCallResponse {
+        #[serde(with = "serde_bytes")]
+        response: Vec<u8>,
+    },
     WorkerCheckTxBatchRequest {
         calls: TxnBatch,
         block: Block,

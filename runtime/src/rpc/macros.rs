@@ -28,7 +28,8 @@ macro_rules! register_runtime_rpc_methods {
                         -> ::failure::Fallible<$output_type> {
                         $method_name(args, ctx)
                     },
-                )
+                ),
+                false,
             );
         )*
     }

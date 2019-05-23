@@ -188,6 +188,13 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 	for _, rtState := range state.getRuntimes() {
 		rtID := rtState.Runtime.ID
 
+		if !rtState.Runtime.IsCompute() {
+			app.logger.Debug("checkCommittees: skipping non-compute runtime",
+				"runtime", rtID,
+			)
+			continue
+		}
+
 		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
@@ -367,6 +374,13 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 
 func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *roothash.Genesis) {
 	state := newMutableState(tree)
+
+	if !runtime.IsCompute() {
+		app.logger.Warn("onNewRuntime: ignoring non-compute runtime",
+			"runtime", runtime,
+		)
+		return
+	}
 
 	// Check if state already exists for the given runtime.
 	rtState, _ := state.getRuntimeState(runtime.ID)

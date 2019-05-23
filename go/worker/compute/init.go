@@ -10,7 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 	"github.com/oasislabs/ekiden/go/worker/registration"
@@ -58,7 +58,7 @@ func New(
 	dataDir string,
 	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	keyManager *keymanager.KeyManager,
+	keyManager *keymanager.Client,
 	registration *registration.Registration,
 ) (*Worker, error) {
 	backend := viper.GetString(cfgWorkerBackend)

@@ -80,6 +80,10 @@ var (
 	}
 )
 
+// OnProcessStart is the function called after a worker process has been
+// started.
+type OnProcessStart func(*protocol.Protocol) error
+
 // ProxySpecification contains all necessary details about a single proxy.
 type ProxySpecification struct {
 	// ProxyType is the type of this proxy ("stream" or "dgram").
@@ -361,6 +365,7 @@ type sandboxedHost struct { // nolint: maligned
 
 	activeWorker          *process
 	activeWorkerAvailable *ctxsync.CancelableCond
+	onProcessStart        OnProcessStart
 	requestCh             chan *hostRequest
 	interruptCh           chan *interruptRequest
 
@@ -539,7 +544,7 @@ func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
 	}
 }
 
-func (h *sandboxedHost) spawnWorker() (*process, error) {
+func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 	h.logger.Info("spawning worker",
 		"worker_binary", h.workerBinary,
 		"runtime_binary", h.runtimeBinary,
@@ -747,6 +752,13 @@ func (h *sandboxedHost) spawnWorker() (*process, error) {
 	default:
 		return nil, node.ErrInvalidTEEHardware
 	}
+
+	if h.onProcessStart != nil {
+		if err = h.onProcessStart(proto); err != nil {
+			return nil, errors.Wrap(err, "worker: process post-start hook failed")
+		}
+	}
+
 	go p.attestationWorker(h)
 
 	haveErrors = false
@@ -886,6 +898,7 @@ func NewSandboxedHost(
 	teeHardware node.TEEHardware,
 	ias *ias.IAS,
 	msgHandler protocol.Handler,
+	onProcessStart OnProcessStart,
 	noSandbox bool,
 ) (Host, error) {
 	if workerBinary == "" {
@@ -930,6 +943,7 @@ func NewSandboxedHost(
 		quitCh:                make(chan struct{}),
 		stopCh:                make(chan struct{}),
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
+		onProcessStart:        onProcessStart,
 		requestCh:             make(chan *hostRequest, 10),
 		interruptCh:           make(chan *interruptRequest, 10),
 		logger:                logging.GetLogger("worker/common/host/sandboxed").With("name", name),

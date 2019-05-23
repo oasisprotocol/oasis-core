@@ -28,7 +28,7 @@ import (
 	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
 	"github.com/oasislabs/ekiden/go/registry"
 	registryAPI "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash"
@@ -44,6 +44,7 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/compute"
+	"github.com/oasislabs/ekiden/go/worker/keymanager"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	workerStorage "github.com/oasislabs/ekiden/go/worker/storage"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
@@ -83,7 +84,7 @@ type Node struct {
 	Storage    storageAPI.Backend
 	IAS        *ias.IAS
 	Client     *client.Client
-	KeyManager *keymanager.KeyManager
+	KeyManager *keymanagerClient.Client
 
 	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
@@ -202,6 +203,19 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.WorkerRegistration)
 
+	// Initialize the key manager service.
+	kmSvc, kmEnabled, err := keymanager.New(
+		dataDir,
+		n.IAS,
+		n.CommonWorker.Grpc,
+		n.WorkerRegistration,
+		&workerCommonCfg,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(kmSvc)
+
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
 		n.Epochtime,
@@ -260,13 +274,18 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		return err
 	}
 
+	// Start the key manager worker.
+	if err = kmSvc.Start(); err != nil {
+		return err
+	}
+
 	// Start the worker registration service.
 	if err = n.WorkerRegistration.Start(); err != nil {
 		return err
 	}
 
 	// Only start the external gRPC server if any workers enabled
-	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() {
+	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || kmEnabled {
 		if err = n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,
@@ -403,6 +422,16 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
+	// Initialize the IAS proxy client.
+	// NOTE: See reason above why this needs to happen before seed node init.
+	node.IAS, err = ias.New(node.Identity)
+	if err != nil {
+		logger.Error("failed to initialize IAS proxy client",
+			"err", err,
+		)
+		return nil, err
+	}
+
 	if node.svcTmnt.IsSeed() {
 		// Tendermint nodes in seed mode crawl the network for
 		// peers. In case of incoming connections seed node will
@@ -427,29 +456,14 @@ func NewNode() (*Node, error) {
 
 	logger.Info("starting ekiden node")
 
-	// Initialize the IAS proxy client.
-	node.IAS, err = ias.New(node.Identity)
+	// Initialize the key manager client service.
+	node.KeyManager, err = keymanagerClient.New(node.Registry)
 	if err != nil {
-		logger.Error("failed to initialize IAS proxy client",
+		logger.Error("failed to initialize key manager client",
 			"err", err,
 		)
 		return nil, err
 	}
-
-	// Initialize the key manager service.
-	node.KeyManager, err = keymanager.New(
-		cmdCommon.DataDir(),
-		node.IAS,
-		node.Identity,
-		node.Storage,
-	)
-	if err != nil {
-		logger.Error("failed to initialize key manager",
-			"err", err,
-		)
-		return nil, err
-	}
-	node.svcMgr.Register(node.KeyManager)
 
 	// Initialize the client.
 	node.Client, err = client.New(
@@ -503,14 +517,6 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Start the key manager service.
-	if err = node.KeyManager.Start(); err != nil {
-		logger.Error("failed to start key manager service",
-			"err", err,
-		)
-		return nil, err
-	}
-
 	logger.Info("initialization complete: ready to serve")
 	startOk = true
 
@@ -536,6 +542,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		tendermint.RegisterFlags,
 		ias.RegisterFlags,
 		keymanager.RegisterFlags,
+		keymanagerClient.RegisterFlags,
 		client.RegisterFlags,
 		compute.RegisterFlags,
 		p2p.RegisterFlags,

@@ -1,4 +1,4 @@
-package compute
+package host
 
 import (
 	"encoding/hex"
@@ -14,13 +14,13 @@ import (
 
 var errInvalidKey = errors.New("invalid local storage key")
 
-type localStorage struct {
+type LocalStorage struct {
 	logger *logging.Logger
 
 	db *bolt.DB
 }
 
-func (s *localStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
+func (s *LocalStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, errInvalidKey
 	}
@@ -49,7 +49,7 @@ func (s *localStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
 	return cbor.FixSliceForSerde(value), nil
 }
 
-func (s *localStorage) Set(id signature.PublicKey, key, value []byte) error {
+func (s *LocalStorage) Set(id signature.PublicKey, key, value []byte) error {
 	if len(key) == 0 {
 		return errInvalidKey
 	}
@@ -80,7 +80,7 @@ func (s *localStorage) Set(id signature.PublicKey, key, value []byte) error {
 	return txErr
 }
 
-func (s *localStorage) Stop() {
+func (s *LocalStorage) Stop() {
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("failed to close local storage",
 			"err", err,
@@ -89,13 +89,13 @@ func (s *localStorage) Stop() {
 	s.db = nil
 }
 
-func newLocalStorage(dataDir string) (*localStorage, error) {
-	s := &localStorage{
-		logger: logging.GetLogger("worker/compute/localStorage"),
+func NewLocalStorage(dataDir, fn string) (*LocalStorage, error) {
+	s := &LocalStorage{
+		logger: logging.GetLogger("worker/common/host/localStorage"),
 	}
 
 	var err error
-	if s.db, err = bolt.Open(filepath.Join(dataDir, "worker-local-storage.bolt.db"), 0600, nil); err != nil {
+	if s.db, err = bolt.Open(filepath.Join(dataDir, fn), 0600, nil); err != nil {
 		return nil, err
 	}
 

@@ -50,21 +50,17 @@ worker:
       - "127.0.0.1:9200"
   p2p:
     port: 9100
+  keymanager:
+    enabled: true
+    tee_hardware: intel-sgx
+    runtime:
+      id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      binary: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
+      loader: target/debug/ekiden-runtime-loader
 
 # IAS configuration.
 ias:
   proxy_addr: "127.0.0.1:9001"
-
-# Key manager configuration.
-keymanager:
-  enabled: true
-  tee_hardware: intel-sgx
-  loader: target/debug/ekiden-runtime-loader
-  runtime: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
-  port: 9003
-  client:
-    address: "127.0.0.1:9003"
-    certificate: /tmp/ekiden-single-node-sgx/tls_identity_cert.pem
 
 # Epochtime backend.
 epochtime:

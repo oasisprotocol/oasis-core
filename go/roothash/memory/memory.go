@@ -505,6 +505,13 @@ func (r *memoryRootHash) getRuntimeState(id signature.PublicKey) (*runtimeState,
 func (r *memoryRootHash) onRuntimeRegistration(ctx context.Context, runtime *registry.Runtime) error {
 	k := runtime.ID.ToMapKey()
 
+	if !runtime.IsCompute() {
+		r.logger.Warn("worker: ignoring non-compute runtime",
+			"runtime", runtime.ID,
+		)
+		return nil
+	}
+
 	r.Lock()
 	defer r.Unlock()
 

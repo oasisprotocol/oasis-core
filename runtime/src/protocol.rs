@@ -19,7 +19,7 @@ use crate::{
     common::{crypto::hash::Hash, logger::get_logger},
     dispatcher::Dispatcher,
     rak::RAK,
-    storage::CAS,
+    storage::{KeyValue, CAS},
     tracing,
     types::{Body, Message, MessageType},
 };
@@ -273,6 +273,11 @@ impl Protocol {
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
+            req @ Body::WorkerLocalRPCCallRequest { .. } => {
+                self.can_handle_runtime_requests()?;
+                self.dispatcher.queue_request(ctx, id, req)?;
+                Ok(None)
+            }
             req @ Body::WorkerCheckTxBatchRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
@@ -321,8 +326,10 @@ impl ProtocolUntrustedLocalStorage {
             protocol,
         }
     }
+}
 
-    pub fn get(&self, key: Vec<u8>) -> Fallible<Vec<u8>> {
+impl KeyValue for ProtocolUntrustedLocalStorage {
+    fn get(&self, key: Vec<u8>) -> Fallible<Vec<u8>> {
         let ctx = Context::create_child(&self.ctx);
 
         match self
@@ -335,7 +342,7 @@ impl ProtocolUntrustedLocalStorage {
         }
     }
 
-    pub fn set(&self, key: Vec<u8>, value: Vec<u8>) -> Fallible<()> {
+    fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Fallible<()> {
         let ctx = Context::create_child(&self.ctx);
 
         match self

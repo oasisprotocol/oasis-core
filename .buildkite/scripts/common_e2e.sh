@@ -15,6 +15,8 @@ EKIDEN_RUNTIME_LOADER=${EKIDEN_RUNTIME_LOADER:-${EKIDEN_ROOT_PATH}/target/debug/
 EKIDEN_TEE_HARDWARE=${EKIDEN_TEE_HARDWARE:-""}
 # Runtime identifier.
 EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000000000000000000000000000"}
+# Keymanager runtime identifier.
+EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
 
 # Run a Tendermint validator committee and a storage node.
 #
@@ -191,8 +193,6 @@ run_backend_tendermint_committee() {
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
             --tendermint.debug.addr_book_lenient \
-            --keymanager.client.address 127.0.0.1:9003 \
-            --keymanager.client.certificate ${committee_dir}/key-manager/tls_identity_cert.pem \
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
             --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
             --datadir ${datadir} \
@@ -266,8 +266,6 @@ run_compute_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
-        --keymanager.client.address 127.0.0.1:9003 \
-        --keymanager.client.certificate ${EKIDEN_COMMITTEE_DIR}/key-manager/tls_identity_cert.pem \
         --worker.compute.enabled \
         --worker.compute.backend sandboxed \
         --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
@@ -357,11 +355,13 @@ run_keymanager_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
-        ${EKIDEN_TEE_HARDWARE:+--keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
-        --keymanager.enabled \
-        --keymanager.loader ${EKIDEN_RUNTIME_LOADER} \
-        --keymanager.runtime ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
-        --keymanager.port 9003 \
+        ${EKIDEN_TEE_HARDWARE:+--worker.keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --worker.client.port 9003 \
+        --worker.keymanager.enabled \
+        --worker.keymanager.runtime.loader ${EKIDEN_RUNTIME_LOADER} \
+        --worker.keymanager.runtime.binary ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
+        --worker.keymanager.runtime.id ${EKIDEN_KM_RUNTIME_ID} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[key-manager] /" &
@@ -398,6 +398,12 @@ run_seed_node() {
         --log.level info \
         --metrics.mode none \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend tendermint \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
         --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \
@@ -436,6 +442,13 @@ run_basic_client() {
 
     local log_file=${EKIDEN_COMMITTEE_DIR}/client.log
     rm -rf ${log_file}
+
+    # Wait for the socket to appear.
+    while [ ! -S "${EKIDEN_VALIDATOR_SOCKET}" ]
+    do
+      echo "Waiting for internal Ekiden node socket to appear..."
+      sleep 1
+    done
 
     ${WORKDIR}/target/debug/${client}-client \
         --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
@@ -481,7 +494,6 @@ run_test() {
     local pre_init_hook=""
     local post_km_hook=""
     local on_success_hook="assert_basic_success"
-    local start_client_first=0
     local client_runner=run_basic_client
     local client="none"
     # Load named arguments that override defaults.
@@ -510,21 +522,13 @@ run_test() {
         $pre_init_hook
     fi
 
-    if [[ "${start_client_first}" == 0 ]]; then
-        # Start backend.
-        $backend_runner
-        sleep 1
-    fi
+    # Start backend.
+    $backend_runner
+    sleep 1
 
     # Run the client.
     $client_runner $runtime $client
     local client_pid=${EKIDEN_CLIENT_PID:-""}
-
-    if [[ "${start_client_first}" == 1 ]]; then
-        # Start backend.
-        $backend_runner
-        sleep 1
-    fi
 
     # Run post key-manager startup hook.
     if [[ "$post_km_hook" != "" ]]; then

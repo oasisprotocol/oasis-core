@@ -113,6 +113,8 @@ impl Method {
 pub struct Dispatcher {
     /// Registered RPC methods.
     methods: HashMap<String, Method>,
+    /// Registered local RPC methods.
+    local_methods: HashMap<String, Method>,
 }
 
 impl Dispatcher {
@@ -120,17 +122,21 @@ impl Dispatcher {
     pub fn new() -> Self {
         Self {
             methods: HashMap::new(),
+            local_methods: HashMap::new(),
         }
     }
 
     /// Register a new method in the dispatcher.
-    pub fn add_method(&mut self, method: Method) {
-        self.methods.insert(method.get_name().clone(), method);
+    pub fn add_method(&mut self, method: Method, is_local: bool) {
+        match is_local {
+            false => self.methods.insert(method.get_name().clone(), method),
+            true => self.local_methods.insert(method.get_name().clone(), method),
+        };
     }
 
     /// Dispatch request.
     pub fn dispatch(&self, request: Request, mut ctx: Context) -> Response {
-        match self.dispatch_fallible(request, &mut ctx) {
+        match self.dispatch_fallible(request, &mut ctx, false) {
             Ok(response) => response,
             Err(error) => Response {
                 body: Body::Error(format!("{}", error)),
@@ -138,13 +144,33 @@ impl Dispatcher {
         }
     }
 
-    fn dispatch_fallible(&self, request: Request, ctx: &mut Context) -> Fallible<Response> {
-        match self.methods.get(&request.method) {
+    fn dispatch_fallible(
+        &self,
+        request: Request,
+        ctx: &mut Context,
+        is_local: bool,
+    ) -> Fallible<Response> {
+        let vtbl = match is_local {
+            false => &self.methods,
+            true => &self.local_methods,
+        };
+
+        match vtbl.get(&request.method) {
             Some(dispatcher) => dispatcher.dispatch(request, ctx),
             None => Err(DispatchError::MethodNotFound {
                 method: request.method,
             }
             .into()),
+        }
+    }
+
+    /// Dispatch local request.
+    pub fn dispatch_local(&self, request: Request, mut ctx: Context) -> Response {
+        match self.dispatch_fallible(request, &mut ctx, true) {
+            Ok(response) => response,
+            Err(error) => Response {
+                body: Body::Error(format!("{}", error)),
+            },
         }
     }
 }

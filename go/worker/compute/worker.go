@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -65,7 +65,7 @@ type Worker struct {
 
 	commonWorker *workerCommon.Worker
 	ias          *ias.IAS
-	keyManager   *keymanager.KeyManager
+	keyManager   *keymanager.Client
 	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
@@ -73,7 +73,7 @@ type Worker struct {
 	netProxies map[string]NetworkProxy
 	socketDir  string
 
-	localStorage *localStorage
+	localStorage *host.LocalStorage
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -246,6 +246,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			rtCfg.TEEHardware,
 			w.ias,
 			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
+			nil,
 			false,
 		)
 	case host.BackendUnconfined:
@@ -257,6 +258,7 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			rtCfg.TEEHardware,
 			w.ias,
 			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
+			nil,
 			true,
 		)
 	case host.BackendMock:
@@ -315,7 +317,7 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	keyManager *keymanager.KeyManager,
+	keyManager *keymanager.Client,
 	registration *registration.Registration,
 	cfg Config,
 ) (*Worker, error) {
@@ -392,7 +394,7 @@ func newWorker(
 		}
 
 		// Open the local storage.
-		if w.localStorage, err = newLocalStorage(dataDir); err != nil {
+		if w.localStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
 			return nil, err
 		}
 
@@ -406,11 +408,15 @@ func newWorker(
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleComputeWorker)
-
 			for _, rt := range n.Runtimes {
 				var err error
 
-				if rt.Capabilities.TEE, err = w.runtimes[rt.ID.ToMapKey()].workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
+				workerRT := w.runtimes[rt.ID.ToMapKey()]
+				if workerRT == nil {
+					continue
+				}
+
+				if rt.Capabilities.TEE, err = workerRT.workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
 					w.logger.Error("failed to obtain CapabilityTEE",
 						"err", err,
 						"runtime", rt.ID,

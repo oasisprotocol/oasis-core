@@ -38,6 +38,10 @@ extern crate tokio_current_thread;
 extern crate tokio_executor;
 extern crate webpki;
 
+use lazy_static::lazy_static;
+#[cfg(target_env = "sgx")]
+use sgx_isa::{AttributesFlags, Report};
+
 #[macro_use]
 pub mod common;
 pub mod dispatcher;
@@ -57,3 +61,44 @@ pub use self::{
     init::start_runtime, protocol::Protocol, rpc::dispatcher::Dispatcher as RpcDispatcher,
     transaction::dispatcher::Dispatcher as TxnDispatcher,
 };
+
+lazy_static! {
+    pub static ref BUILD_INFO: BuildInfo = {
+        // Non-SGX builds are insecure by definition.
+        #[cfg(not(target_env = "sgx"))]
+        let is_secure = false;
+
+        // SGX build security depends on how it was built.
+        #[cfg(target_env = "sgx")]
+        let is_secure = {
+            // Optimistically start out as "it could be secure", and any single
+            // insecure build time option will propagate failure.
+            let maybe_secure = true;
+
+            // AVR signature verification MUST be enabled.
+            let maybe_secure = maybe_secure & option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_none();
+
+            // IAS `GROUP_OUT_OF_DATE` and `CONFIGRUATION_NEEDED` responses
+            // MUST count as IAS failure.
+            //
+            // Rationale: This is how IAS signifies that the host environment
+            // is insecure (eg: SMT is enabled when it should not be).
+            let maybe_secure = maybe_secure & option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
+
+            // The enclave MUST NOT be a debug one.
+            let maybe_secure = maybe_secure & !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);
+
+            maybe_secure
+        };
+
+        BuildInfo {
+            is_secure,
+        }
+    };
+}
+
+/// Runtime build information.
+pub struct BuildInfo {
+    /// True iff the build can provide integrity and confidentiality.
+    pub is_secure: bool,
+}

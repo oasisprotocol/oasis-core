@@ -31,7 +31,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/grpc/txnscheduler"
-	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -63,7 +63,7 @@ type clientCommon struct {
 	scheduler  scheduler.Backend
 	registry   registry.Backend
 	consensus  common.ConsensusBackend
-	keyManager *keymanager.KeyManager
+	keyManager *keymanager.Client
 
 	ctx context.Context
 }
@@ -554,7 +554,7 @@ func New(
 	scheduler scheduler.Backend,
 	registry registry.Backend,
 	consensus common.ConsensusBackend,
-	keyManager *keymanager.KeyManager,
+	keyManager *keymanager.Client,
 ) (*Client, error) {
 	c := &Client{
 		common: &clientCommon{

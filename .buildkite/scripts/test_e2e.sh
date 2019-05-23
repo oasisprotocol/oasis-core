@@ -45,7 +45,7 @@ scenario_basic() {
     run_compute_node 3 ${runtime}
 
     # Wait for all compute nodes to start.
-    wait_nodes 4 # 3 + storage
+    wait_nodes 5 # 3 + storage + km
 
     # Advance epoch to elect a new committee.
     set_epoch 1
@@ -62,7 +62,7 @@ scenario_discrepancy() {
     run_compute_node 3 ${runtime}
 
     # Wait for all compute nodes to start.
-    wait_nodes 4 # 3 + storage
+    wait_nodes 5 # 3 + storage + km
 
     # Advance epoch to elect a new committee.
     set_epoch 1
@@ -116,23 +116,22 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue
 
-    # TODO: this breaks with #1651 until encryption can be fixed again!
-    # # Database encryption test.
-    # run_test \
-    #     scenario=scenario_basic \
-    #     name="e2e-${backend_name}-basic-enc" \
-    #     backend_runner=$backend_runner \
-    #     runtime=simple-keyvalue \
-    #     client=simple-keyvalue-enc
+     # Database encryption test.
+    run_test \
+        scenario=scenario_basic \
+        name="e2e-${backend_name}-basic-enc" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-enc
 
-    # # Database encryption test with restarting key manager.
-    # run_test \
-    #     scenario=scenario_basic \
-    #     name="e2e-${backend_name}-km-restart" \
-    #     backend_runner=$backend_runner \
-    #     runtime=simple-keyvalue \
-    #     client=simple-keyvalue-enc \
-    #     client_runner=run_client_km_restart
+    # Database encryption test with restarting key manager.
+    run_test \
+        scenario=scenario_basic \
+        name="e2e-${backend_name}-km-restart" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-enc \
+        client_runner=run_client_km_restart
 
     # Discrepancy scenario.
     # NOTE: This scenario currently fails on SGX due to the way discrepancy
