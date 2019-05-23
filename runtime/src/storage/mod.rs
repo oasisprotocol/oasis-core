@@ -3,12 +3,11 @@ use std::sync::Arc;
 
 use failure::Fallible;
 
-pub mod cas;
 pub mod context;
 pub mod mkvs;
 
 // Re-exports.
-pub use self::{cas::CAS, context::StorageContext, mkvs::MKVS};
+pub use self::{context::StorageContext, mkvs::MKVS};
 
 /// Trivial Key/Value storage.
 pub trait KeyValue: Send + Sync {

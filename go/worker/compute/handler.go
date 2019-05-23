@@ -47,30 +47,6 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 	}
 	// Storage.
-	if body.HostStorageGetRequest != nil {
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Get(key)",
-			opentracing.Tag{Key: "key", Value: body.HostStorageGetRequest.Key},
-		)
-		defer span.Finish()
-
-		value, err := h.storage.Get(sctx, body.HostStorageGetRequest.Key)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostStorageGetResponse: &protocol.HostStorageGetResponse{Value: value}}, nil
-	}
-	if body.HostStorageGetBatchRequest != nil {
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetBatch(key)",
-			opentracing.Tag{Key: "key", Value: body.HostStorageGetRequest.Key},
-		)
-		defer span.Finish()
-
-		values, err := h.storage.GetBatch(sctx, body.HostStorageGetBatchRequest.Keys)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostStorageGetBatchResponse: &protocol.HostStorageGetBatchResponse{Values: values}}, nil
-	}
 	if body.HostStorageSyncGetSubtreeRequest != nil {
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetSubtree(root_hash, node_path, node_depth, max_depth)",
 			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetSubtreeRequest.RootHash},

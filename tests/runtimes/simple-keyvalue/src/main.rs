@@ -46,7 +46,7 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"insert");
     ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
+    let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),
             args.key.as_bytes(),
@@ -65,7 +65,7 @@ fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"get");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
+    let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         mkvs.get(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -80,7 +80,7 @@ fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     ctx.emit_txn_tag(b"kv_op", b"remove");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
 
-    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
+    let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         mkvs.remove(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -108,7 +108,7 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>>
     let nonce = [0u8; NONCE_SIZE];
 
     let enc_ctx = get_encryption_context(ctx, args.key.as_bytes())?;
-    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
+    let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.insert(
             mkvs,
             IoContext::create_child(&ctx.io_ctx),
@@ -123,7 +123,7 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>>
 /// (encrypted) Retrieve a key/value pair.
 fn enc_get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     let enc_ctx = get_encryption_context(ctx, args.as_bytes())?;
-    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
+    let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.get(mkvs, IoContext::create_child(&ctx.io_ctx), args.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -132,7 +132,7 @@ fn enc_get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 /// (encrypted) Remove a key/value pair.
 fn enc_remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     let enc_ctx = get_encryption_context(ctx, args.as_bytes())?;
-    let existing = StorageContext::with_current(|_cas, mkvs, _untrusted_local| {
+    let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.remove(mkvs, IoContext::create_child(&ctx.io_ctx), args.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
@@ -140,14 +140,14 @@ fn enc_remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 
 /// Insert a key/value pair (untrusted local).
 fn local_insert(args: &KeyValue, _ctx: &mut TxnContext) -> Fallible<()> {
-    StorageContext::with_current(|_cas, _mkvs, untrusted_local| {
+    StorageContext::with_current(|_mkvs, untrusted_local| {
         untrusted_local.insert(args.key.as_bytes().to_vec(), args.value.as_bytes().to_vec())
     })
 }
 
 /// Retrive a key (untrusted local).
 fn local_get(args: &String, _ctx: &mut TxnContext) -> Fallible<String> {
-    let existing = StorageContext::with_current(|_cas, _mkvs, untrusted_local| {
+    let existing = StorageContext::with_current(|_mkvs, untrusted_local| {
         untrusted_local.get(args.as_bytes().to_vec())
     })?;
     Ok(String::from_utf8(existing)?)

@@ -18,7 +18,7 @@ use crate::{
         logger::get_logger,
         roothash::Block,
     },
-    protocol::{Protocol, ProtocolCAS, ProtocolUntrustedLocalStorage},
+    protocol::{Protocol, ProtocolUntrustedLocalStorage},
     rak::RAK,
     rpc::{
         demux::Demux as RpcDemux,
@@ -27,7 +27,6 @@ use crate::{
         Context as RpcContext,
     },
     storage::{
-        cas::PassthroughCAS,
         mkvs::{urkel::sync::HostReadSyncer, UrkelTree},
         StorageContext,
     },
@@ -240,22 +239,15 @@ impl Dispatcher {
         let ctx = ctx.freeze();
         cache.maybe_replace(&ctx, protocol, block.header.state_root);
 
-        let cas = Arc::new(ProtocolCAS::new(
-            Context::create_child(&ctx),
-            protocol.clone(),
-        ));
-        let cas = Arc::new(PassthroughCAS::new(cas));
         let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
             Context::create_child(&ctx),
             protocol.clone(),
         ));
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
-        let (outputs, tags) = StorageContext::enter(
-            cas.clone(),
-            &mut cache.mkvs,
-            untrusted_local.clone(),
-            || txn_dispatcher.dispatch_batch(&calls, txn_ctx),
-        );
+        let (outputs, tags) =
+            StorageContext::enter(&mut cache.mkvs, untrusted_local.clone(), || {
+                txn_dispatcher.dispatch_batch(&calls, txn_ctx)
+            });
 
         if check_only {
             debug!(self.logger, "Transaction batch check complete");
@@ -296,7 +288,6 @@ impl Dispatcher {
 
             let result = ComputedBatch {
                 outputs,
-                storage_inserts: cas.take_inserts(),
                 storage_log: storage_log,
                 new_state_root,
                 tags,
@@ -353,11 +344,6 @@ impl Dispatcher {
                 RpcMessage::Request(req) => {
                     // Request, dispatch.
                     let ctx = ctx.freeze();
-                    let cas = Arc::new(ProtocolCAS::new(
-                        Context::create_child(&ctx),
-                        protocol.clone(),
-                    ));
-                    let cas = Arc::new(PassthroughCAS::new(cas));
                     let read_syncer = HostReadSyncer::new(protocol.clone());
                     let mut mkvs = UrkelTree::make()
                         .with_root(state_root)
@@ -368,12 +354,10 @@ impl Dispatcher {
                         protocol.clone(),
                     ));
                     let rpc_ctx = RpcContext::new(self.rak.clone(), session_info);
-                    let response = StorageContext::enter(
-                        cas.clone(),
-                        &mut mkvs,
-                        untrusted_local.clone(),
-                        || rpc_dispatcher.dispatch(req, rpc_ctx),
-                    );
+                    let response =
+                        StorageContext::enter(&mut mkvs, untrusted_local.clone(), || {
+                            rpc_dispatcher.dispatch(req, rpc_ctx)
+                        });
                     let response = RpcMessage::Response(response);
 
                     let (storage_log, new_state_root) = mkvs
@@ -388,7 +372,6 @@ impl Dispatcher {
                             // Transmit response.
                             protocol_response = Body::WorkerRPCCallResponse {
                                 response: buffer,
-                                storage_inserts: cas.take_inserts(),
                                 storage_log: storage_log,
                                 new_state_root,
                             };
@@ -409,7 +392,6 @@ impl Dispatcher {
                             // Transmit response.
                             protocol_response = Body::WorkerRPCCallResponse {
                                 response: buffer,
-                                storage_inserts: vec![],
                                 storage_log: vec![],
                                 new_state_root: state_root,
                             };
@@ -433,7 +415,6 @@ impl Dispatcher {
             // Send back any handshake frames.
             protocol_response = Body::WorkerRPCCallResponse {
                 response: buffer,
-                storage_inserts: vec![],
                 storage_log: vec![],
                 new_state_root: state_root,
             };
@@ -457,11 +438,6 @@ impl Dispatcher {
 
         // Request, dispatch.
         let ctx = ctx.freeze();
-        let cas = Arc::new(ProtocolCAS::new(
-            Context::create_child(&ctx),
-            protocol.clone(),
-        ));
-        let cas = Arc::new(PassthroughCAS::new(cas));
         let read_syncer = HostReadSyncer::new(protocol.clone());
         let mut mkvs = UrkelTree::make()
             .with_root(state_root)
@@ -472,10 +448,9 @@ impl Dispatcher {
             protocol.clone(),
         ));
         let rpc_ctx = RpcContext::new(self.rak.clone(), None);
-        let response =
-            StorageContext::enter(cas.clone(), &mut mkvs, untrusted_local.clone(), || {
-                rpc_dispatcher.dispatch_local(req, rpc_ctx)
-            });
+        let response = StorageContext::enter(&mut mkvs, untrusted_local.clone(), || {
+            rpc_dispatcher.dispatch_local(req, rpc_ctx)
+        });
         let response = RpcMessage::Response(response);
 
         // Note: MKVS commit is omitted, this MUST be global side-effect free.

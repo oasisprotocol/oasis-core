@@ -8,7 +8,6 @@ use serde_derive::Deserialize;
 
 use crate::common::crypto::hash::Hash;
 
-pub mod cas_patricia_trie;
 pub mod urkel;
 
 /// The type of entry in the log.
@@ -89,4 +88,4 @@ pub trait MKVS: Send + Sync {
 }
 
 // Re-exports.
-pub use self::{cas_patricia_trie::CASPatriciaTrie, urkel::UrkelTree};
+pub use self::urkel::UrkelTree;

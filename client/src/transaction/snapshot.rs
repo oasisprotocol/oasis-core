@@ -1,5 +1,5 @@
 //! A block snapshot.
-use std::{any::Any, cell::RefCell, rc::Rc, sync::Arc};
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use ekiden_runtime::{
     common::{crypto::hash::Hash, roothash::Block},
@@ -11,7 +11,7 @@ use ekiden_runtime::{
             },
             UrkelTree, WriteLog,
         },
-        CAS, MKVS,
+        MKVS,
     },
     transaction::types::{TxnCall, TxnOutput},
 };
@@ -59,7 +59,6 @@ pub struct BlockSnapshot {
     /// Block header hash.
     pub block_hash: Hash,
 
-    cas: Arc<CAS>,
     read_syncer: RemoteReadSync,
     mkvs: UrkelTree,
 }
@@ -68,7 +67,6 @@ impl Clone for BlockSnapshot {
     fn clone(&self) -> Self {
         let block = self.block.clone();
         let block_hash = self.block_hash.clone();
-        let cas = self.cas.clone();
         let read_syncer = self.read_syncer.clone();
         let mkvs = UrkelTree::make()
             .with_root(self.block.header.state_root)
@@ -78,7 +76,6 @@ impl Clone for BlockSnapshot {
         Self {
             block,
             block_hash,
-            cas,
             read_syncer,
             mkvs,
         }
@@ -91,7 +88,6 @@ impl BlockSnapshot {
         block: Block,
         block_hash: Hash,
     ) -> Self {
-        let cas = Arc::new(RemoteCAS(storage_client.clone()));
         let read_syncer = RemoteReadSync(storage_client);
         let mkvs = UrkelTree::make()
             .with_root(block.header.state_root)
@@ -101,20 +97,9 @@ impl BlockSnapshot {
         Self {
             block,
             block_hash,
-            cas,
             read_syncer,
             mkvs,
         }
-    }
-}
-
-impl CAS for BlockSnapshot {
-    fn get(&self, key: Hash) -> Fallible<Vec<u8>> {
-        self.cas.get(key)
-    }
-
-    fn insert(&self, _value: Vec<u8>, _expiry: u64) -> Fallible<Hash> {
-        unimplemented!("block snapshot is read-only");
     }
 }
 
@@ -136,29 +121,6 @@ impl MKVS for BlockSnapshot {
     }
 
     fn rollback(&mut self) {
-        unimplemented!("block snapshot is read-only");
-    }
-}
-
-#[derive(Clone)]
-struct RemoteCAS(api::storage::StorageClient);
-
-impl CAS for RemoteCAS {
-    fn get(&self, key: Hash) -> Fallible<Vec<u8>> {
-        // TODO: Tracing.
-
-        let mut request = api::storage::GetRequest::new();
-        request.set_id(key.as_ref().to_vec());
-
-        let response = self
-            .0
-            .get(&request)
-            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
-
-        Ok(response.data)
-    }
-
-    fn insert(&self, _value: Vec<u8>, _expiry: u64) -> Fallible<Hash> {
         unimplemented!("block snapshot is read-only");
     }
 }

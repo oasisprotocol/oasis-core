@@ -511,14 +511,14 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
-		batch.StorageInserts = append(batch.StorageInserts, storage.Value{
+		casBatch := []storage.Value{storage.Value{
 			Data:       batch.Outputs.MarshalCBOR(),
 			Expiration: 2,
 		}, storage.Value{
 			Data:       cbor.Marshal(batch.Tags),
 			Expiration: 2,
-		})
-		if err := n.commonNode.Storage.InsertBatch(ctx, batch.StorageInserts, opts); err != nil {
+		}}
+		if err := n.commonNode.Storage.InsertBatch(ctx, casBatch, opts); err != nil {
 			n.logger.Error("failed to commit state to storage",
 				"err", err,
 			)
