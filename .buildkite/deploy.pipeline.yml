@@ -38,8 +38,6 @@ steps:
       - eval $(ssh-agent -s)
       - ssh-add
       - docker/deployment/build_context.sh context.tar.gz
-    env:
-      EKIDEN_KM_CUSTOM_KEYS: "0"
     artifact_paths:
       - context.tar.gz
     agents:
@@ -54,9 +52,6 @@ steps:
       - eval $(ssh-agent -s)
       - ssh-add
       - docker/deployment/build_context.sh context-prod.tar.gz
-    env:
-      KM_DUMMY_ENCRYPTION_KEY: /root/.ekiden/keymanager_dummy_encryption.key
-      KM_DUMMY_SIGNING_KEY: /root/.ekiden/keymanager_dummy_signing.key
     artifact_paths:
       - context-prod.tar.gz
     agents:
