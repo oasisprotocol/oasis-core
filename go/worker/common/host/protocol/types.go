@@ -124,7 +124,7 @@ type WorkerRPCCallResponse struct {
 	// Response.
 	Response []byte `codec:"response"`
 	// Batch of storage write operations.
-	StorageLog storage.WriteLog `codec:"storage_log"`
+	WriteLog storage.WriteLog `codec:"write_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
@@ -162,7 +162,7 @@ type ComputedBatch struct {
 	// Batch of runtime outputs.
 	Outputs runtime.Batch `codec:"outputs"`
 	// Batch of storage write operations.
-	StorageLog storage.WriteLog `codec:"storage_log"`
+	WriteLog storage.WriteLog `codec:"write_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 	// Tags are runtime-specific indexable tags.

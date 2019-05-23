@@ -525,7 +525,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			return err
 		}
 
-		if _, err := n.commonNode.Storage.Apply(ctx, n.commonNode.CurrentBlock.Header.StateRoot, batch.NewStateRoot, batch.StorageLog); err != nil {
+		if _, err := n.commonNode.Storage.Apply(ctx, n.commonNode.CurrentBlock.Header.StateRoot, batch.NewStateRoot, batch.WriteLog); err != nil {
 			n.logger.Error("failed to apply write log to storage",
 				"err", err,
 			)

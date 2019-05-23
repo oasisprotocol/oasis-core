@@ -257,7 +257,7 @@ impl Dispatcher {
                 .send_response(id, Body::WorkerCheckTxBatchResponse { results: outputs })
                 .unwrap();
         } else {
-            let (storage_log, new_state_root) = cache
+            let (write_log, new_state_root) = cache
                 .mkvs
                 .commit(Context::create_child(&ctx))
                 .expect("mkvs commit must succeed");
@@ -288,7 +288,7 @@ impl Dispatcher {
 
             let result = ComputedBatch {
                 outputs,
-                storage_log: storage_log,
+                write_log: write_log,
                 new_state_root,
                 tags,
                 rak_sig,
@@ -360,7 +360,7 @@ impl Dispatcher {
                         });
                     let response = RpcMessage::Response(response);
 
-                    let (storage_log, new_state_root) = mkvs
+                    let (write_log, new_state_root) = mkvs
                         .commit(Context::create_child(&ctx))
                         .expect("mkvs commit must succeed");
 
@@ -372,7 +372,7 @@ impl Dispatcher {
                             // Transmit response.
                             protocol_response = Body::WorkerRPCCallResponse {
                                 response: buffer,
-                                storage_log: storage_log,
+                                write_log: write_log,
                                 new_state_root,
                             };
                         }
@@ -392,7 +392,7 @@ impl Dispatcher {
                             // Transmit response.
                             protocol_response = Body::WorkerRPCCallResponse {
                                 response: buffer,
-                                storage_log: vec![],
+                                write_log: vec![],
                                 new_state_root: state_root,
                             };
                         }
@@ -415,7 +415,7 @@ impl Dispatcher {
             // Send back any handshake frames.
             protocol_response = Body::WorkerRPCCallResponse {
                 response: buffer,
-                storage_log: vec![],
+                write_log: vec![],
                 new_state_root: state_root,
             };
         }

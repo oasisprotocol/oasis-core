@@ -75,7 +75,7 @@ pub struct ComputedBatch {
     /// Batch of runtime outputs.
     pub outputs: TxnBatch,
     /// Log of changes to the storage tree.
-    pub storage_log: WriteLog,
+    pub write_log: WriteLog,
     /// New state root hash.
     pub new_state_root: Hash,
     /// Runtime-specific indexable tags.
@@ -125,7 +125,7 @@ pub enum Body {
     WorkerRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
-        storage_log: WriteLog,
+        write_log: WriteLog,
         new_state_root: Hash,
     },
     WorkerLocalRPCCallRequest {
