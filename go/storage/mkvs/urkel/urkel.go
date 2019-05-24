@@ -2,6 +2,7 @@
 package urkel
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -114,7 +115,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 
 // NewWithRoot creates a new Urkel tree with an existing root, backed by
 // the given node database.
-func NewWithRoot(rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ...Option) (*Tree, error) {
+func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ...Option) (*Tree, error) {
 	t := New(rs, ndb, options...)
 	t.cache.setPendingRoot(&internal.Pointer{
 		Clean: true,
@@ -125,7 +126,7 @@ func NewWithRoot(rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ..
 	// Try to prefetch the subtree at the root.
 	// NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
 	var path hash.Hash
-	ptr, err := t.cache.prefetch(root, path, 0)
+	ptr, err := t.cache.prefetch(ctx, root, path, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -146,10 +147,10 @@ func HasRoot(ndb db.NodeDB, root hash.Hash) bool {
 }
 
 // Insert inserts a key/value pair into the tree.
-func (t *Tree) Insert(key []byte, value []byte) error {
+func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	hkey := hashKey(key)
 	var existed bool
-	newRoot, existed, err := t.doInsert(t.cache.pendingRoot, 0, hkey, value)
+	newRoot, existed, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
 	if err != nil {
 		return err
 	}
@@ -167,10 +168,10 @@ func (t *Tree) Insert(key []byte, value []byte) error {
 }
 
 // Remove removes a key from the tree.
-func (t *Tree) Remove(key []byte) error {
+func (t *Tree) Remove(ctx context.Context, key []byte) error {
 	hkey := hashKey(key)
 	var changed bool
-	newRoot, changed, err := t.doRemove(t.cache.pendingRoot, 0, hkey)
+	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, hkey)
 	if err != nil {
 		return err
 	}
@@ -188,19 +189,19 @@ func (t *Tree) Remove(key []byte) error {
 }
 
 // Get looks up an existing key.
-func (t *Tree) Get(key []byte) ([]byte, error) {
+func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 	hkey := hashKey(key)
-	return t.doGet(t.cache.pendingRoot, 0, hkey)
+	return t.doGet(ctx, t.cache.pendingRoot, 0, hkey)
 }
 
 // Dump dumps the tree into the given writer.
-func (t *Tree) Dump(w io.Writer) {
-	t.doDump(w, t.cache.pendingRoot, hash.Hash{}, 0)
+func (t *Tree) Dump(ctx context.Context, w io.Writer) {
+	t.doDump(ctx, w, t.cache.pendingRoot, hash.Hash{}, 0)
 	fmt.Fprintln(w, "")
 }
 
 // Stats traverses the tree and dumps some statistics.
-func (t *Tree) Stats(maxDepth uint8) Stats {
+func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 	stats := &Stats{
 		LeftSubtreeMaxDepths:  make(map[uint8]uint8),
 		RightSubtreeMaxDepths: make(map[uint8]uint8),
@@ -209,18 +210,18 @@ func (t *Tree) Stats(maxDepth uint8) Stats {
 	stats.Cache.LeafNodeCount = t.cache.leafNodeCount
 	stats.Cache.LeafValueSize = t.cache.valueSize
 
-	t.doStats(stats, t.cache.pendingRoot, hash.Hash{}, 0, maxDepth)
+	t.doStats(ctx, stats, t.cache.pendingRoot, hash.Hash{}, 0, maxDepth)
 	return *stats
 }
 
 // Commit commits tree updates to the underlying database and returns
 // the write log and new merkle root.
-func (t *Tree) Commit() (WriteLog, hash.Hash, error) {
+func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 	batch := t.cache.db.NewBatch()
 	defer batch.Reset()
 
 	updates := &cacheUpdates{}
-	root, err := doCommit(&t.cache, updates, batch, t.cache.pendingRoot)
+	root, err := doCommit(ctx, &t.cache, updates, batch, t.cache.pendingRoot)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}

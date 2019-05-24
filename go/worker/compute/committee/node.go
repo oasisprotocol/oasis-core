@@ -585,8 +585,7 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 			defer cancel()
 
 			// Fetch batch from storage.
-			// TODO: Context.
-			tree, err := urkel.NewWithRoot(n.commonNode.Storage, nil, dis.IORoot)
+			tree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, dis.IORoot)
 			if err != nil {
 				n.logger.Error("backup worker failed to fetch I/O root",
 					"err", err,
@@ -594,7 +593,7 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 				return
 			}
 
-			rawBatch, err := tree.Get(block.IoKeyInputs)
+			rawBatch, err := tree.Get(ctx, block.IoKeyInputs)
 			if err != nil {
 				n.logger.Error("backup worker failed to fetch batch",
 					"err", err,

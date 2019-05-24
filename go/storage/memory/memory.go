@@ -182,23 +182,23 @@ func (b *memoryBackend) apply(ctx context.Context, root hash.Hash, expectedNewRo
 		r = expectedNewRoot
 	} else {
 		// We don't, apply operations.
-		tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+		tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, entry := range log {
 			if len(entry.Value) == 0 {
-				err = tree.Remove(entry.Key)
+				err = tree.Remove(ctx, entry.Key)
 			} else {
-				err = tree.Insert(entry.Key, entry.Value)
+				err = tree.Insert(ctx, entry.Key, entry.Value)
 			}
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		_, r, err = tree.Commit()
+		_, r, err = tree.Commit(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRo
 }
 
 func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.N
 }
 
 func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Ha
 }
 
 func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.Node
 }
 
 func (b *memoryBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}

@@ -234,11 +234,11 @@ func (c *cache) evictNodes(targetCapacity uint64) {
 	}
 }
 
-func (c *cache) derefNodeID(id internal.NodeID) (*internal.Pointer, error) {
+func (c *cache) derefNodeID(ctx context.Context, id internal.NodeID) (*internal.Pointer, error) {
 	curPtr := c.pendingRoot
 	var d uint8
 	for d = 0; d < id.Depth; d++ {
-		node, err := c.derefNodePtr(id.AtDepth(d), curPtr, nil)
+		node, err := c.derefNodePtr(ctx, id.AtDepth(d), curPtr, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -264,7 +264,7 @@ func (c *cache) derefNodeID(id internal.NodeID) (*internal.Pointer, error) {
 //
 // This may result in node database accesses or remote syncing if the node
 // is not available locally.
-func (c *cache) derefNodePtr(id internal.NodeID, ptr *internal.Pointer, key *hash.Hash) (internal.Node, error) {
+func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *internal.Pointer, key *hash.Hash) (internal.Node, error) {
 	if ptr == nil {
 		return nil, nil
 	}
@@ -285,8 +285,8 @@ func (c *cache) derefNodePtr(id internal.NodeID, ptr *internal.Pointer, key *has
 		ptr.Node = node
 	case db.ErrNodeNotFound:
 		// Node not found in local node database, try the syncer.
-		// TODO: Ideally use a proper parent context.
-		ctx, cancel := context.WithTimeout(context.Background(), c.syncerGetNodeTimeout)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.syncerGetNodeTimeout)
 		defer cancel()
 
 		if key == nil {
@@ -309,7 +309,7 @@ func (c *cache) derefNodePtr(id internal.NodeID, ptr *internal.Pointer, key *has
 			}
 
 			var newPtr *internal.Pointer
-			if newPtr, err = c.reconstructSubtree(ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
+			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
 				return nil, err
 			}
 
@@ -326,7 +326,7 @@ func (c *cache) derefNodePtr(id internal.NodeID, ptr *internal.Pointer, key *has
 //
 // This may result in node database accesses or remote syncing if the value
 // is not available locally.
-func (c *cache) derefValue(v *internal.Value) ([]byte, error) {
+func (c *cache) derefValue(ctx context.Context, v *internal.Value) ([]byte, error) {
 	// Move the accessed value to the front of the LRU list.
 	if v.LRU != nil || v.Value != nil {
 		c.useValue(v)
@@ -343,8 +343,8 @@ func (c *cache) derefValue(v *internal.Value) ([]byte, error) {
 		v.Value = val
 	case db.ErrNodeNotFound:
 		// Value not found in local node database, try the syncer.
-		// TODO: Ideally use a proper parent context.
-		ctx, cancel := context.WithTimeout(context.Background(), c.syncerGetNodeTimeout)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.syncerGetNodeTimeout)
 		defer cancel()
 
 		var value []byte
@@ -368,13 +368,12 @@ func (c *cache) derefValue(v *internal.Value) ([]byte, error) {
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*internal.Pointer, error) {
+func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*internal.Pointer, error) {
 	if c.prefetchDepth == 0 {
 		return nil, nil
 	}
 
-	// TODO: Ideally use a proper parent context.
-	ctx, cancel := context.WithTimeout(context.Background(), c.syncerPrefetchTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.syncerPrefetchTimeout)
 	defer cancel()
 
 	st, err := c.rs.GetSubtree(ctx, c.syncRoot, internal.NodeID{Path: subtreePath, Depth: depth}, c.prefetchDepth)
@@ -386,7 +385,7 @@ func (c *cache) prefetch(subtreeRoot hash.Hash, subtreePath hash.Hash, depth uin
 		return nil, err
 	}
 
-	ptr, err := c.reconstructSubtree(subtreeRoot, st, 0, c.prefetchDepth)
+	ptr, err := c.reconstructSubtree(ctx, subtreeRoot, st, 0, c.prefetchDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +395,7 @@ func (c *cache) prefetch(subtreeRoot hash.Hash, subtreePath hash.Hash, depth uin
 
 // reconstructSubtree reconstructs a tree summary received through a
 // remote syncer.
-func (c *cache) reconstructSubtree(root hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*internal.Pointer, error) {
+func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*internal.Pointer, error) {
 	ptr, err := c.doReconstructSummary(st, st.Root, depth, maxDepth)
 	if err != nil {
 		return nil, err
@@ -409,7 +408,7 @@ func (c *cache) reconstructSubtree(root hash.Hash, st *syncer.Subtree, depth, ma
 	defer batch.Reset()
 
 	updates := &cacheUpdates{}
-	syncRoot, err := doCommit(c, updates, batch, ptr)
+	syncRoot, err := doCommit(ctx, c, updates, batch, ptr)
 	if err != nil {
 		return nil, err
 	}

@@ -196,23 +196,23 @@ func (b *leveldbBackend) apply(ctx context.Context, root hash.Hash, expectedNewR
 		r = expectedNewRoot
 	} else {
 		// We don't, apply operations.
-		tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+		tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, entry := range log {
 			if len(entry.Value) == 0 {
-				err = tree.Remove(entry.Key)
+				err = tree.Remove(ctx, entry.Key)
 			} else {
-				err = tree.Insert(entry.Key, entry.Value)
+				err = tree.Insert(ctx, entry.Key, entry.Value)
 			}
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		_, r, err = tree.Commit()
+		_, r, err = tree.Commit(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +260,7 @@ func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewR
 
 func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	// TODO: Don't create a new root every time (issue #1580).
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +270,7 @@ func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.
 
 func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	// TODO: Don't create a new root every time (issue #1580).
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key hash.H
 
 func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
 	// TODO: Don't create a new root every time (issue #1580).
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 
 func (b *leveldbBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
 	// TODO: Don't create a new root every time (issue #1580).
-	tree, err := urkel.NewWithRoot(nil, b.nodedb, root)
+	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}

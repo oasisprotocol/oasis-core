@@ -60,10 +60,10 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 			}
 
 			tree := urkel.New(nil, nil)
-			_ = tree.Insert(block.IoKeyInputs, rq.Calls.MarshalCBOR())
-			_ = tree.Insert(block.IoKeyOutputs, rq.Calls.MarshalCBOR())
-			_ = tree.Insert(block.IoKeyTags, cbor.Marshal(tags))
-			ioWriteLog, ioRoot, err := tree.Commit()
+			_ = tree.Insert(ctx, block.IoKeyInputs, rq.Calls.MarshalCBOR())
+			_ = tree.Insert(ctx, block.IoKeyOutputs, rq.Calls.MarshalCBOR())
+			_ = tree.Insert(ctx, block.IoKeyTags, cbor.Marshal(tags))
+			ioWriteLog, ioRoot, err := tree.Commit(ctx)
 			if err != nil {
 				ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) failed to create I/O tree"}}
 				break

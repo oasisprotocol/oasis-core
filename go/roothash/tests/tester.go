@@ -217,14 +217,15 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	defer sub.Close()
 
 	// Generate a dummy I/O root.
+	ctx := context.Background()
 	tree := urkel.New(nil, nil)
-	err = tree.Insert(block.IoKeyInputs, []byte("testInputSet"))
+	err = tree.Insert(ctx, block.IoKeyInputs, []byte("testInputSet"))
 	require.NoError(err, "tree.Insert")
-	err = tree.Insert(block.IoKeyOutputs, []byte("testOutputSet"))
+	err = tree.Insert(ctx, block.IoKeyOutputs, []byte("testOutputSet"))
 	require.NoError(err, "tree.Insert")
-	err = tree.Insert(block.IoKeyTags, []byte("testTagSet"))
+	err = tree.Insert(ctx, block.IoKeyTags, []byte("testTagSet"))
 	require.NoError(err, "tree.Insert")
-	ioWriteLog, ioRoot, err := tree.Commit()
+	ioWriteLog, ioRoot, err := tree.Commit(ctx)
 	require.NoError(err, "tree.Commit")
 
 	var emptyRoot hash.Hash

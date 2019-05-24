@@ -289,17 +289,16 @@ func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, []
 	}
 
 	// Fetch transaction input and output.
-	// TODO: Add context.
-	tree, err := urkel.NewWithRoot(c.common.storage, nil, blk.Header.IORoot)
+	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, blk.Header.IORoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "client: failed to fetch given io root")
 	}
 
-	rawInputs, err := tree.Get(block.IoKeyInputs)
+	rawInputs, err := tree.Get(ctx, block.IoKeyInputs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "client: failed to fetch I/O inputs")
 	}
-	rawOutputs, err := tree.Get(block.IoKeyOutputs)
+	rawOutputs, err := tree.Get(ctx, block.IoKeyOutputs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "client: failed to fetch I/O outputs")
 	}
@@ -383,13 +382,12 @@ func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.Public
 		return [][]byte{}, nil
 	}
 
-	// TODO: Add context.
-	tree, err := urkel.NewWithRoot(c.common.storage, nil, root)
+	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, root)
 	if err != nil {
 		return nil, errors.Wrap(err, "client: failed to fetch given io root")
 	}
 
-	txn, err := tree.Get(block.IoKeyInputs)
+	txn, err := tree.Get(ctx, block.IoKeyInputs)
 	if err != nil {
 		return nil, errors.Wrap(err, "client: failed to fetch I/O inputs")
 	}

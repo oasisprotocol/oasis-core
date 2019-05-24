@@ -1,14 +1,15 @@
 package urkel
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-func (t *Tree) doInsert(ptr *internal.Pointer, depth uint8, key hash.Hash, val []byte) (*internal.Pointer, bool, error) {
-	node, err := t.cache.derefNodePtr(internal.NodeID{Path: key, Depth: depth}, ptr, nil)
+func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8, key hash.Hash, val []byte) (*internal.Pointer, bool, error) {
+	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, nil)
 	if err != nil {
 		return nil, false, err
 	}
@@ -20,9 +21,9 @@ func (t *Tree) doInsert(ptr *internal.Pointer, depth uint8, key hash.Hash, val [
 	case *internal.InternalNode:
 		var existed bool
 		if getKeyBit(key, depth) {
-			n.Right, existed, err = t.doInsert(n.Right, depth+1, key, val)
+			n.Right, existed, err = t.doInsert(ctx, n.Right, depth+1, key, val)
 		} else {
-			n.Left, existed, err = t.doInsert(n.Left, depth+1, key, val)
+			n.Left, existed, err = t.doInsert(ctx, n.Left, depth+1, key, val)
 		}
 		if err != nil {
 			return nil, false, err
@@ -66,9 +67,9 @@ func (t *Tree) doInsert(ptr *internal.Pointer, depth uint8, key hash.Hash, val [
 			// Bit collision at this depth.
 			if existingBit {
 				left = nil
-				right, _, err = t.doInsert(ptr, depth+1, key, val)
+				right, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
 			} else {
-				left, _, err = t.doInsert(ptr, depth+1, key, val)
+				left, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
 				right = nil
 			}
 			if err != nil {

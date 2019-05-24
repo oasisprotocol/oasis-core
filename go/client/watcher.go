@@ -109,15 +109,14 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 		return
 	}
 
-	// TODO: Add context.
-	tree, err := urkel.NewWithRoot(w.common.storage, nil, blk.Header.IORoot)
+	tree, err := urkel.NewWithRoot(w.common.ctx, w.common.storage, nil, blk.Header.IORoot)
 	if err != nil {
 		w.Logger.Error("can't get block I/O from storage", "err", err)
 		return
 	}
 
 	// Get inputs from storage.
-	rawInputs, err := tree.Get(block.IoKeyInputs)
+	rawInputs, err := tree.Get(w.common.ctx, block.IoKeyInputs)
 	if err != nil {
 		w.Logger.Error("can't get block inputs from storage", "err", err)
 		return
@@ -130,7 +129,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 	}
 
 	// Get outputs from storage.
-	rawOutputs, err := tree.Get(block.IoKeyOutputs)
+	rawOutputs, err := tree.Get(w.common.ctx, block.IoKeyOutputs)
 	if err != nil {
 		w.Logger.Error("can't get block outputs from storage", "err", err)
 		return

@@ -100,12 +100,13 @@ func testQueueCall(
 		// Check that correct block was generated.
 		require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
-		tree, err := urkel.NewWithRoot(storage, nil, blk.Header.IORoot)
+		ctx := context.Background()
+		tree, err := urkel.NewWithRoot(ctx, storage, nil, blk.Header.IORoot)
 		require.NoError(t, err, "NewWithRoot")
 
-		rawInputs, err := tree.Get(block.IoKeyInputs)
+		rawInputs, err := tree.Get(ctx, block.IoKeyInputs)
 		require.NoError(t, err, "Get(inputs)")
-		rawOutputs, err := tree.Get(block.IoKeyOutputs)
+		rawOutputs, err := tree.Get(ctx, block.IoKeyOutputs)
 		require.NoError(t, err, "Get(outputs)")
 
 		batch := runtime.Batch([][]byte{testCall})

@@ -97,10 +97,8 @@ func (s *Service) worker() {
 			if !blk.Header.IORoot.IsEmpty() {
 				ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
 
-				// TODO: Add context.
-				_ = ctx
 				var tree *urkel.Tree
-				tree, err = urkel.NewWithRoot(s.storage, nil, blk.Header.IORoot)
+				tree, err = urkel.NewWithRoot(ctx, s.storage, nil, blk.Header.IORoot)
 				if err != nil {
 					logger.Error("can't get block tags from storage",
 						"err", err,
@@ -111,7 +109,7 @@ func (s *Service) worker() {
 				}
 
 				var rawTags []byte
-				rawTags, err = tree.Get(block.IoKeyTags)
+				rawTags, err = tree.Get(ctx, block.IoKeyTags)
 				cancel()
 				if err != nil {
 					logger.Error("can't get block tags from storage",
