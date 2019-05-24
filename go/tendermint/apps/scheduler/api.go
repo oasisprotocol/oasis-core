@@ -10,6 +10,6 @@ const (
 )
 
 const (
-	// QueryTest
+	// QueryTest (no merge)
 	QueryTest = AppName + "/test"
 )
