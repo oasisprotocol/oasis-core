@@ -239,7 +239,7 @@ impl Kdf {
     }
 
     fn load_master_secret() -> Option<Vec<u8>> {
-        let ciphertext = StorageContext::with_current(|_cas, _mkvs, untrusted_local| {
+        let ciphertext = StorageContext::with_current(|_mkvs, untrusted_local| {
             untrusted_local.get(MASTER_SECRET_STORAGE_KEY.to_vec())
         })
         .unwrap();
@@ -281,7 +281,7 @@ impl Kdf {
         ciphertext.extend_from_slice(&nonce);
 
         // Persist the encrypted master secret.
-        StorageContext::with_current(|_cas, _mkvs, untrusted_local| {
+        StorageContext::with_current(|_mkvs, untrusted_local| {
             untrusted_local.insert(MASTER_SECRET_STORAGE_KEY.to_vec(), ciphertext)
         })
         .expect("failed to persist master secret");

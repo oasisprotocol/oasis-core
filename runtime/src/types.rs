@@ -1,6 +1,6 @@
 //! Types used by the worker-host protocol.
 use serde::{self, ser::SerializeSeq, Deserializer, Serializer};
-use serde_bytes::{self, ByteBuf, Bytes};
+use serde_bytes::{self, Bytes};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{
@@ -74,10 +74,8 @@ impl serde::Serialize for Tag {
 pub struct ComputedBatch {
     /// Batch of runtime outputs.
     pub outputs: TxnBatch,
-    /// Batch of storage inserts.
-    pub storage_inserts: Vec<(ByteBuf, u64)>,
     /// Log of changes to the storage tree.
-    pub storage_log: WriteLog,
+    pub write_log: WriteLog,
     /// New state root hash.
     pub new_state_root: Hash,
     /// Runtime-specific indexable tags.
@@ -127,8 +125,7 @@ pub enum Body {
     WorkerRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
-        storage_inserts: Vec<(ByteBuf, u64)>,
-        storage_log: WriteLog,
+        write_log: WriteLog,
         new_state_root: Hash,
     },
     WorkerLocalRPCCallRequest {
@@ -164,19 +161,6 @@ pub enum Body {
     HostRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
-    },
-    HostStorageGetRequest {
-        key: Hash,
-    },
-    HostStorageGetResponse {
-        #[serde(with = "serde_bytes")]
-        value: Vec<u8>,
-    },
-    HostStorageGetBatchRequest {
-        keys: Vec<Hash>,
-    },
-    HostStorageGetBatchResponse {
-        values: Vec<Option<ByteBuf>>,
     },
     HostStorageSyncGetSubtreeRequest {
         root_hash: Hash,

@@ -16,10 +16,10 @@ use serde_cbor::{self, SerializerOptions};
 use slog::Logger;
 
 use crate::{
-    common::{crypto::hash::Hash, logger::get_logger},
+    common::logger::get_logger,
     dispatcher::Dispatcher,
     rak::RAK,
-    storage::{KeyValue, CAS},
+    storage::KeyValue,
     tracing,
     types::{Body, Message, MessageType},
 };
@@ -353,41 +353,5 @@ impl KeyValue for ProtocolUntrustedLocalStorage {
             Ok(_) => Err(ProtocolError::InvalidResponse.into()),
             Err(error) => Err(error),
         }
-    }
-}
-
-/// CAS implementation which forwards all requests to the worker host.
-pub struct ProtocolCAS {
-    ctx: Arc<Context>,
-    protocol: Arc<Protocol>,
-}
-
-impl ProtocolCAS {
-    pub fn new(ctx: Context, protocol: Arc<Protocol>) -> Self {
-        Self {
-            ctx: ctx.freeze(),
-            protocol,
-        }
-    }
-}
-
-impl CAS for ProtocolCAS {
-    fn get(&self, key: Hash) -> Fallible<Vec<u8>> {
-        let ctx = Context::create_child(&self.ctx);
-
-        match self
-            .protocol
-            .make_request(ctx, Body::HostStorageGetRequest { key })
-        {
-            Ok(Body::HostStorageGetResponse { value }) => Ok(value),
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
-        }
-    }
-
-    fn insert(&self, _value: Vec<u8>, _expiry: u64) -> Fallible<Hash> {
-        // The protocol only supports a read-only CAS interface. Insert operations
-        // must be recorded and returned as part of the computed batch.
-        panic!("protocol does not support CAS insert operations");
     }
 }

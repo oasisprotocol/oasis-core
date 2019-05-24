@@ -73,10 +73,6 @@ type Body struct {
 	// Host interface.
 	HostRPCCallRequest                *HostRPCCallRequest
 	HostRPCCallResponse               *HostRPCCallResponse
-	HostStorageGetRequest             *HostStorageGetRequest
-	HostStorageGetResponse            *HostStorageGetResponse
-	HostStorageGetBatchRequest        *HostStorageGetBatchRequest
-	HostStorageGetBatchResponse       *HostStorageGetBatchResponse
 	HostStorageSyncGetSubtreeRequest  *HostStorageSyncGetSubtreeRequest
 	HostStorageSyncGetPathRequest     *HostStorageSyncGetPathRequest
 	HostStorageSyncGetNodeRequest     *HostStorageSyncGetNodeRequest
@@ -127,10 +123,8 @@ type WorkerRPCCallRequest struct {
 type WorkerRPCCallResponse struct {
 	// Response.
 	Response []byte `codec:"response"`
-	// Batch of storage inserts.
-	StorageInserts []storage.Value `codec:"storage_inserts"`
 	// Batch of storage write operations.
-	StorageLog storage.WriteLog `codec:"storage_log"`
+	WriteLog storage.WriteLog `codec:"write_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 }
@@ -167,10 +161,8 @@ type WorkerCheckTxBatchResponse struct {
 type ComputedBatch struct {
 	// Batch of runtime outputs.
 	Outputs runtime.Batch `codec:"outputs"`
-	// Batch of storage inserts.
-	StorageInserts []storage.Value `codec:"storage_inserts"`
 	// Batch of storage write operations.
-	StorageLog storage.WriteLog `codec:"storage_log"`
+	WriteLog storage.WriteLog `codec:"write_log"`
 	// New state root hash.
 	NewStateRoot hash.Hash `codec:"new_state_root"`
 	// Tags are runtime-specific indexable tags.
@@ -212,26 +204,6 @@ type HostRPCCallRequest struct {
 // HostRPCCallResponse is a host RPC call response message body.
 type HostRPCCallResponse struct {
 	Response []byte `codec:"response"`
-}
-
-// HostStorageGetRequest is a host storage get request message body.
-type HostStorageGetRequest struct {
-	Key storage.Key `codec:"key"`
-}
-
-// HostStorageGetResponse is a host storage get response message body.
-type HostStorageGetResponse struct {
-	Value []byte `codec:"value"`
-}
-
-// HostStorageGetBatchRequest is a host storage batch get request message body.
-type HostStorageGetBatchRequest struct {
-	Keys []storage.Key `codec:"keys"`
-}
-
-// HostStorageGetBatchResponse is a host storage batch get response message body.
-type HostStorageGetBatchResponse struct {
-	Values [][]byte `codec:"values"`
 }
 
 // HostStorageSyncGetSubtreeRequest is a host storage read syncer get subtree request message body.

@@ -4,10 +4,9 @@
 //! implementations across the current thread.
 use std::{cell::RefCell, sync::Arc};
 
-use super::{KeyValue, CAS, MKVS};
+use super::{KeyValue, MKVS};
 
 struct Ctx {
-    cas: Arc<CAS>,
     mkvs: *mut MKVS,
     untrusted_local: Arc<KeyValue>,
 }
@@ -19,14 +18,13 @@ thread_local! {
 struct CtxGuard;
 
 impl CtxGuard {
-    fn new<M>(cas: Arc<CAS>, mkvs: &mut M, untrusted_local: Arc<KeyValue>) -> Self
+    fn new<M>(mkvs: &mut M, untrusted_local: Arc<KeyValue>) -> Self
     where
         M: MKVS + 'static,
     {
         CTX.with(|ctx| {
             assert!(ctx.borrow().is_none(), "nested enter is not allowed");
             ctx.borrow_mut().replace(Ctx {
-                cas,
                 mkvs,
                 untrusted_local,
             });
@@ -49,12 +47,12 @@ pub struct StorageContext;
 
 impl StorageContext {
     /// Enter the storage context.
-    pub fn enter<M, F, R>(cas: Arc<CAS>, mkvs: &mut M, untrusted_local: Arc<KeyValue>, f: F) -> R
+    pub fn enter<M, F, R>(mkvs: &mut M, untrusted_local: Arc<KeyValue>, f: F) -> R
     where
         M: MKVS + 'static,
         F: FnOnce() -> R,
     {
-        let _guard = CtxGuard::new(cas, mkvs, untrusted_local);
+        let _guard = CtxGuard::new(mkvs, untrusted_local);
         f()
     }
 
@@ -65,14 +63,14 @@ impl StorageContext {
     /// Will panic if called outside `StorageContext::enter`.
     pub fn with_current<F, R>(f: F) -> R
     where
-        F: FnOnce(&Arc<CAS>, &mut MKVS, &Arc<KeyValue>) -> R,
+        F: FnOnce(&mut MKVS, &Arc<KeyValue>) -> R,
     {
         CTX.with(|ctx| {
             let ctx = ctx.borrow();
             let ctx_ref = ctx.as_ref().expect("must only be called while entered");
             let mkvs_ref = unsafe { ctx_ref.mkvs.as_mut().expect("pointer is never null") };
 
-            f(&ctx_ref.cas, mkvs_ref, &ctx_ref.untrusted_local)
+            f(mkvs_ref, &ctx_ref.untrusted_local)
         })
     }
 }
