@@ -8,7 +8,8 @@ const (
 	TransactionTag byte = 0x04
 
 	// AppName is the ABCI application name.
-	AppName string = "999_beacon"
+	// Run before the scheduler application.
+	AppName string = "998_beacon"
 
 	// QueryGetBeacon is a path for a Get query.
 	QueryGetBeacon string = AppName + "/beacon"
