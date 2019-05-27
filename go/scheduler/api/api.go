@@ -11,8 +11,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-
-	pbSched "github.com/oasislabs/ekiden/go/grpc/scheduler"
 )
 
 var (
@@ -65,47 +63,10 @@ type CommitteeNode struct {
 	PublicKey signature.PublicKey `codec:"public_key"`
 }
 
-// FromProto deserializes a protobuf into a CommitteeNode.
-func (n *CommitteeNode) FromProto(pb *pbSched.CommitteeNode) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	switch pb.GetRole() {
-	case pbSched.CommitteeNode_WORKER:
-		n.Role = Worker
-	case pbSched.CommitteeNode_BACKUP_WORKER:
-		n.Role = BackupWorker
-	case pbSched.CommitteeNode_LEADER:
-		n.Role = Leader
-	default:
-		return ErrInvalidRole
-	}
-	return n.PublicKey.UnmarshalBinary(pb.GetPublicKey())
-}
-
-// ToProto serializes a CommitteeNode into a protobuf.
-func (n *CommitteeNode) ToProto() *pbSched.CommitteeNode {
-	pb := new(pbSched.CommitteeNode)
-
-	pb.PublicKey, _ = n.PublicKey.MarshalBinary()
-	switch n.Role {
-	case Worker:
-		pb.Role = pbSched.CommitteeNode_WORKER
-	case BackupWorker:
-		pb.Role = pbSched.CommitteeNode_BACKUP_WORKER
-	case Leader:
-		pb.Role = pbSched.CommitteeNode_LEADER
-	default:
-		panic(ErrInvalidRole)
-	}
-
-	return pb
-}
-
 // CommitteeKind is the functionality a committee exists to provide.
 type CommitteeKind uint8
 
+// TODO: Add "Kind" prefix to all constants, use explicit values instead of iota.
 const (
 	// Compute is a compute committee.
 	Compute CommitteeKind = iota
@@ -153,29 +114,6 @@ func (c Committee) String() string {
 		members[i] = fmt.Sprintf("%+v", m)
 	}
 	return fmt.Sprintf("&{Kind:%v Members:[%v] RuntimeID:%v ValidFor:%v}", c.Kind, strings.Join(members, " "), c.RuntimeID, c.ValidFor)
-}
-
-// ToProto serializes a Committee into a protobuf.
-func (c *Committee) ToProto() *pbSched.Committee {
-	pb := new(pbSched.Committee)
-
-	switch c.Kind {
-	case Compute:
-		pb.Kind = pbSched.Committee_COMPUTE
-	case Storage:
-		pb.Kind = pbSched.Committee_STORAGE
-	case TransactionScheduler:
-		pb.Kind = pbSched.Committee_TRANSACTION
-	default:
-		panic("scheduler: invalid committee kind")
-	}
-	for _, v := range c.Members {
-		pb.Members = append(pb.Members, v.ToProto())
-	}
-	pb.RuntimeId, _ = c.RuntimeID.MarshalBinary()
-	pb.ValidFor = uint64(c.ValidFor)
-
-	return pb
 }
 
 // EncodedMembersHash returns the encoded cryptographic hash of the committee members.

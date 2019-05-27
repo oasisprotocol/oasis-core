@@ -30,7 +30,6 @@ var protoFiles = [][]string{
 		"registry/entity.proto",
 	},
 	{"roothash/roothash.proto"},
-	{"scheduler/scheduler.proto"},
 	{"storage/storage.proto"},
 	{"client/client.proto"},
 	{"enclaverpc/enclaverpc.proto"},
