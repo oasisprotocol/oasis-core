@@ -45,7 +45,7 @@ type roundState struct {
 	runtime          *registry.Runtime
 	committee        *scheduler.Committee
 	computationGroup map[signature.MapKey]nodeInfo
-	commitments      map[signature.MapKey]*commitment.OpenCommitment
+	commitments      map[signature.MapKey]*commitment.OpenComputeCommitment
 	currentBlock     *block.Block
 	state            state
 }
@@ -70,7 +70,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 }
 
 func (s *roundState) reset() {
-	s.commitments = make(map[signature.MapKey]*commitment.OpenCommitment)
+	s.commitments = make(map[signature.MapKey]*commitment.OpenComputeCommitment)
 	s.state = stateWaitingCommitments
 }
 
@@ -80,7 +80,7 @@ type round struct {
 	didTimeout bool
 }
 
-func (r *round) addCommitment(commitment *commitment.Commitment) error {
+func (r *round) addCommitment(commitment *commitment.ComputeCommitment) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -94,8 +94,8 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 	if err != nil {
 		return err
 	}
-	message := openCom.Message
-	header := &message.Header
+	body := openCom.Body
+	header := &body.Header
 	if r.roundState.runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := r.roundState.computationGroup[id].runtime.Capabilities.TEE.RAK
 		batchSigMessage := block.BatchSigMessage{
@@ -103,7 +103,7 @@ func (r *round) addCommitment(commitment *commitment.Commitment) error {
 			IORoot:        header.IORoot,
 			StateRoot:     header.StateRoot,
 		}
-		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), message.RakSig[:]) {
+		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), body.RakSig[:]) {
 			return errRakSigInvalid
 		}
 	}
@@ -200,7 +200,7 @@ func (r *round) forceBackupTransition() error {
 		}
 
 		r.roundState.state = stateDiscrepancyWaitingCommitments
-		return errDiscrepancyDetected(commit.Message.Header.IORoot)
+		return errDiscrepancyDetected(commit.Body.Header.IORoot)
 	}
 
 	return fmt.Errorf("roothash/memory: no I/O root available for backup transition")
@@ -221,12 +221,12 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		}
 
 		if header == nil {
-			header = &commit.Message.Header
+			header = &commit.Body.Header
 		}
 		if ni.committeeNode.Role == scheduler.Leader {
-			leaderHeader = &commit.Message.Header
+			leaderHeader = &commit.Body.Header
 		}
-		if !header.MostlyEqual(&commit.Message.Header) {
+		if !header.MostlyEqual(&commit.Body.Header) {
 			discrepancyDetected = true
 		}
 	}
@@ -258,10 +258,10 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		k := commit.Message.Header.EncodedHash()
+		k := commit.Body.Header.EncodedHash()
 		if ent, ok := votes[k]; !ok {
 			votes[k] = &voteEnt{
-				header: &commit.Message.Header,
+				header: &commit.Body.Header,
 				tally:  1,
 			}
 		} else {

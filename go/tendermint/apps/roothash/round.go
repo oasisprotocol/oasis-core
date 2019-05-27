@@ -46,11 +46,11 @@ type nodeInfo struct {
 }
 
 type roundState struct {
-	Committee        *scheduler.Committee                            `codec:"committee"`
-	ComputationGroup map[signature.MapKey]nodeInfo                   `codec:"computation_group"`
-	Commitments      map[signature.MapKey]*commitment.OpenCommitment `codec:"commitments"`
-	CurrentBlock     *block.Block                                    `codec:"current_block"`
-	State            state                                           `codec:"state"`
+	Committee        *scheduler.Committee                                   `codec:"committee"`
+	ComputationGroup map[signature.MapKey]nodeInfo                          `codec:"computation_group"`
+	Commitments      map[signature.MapKey]*commitment.OpenComputeCommitment `codec:"commitments"`
+	CurrentBlock     *block.Block                                           `codec:"current_block"`
+	State            state                                                  `codec:"state"`
 }
 
 func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, error) {
@@ -76,7 +76,7 @@ func (s *roundState) ensureValidWorker(id signature.MapKey) (scheduler.Role, err
 
 func (s *roundState) reset() {
 	if s.Commitments == nil || len(s.Commitments) > 0 {
-		s.Commitments = make(map[signature.MapKey]*commitment.OpenCommitment)
+		s.Commitments = make(map[signature.MapKey]*commitment.OpenComputeCommitment)
 	}
 	s.State = stateWaitingCommitments
 }
@@ -86,7 +86,7 @@ type round struct {
 	DidTimeout bool        `codec:"did_timeout"`
 }
 
-func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commitment, runtime *registry.Runtime) error {
+func (r *round) addCommitment(ctx context.Context, commitment *commitment.ComputeCommitment, runtime *registry.Runtime) error {
 	id := commitment.Signature.PublicKey.ToMapKey()
 
 	// Check node identity/role.
@@ -100,8 +100,8 @@ func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commit
 	if err != nil {
 		return err
 	}
-	message := openCom.Message
-	header := &message.Header
+	body := openCom.Body
+	header := &body.Header
 	if runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := r.RoundState.ComputationGroup[id].Runtime.Capabilities.TEE.RAK
 		batchSigMessage := block.BatchSigMessage{
@@ -109,7 +109,7 @@ func (r *round) addCommitment(ctx context.Context, commitment *commitment.Commit
 			IORoot:        header.IORoot,
 			StateRoot:     header.StateRoot,
 		}
-		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), message.RakSig[:]) {
+		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), body.RakSig[:]) {
 			return errRakSigInvalid
 		}
 	}
@@ -192,7 +192,7 @@ func (r *round) tryFinalize(ctx *abci.Context, runtime *registry.Runtime) (*bloc
 	r.populateFinalizedBlock(block)
 
 	r.RoundState.State = stateFinalized
-	r.RoundState.Commitments = make(map[signature.MapKey]*commitment.OpenCommitment)
+	r.RoundState.Commitments = make(map[signature.MapKey]*commitment.OpenComputeCommitment)
 
 	return block, nil
 }
@@ -214,7 +214,7 @@ func (r *round) forceBackupTransition() error {
 		}
 
 		r.RoundState.State = stateDiscrepancyWaitingCommitments
-		return errDiscrepancyDetected(commit.Message.Header.IORoot)
+		return errDiscrepancyDetected(commit.Body.Header.IORoot)
 	}
 
 	return fmt.Errorf("tendermint/roothash: no I/O root available for backup transition")
@@ -235,12 +235,12 @@ func (r *round) tryFinalizeFast() (*block.Header, error) {
 		}
 
 		if header == nil {
-			header = &commit.Message.Header
+			header = &commit.Body.Header
 		}
 		if ni.CommitteeNode.Role == scheduler.Leader {
-			leaderHeader = &commit.Message.Header
+			leaderHeader = &commit.Body.Header
 		}
-		if !header.MostlyEqual(&commit.Message.Header) {
+		if !header.MostlyEqual(&commit.Body.Header) {
 			discrepancyDetected = true
 		}
 	}
@@ -272,10 +272,10 @@ func (r *round) tryFinalizeDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		k := commit.Message.Header.EncodedHash()
+		k := commit.Body.Header.EncodedHash()
 		if ent, ok := votes[k]; !ok {
 			votes[k] = &voteEnt{
-				header: &commit.Message.Header,
+				header: &commit.Body.Header,
 				tally:  1,
 			}
 		} else {

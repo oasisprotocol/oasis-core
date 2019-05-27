@@ -518,7 +518,7 @@ func (app *rootHashApplication) commit(
 	}
 	runtime := rtState.Runtime
 
-	var c commitment.Commitment
+	var c commitment.ComputeCommitment
 	if err = c.FromOpaqueCommitment(commit); err != nil {
 		return errors.Wrap(err, "roothash: failed to unmarshal commitment")
 	}

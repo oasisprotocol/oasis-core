@@ -523,7 +523,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	}
 
 	// Commit.
-	commit, err := commitment.SignCommitment(*n.commonNode.Identity.NodeKey, &commitment.Message{
+	commit, err := commitment.SignComputeCommitment(*n.commonNode.Identity.NodeKey, &commitment.ComputeBody{
 		Header: blk.Header,
 		RakSig: batch.RakSig,
 	})

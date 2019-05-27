@@ -39,7 +39,7 @@ var (
 )
 
 type commitCmd struct {
-	commitment *commitment.Commitment
+	commitment *commitment.ComputeCommitment
 	errCh      chan error
 }
 
@@ -445,7 +445,7 @@ func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, com
 		return err
 	}
 
-	var c commitment.Commitment
+	var c commitment.ComputeCommitment
 	if err = c.FromOpaqueCommitment(commit); err != nil {
 		return err
 	}
