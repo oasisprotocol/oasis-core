@@ -14,7 +14,6 @@ import (
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	tmbeacon "github.com/oasislabs/ekiden/go/beacon/tendermint"
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -207,15 +206,19 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		var committee *scheduler.Committee
+		var computeCommittee, mergeCommittee *scheduler.Committee
 		for _, c := range committees {
-			if c.Kind == scheduler.Compute {
-				committee = c
-				break
+			switch c.Kind {
+			case scheduler.Compute:
+				computeCommittee = c
+			case scheduler.Merge:
+				mergeCommittee = c
+			default:
+				// Skip other types of committees.
 			}
 		}
-		if committee == nil {
-			app.logger.Error("checkCommittees: scheduler did not give us a compute committee",
+		if computeCommittee == nil || mergeCommittee == nil {
+			app.logger.Error("checkCommittees: scheduler did not give us compute/merge committees",
 				"runtime", rtID,
 			)
 			continue
@@ -229,10 +232,10 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
 		round := rtState.Round
-		if round != nil && round.Pool.Committee.ValidFor == committee.ValidFor {
+		if round != nil && round.MergePool.Committee.ValidFor == mergeCommittee.ValidFor {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
 				"runtime", rtID,
-				"epoch", committee.ValidFor,
+				"epoch", mergeCommittee.ValidFor,
 			)
 			mk := rtID.ToMapKey()
 			if _, ok := newDescriptors[mk]; ok {
@@ -247,7 +250,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
 			"runtime", rtID,
-			"epoch", committee.ValidFor,
+			"epoch", mergeCommittee.ValidFor,
 			"round", blockNr,
 		)
 
@@ -256,8 +259,9 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		// Retrieve nodes for their runtime-specific information.
 		tree := app.state.DeliverTxTree()
 		regState := registryapp.NewMutableState(tree)
-		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-		for idx, committeeNode := range committee.Members {
+
+		computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+		for idx, committeeNode := range computeCommittee.Members {
 			var nodeRuntime *node.Runtime
 			node, err := regState.GetNode(committeeNode.PublicKey)
 			if err != nil {
@@ -278,12 +282,27 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 				)
 				continue
 			}
-			nodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
+			computeNodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
 				CommitteeNode: idx,
 				Runtime:       nodeRuntime,
 			}
 		}
-		rtState.Round = newRound(committee, nodeInfo, blk, rtState.Runtime)
+
+		mergeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+		for idx, committeeNode := range mergeCommittee.Members {
+			mergeNodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
+				CommitteeNode: idx,
+			}
+		}
+
+		rtState.Round = newRound(
+			computeCommittee,
+			computeNodeInfo,
+			mergeCommittee,
+			mergeNodeInfo,
+			blk,
+			rtState.Runtime,
+		)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.
@@ -319,7 +338,6 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runtimeState, hdrType block.HeaderType) {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
-	runtime.Round.populateFinalizedBlock(blk)
 
 	runtime.CurrentBlock = blk
 
@@ -491,8 +509,13 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	)
 
 	defer state.updateRuntimeState(rtState)
-	rtState.Round.DidTimeout = true
-	app.tryFinalize(ctx, runtime, rtState, true)
+
+	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
+		app.tryFinalizeMerge(ctx, runtime, rtState, true)
+	}
+	for _, pool := range rtState.Round.ComputePool.GetTimeoutCommittees(ctx.Now()) {
+		app.tryFinalizeCompute(ctx, runtime, rtState, pool, true)
+	}
 }
 
 func (app *rootHashApplication) executeTx(
@@ -502,8 +525,10 @@ func (app *rootHashApplication) executeTx(
 ) error {
 	state := newMutableState(tree)
 
-	if tx.TxCommit != nil {
-		return app.commit(ctx, state, tx.TxCommit.ID, &tx.TxCommit.Commitment)
+	if tx.TxMergeCommit != nil {
+		return app.commit(ctx, state, tx.TxMergeCommit.ID, tx)
+	} else if tx.TxComputeCommit != nil {
+		return app.commit(ctx, state, tx.TxComputeCommit.ID, tx)
 	}
 	return roothash.ErrInvalidArgument
 }
@@ -512,7 +537,7 @@ func (app *rootHashApplication) commit(
 	ctx *abci.Context,
 	state *mutableState,
 	id signature.PublicKey,
-	commit *roothash.OpaqueCommitment,
+	tx *Tx,
 ) error {
 	rtState, err := state.getRuntimeState(id)
 	if err != nil {
@@ -522,11 +547,6 @@ func (app *rootHashApplication) commit(
 		return errNoSuchRuntime
 	}
 	runtime := rtState.Runtime
-
-	var c commitment.ComputeCommitment
-	if err = c.FromOpaqueCommitment(commit); err != nil {
-		return errors.Wrap(err, "roothash: failed to unmarshal commitment")
-	}
 
 	if ctx.IsCheckOnly() {
 		// If we are within CheckTx then we cannot do any further checks as epoch
@@ -552,30 +572,145 @@ func (app *rootHashApplication) commit(
 			"round", blockNr,
 		)
 
-		rtState.Round = newRound(
-			rtState.Round.Pool.Committee,
-			rtState.Round.Pool.NodeInfo,
-			latestBlock,
-			rtState.Runtime,
-		)
+		rtState.Round.transition(latestBlock)
 	}
 
-	// Add the commitment.
-	if err = rtState.Round.addCommitment(&c); err != nil {
-		app.logger.Error("failed to add commitment to round",
-			"err", err,
-			"round", blockNr,
-		)
-		return err
-	}
+	// Add the commitments.
+	if tx.TxMergeCommit != nil {
+		for _, commit := range tx.TxMergeCommit.Commits {
+			if err = rtState.Round.addMergeCommitment(&commit); err != nil {
+				app.logger.Error("failed to add merge commitment to round",
+					"err", err,
+					"round", blockNr,
+				)
+				return err
+			}
+		}
 
-	// Try to finalize round.
-	app.tryFinalize(ctx, runtime, rtState, false)
+		// Try to finalize round.
+		app.tryFinalizeMerge(ctx, runtime, rtState, false)
+	} else if tx.TxComputeCommit != nil {
+		pools := make(map[*commitment.Pool]bool)
+		for _, commit := range tx.TxComputeCommit.Commits {
+			var pool *commitment.Pool
+			if pool, err = rtState.Round.addComputeCommitment(&commit); err != nil {
+				app.logger.Error("failed to add compute commitment to round",
+					"err", err,
+					"round", blockNr,
+				)
+				return err
+			}
+
+			pools[pool] = true
+		}
+
+		for pool := range pools {
+			app.tryFinalizeCompute(ctx, runtime, rtState, pool, false)
+		}
+	}
 
 	return nil
 }
 
-func (app *rootHashApplication) tryFinalize(
+func (app *rootHashApplication) updateTimer(
+	ctx *abci.Context,
+	runtime *registry.Runtime,
+	rtState *runtimeState,
+	blockNr uint64,
+) {
+	nextTimeout := rtState.Round.getNextTimeout()
+	if nextTimeout.IsZero() {
+		// Disarm timer.
+		app.logger.Debug("disarming round timeout")
+		rtState.Timer.Stop(ctx)
+	} else {
+		// (Re-)arm timer.
+		app.logger.Debug("(re-)arming round timeout")
+
+		timerCtx := &timerContext{
+			ID:    runtime.ID,
+			Round: blockNr,
+		}
+		rtState.Timer.Reset(ctx, nextTimeout.Sub(ctx.Now()), timerCtx.MarshalCBOR())
+	}
+}
+
+func (app *rootHashApplication) tryFinalizeCompute(
+	ctx *abci.Context,
+	runtime *registry.Runtime,
+	rtState *runtimeState,
+	pool *commitment.Pool,
+	forced bool,
+) { // nolint: gocyclo
+	latestBlock := rtState.CurrentBlock
+	blockNr := latestBlock.Header.Round
+	id, _ := runtime.ID.MarshalBinary()
+	committeeID := pool.GetCommitteeID()
+
+	defer app.updateTimer(ctx, runtime, rtState, blockNr)
+
+	if rtState.Round.Finalized {
+		app.logger.Error("attempted to finalize compute when block already finalized",
+			"round", blockNr,
+			"committee_id", committeeID,
+		)
+		return
+	}
+
+	// TODO: Separate timeout for compute/merge.
+	_, err := pool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
+	switch err {
+	case nil:
+		// No error -- there is no discrepancy. But only the merge committee
+		// can make progress even if we have all compute commitments.
+
+		// TODO: Check if we need to punish the merge committee.
+
+		app.logger.Warn("no compute discrepancy, but only merge committee can make progress",
+			"round", blockNr,
+			"committee_id", committeeID,
+		)
+
+		if !forced {
+			// If this was not a timeout, we give the merge committee some
+			// more time to merge, otherwise we fail the round.
+			return
+		}
+	case commitment.ErrStillWaiting:
+		// Need more commits.
+		return
+	case commitment.ErrDiscrepancyDetected:
+		// Discrepancy has been detected.
+		app.logger.Warn("compute discrepancy detected",
+			"round", blockNr,
+			"committee_id", committeeID,
+		)
+
+		ctx.EmitTag(TagUpdate, TagUpdateValue)
+		tagV := ValueComputeDiscrepancyDetected{
+			ID: id,
+			Event: roothash.ComputeDiscrepancyDetectedEvent{
+				CommitteeID: pool.GetCommitteeID(),
+			},
+		}
+		ctx.EmitTag(TagComputeDiscrepancyDetected, tagV.MarshalCBOR())
+		return
+	default:
+	}
+
+	// Something else went wrong, emit empty error block. Note that we need
+	// to abort everything even if only one committee failed to finalize as
+	// there is otherwise no way to make progress as merge committees will
+	// refuse to merge if there are discrepancies.
+	app.logger.Error("worker: round failed",
+		"round", blockNr,
+		"err", err,
+	)
+
+	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
+}
+
+func (app *rootHashApplication) tryFinalizeMerge(
 	ctx *abci.Context,
 	runtime *registry.Runtime,
 	rtState *runtimeState,
@@ -583,38 +718,18 @@ func (app *rootHashApplication) tryFinalize(
 ) { // nolint: gocyclo
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
-
-	var rearmTimer bool
-	defer func() {
-		// Note: Unlike the Rust code, this pushes back the timer
-		// each time forward progress is made.
-
-		switch rearmTimer {
-		case true: // (Re-)arm timer.
-			app.logger.Debug("(re-)arming round timeout")
-
-			timerCtx := &timerContext{
-				ID:    runtime.ID,
-				Round: blockNr,
-			}
-			rtState.Timer.Reset(ctx, app.roundTimeout, timerCtx.MarshalCBOR())
-		case false: // Disarm timer.
-			app.logger.Debug("disarming round timeout")
-			rtState.Timer.Stop(ctx)
-		}
-	}()
-
-	state := rtState.Round.State
 	id, _ := runtime.ID.MarshalBinary()
 
-	if state == stateFinalized {
-		app.logger.Error("attempted to finalize when block already finalized",
+	defer app.updateTimer(ctx, runtime, rtState, blockNr)
+
+	if rtState.Round.Finalized {
+		app.logger.Error("attempted to finalize merge when block already finalized",
 			"round", blockNr,
 		)
 		return
 	}
 
-	blk, err := rtState.Round.tryFinalize(ctx)
+	header, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -622,6 +737,14 @@ func (app *rootHashApplication) tryFinalize(
 			"round", blockNr,
 		)
 
+		// Generate the final block.
+		blk := new(block.Block)
+		blk.Header = *header
+		blk.Header.Timestamp = uint64(ctx.Now().Unix())
+
+		rtState.Round.MergePool.ResetCommitments()
+		rtState.Round.ComputePool.ResetCommitments()
+		rtState.Round.Finalized = true
 		rtState.CurrentBlock = blk
 
 		ctx.EmitTag(TagUpdate, TagUpdateValue)
@@ -632,59 +755,26 @@ func (app *rootHashApplication) tryFinalize(
 		ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 		return
 	case commitment.ErrStillWaiting:
-		if forced {
-			if state == stateDiscrepancyWaitingCommitments {
-				// This was a forced finalization call due to timeout,
-				// and the round was in the discrepancy state.  Give up.
-				app.logger.Error("failed to finalize discrepancy committee on timeout",
-					"round", blockNr,
-				)
-				break
-			}
-
-			// This is the fast path and the round timer expired.
-			//
-			// Transition to the discrepancy state so the backup workers
-			// process the round, assuming that is is possible to do so.
-			app.logger.Error("failed to finalize committee on timeout",
-				"round", blockNr,
-			)
-			err = rtState.Round.forceBackupTransition()
-			break
-		}
-
+		// Need more commits.
 		app.logger.Debug("insufficient commitments for finality, waiting",
 			"round", blockNr,
 		)
 
-		rearmTimer = true
 		return
-	default:
-	}
-
-	if dErr, ok := (err).(errDiscrepancyDetected); ok {
-		ioRoot := hash.Hash(dErr)
-
-		app.logger.Warn("discrepancy detected",
+	case commitment.ErrDiscrepancyDetected:
+		// Discrepancy has been detected.
+		app.logger.Warn("merge discrepancy detected",
 			"round", blockNr,
-			"io_root", ioRoot,
 		)
 
 		ctx.EmitTag(TagUpdate, TagUpdateValue)
-		tagV := ValueDiscrepancyDetected{
-			ID: id,
-			Event: roothash.DiscrepancyDetectedEvent{
-				IORoot:      ioRoot,
-				BlockHeader: latestBlock.Header,
-			},
+		tagV := ValueMergeDiscrepancyDetected{
+			ID:    id,
+			Event: roothash.MergeDiscrepancyDetectedEvent{},
 		}
-		ctx.EmitTag(TagDiscrepancyDetected, tagV.MarshalCBOR())
-
-		// Re-arm the timer.  The rust code waits till the first discrepancy
-		// commit to do this, but there is 0 guarantee that said commit will
-		// come.
-		rearmTimer = true
+		ctx.EmitTag(TagMergeDiscrepancyDetected, tagV.MarshalCBOR())
 		return
+	default:
 	}
 
 	// Something else went wrong, emit empty error block.

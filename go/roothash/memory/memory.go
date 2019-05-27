@@ -10,7 +10,6 @@ import (
 
 	"github.com/eapache/channels"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -38,9 +37,14 @@ var (
 	_ (api.MetricsMonitorable) = (*memoryRootHash)(nil)
 )
 
-type commitCmd struct {
-	commitment *commitment.ComputeCommitment
-	errCh      chan error
+type computeCommitCmd struct {
+	commitments []commitment.ComputeCommitment
+	errCh       chan error
+}
+
+type mergeCommitCmd struct {
+	commitments []commitment.MergeCommitment
+	errCh       chan error
 }
 
 type runtimeState struct {
@@ -54,7 +58,7 @@ type runtimeState struct {
 	timer   *time.Timer
 	blocks  []*block.Block
 
-	cmdCh         chan *commitCmd
+	cmdCh         chan interface{}
 	blockNotifier *pubsub.Broker
 	eventNotifier *pubsub.Broker
 
@@ -77,13 +81,28 @@ func (s *runtimeState) getLatestBlockImpl() (*block.Block, error) {
 	return s.blocks[nBlocks-1], nil
 }
 
-func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.Committee) {
+func (s *runtimeState) onNewCommittees(ctx context.Context, committees []*scheduler.Committee) {
+	var computeCommittee, mergeCommittee *scheduler.Committee
+	for _, c := range committees {
+		switch c.Kind {
+		case scheduler.Compute:
+			computeCommittee = c
+		case scheduler.Merge:
+			mergeCommittee = c
+		default:
+			// Skip other types of committees.
+		}
+	}
+	if computeCommittee == nil || mergeCommittee == nil {
+		panic("roothash/memory: missing committees")
+	}
+
 	// If the committee is the "same", ignore this.
 	//
 	// TODO: Use a better check to allow for things like rescheduling.
-	if s.round != nil && s.round.pool.Committee.ValidFor == committee.ValidFor {
+	if s.round != nil && s.round.mergePool.Committee.ValidFor == mergeCommittee.ValidFor {
 		s.logger.Debug("worker: duplicate committee or reschedule, ignoring",
-			"epoch", committee.ValidFor,
+			"epoch", mergeCommittee.ValidFor,
 		)
 		return
 	}
@@ -97,7 +116,7 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 	blockNr := blk.Header.Round
 
 	s.logger.Debug("worker: new committee, transitioning round",
-		"epoch", committee.ValidFor,
+		"epoch", mergeCommittee.ValidFor,
 		"round", blockNr,
 	)
 
@@ -111,14 +130,24 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 	if err != nil {
 		panic(err)
 	}
-	nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-	for idx, committeeNode := range committee.Members {
-		nodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
+
+	// TODO: Support multiple compute committees (#1775).
+	computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+	for idx, committeeNode := range computeCommittee.Members {
+		computeNodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
 			CommitteeNode: idx,
 		}
 	}
+
+	mergeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+	for idx, committeeNode := range mergeCommittee.Members {
+		mergeNodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
+			CommitteeNode: idx,
+		}
+	}
+
 	for _, node := range nodes {
-		ni, ok := nodeInfo[node.ID.ToMapKey()]
+		ni, ok := computeNodeInfo[node.ID.ToMapKey()]
 		if !ok {
 			continue
 		}
@@ -131,12 +160,6 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 		}
 	}
 
-	s.round = newRound(ctx, committee, nodeInfo, blk, s.runtime)
-
-	// Emit an empty epoch transition block in the new round. This is required so that
-	// the clients can be sure what state is final when an epoch transition occurs.
-	s.emitEmptyBlock(blk, block.EpochTransition)
-
 	// Update the runtime.
 	rtID := s.runtime.ID
 	if s.runtime, err = s.registry.GetRuntime(ctx, s.runtime.ID); err != nil {
@@ -146,11 +169,24 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 		)
 		panic(err)
 	}
+
+	s.round = newRound(
+		ctx,
+		computeCommittee,
+		computeNodeInfo,
+		mergeCommittee,
+		mergeNodeInfo,
+		blk,
+		s.runtime,
+	)
+
+	// Emit an empty epoch transition block in the new round. This is required so that
+	// the clients can be sure what state is final when an epoch transition occurs.
+	s.emitEmptyBlock(blk, block.EpochTransition)
 }
 
 func (s *runtimeState) emitEmptyBlock(blk *block.Block, hdrType block.HeaderType) {
 	blk = block.NewEmptyBlock(blk, uint64(time.Now().Unix()), hdrType)
-	s.round.populateFinalizedBlock(blk)
 	s.rootHash.allBlockNotifier.Broadcast(blk)
 
 	s.Lock()
@@ -160,32 +196,88 @@ func (s *runtimeState) emitEmptyBlock(blk *block.Block, hdrType block.HeaderType
 	s.blocks = append(s.blocks, blk)
 }
 
-func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
-	var rearmTimer bool
-	defer func() {
-		// Note: Unlike the Rust code, this pushes back the timer
-		// each time forward progress is made.
+func (s *runtimeState) updateTimer(now time.Time, forced bool) {
+	if !forced && !s.timer.Stop() {
+		<-s.timer.C
+	}
 
-		if !forced && !s.timer.Stop() {
-			<-s.timer.C
-		}
+	nextTimeout := s.round.getNextTimeout()
+	if nextTimeout.IsZero() {
+		// Disarm timer.
+		s.logger.Debug("worker: disarming round timeout")
+		s.timer.Reset(infiniteTimeout)
+	} else {
+		// (Re-)arm timer.
+		s.logger.Debug("worker: (re-)arming round timeout")
+		s.timer.Reset(nextTimeout.Sub(now))
+	}
+}
 
-		switch rearmTimer {
-		case true: // (Re-)arm timer.
-			s.logger.Debug("worker: (re-)arming round timeout")
-			s.timer.Reset(s.rootHash.roundTimeout)
-		case false: // Disarm timer.
-			s.logger.Debug("worker: disarming round timeout")
-			s.timer.Reset(infiniteTimeout)
+func (s *runtimeState) tryFinalizeCompute(pool *commitment.Pool, forced bool) {
+	now := time.Now()
+	defer s.updateTimer(now, forced)
+
+	latestBlock, _ := s.getLatestBlockImpl()
+	blockNr := latestBlock.Header.Round
+	committeeID := pool.GetCommitteeID()
+
+	// TODO: Separate timeout for compute/merge.
+	_, err := pool.TryFinalize(now, s.rootHash.roundTimeout, forced)
+	switch err {
+	case nil:
+		// No error -- there is no discrepancy. But only the merge committee
+		// can make progress even if we have all compute commitments.
+
+		// TODO: Check if we need to punish the merge committee.
+
+		s.logger.Warn("worker: no compute discrepancy, but only merge committee can make progress",
+			"round", blockNr,
+			"committee_id", committeeID,
+		)
+
+		if !forced {
+			// If this was not a timeout, we give the merge committee some
+			// more time to merge, otherwise we fail the round.
+			return
 		}
-	}()
+	case commitment.ErrStillWaiting:
+		// Need more commits.
+		return
+	case commitment.ErrDiscrepancyDetected:
+		s.logger.Warn("worker: compute discrepancy detected",
+			"round", blockNr,
+			"committee_id", committeeID,
+		)
+
+		s.eventNotifier.Broadcast(&api.Event{
+			ComputeDiscrepancyDetected: &api.ComputeDiscrepancyDetectedEvent{
+				CommitteeID: committeeID,
+			},
+		})
+		return
+	default:
+	}
+
+	// Something else went wrong, emit empty error block. Note that we need
+	// to abort everything even if only one committee failed to finalize as
+	// there is otherwise no way to make progress as merge committees will
+	// refuse to merge if there are discrepancies.
+	s.logger.Error("worker: round failed during compute finalization",
+		"round", blockNr,
+		"err", err,
+	)
+
+	s.emitEmptyBlock(latestBlock, block.RoundFailed)
+}
+
+func (s *runtimeState) tryFinalizeMerge(forced bool) { // nolint: gocyclo
+	now := time.Now()
+	defer s.updateTimer(now, forced)
 
 	latestBlock, _ := s.getLatestBlockImpl()
 	blockNr := latestBlock.Header.Round
 
-	state := s.round.state
-
-	blk, err := s.round.tryFinalize()
+	header, err := s.round.mergePool.TryFinalize(now, s.rootHash.roundTimeout, forced)
 	switch err {
 	case nil:
 		// Add the new block to the block chain.
@@ -193,71 +285,36 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 			"round", blockNr,
 		)
 
+		// Generate the final block.
+		blk := new(block.Block)
+		blk.Header = *header
+		blk.Header.Timestamp = uint64(now.Unix())
+
 		s.rootHash.allBlockNotifier.Broadcast(blk)
+		s.blockNotifier.Broadcast(blk)
 
 		s.Lock()
 		defer s.Unlock()
 
-		s.blockNotifier.Broadcast(blk)
 		s.blocks = append(s.blocks, blk)
 		return
 	case commitment.ErrStillWaiting:
-		if forced {
-			if state == stateDiscrepancyWaitingCommitments {
-				// This was a forced finalization call due to timeout,
-				// and the round was in the discrepancy state.  Give up.
-				//
-				// I'm 99% sure the Rust code can livelock since it
-				// doesn't handle this.
-				s.logger.Error("worker: failed to finalize discrepancy committee on timeout",
-					"round", blockNr,
-					"num_commitments", len(s.round.pool.Commitments),
-				)
-				break
-			}
-
-			// This is the fast path and the round timer expired.
-			//
-			// Transition to the discrepancy state so the backup workers
-			// process the round, assuming that it is possible to do so.
-			s.logger.Error("worker: failed to finalize committee on timeout",
-				"round", blockNr,
-				"num_commitments", len(s.round.pool.Commitments),
-			)
-			err = s.round.forceBackupTransition()
-			break
-		}
-
+		// Need more commits.
 		s.logger.Debug("worker: insufficient commitments for finality, waiting",
 			"round", blockNr,
-			"num_commitments", len(s.round.pool.Commitments),
 		)
 
-		rearmTimer = true
 		return
-	default:
-	}
-
-	if dErr, ok := (err).(errDiscrepancyDetected); ok {
-		ioRoot := hash.Hash(dErr)
-
-		s.logger.Warn("worker: discrepancy detected",
+	case commitment.ErrDiscrepancyDetected:
+		s.logger.Warn("worker: merge discrepancy detected",
 			"round", blockNr,
-			"io_root", ioRoot,
 		)
 
 		s.eventNotifier.Broadcast(&api.Event{
-			DiscrepancyDetected: &api.DiscrepancyDetectedEvent{
-				IORoot:      ioRoot,
-				BlockHeader: latestBlock.Header,
-			},
+			MergeDiscrepancyDetected: &api.MergeDiscrepancyDetectedEvent{},
 		})
-
-		// Re-arm the timer.  The rust code waits till the first discrepancy
-		// commit to do this, but there is 0 guarantee that said commit will
-		// come.
-		rearmTimer = true
 		return
+	default:
 	}
 
 	// Something else went wrong, emit empty error block.
@@ -283,6 +340,7 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 		s.timer = nil
 	}()
 
+OUTER:
 	for {
 		select {
 		case committee, ok := <-schedCh:
@@ -298,16 +356,35 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 			if committee.Kind != scheduler.Compute {
 				continue
 			}
-			s.onNewCommittee(ctx, committee)
-		case cmd, ok := <-s.cmdCh:
+
+			committees, err := sched.GetCommittees(ctx, s.runtime.ID)
+			if err != nil {
+				s.logger.Error("worker: failed to get committees",
+					"err", err,
+				)
+				continue
+			}
+			s.onNewCommittees(ctx, committees)
+		case c, ok := <-s.cmdCh:
 			if !ok {
 				return
 			}
+
+			var errCh chan error
+			switch cmd := c.(type) {
+			case *mergeCommitCmd:
+				errCh = cmd.errCh
+			case *computeCommitCmd:
+				errCh = cmd.errCh
+			default:
+				panic("worker: unsupported command type")
+			}
+
 			if s.round == nil {
 				s.logger.Error("worker: commit recevied when no round in progress",
 					"err", errNoRound,
 				)
-				cmd.errCh <- errNoRound
+				errCh <- errNoRound
 				continue
 			}
 
@@ -316,7 +393,7 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 				s.logger.Error("worker: BUG: Failed to get latest block",
 					"err", err,
 				)
-				cmd.errCh <- err
+				errCh <- err
 				continue
 			}
 			blockNr := latestBlock.Header.Round
@@ -327,33 +404,62 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 					"round", blockNr,
 				)
 
-				s.round = newRound(
-					ctx,
-					s.round.pool.Committee,
-					s.round.pool.NodeInfo,
-					latestBlock,
-					s.runtime,
-				)
+				s.round.transition(latestBlock)
 			}
 
-			// Add the commitment.
-			if err = s.round.addCommitment(cmd.commitment); err != nil {
-				s.logger.Error("worker: failed to add commitment to round",
-					"err", err,
-					"round", blockNr,
-				)
-				cmd.errCh <- err
-				continue
+			// Add the commitments.
+			switch cmd := c.(type) {
+			case *mergeCommitCmd:
+				// Merge commits.
+				for _, commit := range cmd.commitments {
+					if err = s.round.addMergeCommitment(&commit); err != nil {
+						s.logger.Error("worker: failed to add merge commitment to round",
+							"err", err,
+							"round", blockNr,
+						)
+						errCh <- err
+						continue OUTER
+					}
+				}
+
+				// Propagate the commit success to the committer.
+				errCh <- nil
+
+				s.tryFinalizeMerge(false)
+			case *computeCommitCmd:
+				// Compute commits.
+				pools := make(map[*commitment.Pool]bool)
+				for _, commit := range cmd.commitments {
+					var pool *commitment.Pool
+					if pool, err = s.round.addComputeCommitment(&commit); err != nil {
+						s.logger.Error("worker: failed to add compute commitment to round",
+							"err", err,
+							"round", blockNr,
+						)
+						errCh <- err
+						continue OUTER
+					}
+
+					pools[pool] = true
+				}
+
+				// Propagate the commit success to the committer.
+				errCh <- nil
+
+				for pool := range pools {
+					s.tryFinalizeCompute(pool, false)
+				}
 			}
-
-			// Propagate the commit success to the committer.
-			cmd.errCh <- nil
-
-			s.tryFinalize(false)
 		case <-s.timer.C:
+			now := time.Now()
 			s.logger.Warn("worker: round timeout expired, forcing finalization")
-			s.round.didTimeout = true
-			s.tryFinalize(true)
+
+			if s.round.mergePool.IsTimeout(now) {
+				s.tryFinalizeMerge(true)
+			}
+			for _, pool := range s.round.computePool.GetTimeoutCommittees(now) {
+				s.tryFinalizeCompute(pool, true)
+			}
 		}
 	}
 }
@@ -380,6 +486,13 @@ type memoryRootHash struct {
 	closeOnce sync.Once
 
 	roundTimeout time.Duration
+}
+
+func (r *memoryRootHash) Info() api.Info {
+	return api.Info{
+		ComputeRoundTimeout: r.roundTimeout,
+		MergeRoundTimeout:   r.roundTimeout,
+	}
 }
 
 func (r *memoryRootHash) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
@@ -445,20 +558,36 @@ func (r *memoryRootHash) WatchEvents(id signature.PublicKey) (<-chan *api.Event,
 	return ch, sub, nil
 }
 
-func (r *memoryRootHash) Commit(ctx context.Context, id signature.PublicKey, commit *api.OpaqueCommitment) error {
+func (r *memoryRootHash) MergeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.MergeCommitment) error {
 	s, err := r.getRuntimeState(id)
 	if err != nil {
 		return err
 	}
 
-	var c commitment.ComputeCommitment
-	if err = c.FromOpaqueCommitment(commit); err != nil {
+	cmd := &mergeCommitCmd{
+		commitments: commits,
+		errCh:       make(chan error, 1),
+	}
+	s.cmdCh <- cmd
+
+	select {
+	case <-ctx.Done():
+		return context.Canceled
+	case err = <-cmd.errCh:
+	}
+
+	return err
+}
+
+func (r *memoryRootHash) ComputeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.ComputeCommitment) error {
+	s, err := r.getRuntimeState(id)
+	if err != nil {
 		return err
 	}
 
-	cmd := &commitCmd{
-		commitment: &c,
-		errCh:      make(chan error, 1),
+	cmd := &computeCommitCmd{
+		commitments: commits,
+		errCh:       make(chan error, 1),
 	}
 	s.cmdCh <- cmd
 
@@ -537,7 +666,7 @@ func (r *memoryRootHash) onRuntimeRegistration(ctx context.Context, runtime *reg
 		registry:      r.registry,
 		runtime:       runtime,
 		blocks:        append([]*block.Block{}, genesisBlock),
-		cmdCh:         make(chan *commitCmd), // XXX: Use an unbound channel?
+		cmdCh:         make(chan interface{}), // XXX: Use an unbound channel?
 		blockNotifier: pubsub.NewBroker(false),
 		eventNotifier: pubsub.NewBroker(false),
 		rootHash:      r,

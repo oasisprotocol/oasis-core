@@ -103,6 +103,7 @@ type Header struct { // nolint: maligned
 	// PreviousHash is the previous block hash.
 	PreviousHash hash.Hash `codec:"previous_hash"`
 
+	// TODO: Remove GroupHash.
 	// GroupHash is the computation group hash.
 	GroupHash hash.Hash `codec:"group_hash"`
 
@@ -112,6 +113,7 @@ type Header struct { // nolint: maligned
 	// StateRoot is the state merkle root.
 	StateRoot hash.Hash `codec:"state_root"`
 
+	// TODO: Remove CommitmentsHash.
 	// CommitmentsHash is the Commitments hash.
 	CommitmentsHash hash.Hash `codec:"commitments_hash"`
 

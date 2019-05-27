@@ -36,6 +36,7 @@ var (
 	rngContextCompute              = []byte("EkS-Dummy-Compute")
 	rngContextStorage              = []byte("EkS-Dummy-Storage")
 	rngContextTransactionScheduler = []byte("EkS-Dummy-TransactionScheduler")
+	rngContextMerge                = []byte("EkS-Dummy-Merge")
 
 	errIncompatibleBackends = fmt.Errorf("scheduler/trivial: incompatible backend(s) for block operations")
 )
@@ -65,6 +66,7 @@ type trivialSchedulerState struct {
 	computeNodeLists      map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node
 	storageNodeLists      map[epochtime.EpochTime][]*node.Node
 	txnSchedulerNodeLists map[epochtime.EpochTime]map[signature.MapKey][]*node.Node
+	mergeNodeLists        map[epochtime.EpochTime]map[signature.MapKey][]*node.Node
 	beacons               map[epochtime.EpochTime][]byte
 	runtimes              map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime
 	committees            map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee
@@ -77,7 +79,7 @@ func (s *trivialSchedulerState) canElect() bool {
 	s.Lock()
 	defer s.Unlock()
 
-	return s.computeNodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil && s.storageNodeLists[s.epoch] != nil && s.txnSchedulerNodeLists[s.epoch] != nil
+	return s.computeNodeLists[s.epoch] != nil && s.beacons[s.epoch] != nil && s.storageNodeLists[s.epoch] != nil && s.txnSchedulerNodeLists[s.epoch] != nil && s.mergeNodeLists[s.epoch] != nil
 }
 
 func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.EpochTime, notifier *pubsub.Broker) ([]*api.Committee, error) { //nolint:gocyclo
@@ -109,7 +111,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 	// Only generic compute runtimes need to elect all the committees.
 	kinds := []api.CommitteeKind{api.Compute}
 	if rt.IsCompute() {
-		kinds = append(kinds, []api.CommitteeKind{api.Storage, api.TransactionScheduler}...)
+		kinds = append(kinds, []api.CommitteeKind{api.Storage, api.TransactionScheduler, api.Merge}...)
 	}
 
 	for _, kind := range kinds {
@@ -129,6 +131,11 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			nodeList = s.txnSchedulerNodeLists[epoch][rtID]
 			sz = int(rt.TransactionSchedulerGroupSize)
 			ctx = rngContextTransactionScheduler
+		case api.Merge:
+			nodeList = s.mergeNodeLists[epoch][rtID]
+			// TODO: Allow independent group sizes.
+			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
+			ctx = rngContextMerge
 		default:
 			return nil, fmt.Errorf("scheduler: invalid committee type: %v", kind)
 		}
@@ -219,6 +226,11 @@ func (s *trivialSchedulerState) prune() {
 			delete(s.txnSchedulerNodeLists, epoch)
 		}
 	}
+	for epoch := range s.mergeNodeLists {
+		if epoch < pruneBefore {
+			delete(s.mergeNodeLists, epoch)
+		}
+	}
 	for epoch := range s.beacons {
 		if epoch < pruneBefore {
 			delete(s.beacons, epoch)
@@ -294,15 +306,17 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 
 	// Re-scheduling is not allowed, and if there are node lists already there
 	// is nothing to do.
-	if s.computeNodeLists[epoch] != nil || s.storageNodeLists[epoch] != nil || s.txnSchedulerNodeLists[epoch] != nil {
+	if s.computeNodeLists[epoch] != nil || s.storageNodeLists[epoch] != nil || s.txnSchedulerNodeLists[epoch] != nil || s.mergeNodeLists[epoch] != nil {
 		return
 	}
 
 	m := make(map[signature.MapKey]map[node.TEEHardware][]*node.Node)
 	s.txnSchedulerNodeLists[epoch] = make(map[signature.MapKey][]*node.Node)
+	s.mergeNodeLists[epoch] = make(map[signature.MapKey][]*node.Node)
 	for id := range s.runtimes[epoch] {
 		m[id] = make(map[node.TEEHardware][]*node.Node)
 		s.txnSchedulerNodeLists[epoch][id] = []*node.Node{}
+		s.mergeNodeLists[epoch][id] = []*node.Node{}
 	}
 	s.storageNodeLists[epoch] = []*node.Node{}
 
@@ -365,6 +379,22 @@ func (s *trivialSchedulerState) updateNodeListLocked(epoch epochtime.EpochTime, 
 					continue
 				}
 				s.txnSchedulerNodeLists[epoch][rtID] = append(nls, n)
+			}
+		}
+
+		// Merge workers
+		if n.HasRoles(node.RoleMergeWorker) {
+			for _, rt := range n.Runtimes {
+				rtID := rt.ID.ToMapKey()
+				nls, ok := s.mergeNodeLists[epoch][rtID]
+				if !ok {
+					s.logger.Warn("node supports unknown runtime",
+						"node", n,
+						"runtime", rt.ID,
+					)
+					continue
+				}
+				s.mergeNodeLists[epoch][rtID] = append(nls, n)
 			}
 		}
 	}
@@ -662,6 +692,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, registryBackend regi
 			computeNodeLists:      make(map[epochtime.EpochTime]map[signature.MapKey]map[node.TEEHardware][]*node.Node),
 			storageNodeLists:      make(map[epochtime.EpochTime][]*node.Node),
 			txnSchedulerNodeLists: make(map[epochtime.EpochTime]map[signature.MapKey][]*node.Node),
+			mergeNodeLists:        make(map[epochtime.EpochTime]map[signature.MapKey][]*node.Node),
 			beacons:               make(map[epochtime.EpochTime][]byte),
 			runtimes:              make(map[epochtime.EpochTime]map[signature.MapKey]*registry.Runtime),
 			committees:            make(map[epochtime.EpochTime]map[signature.MapKey][]*api.Committee),

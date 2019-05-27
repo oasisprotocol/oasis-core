@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
@@ -114,7 +115,7 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 }
 
 // HandlePeerMessage implements NodeHooks.
-func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) (bool, error) {
+func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
 	return false, nil
 }
 
@@ -205,6 +206,11 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	}
 }
 
+// HandleNewEventLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
+}
+
 // Dispatch dispatches a bach to the compute committee.
 func (n *Node) Dispatch(batch runtime.Batch) error {
 	n.commonNode.CrossNode.Lock()
@@ -235,12 +241,12 @@ func (n *Node) Dispatch(batch runtime.Batch) error {
 	var batchID hash.Hash
 	batchID.From(batch)
 
-	spanPublish := opentracing.StartSpan("Publish(batchHash, header)",
+	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
 		opentracing.Tag{Key: "batchHash", Value: batchID},
 		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
 		opentracing.ChildOf(batchSpanCtx),
 	)
-	if err := n.commonNode.Group.PublishBatch(batchSpanCtx, batch, n.commonNode.CurrentBlock.Header); err != nil {
+	if err := n.commonNode.Group.PublishScheduledBatch(batchSpanCtx, batch, n.commonNode.CurrentBlock.Header); err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
@@ -252,8 +258,12 @@ func (n *Node) Dispatch(batch runtime.Batch) error {
 
 	n.transitionLocked(StateWaitingForFinalize{})
 
-	if epoch.IsComputeLeader() || epoch.IsComputeWorker() {
-		n.computeNode.HandleBatchFromTransactionSchedulerLocked(batch, batchSpanCtx)
+	if epoch.IsComputeMember() {
+		if n.computeNode == nil {
+			n.logger.Error("scheduler says we are a compute worker, but we are not")
+		} else {
+			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, batch)
+		}
 	}
 
 	return nil

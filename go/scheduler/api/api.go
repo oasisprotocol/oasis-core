@@ -76,6 +76,9 @@ const (
 
 	// TransactionScheduler is a transaction scheduler committee.
 	TransactionScheduler
+
+	// Merge is a merge committee.
+	Merge
 )
 
 // String returns a string representation of a CommitteeKind.
@@ -87,6 +90,8 @@ func (k CommitteeKind) String() string {
 		return "storage"
 	case TransactionScheduler:
 		return "transaction"
+	case Merge:
+		return "merge"
 	default:
 		return fmt.Sprintf("unknown kind: %d", k)
 	}

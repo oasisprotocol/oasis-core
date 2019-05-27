@@ -5,6 +5,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
@@ -24,9 +25,12 @@ var (
 	// TagUpdateValue is the only allowed value for TagUpdate.
 	TagUpdateValue = []byte("1")
 
-	// TagDiscrepancyDetected is an ABCI transaction tag for discrepancy
-	// detected events (value is a CBOR serialized ValueDiscrepancyDetected).
-	TagDiscrepancyDetected = []byte("roothash.discrepancy")
+	// TagMergeDiscrepancyDetected is an ABCI transaction tag for merge discrepancy
+	// detected events (value is a CBOR serialized ValueMergeDiscrepancyDetected).
+	TagMergeDiscrepancyDetected = []byte("roothash.merge-discrepancy")
+	// TagComputeDiscrepancyDetected is an ABCI transaction tag for merge discrepancy
+	// detected events (value is a CBOR serialized ValueComputeDiscrepancyDetected).
+	TagComputeDiscrepancyDetected = []byte("roothash.compute-discrepancy")
 
 	// TagFinalized is an ABCI transaction tag for finalized blocks
 	// (value is a CBOR serialized ValueFinalized).
@@ -51,13 +55,20 @@ const (
 type Tx struct {
 	_struct struct{} `codec:",omitempty"` // nolint
 
-	*TxCommit `codec:"Commit"`
+	*TxComputeCommit `codec:"ComputeCommit"`
+	*TxMergeCommit   `codec:"MergeCommit"`
 }
 
-// TxCommit is a transaction for submitting a roothash commitment.
-type TxCommit struct {
-	ID         signature.PublicKey
-	Commitment roothash.OpaqueCommitment
+// TxComputeCommit is a transaction for submitting compute commitments.
+type TxComputeCommit struct {
+	ID      signature.PublicKey            `codec:"id"`
+	Commits []commitment.ComputeCommitment `codec:"commits"`
+}
+
+// TxMergeCommit is a transaction for submitting merge commitments.
+type TxMergeCommit struct {
+	ID      signature.PublicKey          `codec:"id"`
+	Commits []commitment.MergeCommitment `codec:"commits"`
 }
 
 // ValueFinalized is the value component of a TagFinalized.
@@ -76,20 +87,37 @@ func (v *ValueFinalized) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, v)
 }
 
-// ValueDiscrepancyDetected is the value component of a
-// TagDiscrepancyDetected.
-type ValueDiscrepancyDetected struct {
-	ID    signature.PublicKey               `codec:"id"`
-	Event roothash.DiscrepancyDetectedEvent `codec:"event"`
+// ValueMergeDiscrepancyDetected is the value component of a
+// TagMergeDiscrepancyDetected.
+type ValueMergeDiscrepancyDetected struct {
+	Event roothash.MergeDiscrepancyDetectedEvent `codec:"event"`
+	ID    signature.PublicKey                    `codec:"id"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
-func (v *ValueDiscrepancyDetected) MarshalCBOR() []byte {
+func (v *ValueMergeDiscrepancyDetected) MarshalCBOR() []byte {
 	return cbor.Marshal(v)
 }
 
 // UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (v *ValueDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
+func (v *ValueMergeDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, v)
+}
+
+// ValueComputeDiscrepancyDetected is the value component of a
+// TagMergeDiscrepancyDetected.
+type ValueComputeDiscrepancyDetected struct {
+	ID    signature.PublicKey                      `codec:"id"`
+	Event roothash.ComputeDiscrepancyDetectedEvent `codec:"event"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (v *ValueComputeDiscrepancyDetected) MarshalCBOR() []byte {
+	return cbor.Marshal(v)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (v *ValueComputeDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, v)
 }
 

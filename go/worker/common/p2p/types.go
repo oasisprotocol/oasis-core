@@ -5,10 +5,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 )
 
 // Message is a message sent to nodes in the same computation group.
 type Message struct {
+	_struct struct{} `codec:",omitempty"` // nolint
+
 	// RuntimeID is the identifier of the runtime this message
 	// belongs to. It is used as a namespace.
 	RuntimeID signature.PublicKey
@@ -25,9 +28,11 @@ type Message struct {
 	Error *Error
 
 	// Batch dispatch.
-	LeaderBatchDispatch *LeaderBatchDispatch
+	LeaderBatchDispatch   *LeaderBatchDispatch
+	ComputeWorkerFinished *ComputeWorkerFinished
 }
 
+// TODO: Rename to TxnSchedulerBatchDispatch.
 type LeaderBatchDispatch struct {
 	// Batch is the dispatched transaction batch.
 	Batch runtime.Batch
@@ -35,6 +40,14 @@ type LeaderBatchDispatch struct {
 	// Header is the block header on which the batch should be
 	// based.
 	Header roothash.Header
+}
+
+// ComputeWorkerFinished is the message sent from the compute workers to
+// the merge committee after a batch has been processed and is ready to
+// be merged.
+type ComputeWorkerFinished struct {
+	// Commitment is a compute worker commitment.
+	Commitment commitment.ComputeCommitment
 }
 
 // Ack is an acknowledgement that a message was received.

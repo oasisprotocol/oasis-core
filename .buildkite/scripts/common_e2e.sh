@@ -143,7 +143,7 @@ run_backend_tendermint_committee() {
         let grpc_debug_port=tm_port+36656
 
         ${EKIDEN_NODE} \
-            --log.level info \
+            --log.level debug \
             --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.log.verbose_debug \
             --grpc.debug.port ${grpc_debug_port} \
@@ -225,7 +225,7 @@ run_compute_node() {
     fi
 
     ${EKIDEN_NODE} \
-        --log.level info \
+        --log.level debug \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
@@ -248,6 +248,7 @@ run_compute_node() {
         ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
         --worker.txnscheduler.enabled \
         --worker.txnscheduler.batching.max_batch_size 1 \
+        --worker.merge.enabled \
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
@@ -619,6 +620,12 @@ assert_worker_logs_not_contain() {
     _assert_worker_logs_contain 1 "$1" "$2"
 }
 
+# Assert that there were no panics.
+assert_no_panics() {
+    assert_worker_logs_not_contain "panic:" "Panics detected during run."
+    assert_worker_logs_not_contain "CONSENSUS FAILURE" "Consensus failure detected during run."
+}
+
 # Assert that there are were no round timeouts.
 assert_no_round_timeouts() {
     assert_worker_logs_not_contain "FireTimer" "Round timeouts detected during run."
@@ -628,6 +635,11 @@ assert_no_round_timeouts() {
 # Assert that there were no discrepancies.
 assert_no_discrepancies() {
     assert_worker_logs_not_contain "discrepancy detected" "Discrepancy detected during run."
+}
+
+# Assert that there were no compute discrepancies.
+assert_no_compute_discrepancies() {
+    assert_worker_logs_not_contain "compute discrepancy detected" "Compute discrepancy detected during run."
 }
 
 # Assert that there were compute discrepancies.
@@ -642,6 +654,7 @@ assert_merge_discrepancies() {
 
 # Assert that all computations ran successfully without hiccups.
 assert_basic_success() {
+    assert_no_panics
     assert_no_round_timeouts
     assert_no_discrepancies
 }

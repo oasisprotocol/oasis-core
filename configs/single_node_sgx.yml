@@ -44,6 +44,8 @@ worker:
     enabled: true
   txnscheduler:
     enabled: true
+  merge:
+    enabled: true
   client:
     port: 9200
     addresses:

@@ -45,6 +45,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/keymanager"
+	"github.com/oasislabs/ekiden/go/worker/merge"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	workerStorage "github.com/oasislabs/ekiden/go/worker/storage"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
@@ -90,6 +91,7 @@ type Node struct {
 	ComputeWorker              *compute.Worker
 	StorageWorker              *workerStorage.Storage
 	TransactionSchedulerWorker *txnscheduler.Worker
+	MergeWorker                *merge.Worker
 	P2P                        *p2p.P2P
 	WorkerRegistration         *registration.Registration
 }
@@ -228,10 +230,21 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.StorageWorker)
 
+	// Initialize the merge worker.
+	n.MergeWorker, err = merge.New(
+		n.CommonWorker,
+		n.WorkerRegistration,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.MergeWorker)
+
 	// Initialize the compute worker.
 	n.ComputeWorker, err = compute.New(
 		dataDir,
 		n.CommonWorker,
+		n.MergeWorker,
 		n.IAS,
 		n.KeyManager,
 		n.WorkerRegistration,
@@ -252,11 +265,6 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.TransactionSchedulerWorker)
 
-	// Start the common worker.
-	if err = n.CommonWorker.Start(); err != nil {
-		return err
-	}
-
 	// Start the storage worker.
 	if err = n.StorageWorker.Start(); err != nil {
 		return err
@@ -272,6 +280,16 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		return err
 	}
 
+	// Start the merge worker.
+	if err = n.MergeWorker.Start(); err != nil {
+		return err
+	}
+
+	// Start the common worker.
+	if err = n.CommonWorker.Start(); err != nil {
+		return err
+	}
+
 	// Start the key manager worker.
 	if err = kmSvc.Start(); err != nil {
 		return err
@@ -282,8 +300,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Only start the external gRPC server if any workers enabled
-	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || kmEnabled {
+	// Only start the external gRPC server if any workers are enabled.
+	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || n.MergeWorker.Enabled() || kmEnabled {
 		if err = n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,
@@ -548,6 +566,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		txnscheduler.RegisterFlags,
 		workerCommon.RegisterFlags,
 		workerStorage.RegisterFlags,
+		merge.RegisterFlags,
 		crash.RegisterFlags,
 	} {
 		v(cmd)

@@ -8,7 +8,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -29,6 +28,13 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	processedEventCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ekiden_worker_processed_event_count",
+			Help: "Number of processed roothash events",
+		},
+		[]string{"runtime"},
+	)
 	failedRoundCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ekiden_worker_failed_round_count",
@@ -45,6 +51,7 @@ var (
 	)
 	nodeCollectors = []prometheus.Collector{
 		processedBlockCount,
+		processedEventCount,
 		failedRoundCount,
 		epochTransitionCount,
 	}
@@ -55,13 +62,15 @@ var (
 // NodeHooks defines a worker's duties at common events.
 // These are called from the runtime's common node's worker.
 type NodeHooks interface {
-	HandlePeerMessage(context.Context, p2p.Message) (bool, error)
+	HandlePeerMessage(context.Context, *p2p.Message) (bool, error)
 	// Guarded by CrossNode.
 	HandleEpochTransitionLocked(*EpochSnapshot)
 	// Guarded by CrossNode.
 	HandleNewBlockEarlyLocked(*block.Block)
 	// Guarded by CrossNode.
 	HandleNewBlockLocked(*block.Block)
+	// Guarded by CrossNode.
+	HandleNewEventLocked(*roothash.Event)
 }
 
 // Node is a committee node.
@@ -101,11 +110,6 @@ func (n *Node) Name() string {
 
 // Start starts the service.
 func (n *Node) Start() error {
-	// %%%
-	if len(n.hooks) != 2 {
-		panic("expected 2 hooks")
-	}
-
 	go n.worker()
 	return nil
 }
@@ -143,7 +147,7 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 }
 
 // HandlePeerMessage forwards a message from the group system to our hooks.
-func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) error {
+func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) error {
 	for _, hooks := range n.hooks {
 		handled, err := hooks.HandlePeerMessage(ctx, message)
 		if err != nil {
@@ -157,15 +161,13 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) error
 }
 
 // Guarded by n.CrossNode.
-func (n *Node) handleEpochTransitionLocked(computeGroupHash hash.Hash, height int64) {
-	n.logger.Info("epoch transition has occurred",
-		"new_compute_group_hash", computeGroupHash,
-	)
+func (n *Node) handleEpochTransitionLocked(height int64) {
+	n.logger.Info("epoch transition has occurred")
 
 	epochTransitionCount.With(n.getMetricLabels()).Inc()
 
 	// Transition group.
-	if err := n.Group.EpochTransition(n.ctx, computeGroupHash, height); err != nil {
+	if err := n.Group.EpochTransition(n.ctx, height); err != nil {
 		n.logger.Error("unable to handle epoch transition",
 			"err", err,
 		)
@@ -201,7 +203,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	case block.Normal:
 		if firstBlockReceived {
 			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransitionLocked(header.GroupHash, height)
+			n.handleEpochTransitionLocked(height)
 		} else {
 			// Normal block.
 			n.Group.RoundTransition(n.ctx)
@@ -209,7 +211,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	case block.RoundFailed:
 		if firstBlockReceived {
 			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransitionLocked(header.GroupHash, height)
+			n.handleEpochTransitionLocked(height)
 		} else {
 			// Round has failed.
 			n.logger.Warn("round has failed")
@@ -219,7 +221,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		}
 	case block.EpochTransition:
 		// Process an epoch transition.
-		n.handleEpochTransitionLocked(header.GroupHash, height)
+		n.handleEpochTransitionLocked(height)
 	default:
 		n.logger.Error("invalid block type",
 			"block", blk,
@@ -229,6 +231,15 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockLocked(blk)
+	}
+}
+
+// Guarded by n.CrossNode.
+func (n *Node) handleNewEventLocked(ev *roothash.Event) {
+	processedEventCount.With(n.getMetricLabels()).Inc()
+
+	for _, hooks := range n.hooks {
+		hooks.HandleNewEventLocked(ev)
 	}
 }
 
@@ -266,6 +277,16 @@ func (n *Node) worker() {
 	}
 	defer blocksSub.Close()
 
+	// Start watching roothash events.
+	events, eventsSub, err := n.Roothash.WatchEvents(n.RuntimeID)
+	if err != nil {
+		n.logger.Error("failed to subscribe to roothash events",
+			"err", err,
+		)
+		return
+	}
+	defer eventsSub.Close()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -287,6 +308,13 @@ func (n *Node) worker() {
 				n.CrossNode.Lock()
 				defer n.CrossNode.Unlock()
 				n.handleNewBlockLocked(blk, 0)
+			}()
+		case ev := <-events:
+			// Received an event.
+			func() {
+				n.CrossNode.Lock()
+				defer n.CrossNode.Unlock()
+				n.handleNewEventLocked(ev)
 			}()
 		}
 	}

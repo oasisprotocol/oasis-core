@@ -21,28 +21,26 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	mergeCommittee "github.com/oasislabs/ekiden/go/worker/merge/committee"
 )
 
-const queueExternalBatchTimeout = 5 * time.Second
-
 var (
-	errSeenNewerBlock    = errors.New("seen newer block")
-	errWorkerAborted     = errors.New("worker aborted batch processing")
-	errIncomatibleHeader = errors.New("incompatible header")
-	errIncorrectRole     = errors.New("incorrect role")
-	errIncorrectState    = errors.New("incorrect state")
+	errSeenNewerBlock    = errors.New("compute: seen newer block")
+	errWorkerAborted     = errors.New("compute: worker aborted batch processing")
+	errIncomatibleHeader = errors.New("compute: incompatible header")
+	errIncorrectRole     = errors.New("compute: incorrect role")
+	errIncorrectState    = errors.New("compute: incorrect state")
 )
 
 var (
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_discrepancy_detected_count",
-			Help: "Number of detected discrepancies",
+			Name: "ekiden_worker_compute_discrepancy_detected_count",
+			Help: "Number of detected compute discrepancies",
 		},
 		[]string{"runtime"},
 	)
@@ -111,6 +109,7 @@ type Config struct {
 // Node is a committee node.
 type Node struct {
 	commonNode *committee.Node
+	mergeNode  *mergeCommittee.Node
 	workerHost host.Host
 
 	cfg Config
@@ -180,30 +179,18 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 }
 
 // HandlePeerMessage implements NodeHooks.
-func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) (bool, error) {
+func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
 	if message.LeaderBatchDispatch != nil {
+		crash.Here(crashPointBatchReceiveAfter)
+
 		bd := message.LeaderBatchDispatch
-		err := n.handleBatchFromCommittee(ctx, bd.Batch, bd.Header)
+		err := n.queueBatchBlocking(ctx, bd.Batch, bd.Header)
 		if err != nil {
 			return false, err
 		}
 		return true, nil
 	}
 	return false, nil
-}
-
-// handleBatchFromCommittee processes an incoming batch.
-//
-// The call has already been authenticated to come from a committee
-// member or our own node.
-//
-// The block header determines what block the batch should be
-// computed against.
-//
-// Called from P2P worker.
-func (n *Node) handleBatchFromCommittee(ctx context.Context, batch runtime.Batch, hdr block.Header) error {
-	crash.Here(crashPointBatchReceiveAfter)
-	return n.queueBatchBlocking(ctx, batch, hdr)
 }
 
 func (n *Node) queueBatchBlocking(ctx context.Context, batch runtime.Batch, hdr block.Header) error {
@@ -227,8 +214,8 @@ func (n *Node) queueBatchBlocking(ctx context.Context, batch runtime.Batch, hdr 
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleBatchFromTransactionSchedulerLocked(batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
-	n.startProcessingBatchLocked(batch, batchSpanCtx)
+func (n *Node) HandleBatchFromTransactionSchedulerLocked(batchSpanCtx opentracing.SpanContext, batch runtime.Batch) {
+	n.maybeStartProcessingBatchLocked(batch, batchSpanCtx)
 }
 
 func (n *Node) bumpReselect() {
@@ -297,7 +284,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		// Check if this was the block we were waiting for.
 		if header.MostlyEqual(state.header) {
 			n.logger.Info("received block needed for batch processing")
-			n.startProcessingBatchLocked(state.batch, state.batchSpanCtx)
+			n.maybeStartProcessingBatchLocked(state.batch, state.batchSpanCtx)
 			break
 		}
 
@@ -317,6 +304,10 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			"current_round", curRound,
 			"wait_round", waitRound,
 		)
+	case StateWaitingForEvent:
+		// Block finalized without the need for a backup worker.
+		n.logger.Info("considering the round finalized")
+		n.transitionLocked(StateWaitingForBatch{})
 	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
 		n.logger.Info("considering the round finalized")
@@ -324,6 +315,21 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 		// Record time taken for successfully processing a batch.
 		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
+	}
+}
+
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) maybeStartProcessingBatchLocked(batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+
+	if epoch.IsComputeBackupWorker() {
+		// Backup worker, wait for discrepancy event.
+		n.transitionLocked(StateWaitingForEvent{
+			batch:        batch,
+			batchSpanCtx: batchSpanCtx,
+		})
+	} else {
+		n.startProcessingBatchLocked(batch, batchSpanCtx)
 	}
 }
 
@@ -347,6 +353,8 @@ func (n *Node) startProcessingBatchLocked(batch runtime.Batch, batchSpanCtx open
 			Block: *n.commonNode.CurrentBlock,
 		},
 	}
+
+	n.byzantineMaybeInjectDiscrepancy(rq.WorkerExecuteTxBatchRequest.Calls)
 
 	batchStartTime := time.Now()
 	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
@@ -452,7 +460,6 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// Generate proposed block header.
 	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
-	blk.Header.GroupHash = epoch.GetComputeGroupHash()
 	blk.Header.IORoot = batch.IORoot
 	blk.Header.StateRoot = batch.NewStateRoot
 
@@ -466,10 +473,6 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
-
-		if !epoch.IsComputeLeader() && !epoch.IsComputeBackupWorker() {
-			return nil
-		}
 
 		var emptyRoot hash.Hash
 		emptyRoot.Empty()
@@ -524,8 +527,9 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// Commit.
 	commit, err := commitment.SignComputeCommitment(*n.commonNode.Identity.NodeKey, &commitment.ComputeBody{
-		Header: blk.Header,
-		RakSig: batch.RakSig,
+		CommitteeID: epoch.GetComputeCommitteeID(),
+		Header:      blk.Header,
+		RakSig:      batch.RakSig,
 	})
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
@@ -535,87 +539,73 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		return
 	}
 
-	n.transitionLocked(StateWaitingForFinalize{
-		batchStartTime: state.batchStartTime,
-	})
-
-	span := opentracing.StartSpan("roothash.Commit", opentracing.ChildOf(state.batchSpanCtx))
-	defer span.Finish()
-
-	start = time.Now()
-	if err := n.commonNode.Roothash.Commit(n.ctx, n.commonNode.RuntimeID, commit.ToOpaqueCommitment()); err != nil {
-		n.logger.Error("failed to submit commitment",
+	// Publish commitment to merge committee.
+	spanPublish := opentracing.StartSpan("PublishComputeFinished(commitment)",
+		opentracing.ChildOf(state.batchSpanCtx),
+	)
+	err = n.commonNode.Group.PublishComputeFinished(state.batchSpanCtx, commit)
+	if err != nil {
+		spanPublish.Finish()
+		n.logger.Error("failed to publish results to committee",
 			"err", err,
 		)
 		n.abortBatchLocked(err)
 		return
 	}
-	crash.Here(crashPointBatchProposeAfter)
+	spanPublish.Finish()
 
-	roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
-}
+	// TODO: Add crash point.
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) handleNewEventLocked(ev *roothash.Event) {
-	dis := ev.DiscrepancyDetected
-	if dis == nil {
-		panic(fmt.Sprintf("unsupported event type: %+v", ev))
+	// TODO: Record commitment locally so we can submit it independently in case
+	//       it is not included in a block.
+
+	n.transitionLocked(StateWaitingForFinalize{
+		batchStartTime: state.batchStartTime,
+	})
+
+	if epoch.IsMergeMember() {
+		if n.mergeNode == nil {
+			n.logger.Error("scheduler says we are a merge worker, but we are not")
+		} else {
+			n.mergeNode.HandleResultsFromComputeWorkerLocked(state.batchSpanCtx, commit)
+		}
 	}
 
-	n.logger.Warn("discrepancy detected",
-		"io_root", dis.IORoot,
-		"header", dis.BlockHeader,
+	crash.Here(crashPointBatchProposeAfter)
+}
+
+// HandleNewEventLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
+	dis := ev.ComputeDiscrepancyDetected
+	if dis == nil {
+		// Ignore other events.
+		return
+	}
+
+	// If we are not waiting for an event, don't do anything.
+	state, ok := n.state.(StateWaitingForEvent)
+	if !ok {
+		return
+	}
+
+	// TODO: Check if this is for our committee.
+
+	n.logger.Warn("compute discrepancy detected",
+		"committee_id", dis.CommitteeID,
 	)
 
 	crash.Here(crashPointDiscrepancyDetectedAfter)
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
-	if n.commonNode.Group.GetEpochSnapshot().IsComputeBackupWorker() {
-		// Backup worker, start processing a batch.
-		n.logger.Info("backup worker activating and processing batch",
-			"io_root", dis.IORoot,
-			"header", dis.BlockHeader,
-		)
-
-		go func() {
-			// This may block if we are unable to fetch the batch from storage or if
-			// the external batch channel is full. Be sure to abort early in this case.
-			ctx, cancel := context.WithTimeout(n.ctx, queueExternalBatchTimeout)
-			defer cancel()
-
-			// Fetch batch from storage.
-			tree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, dis.IORoot)
-			if err != nil {
-				n.logger.Error("backup worker failed to fetch I/O root",
-					"err", err,
-				)
-				return
-			}
-
-			rawBatch, err := tree.Get(ctx, block.IoKeyInputs)
-			if err != nil {
-				n.logger.Error("backup worker failed to fetch batch",
-					"err", err,
-				)
-				return
-			}
-
-			var batch runtime.Batch
-			if err := batch.UnmarshalCBOR(rawBatch); err != nil {
-				n.logger.Error("backup worker failed to unmarshal batch",
-					"err", err,
-				)
-				return
-			}
-
-			if err := n.queueBatchBlocking(ctx, batch, dis.BlockHeader); err != nil {
-				n.logger.Error("backup worker failed to queue external batch",
-					"err", err,
-				)
-			}
-		}()
+	if !n.commonNode.Group.GetEpochSnapshot().IsComputeBackupWorker() {
+		return
 	}
+
+	// Backup worker, start processing a batch.
+	n.logger.Info("backup worker activating and processing batch")
+	n.startProcessingBatchLocked(state.batch, state.batchSpanCtx)
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -635,7 +625,7 @@ func (n *Node) handleExternalBatchLocked(batch runtime.Batch, batchSpanCtx opent
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.commonNode.CurrentBlock.Header.MostlyEqual(&hdr) {
-		n.startProcessingBatchLocked(batch, batchSpanCtx)
+		n.maybeStartProcessingBatchLocked(batch, batchSpanCtx)
 		return nil
 	}
 
@@ -676,16 +666,6 @@ func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
 
-	// Start watching roothash events.
-	events, eventsSub, err := n.commonNode.Roothash.WatchEvents(n.commonNode.RuntimeID)
-	if err != nil {
-		n.logger.Error("failed to subscribe to roothash events",
-			"err", err,
-		)
-		return
-	}
-	defer eventsSub.Close()
-
 	// We are initialized.
 	close(n.initCh)
 
@@ -721,13 +701,6 @@ func (n *Node) worker() {
 				defer n.commonNode.CrossNode.Unlock()
 				n.proposeBatchLocked(batch)
 			}()
-		case ev := <-events:
-			// Received an event.
-			func() {
-				n.commonNode.CrossNode.Lock()
-				defer n.commonNode.CrossNode.Unlock()
-				n.handleNewEventLocked(ev)
-			}()
 		case <-n.reselect:
 			// Recalculate select set.
 		}
@@ -736,6 +709,7 @@ func (n *Node) worker() {
 
 func NewNode(
 	commonNode *committee.Node,
+	mergeNode *mergeCommittee.Node,
 	worker host.Host,
 	cfg Config,
 ) (*Node, error) {
@@ -747,6 +721,7 @@ func NewNode(
 
 	n := &Node{
 		commonNode:       commonNode,
+		mergeNode:        mergeNode,
 		workerHost:       worker,
 		cfg:              cfg,
 		ctx:              ctx,

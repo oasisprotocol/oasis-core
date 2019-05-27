@@ -2,13 +2,14 @@ package commitment
 
 import (
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 )
@@ -20,21 +21,13 @@ var (
 	ErrRakSigInvalid          = errors.New("roothash/commitment: batch RAK signature invalid")
 	ErrNotInCommittee         = errors.New("roothash/commitment: node not part of committee")
 	ErrAlreadyCommitted       = errors.New("roothash/commitment: node already sent commitment")
-	ErrNoNodeVerifyPolicy     = errors.New("roothash/commitment: no node verify policy")
-	ErrNoStorageVerifyPolicy  = errors.New("roothash/commitment: no storage verify policy")
 	ErrNotBasedOnCorrectBlock = errors.New("roothash/commitment: submitted commitment is not based on correct block")
 	ErrDiscrepancyDetected    = errors.New("roothash/commitment: discrepancy detected")
 	ErrStillWaiting           = errors.New("roothash/commitment: still waiting for commits")
 	ErrInsufficientVotes      = errors.New("roothash/commitment: insufficient votes to finalize discrepancy resolution round")
+	ErrBadComputeCommits      = errors.New("roothash/commitment: bad compute commitments")
+	ErrInvalidCommitteeID     = errors.New("roothash/commitment: invalid committee ID")
 )
-
-// NodeVerifyPolicy is a function defining the policy for accepting
-// commitments from nodes.
-type NodeVerifyPolicy func(*scheduler.CommitteeNode) error
-
-// StorageVerifyPolicy is a function defining the policy for verifying
-// storage receipts in commitments from nodes.
-type StorageVerifyPolicy func(signature.PublicKey) error
 
 // NodeInfo contains information about a node that is member of a committee.
 type NodeInfo struct {
@@ -57,65 +50,56 @@ type Pool struct {
 	NodeInfo map[signature.MapKey]NodeInfo `codec:"node_info"`
 	// Commitments are the commitments in the pool.
 	//
-	// The stored commitment must be an *OpenComputeCommitment.
-	Commitments map[signature.MapKey]interface{} `codec:"commitments"`
-	// NodeVerifyPolicy is a function defining the policy for accepting
-	// commitments from nodes. If no policy is defined, all commitments will
-	// be rejected.
-	NodeVerifyPolicy NodeVerifyPolicy `codec:"-"`
-	// StorageVerifyPolicy is a function defining the policy for verifying
-	// storage receipts in commitments from nodes. If no policy is defined,
-	// all commitments will be rejected.
-	StorageVerifyPolicy StorageVerifyPolicy `codec:"-"`
+	// The type of conrete commitments depends on Committee.Kind and all
+	// commitments in the pool MUST be of the same type.
+	Commitments map[signature.MapKey]OpenCommitment `codec:"commitments"`
+	// Discrepancy is a flag signalling that a discrepancy has been detected.
+	Discrepancy bool `codec:"discrepancy"`
+	// NextTimeout is the time when the next call to TryFinalize(true) should
+	// be scheduled to be executed. Zero timestamp means that no timeout is
+	// to be scheduled.
+	NextTimeout time.Time `codec:"next_timeout"`
 }
 
-func (p *Pool) getRole(id signature.MapKey) (scheduler.Role, error) {
-	ni, ok := p.NodeInfo[id]
-	if !ok {
-		return scheduler.Invalid, ErrNotInCommittee
-	}
-
-	if p.NodeVerifyPolicy == nil {
-		return scheduler.Invalid, ErrNoNodeVerifyPolicy
-	}
-
-	n := p.Committee.Members[ni.CommitteeNode]
-	if err := p.NodeVerifyPolicy(n); err != nil {
-		return scheduler.Invalid, err
-	}
-
-	return n.Role, nil
+// GetCommitteeID returns the identifier of the committee this pool is collecting
+// commitments for.
+func (p *Pool) GetCommitteeID() hash.Hash {
+	return p.Committee.EncodedMembersHash()
 }
 
-// ResetCommitments resets the commitments in the pool.
+// ResetCommitments resets the commitments in the pool and clears the discrepancy
+// flag.
 func (p *Pool) ResetCommitments() {
 	if p.Commitments == nil || len(p.Commitments) > 0 {
-		p.Commitments = make(map[signature.MapKey]interface{})
+		p.Commitments = make(map[signature.MapKey]OpenCommitment)
 	}
+	p.Discrepancy = false
+	p.NextTimeout = time.Time{}
 }
 
-// AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (p *Pool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitment) error {
-	if p.Committee == nil {
+func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCommitment) error {
+	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
 	if p.Committee.Kind != scheduler.Compute {
 		return ErrInvalidCommitteeKind
 	}
 
-	id := commitment.Signature.PublicKey.ToMapKey()
+	id := openCom.Signature.PublicKey.ToMapKey()
 
-	// Check node identity/role.
-	role, err := p.getRole(id)
-	if err != nil {
-		return err
+	// Ensure that the node is actually a committee member. We do not enforce specific
+	// roles based on current discrepancy state to allow commitments arriving in any
+	// order (e.g., a backup worker can submit a commitment even before there is a
+	// discrepancy).
+	if _, ok := p.NodeInfo[id]; !ok {
+		return ErrNotInCommittee
 	}
 
-	// Check the commitment signature and de-serialize into header.
-	openCom, err := commitment.Open()
-	if err != nil {
-		return err
+	// Ensure the node did not already submit a commitment.
+	if _, ok := p.Commitments[id]; ok {
+		return ErrAlreadyCommitted
 	}
+
 	body := openCom.Body
 	header := &body.Header
 
@@ -131,14 +115,9 @@ func (p *Pool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitm
 			IORoot:        header.IORoot,
 			StateRoot:     header.StateRoot,
 		}
-		if !rak.Verify(api.RakSigContext, cbor.Marshal(batchSigMessage), body.RakSig[:]) {
+		if !rak.Verify(RakSigContext, cbor.Marshal(batchSigMessage), body.RakSig[:]) {
 			return ErrRakSigInvalid
 		}
-	}
-
-	// Ensure the node did not already submit a commitment.
-	if _, ok := p.Commitments[id]; ok {
-		return ErrAlreadyCommitted
 	}
 
 	// Check if the block is based on the previous block.
@@ -146,31 +125,40 @@ func (p *Pool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitm
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	// Check if the header refers to hashes in storage.
-	if p.StorageVerifyPolicy == nil {
-		return ErrNoStorageVerifyPolicy
+	// Verify that this is for the correct committee.
+	cID := p.GetCommitteeID()
+	if !cID.Equal(&body.CommitteeID) {
+		return ErrInvalidCommitteeID
 	}
-	if role == scheduler.Leader || role == scheduler.BackupWorker {
-		if err = p.StorageVerifyPolicy(header.StorageReceipt.PublicKey); err != nil {
-			return err
-		}
 
-		if err = header.VerifyStorageReceiptSignature(); err != nil {
-			return err
-		}
+	// Check if the header refers to hashes in storage.
+	// TODO: Actually check that the storage receipt was signed by a storage node.
+	if err := header.VerifyStorageReceiptSignature(); err != nil {
+		return err
 	}
 
 	if p.Commitments == nil {
-		p.Commitments = make(map[signature.MapKey]interface{})
+		p.Commitments = make(map[signature.MapKey]OpenCommitment)
 	}
 	p.Commitments[id] = *openCom
 
 	return nil
 }
 
-// CheckEnoughComputeCommitments checks if there is enough compute commitments in
-// the pool to be able to perform discrepancy detection.
-func (p *Pool) CheckEnoughComputeCommitments(wantPrimary, didTimeout bool) error {
+// AddComputeCommitment verifies and adds a new compute commitment to the pool.
+func (p *Pool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitment) error {
+	// Check the commitment signature and de-serialize into header.
+	openCom, err := commitment.Open()
+	if err != nil {
+		return err
+	}
+
+	return p.addOpenComputeCommitment(blk, openCom)
+}
+
+// CheckEnoughCommitments checks if there are enough commitments in the pool to be
+// able to perform discrepancy detection.
+func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	if p.Committee == nil {
 		return ErrNoCommittee
 	}
@@ -178,7 +166,7 @@ func (p *Pool) CheckEnoughComputeCommitments(wantPrimary, didTimeout bool) error
 	var commits, required int
 	for _, n := range p.Committee.Members {
 		var check bool
-		if wantPrimary {
+		if !p.Discrepancy {
 			check = n.Role == scheduler.Worker || n.Role == scheduler.Leader
 		} else {
 			check = n.Role == scheduler.BackupWorker
@@ -208,12 +196,12 @@ func (p *Pool) CheckEnoughComputeCommitments(wantPrimary, didTimeout bool) error
 	return nil
 }
 
-// DetectComputeDiscrepancy performs discrepancy detection on the current compute
-// commitments in the pool.
+// DetectDiscrepancy performs discrepancy detection on the current commitments in
+// the pool.
 //
-// The caller must verify that there is enough commitments in the pool.
-func (p *Pool) DetectComputeDiscrepancy() (*block.Header, error) {
-	var header, leaderHeader *block.Header
+// The caller must verify that there are enough commitments in the pool.
+func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
+	var header *block.Header
 	var discrepancyDetected bool
 
 	for id, ni := range p.NodeInfo {
@@ -227,30 +215,37 @@ func (p *Pool) DetectComputeDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		commit := c.(OpenComputeCommitment)
+		var h *block.Header
+		switch p.Committee.Kind {
+		case scheduler.Compute:
+			h = &c.(OpenComputeCommitment).Body.Header
+		case scheduler.Merge:
+			h = &c.(OpenMergeCommitment).Body.Header
+		default:
+			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
+		}
+
 		if header == nil {
-			header = &commit.Body.Header
+			header = h
 		}
-		if n.Role == scheduler.Leader {
-			leaderHeader = &commit.Body.Header
-		}
-		if !header.MostlyEqual(&commit.Body.Header) {
+		if !header.MostlyEqual(h) {
 			discrepancyDetected = true
 		}
 	}
 
-	if leaderHeader == nil || discrepancyDetected {
+	if header == nil || discrepancyDetected {
+		p.Discrepancy = true
 		return nil, ErrDiscrepancyDetected
 	}
 
-	return leaderHeader, nil
+	return header, nil
 }
 
-// ResolveComputeDiscrepancy performs discrepancy resolution on the current
-// compute commitments in the pool.
+// ResolveDiscrepancy performs discrepancy resolution on the current commitments
+// in the pool.
 //
-// The caller must verify that there is enough commitments in the pool.
-func (p *Pool) ResolveComputeDiscrepancy() (*block.Header, error) {
+// The caller must verify that there are enough commitments in the pool.
+func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
 	type voteEnt struct {
 		header *block.Header
 		tally  int
@@ -269,11 +264,20 @@ func (p *Pool) ResolveComputeDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		commit := c.(OpenComputeCommitment)
-		k := commit.Body.Header.EncodedHash()
+		var header *block.Header
+		switch p.Committee.Kind {
+		case scheduler.Compute:
+			header = &c.(OpenComputeCommitment).Body.Header
+		case scheduler.Merge:
+			header = &c.(OpenMergeCommitment).Body.Header
+		default:
+			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
+		}
+
+		k := header.EncodedHash()
 		if ent, ok := votes[k]; !ok {
 			votes[k] = &voteEnt{
-				header: &commit.Body.Header,
+				header: header,
 				tally:  1,
 			}
 		} else {
@@ -291,6 +295,166 @@ func (p *Pool) ResolveComputeDiscrepancy() (*block.Header, error) {
 	return nil, ErrInsufficientVotes
 }
 
+// TryFinalize attempts to finalize the commitments by performing discrepancy
+// detection and discrepancy resolution, based on the state of the pool. It may
+// request the caller to schedule timeouts by setting NextTimeout appropriately.
+func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout bool) (*block.Header, error) {
+	var err error
+	var rearmTimer bool
+	defer func() {
+		if rearmTimer {
+			// All timeouts are rounded to nearest second to ensure stable serialization.
+			p.NextTimeout = now.Add(roundTimeout).Round(time.Second)
+		} else {
+			p.NextTimeout = time.Time{}
+		}
+	}()
+
+	// Ensure that the required number of commitments are present.
+	if err = p.CheckEnoughCommitments(didTimeout); err != nil {
+		if err != ErrStillWaiting {
+			return nil, err
+		}
+
+		if didTimeout {
+			if p.Discrepancy {
+				// This was a forced finalization call due to timeout,
+				// and the round was in the discrepancy state.  Give up.
+				return nil, ErrInsufficientVotes
+			}
+
+			// This is the fast path and the round timer expired.
+			//
+			// Transition to the discrepancy state so the backup workers
+			// process the round, assuming that it is possible to do so.
+			p.Discrepancy = true
+			return nil, ErrDiscrepancyDetected
+		}
+
+		// Insufficient commitments for finalization, wait.
+		rearmTimer = true
+		return nil, err
+	}
+
+	// Attempt to finalize, based on the discrepancy flag.
+	var header *block.Header
+	if !p.Discrepancy {
+		// Fast path -- no discrepancy yet, check for one.
+		header, err = p.DetectDiscrepancy()
+		if err != nil {
+			rearmTimer = true
+			return nil, err
+		}
+	} else {
+		// Discrepancy resolution.
+		header, err = p.ResolveDiscrepancy()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return header, nil
+}
+
+// AddMergeCommitment verifies and adds a new merge commitment to the pool.
+//
+// Any compute commitments are added to the provided pool.
+func (p *Pool) AddMergeCommitment(
+	blk *block.Block,
+	commitment *MergeCommitment,
+	ccPool *MultiPool,
+) error {
+	if p.Committee == nil || p.NodeInfo == nil {
+		return ErrNoCommittee
+	}
+	if p.Committee.Kind != scheduler.Merge {
+		return ErrInvalidCommitteeKind
+	}
+
+	id := commitment.Signature.PublicKey.ToMapKey()
+
+	// Ensure that the node is actually a committee member. We do not enforce specific
+	// roles based on current discrepancy state to allow commitments arriving in any
+	// order (e.g., a backup worker can submit a commitment even before there is a
+	// discrepancy).
+	if _, ok := p.NodeInfo[id]; !ok {
+		return ErrNotInCommittee
+	}
+
+	// Ensure the node did not already submit a commitment.
+	if _, ok := p.Commitments[id]; ok {
+		return ErrAlreadyCommitted
+	}
+
+	// Check the commitment signature and de-serialize.
+	openCom, err := commitment.Open()
+	if err != nil {
+		return err
+	}
+	body := openCom.Body
+	header := &body.Header
+
+	// Check if the block is based on the previous block.
+	if !header.IsParentOf(&blk.Header) {
+		return ErrNotBasedOnCorrectBlock
+	}
+
+	// Check compute commitments -- all commitments must be valid and there
+	// must be no discrepancy as the merge committee nodes are supposed to
+	// check this.
+	var hasError bool
+	for _, cc := range body.ComputeCommits {
+		_, err = ccPool.AddComputeCommitment(blk, &cc)
+		switch err {
+		case nil:
+		case ErrAlreadyCommitted:
+			// Ignore duplicate commitments.
+			continue
+		default:
+			// Only set a flag so that we add all valid compute commitments
+			// to the compute committment pool.
+			hasError = true
+		}
+	}
+	if hasError {
+		return ErrBadComputeCommits
+	}
+
+	// There must be enough compute commits for all committees.
+	if err = ccPool.CheckEnoughCommitments(); err != nil {
+		return ErrBadComputeCommits
+	}
+
+	for _, sp := range ccPool.Committees {
+		if !sp.Discrepancy {
+			// If there was no discrepancy yet there must not be one now.
+			_, err = sp.DetectDiscrepancy()
+			if err != nil {
+				return ErrBadComputeCommits
+			}
+		} else {
+			// If there was a discrepancy before it must be resolved now.
+			_, err = sp.ResolveDiscrepancy()
+			if err != nil {
+				return ErrBadComputeCommits
+			}
+		}
+	}
+
+	// Check if the header refers to hashes in storage.
+	// TODO: Actually check that the storage receipt was signed by a storage node.
+	if err = header.VerifyStorageReceiptSignature(); err != nil {
+		return err
+	}
+
+	if p.Commitments == nil {
+		p.Commitments = make(map[signature.MapKey]OpenCommitment)
+	}
+	p.Commitments[id] = *openCom
+
+	return nil
+}
+
 // GetCommitteeNode returns a committee node given its public key.
 func (p *Pool) GetCommitteeNode(id signature.PublicKey) (*scheduler.CommitteeNode, error) {
 	ni, ok := p.NodeInfo[id.ToMapKey()]
@@ -299,4 +463,98 @@ func (p *Pool) GetCommitteeNode(id signature.PublicKey) (*scheduler.CommitteeNod
 	}
 
 	return p.Committee.Members[ni.CommitteeNode], nil
+}
+
+// GetComputeCommitments returns a list of compute commitments in the pool.
+//
+// Panics if the pool contains non-compute commitments.
+func (p *Pool) GetComputeCommitments() (result []ComputeCommitment) {
+	for _, c := range p.Commitments {
+		commit := c.(OpenComputeCommitment)
+		result = append(result, commit.ComputeCommitment)
+	}
+	return
+}
+
+// IsTimeout returns true if the time is up for pool's TryFinalize to be called.
+func (p *Pool) IsTimeout(now time.Time) bool {
+	return !p.NextTimeout.IsZero() && !p.NextTimeout.After(now)
+}
+
+// MultiPool contains pools for multiple committees and routes operations to
+// multiple committees based on commitments' committee IDs.
+type MultiPool struct {
+	Committees map[hash.Hash]*Pool `codec:"committees"`
+}
+
+// AddComputeCommitment verifies and adds a new compute commitment to the pool.
+func (m *MultiPool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitment) (*Pool, error) {
+	// Check the commitment signature and de-serialize into header.
+	openCom, err := commitment.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	p := m.Committees[openCom.Body.CommitteeID]
+	if p == nil {
+		return nil, ErrInvalidCommitteeID
+	}
+
+	return p, p.addOpenComputeCommitment(blk, openCom)
+}
+
+// CheckEnoughCommitments checks if there are enough commitments in the pool to be
+// able to perform discrepancy detection.
+//
+// Note that this checks all committees in the multi-pool and returns an error if
+// any doesn't have enoguh commitments.
+func (m *MultiPool) CheckEnoughCommitments() error {
+	for _, p := range m.Committees {
+		if err := p.CheckEnoughCommitments(false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetComputeCommitments returns a list of compute commitments in the pool.
+//
+// Panics if the pool contains non-compute commitments.
+func (m *MultiPool) GetComputeCommitments() (result []ComputeCommitment) {
+	for _, p := range m.Committees {
+		for _, c := range p.Commitments {
+			commit := c.(OpenComputeCommitment)
+			result = append(result, commit.ComputeCommitment)
+		}
+	}
+	return
+}
+
+// GetTimeoutCommittees returns a list of committee pools that are up for their
+// TryFinalize to be called.
+func (m *MultiPool) GetTimeoutCommittees(now time.Time) (result []*Pool) {
+	for _, p := range m.Committees {
+		if p.IsTimeout(now) {
+			result = append(result, p)
+		}
+	}
+	return
+}
+
+// GetNextTimeout returns the minimum next timeout of all committee pools.
+func (m *MultiPool) GetNextTimeout() (timeout time.Time) {
+	for _, p := range m.Committees {
+		if timeout.IsZero() || (!p.NextTimeout.IsZero() && p.NextTimeout.Before(timeout)) {
+			timeout = p.NextTimeout
+		}
+	}
+	return
+}
+
+// ResetCommitments resets the commitments in the pool and clears their discrepancy
+// flags.
+func (m *MultiPool) ResetCommitments() {
+	for _, p := range m.Committees {
+		p.ResetCommitments()
+	}
 }
