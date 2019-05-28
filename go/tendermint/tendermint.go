@@ -18,7 +18,6 @@ import (
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmpex "github.com/tendermint/tendermint/p2p/pex"
-	tmpriv "github.com/tendermint/tendermint/privval"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -374,16 +373,9 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
-	tendermintPV := tmpriv.LoadOrGenFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
-	tenderValIdent := crypto.PrivateKeyToTendermint(t.nodeKey)
-	if !tenderValIdent.Equals(tendermintPV.Key.PrivKey) {
-		// The private validator must have been just generated.  Force
-		// it to use the oasis identity rather than the new key.
-		t.Logger.Debug("fixing up tendermint private validator identity")
-		tendermintPV.Key.PrivKey = tenderValIdent
-		tendermintPV.Key.PubKey = tenderValIdent.PubKey()
-		tendermintPV.Key.Address = tendermintPV.Key.PubKey.Address()
-		tendermintPV.Save()
+	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.nodeKey)
+	if err != nil {
+		return err
 	}
 
 	tmGenDoc, err := t.getGenesis(tenderConfig)
