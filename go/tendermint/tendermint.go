@@ -36,8 +36,8 @@ import (
 	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
-	"github.com/oasislabs/ekiden/go/tendermint/internal/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
