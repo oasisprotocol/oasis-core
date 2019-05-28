@@ -21,8 +21,10 @@ import (
 )
 
 const (
+	// NodeKeyPubFilename is the filename of the PEM encoded node public key.
+	NodeKeyPubFilename = "identity_pub.pem"
+
 	nodeKeyPrivFilename = "identity.pem"
-	nodeKeyPubFilename  = "identity_pub.pem"
 
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"
@@ -74,7 +76,7 @@ func doLoadOrGenerate(dataDir string, shouldGenerate bool) (*Identity, error) {
 		return nil, err
 	}
 	var nodePub signature.PublicKey
-	if err := nodePub.LoadPEM(filepath.Join(dataDir, nodeKeyPubFilename), &nodeKey); err != nil {
+	if err := nodePub.LoadPEM(filepath.Join(dataDir, NodeKeyPubFilename), &nodeKey); err != nil {
 		return nil, err
 	}
 

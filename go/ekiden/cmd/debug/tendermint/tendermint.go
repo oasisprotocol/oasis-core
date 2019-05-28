@@ -10,11 +10,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
+	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/inspector"
-	tmconfig "github.com/tendermint/tendermint/config"
-	tmpriv "github.com/tendermint/tendermint/privval"
 )
 
 var (
@@ -83,14 +84,18 @@ func showNodeID(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	tenderConfig := tmconfig.DefaultConfig()
-	tendermintDataDir := filepath.Join(cmdCommon.DataDir(), "tendermint")
-	tenderConfig.SetRoot(tendermintDataDir)
+	logger := logging.GetLogger("cmd/debug/tendermint/show-node-id")
 
-	// LoadFilePV will already exit on errors
-	tendermintPV := tmpriv.LoadFilePV(tenderConfig.PrivValidatorKeyFile(), tenderConfig.PrivValidatorStateFile())
+	var pubKey signature.PublicKey
 
-	fmt.Println(tendermintPV.Key.Address)
+	if err := pubKey.LoadPEM(filepath.Join(cmdCommon.DataDir(), identity.NodeKeyPubFilename), nil); err != nil {
+		logger.Error("failed to open node identity public key",
+			"err", err,
+		)
+		return
+	}
+
+	fmt.Println(crypto.PublicKeyToTendermint(&pubKey).Address())
 }
 
 // Register registers the tendermint sub-command and all of it's children.
