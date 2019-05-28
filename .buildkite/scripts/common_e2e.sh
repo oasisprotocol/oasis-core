@@ -440,8 +440,8 @@ run_seed_node() {
         --datadir ${data_dir} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[seed-node-${id}] /" &
 
-    # 'show-node-id' relies on key file to be present
-    while [ ! -f "${data_dir}/tendermint/config/priv_validator_key.json" ]
+    # 'show-node-id' relies on key file to be present.
+    while [ ! -f "${data_dir}/identity_pub.pem" ]
     do
       echo "Waiting for seed node to start..."
       sleep 2
