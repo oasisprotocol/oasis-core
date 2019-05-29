@@ -42,6 +42,18 @@ pub struct SignedInitResponse {
     pub signature: Signature,
 }
 
+/// Key manager replication request.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ReplicateRequest {
+    // Empty.
+}
+
+/// Key manager replication response.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ReplicateResponse {
+    pub master_secret: MasterSecret,
+}
+
 /// Request runtime/contract id tuple.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RequestIds {
@@ -153,6 +165,8 @@ pub struct SignedPublicKey {
 pub enum KeyManagerError {
     #[fail(display = "client session is not authenticated")]
     NotAuthenticated,
+    #[fail(display = "client session authentication is invalid")]
+    InvalidAuthentication,
     #[fail(display = "key manager is not initialized")]
     NotInitialized,
     #[fail(display = "key manager is already initialized")]
@@ -165,4 +179,6 @@ runtime_api! {
     pub fn get_public_key(RequestIds) -> Option<SignedPublicKey>;
 
     pub fn get_long_term_public_key(RequestIds) -> Option<SignedPublicKey>;
+
+    pub fn replicate_master_secret(ReplicateRequest) -> ReplicateResponse;
 }

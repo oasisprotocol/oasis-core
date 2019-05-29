@@ -69,4 +69,8 @@ impl KeyManagerClient for MockClient {
 
         Box::new(future::ok(result))
     }
+
+    fn replicate_master_secret(&self, _ctx: Context) -> BoxFuture<Option<MasterSecret>> {
+        unimplemented!();
+    }
 }

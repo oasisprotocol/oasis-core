@@ -13,8 +13,9 @@ use x25519_dalek;
 use zeroize::Zeroize;
 
 use ekiden_keymanager_api::{
-    ContractKey, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey, RequestIds,
-    SignedInitResponse, SignedPublicKey, StateKey, INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
+    ContractKey, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey,
+    ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
+    INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
 use ekiden_runtime::{
     common::{
@@ -253,6 +254,16 @@ impl Kdf {
             timestamp,
             signature,
         })
+    }
+
+    // Replciate master secret.
+    pub fn replicate_master_secret(&self) -> Fallible<ReplicateResponse> {
+        let inner = self.inner.read().unwrap();
+
+        match inner.master_secret {
+            Some(master_secret) => Ok(ReplicateResponse { master_secret }),
+            None => Err(KeyManagerError::NotInitialized.into()),
+        }
     }
 
     fn load_master_secret() -> Option<Vec<u8>> {

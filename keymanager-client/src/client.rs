@@ -189,5 +189,13 @@ impl KeyManagerClient for RemoteClient {
                     None => Ok(None),
                 }),
         )
+
+    fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Option<MasterSecret>> {
+        Box::new(
+            self.inner
+                .rpc_client
+                .replicate_master_secret(ctx, ReplicateRequest {})
+                .and_then(move |rsp| Ok(Some(rsp.master_secret))),
+        )
     }
 }
