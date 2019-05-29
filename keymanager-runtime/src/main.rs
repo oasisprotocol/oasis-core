@@ -23,24 +23,19 @@ use ekiden_runtime::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
         Context as RpcContext,
     },
-    RpcDemux, RpcDispatcher, TxnDispatcher, BUILD_INFO,
+    RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
 use self::kdf::Kdf;
 
 /// Initialize the Kdf.
-fn init(_req: &InitRequest, ctx: &mut RpcContext) -> Fallible<InitResponse> {
+fn init_kdf(_req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
     // TODO: Based on the InitRequest, and persisted state (if any):
     //  * Load the persisted state.
     //  * Generate a new master secret.
     //  * Replicate the master secret.
 
-    let checksum = Kdf::global().init(&ctx)?;
-
-    Ok(InitResponse {
-        is_secure: BUILD_INFO.is_secure,
-        checksum,
-    })
+    Kdf::global().init(&ctx)
 }
 
 fn main() {
@@ -64,7 +59,7 @@ fn main() {
                 RpcMethodDescriptor {
                     name: "init".to_string(),
                 },
-                init,
+                init_kdf,
             ),
             true,
         );

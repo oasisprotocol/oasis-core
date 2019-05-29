@@ -6,14 +6,15 @@ use failure::Fallible;
 use lazy_static::lazy_static;
 use lru::LruCache;
 use rand::{rngs::OsRng, Rng};
+use serde_cbor;
 use sgx_isa::Keypolicy;
 use sp800_185::{CShake, KMac};
 use x25519_dalek;
 use zeroize::Zeroize;
 
 use ekiden_keymanager_api::{
-    ContractKey, KeyManagerError, MasterSecret, PrivateKey, PublicKey, RequestIds, SignedPublicKey,
-    StateKey, PUBLIC_KEY_CONTEXT,
+    ContractKey, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey, RequestIds,
+    SignedInitResponse, SignedPublicKey, StateKey, INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
 use ekiden_runtime::{
     common::{
@@ -147,7 +148,7 @@ impl Kdf {
 
     /// Initialize the KDF internal state.
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    pub fn init(&self, ctx: &RpcContext) -> Fallible<Vec<u8>> {
+    pub fn init(&self, ctx: &RpcContext) -> Fallible<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
 
         // Initialization should be idempotent.
@@ -187,7 +188,23 @@ impl Kdf {
         f.finalize(&mut k);
         inner.checksum = Some(k.to_vec());
 
-        return Ok(inner.checksum.as_ref().unwrap().clone());
+        // Build the response and sign it with the RAK.
+        let init_response = InitResponse {
+            is_secure: BUILD_INFO.is_secure,
+            checksum: inner.checksum.as_ref().unwrap().clone(),
+        };
+
+        let body = serde_cbor::to_vec(&init_response)?;
+        let signature = inner
+            .signer
+            .as_ref()
+            .unwrap()
+            .sign(&INIT_RESPONSE_CONTEXT, &body)?;
+
+        Ok(SignedInitResponse {
+            init_response,
+            signature,
+        })
     }
 
     // Get or create keys.

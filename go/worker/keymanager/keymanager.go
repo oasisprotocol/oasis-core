@@ -3,9 +3,11 @@ package keymanager
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,6 +22,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/ias"
+	"github.com/oasislabs/ekiden/go/keymanager/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -40,10 +43,17 @@ const (
 var (
 	_ service.BackgroundService = (*worker)(nil)
 
+	errMalformedResponse = fmt.Errorf("worker/keymanager: malformed response from worker")
+	initResponseContext  = []byte("EkKmIniR")
+
 	emptyRoot hash.Hash
+
+	testPublicKey signature.PublicKey
 )
 
 type worker struct {
+	sync.Mutex
+
 	enabled bool
 
 	ctx       context.Context
@@ -57,7 +67,8 @@ type worker struct {
 	localStorage *host.LocalStorage
 	grpc         *grpc.Server
 
-	registration *registration.Registration
+	registration  *registration.Registration
+	enclaveStatus *api.SignedInitResponse
 
 	logger *logging.Logger
 }
@@ -162,7 +173,7 @@ func (w *worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 			w.logger.Error("malformed response from worker",
 				"response", response,
 			)
-			return nil, fmt.Errorf("worker/keymanager: malformed response from worker")
+			return nil, errMalformedResponse
 		}
 
 		return resp.Response, nil
@@ -173,7 +184,11 @@ func (w *worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 	}
 }
 
-func (w *worker) onProcessStart(proto *protocol.Protocol) error {
+func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTEE) error {
+	// TODO: A more natural place to do this is probably on node
+	// registration, or better yet periodically based on the BFT
+	// component.
+
 	// Initialize the key manager.
 	type InitRequest struct {
 		// TODO: At some point this needs the policy, checksum, peers, etc.
@@ -182,6 +197,9 @@ func (w *worker) onProcessStart(proto *protocol.Protocol) error {
 		Method string      `codec:"method"`
 		Args   InitRequest `codec:"args"`
 	}
+
+	// XXX: Query the BFT component for the policy, checksum, peers (as available),
+	// and repeatedly try to initialize the KM enclave.
 
 	call := InitCall{
 		Method: "init",
@@ -194,24 +212,127 @@ func (w *worker) onProcessStart(proto *protocol.Protocol) error {
 		},
 	}
 
-	resp, err := proto.Call(w.ctx, req)
+	response, err := proto.Call(w.ctx, req)
 	if err != nil {
-		w.logger.Error("failed to initialize key manager enclave",
+		w.logger.Error("failed to initialize enclave",
 			"err", err,
 		)
 		return err
 	}
+	if response.Error != nil {
+		w.logger.Error("error initializing enclave",
+			"err", response.Error.Message,
+		)
+		return fmt.Errorf("worker/keymanager: error initializing enclave: %s", response.Error.Message)
+	}
 
-	// TODO: Do something clever with the response.
-	/*
-		type InitResponse struct {
-			IsSecure bool   `codec:"is_secure"`
-			Checksum []byte `codec:"checksum"`
+	resp := response.WorkerLocalRPCCallResponse
+	if resp == nil {
+		w.logger.Error("malformed response initializing enclave",
+			"response", response,
+		)
+		return errMalformedResponse
+	}
+
+	innerResp, err := extractMessageResponsePayload(resp.Response)
+	if err != nil {
+		w.logger.Error("failed to extract rpc response payload",
+			"err", err,
+		)
+		return errors.Wrap(err, "worker/keymanager: failed to extract rpc response payload")
+	}
+
+	var signedInitResp api.SignedInitResponse
+	if err = cbor.Unmarshal(innerResp, &signedInitResp); err != nil {
+		w.logger.Error("failed to parse response initializing enclave",
+			"err", err,
+			"response", innerResp,
+		)
+		return errors.Wrap(err, "worker/keymanager: failed to parse response initializing enclave")
+	}
+
+	// Validate the signature.
+	if tee != nil {
+		var signingKey *signature.PublicKey
+
+		switch tee.Hardware {
+		case node.TEEHardwareInvalid:
+			signingKey = &testPublicKey
+		case node.TEEHardwareIntelSGX:
+			signingKey = &tee.RAK
+		default:
+			return fmt.Errorf("worker/keymanager: unknown TEE hardware: %v", tee.Hardware)
 		}
-	*/
-	_ = resp
+
+		rawInitResp := cbor.Marshal(signedInitResp.InitResponse)
+		if !signingKey.Verify(initResponseContext, rawInitResp, signedInitResp.Signature) {
+			w.logger.Error("failed to validate initialization response signature")
+			return fmt.Errorf("worker/keymanager: failed to validate initialization response signature")
+		}
+	}
+
+	if !signedInitResp.InitResponse.IsSecure {
+		w.logger.Warn("Key manager enclave build is INSECURE")
+	}
+
+	w.logger.Info("Key manager initialized",
+		"checksum", hex.EncodeToString(signedInitResp.InitResponse.Checksum),
+	)
+
+	// Cache the key manager enclave status.
+	w.Lock()
+	defer w.Unlock()
+
+	w.enclaveStatus = &signedInitResp
 
 	return nil
+}
+
+func extractMessageResponsePayload(raw []byte) ([]byte, error) {
+	// Because of how serde_cbor serializes unit enums, simply de-serializing
+	// the response into a struct is not possible.  Do this the hard way.
+	//
+	// This could alternatively be done by changing the rust side, or maybe
+	// this should be a general protocol helper, but this is probably the
+	// only place that will need such a thing.
+	//
+	// See: runtime/src/rcp/types.rs
+	type MessageResponseBody struct {
+		Status string      `codec:""`
+		Value  interface{} `codec:""`
+	}
+	type MessageResponse struct {
+		Type  string `codec:""`
+		Inner struct {
+			Body MessageResponseBody `codec:"body"`
+		} `codec:""`
+	}
+
+	var msg MessageResponse
+	if err := cbor.Unmarshal(raw, &msg); err != nil {
+		return nil, errors.Wrap(err, "malformed message envelope")
+	}
+
+	if mType := msg.Type; mType != "Response" {
+		return nil, fmt.Errorf("message is not a response: '%s'", mType)
+	}
+
+	switch msg.Inner.Body.Status {
+	case "Success":
+	case "Error":
+		if msg.Inner.Body.Value == nil {
+			return nil, fmt.Errorf("unknown rpc response failure (nil)")
+		}
+		mErr, ok := msg.Inner.Body.Value.(string)
+		if !ok {
+			return nil, fmt.Errorf("unknown rpc response failure (%T)", msg.Inner.Body.Value)
+		}
+		return nil, fmt.Errorf("rpc failure: '%s'", mErr)
+	default:
+		return nil, fmt.Errorf("unknown rpc response status: '%s'", msg.Inner.Body.Status)
+	}
+
+	return cbor.Marshal(msg.Inner.Body.Value), nil
 }
 
 func (w *worker) onNodeRegistration(n *node.Node) error {
@@ -223,11 +344,21 @@ func (w *worker) onNodeRegistration(n *node.Node) error {
 		return err
 	}
 
+	// Pull out the enclave status to be appended to the node registration.
+	w.Lock()
+	enclaveStatus := w.enclaveStatus
+	w.Unlock()
+	if enclaveStatus == nil {
+		w.logger.Error("enclave not initialized")
+		return fmt.Errorf("worker/keymanager: enclave not initialized")
+	}
+
 	// Add the key manager runtime to the node descriptor.  Done here instead
 	// of in the registration's generic handler since the registration handler
 	// only knows about normal runtimes.
 	rtDesc := &node.Runtime{
-		ID: w.runtimeID,
+		ID:        w.runtimeID,
+		ExtraInfo: cbor.Marshal(enclaveStatus),
 	}
 	rtDesc.Capabilities.TEE = tee
 	n.Runtimes = append(n.Runtimes, rtDesc)
@@ -331,4 +462,5 @@ func RegisterFlags(cmd *cobra.Command) {
 
 func init() {
 	emptyRoot.Empty()
+	_ = testPublicKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
 }

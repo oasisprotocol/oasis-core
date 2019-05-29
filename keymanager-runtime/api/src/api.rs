@@ -30,6 +30,18 @@ pub struct InitResponse {
     pub checksum: Vec<u8>,
 }
 
+/// Context used for th einit response signature.
+pub const INIT_RESPONSE_CONTEXT: [u8; 8] = *b"EkKmIniR";
+
+/// Signed InitResponse.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SignedInitResponse {
+    /// InitResponse.
+    pub init_response: InitResponse,
+    /// Sign(init_response).
+    pub signature: Signature,
+}
+
 /// Request runtime/contract id tuple.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RequestIds {
