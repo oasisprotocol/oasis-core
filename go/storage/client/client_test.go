@@ -9,13 +9,13 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/beacon/insecure"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	"github.com/oasislabs/ekiden/go/registry/memory"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	"github.com/oasislabs/ekiden/go/scheduler/trivial"
-	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
 func TestClientWorker(t *testing.T) {
@@ -36,10 +36,14 @@ func TestClientWorker(t *testing.T) {
 	// Initialize storage client
 	client, err := New(ctx, timeSource, scheduler, registry)
 	require.NoError(err, "NewStorageClient")
+	// Create mock root hash and id hash for GetValue().
+	var root, id hash.Hash
+	root.FromBytes([]byte("non-existing"))
+	id.FromBytes([]byte("key"))
 
 	// Storage should not yet be available
-	r, err := client.Get(ctx, api.HashStorageKey([]byte("key")))
-	require.EqualError(err, ErrStorageNotAvailable.Error(), "storage client get before initialisation")
+	r, err := client.GetValue(ctx, root, id)
+	require.EqualError(err, ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
 
 	// Advance the epoch.
@@ -52,7 +56,7 @@ func TestClientWorker(t *testing.T) {
 
 	require.NotNil(connectedNode, "storage node should be connected")
 	// TimeOut is expected, as test nodes do not actually start storage worker.
-	r, err = client.Get(ctx, api.HashStorageKey([]byte("key")))
+	r, err = client.GetValue(ctx, root, id)
 	require.Error(err, "storage client should error")
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")
