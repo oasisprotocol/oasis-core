@@ -5,6 +5,7 @@ ARG GO_VERSION=1.12.5
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.2.0
 ARG GOLANGCILINT_VERSION=1.15.0
+ARG RUST_NIGHTLY_VERSION=2019-05-30
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -39,7 +40,7 @@ RUN wget https://github.com/google/protobuf/releases/download/v${GO_PROTOC_VERSI
 
 # Install Rust.
 RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
-    sh rustup.sh -y --default-toolchain nightly-2019-03-21 && \
+    sh rustup.sh -y --default-toolchain nightly-${RUST_NIGHTLY_VERSION} && \
     rustup target add x86_64-fortanix-unknown-sgx && \
     rustup component add rustfmt && \
     cargo install fortanix-sgx-tools sgxs-tools && \

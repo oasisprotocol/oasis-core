@@ -39,7 +39,7 @@ all: tools runtimes rust go
 
 tools:
 	@$(ECHO) "$(CYAN)*** Building Rust tools...$(OFF)"
-	@cargo install --force --path tools
+	@cargo install --quiet --path tools || true
 
 runtimes:
 	@$(ECHO) "$(CYAN)*** Building runtimes...$(OFF)"
