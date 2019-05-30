@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
+	mrand "math/rand"
 	"os"
 	"testing"
 	"time"
@@ -15,9 +16,14 @@ import (
 )
 
 const (
-	testServer1Address = "127.0.0.1:36578"
-	testServer2Address = "127.0.0.1:36579"
+	testServerPortBase = 36578
+	testServerPortMax  = 37000
 )
+
+func generateServerAddress() string {
+	port := testServerPortBase + mrand.Intn(testServerPortMax-testServerPortBase)
+	return fmt.Sprintf("127.0.0.1:%d", port)
+}
 
 func generateValidator(t *testing.T, index int) *api.Validator {
 	privKey, err := signature.NewPrivateKey(rand.Reader)
@@ -42,6 +48,9 @@ func generateSeed(t *testing.T, index int) *SeedNode {
 }
 
 func TestBootstrapGenesis(t *testing.T) {
+	testServer1Address := generateServerAddress()
+	testServer2Address := generateServerAddress()
+
 	numValidators := 3
 	numSeeds := 0
 
@@ -224,6 +233,9 @@ func TestBootstrapGenesis(t *testing.T) {
 }
 
 func TestBootstrapSeeds(t *testing.T) {
+	testServer1Address := generateServerAddress()
+	testServer2Address := generateServerAddress()
+
 	numValidators := 0
 	numSeeds := 3
 
@@ -336,7 +348,7 @@ func TestBootstrapSeeds(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Seeds should be immediately available to a client.
-	rcvSeeds, serr = getSeeds(testServer1Address)
+	rcvSeeds, serr = getSeeds(testServer2Address)
 	require.NoError(t, serr, "getting seeds must not fail")
 	checkSeeds(rcvSeeds)
 }
