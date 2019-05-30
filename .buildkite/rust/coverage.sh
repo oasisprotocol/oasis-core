@@ -36,6 +36,9 @@ set -x
 # the build cache.
 export CARGO_TARGET_DIR=/tmp/coverage_target
 
+# Required as tarpaulin doesn't honor .cargo/config.
+export RUSTFLAGS="-C target-feature=+aes,+ssse3"
+
 # Calculate coverage
 set +x
 cargo tarpaulin \
