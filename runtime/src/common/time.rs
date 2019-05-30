@@ -1,7 +1,7 @@
 //! Runtime time source.
 use std::{
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use lazy_static::lazy_static;
@@ -34,6 +34,11 @@ pub fn insecure_posix_time() -> i64 {
     inner.timestamp = now;
 
     inner.timestamp
+}
+
+// Returns `insecure_posix_time` as SystemTime.
+pub fn insecure_posix_system_time() -> SystemTime {
+    UNIX_EPOCH + Duration::from_secs(insecure_posix_time() as u64)
 }
 
 /// Force update the minimum timestamp from a semi-trusted source (eg: the AVR

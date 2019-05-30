@@ -49,6 +49,7 @@ pub trait Initializer: Send + Sync {
         &self,
         protocol: &Arc<Protocol>,
         rak: &Arc<RAK>,
+        rpc_demux: &mut RpcDemux,
         rpc_dispatcher: &mut RpcDispatcher,
         txn_dispatcher: &mut TxnDispatcher,
     );
@@ -56,16 +57,19 @@ pub trait Initializer: Send + Sync {
 
 impl<F> Initializer for F
 where
-    F: Fn(&Arc<Protocol>, &Arc<RAK>, &mut RpcDispatcher, &mut TxnDispatcher) + Send + Sync,
+    F: Fn(&Arc<Protocol>, &Arc<RAK>, &mut RpcDemux, &mut RpcDispatcher, &mut TxnDispatcher)
+        + Send
+        + Sync,
 {
     fn init(
         &self,
         protocol: &Arc<Protocol>,
         rak: &Arc<RAK>,
+        rpc_demux: &mut RpcDemux,
         rpc_dispatcher: &mut RpcDispatcher,
         txn_dispatcher: &mut TxnDispatcher,
     ) {
-        (*self)(protocol, rak, rpc_dispatcher, txn_dispatcher)
+        (*self)(protocol, rak, rpc_demux, rpc_dispatcher, txn_dispatcher)
     }
 }
 
@@ -131,6 +135,7 @@ impl Dispatcher {
             initializer.init(
                 &protocol,
                 &self.rak,
+                &mut rpc_demux,
                 &mut rpc_dispatcher,
                 &mut txn_dispatcher,
             );
