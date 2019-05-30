@@ -105,6 +105,10 @@ type Runtime struct {
 
 	// Capabilities are the node's capabilities for a given runtime.
 	Capabilities Capabilities `codec:"capabilities"`
+
+	// ExtraInfo is the extra per node + per runtime opaque data associated
+	// with the current instance.
+	ExtraInfo []byte `codec:"extra_info"`
 }
 
 func (r *Runtime) fromProto(pb *pbCommon.NodeRuntime) error {
@@ -118,6 +122,8 @@ func (r *Runtime) fromProto(pb *pbCommon.NodeRuntime) error {
 		}
 	}
 
+	r.ExtraInfo = pb.GetExtraInfo()
+
 	return nil
 }
 
@@ -130,6 +136,8 @@ func (r *Runtime) toProto() *pbCommon.NodeRuntime {
 	if r.Capabilities.TEE != nil {
 		pb.Capabilities.Tee = r.Capabilities.TEE.toProto()
 	}
+
+	pb.ExtraInfo = r.ExtraInfo
 
 	return pb
 }
