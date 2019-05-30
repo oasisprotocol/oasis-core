@@ -193,7 +193,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 				if err = mkvsReceipt.Open(&rb); err != nil {
 					b.Fatalf("failed to Open(): %v", err)
 				}
-				newRoot = rb.Root
+				newRoot = rb.Roots[0]
 				b.StartTimer()
 			}
 		})

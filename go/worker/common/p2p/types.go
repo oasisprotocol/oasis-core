@@ -3,6 +3,7 @@ package p2p
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
@@ -28,9 +29,8 @@ type Message struct {
 }
 
 type LeaderBatchDispatch struct {
-	// BatchHash is the hash of the dispatched batch which can be
-	// used to fetch the batch from storage.
-	BatchHash hash.Hash
+	// Batch is the dispatched transaction batch.
+	Batch runtime.Batch
 
 	// Header is the block header on which the batch should be
 	// based.

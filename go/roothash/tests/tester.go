@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -108,8 +109,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 		require.EqualValues(header.Version, 0, "block version")
 		require.EqualValues(0, header.Round, "block round")
 		require.Equal(block.Normal, header.HeaderType, "block header type")
-		require.True(header.InputHash.IsEmpty(), "block input hash empty")
-		require.True(header.OutputHash.IsEmpty(), "block output hash empty")
+		require.True(header.IORoot.IsEmpty(), "block I/O root empty")
 		require.True(header.StateRoot.IsEmpty(), "block root hash empty")
 		genesisBlock = blk
 	case <-time.After(recvTimeout):
@@ -187,8 +187,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 			}
 
 			require.True(header.IsParentOf(&s.genesisBlock.Header), "parent is parent of genesis block")
-			require.True(header.InputHash.IsEmpty(), "block input hash empty")
-			require.True(header.OutputHash.IsEmpty(), "block output hash empty")
+			require.True(header.IORoot.IsEmpty(), "block I/O root empty")
 			require.EqualValues(s.genesisBlock.Header.StateRoot, header.StateRoot, "state root preserved")
 
 			// Nothing more to do after the epoch transition block was received.
@@ -205,7 +204,7 @@ func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backe
 	}
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, storage storage.Backend) {
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, storageBackend storage.Backend) {
 	require := require.New(t)
 
 	rt, committee := s.rt, s.committee
@@ -217,6 +216,21 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
+	// Generate a dummy I/O root.
+	ctx := context.Background()
+	tree := urkel.New(nil, nil)
+	err = tree.Insert(ctx, block.IoKeyInputs, []byte("testInputSet"))
+	require.NoError(err, "tree.Insert")
+	err = tree.Insert(ctx, block.IoKeyOutputs, []byte("testOutputSet"))
+	require.NoError(err, "tree.Insert")
+	err = tree.Insert(ctx, block.IoKeyTags, []byte("testTagSet"))
+	require.NoError(err, "tree.Insert")
+	ioWriteLog, ioRoot, err := tree.Commit(ctx)
+	require.NoError(err, "tree.Commit")
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
 	// Create the new block header that the leader and nodes will commit to.
 	parent := &block.Block{
 		Header: block.Header{
@@ -226,14 +240,17 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			Timestamp:    uint64(time.Now().Unix()),
 			HeaderType:   block.Normal,
 			PreviousHash: child.Header.EncodedHash(),
-			InputHash:    mustStore(t, storage, []byte("testInputSet")),
-			OutputHash:   mustStore(t, storage, []byte("testOutputSet")),
-			StateRoot:    mustStore(t, storage, []byte("testStateRoot")),
+			IORoot:       ioRoot,
+			StateRoot:    ioRoot,
 		},
 	}
 	parent.Header.GroupHash.From(committee.committee.Members)
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
-	parent.Header.StorageReceipt = mustGetReceipt(t, storage, &parent.Header)
+	parent.Header.StorageReceipt = mustStore(t, storageBackend, []storage.ApplyOp{
+		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
+		// NOTE: Twice to get a receipt over both roots which we set to the same value.
+		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
+	})
 
 	// Send all the commitments.
 	var toCommit []*registryTests.TestNode
@@ -281,8 +298,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			require.EqualValues(parent.Header.HeaderType, header.HeaderType, "block header type")
 			require.EqualValues(parent.Header.PreviousHash, header.PreviousHash, "block previous hash")
 			require.EqualValues(parent.Header.GroupHash, header.GroupHash, "block group hash")
-			require.EqualValues(parent.Header.InputHash, header.InputHash, "block input hash")
-			require.EqualValues(parent.Header.OutputHash, header.OutputHash, "block output hash")
+			require.EqualValues(parent.Header.IORoot, header.IORoot, "block I/O root")
 			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
 			require.EqualValues(parent.Header.CommitmentsHash, header.CommitmentsHash, "block commitments hash")
 
@@ -356,23 +372,11 @@ func mustGetCommittee(t *testing.T, rt *registryTests.TestRuntime, epoch epochti
 	}
 }
 
-func mustStore(t *testing.T, store storage.Backend, value []byte) hash.Hash {
+func mustStore(t *testing.T, store storage.Backend, ops []storage.ApplyOp) signature.Signature {
 	require := require.New(t)
 
-	err := store.Insert(context.Background(), value, uint64(1)<<63, storage.InsertOptions{})
-	require.NoError(err, "Insert")
+	receipt, err := store.ApplyBatch(context.Background(), ops)
+	require.NoError(err, "Apply")
 
-	key := storage.HashStorageKey(value)
-	var h hash.Hash
-	copy(h[:], key[:])
-	return h
-}
-
-func mustGetReceipt(t *testing.T, store storage.Backend, hdr *block.Header) signature.Signature {
-	require := require.New(t)
-
-	signed, err := store.GetReceipt(context.Background(), hdr.KeysForStorageReceipt())
-	require.NoError(err, "GetReceipt")
-
-	return signed.Signature
+	return receipt.Signed.Signature
 }

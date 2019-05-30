@@ -13,7 +13,7 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 type watchRequest struct {
@@ -105,8 +105,18 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 }
 
 func (w *blockWatcher) checkBlock(blk *block.Block) {
+	if blk.Header.IORoot.IsEmpty() {
+		return
+	}
+
+	tree, err := urkel.NewWithRoot(w.common.ctx, w.common.storage, nil, blk.Header.IORoot)
+	if err != nil {
+		w.Logger.Error("can't get block I/O from storage", "err", err)
+		return
+	}
+
 	// Get inputs from storage.
-	rawInputs, err := w.common.storage.Get(w.common.ctx, storage.Key(blk.Header.InputHash))
+	rawInputs, err := tree.Get(w.common.ctx, block.IoKeyInputs)
 	if err != nil {
 		w.Logger.Error("can't get block inputs from storage", "err", err)
 		return
@@ -119,7 +129,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 	}
 
 	// Get outputs from storage.
-	rawOutputs, err := w.common.storage.Get(w.common.ctx, storage.Key(blk.Header.OutputHash))
+	rawOutputs, err := tree.Get(w.common.ctx, block.IoKeyOutputs)
 	if err != nil {
 		w.Logger.Error("can't get block outputs from storage", "err", err)
 		return

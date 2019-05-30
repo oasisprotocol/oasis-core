@@ -66,9 +66,7 @@ func NewGenesisBlock(id signature.PublicKey, timestamp uint64) *Block {
 	blk.Header.Version = 0
 	blk.Header.Timestamp = timestamp
 	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
-	blk.Header.InputHash.Empty()
-	blk.Header.OutputHash.Empty()
-	blk.Header.TagHash.Empty()
+	blk.Header.IORoot.Empty()
 	blk.Header.StateRoot.Empty()
 
 	return &blk
@@ -84,9 +82,7 @@ func NewEmptyBlock(child *Block, timestamp uint64, htype HeaderType) *Block {
 	blk.Header.Timestamp = timestamp
 	blk.Header.HeaderType = htype
 	blk.Header.PreviousHash = child.Header.EncodedHash()
-	blk.Header.InputHash.Empty()
-	blk.Header.OutputHash.Empty()
-	blk.Header.TagHash.Empty()
+	blk.Header.IORoot.Empty()
 	// State root is unchanged.
 	blk.Header.StateRoot = child.Header.StateRoot
 	blk.Header.CommitmentsHash.Empty()

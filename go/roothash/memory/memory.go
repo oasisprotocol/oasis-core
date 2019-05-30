@@ -239,17 +239,17 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 	}
 
 	if dErr, ok := (err).(errDiscrepancyDetected); ok {
-		inputHash := hash.Hash(dErr)
+		ioRoot := hash.Hash(dErr)
 
 		s.logger.Warn("worker: discrepancy detected",
 			"round", blockNr,
-			"input_hash", inputHash,
+			"io_root", ioRoot,
 		)
 
 		s.eventNotifier.Broadcast(&api.Event{
 			DiscrepancyDetected: &api.DiscrepancyDetectedEvent{
-				BatchHash:   &inputHash,
-				BlockHeader: &latestBlock.Header,
+				IORoot:      ioRoot,
+				BlockHeader: latestBlock.Header,
 			},
 		})
 

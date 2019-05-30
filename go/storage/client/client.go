@@ -446,8 +446,8 @@ func (b *storageClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo
 
 func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
 	var req storage.ApplyRequest
-	req.Root = root[:]
-	req.ExpectedNewRoot = expectedNewRoot[:]
+	req.Root, _ = root.MarshalBinary()
+	req.ExpectedNewRoot, _ = expectedNewRoot.MarshalBinary()
 	req.Log = make([]*storage.LogEntry, 0, len(log))
 	for _, e := range log {
 		req.Log = append(req.Log, &storage.LogEntry{
@@ -476,11 +476,49 @@ func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expect
 	return &receipt, nil
 }
 
+func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+	var req storage.ApplyBatchRequest
+	req.Ops = make([]*storage.ApplyOp, 0, len(ops))
+	for _, op := range ops {
+		var pOp storage.ApplyOp
+		pOp.Root, _ = op.Root.MarshalBinary()
+		pOp.ExpectedNewRoot, _ = op.ExpectedNewRoot.MarshalBinary()
+		pOp.Log = make([]*storage.LogEntry, 0, len(op.WriteLog))
+		for _, e := range op.WriteLog {
+			pOp.Log = append(pOp.Log, &storage.LogEntry{
+				Key:   e.Key,
+				Value: e.Value,
+			})
+		}
+		req.Ops = append(req.Ops, &pOp)
+	}
+
+	b.connectionState.RLock()
+	if b.connectionState.client == nil {
+		b.connectionState.RUnlock()
+		return nil, ErrStorageNotAvailable
+	}
+	resp, err := b.connectionState.client.ApplyBatch(ctx, &req)
+	b.connectionState.RUnlock()
+
+	if err != nil {
+		return nil, err
+	}
+
+	var receipt api.MKVSReceipt
+	if err = receipt.UnmarshalCBOR(resp.GetReceipt()); err != nil {
+		return nil, errors.Wrap(err, "storage client: failed to unmarshal receipt")
+	}
+
+	return &receipt, nil
+}
+
 func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	var req storage.GetSubtreeRequest
-	req.Root = root[:]
+	req.Root, _ = root.MarshalBinary()
 	req.MaxDepth = uint32(maxDepth)
-	req.Id = &storage.NodeID{Path: id.Path[:], Depth: uint32(id.Depth)}
+	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
+	req.Id.Path, _ = id.Path.MarshalBinary()
 
 	b.connectionState.RLock()
 	if b.connectionState.client == nil {
@@ -504,8 +542,8 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 
 func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	var req storage.GetPathRequest
-	req.Root = root[:]
-	req.Key = key[:]
+	req.Root, _ = root.MarshalBinary()
+	req.Key, _ = key.MarshalBinary()
 	req.StartDepth = uint32(startDepth)
 
 	b.connectionState.RLock()
@@ -530,8 +568,9 @@ func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key 
 
 func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
 	var req storage.GetNodeRequest
-	req.Root = root[:]
-	req.Id = &storage.NodeID{Path: id.Path[:], Depth: uint32(id.Depth)}
+	req.Root, _ = root.MarshalBinary()
+	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
+	req.Id.Path, _ = id.Path.MarshalBinary()
 
 	b.connectionState.RLock()
 	if b.connectionState.client == nil {
@@ -555,8 +594,8 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 
 func (b *storageClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
 	var req storage.GetValueRequest
-	req.Root = root[:]
-	req.Id = id[:]
+	req.Root, _ = root.MarshalBinary()
+	req.Id, _ = id.MarshalBinary()
 
 	b.connectionState.RLock()
 	if b.connectionState.client == nil {

@@ -140,9 +140,9 @@ type LogEntry = urkel.LogEntry
 type MKVSReceiptBody struct {
 	// Version is the storage data structure version.
 	Version uint16
-	// Root is the root hash of the merklized data structure that the
+	// Roots are the merkle roots of the merklized data structure that the
 	// storage node is certifying to store.
-	Root hash.Hash
+	Roots []hash.Hash
 }
 
 // MKVSReceipt is a signed MKVSReceiptBody.
@@ -211,8 +211,23 @@ type InternalNodeSummary = syncer.InternalNodeSummary
 // Subtree is a compressed representation of a subtree.
 type Subtree = syncer.Subtree
 
+// ApplyOp is an apply operation within a batch of apply operations.
+type ApplyOp struct {
+	// Root is the merkle root to apply the operations against. It may
+	// refer to a nil node (empty hash) in which case a new root will be
+	// created.
+	Root hash.Hash
+	// ExpectedNewRoot is the expected merkle root after applying the
+	// write log.
+	ExpectedNewRoot hash.Hash
+	// WriteLog is a write log of operations to apply.
+	WriteLog WriteLog
+}
+
 // Backend is a storage backend implementation.
 type Backend interface {
+	syncer.ReadSyncer
+
 	// Get returns the value for a specific immutable key.
 	Get(context.Context, Key) ([]byte, error)
 
@@ -247,21 +262,11 @@ type Backend interface {
 	// Apply is ignored.
 	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) (*MKVSReceipt, error)
 
-	// GetSubtree retrieves a compressed subtree summary of the given node
-	// under the given root up to the specified depth. The summary contains
-	// full nodes (with hashes) and summary nodes (only structure as hashes
-	// can and must be recomputed locally).
-	GetSubtree(context.Context, hash.Hash, NodeID, uint8) (*Subtree, error)
-
-	// GetPath retrieves a compressed path summary for the given key under
-	// the given root, starting at the given depth.
-	GetPath(context.Context, hash.Hash, hash.Hash, uint8) (*Subtree, error)
-
-	// GetNode retrieves a specific node under the given root.
-	GetNode(context.Context, hash.Hash, NodeID) (Node, error)
-
-	// GetValue retrieves a specific value under the given root.
-	GetValue(context.Context, hash.Hash, hash.Hash) ([]byte, error)
+	// ApplyBatch applies multiple sets of operations against the MKVS and
+	// returns a single receipt covering all applied roots.
+	//
+	// See Apply for more details.
+	ApplyBatch(context.Context, []ApplyOp) (*MKVSReceipt, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()

@@ -132,31 +132,35 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	err = mkvsReceipt.Open(&rb)
 	require.NoError(t, err, "mkvsReceipt.Open()")
 	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version")
-	require.NotEqual(t, root, rb.Root, "mkvs receipt root")
-	require.EqualValues(t, expectedNewRoot, rb.Root, "mkvs receipt root")
+	require.Equal(t, 1, len(rb.Roots), "mkvs receipt roots")
+	require.NotEqual(t, root, rb.Roots[0], "mkvs receipt root")
+	require.EqualValues(t, expectedNewRoot, rb.Roots[0], "mkvs receipt root")
+
+	var emptyPath hash.Hash
 
 	// Get a subtree summary of the new root.
-	st, err := backend.GetSubtree(context.Background(), rb.Root, api.NodeID{Path: rb.Root, Depth: 0}, 10)
+	st, err := backend.GetSubtree(context.Background(), rb.Roots[0], api.NodeID{Path: emptyPath, Depth: 0}, 10)
 	require.NoError(t, err, "GetSubtree()")
 	require.NotNil(t, st, "subtree returned by GetSubtree()")
 
 	// Get a path summary of the new root.
-	st, err = backend.GetPath(context.Background(), rb.Root, rb.Root, 0)
+	st, err = backend.GetPath(context.Background(), rb.Roots[0], emptyPath, 0)
 	require.NoError(t, err, "GetPath()")
 	require.NotNil(t, st, "subtree returned by GetPath()")
 
 	// Get the root node.
-	n, err := backend.GetNode(context.Background(), rb.Root, api.NodeID{Path: rb.Root, Depth: 0})
+	n, err := backend.GetNode(context.Background(), rb.Roots[0], api.NodeID{Path: emptyPath, Depth: 0})
 	require.NoError(t, err, "GetNode()")
 	require.NotNil(t, n)
 
 	// Now try applying the same operations again, we should get the same root.
-	mkvsReceipt, err = backend.Apply(context.Background(), root, rb.Root, wl)
+	mkvsReceipt, err = backend.Apply(context.Background(), root, rb.Roots[0], wl)
 	require.NoError(t, err, "Apply()")
 	require.NotNil(t, mkvsReceipt, "mkvsReceipt")
 	err = mkvsReceipt.Open(&rb)
 	require.NoError(t, err, "mkvsReceipt.Open()")
 	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version")
-	require.NotEqual(t, root, rb.Root, "mkvs receipt root")
-	require.EqualValues(t, expectedNewRoot, rb.Root, "mkvs receipt root")
+	require.Equal(t, 1, len(rb.Roots), "mkvs receipt roots")
+	require.NotEqual(t, root, rb.Roots[0], "mkvs receipt root")
+	require.EqualValues(t, expectedNewRoot, rb.Roots[0], "mkvs receipt root")
 }

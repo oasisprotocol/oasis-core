@@ -11,7 +11,6 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -22,6 +21,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -183,7 +183,7 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) (bool, error) {
 	if message.LeaderBatchDispatch != nil {
 		bd := message.LeaderBatchDispatch
-		err := n.handleBatchFromCommittee(ctx, bd.BatchHash, bd.Header)
+		err := n.handleBatchFromCommittee(ctx, bd.Batch, bd.Header)
 		if err != nil {
 			return false, err
 		}
@@ -197,19 +197,16 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message p2p.Message) (bool
 // The call has already been authenticated to come from a committee
 // member or our own node.
 //
-// The batch identifier is a hash of the batch which can be used
-// to retrieve the batch from storage.
-//
 // The block header determines what block the batch should be
 // computed against.
 //
 // Called from P2P worker.
-func (n *Node) handleBatchFromCommittee(ctx context.Context, batchHash hash.Hash, hdr block.Header) error {
+func (n *Node) handleBatchFromCommittee(ctx context.Context, batch runtime.Batch, hdr block.Header) error {
 	crash.Here(crashPointBatchReceiveAfter)
-	return n.queueBatchBlocking(ctx, batchHash, hdr)
+	return n.queueBatchBlocking(ctx, batch, hdr)
 }
 
-func (n *Node) queueBatchBlocking(ctx context.Context, batchHash hash.Hash, hdr block.Header) error {
+func (n *Node) queueBatchBlocking(ctx context.Context, batch runtime.Batch, hdr block.Header) error {
 	// Quick check to see if header is compatible.
 	if !bytes.Equal(hdr.Namespace[:], n.commonNode.RuntimeID) {
 		n.logger.Warn("received incompatible header in external batch",
@@ -218,33 +215,9 @@ func (n *Node) queueBatchBlocking(ctx context.Context, batchHash hash.Hash, hdr 
 		return errIncomatibleHeader
 	}
 
-	// Fetch batch from storage.
-	var k storage.Key
-	copy(k[:], batchHash[:])
-
 	var batchSpanCtx opentracing.SpanContext
 	if batchSpan := opentracing.SpanFromContext(ctx); batchSpan != nil {
 		batchSpanCtx = batchSpan.Context()
-	}
-	span, ctx := tracing.StartSpanWithContext(ctx, "Get(batchHash)",
-		opentracing.Tag{Key: "batchHash", Value: k},
-		opentracing.ChildOf(batchSpanCtx),
-	)
-	raw, err := n.commonNode.Storage.Get(ctx, k)
-	span.Finish()
-	if err != nil {
-		n.logger.Error("failed to fetch batch from storage",
-			"err", err,
-		)
-		return err
-	}
-
-	var batch runtime.Batch
-	if err := batch.UnmarshalCBOR(raw); err != nil {
-		n.logger.Error("failed to deserialize batch",
-			"err", err,
-		)
-		return err
 	}
 
 	n.commonNode.CrossNode.Lock()
@@ -477,33 +450,16 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
-	// Byzantine mode: inject discrepancy.
-	if n.cfg.ByzantineInjectDiscrepancies {
-		n.logger.Error("BYZANTINE MODE: injecting discrepancy into batch")
-
-		for idx := range batch.Outputs {
-			batch.Outputs[idx] = []byte("boom")
-		}
-	}
-
 	// Generate proposed block header.
 	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
 	blk.Header.GroupHash = epoch.GetComputeGroupHash()
-	blk.Header.InputHash.From(state.batch)
-	blk.Header.OutputHash.From(batch.Outputs)
-	blk.Header.TagHash.From(batch.Tags)
+	blk.Header.IORoot = batch.IORoot
 	blk.Header.StateRoot = batch.NewStateRoot
 
-	// Commit outputs and state to storage. If we are a regular worker, then we only
-	// insert into local cache.
-	var opts storage.InsertOptions
-	if !epoch.IsComputeLeader() && !epoch.IsComputeBackupWorker() {
-		opts.LocalOnly = true
-	}
-
+	// Commit I/O and state write logs to storage.
 	start := time.Now()
 	err := func() error {
-		span, ctx := tracing.StartSpanWithContext(n.ctx, "InsertBatch(outputs, state, tags)",
+		span, ctx := tracing.StartSpanWithContext(n.ctx, "Apply(io, state)",
 			opentracing.ChildOf(state.batchSpanCtx),
 		)
 		defer span.Finish()
@@ -511,35 +467,28 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
-		casBatch := []storage.Value{storage.Value{
-			Data:       batch.Outputs.MarshalCBOR(),
-			Expiration: 2,
-		}, storage.Value{
-			Data:       cbor.Marshal(batch.Tags),
-			Expiration: 2,
-		}}
-		if err := n.commonNode.Storage.InsertBatch(ctx, casBatch, opts); err != nil {
-			n.logger.Error("failed to commit state to storage",
-				"err", err,
-			)
-			return err
-		}
-
-		if _, err := n.commonNode.Storage.Apply(ctx, n.commonNode.CurrentBlock.Header.StateRoot, batch.NewStateRoot, batch.WriteLog); err != nil {
-			n.logger.Error("failed to apply write log to storage",
-				"err", err,
-			)
-			return err
-		}
-
-		if opts.LocalOnly {
+		if !epoch.IsComputeLeader() && !epoch.IsComputeBackupWorker() {
 			return nil
 		}
 
-		// If we actually write to storage, acquire proof that we did.
-		signedReceipt, err := n.commonNode.Storage.GetReceipt(ctx, blk.Header.KeysForStorageReceipt())
+		var emptyRoot hash.Hash
+		emptyRoot.Empty()
+
+		// NOTE: Order is important for verifying the receipt.
+		applyOps := []storage.ApplyOp{
+			// I/O root.
+			storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: batch.IORoot, WriteLog: batch.IOWriteLog},
+			// State root.
+			storage.ApplyOp{
+				Root:            n.commonNode.CurrentBlock.Header.StateRoot,
+				ExpectedNewRoot: batch.NewStateRoot,
+				WriteLog:        batch.StateWriteLog,
+			},
+		}
+
+		signedReceipt, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
 		if err != nil {
-			n.logger.Error("failed to get storage proof",
+			n.logger.Error("failed to apply to storage",
 				"err", err,
 			)
 			return err
@@ -547,7 +496,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 		// TODO: Ensure that the receipt is actually signed by the
 		// storage node.  For now accept a signature from anyone.
-		var receipt storage.Receipt
+		var receipt storage.MKVSReceiptBody
 		if err = signedReceipt.Open(&receipt); err != nil {
 			n.logger.Error("failed to open signed receipt",
 				"err", err,
@@ -614,7 +563,7 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 	}
 
 	n.logger.Warn("discrepancy detected",
-		"input_hash", dis.BatchHash,
+		"io_root", dis.IORoot,
 		"header", dis.BlockHeader,
 	)
 
@@ -625,7 +574,7 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 	if n.commonNode.Group.GetEpochSnapshot().IsComputeBackupWorker() {
 		// Backup worker, start processing a batch.
 		n.logger.Info("backup worker activating and processing batch",
-			"input_hash", dis.BatchHash,
+			"io_root", dis.IORoot,
 			"header", dis.BlockHeader,
 		)
 
@@ -635,7 +584,32 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 			ctx, cancel := context.WithTimeout(n.ctx, queueExternalBatchTimeout)
 			defer cancel()
 
-			if err := n.queueBatchBlocking(ctx, *dis.BatchHash, *dis.BlockHeader); err != nil {
+			// Fetch batch from storage.
+			tree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, dis.IORoot)
+			if err != nil {
+				n.logger.Error("backup worker failed to fetch I/O root",
+					"err", err,
+				)
+				return
+			}
+
+			rawBatch, err := tree.Get(ctx, block.IoKeyInputs)
+			if err != nil {
+				n.logger.Error("backup worker failed to fetch batch",
+					"err", err,
+				)
+				return
+			}
+
+			var batch runtime.Batch
+			if err := batch.UnmarshalCBOR(rawBatch); err != nil {
+				n.logger.Error("backup worker failed to unmarshal batch",
+					"err", err,
+				)
+				return
+			}
+
+			if err := n.queueBatchBlocking(ctx, batch, dis.BlockHeader); err != nil {
 				n.logger.Error("backup worker failed to queue external batch",
 					"err", err,
 				)

@@ -166,6 +166,44 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 	return &pb.ApplyResponse{Receipt: signedReceipt.MarshalCBOR()}, nil
 }
 
+func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) (*pb.ApplyBatchResponse, error) {
+	var ops []api.ApplyOp
+	for _, op := range req.GetOps() {
+		var root hash.Hash
+		if err := root.UnmarshalBinary(op.GetRoot()); err != nil {
+			return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+		}
+
+		var expectedNewRoot hash.Hash
+		if err := expectedNewRoot.UnmarshalBinary(op.GetExpectedNewRoot()); err != nil {
+			return nil, errors.Wrap(err, "storage: failed to unmarshal expected new root")
+		}
+
+		var log api.WriteLog
+		for _, item := range op.GetLog() {
+			log = append(log, api.LogEntry{
+				Key:   item.GetKey(),
+				Value: item.GetValue(),
+			})
+		}
+
+		ops = append(ops, api.ApplyOp{
+			Root:            root,
+			ExpectedNewRoot: expectedNewRoot,
+			WriteLog:        log,
+		})
+	}
+
+	<-s.backend.Initialized()
+	signedReceipt, err := s.backend.ApplyBatch(ctx, ops)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.ApplyBatchResponse{Receipt: signedReceipt.MarshalCBOR()}, nil
+}
+
 func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
 	var root hash.Hash
 	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {

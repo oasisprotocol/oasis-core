@@ -136,14 +136,16 @@ func MapAnnotatedBlockToBlock(annCh <-chan *AnnotatedBlock) <-chan *block.Block 
 
 // DiscrepancyDetectedEvent is a discrepancy detected event.
 type DiscrepancyDetectedEvent struct {
-	// BatchHash is the CallBatch hash that is set when a discrepancy
+	// IORoot is the I/O merkle root that is set when a discrepancy
 	// is detected to signal to the backup workers that a computation
 	// should be re-executed.
-	BatchHash *hash.Hash `codec:"batch_hash"`
+	//
+	// The backup workers should use this root to fetch the batch.
+	IORoot hash.Hash `codec:"io_root"`
 
 	// BlockHeader is the block header of the block on which the backup
 	// computation should be based.
-	BlockHeader *block.Header `codec:"header"`
+	BlockHeader block.Header `codec:"header"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -158,7 +160,7 @@ func (e *DiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
 
 // Event is a protocol event.
 type Event struct {
-	// DiscrepancyDetected is the CallBatch hash that is set when a
+	// DiscrepancyDetected is the I/O merkle root that is set when a
 	// discrepancy is detected to signal to the backup workers that a
 	// computation should be re-executed.
 	DiscrepancyDetected *DiscrepancyDetectedEvent

@@ -25,12 +25,8 @@ pub const BATCH_HASH_CONTEXT: [u8; 8] = *b"EkBatch-";
 pub struct BatchSigMessage<'a> {
     /// The block (partial fields) that we computed this batch on.
     pub previous_block: &'a Block,
-    /// The hash of the input TxnBatch.
-    pub input_hash: &'a Hash,
-    /// The hash of the output TxnBatch.
-    pub output_hash: &'a Hash,
-    /// The hash of serialized tags.
-    pub tags_hash: &'a Hash,
+    /// The I/O merkle root.
+    pub io_root: &'a Hash,
     /// The root hash of the state after computing this batch.
     pub state_root: &'a Hash,
 }
@@ -72,14 +68,14 @@ impl serde::Serialize for Tag {
 /// Computed batch.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComputedBatch {
-    /// Batch of runtime outputs.
-    pub outputs: TxnBatch,
-    /// Log of changes to the storage tree.
-    pub write_log: WriteLog,
-    /// New state root hash.
+    /// Log that generates the I/O tree.
+    pub io_write_log: WriteLog,
+    /// I/O merkle root.
+    pub io_root: Hash,
+    /// Log of changes to the state tree.
+    pub state_write_log: WriteLog,
+    /// New state merkle root.
     pub new_state_root: Hash,
-    /// Runtime-specific indexable tags.
-    pub tags: Vec<Tag>,
     /// If this runtime uses a TEE, then this is the signature of the batch's
     /// BatchSigMessage with the node's RAK for this runtime.
     pub rak_sig: Signature,

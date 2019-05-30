@@ -11,7 +11,9 @@ import (
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/service"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -92,11 +94,22 @@ func (s *Service) worker() {
 			var tags []runtime.Tag
 
 			// Fetch tags from storage.
-			if !blk.Header.TagHash.IsEmpty() {
+			if !blk.Header.IORoot.IsEmpty() {
 				ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
 
+				var tree *urkel.Tree
+				tree, err = urkel.NewWithRoot(ctx, s.storage, nil, blk.Header.IORoot)
+				if err != nil {
+					logger.Error("can't get block tags from storage",
+						"err", err,
+						"round", blk.Header.Round,
+					)
+					cancel()
+					continue
+				}
+
 				var rawTags []byte
-				rawTags, err = s.storage.Get(ctx, storage.Key(blk.Header.TagHash))
+				rawTags, err = tree.Get(ctx, block.IoKeyTags)
 				cancel()
 				if err != nil {
 					logger.Error("can't get block tags from storage",

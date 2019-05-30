@@ -26,7 +26,7 @@ func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeI
 	}
 
 	// Extract the node that is at the root of the subtree.
-	subtreeRoot, err := t.cache.derefNodeID(id)
+	subtreeRoot, err := t.cache.derefNodeID(ctx, id)
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
@@ -60,7 +60,7 @@ func (t *Tree) doGetSubtree(
 	default:
 	}
 
-	node, err := t.cache.derefNodePtr(internal.NodeID{Path: path, Depth: depth}, ptr, nil)
+	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: path, Depth: depth}, ptr, nil)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -129,7 +129,7 @@ func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, start
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	subtreeRoot, err := t.cache.derefNodeID(internal.NodeID{Path: key, Depth: startDepth})
+	subtreeRoot, err := t.cache.derefNodeID(ctx, internal.NodeID{Path: key, Depth: startDepth})
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
@@ -161,7 +161,7 @@ func (t *Tree) doGetPath(
 	default:
 	}
 
-	node, err := t.cache.derefNodePtr(internal.NodeID{Path: key, Depth: depth}, ptr, &key)
+	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, &key)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -230,11 +230,11 @@ func (t *Tree) GetNode(ctx context.Context, root hash.Hash, id internal.NodeID) 
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	ptr, err := t.cache.derefNodeID(id)
+	ptr, err := t.cache.derefNodeID(ctx, id)
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
-	node, err := t.cache.derefNodePtr(id, ptr, nil)
+	node, err := t.cache.derefNodePtr(ctx, id, ptr, nil)
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
@@ -253,7 +253,7 @@ func (t *Tree) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]by
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	val, err := t.cache.derefValue(&internal.Value{Clean: true, Hash: id})
+	val, err := t.cache.derefValue(ctx, &internal.Value{Clean: true, Hash: id})
 	if err != nil {
 		return nil, syncer.ErrValueNotFound
 	}

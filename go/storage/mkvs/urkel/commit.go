@@ -1,6 +1,8 @@
 package urkel
 
 import (
+	"context"
+
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
@@ -29,7 +31,7 @@ func (u *cacheUpdates) Commit() {
 // doCommit commits all dirty nodes and values into the underlying node
 // database. This operation may cause committed nodes and values to be
 // evicted from the in-memory cache.
-func doCommit(cache *cache, upd *cacheUpdates, batch db.Batch, ptr *internal.Pointer) (h hash.Hash, err error) {
+func doCommit(ctx context.Context, cache *cache, upd *cacheUpdates, batch db.Batch, ptr *internal.Pointer) (h hash.Hash, err error) {
 	if ptr == nil {
 		h.Empty()
 		return
@@ -57,10 +59,10 @@ func doCommit(cache *cache, upd *cacheUpdates, batch db.Batch, ptr *internal.Poi
 			break
 		}
 
-		if _, err = doCommit(cache, upd, batch, n.Left); err != nil {
+		if _, err = doCommit(ctx, cache, upd, batch, n.Left); err != nil {
 			return
 		}
-		if _, err = doCommit(cache, upd, batch, n.Right); err != nil {
+		if _, err = doCommit(ctx, cache, upd, batch, n.Right); err != nil {
 			return
 		}
 

@@ -56,6 +56,7 @@ var (
 	labelInsertBatch = prometheus.Labels{"call": "insert_batch"}
 	labelGetKeys     = prometheus.Labels{"call": "get_keys"}
 	labelApply       = prometheus.Labels{"call": "apply"}
+	labelApplyBatch  = prometheus.Labels{"call": "apply_batch"}
 	labelGetSubtree  = prometheus.Labels{"call": "get_subtree"}
 	labelGetPath     = prometheus.Labels{"call": "get_path"}
 	labelGetNode     = prometheus.Labels{"call": "get_node"}
@@ -178,6 +179,27 @@ func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewR
 	}
 
 	storageCalls.With(labelApply).Inc()
+	return receipt, err
+}
+
+func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+	start := time.Now()
+	receipt, err := w.Backend.ApplyBatch(ctx, ops)
+	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())
+
+	var size int
+	for _, op := range ops {
+		for _, entry := range op.WriteLog {
+			size += len(entry.Key) + len(entry.Value)
+		}
+	}
+	storageValueSize.With(labelApplyBatch).Observe(float64(size))
+	if err != nil {
+		storageFailures.With(labelApplyBatch).Inc()
+		return nil, err
+	}
+
+	storageCalls.With(labelApplyBatch).Inc()
 	return receipt, err
 }
 
