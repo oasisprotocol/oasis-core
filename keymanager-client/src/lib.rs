@@ -7,6 +7,7 @@ extern crate futures;
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;
 extern crate io_context;
+extern crate lru;
 
 pub mod client;
 pub mod mock;
