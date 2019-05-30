@@ -1,13 +1,11 @@
 //! Key manager client which talks to a remote key manager enclave.
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use futures::{future, prelude::*};
 #[cfg(not(target_env = "sgx"))]
 use grpcio::Channel;
 use io_context::Context;
+use lru::LruCache;
 
 use ekiden_client::{create_rpc_api_client, BoxFuture, RpcClient};
 use ekiden_keymanager_api::*;
@@ -33,11 +31,11 @@ struct Inner {
     /// RPC client.
     rpc_client: Client,
     /// Local cache for the get_or_create_keys KeyManager endpoint.
-    get_or_create_secret_keys_cache: RwLock<HashMap<ContractId, ContractKey>>,
+    get_or_create_secret_keys_cache: RwLock<LruCache<ContractId, ContractKey>>,
     /// Local cache for the get_public_key KeyManager endpoint.
-    get_public_key_cache: RwLock<HashMap<ContractId, SignedPublicKey>>,
+    get_public_key_cache: RwLock<LruCache<ContractId, SignedPublicKey>>,
     /// Local cache for the get_long_term_public_key KeyManager endpoint.
-    get_long_term_public_key_cache: RwLock<HashMap<ContractId, SignedPublicKey>>,
+    get_long_term_public_key_cache: RwLock<LruCache<ContractId, SignedPublicKey>>,
 }
 
 /// A key manager client which talks to a remote key manager enclave.
@@ -46,14 +44,14 @@ pub struct RemoteClient {
 }
 
 impl RemoteClient {
-    fn new(runtime_id: RuntimeId, client: RpcClient) -> Self {
+    fn new(runtime_id: RuntimeId, client: RpcClient, keys_cache_sizes: usize) -> Self {
         Self {
             inner: Arc::new(Inner {
                 runtime_id,
                 rpc_client: Client::new(client),
-                get_or_create_secret_keys_cache: RwLock::new(HashMap::new()),
-                get_public_key_cache: RwLock::new(HashMap::new()),
-                get_long_term_public_key_cache: RwLock::new(HashMap::new()),
+                get_or_create_secret_keys_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
+                get_public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
+                get_long_term_public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
             }),
         }
     }
@@ -64,6 +62,7 @@ impl RemoteClient {
         mrenclave: Option<MrEnclave>,
         protocol: Arc<Protocol>,
         rak: Arc<RAK>,
+        keys_cache_sizes: usize,
     ) -> Self {
         Self::new(
             runtime_id,
@@ -74,12 +73,18 @@ impl RemoteClient {
                 protocol,
                 KEY_MANAGER_ENDPOINT,
             ),
+            keys_cache_sizes,
         )
     }
 
     /// Create a new key manager client with gRPC transport.
     #[cfg(not(target_env = "sgx"))]
-    pub fn new_grpc(runtime_id: RuntimeId, mrenclave: Option<MrEnclave>, channel: Channel) -> Self {
+    pub fn new_grpc(
+        runtime_id: RuntimeId,
+        mrenclave: Option<MrEnclave>,
+        channel: Channel,
+        keys_cache_sizes: usize,
+    ) -> Self {
         Self::new(
             runtime_id,
             RpcClient::new_grpc(
@@ -87,6 +92,7 @@ impl RemoteClient {
                 channel,
                 &format!("{}://{:?}", KEY_MANAGER_ENDPOINT, runtime_id),
             ),
+            keys_cache_sizes,
         )
     }
 }
@@ -109,7 +115,7 @@ impl KeyManagerClient for RemoteClient {
     }
 
     fn get_or_create_keys(&self, ctx: Context, contract_id: ContractId) -> BoxFuture<ContractKey> {
-        let cache = self.inner.get_or_create_secret_keys_cache.read().unwrap();
+        let mut cache = self.inner.get_or_create_secret_keys_cache.write().unwrap();
         if let Some(keys) = cache.get(&contract_id) {
             return Box::new(future::ok(keys.clone()));
         }
@@ -122,7 +128,7 @@ impl KeyManagerClient for RemoteClient {
                 .get_or_create_keys(ctx, RequestIds::new(inner.runtime_id, contract_id))
                 .and_then(move |keys| {
                     let mut cache = inner.get_or_create_secret_keys_cache.write().unwrap();
-                    cache.insert(contract_id, keys.clone());
+                    cache.put(contract_id, keys.clone());
 
                     Ok(keys)
                 }),
@@ -134,7 +140,7 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         contract_id: ContractId,
     ) -> BoxFuture<Option<SignedPublicKey>> {
-        let cache = self.inner.get_public_key_cache.read().unwrap();
+        let mut cache = self.inner.get_public_key_cache.write().unwrap();
         if let Some(key) = cache.get(&contract_id) {
             return Box::new(future::ok(Some(key.clone())));
         }
@@ -148,7 +154,7 @@ impl KeyManagerClient for RemoteClient {
                 .and_then(move |key| match key {
                     Some(key) => {
                         let mut cache = inner.get_public_key_cache.write().unwrap();
-                        cache.insert(contract_id, key.clone());
+                        cache.put(contract_id, key.clone());
 
                         Ok(Some(key))
                     }
@@ -162,7 +168,7 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         contract_id: ContractId,
     ) -> BoxFuture<Option<SignedPublicKey>> {
-        let cache = self.inner.get_long_term_public_key_cache.read().unwrap();
+        let mut cache = self.inner.get_long_term_public_key_cache.write().unwrap();
         if let Some(key) = cache.get(&contract_id) {
             return Box::new(future::ok(Some(key.clone())));
         }
@@ -176,7 +182,7 @@ impl KeyManagerClient for RemoteClient {
                 .and_then(move |key| match key {
                     Some(key) => {
                         let mut cache = inner.get_long_term_public_key_cache.write().unwrap();
-                        cache.insert(contract_id, key.clone());
+                        cache.put(contract_id, key.clone());
 
                         Ok(Some(key))
                     }

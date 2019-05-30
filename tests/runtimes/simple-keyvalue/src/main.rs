@@ -270,6 +270,7 @@ fn main() {
             None,
             protocol.clone(),
             rak.clone(),
+            1024,
         ));
 
         txn.set_context_initializer(move |ctx: &mut TxnContext| {

@@ -11,6 +11,7 @@ ekiden-keymanager-api = { path = "../keymanager-runtime/api" }
 failure = "0.1.5"
 futures = "0.1.25"
 io-context = "0.2.0"
+lru = "0.1.15"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 grpcio = "0.4.4"
