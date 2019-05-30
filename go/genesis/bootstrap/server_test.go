@@ -267,10 +267,8 @@ func TestBootstrapSeeds(t *testing.T) {
 		seeds[k] = s
 		seedMapKeys = append(seedMapKeys, k)
 
-		go func(s *SeedNode) {
-			gerr := registerSeed(testServer1Address, s)
-			require.NoError(t, gerr, "seed registration failed")
-		}(s)
+		gerr := registerSeed(testServer1Address, s)
+		require.NoError(t, gerr, "seed registration failed")
 	}
 
 	// All received seeds should be equal and valid.
