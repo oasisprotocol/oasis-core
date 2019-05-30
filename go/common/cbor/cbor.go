@@ -5,7 +5,59 @@
 // to always have the same serialization.
 package cbor
 
-import "github.com/oasislabs/go-codec/codec"
+import (
+	"crypto/sha512"
+	"encoding/binary"
+	"reflect"
+
+	"github.com/oasislabs/go-codec/codec"
+)
+
+// tagBase is a base tag for all Ekiden CBOR extensions.
+const tagBase = 0x4515
+
+var typeRegistry map[uint64]bool
+
+type extFwd struct{}
+
+func (e extFwd) ConvertExt(v interface{}) interface{} {
+	return v
+}
+
+func (e extFwd) UpdateExt(dst interface{}, src interface{}) {
+}
+
+func (e extFwd) UseDefault() bool {
+	return true
+}
+
+// Extension is a type that can be registered as a CBOR extension.
+type Extension interface {
+}
+
+// RegisterType registers a new CBOR extension.
+//
+// This function MUST only be called during package init, before the
+// CBOR handle is used.
+func RegisterType(t Extension, id string) {
+	// Derive tag based on given string identifier.
+	tagHash := sha512.Sum512_256([]byte(id))
+	tag := uint64(tagBase + binary.LittleEndian.Uint32(tagHash[:4]))
+	if _, ok := typeRegistry[tag]; ok {
+		panic("cbor: duplicate type tag")
+	}
+
+	h := Handle.(*codec.CborHandle)
+	err := h.SetInterfaceExt(reflect.TypeOf(t), tag, extFwd{})
+	if err != nil {
+		panic(err)
+	}
+
+	if typeRegistry == nil {
+		typeRegistry = make(map[uint64]bool)
+	}
+	typeRegistry[tag] = true
+}
 
 // FixSliceForSerde will convert `nil` to `[]byte` to work around serde
 // brain damage.

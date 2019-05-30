@@ -148,7 +148,6 @@ func (n *Node) initBackends() error {
 	grpcSrv := n.grpcInternal.Server()
 	registry.NewGRPCServer(grpcSrv, n.Registry)
 	roothash.NewGRPCServer(grpcSrv, n.RootHash)
-	scheduler.NewGRPCServer(grpcSrv, n.Scheduler)
 	storage.NewGRPCServer(grpcSrv, n.Storage)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
 

@@ -272,6 +272,8 @@ github.com/oasislabs/deoxysii v0.0.0-20190329164139-cc54819a5e4c h1:HXZEsKsQ6lDd
 github.com/oasislabs/deoxysii v0.0.0-20190329164139-cc54819a5e4c/go.mod h1:lYp+eM7TUm0n0T/KE8FyKXLC226gDx7/UlGTUAO6W/4=
 github.com/oasislabs/go-codec v0.0.0-20190513052804-1ee93b6329db h1:7nhxAQ369c4nt6X6Mnn/KO+1CrWuZp3h1E/emD1fVUM=
 github.com/oasislabs/go-codec v0.0.0-20190513052804-1ee93b6329db/go.mod h1:Aun42SeUcfUG7JiwijrAymzM6sPVq1vMpLUDYRNANfo=
+github.com/oasislabs/go-codec v0.0.0-20190529151125-64f68cae5bf3 h1:COvdc1ciEBEPAPV+ihabYAIfbZDRtNqEQNlC2xynbJk=
+github.com/oasislabs/go-codec v0.0.0-20190529151125-64f68cae5bf3/go.mod h1:Aun42SeUcfUG7JiwijrAymzM6sPVq1vMpLUDYRNANfo=
 github.com/oasislabs/iavl v0.12.0-ekiden2 h1:kzdp6OTHYrn8TXlAo+2NsL84Qi2gqydFvjhWQZ/H9GM=
 github.com/oasislabs/iavl v0.12.0-ekiden2/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

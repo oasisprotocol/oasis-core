@@ -226,7 +226,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
 		round := rtState.Round
-		if round != nil && round.RoundState.Committee.ValidFor == committee.ValidFor {
+		if round != nil && round.Pool.Committee.ValidFor == committee.ValidFor {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
 				"runtime", rtID,
 				"epoch", committee.ValidFor,
@@ -253,8 +253,8 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		// Retrieve nodes for their runtime-specific information.
 		tree := app.state.DeliverTxTree()
 		regState := registryapp.NewMutableState(tree)
-		computationGroup := make(map[signature.MapKey]nodeInfo)
-		for _, committeeNode := range committee.Members {
+		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+		for idx, committeeNode := range committee.Members {
 			var nodeRuntime *node.Runtime
 			node, err := regState.GetNode(committeeNode.PublicKey)
 			if err != nil {
@@ -275,12 +275,12 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 				)
 				continue
 			}
-			computationGroup[committeeNode.PublicKey.ToMapKey()] = nodeInfo{
-				CommitteeNode: committeeNode,
+			nodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
+				CommitteeNode: idx,
 				Runtime:       nodeRuntime,
 			}
 		}
-		rtState.Round = newRound(committee, computationGroup, blk)
+		rtState.Round = newRound(committee, nodeInfo, blk, rtState.Runtime)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.
@@ -518,7 +518,7 @@ func (app *rootHashApplication) commit(
 	}
 	runtime := rtState.Runtime
 
-	var c commitment.Commitment
+	var c commitment.ComputeCommitment
 	if err = c.FromOpaqueCommitment(commit); err != nil {
 		return errors.Wrap(err, "roothash: failed to unmarshal commitment")
 	}
@@ -542,16 +542,21 @@ func (app *rootHashApplication) commit(
 	defer state.updateRuntimeState(rtState)
 
 	// If the round was finalized, transition.
-	if rtState.Round.RoundState.CurrentBlock.Header.Round != latestBlock.Header.Round {
+	if rtState.Round.CurrentBlock.Header.Round != latestBlock.Header.Round {
 		app.logger.Debug("round was finalized, transitioning round",
 			"round", blockNr,
 		)
 
-		rtState.Round = newRound(rtState.Round.RoundState.Committee, rtState.Round.RoundState.ComputationGroup, latestBlock)
+		rtState.Round = newRound(
+			rtState.Round.Pool.Committee,
+			rtState.Round.Pool.NodeInfo,
+			latestBlock,
+			rtState.Runtime,
+		)
 	}
 
 	// Add the commitment.
-	if err = rtState.Round.addCommitment(app.ctx, &c, rtState.Runtime); err != nil {
+	if err = rtState.Round.addCommitment(&c); err != nil {
 		app.logger.Error("failed to add commitment to round",
 			"err", err,
 			"round", blockNr,
@@ -594,7 +599,7 @@ func (app *rootHashApplication) tryFinalize(
 		}
 	}()
 
-	state := rtState.Round.RoundState.State
+	state := rtState.Round.State
 	id, _ := runtime.ID.MarshalBinary()
 
 	if state == stateFinalized {
@@ -604,7 +609,7 @@ func (app *rootHashApplication) tryFinalize(
 		return
 	}
 
-	blk, err := rtState.Round.tryFinalize(ctx, runtime)
+	blk, err := rtState.Round.tryFinalize(ctx)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -621,7 +626,7 @@ func (app *rootHashApplication) tryFinalize(
 		}
 		ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 		return
-	case errStillWaiting:
+	case commitment.ErrStillWaiting:
 		if forced {
 			if state == stateDiscrepancyWaitingCommitments {
 				// This was a forced finalization call due to timeout,
