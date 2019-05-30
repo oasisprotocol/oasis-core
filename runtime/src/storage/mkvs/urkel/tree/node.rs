@@ -111,7 +111,7 @@ pub struct NodePointer {
     pub hash: Hash,
     pub node: Option<NodeRef>,
 
-    pub cache_extra: u64,
+    pub cache_extra: CacheExtra<NodePointer>,
 }
 
 /// A reference-counted pointer to a pointer.
@@ -159,11 +159,11 @@ impl NodePointer {
 }
 
 impl CacheItem for NodePointer {
-    fn get_cache_extra(&self) -> u64 {
+    fn get_cache_extra(&self) -> CacheExtra<NodePointer> {
         self.cache_extra
     }
 
-    fn set_cache_extra(&mut self, new_val: u64) {
+    fn set_cache_extra(&mut self, new_val: CacheExtra<NodePointer>) {
         self.cache_extra = new_val;
     }
 
@@ -335,7 +335,7 @@ pub struct ValuePointer {
     pub hash: Hash,
     pub value: Option<Value>,
 
-    pub cache_extra: u64,
+    pub cache_extra: CacheExtra<ValuePointer>,
 }
 
 impl ValuePointer {
@@ -373,11 +373,11 @@ impl ValuePointer {
 }
 
 impl CacheItem for ValuePointer {
-    fn get_cache_extra(&self) -> u64 {
+    fn get_cache_extra(&self) -> CacheExtra<ValuePointer> {
         self.cache_extra
     }
 
-    fn set_cache_extra(&mut self, new_val: u64) {
+    fn set_cache_extra(&mut self, new_val: CacheExtra<ValuePointer>) {
         self.cache_extra = new_val;
     }
 

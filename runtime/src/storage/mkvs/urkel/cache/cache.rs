@@ -1,11 +1,11 @@
-use std::{any::Any, sync::Arc};
+use std::{any::Any, ptr::NonNull, sync::Arc};
 
 use failure::Fallible;
 use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{sync::*, tree::*},
+    storage::mkvs::urkel::{cache::lru_cache::CacheItemBox, sync::*, tree::*},
 };
 
 /// Statistics about the contents of the cache.
@@ -103,14 +103,20 @@ pub trait Cache {
     ) -> Fallible<NodePtrRef>;
 }
 
+/// Shorthand for the type that cacheable items must hold to aid caching.
+pub type CacheExtra<T> = Option<NonNull<CacheItemBox<T>>>;
+
 /// Cacheable objects must implement this trait to enable the cache to cache them.
-pub trait CacheItem {
+pub trait CacheItem<Item = Self>
+where
+    Item: CacheItem + Default,
+{
     /// Get the item's caching hint.
     ///
     /// For e.g. the LRU cache, this may be a used timestamp.
-    fn get_cache_extra(&self) -> u64;
+    fn get_cache_extra(&self) -> CacheExtra<Item>;
     /// Set the item's caching hint.
-    fn set_cache_extra(&mut self, new_val: u64);
+    fn set_cache_extra(&mut self, new_val: CacheExtra<Item>);
     /// Return the size, in bytes, of the item when cached.
     fn get_cached_size(&self) -> usize;
 }

@@ -1,6 +1,7 @@
-use std::{any::Any, cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc, sync::Arc};
 
 use failure::Fallible;
+use intrusive_collections::{IntrusivePointer, LinkedList, LinkedListLink};
 use io_context::Context;
 
 use crate::{
@@ -8,24 +9,47 @@ use crate::{
     storage::mkvs::urkel::{cache::*, sync::*, tree::*, utils::*},
 };
 
+#[derive(Clone, Default)]
+pub struct CacheItemBox<Item: CacheItem + Default> {
+    item: Rc<RefCell<Item>>,
+    link: LinkedListLink,
+}
+
+unsafe impl<T: CacheItem + Default> IntrusivePointer<CacheItemBox<T>>
+    for Pin<Box<CacheItemBox<T>>>
+{
+    #[inline]
+    fn into_raw(self) -> *const CacheItemBox<T> {
+        unsafe { Box::into_raw(Pin::into_inner_unchecked(self)) }
+    }
+    #[inline]
+    unsafe fn from_raw(ptr: *const CacheItemBox<T>) -> Self {
+        Box::into_pin(Box::from_raw(ptr as *mut CacheItemBox<T>))
+    }
+}
+
+intrusive_adapter!(
+    CacheItemAdapter<Item> = Pin<Box<CacheItemBox<Item>>>:
+        CacheItemBox<Item> { link: LinkedListLink }
+        where Item: CacheItem + Default
+);
+
 struct LRUList<V>
 where
-    V: CacheItem,
+    V: CacheItem + Default,
 {
-    pub list: BTreeMap<u64, Rc<RefCell<V>>>,
-    pub seq_next: u64,
+    pub list: LinkedList<CacheItemAdapter<V>>,
     pub size: usize,
     pub capacity: usize,
 }
 
 impl<V> LRUList<V>
 where
-    V: CacheItem,
+    V: CacheItem + Default,
 {
     pub fn new(capacity: usize) -> LRUList<V> {
         LRUList {
-            list: BTreeMap::new(),
-            seq_next: 1,
+            list: LinkedList::new(CacheItemAdapter::new()),
             size: 0,
             capacity: capacity,
         }
@@ -33,39 +57,46 @@ where
 
     fn add_to_front(&mut self, val: Rc<RefCell<V>>) {
         let mut val_ref = val.borrow_mut();
-        if val_ref.get_cache_extra() == 0 {
+        if val_ref.get_cache_extra().is_none() {
             self.size += val_ref.get_cached_size();
+            let mut item_box = Box::pin(CacheItemBox {
+                item: val.clone(),
+                link: LinkedListLink::new(),
+            });
+            val_ref.set_cache_extra(NonNull::new(&mut *item_box));
+            self.list.push_front(item_box);
+        } else {
+            self.move_to_front(val.clone());
         }
-        val_ref.set_cache_extra(self.seq_next);
-        self.list.insert(val_ref.get_cache_extra(), val.clone());
-        self.seq_next += 1;
     }
 
     fn move_to_front(&mut self, val: Rc<RefCell<V>>) -> bool {
-        let mut val_ref = val.borrow_mut();
-        if val_ref.get_cache_extra() == 0 {
-            false
-        } else {
-            self.list.remove(&val_ref.get_cache_extra());
-            val_ref.set_cache_extra(self.seq_next);
-            self.list.insert(val_ref.get_cache_extra(), val.clone());
-            self.seq_next += 1;
-            true
+        let val_ref = val.borrow();
+        match val_ref.get_cache_extra() {
+            None => false,
+            Some(non_null) => {
+                let mut item_cursor = unsafe { self.list.cursor_mut_from_ptr(non_null.as_ptr()) };
+                let removed_box = item_cursor.remove().unwrap();
+                self.list.push_front(removed_box);
+                true
+            }
         }
     }
 
     fn remove(&mut self, val: Rc<RefCell<V>>) -> bool {
         let extra = val.borrow().get_cache_extra();
-        if extra == 0 {
-            false
-        } else {
-            match self.list.remove(&extra) {
-                None => false,
-                Some(val) => {
-                    let mut val = val.borrow_mut();
-                    val.set_cache_extra(0);
-                    self.size -= val.get_cached_size();
-                    true
+        match extra {
+            None => false,
+            Some(non_null) => {
+                let mut item_cursor = unsafe { self.list.cursor_mut_from_ptr(non_null.as_ptr()) };
+                match item_cursor.remove() {
+                    None => false,
+                    Some(item_box) => {
+                        let mut val = item_box.item.borrow_mut();
+                        val.set_cache_extra(None);
+                        self.size -= val.get_cached_size();
+                        true
+                    }
                 }
             }
         }
@@ -76,10 +107,9 @@ where
         if self.capacity > 0 {
             let target_size = val.borrow().get_cached_size();
             while !self.list.is_empty() && self.capacity - self.size < target_size {
-                let lowest = self.list.keys().next().unwrap();
-                let item = self.list.get(lowest).unwrap().clone();
-                if self.remove(item.clone()) {
-                    evicted.push(item);
+                let back = (*self.list.back().get().unwrap()).item.clone();
+                if self.remove(back.clone()) {
+                    evicted.push(back);
                 }
             }
         }
@@ -282,7 +312,7 @@ impl Cache for LRUCache {
     }
 
     fn try_remove_node(&mut self, ptr: NodePtrRef) {
-        if ptr.borrow().get_cache_extra() == 0 {
+        if ptr.borrow().get_cache_extra().is_none() {
             return;
         }
 
