@@ -73,6 +73,9 @@ func (b *memoryBackend) apply(ctx context.Context, root hash.Hash, expectedNewRo
 }
 
 func (b *memoryBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.MKVSReceipt, error) {
+	if b.signingKey == nil {
+		return nil, api.ErrCantProve
+	}
 	receipt := api.MKVSReceiptBody{
 		Version: 1,
 		Roots:   roots,
