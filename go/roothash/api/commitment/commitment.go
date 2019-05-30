@@ -85,3 +85,7 @@ func SignComputeCommitment(privateKey signature.PrivateKey, body *ComputeBody) (
 		Signed: *signed,
 	}, nil
 }
+
+func init() {
+	cbor.RegisterType(OpenComputeCommitment{}, "com.oasislabs/OpenComputeCommitment")
+}

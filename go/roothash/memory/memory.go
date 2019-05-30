@@ -81,7 +81,7 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 	// If the committee is the "same", ignore this.
 	//
 	// TODO: Use a better check to allow for things like rescheduling.
-	if s.round != nil && s.round.roundState.committee.ValidFor == committee.ValidFor {
+	if s.round != nil && s.round.pool.Committee.ValidFor == committee.ValidFor {
 		s.logger.Debug("worker: duplicate committee or reschedule, ignoring",
 			"epoch", committee.ValidFor,
 		)
@@ -111,14 +111,14 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 	if err != nil {
 		panic(err)
 	}
-	computationGroup := make(map[signature.MapKey]nodeInfo)
-	for _, committeeNode := range committee.Members {
-		computationGroup[committeeNode.PublicKey.ToMapKey()] = nodeInfo{
-			committeeNode: committeeNode,
+	nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+	for idx, committeeNode := range committee.Members {
+		nodeInfo[committeeNode.PublicKey.ToMapKey()] = commitment.NodeInfo{
+			CommitteeNode: idx,
 		}
 	}
 	for _, node := range nodes {
-		ni, ok := computationGroup[node.ID.ToMapKey()]
+		ni, ok := nodeInfo[node.ID.ToMapKey()]
 		if !ok {
 			continue
 		}
@@ -126,12 +126,12 @@ func (s *runtimeState) onNewCommittee(ctx context.Context, committee *scheduler.
 			if !r.ID.Equal(s.runtime.ID) {
 				continue
 			}
-			ni.runtime = r
+			ni.Runtime = r
 			break
 		}
 	}
 
-	s.round = newRound(ctx, s.runtime, committee, computationGroup, blk)
+	s.round = newRound(ctx, committee, nodeInfo, blk, s.runtime)
 
 	// Emit an empty epoch transition block in the new round. This is required so that
 	// the clients can be sure what state is final when an epoch transition occurs.
@@ -183,7 +183,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 	latestBlock, _ := s.getLatestBlockImpl()
 	blockNr := latestBlock.Header.Round
 
-	state := s.round.roundState.state
+	state := s.round.state
 
 	blk, err := s.round.tryFinalize()
 	switch err {
@@ -201,7 +201,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 		s.blockNotifier.Broadcast(blk)
 		s.blocks = append(s.blocks, blk)
 		return
-	case errStillWaiting:
+	case commitment.ErrStillWaiting:
 		if forced {
 			if state == stateDiscrepancyWaitingCommitments {
 				// This was a forced finalization call due to timeout,
@@ -211,7 +211,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 				// doesn't handle this.
 				s.logger.Error("worker: failed to finalize discrepancy committee on timeout",
 					"round", blockNr,
-					"num_commitments", len(s.round.roundState.commitments),
+					"num_commitments", len(s.round.pool.Commitments),
 				)
 				break
 			}
@@ -222,7 +222,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 			// process the round, assuming that it is possible to do so.
 			s.logger.Error("worker: failed to finalize committee on timeout",
 				"round", blockNr,
-				"num_commitments", len(s.round.roundState.commitments),
+				"num_commitments", len(s.round.pool.Commitments),
 			)
 			err = s.round.forceBackupTransition()
 			break
@@ -230,7 +230,7 @@ func (s *runtimeState) tryFinalize(forced bool) { // nolint: gocyclo
 
 		s.logger.Debug("worker: insufficient commitments for finality, waiting",
 			"round", blockNr,
-			"num_commitments", len(s.round.roundState.commitments),
+			"num_commitments", len(s.round.pool.Commitments),
 		)
 
 		rearmTimer = true
@@ -322,12 +322,18 @@ func (s *runtimeState) worker(ctx context.Context, sched scheduler.Backend) { //
 			blockNr := latestBlock.Header.Round
 
 			// If the round was finalized, transition.
-			if s.round.roundState.currentBlock != latestBlock {
+			if s.round.currentBlock != latestBlock {
 				s.logger.Debug("worker: round was finalized, transitioning round",
 					"round", blockNr,
 				)
 
-				s.round = newRound(ctx, s.runtime, s.round.roundState.committee, s.round.roundState.computationGroup, latestBlock)
+				s.round = newRound(
+					ctx,
+					s.round.pool.Committee,
+					s.round.pool.NodeInfo,
+					latestBlock,
+					s.runtime,
+				)
 			}
 
 			// Add the commitment.
