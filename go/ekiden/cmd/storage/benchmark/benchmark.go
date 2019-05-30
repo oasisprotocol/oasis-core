@@ -110,63 +110,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		defer pprof.StopCPUProfile()
 	}
 
-	// Benchmark CAS storage first.
-	for _, sz := range []int{
-		256, 512, 1024, 4096, 8192, 16384, 32768,
-	} {
-		buf := make([]byte, sz)
-
-		// Insert.
-		res := testing.Benchmark(func(b *testing.B) {
-			b.SetBytes(int64(sz))
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				_, _ = io.ReadFull(rand.Reader, buf)
-				b.StartTimer()
-
-				if err = storage.Insert(context.Background(), buf, 9001, storageAPI.InsertOptions{}); err != nil {
-					b.Fatalf("failed to Insert(): %v", err)
-				}
-			}
-		})
-		if err != nil {
-			logger.Error("failed to Insert()", "err", err)
-		} else {
-			logger.Info("Insert",
-				"sz", sz,
-				"ns_per_op", res.NsPerOp(),
-			)
-		}
-
-		// Get.
-		key := storageAPI.HashStorageKey(buf)
-		res = testing.Benchmark(func(b *testing.B) {
-			b.SetBytes(int64(sz))
-			for i := 0; i < b.N; i++ {
-				var tmp []byte
-				tmp, err = storage.Get(context.Background(), key)
-				if err != nil {
-					b.Fatalf("failed to Get(): %v", err)
-				}
-
-				b.StopTimer()
-				if !bytes.Equal(tmp, buf) {
-					err = fmt.Errorf("bytes mismatch")
-					b.Fatalf("bytes mismatch")
-				}
-				b.StartTimer()
-			}
-		})
-		if err != nil {
-			logger.Error("failed to Get()", "err", err)
-		} else {
-			logger.Info("Get",
-				"sz", sz,
-				"ns_per_op", res.NsPerOp(),
-			)
-		}
-	}
-
 	// PurgeExpired.
 	sweeper, ok := storage.(storageAPI.SweepableBackend)
 	if ok {

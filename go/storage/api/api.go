@@ -228,33 +228,6 @@ type ApplyOp struct {
 type Backend interface {
 	syncer.ReadSyncer
 
-	// Get returns the value for a specific immutable key.
-	Get(context.Context, Key) ([]byte, error)
-
-	// Fetch multiple values for specific immutable keys.
-	GetBatch(context.Context, []Key) ([][]byte, error)
-
-	// GetReceipt returns a signed proof that the specific keys are in
-	// storage.
-	GetReceipt(context.Context, []Key) (*SignedReceipt, error)
-
-	// Insert inserts a specific value, which can later be retreived by
-	// it's hash.  The expiration is the number of epochs for which the
-	// value should remain available.
-	Insert(context.Context, []byte, uint64, InsertOptions) error
-
-	// InsertBatch inserts multiple values into storage. They can be later
-	// retrieved by their hashes. The expiration is the number of epochs
-	// for which the value should remain available.
-	//
-	// If the storage backend is unable to store any of the values, no
-	// values will be stored.
-	InsertBatch(context.Context, []Value, InsertOptions) error
-
-	// GetKeys returns all of the keys in the storage database, along
-	// with their associated metadata.
-	GetKeys(context.Context) (<-chan *KeyInfo, error)
-
 	// Apply applies a set of operations against the MKVS.  The root may refer
 	// to a nil node, in which case a new root will be created.
 	// The expected new root is used to check if the new root after all the

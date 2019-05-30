@@ -5,8 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -18,123 +16,6 @@ var _ pb.StorageServer = (*grpcServer)(nil)
 
 type grpcServer struct {
 	backend api.Backend
-}
-
-func (s *grpcServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
-	id := req.GetId()
-	if len(id) != api.KeySize {
-		return nil, errors.New("storage: malformed key")
-	}
-
-	var k api.Key
-	copy(k[:], id)
-	// TODO: should these waits be here, or should the clients be updated to wait?
-	<-s.backend.Initialized()
-	v, err := s.backend.Get(ctx, k)
-	if err == api.ErrKeyNotFound || err == api.ErrKeyExpired {
-		return nil, status.Errorf(codes.NotFound, err.Error())
-	} else if err != nil {
-		return nil, err
-	}
-
-	return &pb.GetResponse{Data: v}, nil
-}
-
-func (s *grpcServer) GetBatch(ctx context.Context, req *pb.GetBatchRequest) (*pb.GetBatchResponse, error) {
-	var keys []api.Key
-	for _, id := range req.GetIds() {
-		if len(id) != api.KeySize {
-			return nil, errors.New("storage: malformed key")
-		}
-
-		var k api.Key
-		copy(k[:], id)
-		keys = append(keys, k)
-	}
-
-	<-s.backend.Initialized()
-	values, err := s.backend.GetBatch(ctx, keys)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.GetBatchResponse{Data: values}, nil
-}
-
-func (s *grpcServer) GetReceipt(ctx context.Context, req *pb.GetReceiptRequest) (*pb.GetReceiptResponse, error) {
-	var keys []api.Key
-	for _, id := range req.GetIds() {
-		if len(id) != api.KeySize {
-			return nil, errors.New("storage: malformed key")
-		}
-
-		var k api.Key
-		copy(k[:], id)
-		keys = append(keys, k)
-	}
-
-	<-s.backend.Initialized()
-	signed, err := s.backend.GetReceipt(ctx, keys)
-	if err != nil {
-		return nil, err
-	}
-
-	return &pb.GetReceiptResponse{Data: signed.MarshalCBOR()}, nil
-}
-
-func (s *grpcServer) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
-	<-s.backend.Initialized()
-	if err := s.backend.Insert(ctx, req.GetData(), req.GetExpiry(), api.InsertOptions{}); err != nil {
-		return nil, err
-	}
-	return &pb.InsertResponse{}, nil
-}
-
-func (s *grpcServer) InsertBatch(ctx context.Context, req *pb.InsertBatchRequest) (*pb.InsertBatchResponse, error) {
-	var values []api.Value
-	for _, item := range req.GetItems() {
-		values = append(values, api.Value{
-			Data:       item.GetData(),
-			Expiration: item.GetExpiry(),
-		})
-	}
-
-	<-s.backend.Initialized()
-	if err := s.backend.InsertBatch(ctx, values, api.InsertOptions{}); err != nil {
-		return nil, err
-	}
-
-	return &pb.InsertBatchResponse{}, nil
-}
-
-func (s *grpcServer) GetKeys(req *pb.GetKeysRequest, stream pb.Storage_GetKeysServer) error {
-	<-s.backend.Initialized()
-	ch, err := s.backend.GetKeys(stream.Context())
-	if err != nil {
-		return err
-	}
-
-	for {
-		var ki *api.KeyInfo
-		var ok bool
-
-		select {
-		case ki, ok = <-ch:
-		case <-stream.Context().Done():
-		}
-		if !ok {
-			break
-		}
-
-		resp := &pb.GetKeysResponse{
-			Key:    ki.Key[:],
-			Expiry: uint64(ki.Expiration),
-		}
-		if err := stream.Send(resp); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {

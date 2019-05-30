@@ -10,7 +10,6 @@ package client
 import (
 	"context"
 	"crypto/x509"
-	"io"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -18,10 +17,8 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -270,178 +267,6 @@ func (s *storageClientBackendState) updateStorageLeader(ctx context.Context, epo
 	s.storageNodeLeaderKey[epoch] = &nodeKey
 
 	return nil
-}
-
-func (b *storageClientBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
-	var req storage.GetRequest
-
-	req.Id = key[:]
-
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.Get(ctx, &req)
-	b.connectionState.RUnlock()
-
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, api.ErrKeyNotFound
-		}
-		return nil, err
-	}
-
-	return resp.GetData(), nil
-}
-
-func (b *storageClientBackend) GetBatch(ctx context.Context, keys []api.Key) ([][]byte, error) {
-	var req storage.GetBatchRequest
-
-	req.Ids = make([][]byte, 0, len(keys))
-	for _, v := range keys {
-		req.Ids = append(req.Ids, append([]byte{}, v[:]...))
-	}
-
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.GetBatch(ctx, &req)
-	b.connectionState.RUnlock()
-
-	if err != nil {
-		return nil, err
-	}
-
-	rs := resp.GetData()
-
-	// Fix response by replacing empty parts with nils, as is expected/done by other backends.
-	fixedRs := [][]byte{}
-	for _, v := range rs {
-		if len(v) > 0 {
-			fixedRs = append(fixedRs, v)
-		} else {
-			fixedRs = append(fixedRs, nil)
-		}
-
-	}
-
-	return fixedRs, nil
-}
-
-func (b *storageClientBackend) GetReceipt(ctx context.Context, keys []api.Key) (*api.SignedReceipt, error) {
-	var req storage.GetReceiptRequest
-
-	req.Ids = make([][]byte, 0, len(keys))
-	for _, v := range keys {
-		req.Ids = append(req.Ids, append([]byte{}, v[:]...))
-	}
-
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.GetReceipt(ctx, &req)
-	b.connectionState.RUnlock()
-
-	if err != nil {
-		return nil, err
-	}
-
-	var signed api.SignedReceipt
-	if err = signed.UnmarshalCBOR(resp.GetData()); err != nil {
-		return nil, err
-	}
-
-	return &signed, nil
-}
-
-func (b *storageClientBackend) Insert(ctx context.Context, value []byte, expiration uint64, opts api.InsertOptions) error {
-	var req storage.InsertRequest
-
-	req.Data = value
-	req.Expiry = expiration
-
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return ErrStorageNotAvailable
-	}
-	_, err := b.connectionState.client.Insert(ctx, &req)
-	b.connectionState.RUnlock()
-
-	return err
-}
-
-func (b *storageClientBackend) InsertBatch(ctx context.Context, values []api.Value, opts api.InsertOptions) error {
-	var req storage.InsertBatchRequest
-
-	req.Items = make([]*storage.InsertRequest, 0, len(values))
-	for _, v := range values {
-		value := v.Data
-		exp := v.Expiration
-
-		req.Items = append(req.Items, &storage.InsertRequest{
-			Data:   value,
-			Expiry: exp,
-		})
-	}
-
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return ErrStorageNotAvailable
-	}
-	_, err := b.connectionState.client.InsertBatch(ctx, &req)
-	b.connectionState.RUnlock()
-
-	return err
-}
-
-func (b *storageClientBackend) GetKeys(ctx context.Context) (<-chan *api.KeyInfo, error) {
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	keys, err := b.connectionState.client.GetKeys(ctx, &storage.GetKeysRequest{})
-	b.connectionState.RUnlock()
-
-	if err != nil {
-		return nil, err
-	}
-
-	kiCh := make(chan *api.KeyInfo)
-
-	go func() {
-		defer close(kiCh)
-
-		for {
-			resp, err := keys.Recv()
-
-			switch err {
-			case nil:
-			case io.EOF:
-				return
-			}
-
-			ki := &api.KeyInfo{
-				Expiration: epochtime.EpochTime(resp.GetExpiry()),
-			}
-			copy(ki.Key[:], resp.GetKey())
-
-			select {
-			case kiCh <- ki:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return kiCh, nil
 }
 
 func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {

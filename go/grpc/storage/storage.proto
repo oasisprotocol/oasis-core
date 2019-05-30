@@ -4,13 +4,6 @@ package storage;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 
 service Storage {
-    // CAS
-    rpc Get(GetRequest) returns (GetResponse) {}
-    rpc GetBatch(GetBatchRequest) returns (GetBatchResponse) {}
-    rpc GetReceipt(GetReceiptRequest) returns (GetReceiptResponse) {}
-    rpc Insert(InsertRequest) returns (InsertResponse) {}
-    rpc InsertBatch(InsertBatchRequest) returns (InsertBatchResponse) {}
-    rpc GetKeys(GetKeysRequest) returns (stream GetKeysResponse) {}
     // MKVS
     rpc Apply(ApplyRequest) returns (ApplyResponse) {}
     rpc ApplyBatch(ApplyBatchRequest) returns (ApplyBatchResponse) {}
@@ -18,53 +11,6 @@ service Storage {
     rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
     rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
     rpc GetValue(GetValueRequest) returns (GetValueResponse) {}
-}
-
-message GetRequest {
-    bytes id = 1;
-}
-
-message GetResponse {
-    bytes data = 1;
-}
-
-message GetBatchRequest {
-    repeated bytes ids = 1;
-}
-
-message GetBatchResponse {
-    repeated bytes data = 1;
-}
-
-message GetReceiptRequest {
-    repeated bytes ids = 1;
-}
-
-message GetReceiptResponse {
-    bytes data = 1;
-}
-
-message InsertRequest {
-    bytes data = 1;
-    uint64 expiry = 2;
-}
-
-message InsertResponse {
-}
-
-message InsertBatchRequest {
-    repeated InsertRequest items = 1;
-}
-
-message InsertBatchResponse {
-}
-
-message GetKeysRequest {
-}
-
-message GetKeysResponse {
-    bytes key = 1;
-    uint64 expiry = 2;
 }
 
 message LogEntry {

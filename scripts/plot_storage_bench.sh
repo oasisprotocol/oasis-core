@@ -44,47 +44,6 @@ fi
 OUT="$(mktemp)"
 ${ROOT}/go/ekiden/ekiden ${ARGS} > ${OUT}
 
-# CAS Insert.
-DATA_INSERT="$(mktemp)"
-fgrep 'msg=Insert sz=' ${OUT} | cut -sd' ' -f6,7 | sed 's/[^0-9 ]*//g' > ${DATA_INSERT}
-
-gnuplot <<- EOF
-set title "CAS Insert (${BACKEND})"
-
-set logscale x
-set xlabel "Value size [log bytes]"
-set xtics (256, 512, 1024, 4096, 8192, 16384, 32768)
-
-set ylabel "μs/op"
-
-set term png
-set output "${BACKEND}_cas_insert.png"
-plot '${DATA_INSERT}' using 1:(column(2) / 1000) with lines notitle
-EOF
-
-rm "${DATA_INSERT}"
-
-
-# CAS Get.
-DATA_GET="$(mktemp)"
-fgrep 'msg=Get sz=' ${OUT} | cut -sd' ' -f6,7 | sed 's/[^0-9 ]*//g' > ${DATA_GET}
-
-gnuplot <<- EOF
-set title "CAS Get (${BACKEND})"
-
-set logscale x
-set xlabel "Value size [log bytes]"
-set xtics (256, 512, 1024, 4096, 8192, 16384, 32768)
-
-set ylabel "μs/op"
-
-set term png
-set output "${BACKEND}_cas_get.png"
-plot '${DATA_GET}' using 1:(column(2) / 1000) with lines notitle
-EOF
-
-rm "${DATA_GET}"
-
 
 # MKVS single Apply.
 DATA_APPLY_SINGLE="$(mktemp)"
