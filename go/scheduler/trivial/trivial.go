@@ -3,7 +3,6 @@ package trivial
 import (
 	"bytes"
 	"context"
-	"fmt"
 
 	"github.com/eapache/channels"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -23,8 +22,6 @@ const BackendName = "trivial"
 var (
 	_ api.Backend      = (*trivialScheduler)(nil)
 	_ api.BlockBackend = (*trivialScheduler)(nil)
-
-	errIncompatibleBackends = fmt.Errorf("scheduler/trivial: incompatible backend(s) for block operations")
 )
 
 type trivialScheduler struct {
