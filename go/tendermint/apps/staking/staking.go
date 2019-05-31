@@ -79,12 +79,12 @@ func (app *stakingApplication) ForeignCheckTx(ctx *abci.Context, other abci.Appl
 	return nil
 }
 
-func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
 	if app.debugGenesisState != nil {
 		if len(st.Ledger) > 0 {
 			app.logger.Error("InitChain: debug genesis state and actual genesis state provided")
-			panic("staking: multiple genesis states specified")
+			return errors.New("staking: multiple genesis states specified")
 		}
 		st = app.debugGenesisState
 	}
@@ -108,6 +108,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 				"id",
 				"generalBalance", account.GeneralBalance,
 			)
+			return errors.Wrap(err, "staking: invalid general balance")
 		}
 	}
 	state.setTotalSupply(&totalSupply)
@@ -115,9 +116,12 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	app.logger.Debug("InitChain: setting total supply",
 		"totalSupply", totalSupply,
 	)
+
+	return nil
 }
 
-func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
+func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+	return nil
 }
 
 func (app *stakingApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -137,8 +141,8 @@ func (app *stakingApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Ap
 	return nil
 }
 
-func (app *stakingApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+func (app *stakingApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, nil
 }
 
 func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {

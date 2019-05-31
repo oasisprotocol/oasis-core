@@ -122,7 +122,7 @@ func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.Registry
 
 	app.logger.Debug("InitChain: Genesis state",
@@ -139,7 +139,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 				"err", err,
 				"entity", v,
 			)
-			panic("registry: genesis entity registration failure")
+			return errors.Wrap(err, "registry: genesis entity registration failure")
 		}
 	}
 	for _, v := range st.Runtimes {
@@ -151,19 +151,22 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 				"err", err,
 				"runtime", v,
 			)
-			panic("registry: genesis runtime registration failure")
+			return errors.Wrap(err, "registry: genesis runtime registration failure")
 		}
 	}
 
 	if len(st.Entities) > 0 || len(st.Runtimes) > 0 {
 		ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 	}
+
+	return nil
 }
 
-func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
+func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		app.onEpochChange(ctx, epoch)
+		return app.onEpochChange(ctx, epoch)
 	}
+	return nil
 }
 
 func (app *registryApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -182,14 +185,14 @@ func (app *registryApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 	return nil
 }
 
-func (app *registryApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, nil
 }
 
 func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
 }
 
-func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) {
+func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
 	nodes, err := state.getNodes()
@@ -197,7 +200,7 @@ func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		app.logger.Error("onEpochChange: failed to get nodes",
 			"err", err,
 		)
-		return
+		return errors.Wrap(err, "registry: onEpochChange: failed to get nodes")
 	}
 
 	var expiredNodes []*node.Node
@@ -209,13 +212,15 @@ func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		state.removeNode(node)
 	}
 	if len(expiredNodes) == 0 {
-		return
+		return nil
 	}
 
 	// Iff any nodes have expired, force-emit the application tag so
 	// the change is picked up.
 	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 	ctx.EmitTag(TagNodesExpired, cbor.Marshal(expiredNodes))
+
+	return nil
 }
 
 // Execute transaction against given state.
