@@ -39,12 +39,21 @@ export CARGO_TARGET_DIR=/tmp/coverage_target
 # Required as tarpaulin doesn't honor .cargo/config.
 export RUSTFLAGS="-C target-feature=+aes,+ssse3"
 
-# Calculate coverage
+# Name the current commit so Tarpaulin can detect it correctly.
+git checkout -B ${BUILDKITE_BRANCH}
+
+# Calculate coverage.
 set +x
 cargo tarpaulin \
   --ignore-tests \
   --out Xml \
-  --exclude-files *generated* \
+  --all \
+  --exclude simple-keyvalue \
+  --exclude simple-keyvalue-client \
+  --exclude simple-keyvalue-enc-client \
+  --exclude test-long-term-client \
+  --exclude-files '*generated*' \
+  --exclude-files tests \
   --coveralls ${coveralls_api_token} \
   -v
 set -x
