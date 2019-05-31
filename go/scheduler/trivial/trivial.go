@@ -1,17 +1,19 @@
 package trivial
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"sync"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/eapache/channels"
+	tmtypes "github.com/tendermint/tendermint/types"
+
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
+	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -26,8 +28,6 @@ var (
 )
 
 type trivialScheduler struct {
-	sync.Once
-
 	logger *logging.Logger
 
 	service  service.TendermintService
@@ -38,7 +38,7 @@ func (s *trivialScheduler) Cleanup() {
 }
 
 func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
-	panic("scheduler/trivial: GetCommittees not implemented")
+	return s.GetBlockCommittees(ctx, id, 0)
 }
 
 func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
@@ -49,22 +49,141 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
-	panic("scheduler/trivial: GetBlockCommittees not implemented")
+func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
+	raw, err := s.service.Query(app.QueryAllCommittees, id, height)
+	if err != nil {
+		return nil, err
+	}
+
+	var committees []*api.Committee
+	err = cbor.Unmarshal(raw, &committees)
+	if err != nil {
+		return nil, err
+	}
+
+	var runtimeCommittees []*api.Committee
+	for _, c := range committees {
+		if c.RuntimeID.Equal(id) {
+			runtimeCommittees = append(runtimeCommittees, c)
+		}
+	}
+
+	return runtimeCommittees, err
+}
+
+func (s *trivialScheduler) getCurrentCommittees() ([]*api.Committee, error) {
+	raw, err := s.service.Query(app.QueryAllCommittees, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	var committees []*api.Committee
+	err = cbor.Unmarshal(raw, &committees)
+	return committees, err
 }
 
 func (s *trivialScheduler) worker(ctx context.Context) {
-	// TODO %%%
+	// Subscribe to blocks which elect committees.
+	sub, err := s.service.Subscribe("scheduler-worker", app.QueryApp)
+	if err != nil {
+		s.logger.Error("failed to subscribe",
+			"err", err,
+		)
+		return
+	}
+	defer func() {
+		err := s.service.Unsubscribe("scheduler-worker", app.QueryApp)
+		if err != nil {
+			s.logger.Error("failed to unsubscribe",
+				"err", err,
+			)
+		}
+	}()
+
+	for {
+		var event interface{}
+
+		select {
+		case msg := <-sub.Out():
+			event = msg.Data()
+		case <-sub.Cancelled():
+			s.logger.Debug("worker: terminating, subscription closed")
+			return
+		case <-ctx.Done():
+			return
+		}
+
+		switch ev := event.(type) {
+		case tmtypes.EventDataNewBlock:
+			s.onEventDataNewBlock(ctx, ev)
+		default:
+		}
+	}
+}
+
+// Called from worker.
+func (s *trivialScheduler) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
+	tags := ev.ResultBeginBlock.GetTags()
+
+	for _, pair := range tags {
+		if bytes.Equal(pair.GetKey(), app.TagElected) {
+			var kinds []api.CommitteeKind
+			if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
+				s.logger.Error("worker: malformed elected committee types list",
+					"err", err,
+				)
+				continue
+			}
+
+			raw, err := s.service.Query(app.QueryKindsCommittees, kinds, ev.Block.Header.Height)
+			if err != nil {
+				s.logger.Error("worker: couldn't query elected committees",
+					"err", err,
+				)
+				continue
+			}
+
+			var committees []*api.Committee
+			if err := cbor.Unmarshal(raw, &committees); err != nil {
+				s.logger.Error("worker: malformed elected committees",
+					"err", err,
+				)
+				continue
+			}
+
+			for _, c := range committees {
+				s.notifier.Broadcast(c)
+			}
+		}
+	}
 }
 
 // New constracts a new trivial scheduler Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, registryBackend registry.Backend, beacon beacon.Backend, service service.TendermintService) api.Backend {
+func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+	// Initialze and register the tendermint service component.
+	app := app.New()
+	if err := service.RegisterApplication(app); err != nil {
+		return nil, err
+	}
+
 	s := &trivialScheduler{
 		logger:  logging.GetLogger("scheduler/trivial"),
 		service: service,
 	}
+	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		currentCommittees, err := s.getCurrentCommittees()
+		if err != nil {
+			s.logger.Error("couldn't get current committees. won't send them. good luck to the subscriber",
+				"err", err,
+			)
+			return
+		}
+		for _, c := range currentCommittees {
+			ch.In() <- c
+		}
+	})
 
 	go s.worker(ctx)
 
-	return s
+	return s, nil
 }

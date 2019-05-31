@@ -55,7 +55,7 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 	var committees []*scheduler.Committee
 	var err error
 	if sched, ok := w.common.scheduler.(scheduler.BlockBackend); ok {
-		committees, err = sched.GetBlockCommittees(w.common.ctx, w.id, height, nil)
+		committees, err = sched.GetBlockCommittees(w.common.ctx, w.id, height)
 	} else {
 		committees, err = w.common.scheduler.GetCommittees(w.common.ctx, w.id)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/oasislabs/ekiden/go/beacon/insecure"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/registry/memory"
 	"github.com/oasislabs/ekiden/go/scheduler/tests"
@@ -21,11 +20,13 @@ func TestSchedulerTrivial(t *testing.T) {
 	}()
 
 	timeSource := mock.New()
-	beacon := insecure.New(ctx, timeSource)
 	registry := memory.New(ctx, timeSource)
 	cleanupFns = append(cleanupFns, registry.Cleanup)
 
-	backend := New(ctx, timeSource, registry, beacon, nil)
+	backend, err := New(ctx, nil)
+	if err != nil {
+		t.Fatalf("couldn't create backend: %s", err.Error())
+	}
 	cleanupFns = append(cleanupFns, backend.Cleanup)
 
 	tests.SchedulerImplementationTests(t, backend, timeSource, registry)

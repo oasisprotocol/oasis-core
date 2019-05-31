@@ -12,7 +12,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	tmbeacon "github.com/oasislabs/ekiden/go/beacon/tendermint"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -27,7 +26,6 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
 
@@ -174,20 +172,6 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		newDescriptors[v.ID.ToMapKey()] = v
 	}
 
-	// Explicitly query the beacon for the epoch.
-	var getBeaconFn scheduler.GetBeaconFunc
-	switch app.beacon.(type) {
-	case *tmbeacon.Backend:
-		getBeaconFn = func() ([]byte, error) {
-			beaconState := beaconapp.NewMutableState(tree)
-			return beaconState.GetBeacon(epoch)
-		}
-	default:
-		getBeaconFn = func() ([]byte, error) {
-			return app.beacon.GetBeacon(app.ctx, epoch)
-		}
-	}
-
 	for _, rtState := range state.getRuntimes() {
 		rtID := rtState.Runtime.ID
 
@@ -198,7 +182,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
+		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight())
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,

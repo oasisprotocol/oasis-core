@@ -24,7 +24,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case trivial.BackendName:
-		return trivial.New(ctx, timeSource, reg, beacon, service), nil
+		return trivial.New(ctx, service)
 	default:
 		return nil, fmt.Errorf("scheduler: unsupported backend: '%v'", backend)
 	}

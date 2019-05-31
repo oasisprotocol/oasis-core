@@ -9,6 +9,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -16,8 +17,9 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/scheduler/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
@@ -57,7 +59,8 @@ func (app *schedulerApplication) OnRegister(state *abci.ApplicationState, queryR
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(QueryTest, nil, app.queryTest)
+	queryRouter.AddRoute(QueryAllCommittees, nil, app.queryAllCommittees)
+	queryRouter.AddRoute(QueryKindsCommittees, []scheduler.CommitteeKind{}, app.queryKindsCommittees)
 }
 
 func (app *schedulerApplication) OnCleanup() {}
@@ -101,15 +104,17 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return fmt.Errorf("couldn't get nodes: %s", err.Error())
 		}
 
-		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.Compute); err != nil {
+		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.Compute); err != nil {
 			return fmt.Errorf("couldn't elect compute committees: %s", err.Error())
 		}
-		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.Storage); err != nil {
+		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.Storage); err != nil {
 			return fmt.Errorf("couldn't elect storage committees: %s", err.Error())
 		}
-		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.TransactionScheduler); err != nil {
+		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.TransactionScheduler); err != nil {
 			return fmt.Errorf("couldn't elect transaction scheduler committees: %s", err.Error())
 		}
+		ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+		ctx.EmitTag(TagElected, cbor.Marshal([]scheduler.CommitteeKind{scheduler.Compute, scheduler.Storage, scheduler.TransactionScheduler}))
 	}
 	return nil
 }
@@ -128,9 +133,23 @@ func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.Resp
 
 func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {}
 
-func (app *schedulerApplication) queryTest(s interface{}, r interface{}) ([]byte, error) {
-	app.logger.Debug("queryTest %%%")
-	return nil, nil
+func (app *schedulerApplication) queryAllCommittees(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+	committees, err := state.getAllCommittees()
+	if err != nil {
+		return nil, err
+	}
+	return cbor.Marshal(committees), nil
+}
+
+func (app *schedulerApplication) queryKindsCommittees(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+	request := r.([]scheduler.CommitteeKind)
+	committees, err := state.getKindsCommittees(request)
+	if err != nil {
+		return nil, err
+	}
+	return cbor.Marshal(committees), nil
 }
 
 func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
@@ -187,9 +206,9 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind api.CommitteeKind) error {
+func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != api.Compute {
+	if !rt.IsCompute() && kind != scheduler.Compute {
 		return nil
 	}
 
@@ -197,7 +216,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	var sz int
 	var rngCtx []byte
 	switch kind {
-	case api.Compute:
+	case scheduler.Compute:
 		for _, n := range nodes {
 			if app.isSuitableComputeWorker(n, rt, request.Header.Time) {
 				nodeList = append(nodeList, n)
@@ -205,7 +224,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		}
 		sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
 		rngCtx = rngContextCompute
-	case api.Storage:
+	case scheduler.Storage:
 		for _, n := range nodes {
 			if app.isSuitableStorageWorker(n) {
 				nodeList = append(nodeList, n)
@@ -213,7 +232,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		}
 		sz = int(rt.StorageGroupSize)
 		rngCtx = rngContextStorage
-	case api.TransactionScheduler:
+	case scheduler.TransactionScheduler:
 		for _, n := range nodes {
 			if app.isSuitableTransactionScheduler(n, rt) {
 				nodeList = append(nodeList, n)
@@ -247,7 +266,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	// badly.
 	// XXX: This only ensures the same storage node will be the leader if
 	// the list of registered storage nodes doesn't change.
-	if kind == api.Storage {
+	if kind == scheduler.Storage {
 		// Sort nodes by their public key.
 		sort.Slice(nodeList, func(i, j int) bool { return nodeList[i].ID.String() < nodeList[j].ID.String() })
 		// Set idxs to identity instead of a random permutation.
@@ -259,19 +278,19 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		idxs = rng.Perm(nrNodes)
 	}
 
-	var members []*api.CommitteeNode
+	var members []*scheduler.CommitteeNode
 
 	for i := 0; i < sz; i++ {
-		var role api.Role
+		var role scheduler.Role
 		switch {
 		case i == 0:
-			role = api.Leader
+			role = scheduler.Leader
 		case i >= int(rt.ReplicaGroupSize):
-			role = api.BackupWorker
+			role = scheduler.BackupWorker
 		default:
-			role = api.Worker
+			role = scheduler.Worker
 		}
-		members = append(members, &api.CommitteeNode{
+		members = append(members, &scheduler.CommitteeNode{
 			Role:      role,
 			PublicKey: nodeList[idxs[i]].ID,
 		})
@@ -282,7 +301,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, runtimes []*registry.Runtime, nodes []*node.Node, kind api.CommitteeKind) error {
+func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
 		if err := app.elect(ctx, request, epoch, beacon, runtime, nodes, kind); err != nil {
 			return err
