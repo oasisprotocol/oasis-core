@@ -35,7 +35,8 @@ var (
 	logger = logging.GetLogger("cmd/client")
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, clientGrpc.RuntimeClient) {
+// DoConnect connects to the runtime client grpc server.
+func DoConnect(cmd *cobra.Command) (*grpc.ClientConn, clientGrpc.RuntimeClient) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -54,7 +55,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, clientGrpc.RuntimeClient) 
 }
 
 func doIsSynced(cmd *cobra.Command, args []string) {
-	conn, client := doConnect(cmd)
+	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
 	logger.Debug("querying synced status")
@@ -75,7 +76,7 @@ func doIsSynced(cmd *cobra.Command, args []string) {
 }
 
 func doWaitSync(cmd *cobra.Command, args []string) {
-	conn, client := doConnect(cmd)
+	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
 	logger.Debug("waiting for sync status")

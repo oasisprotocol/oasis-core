@@ -2,19 +2,13 @@
 package block
 
 import (
-	"errors"
-
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-
-	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
 
 var (
 	_ cbor.Marshaler   = (*Block)(nil)
 	_ cbor.Unmarshaler = (*Block)(nil)
-
-	errNilProtobuf = errors.New("block: protobuf is nil")
 )
 
 // Block is an Oasis block.
@@ -23,29 +17,6 @@ var (
 type Block struct {
 	// Header is the block header.
 	Header Header `codec:"header"`
-}
-
-// FromProto deserializes a protobuf into a block.
-//
-// WARNING: The block is not guaranteed to be internally consistent.
-func (b *Block) FromProto(pb *pbRoothash.Block) error {
-	if pb == nil {
-		return errNilProtobuf
-	}
-
-	if err := b.Header.FromProto(pb.GetHeader()); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ToProto serializes a protobuf into a block.
-func (b *Block) ToProto() *pbRoothash.Block {
-	resp := new(pbRoothash.Block)
-	resp.Header = b.Header.ToProto()
-
-	return resp
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
