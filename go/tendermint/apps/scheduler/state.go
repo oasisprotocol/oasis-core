@@ -12,17 +12,11 @@ import (
 )
 
 const (
-	statePoison       = "scheduler/poison"
 	stateCommitteeMap = "scheduler/committee/%s/%s"
 )
 
 type immutableState struct {
 	*abci.ImmutableState
-}
-
-func (s *immutableState) isPoisoned() bool {
-	_, value := s.Snapshot.Get([]byte(statePoison))
-	return value != nil
 }
 
 func (s *immutableState) getCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) ([]*api.CommitteeNode, error) {
@@ -49,13 +43,6 @@ type mutableState struct {
 	*immutableState
 
 	tree *iavl.MutableTree
-}
-
-func (s *mutableState) poison() {
-	s.tree.Set(
-		[]byte(statePoison),
-		[]byte{1},
-	)
 }
 
 func (s *mutableState) putCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey, members []*api.CommitteeNode) {

@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"crypto"
+	"fmt"
 	"math/rand"
 	"sort"
 	"time"
@@ -73,14 +74,11 @@ func (app *schedulerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Ap
 	return nil
 }
 
-func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) {
+func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
+	return nil
 }
 
-func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
-	if newMutableState(app.state.DeliverTxTree()).isPoisoned() {
-		panic("scheduler: DeliverTx state is poisoned")
-	}
-
+func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// TODO: We'll later have this for each type of committee.
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
 		app.logger.Debug("BeginBlock with epoch change %%%",
@@ -90,35 +88,30 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		beaconState := beaconapp.NewMutableState(app.state.DeliverTxTree())
 		beacon, err := beaconState.GetBeacon(epoch)
 		if err != nil {
-			app.logger.Error("couldn't get beacon. poisoning",
-				"err", err,
-			)
-			app.poison()
-			return
+			return fmt.Errorf("couldn't get beacon: %s", err.Error())
 		}
 
 		regState := registryapp.NewMutableState(app.state.DeliverTxTree())
 		runtimes, err := regState.GetRuntimes()
 		if err != nil {
-			app.logger.Error("couldn't get runtimes. poisoning",
-				"err", err,
-			)
-			app.poison()
-			return
+			return fmt.Errorf("couldn't get runtimes: %s", err.Error())
 		}
 		nodes, err := regState.GetNodes()
 		if err != nil {
-			app.logger.Error("couldn't get nodes. poisoning",
-				"err", err,
-			)
-			app.poison()
-			return
+			return fmt.Errorf("couldn't get nodes: %s", err.Error())
 		}
 
-		app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.Compute)
-		app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.Storage)
-		app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.TransactionScheduler)
+		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.Compute); err != nil {
+			return fmt.Errorf("couldn't elect compute committees: %s", err.Error())
+		}
+		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.Storage); err != nil {
+			return fmt.Errorf("couldn't elect storage committees: %s", err.Error())
+		}
+		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, api.TransactionScheduler); err != nil {
+			return fmt.Errorf("couldn't elect transaction scheduler committees: %s", err.Error())
+		}
 	}
+	return nil
 }
 
 func (app *schedulerApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -129,25 +122,15 @@ func (app *schedulerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.
 	return nil
 }
 
-func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, nil
 }
 
 func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {}
 
 func (app *schedulerApplication) queryTest(s interface{}, r interface{}) ([]byte, error) {
 	app.logger.Debug("queryTest %%%")
-
-	if s.(*immutableState).isPoisoned() {
-		panic("scheduler: DeliverTx state is poisoned")
-	}
-
 	return nil, nil
-}
-
-// Operates on consensus connection.
-func (app *schedulerApplication) poison() {
-	newMutableState(app.state.DeliverTxTree()).poison()
 }
 
 func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
@@ -204,10 +187,10 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind api.CommitteeKind) {
+func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind api.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != api.Compute {
-		return
+		return nil
 	}
 
 	var nodeList []*node.Node
@@ -239,33 +222,20 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		sz = int(rt.TransactionSchedulerGroupSize)
 		rngCtx = rngContextTransactionScheduler
 	default:
-		app.logger.Error("invalid committee type",
-			"kind", kind,
-		)
-		return
+		return fmt.Errorf("scheduler: invalid committee type: %v", kind)
 	}
 	nrNodes := len(nodeList)
 
 	if sz == 0 {
-		app.logger.Error("empty committee not allowed")
-		return
+		return fmt.Errorf("scheduler: empty committee not allowed")
 	}
 	if sz > nrNodes {
-		app.logger.Error("committee size exceeds available nodes",
-			"kind", kind,
-			"sz", sz,
-			"nr_nodes", nrNodes,
-		)
-		return
+		return fmt.Errorf("scheduler: %v committee size %d exceeds available nodes %d", kind, sz, nrNodes)
 	}
 
 	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
 	if err != nil {
-		app.logger.Error("couldn't instantiate DRBG. poisoning",
-			"err", err,
-		)
-		app.poison()
-		return
+		return fmt.Errorf("scheduler: couldn't instantiate DRBG: %s", err.Error())
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
@@ -308,13 +278,17 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	}
 
 	newMutableState(app.state.DeliverTxTree()).putCommittee(kind, rt.ID, members)
+	return nil
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, runtimes []*registry.Runtime, nodes []*node.Node, kind api.CommitteeKind) {
+func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, runtimes []*registry.Runtime, nodes []*node.Node, kind api.CommitteeKind) error {
 	for _, runtime := range runtimes {
-		app.elect(ctx, request, epoch, beacon, runtime, nodes, kind)
+		if err := app.elect(ctx, request, epoch, beacon, runtime, nodes, kind); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // New constructs a new scheduler application instance.
