@@ -18,19 +18,6 @@ const tagBase = 0x4515
 
 var typeRegistry map[uint64]bool
 
-type extFwd struct{}
-
-func (e extFwd) ConvertExt(v interface{}) interface{} {
-	return v
-}
-
-func (e extFwd) UpdateExt(dst interface{}, src interface{}) {
-}
-
-func (e extFwd) UseDefault() bool {
-	return true
-}
-
 // Extension is a type that can be registered as a CBOR extension.
 type Extension interface {
 }
@@ -48,7 +35,7 @@ func RegisterType(t Extension, id string) {
 	}
 
 	h := Handle.(*codec.CborHandle)
-	err := h.SetInterfaceExt(reflect.TypeOf(t), tag, extFwd{})
+	err := h.SetInterfaceExt(reflect.TypeOf(t), tag, codec.SelfExt)
 	if err != nil {
 		panic(err)
 	}
