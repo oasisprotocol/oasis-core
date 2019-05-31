@@ -5,17 +5,18 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
-	"github.com/oasislabs/ekiden/go/grpc/roothash"
+	cmdDebugClient "github.com/oasislabs/ekiden/go/ekiden/cmd/debug/client"
+	clientGrpc "github.com/oasislabs/ekiden/go/grpc/client"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
@@ -65,35 +66,29 @@ func validateRuntimeIDStr(idStr string) error {
 	return nil
 }
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, roothash.RootHashClient) {
-	conn, err := cmdGrpc.NewClient(cmd)
+func doExport(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
+
+	conn, client := cmdDebugClient.DoConnect(cmd)
+	defer conn.Close()
+
+	logger.Debug("waiting for sync status")
+	// Use background context to block until the result comes in.
+	_, err := client.WaitSync(ctx, &clientGrpc.WaitSyncRequest{})
 	if err != nil {
-		logger.Error("failed to establish connection with node",
+		logger.Error("failed to wait for sync status",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-
-	client := roothash.NewRootHashClient(conn)
-
-	return conn, client
-}
-
-func doExport(cmd *cobra.Command, args []string) {
-	if err := cmdCommon.Init(); err != nil {
-		cmdCommon.EarlyLogAndExit(err)
-	}
-
-	conn, client := doConnect(cmd)
-	defer conn.Close()
 
 	var (
 		genesisBlocks []*block.Block
 		failed        bool
 	)
 	for _, idHex := range args {
-		id, err := hex.DecodeString(idHex)
-		if err != nil {
+		var id signature.PublicKey
+		if err = id.UnmarshalHex(idHex); err != nil {
 			logger.Error("failed to decode runtime id",
 				"err", err,
 			)
@@ -105,14 +100,11 @@ func doExport(cmd *cobra.Command, args []string) {
 			"runtime_id", idHex,
 		)
 
-		req := &roothash.LatestBlockRequest{
-			RuntimeId: id,
-		}
-		blk, err := client.GetLatestBlock(context.Background(), req)
-		if err != nil {
+		res, berr := client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id, Round: math.MaxUint64})
+		if berr != nil {
 			logger.Error("failed to get latest block",
-				"err", err,
-				"runtime_id", idHex,
+				"err", berr,
+				"runtime_id", id,
 			)
 			failed = true
 			continue
@@ -120,7 +112,7 @@ func doExport(cmd *cobra.Command, args []string) {
 
 		// Update block header so the block will be suitable as the genesis block.
 		var latestBlock block.Block
-		err = latestBlock.FromProto(blk.Block)
+		err = latestBlock.UnmarshalCBOR(res.Block)
 		if err != nil {
 			logger.Error("failed to parse block",
 				"err", err,
@@ -130,17 +122,7 @@ func doExport(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		var ns signature.PublicKey
-		if err = ns.UnmarshalBinary(id); err != nil {
-			logger.Error("failed to parse runtime id",
-				"err", err,
-				"runtime_id", idHex,
-			)
-			failed = true
-			continue
-		}
-
-		genesisBlk := block.NewGenesisBlock(ns, latestBlock.Header.Timestamp)
+		genesisBlk := block.NewGenesisBlock(id, latestBlock.Header.Timestamp)
 		genesisBlk.Header.Round = latestBlock.Header.Round
 		genesisBlk.Header.StateRoot = latestBlock.Header.StateRoot
 

@@ -5,14 +5,11 @@ import (
 	"encoding"
 	"encoding/hex"
 	"errors"
-	"math"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-
-	pbRoothash "github.com/oasislabs/ekiden/go/grpc/roothash"
 )
 
 const (
@@ -137,68 +134,6 @@ func (h *Header) MostlyEqual(cmp *Header) bool {
 	a.StorageReceipt, b.StorageReceipt = signature.Signature{}, signature.Signature{}
 	aHash, bHash := a.EncodedHash(), b.EncodedHash()
 	return aHash.Equal(&bHash)
-}
-
-// FromProto deserializes a protobuf into a header.
-func (h *Header) FromProto(pb *pbRoothash.Header) error { // nolint: gocyclo
-	if pb == nil {
-		return errNilProtobuf
-	}
-
-	// Version (range check)
-	ver := pb.GetVersion()
-	if ver > math.MaxUint16 {
-		return ErrInvalidVersion
-	}
-	h.Version = uint16(ver)
-
-	if err := h.Namespace.UnmarshalBinary(pb.GetNamespace()); err != nil {
-		return err
-	}
-	h.Round = pb.GetRound()
-	h.Timestamp = pb.GetTimestamp()
-	h.HeaderType = HeaderType(pb.GetHeaderType())
-	if err := h.PreviousHash.UnmarshalBinary(pb.GetPreviousHash()); err != nil {
-		return err
-	}
-	if err := h.GroupHash.UnmarshalBinary(pb.GetGroupHash()); err != nil {
-		return err
-	}
-	if err := h.IORoot.UnmarshalBinary(pb.GetIoRoot()); err != nil {
-		return err
-	}
-	if err := h.StateRoot.UnmarshalBinary(pb.GetStateRoot()); err != nil {
-		return err
-	}
-	if err := h.CommitmentsHash.UnmarshalBinary(pb.GetCommitmentsHash()); err != nil {
-		return err
-	}
-	if sr := pb.GetStorageReceipt(); sr != nil {
-		if err := cbor.Unmarshal(sr, &h.StorageReceipt); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ToProto serializes a header into a protobuf.
-func (h *Header) ToProto() *pbRoothash.Header {
-	pb := new(pbRoothash.Header)
-
-	pb.Version = uint32(h.Version)
-	pb.Namespace, _ = h.Namespace.MarshalBinary()
-	pb.Round = h.Round
-	pb.Timestamp = h.Timestamp
-	pb.HeaderType = uint32(h.HeaderType)
-	pb.PreviousHash, _ = h.PreviousHash.MarshalBinary()
-	pb.GroupHash, _ = h.GroupHash.MarshalBinary()
-	pb.IoRoot, _ = h.IORoot.MarshalBinary()
-	pb.StateRoot, _ = h.StateRoot.MarshalBinary()
-	pb.CommitmentsHash, _ = h.CommitmentsHash.MarshalBinary()
-	pb.StorageReceipt = cbor.Marshal(&h.StorageReceipt)
-
-	return pb
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
