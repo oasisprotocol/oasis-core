@@ -71,19 +71,21 @@ func (app *beaconApplication) ForeignCheckTx(ctx *abci.Context, other abci.Appli
 	return nil
 }
 
-func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) {
+func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
 	// Note: If we ever decide that we need a beacon for the 0th epoch
 	// (that is *only* for the genesis state), it should be initiailized
 	// here.
 	//
 	// It is not super important for now as the epoch will transition
 	// immediately on the first block under normal circumstances.
+	return nil
 }
 
-func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) {
+func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		app.onEpochChange(ctx, epoch, req)
+		return app.onEpochChange(ctx, epoch, req)
 	}
+	return nil
 }
 
 func (app *beaconApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -94,8 +96,8 @@ func (app *beaconApplication) ForeignDeliverTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *beaconApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+func (app *beaconApplication) EndBlock(req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, nil
 }
 
 func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {
@@ -107,7 +109,7 @@ func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]by
 	return state.GetBeacon(request.Epoch)
 }
 
-func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) {
+func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
 	b := getBeacon(epoch, req.Hash)
 
 	app.logger.Debug("onEpochChange: generated beacon",
@@ -117,22 +119,23 @@ func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.E
 		"height", app.state.BlockHeight(),
 	)
 
-	app.onNewBeacon(ctx, &beacon.GenerateEvent{Epoch: epoch, Beacon: b})
+	return app.onNewBeacon(ctx, &beacon.GenerateEvent{Epoch: epoch, Beacon: b})
 }
 
-func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.GenerateEvent) {
+func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.GenerateEvent) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
 	if err := state.setBeacon(event); err != nil {
-		// Failure here is catastrophic.
 		app.logger.Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)
-		panic("failed to set beacon: " + err.Error())
+		return errors.Wrap(err, "tendermint/beacon: failed to set beacon")
 	}
 
 	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 	ctx.EmitTag(TagGenerated, cbor.Marshal(event))
+
+	return nil
 }
 
 // New constructs a new beacon application instance.

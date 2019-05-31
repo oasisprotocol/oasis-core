@@ -1,6 +1,7 @@
 package epochtimemock
 
 import (
+	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -47,17 +48,17 @@ func (s *immutableState) getEpoch() (api.EpochTime, int64, error) {
 	return state.Epoch, state.Height, err
 }
 
-func (s *immutableState) mustGetFutureEpoch() *mockEpochTimeState {
+func (s *immutableState) getFutureEpoch() (*mockEpochTimeState, error) {
 	_, raw := s.Snapshot.Get([]byte(stateFutureEpoch))
 	if raw == nil {
-		return nil
+		return nil, nil
 	}
 
 	var state mockEpochTimeState
 	if err := state.UnmarshalCBOR(raw); err != nil {
-		panic("epochtime_mock: failed to unmarshal future epoch: " + err.Error())
+		return nil, errors.Wrap(err, "epochtime_mock: failed to unmarshal future epoch")
 	}
-	return &state
+	return &state, nil
 }
 
 func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
@@ -84,9 +85,13 @@ func (s *mutableState) setEpoch(epoch api.EpochTime, height int64) {
 	)
 }
 
-func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) {
-	if s.mustGetFutureEpoch() != nil {
-		panic("epochtime_mock: future epoch already pending")
+func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) error {
+	future, err := s.getFutureEpoch()
+	if err != nil {
+		return err
+	}
+	if future != nil {
+		return errors.New("epochtime_mock: future epoch already pending")
 	}
 
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
@@ -95,6 +100,8 @@ func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) {
 		[]byte(stateFutureEpoch),
 		state.MarshalCBOR(),
 	)
+
+	return nil
 }
 
 func (s *mutableState) clearFutureEpoch() {

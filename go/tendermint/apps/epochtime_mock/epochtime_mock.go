@@ -88,15 +88,19 @@ func (app *epochTimeMockApplication) ForeignCheckTx(ctx *abci.Context, other abc
 	return nil
 }
 
-func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
+	return nil
 }
 
-func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
+func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	state := newMutableState(app.state.DeliverTxTree())
 
-	future := state.mustGetFutureEpoch()
+	future, err := state.getFutureEpoch()
+	if err != nil {
+		return errors.Wrap(err, "BeginBlock: failed to get future epoch")
+	}
 	if future == nil {
-		return
+		return nil
 	}
 	defer state.clearFutureEpoch()
 
@@ -106,7 +110,7 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 			"height", height,
 			"expected_height", future.Height,
 		)
-		panic("BUG: epochtime_mock: height mismatch in defered set")
+		return errors.New("epochtime_mock: height mismatch in defered set")
 	}
 
 	app.logger.Info("setting epoch",
@@ -117,6 +121,8 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 	state.setEpoch(future.Epoch, height)
 	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 	ctx.EmitTag(TagEpoch, cbor.Marshal(future.Epoch))
+
+	return nil
 }
 
 func (app *epochTimeMockApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
@@ -135,8 +141,8 @@ func (app *epochTimeMockApplication) ForeignDeliverTx(ctx *abci.Context, other a
 	return nil
 }
 
-func (app *epochTimeMockApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+func (app *epochTimeMockApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, nil
 }
 
 func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
@@ -168,9 +174,7 @@ func (app *epochTimeMockApplication) setEpoch(
 		"next_height", height+1,
 	)
 
-	state.setFutureEpoch(epoch, height+1)
-
-	return nil
+	return state.setFutureEpoch(epoch, height+1)
 }
 
 // New constructs a new mock epochtime application instance.

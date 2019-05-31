@@ -115,12 +115,16 @@ type Application interface {
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
-	InitChain(*Context, types.RequestInitChain, *genesis.Document)
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	InitChain(*Context, types.RequestInitChain, *genesis.Document) error
 
 	// BeginBlock signals the beginning of a block.
 	//
 	// Returned tags will be added to the current block.
-	BeginBlock(*Context, types.RequestBeginBlock)
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	BeginBlock(*Context, types.RequestBeginBlock) error
 
 	// DeliverTx delivers a transaction for full processing.
 	DeliverTx(*Context, []byte) error
@@ -136,7 +140,9 @@ type Application interface {
 
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
-	EndBlock(types.RequestEndBlock) types.ResponseEndBlock
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	EndBlock(types.RequestEndBlock) (types.ResponseEndBlock, error)
 
 	// FireTimer is called within BeginBlock before any other processing
 	// takes place for each timer that should fire.
@@ -479,7 +485,13 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"app", app.Name(),
 			)
 
-			app.InitChain(ctx, initReq, doc)
+			if err = app.InitChain(ctx, initReq, doc); err != nil {
+				mux.logger.Error("BeginBlock: defered InitChain, fatal error in application",
+					"err", err,
+					"app", app.Name(),
+				)
+				panic("mux: BeginBlock: defered InitChain, fatal error in application: '" + app.Name() + "': " + err.Error())
+			}
 		}
 
 		ctx.outputType = ContextBeginBlock
@@ -492,7 +504,13 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// Dispatch BeginBlock to all applications.
 	for _, app := range mux.appsByLexOrder {
-		app.BeginBlock(ctx, req)
+		if err := app.BeginBlock(ctx, req); err != nil {
+			mux.logger.Error("BeginBlock: fatal error in application",
+				"err", err,
+				"app", app.Name(),
+			)
+			panic("mux: BeginBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+		}
 	}
 
 	response := mux.BaseApplication.BeginBlock(req)
@@ -565,7 +583,14 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 
 	resp := mux.BaseApplication.EndBlock(req)
 	for _, app := range mux.appsByLexOrder {
-		newResp := app.EndBlock(req)
+		newResp, err := app.EndBlock(req)
+		if err != nil {
+			mux.logger.Error("EndBlock: fatal error in application",
+				"err", err,
+				"app", app.Name(),
+			)
+			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+		}
 		if app.Blessed() {
 			resp = newResp
 		}

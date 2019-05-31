@@ -130,7 +130,7 @@ func (app *rootHashApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) {
+func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.RootHash
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
@@ -150,16 +150,19 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 		)
 		app.onNewRuntime(ctx, tree, v, &st)
 	}
+
+	return nil
 }
 
-func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) {
+func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// Only perform checks on epoch changes.
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		app.onEpochChange(ctx, epoch)
+		return app.onEpochChange(ctx, epoch)
 	}
+	return nil
 }
 
-func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) { // nolint: gocyclo
+func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
 	tree := app.state.DeliverTxTree()
 	state := newMutableState(tree)
 
@@ -258,7 +261,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			var nodeRuntime *node.Runtime
 			node, err := regState.GetNode(committeeNode.PublicKey)
 			if err != nil {
-				panic(err)
+				return errors.Wrap(err, "checkCommittees: failed to query node")
 			}
 			for _, r := range node.Runtimes {
 				if !r.ID.Equal(rtID) {
@@ -310,6 +313,8 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		rtState.Runtime = v
 		state.updateRuntimeState(rtState)
 	}
+
+	return nil
 }
 
 func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runtimeState, hdrType block.HeaderType) {
@@ -424,8 +429,8 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
 
-func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, nil
 }
 
 func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
