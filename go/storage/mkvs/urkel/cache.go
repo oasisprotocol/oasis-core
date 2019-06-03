@@ -37,7 +37,7 @@ type cache struct {
 	// Maximum capacity of leaf values.
 	valueCapacity uint64
 	// Prefetch depth.
-	prefetchDepth uint8
+	prefetchDepth internal.DepthType
 	// Syncer remote GetNode timeout.
 	syncerGetNodeTimeout time.Duration
 	// Syncer remote subtree prefetch timeout.
@@ -237,7 +237,7 @@ func (c *cache) evictNodes(targetCapacity uint64) {
 
 func (c *cache) derefNodeID(ctx context.Context, id internal.NodeID) (*internal.Pointer, error) {
 	curPtr := c.pendingRoot
-	var d uint8
+	var d internal.DepthType
 	for d = 0; d < id.Depth; d++ {
 		node, err := c.derefNodePtr(ctx, id.AtDepth(d), curPtr, nil)
 		if err != nil {
@@ -369,7 +369,7 @@ func (c *cache) derefValue(ctx context.Context, v *internal.Value) ([]byte, erro
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath internal.Key, depth uint8) (*internal.Pointer, error) {
+func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath internal.Key, depth internal.DepthType) (*internal.Pointer, error) {
 	if c.prefetchDepth == 0 {
 		return nil, nil
 	}
@@ -396,7 +396,7 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 
 // reconstructSubtree reconstructs a tree summary received through a
 // remote syncer.
-func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*internal.Pointer, error) {
+func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *syncer.Subtree, depth, maxDepth internal.DepthType) (*internal.Pointer, error) {
 	ptr, err := c.doReconstructSummary(st, st.Root, depth, maxDepth)
 	if err != nil {
 		return nil, err
@@ -433,8 +433,8 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 func (c *cache) doReconstructSummary(
 	st *syncer.Subtree,
 	sptr syncer.SubtreePointer,
-	depth uint8,
-	maxDepth uint8,
+	depth internal.DepthType,
+	maxDepth internal.DepthType,
 ) (*internal.Pointer, error) {
 	if depth > maxDepth {
 		return nil, errors.New("urkel: maximum depth exceeded")

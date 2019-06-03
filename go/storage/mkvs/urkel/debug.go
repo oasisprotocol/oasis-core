@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-func (t *Tree) doDump(ctx context.Context, w io.Writer, ptr *internal.Pointer, path internal.Key, depth uint8) {
+func (t *Tree) doDump(ctx context.Context, w io.Writer, ptr *internal.Pointer, path internal.Key, depth internal.DepthType) {
 	prefix := strings.Repeat(" ", int(depth)*2)
 	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: path, Depth: depth}, ptr, nil)
 	if err != nil {
@@ -44,7 +44,7 @@ func (t *Tree) doDump(ctx context.Context, w io.Writer, ptr *internal.Pointer, p
 	}
 }
 
-func (t *Tree) doStats(ctx context.Context, s *Stats, ptr *internal.Pointer, path internal.Key, depth uint8, maxDepth uint8) uint8 {
+func (t *Tree) doStats(ctx context.Context, s *Stats, ptr *internal.Pointer, path internal.Key, depth internal.DepthType, maxDepth internal.DepthType) internal.DepthType {
 	if maxDepth > 0 && depth > maxDepth {
 		return depth
 	}

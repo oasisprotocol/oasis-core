@@ -7,7 +7,7 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8, key internal.Key) (*internal.Pointer, bool, error) {
+func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth internal.DepthType, key internal.Key) (*internal.Pointer, bool, error) {
 	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, key)
 	if err != nil {
 		return nil, false, err

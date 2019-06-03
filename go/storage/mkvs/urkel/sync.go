@@ -17,7 +17,7 @@ var _ syncer.ReadSyncer = (*Tree)(nil)
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth internal.DepthType) (*syncer.Subtree, error) {
 	if !root.Equal(&t.cache.pendingRoot.Hash) {
 		return nil, syncer.ErrInvalidRoot
 	}
@@ -48,10 +48,10 @@ func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeI
 func (t *Tree) doGetSubtree(
 	ctx context.Context,
 	ptr *internal.Pointer,
-	depth uint8,
+	depth internal.DepthType,
 	path internal.Key,
 	st *syncer.Subtree,
-	maxDepth uint8,
+	maxDepth internal.DepthType,
 ) (syncer.SubtreePointer, error) {
 	// Abort in case the context is cancelled.
 	select {
@@ -135,7 +135,7 @@ func (t *Tree) doGetSubtree(
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth internal.DepthType) (*syncer.Subtree, error) {
 	if !root.Equal(&t.cache.pendingRoot.Hash) {
 		return nil, syncer.ErrInvalidRoot
 	}
@@ -164,7 +164,7 @@ func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key internal.Key, st
 func (t *Tree) doGetPath(
 	ctx context.Context,
 	ptr *internal.Pointer,
-	depth uint8,
+	depth internal.DepthType,
 	key internal.Key,
 	st *syncer.Subtree,
 ) (syncer.SubtreePointer, error) {

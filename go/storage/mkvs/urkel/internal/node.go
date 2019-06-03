@@ -40,12 +40,12 @@ var (
 // a node under a given root.
 type NodeID struct {
 	Path  Key
-	Depth uint8
+	Depth DepthType
 }
 
 // AtDepth returns a NodeID representing the same path at a specified
 // depth.
-func (n NodeID) AtDepth(d uint8) NodeID {
+func (n NodeID) AtDepth(d DepthType) NodeID {
 	return NodeID{Path: n.Path, Depth: d}
 }
 
@@ -385,7 +385,7 @@ func (n *LeafNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled leaf node.
 func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 2 {
+	if len(data) < 1+DepthSize {
 		return 0, ErrMalformed
 	}
 	if data[0] != PrefixLeafNode {
@@ -448,12 +448,21 @@ func (n *LeafNode) Copy() LeafNode {
 // Key holds variable-length key.
 type Key []byte
 
+// DepthType determines the maximum length of the key in bits.
+//
+// maxKeyLengthInBits = 2^size_of(DepthType)*8
+type DepthType uint16
+
+// DepthSize is the size of DepthType in bytes. This should go away once Go adds
+// compile-time sizeof() method.
+const DepthSize = 2
+
 // MarshalBinary encodes a key into binary form.
 func (k Key) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, 1+len(k))
-	data[0] = uint8(len(k))
+	data = make([]byte, DepthSize+len(k))
+	binary.LittleEndian.PutUint16(data[0:DepthSize], uint16(len(k)))
 	if k != nil {
-		copy(data[1:], k[:])
+		copy(data[DepthSize:], k[:])
 	}
 	return
 }
@@ -466,20 +475,20 @@ func (k *Key) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled key.
 func (k *Key) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1 {
+	if len(data) < DepthSize {
 		return 0, ErrMalformedKey
 	}
 
-	keyLen := data[0]
-	if len(data) < int(1+keyLen) {
+	keyLen := binary.LittleEndian.Uint16(data[0:DepthSize])
+	if len(data) < int(DepthSize+keyLen) {
 		return 1, ErrMalformedKey
 	}
 
 	if keyLen > 0 {
 		*k = make([]byte, keyLen)
-		copy(*k, data[1:1+keyLen])
+		copy(*k, data[DepthSize:DepthSize+keyLen])
 	}
-	return int(1 + keyLen), nil
+	return int(DepthSize + keyLen), nil
 }
 
 // Equal compares the key with some other key.
@@ -501,14 +510,14 @@ func (k Key) BitLength() int {
 }
 
 // GetKeyBit returns the given bit of the key.
-func (k Key) GetBit(bit uint8) bool {
+func (k Key) GetBit(bit DepthType) bool {
 	return k[bit/8]&(1<<(7-(bit%8))) != 0
 }
 
 // SetKeyBit sets the bit at the given position bit to value val.
 //
 // This function is immutable and returns a new instance of internal.Key
-func (k Key) SetBit(bit uint8, val bool) Key {
+func (k Key) SetBit(bit DepthType, val bool) Key {
 	var kb = make(Key, len(k))
 	copy(kb[:], k[:])
 	mask := byte(1 << (7 - (bit % 8)))

@@ -17,20 +17,21 @@ import (
 type NodeID = internal.NodeID
 type Node = internal.Node
 type Key = internal.Key
+type DepthType = internal.DepthType
 type Pointer = internal.Pointer
 type InternalNode = internal.InternalNode
 type LeafNode = internal.LeafNode
 type Value = internal.Value
 
 type Stats struct {
-	MaxDepth          uint8
+	MaxDepth          DepthType
 	InternalNodeCount uint64
 	LeafNodeCount     uint64
 	LeafValueSize     uint64
 	DeadNodeCount     uint64
 
-	LeftSubtreeMaxDepths  map[uint8]uint8
-	RightSubtreeMaxDepths map[uint8]uint8
+	LeftSubtreeMaxDepths  map[DepthType]DepthType
+	RightSubtreeMaxDepths map[DepthType]DepthType
 
 	Cache struct {
 		InternalNodeCount uint64
@@ -59,7 +60,7 @@ type Option func(t *Tree)
 // PrefetchDepth sets the depth of subtree prefetching.
 //
 // If no prefetch depth is specified, no prefetching will be done.
-func PrefetchDepth(depth uint8) Option {
+func PrefetchDepth(depth internal.DepthType) Option {
 	return func(t *Tree) {
 		t.cache.prefetchDepth = depth
 	}
@@ -199,10 +200,10 @@ func (t *Tree) Dump(ctx context.Context, w io.Writer) {
 }
 
 // Stats traverses the tree and dumps some statistics.
-func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
+func (t *Tree) Stats(ctx context.Context, maxDepth internal.DepthType) Stats {
 	stats := &Stats{
-		LeftSubtreeMaxDepths:  make(map[uint8]uint8),
-		RightSubtreeMaxDepths: make(map[uint8]uint8),
+		LeftSubtreeMaxDepths:  make(map[internal.DepthType]internal.DepthType),
+		RightSubtreeMaxDepths: make(map[internal.DepthType]internal.DepthType),
 	}
 	stats.Cache.InternalNodeCount = t.cache.internalNodeCount
 	stats.Cache.LeafNodeCount = t.cache.leafNodeCount

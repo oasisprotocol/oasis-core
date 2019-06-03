@@ -25,12 +25,12 @@ func NewStatsCollector(rs ReadSyncer) *StatsCollector {
 }
 
 // GetSubtree retrieves a compressed subtree summary of the given root.
-func (c *StatsCollector) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*Subtree, error) {
+func (c *StatsCollector) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth internal.DepthType) (*Subtree, error) {
 	c.SubtreeFetches++
 	return c.rs.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (c *StatsCollector) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*Subtree, error) {
+func (c *StatsCollector) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth internal.DepthType) (*Subtree, error) {
 	c.PathFetches++
 	return c.rs.GetPath(ctx, root, key, startDepth)
 }

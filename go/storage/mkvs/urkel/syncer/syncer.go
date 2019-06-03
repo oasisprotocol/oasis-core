@@ -25,14 +25,14 @@ type ReadSyncer interface {
 	//
 	// It is the responsibility of the caller to validate that the subtree
 	// is correct and consistent.
-	GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*Subtree, error)
+	GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth internal.DepthType) (*Subtree, error)
 
 	// GetPath retrieves a compressed path summary for the given key under
 	// the given root, starting at the given depth.
 	//
 	// It is the responsibility of the caller to validate that the subtree
 	// is correct and consistent.
-	GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*Subtree, error)
+	GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth internal.DepthType) (*Subtree, error)
 
 	// GetNode retrieves a specific node under the given root.
 	//
@@ -56,11 +56,11 @@ func NewNopReadSyncer() ReadSyncer {
 	return &nopReadSyncer{}
 }
 
-func (r *nopReadSyncer) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*Subtree, error) {
+func (r *nopReadSyncer) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth internal.DepthType) (*Subtree, error) {
 	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth uint8) (*Subtree, error) {
+func (r *nopReadSyncer) GetPath(ctx context.Context, root hash.Hash, key internal.Key, startDepth internal.DepthType) (*Subtree, error) {
 	return nil, ErrUnsupported
 }
 

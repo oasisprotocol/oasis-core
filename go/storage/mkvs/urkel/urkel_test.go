@@ -19,6 +19,10 @@ import (
 const (
 	insertItems  = 1000
 	allItemsRoot = "410a4d112994762fe7887daf0e3ca6b307200b65677672132caf73163fd3100b"
+
+	longKey          = "Unlock the potential of your data without compromising security or privacy"
+	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
+	allLongItemsRoot = "410a4d112994762fe7887daf0e3ca6b307200b65677672132caf73163fd3100b"
 )
 
 func testBasic(t *testing.T, ndb db.NodeDB) {
@@ -81,6 +85,52 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, "c86e7119b52682fea21319c9c747e2197012b49f5050fce5e4aa82e5ced36236", root.String())
 	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: nil}})
 	require.Equal(t, log[0].Type(), LogDelete)
+}
+
+func testLongKeys(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	tree := New(nil, ndb, Capacity(0, 512))
+
+	// First insert keys 0..n and remove them in order n..0.
+	var roots []hash.Hash
+	keys, values := generateLongKeyValuePairs()
+	for i := 0; i < len(keys); i++ {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+
+		_, root, err := tree.Commit(ctx)
+		require.NoError(t, err, "Commit")
+		roots = append(roots, root)
+	}
+
+	for i := 0; i < len(keys); i++ {
+		value, err := tree.Get(ctx, keys[i])
+		require.NoError(t, err, "Get")
+		require.Equal(t, values[i], value)
+	}
+
+	require.Equal(t, allLongItemsRoot, roots[len(roots)-1].String())
+
+	for i := len(keys) - 1; i > 0; i-- {
+		err := tree.Remove(ctx, keys[i])
+		require.NoError(t, err, "Remove")
+
+		// Key should not exist anymore.
+		value, err := tree.Get(ctx, keys[i])
+		require.NoError(t, err, "Get")
+		require.Equal(t, []byte(nil), value)
+
+		_, root, err := tree.Commit(ctx)
+		require.NoError(t, err, "Commit")
+		require.Equal(t, roots[i-1], root, "root after removal at index %d", i)
+	}
+
+	err := tree.Remove(ctx, keys[0])
+	require.NoError(t, err, "Remove")
+
+	_, root, err := tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+	require.True(t, root.IsEmpty())
 }
 
 func testInsertCommitBatch(t *testing.T, ndb db.NodeDB) {
@@ -354,6 +404,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		defer finiBackend(t, backend, custom)
 		testBasic(t, backend)
 	})
+	t.Run("LongKeys", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testLongKeys(t, backend)
+	})
 	t.Run("InsertCommitBatch", func(t *testing.T) {
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
@@ -525,6 +580,17 @@ func generateKeyValuePairs() ([][]byte, [][]byte) {
 	for i := 0; i < insertItems; i++ {
 		keys[i] = []byte(fmt.Sprintf("key %d", i))
 		values[i] = []byte(fmt.Sprintf("value %d", i))
+	}
+
+	return keys, values
+}
+
+func generateLongKeyValuePairs() ([][]byte, [][]byte) {
+	keys := make([][]byte, len(longKey))
+	values := make([][]byte, len(longKey))
+	for i := 0; i < len(longKey)-2; i++ {
+		keys[i] = []byte(longKey[0 : i+2])
+		values[i] = []byte(longValue)
 	}
 
 	return keys, values

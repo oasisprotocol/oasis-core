@@ -8,7 +8,7 @@ import (
 )
 
 // doInsert is a recursive function for inserting a key into the urkel tree.
-func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8, key internal.Key, val []byte) (*internal.Pointer, bool, error) {
+func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth internal.DepthType, key internal.Key, val []byte) (*internal.Pointer, bool, error) {
 	//	fmt.Println("inserting key:", string(key), "depth:", depth)
 	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, nil)
 	if err != nil {
