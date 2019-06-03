@@ -47,6 +47,7 @@ var (
 		{"log.level.default", "DEBUG"},
 		{"epochtime.backend", "tendermint_mock"},
 		{"beacon.backend", "tendermint"},
+		{"keymanager.backend", "tendermint"},
 		{"registry.backend", "tendermint"},
 		{"roothash.backend", "tendermint"},
 		{"roothash.tendermint.index_blocks", true},

@@ -29,6 +29,8 @@ import (
 	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/ias"
+	"github.com/oasislabs/ekiden/go/keymanager"
+	keymanagerAPI "github.com/oasislabs/ekiden/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
 	"github.com/oasislabs/ekiden/go/registry"
 	registryAPI "github.com/oasislabs/ekiden/go/registry/api"
@@ -45,7 +47,7 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/compute"
-	"github.com/oasislabs/ekiden/go/worker/keymanager"
+	keymanagerWorker "github.com/oasislabs/ekiden/go/worker/keymanager"
 	"github.com/oasislabs/ekiden/go/worker/merge"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 	workerStorage "github.com/oasislabs/ekiden/go/worker/storage"
@@ -75,18 +77,20 @@ type Node struct {
 	grpcInternal *grpc.Server
 	svcTmnt      tmService.TendermintService
 
-	Genesis    genesis.Provider
-	Identity   *identity.Identity
-	Beacon     beaconAPI.Backend
-	Epochtime  epochtimeAPI.Backend
-	Registry   registryAPI.Backend
-	RootHash   roothashAPI.Backend
-	Scheduler  schedulerAPI.Backend
-	Staking    stakingAPI.Backend
-	Storage    storageAPI.Backend
-	IAS        *ias.IAS
-	Client     *client.Client
-	KeyManager *keymanagerClient.Client
+	Genesis   genesis.Provider
+	Identity  *identity.Identity
+	Beacon    beaconAPI.Backend
+	Epochtime epochtimeAPI.Backend
+	Registry  registryAPI.Backend
+	RootHash  roothashAPI.Backend
+	Scheduler schedulerAPI.Backend
+	Staking   stakingAPI.Backend
+	Storage   storageAPI.Backend
+	IAS       *ias.IAS
+	Client    *client.Client
+
+	KeyManager       keymanagerAPI.Backend
+	KeyManagerClient *keymanagerClient.Client
 
 	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
@@ -130,6 +134,9 @@ func (n *Node) initBackends() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
 	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
+		return err
+	}
+	if n.KeyManager, err = keymanager.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Staking, "staking backend")
@@ -204,13 +211,14 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.WorkerRegistration)
 
-	// Initialize the key manager service.
-	kmSvc, kmEnabled, err := keymanager.New(
+	// Initialize the key manager worker service.
+	kmSvc, kmEnabled, err := keymanagerWorker.New(
 		dataDir,
 		n.IAS,
 		n.CommonWorker.Grpc,
 		n.WorkerRegistration,
 		&workerCommonCfg,
+		n.KeyManager,
 	)
 	if err != nil {
 		return err
@@ -247,7 +255,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.CommonWorker,
 		n.MergeWorker,
 		n.IAS,
-		n.KeyManager,
+		n.KeyManagerClient,
 		n.WorkerRegistration,
 	)
 	if err != nil {
@@ -474,7 +482,7 @@ func NewNode() (*Node, error) {
 	logger.Info("starting ekiden node")
 
 	// Initialize the key manager client service.
-	node.KeyManager, err = keymanagerClient.New(node.Registry)
+	node.KeyManagerClient, err = keymanagerClient.New(node.KeyManager, node.Registry)
 	if err != nil {
 		logger.Error("failed to initialize key manager client",
 			"err", err,
@@ -491,7 +499,7 @@ func NewNode() (*Node, error) {
 		node.Scheduler,
 		node.Registry,
 		node.svcTmnt,
-		node.KeyManager,
+		node.KeyManagerClient,
 	)
 	if err != nil {
 		return nil, err
@@ -560,6 +568,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		ias.RegisterFlags,
 		keymanager.RegisterFlags,
 		keymanagerClient.RegisterFlags,
+		keymanagerWorker.RegisterFlags,
 		client.RegisterFlags,
 		compute.RegisterFlags,
 		p2p.RegisterFlags,

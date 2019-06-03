@@ -394,7 +394,7 @@ impl Dispatcher {
                         Context::create_child(&ctx),
                         protocol.clone(),
                     ));
-                    let rpc_ctx = RpcContext::new(self.rak.clone(), session_info);
+                    let rpc_ctx = RpcContext::new(ctx.clone(), self.rak.clone(), session_info);
                     let response =
                         StorageContext::enter(&mut mkvs, untrusted_local.clone(), || {
                             rpc_dispatcher.dispatch(req, rpc_ctx)
@@ -488,7 +488,7 @@ impl Dispatcher {
             Context::create_child(&ctx),
             protocol.clone(),
         ));
-        let rpc_ctx = RpcContext::new(self.rak.clone(), None);
+        let rpc_ctx = RpcContext::new(ctx.clone(), self.rak.clone(), None);
         let response = StorageContext::enter(&mut mkvs, untrusted_local.clone(), || {
             rpc_dispatcher.dispatch_local(req, rpc_ctx)
         });

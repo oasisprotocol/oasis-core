@@ -1,4 +1,5 @@
 extern crate ekiden_keymanager_api;
+extern crate ekiden_keymanager_client;
 extern crate ekiden_runtime;
 extern crate failure;
 extern crate io_context;
@@ -7,8 +8,11 @@ extern crate lru;
 extern crate rand;
 extern crate serde_cbor;
 extern crate sp800_185;
+extern crate tiny_keccak;
 extern crate x25519_dalek;
 extern crate zeroize;
+
+use std::{str::FromStr, sync::Arc};
 
 mod kdf;
 mod methods;
@@ -16,31 +20,29 @@ mod methods;
 use failure::Fallible;
 
 use ekiden_keymanager_api::*;
+use ekiden_keymanager_client::RemoteClient;
 use ekiden_runtime::{
+    common::{runtime::RuntimeId, sgx::avr},
+    rak::RAK,
     register_runtime_rpc_methods,
     rpc::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
         Context as RpcContext,
     },
-    RpcDemux, RpcDispatcher, TxnDispatcher,
+    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
 use self::kdf::Kdf;
 
 /// Initialize the Kdf.
-fn init_kdf(_req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
-    // TODO: Based on the InitRequest, and persisted state (if any):
-    //  * Load the persisted state.
-    //  * Generate a new master secret.
-    //  * Replicate the master secret.
-
-    Kdf::global().init(&ctx)
+fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
+    Kdf::global().init(&req, ctx)
 }
 
 fn main() {
     // Initializer.
-    let init = |_: &_,
-                _: &_,
+    let init = |protocol: &Arc<Protocol>,
+                rak: &Arc<RAK>,
                 _rpc_demux: &mut RpcDemux,
                 rpc: &mut RpcDispatcher,
                 _txn: &mut TxnDispatcher| {
@@ -62,6 +64,32 @@ fn main() {
             ),
             true,
         );
+
+        // HACK: There is no nice way of passing in the runtime ID at compile
+        // time yet.
+        let runtime_id =
+            RuntimeId::from_str("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+                .unwrap();
+
+        // We will only replicate from ourselves for now, once migration
+        // support is required, this needs to change somehow.
+        let mr_enclave = match avr::get_enclave_identity() {
+            Some(id) => Some(id.mr_enclave),
+            None => None,
+        };
+        let km_client = Arc::new(RemoteClient::new_runtime(
+            runtime_id,
+            mr_enclave,
+            protocol.clone(),
+            rak.clone(),
+            1, // Not used, doesn't matter.
+        ));
+
+        rpc.set_context_initializer(move |ctx: &mut RpcContext| {
+            ctx.runtime = Box::new(kdf::Context {
+                km_client: km_client.clone(),
+            })
+        });
     };
 
     // Start the runtime.

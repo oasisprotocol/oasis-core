@@ -77,6 +77,16 @@ run_backend_tendermint_committee() {
         registry entity init \
         --datadir ${entity_dir}
 
+    # Provision the key manager runtime.
+    ${EKIDEN_NODE} \
+        registry runtime init_genesis \
+        --runtime.id ${EKIDEN_KM_RUNTIME_ID} \
+        ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --runtime.kind keymanager \
+        --runtime.genesis.file keymanager_genesis.json \
+        --entity ${entity_dir} \
+        --datadir ${entity_dir}
+
     # Provision the runtime.
     ${EKIDEN_NODE} \
         registry runtime init_genesis \
@@ -99,6 +109,7 @@ run_backend_tendermint_committee() {
         genesis init \
         --genesis_file ${genesis_file} \
         --entity ${entity_dir}/entity_genesis.json \
+        --runtime ${entity_dir}/keymanager_genesis.json \
         --runtime ${entity_dir}/runtime_genesis.json \
         ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
         ${runtime_genesis:+--storage ${runtime_genesis}} \
@@ -158,6 +169,7 @@ run_backend_tendermint_committee() {
             --scheduler.backend trivial \
             --registry.backend tendermint \
             --roothash.backend tendermint \
+            --keymanager.backend tendermint \
             --genesis.file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
@@ -242,6 +254,7 @@ run_compute_node() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --keymanager.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -316,6 +329,7 @@ run_storage_node() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --keymanager.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -377,6 +391,7 @@ run_client_node() {
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --roothash.tendermint.index_blocks \
+        --keymanager.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -457,6 +472,7 @@ run_keymanager_node() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --keymanager.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -469,6 +485,7 @@ run_keymanager_node() {
         --worker.keymanager.runtime.loader ${EKIDEN_RUNTIME_LOADER} \
         --worker.keymanager.runtime.binary ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
         --worker.keymanager.runtime.id ${EKIDEN_KM_RUNTIME_ID} \
+        --worker.keymanager.may_generate \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
@@ -513,6 +530,7 @@ run_seed_node() {
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \
+        --keymanager.backend tendermint \
         --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \

@@ -2,20 +2,23 @@
 use std::sync::{Arc, RwLock};
 
 use failure::Fallible;
+use io_context::Context as IoContext;
 use lazy_static::lazy_static;
 use lru::LruCache;
 use rand::{rngs::OsRng, Rng};
 use serde_cbor;
 use sgx_isa::Keypolicy;
 use sp800_185::{CShake, KMac};
+use tiny_keccak::sha3_256;
 use x25519_dalek;
 use zeroize::Zeroize;
 
 use ekiden_keymanager_api::{
-    ContractKey, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey,
+    ContractKey, InitRequest, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey,
     ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
     INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
+use ekiden_keymanager_client::KeyManagerClient;
 use ekiden_runtime::{
     common::{
         crypto::{
@@ -24,7 +27,9 @@ use ekiden_runtime::{
         },
         sgx::egetkey::egetkey,
     },
+    executor::Executor,
     rpc::Context as RpcContext,
+    runtime_context,
     storage::StorageContext,
     BUILD_INFO,
 };
@@ -69,6 +74,10 @@ const MASTER_SECRET_STORAGE_KEY: &'static [u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
 const MASTER_SECRET_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal master secret v0";
 
+pub(crate) struct Context {
+    pub km_client: Arc<dyn KeyManagerClient>,
+}
+
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
     inner: RwLock<Inner>,
@@ -83,6 +92,13 @@ struct Inner {
 }
 
 impl Inner {
+    fn reset(&mut self) {
+        self.master_secret = None;
+        self.checksum = None;
+        self.signer = None;
+        self.cache.clear();
+    }
+
     fn derive_contract_key(&self, req: &RequestIds) -> Fallible<ContractKey> {
         let checksum = self.get_checksum()?;
         let mut contract_secret = self.derive_contract_secret(req)?;
@@ -120,8 +136,7 @@ impl Inner {
 
         let mut k = [0u8; 32];
 
-        // KMAC256(master_secret, MRENCLAVE_km || runtimeID || contractID, 32, "ekiden-derive-runtime-secret")
-        // XXX: We don't pass in the MRENCLAVE yet.
+        // KMAC256(master_secret, runtimeID || contractID, 32, "ekiden-derive-runtime-secret")
         let mut f = KMac::new_kmac256(master_secret.as_ref(), &RUNTIME_KDF_CUSTOM);
         f.update(req.runtime_id.as_ref());
         f.update(req.contract_id.as_ref());
@@ -157,45 +172,114 @@ impl Kdf {
 
     /// Initialize the KDF internal state.
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    pub fn init(&self, ctx: &RpcContext) -> Fallible<SignedInitResponse> {
+    pub fn init(
+        &self,
+        req: &InitRequest,
+        ctx: &mut RpcContext,
+        //client: Arc<KeyManagerClient>,
+    ) -> Fallible<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
 
-        // Initialization should be idempotent.
-        if inner.master_secret.is_none() {
+        // How initialization proceeds depends on the state and the request.
+        //
+        // WARNING: Once a master secret has been persisted to disk, it is
+        // intended that manual intervention by the operator is required to
+        // remove/alter it.
+        if inner.master_secret.is_some() {
+            // A master secret is set.  This enclave has initialized successfully
+            // at least once.
+
+            let checksum = inner.get_checksum()?;
+            if req.checksum.len() > 0 && req.checksum != checksum {
+                // The init request provided a checksum and there was a mismatch.
+                // The global key manager state disagrees with the enclave state.
+                inner.reset();
+                return Err(KeyManagerError::StateCorrupted.into());
+            }
+        } else if req.checksum.len() > 0 {
+            // A master secret is not set, and there is a checksum in the
+            // request.  An enclave somewhere, has initialized at least
+            // once.
+
+            // Attempt to load the master secret.
+            let (master_secret, did_replicate) = match Self::load_master_secret() {
+                Some(master_secret) => (master_secret, false),
+                None => {
+                    // Couldn't load, fetch the master secret from another
+                    // enclave instance.
+
+                    let rctx = runtime_context!(ctx, Context);
+
+                    let result = rctx
+                        .km_client
+                        .replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
+                    let master_secret =
+                        Executor::with_current(|executor| executor.block_on(result))?;
+                    (master_secret.unwrap(), true)
+                }
+            };
+
+            let checksum = Self::checksum_master_secret(&master_secret);
+            if req.checksum != checksum {
+                // We either loaded or replicated something that does
+                // not match the rest of the world.
+                inner.reset();
+                return Err(KeyManagerError::StateCorrupted.into());
+            }
+
+            // The loaded/replicated master secret is consistent with the rest
+            // of the world.   Ok to proceed.
+            if did_replicate {
+                Self::save_master_secret(&master_secret);
+            }
+            inner.master_secret = Some(master_secret);
+            inner.checksum = Some(checksum);
+        } else {
+            // A master secret is not set, and there is no checksum in the
+            // request. Either this key manager instance has never been
+            // initialized, or our view of the external state is not current.
+
+            // Attempt to load the master secret, the caller may just be
+            // behind the rest of the world.
             let master_secret = match Self::load_master_secret() {
                 Some(master_secret) => master_secret,
-                None => Self::generate_master_secret(),
+                None => {
+                    // Unable to load, perhaps we can generate?
+                    if !req.may_generate {
+                        return Err(KeyManagerError::ReplicationRequired.into());
+                    }
+
+                    Self::generate_master_secret()
+                }
             };
-            inner.master_secret = Some(MasterSecret::from(master_secret));
+
+            // Loaded or generated a master secret.  There is no checksum to
+            // compare against, but that is expected when bootstrapping or
+            // lagging.
+            inner.checksum = Some(Self::checksum_master_secret(&master_secret));
+            inner.master_secret = Some(master_secret);
         }
 
-        // (re)-generate the checksum, based on the possibly updated RAK.
-        let mut k = [0u8; 32];
-        let mut f = KMac::new_kmac256(
-            inner.master_secret.as_ref().unwrap().as_ref(),
-            &CHECKSUM_CUSTOM,
-        );
+        // If we make it this far, we have a master secret and checksum
+        // that either matches the global state, will become the global
+        // state, or should become the global state (rare).
+        //
+        // It is ok to generate a response.
 
+        // The RAK (signing key) may have changed since the last init call.
         #[cfg(target_env = "sgx")]
         {
             let signer: Arc<dyn signature::Signer> = ctx.rak.clone();
             inner.signer = Some(signer);
-
-            f.update(ctx.rak.public_key().unwrap().as_ref());
         }
-
         #[cfg(not(target_env = "sgx"))]
         {
             let priv_key =
                 Arc::new(signature::PrivateKey::from_pkcs8(INSECURE_SIGNING_KEY_PKCS8).unwrap());
 
-            f.update(priv_key.public_key().as_ref());
-
             let signer: Arc<dyn signature::Signer> = priv_key;
             inner.signer = Some(signer);
         }
-        f.finalize(&mut k);
-        inner.checksum = Some(k.to_vec());
 
         // Build the response and sign it with the RAK.
         let init_response = InitResponse {
@@ -260,7 +344,7 @@ impl Kdf {
         })
     }
 
-    // Replciate master secret.
+    // Replicate master secret.
     pub fn replicate_master_secret(&self) -> Fallible<ReplicateResponse> {
         let inner = self.inner.read().unwrap();
 
@@ -270,7 +354,7 @@ impl Kdf {
         }
     }
 
-    fn load_master_secret() -> Option<Vec<u8>> {
+    fn load_master_secret() -> Option<MasterSecret> {
         let ciphertext = StorageContext::with_current(|_mkvs, untrusted_local| {
             untrusted_local.get(MASTER_SECRET_STORAGE_KEY.to_vec())
         })
@@ -295,21 +379,17 @@ impl Kdf {
             .open(&nonce, ciphertext.to_vec(), vec![])
             .expect("persisted state is corrupted");
 
-        Some(plaintext)
+        Some(MasterSecret::from(plaintext))
     }
 
-    fn generate_master_secret() -> Vec<u8> {
+    fn save_master_secret(master_secret: &MasterSecret) {
         let mut rng = OsRng::new().unwrap();
-
-        // TODO: Support static keying for debugging.
-        let mut master_secret = [0u8; 32];
-        rng.fill(&mut master_secret);
 
         // Encrypt the master secret.
         let mut nonce = [0u8; NONCE_SIZE];
         rng.fill(&mut nonce);
         let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(&nonce, master_secret.to_vec(), vec![]);
+        let mut ciphertext = d2.seal(&nonce, master_secret.as_ref().to_vec(), vec![]);
         ciphertext.extend_from_slice(&nonce);
 
         // Persist the encrypted master secret.
@@ -317,8 +397,28 @@ impl Kdf {
             untrusted_local.insert(MASTER_SECRET_STORAGE_KEY.to_vec(), ciphertext)
         })
         .expect("failed to persist master secret");
+    }
 
-        master_secret.to_vec()
+    fn generate_master_secret() -> MasterSecret {
+        let mut rng = OsRng::new().unwrap();
+
+        // TODO: Support static keying for debugging.
+        let mut master_secret = [0u8; 32];
+        rng.fill(&mut master_secret);
+        let master_secret = MasterSecret::from(master_secret.to_vec());
+
+        Self::save_master_secret(&master_secret);
+
+        master_secret
+    }
+
+    fn checksum_master_secret(master_secret: &MasterSecret) -> Vec<u8> {
+        let mut tmp = master_secret.as_ref().to_vec().clone();
+        tmp.extend_from_slice(&CHECKSUM_CUSTOM);
+        let checksum = sha3_256(&tmp);
+        tmp.zeroize();
+
+        checksum.to_vec()
     }
 
     fn new_d2() -> DeoxysII {

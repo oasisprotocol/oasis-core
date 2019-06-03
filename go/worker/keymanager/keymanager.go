@@ -36,6 +36,7 @@ const (
 	cfgRuntimeLoader = "worker.keymanager.runtime.loader"
 	cfgRuntimeBinary = "worker.keymanager.runtime.binary"
 	cfgRuntimeID     = "worker.keymanager.runtime.id"
+	cfgMayGenerate   = "worker.keymanager.may_generate"
 
 	rpcCallTimeout = 5 * time.Second
 )
@@ -44,17 +45,14 @@ var (
 	_ service.BackgroundService = (*worker)(nil)
 
 	errMalformedResponse = fmt.Errorf("worker/keymanager: malformed response from worker")
-	initResponseContext  = []byte("EkKmIniR")
 
 	emptyRoot hash.Hash
-
-	testPublicKey signature.PublicKey
 )
 
 type worker struct {
 	sync.Mutex
 
-	enabled bool
+	logger *logging.Logger
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -69,8 +67,10 @@ type worker struct {
 
 	registration  *registration.Registration
 	enclaveStatus *api.SignedInitResponse
+	backend       api.Backend
 
-	logger *logging.Logger
+	enabled     bool
+	mayGenerate bool
 }
 
 func (w *worker) Name() string {
@@ -191,19 +191,33 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 
 	// Initialize the key manager.
 	type InitRequest struct {
-		// TODO: At some point this needs the policy, checksum, peers, etc.
+		Checksum    []byte `codec:"checksum"`
+		MayGenerate bool   `codec:"may_generate"`
 	}
 	type InitCall struct { // nolint: maligned
 		Method string      `codec:"method"`
 		Args   InitRequest `codec:"args"`
 	}
 
-	// XXX: Query the BFT component for the policy, checksum, peers (as available),
-	// and repeatedly try to initialize the KM enclave.
+	// Query the BFT component for the policy, checksum, peers (as available).
+	status, err := w.backend.GetStatus(w.ctx, w.runtimeID)
+	if err != nil {
+		if err != api.ErrNoSuchKeyManager {
+			w.logger.Error("failed to query key manger status",
+				"err", err,
+				"id", w.runtimeID,
+			)
+			return err
+		}
+		status = &api.Status{}
+	}
 
 	call := InitCall{
 		Method: "init",
-		Args:   InitRequest{},
+		Args: InitRequest{
+			Checksum:    cbor.FixSliceForSerde(status.Checksum),
+			MayGenerate: w.mayGenerate,
+		},
 	}
 	req := &protocol.Body{
 		WorkerLocalRPCCallRequest: &protocol.WorkerLocalRPCCallRequest{
@@ -253,21 +267,19 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 
 	// Validate the signature.
 	if tee != nil {
-		var signingKey *signature.PublicKey
+		var signingKey signature.PublicKey
 
 		switch tee.Hardware {
 		case node.TEEHardwareInvalid:
-			signingKey = &testPublicKey
+			signingKey = api.TestPublicKey
 		case node.TEEHardwareIntelSGX:
-			signingKey = &tee.RAK
+			signingKey = tee.RAK
 		default:
 			return fmt.Errorf("worker/keymanager: unknown TEE hardware: %v", tee.Hardware)
 		}
 
-		rawInitResp := cbor.Marshal(signedInitResp.InitResponse)
-		if !signingKey.Verify(initResponseContext, rawInitResp, signedInitResp.Signature) {
-			w.logger.Error("failed to validate initialization response signature")
-			return fmt.Errorf("worker/keymanager: failed to validate initialization response signature")
+		if err = signedInitResp.Verify(signingKey); err != nil {
+			return errors.Wrap(err, "worker/keymanager: failed to validate initialziation response signature")
 		}
 	}
 
@@ -369,7 +381,7 @@ func (w *worker) onNodeRegistration(n *node.Node) error {
 }
 
 // New constructs a new key manager worker.
-func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Registration, workerCommonCfg *workerCommon.Config) (service.BackgroundService, bool, error) {
+func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Registration, workerCommonCfg *workerCommon.Config, backend api.Backend) (service.BackgroundService, bool, error) {
 	var teeHardware node.TEEHardware
 	s := viper.GetString(cfgTEEHardware)
 	switch strings.ToLower(s) {
@@ -386,7 +398,7 @@ func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Regist
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	w := &worker{
-		enabled:      viper.GetBool(cfgEnabled),
+		logger:       logging.GetLogger("worker/keymanager"),
 		ctx:          ctx,
 		cancelCtx:    cancelFn,
 		stopCh:       make(chan struct{}),
@@ -394,7 +406,9 @@ func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Regist
 		initCh:       make(chan struct{}),
 		grpc:         grpc,
 		registration: r,
-		logger:       logging.GetLogger("worker/keymanager"),
+		backend:      backend,
+		enabled:      viper.GetBool(cfgEnabled),
+		mayGenerate:  viper.GetBool(cfgMayGenerate),
 	}
 
 	if w.enabled {
@@ -446,6 +460,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgRuntimeLoader, "", "Path to key manager worker process binary")
 		cmd.Flags().String(cfgRuntimeBinary, "", "Path to key manager runtime binary")
 		cmd.Flags().String(cfgRuntimeID, "", "Key manager Runtime ID")
+		cmd.Flags().Bool(cfgMayGenerate, false, "Key manager may generate new master secret")
 	}
 
 	for _, v := range []string{
@@ -455,6 +470,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgRuntimeLoader,
 		cfgRuntimeBinary,
 		cfgRuntimeID,
+		cfgMayGenerate,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
@@ -462,6 +478,4 @@ func RegisterFlags(cmd *cobra.Command) {
 
 func init() {
 	emptyRoot.Empty()
-	_ = testPublicKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
-	signature.RegisterTestPublicKey(testPublicKey)
 }

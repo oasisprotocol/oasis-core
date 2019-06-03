@@ -17,7 +17,12 @@ impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
 /// Key manager initialization request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct InitRequest {
-    // TODO: Policy, peers, checksum, etc.
+    /// True iff the enclave may generate a new master secret.
+    pub may_generate: bool,
+    /// Checksum for validating replication.
+    #[serde(with = "serde_bytes")]
+    pub checksum: Vec<u8>,
+    // TODO: Policy.
 }
 
 /// Key manager initialization response.
@@ -86,6 +91,7 @@ pub struct ContractKey {
     /// State encryption key
     pub state_key: StateKey,
     /// Checksum of the key manager state.
+    #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
 }
 
@@ -160,6 +166,7 @@ pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,
     /// Checksum of the key manager state.
+    #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
     /// Sign(sk, (key || checksum)) from the key manager.
     pub signature: Signature,
@@ -174,8 +181,10 @@ pub enum KeyManagerError {
     InvalidAuthentication,
     #[fail(display = "key manager is not initialized")]
     NotInitialized,
-    #[fail(display = "key manager is already initialized")]
-    AlreadyInitialized,
+    #[fail(display = "key manager state corrupted")]
+    StateCorrupted,
+    #[fail(display = "key manager replication required")]
+    ReplicationRequired,
 }
 
 runtime_api! {
