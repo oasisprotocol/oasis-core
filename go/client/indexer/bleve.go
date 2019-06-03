@@ -8,6 +8,7 @@ import (
 
 	"github.com/blevesearch/bleve"
 	bleveKeyword "github.com/blevesearch/bleve/analysis/analyzer/keyword"
+	"github.com/blevesearch/bleve/index/store/boltdb"
 	bleveQuery "github.com/blevesearch/bleve/search/query"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -308,6 +309,20 @@ func (b *bleveBackend) WaitBlockIndexed(ctx context.Context, runtimeID signature
 	return b.backendCommon.WaitBlockIndexed(ctx, runtimeID, round)
 }
 
+func (b *bleveBackend) compact(ctx context.Context) error {
+	// XXX: Note this is only needed fpr boltdb/goleveldb stores
+	//      Remove this if index backend is switched
+	_, store, _ := b.index.Advanced()
+	boltdbStore := store.(*boltdb.Store)
+	err := boltdbStore.Compact()
+	if err != nil {
+		b.logger.Error("failed to compact index",
+			"err", err,
+		)
+	}
+	return err
+}
+
 func (b *bleveBackend) Prune(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
 	// Filter by runtime.
 	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
@@ -342,7 +357,17 @@ func (b *bleveBackend) Prune(ctx context.Context, runtimeID signature.PublicKey,
 		batch.Delete(hit.ID)
 	}
 
-	return b.index.Batch(batch)
+	if err := b.index.Batch(batch); err != nil {
+		b.logger.Error("failed to prune index",
+			"err", err,
+		)
+		return err
+	}
+
+	// Compact the index store as otherwise documents are never actually
+	// deleted from the underlying backend.
+	// https://github.com/oasislabs/ekiden/issues/1736
+	return b.compact(ctx)
 }
 
 func (b *bleveBackend) Stop() {
