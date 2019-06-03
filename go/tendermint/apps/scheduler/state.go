@@ -24,6 +24,17 @@ type immutableState struct {
 	*abci.ImmutableState
 }
 
+func (s *immutableState) getCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) ([]*api.CommitteeNode, error) {
+	_, raw := s.Snapshot.Get([]byte(fmt.Sprintf(stateCommitteeMap, kind, runtimeID)))
+	if raw == nil {
+		return nil, nil
+	}
+
+	var members []*api.CommitteeNode
+	err := cbor.Unmarshal(raw, &members)
+	return members, err
+}
+
 func committeeFromEntry(key, value []byte) (*api.Committee, error) {
 	var (
 		runtimeIDHex string
