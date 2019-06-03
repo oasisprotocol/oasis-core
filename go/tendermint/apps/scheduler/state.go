@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	stateCommitteeMap = "scheduler/committee/%d/%s"
+	stateCommitteeMap = "scheduler/committee/%02x/%s"
 )
 
 var (
@@ -55,7 +55,7 @@ func (s *immutableState) getAllCommittees() ([]*api.Committee, error) {
 	var committees []*api.Committee
 	s.Snapshot.IterateRange(
 		[]byte(fmt.Sprintf(stateCommitteeMap, 0, abci.FirstID)),
-		[]byte(fmt.Sprintf(stateCommitteeMap, api.MaxCommitteeKind, abci.FirstID)),
+		[]byte(fmt.Sprintf(stateCommitteeMap, uint8(api.MaxCommitteeKind), abci.FirstID)),
 		true,
 		func(key, value []byte) bool {
 			c, err := committeeFromEntry(key, value)
@@ -78,8 +78,8 @@ func (s *immutableState) getKindsCommittees(kinds []api.CommitteeKind) ([]*api.C
 	var committees []*api.Committee
 	for _, kind := range kinds {
 		s.Snapshot.IterateRangeInclusive(
-			[]byte(fmt.Sprintf(stateCommitteeMap, kind, abci.FirstID)),
-			[]byte(fmt.Sprintf(stateCommitteeMap, kind, abci.LastID)),
+			[]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), abci.FirstID)),
+			[]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), abci.LastID)),
 			true,
 			func(key, value []byte, version int64) bool {
 				c, err := committeeFromEntry(key, value)
@@ -116,7 +116,7 @@ type mutableState struct {
 
 func (s *mutableState) putCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey, members []*api.CommitteeNode) {
 	s.tree.Set(
-		[]byte(fmt.Sprintf(stateCommitteeMap, kind, runtimeID)),
+		[]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)),
 		cbor.Marshal(members),
 	)
 }
