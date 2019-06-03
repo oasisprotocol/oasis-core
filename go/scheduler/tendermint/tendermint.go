@@ -1,4 +1,4 @@
-package trivial
+package tendermint
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 )
 
 // BackendName is the name of this implementation.
-const BackendName = "trivial"
+const BackendName = "tendermint"
 
 var (
 	_ api.Backend      = (*trivialScheduler)(nil)
