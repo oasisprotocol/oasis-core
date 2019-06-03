@@ -50,7 +50,7 @@ var (
 		{"registry.backend", "tendermint"},
 		{"roothash.backend", "tendermint"},
 		{"roothash.tendermint.index_blocks", true},
-		{"scheduler.backend", "trivial"},
+		{"scheduler.backend", "tendermint"},
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},
 		{"staking.backend", "tendermint"},
