@@ -5,12 +5,14 @@ import (
 	"context"
 
 	"github.com/eapache/channels"
+	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -156,9 +158,18 @@ func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtype
 }
 
 // New constracts a new tendermint-based scheduler Backend instance.
-func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context,
+	timeSource epochtime.Backend,
+	service service.TendermintService,
+) (api.Backend, error) {
+	// We can only work with a block-based epochtime.
+	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
+	if !ok {
+		return nil, errors.New("scheduler/tendermint: need a block-based epochtime backend")
+	}
+
 	// Initialze and register the tendermint service component.
-	app := app.New()
+	app := app.New(blockTimeSource)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

@@ -311,8 +311,11 @@ func (app *schedulerApplication) electAll(ctx *abci.Context, request types.Reque
 }
 
 // New constructs a new scheduler application instance.
-func New() abci.Application {
+func New(
+	timeSource epochtime.BlockBackend,
+) abci.Application {
 	return &schedulerApplication{
-		logger: logging.GetLogger("tendermint/scheduler"),
+		logger:     logging.GetLogger("tendermint/scheduler"),
+		timeSource: timeSource,
 	}
 }
