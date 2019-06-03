@@ -296,7 +296,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		})
 	}
 
-	newMutableState(app.state.DeliverTxTree()).putCommittee(kind, rt.ID, members)
+	NewMutableState(app.state.DeliverTxTree()).putCommittee(kind, rt.ID, members)
 	return nil
 }
 

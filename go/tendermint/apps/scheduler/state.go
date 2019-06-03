@@ -24,8 +24,8 @@ type immutableState struct {
 	*abci.ImmutableState
 }
 
-func (s *immutableState) getCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) ([]*api.CommitteeNode, error) {
-	_, raw := s.Snapshot.Get([]byte(fmt.Sprintf(stateCommitteeMap, kind, runtimeID)))
+func (s *immutableState) GetCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) ([]*api.CommitteeNode, error) {
+	_, raw := s.Snapshot.Get([]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)))
 	if raw == nil {
 		return nil, nil
 	}
@@ -119,23 +119,25 @@ func newImmutableState(state *abci.ApplicationState, version int64) (*immutableS
 	return &immutableState{inner}, nil
 }
 
-type mutableState struct {
+// MutableState is a mutable scheduler state wrapper.
+type MutableState struct {
 	*immutableState
 
 	tree *iavl.MutableTree
 }
 
-func (s *mutableState) putCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey, members []*api.CommitteeNode) {
+func (s *MutableState) putCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey, members []*api.CommitteeNode) {
 	s.tree.Set(
 		[]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)),
 		cbor.Marshal(members),
 	)
 }
 
-func newMutableState(tree *iavl.MutableTree) *mutableState {
+// NewMutableState creates a new mutable scheduler state wrapper.
+func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
 
-	return &mutableState{
+	return &MutableState{
 		immutableState: &immutableState{inner},
 		tree:           tree,
 	}

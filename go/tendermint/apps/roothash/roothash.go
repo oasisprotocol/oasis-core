@@ -27,6 +27,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 )
 
 var (
@@ -172,6 +173,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		newDescriptors[v.ID.ToMapKey()] = v
 	}
 
+	schedState := schedulerapp.NewMutableState(tree)
 	for _, rtState := range state.getRuntimes() {
 		rtID := rtState.Runtime.ID
 
@@ -182,24 +184,16 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight())
+		members, err := schedState.GetCommittee(scheduler.Compute, rtID)
 		if err != nil {
-			app.logger.Error("checkCommittees: failed to get committees from scheduler",
+			app.logger.Error("checkCommittees: failed to get committee from scheduler",
 				"err", err,
 				"runtime", rtID,
 			)
 			continue
 		}
-
-		var committee *scheduler.Committee
-		for _, c := range committees {
-			if c.Kind == scheduler.Compute {
-				committee = c
-				break
-			}
-		}
-		if committee == nil {
-			app.logger.Error("checkCommittees: scheduler did not give us a compute committee",
+		if members == nil {
+			app.logger.Error("checkCommittees: scheduler gave us an empty compute committee",
 				"runtime", rtID,
 			)
 			continue
@@ -213,10 +207,10 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
 		round := rtState.Round
-		if round != nil && round.Pool.Committee.ValidFor == committee.ValidFor {
+		if round != nil && round.Pool.Committee.ValidFor == epoch {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
 				"runtime", rtID,
-				"epoch", committee.ValidFor,
+				"epoch", epoch,
 			)
 			mk := rtID.ToMapKey()
 			if _, ok := newDescriptors[mk]; ok {
@@ -231,7 +225,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
 			"runtime", rtID,
-			"epoch", committee.ValidFor,
+			"epoch", epoch,
 			"round", blockNr,
 		)
 
@@ -241,7 +235,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		tree := app.state.DeliverTxTree()
 		regState := registryapp.NewMutableState(tree)
 		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-		for idx, committeeNode := range committee.Members {
+		for idx, committeeNode := range members {
 			var nodeRuntime *node.Runtime
 			node, err := regState.GetNode(committeeNode.PublicKey)
 			if err != nil {
@@ -266,6 +260,12 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 				CommitteeNode: idx,
 				Runtime:       nodeRuntime,
 			}
+		}
+		committee := &scheduler.Committee{
+			Kind:      scheduler.Compute,
+			Members:   members,
+			RuntimeID: rtID,
+			ValidFor:  epoch,
 		}
 		rtState.Round = newRound(committee, nodeInfo, blk, rtState.Runtime)
 
