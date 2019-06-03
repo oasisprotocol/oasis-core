@@ -306,6 +306,12 @@ func (k *PrivateKey) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// UnmarshalSeed decodes a RFC 8032 seed into a private key.
+func (k *PrivateKey) UnmarshalSeed(seed []byte) error {
+	nk := ed25519.NewKeyFromSeed(seed)
+	return k.UnmarshalBinary(nk[:])
+}
+
 // UnmarshalPEM decodes a PEM marshaled PrivateKey.
 func (k *PrivateKey) UnmarshalPEM(data []byte) error {
 	b, err := unmarshalPEM(privPEMType, data)

@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
@@ -206,7 +207,9 @@ func getEntityPrivKey(dataDir string) (*signature.PrivateKey, error) {
 		err           error
 	)
 
-	if f := viper.GetString(cfgEntityPrivateKey); f != "" {
+	if flags.DebugTestEntity() {
+		_, entityPrivKey, err = entity.TestEntity()
+	} else if f := viper.GetString(cfgEntityPrivateKey); f != "" {
 		// Load PEM.
 		entityPrivKey = new(signature.PrivateKey)
 		if err = entityPrivKey.LoadPEM(f, nil); err != nil {

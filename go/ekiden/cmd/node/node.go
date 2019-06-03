@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/dummydebug"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/pprof"
@@ -571,4 +572,6 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		v(cmd)
 	}
+
+	flags.RegisterDebugTestEntity(cmd)
 }

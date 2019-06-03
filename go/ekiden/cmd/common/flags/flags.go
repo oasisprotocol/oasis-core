@@ -11,6 +11,8 @@ const (
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
 	cfgRetries = "retries"
+
+	cfgDebugTestEntity = "debug.test_entity"
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -53,4 +55,18 @@ func RegisterRetries(cmd *cobra.Command) {
 	}
 
 	_ = viper.BindPFlag(cfgRetries, cmd.Flags().Lookup(cfgRetries))
+}
+
+// DebugTestEntity returns true iff the test entity enable flag is set.
+func DebugTestEntity() bool {
+	return viper.GetBool(cfgDebugTestEntity)
+}
+
+// RegisterDebugTestEntity registers the test entity enable flag.
+func RegisterDebugTestEntity(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgDebugTestEntity, false, "use the test entity (UNSAFE)")
+	}
+
+	_ = viper.BindPFlag(cfgDebugTestEntity, cmd.Flags().Lookup(cfgDebugTestEntity))
 }

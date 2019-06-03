@@ -54,6 +54,7 @@ var (
 		Use:   "init_genesis",
 		Short: "initialize a runtime for genesis",
 		PreRun: func(cmd *cobra.Command, args []string) {
+			cmdFlags.RegisterDebugTestEntity(cmd)
 			registerRuntimeFlags(cmd)
 		},
 		Run: doInitGenesis,
@@ -64,6 +65,7 @@ var (
 		Short: "register a runtime",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdGrpc.RegisterClientFlags(cmd, false)
+			cmdFlags.RegisterDebugTestEntity(cmd)
 			cmdFlags.RegisterRetries(cmd)
 			registerRuntimeFlags(cmd)
 		},
@@ -245,7 +247,7 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, privKey, err := entity.Load(viper.GetString(cfgEntity))
+	ent, privKey, err := loadEntity(viper.GetString(cfgEntity))
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -346,6 +348,14 @@ func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, is
 	return signed, err
 }
 
+func loadEntity(dataDir string) (*entity.Entity, *signature.PrivateKey, error) {
+	if cmdFlags.DebugTestEntity() {
+		return entity.TestEntity()
+	}
+
+	return entity.Load(dataDir)
+}
+
 func registerRuntimeFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgID, "", "Runtime ID")
@@ -382,6 +392,13 @@ func Register(parentCmd *cobra.Command) {
 		listCmd,
 	} {
 		runtimeCmd.AddCommand(v)
+	}
+
+	for _, v := range []*cobra.Command{
+		initGenesisCmd,
+		registerCmd,
+	} {
+		cmdFlags.RegisterDebugTestEntity(v)
 	}
 
 	registerRuntimeFlags(initGenesisCmd)

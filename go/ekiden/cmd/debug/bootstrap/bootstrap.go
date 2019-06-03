@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGenesis "github.com/oasislabs/ekiden/go/ekiden/cmd/genesis"
 	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
@@ -130,6 +131,8 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+
+	flags.RegisterDebugTestEntity(cmd)
 }
 
 // Register registers the bootstrap sub-command and all of it's children.
