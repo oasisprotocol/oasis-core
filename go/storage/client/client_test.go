@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/ekiden/go/beacon/insecure"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
@@ -23,11 +24,9 @@ func TestClientWorker(t *testing.T) {
 	seed := []byte("StorageClientTests")
 
 	timeSource := mock.New()
+	beacon := insecure.New(ctx, timeSource)
 	registry := memory.New(ctx, timeSource)
-	scheduler, err := trivial.New(ctx, nil)
-	if err != nil {
-		t.Fatalf("couldn't create scheduler backend: %s", err.Error())
-	}
+	scheduler := trivial.New(ctx, timeSource, registry, beacon, nil)
 	// Populate registry
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")

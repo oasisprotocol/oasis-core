@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oasislabs/ekiden/go/beacon/insecure"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	registry "github.com/oasislabs/ekiden/go/registry/memory"
@@ -25,12 +26,10 @@ func TestRootHashMemory(t *testing.T) {
 	}()
 
 	timeSource := mock.New()
+	beacon := insecure.New(ctx, timeSource)
 	registry := registry.New(ctx, timeSource)
 	cleanupFns = append(cleanupFns, registry.Cleanup)
-	scheduler, err := trivial.New(ctx, nil)
-	if err != nil {
-		t.Fatalf("couldn't create scheduler backend: %s", err.Error())
-	}
+	scheduler := trivial.New(ctx, timeSource, registry, beacon, nil)
 	storagePrivKey, _ := signature.NewPrivateKey(rand.Reader)
 	storage := storage.New(&storagePrivKey)
 	cleanupFns = append(cleanupFns, storage.Cleanup)
