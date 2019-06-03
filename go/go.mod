@@ -11,7 +11,7 @@ require (
 	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524
 	github.com/RoaringBitmap/roaring v0.4.17 // indirect
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
-	github.com/blevesearch/bleve v0.0.0-20190425163828-55bd8a4b302a
+	github.com/blevesearch/bleve v0.7.1-0.20190531184658-92623347bffc
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/btcsuite/btcd v0.0.0-20190315201642-aa6e0f35703c // indirect
