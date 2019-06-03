@@ -155,7 +155,7 @@ func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtype
 	}
 }
 
-// New constracts a new trivial scheduler Backend instance.
+// New constracts a new tendermint-based scheduler Backend instance.
 func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
 	app := app.New()
@@ -164,7 +164,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 	}
 
 	s := &tendermintScheduler{
-		logger:  logging.GetLogger("scheduler/trivial"),
+		logger:  logging.GetLogger("scheduler/tendermint"),
 		service: service,
 	}
 	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
