@@ -144,7 +144,7 @@ func (app *schedulerApplication) queryAllCommittees(s interface{}, r interface{}
 
 func (app *schedulerApplication) queryKindsCommittees(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
-	request := r.([]scheduler.CommitteeKind)
+	request := *r.(*[]scheduler.CommitteeKind)
 	committees, err := state.getKindsCommittees(request)
 	if err != nil {
 		return nil, err
