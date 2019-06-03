@@ -37,7 +37,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, trivial.BackendName, "Scheduler backend")
+		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Scheduler backend")
 	}
 
 	for _, v := range []string{
