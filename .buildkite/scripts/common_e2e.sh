@@ -162,6 +162,7 @@ run_backend_tendermint_committee() {
             --tendermint.debug.addr_book_lenient \
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
             --datadir ${datadir} \
+            --debug.allow_test_keys \
             &
 
         # HACK HACK HACK HACK HACK
@@ -258,6 +259,7 @@ run_compute_node() {
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
+        --debug.allow_test_keys \
         ${extra_args} 2>&1 | sed "s/^/[compute-node-${id}] /" &
 }
 
@@ -322,6 +324,7 @@ run_storage_node() {
         --worker.p2p.port ${p2p_port} \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
+        --debug.allow_test_keys \
         2>&1 | sed "s/^/[storage-node-${id}] /" &
 }
 
@@ -379,6 +382,7 @@ run_client_node() {
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
+        --debug.allow_test_keys \
         2>&1 | sed "s/^/[client-node-${id}] /" &
 }
 
@@ -465,6 +469,7 @@ run_keymanager_node() {
         --worker.keymanager.runtime.id ${EKIDEN_KM_RUNTIME_ID} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
+        --debug.allow_test_keys \
         ${extra_args} 2>&1 | sed "s/^/[key-manager] /" &
 }
 
@@ -510,6 +515,7 @@ run_seed_node() {
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \
         --datadir ${data_dir} \
+        --debug.allow_test_keys \
         ${extra_args} 2>&1 | sed "s/^/[seed-node-${id}] /" &
 
     # 'show-node-id' relies on key file to be present.

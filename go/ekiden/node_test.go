@@ -66,6 +66,7 @@ var (
 		{"worker.txnscheduler.enabled", true},
 		{"worker.merge.enabled", true},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
+		{"debug.allow_test_keys", true},
 	}
 
 	testRuntime = &registry.Runtime{

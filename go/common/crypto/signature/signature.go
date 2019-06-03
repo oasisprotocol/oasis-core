@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"golang.org/x/crypto/ed25519"
 
@@ -79,6 +80,9 @@ var (
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
 	_ encoding.BinaryUnmarshaler = (*PrivateKey)(nil)
+
+	testPublicKeys        sync.Map
+	blacklistedPublicKeys sync.Map
 )
 
 // MapKey is a PublicKey as a fixed sized byte array for use as a map key.
@@ -103,6 +107,9 @@ func (k PublicKey) Verify(context, message, sig []byte) bool {
 		return false
 	}
 	if len(sig) != SignatureSize {
+		return false
+	}
+	if _, isBlacklisted := blacklistedPublicKeys.Load(k.ToMapKey()); isBlacklisted {
 		return false
 	}
 
@@ -512,6 +519,24 @@ type SignedPublicKey struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedPublicKey) Open(context []byte, pub *PublicKey) error { // nolint: interfacer
 	return s.Signed.Open(context, pub)
+}
+
+// RegisterTestPublicKey registers a hardcoded test public key with the
+// internal public key blacklist.
+func RegisterTestPublicKey(pk PublicKey) {
+	testPublicKeys.Store(pk.ToMapKey(), true)
+}
+
+// BuildPublicKeyBlacklist builds the public key blacklist.
+func BuildPublicKeyBlacklist(allowTestKeys bool) {
+	if !allowTestKeys {
+		testPublicKeys.Range(func(k, v interface{}) bool {
+			blacklistedPublicKeys.Store(k, v)
+			return true
+		})
+	}
+
+	// Explicitly forbid other keys here.
 }
 
 func digest(context, message []byte) ([]byte, error) {

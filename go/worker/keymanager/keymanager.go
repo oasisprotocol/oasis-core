@@ -463,4 +463,5 @@ func RegisterFlags(cmd *cobra.Command) {
 func init() {
 	emptyRoot.Empty()
 	_ = testPublicKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
+	signature.RegisterTestPublicKey(testPublicKey)
 }
