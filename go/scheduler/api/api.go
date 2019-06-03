@@ -104,7 +104,7 @@ type Committee struct {
 	Members []*CommitteeNode `codec:"members"`
 
 	// RuntimeID is the runtime ID that this committee is for.
-	RuntimeID signature.PublicKey `codec:"-"`
+	RuntimeID signature.PublicKey `codec:"runtime_id"`
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `codec:"valid_for"`
