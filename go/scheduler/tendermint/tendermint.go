@@ -20,25 +20,25 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend      = (*trivialScheduler)(nil)
-	_ api.BlockBackend = (*trivialScheduler)(nil)
+	_ api.Backend      = (*tendermintScheduler)(nil)
+	_ api.BlockBackend = (*tendermintScheduler)(nil)
 )
 
-type trivialScheduler struct {
+type tendermintScheduler struct {
 	logger *logging.Logger
 
 	service  service.TendermintService
 	notifier *pubsub.Broker
 }
 
-func (s *trivialScheduler) Cleanup() {
+func (s *tendermintScheduler) Cleanup() {
 }
 
-func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
+func (s *tendermintScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
 	return s.GetBlockCommittees(ctx, id, 0)
 }
 
-func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
+func (s *tendermintScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
 	typedCh := make(chan *api.Committee)
 	sub := s.notifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -46,7 +46,7 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
+func (s *tendermintScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
 	raw, err := s.service.Query(app.QueryAllCommittees, id, height)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 	return runtimeCommittees, err
 }
 
-func (s *trivialScheduler) getCurrentCommittees() ([]*api.Committee, error) {
+func (s *tendermintScheduler) getCurrentCommittees() ([]*api.Committee, error) {
 	raw, err := s.service.Query(app.QueryAllCommittees, nil, 0)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (s *trivialScheduler) getCurrentCommittees() ([]*api.Committee, error) {
 	return committees, err
 }
 
-func (s *trivialScheduler) worker(ctx context.Context) {
+func (s *tendermintScheduler) worker(ctx context.Context) {
 	// Subscribe to blocks which elect committees.
 	sub, err := s.service.Subscribe("scheduler-worker", app.QueryApp)
 	if err != nil {
@@ -119,7 +119,7 @@ func (s *trivialScheduler) worker(ctx context.Context) {
 }
 
 // Called from worker.
-func (s *trivialScheduler) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
+func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
 	tags := ev.ResultBeginBlock.GetTags()
 
 	for _, pair := range tags {
@@ -163,7 +163,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		return nil, err
 	}
 
-	s := &trivialScheduler{
+	s := &tendermintScheduler{
 		logger:  logging.GetLogger("scheduler/trivial"),
 		service: service,
 	}
