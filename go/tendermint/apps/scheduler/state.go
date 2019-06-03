@@ -53,7 +53,7 @@ func committeeFromEntry(key, value []byte) (*api.Committee, error) {
 	}
 	var members []*api.CommitteeNode
 	if err := cbor.Unmarshal(value, &members); err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal committee value: %s", err)
+		return nil, fmt.Errorf("couldn't unmarshal committee value: %s", err.Error())
 	}
 	return &api.Committee{
 		RuntimeID: runtimeID,
