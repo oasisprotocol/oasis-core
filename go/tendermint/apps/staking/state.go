@@ -68,7 +68,7 @@ func (s *immutableState) rawTotalSupply() ([]byte, error) {
 func (s *immutableState) accounts() ([]signature.PublicKey, error) {
 	var accounts []signature.PublicKey
 	s.Snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateAccountsMap, "")),
+		[]byte(fmt.Sprintf(stateAccountsMap, abci.FirstID)),
 		[]byte(fmt.Sprintf(stateAccountsMap, abci.LastID)),
 		true,
 		func(key, value []byte, version int64) bool {
