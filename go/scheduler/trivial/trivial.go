@@ -412,7 +412,7 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
+func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) { // nolint: gocyclo
 	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
 	if !ok {
 		return nil, errIncompatibleBackends
@@ -447,18 +447,16 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 
 	if b := s.state.beacons[epoch]; b == nil {
 		var newBeacon []byte
-		switch getBeaconFn {
-		case nil:
-			beacon, ok := s.beacon.(beacon.BlockBackend)
-			if !ok {
-				return nil, errIncompatibleBackends
-			}
+		if beacon, ok := s.beacon.(beacon.BlockBackend); ok {
 			newBeacon, err = beacon.GetBlockBeacon(ctx, height)
-		default:
-			newBeacon, err = getBeaconFn()
-		}
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			newBeacon, err = s.beacon.GetBeacon(ctx, epoch)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		s.logger.Debug("GetBlockCommittees: setting cached beacon",
