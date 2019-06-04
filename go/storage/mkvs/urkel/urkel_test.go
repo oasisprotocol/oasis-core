@@ -22,7 +22,7 @@ const (
 
 	longKey          = "Unlock the potential of your data without compromising security or privacy"
 	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
-	allLongItemsRoot = "5b12685312e13363326e490e1017e3f268338c78e7a5b755b6d0157052c86a77"
+	allLongItemsRoot = "5b4f767a6236c3960f59e2032fd1d08f5736087f5c8072c0b20cbab12f60ef20"
 )
 
 func testBasic(t *testing.T, ndb db.NodeDB) {
@@ -106,7 +106,7 @@ func testLongKeys(t *testing.T, ndb db.NodeDB) {
 	for i := 0; i < len(keys); i++ {
 		value, err := tree.Get(ctx, keys[i])
 		require.NoError(t, err, "Get")
-		require.Equal(t, values[i], value)
+		require.Equal(t, values[i], value, "get at index %d", i)
 	}
 
 	require.Equal(t, allLongItemsRoot, roots[len(roots)-1].String())
@@ -588,8 +588,8 @@ func generateKeyValuePairs() ([][]byte, [][]byte) {
 func generateLongKeyValuePairs() ([][]byte, [][]byte) {
 	keys := make([][]byte, len(longKey))
 	values := make([][]byte, len(longKey))
-	for i := 0; i < len(longKey)-2; i++ {
-		keys[i] = []byte(longKey[0 : i+2])
+	for i := 0; i < len(longKey); i++ {
+		keys[i] = []byte(longKey[0 : i+1])
 		values[i] = []byte(longValue)
 	}
 
