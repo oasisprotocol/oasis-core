@@ -1,4 +1,4 @@
-// Package tendermint implements the mock (settable) tendermint backed epochtime backend.
+// Package tendermintmock implements the mock (settable) tendermint backed epochtime backend.
 package tendermintmock
 
 import (
