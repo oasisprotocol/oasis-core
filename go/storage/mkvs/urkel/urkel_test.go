@@ -22,7 +22,7 @@ const (
 
 	longKey          = "Unlock the potential of your data without compromising security or privacy"
 	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
-	allLongItemsRoot = "410a4d112994762fe7887daf0e3ca6b307200b65677672132caf73163fd3100b"
+	allLongItemsRoot = "5b12685312e13363326e490e1017e3f268338c78e7a5b755b6d0157052c86a77"
 )
 
 func testBasic(t *testing.T, ndb db.NodeDB) {

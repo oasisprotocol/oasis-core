@@ -244,7 +244,7 @@ func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRo
 	return b.signReceipt(ctx, []hash.Hash{*r})
 }
 
-func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth api.MKVSDepthType) (*api.Subtree, error) {
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.N
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth uint8) (*api.Subtree, error) {
+func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth api.MKVSDepthType) (*api.Subtree, error) {
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err

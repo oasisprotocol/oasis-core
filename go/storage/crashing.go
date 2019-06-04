@@ -49,14 +49,14 @@ func (w *crashingWrapper) GetReceipt(ctx context.Context, keys []api.Key) (*api.
 	return res, err
 }
 
-func (w *crashingWrapper) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (w *crashingWrapper) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth api.MKVSDepthType) (*api.Subtree, error) {
 	crash.Here(crashPointReadBefore)
 	res, err := w.Backend.GetSubtree(ctx, root, id, maxDepth)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }
 
-func (w *crashingWrapper) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth uint8) (*api.Subtree, error) {
+func (w *crashingWrapper) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth api.MKVSDepthType) (*api.Subtree, error) {
 	crash.Here(crashPointReadBefore)
 	res, err := w.Backend.GetPath(ctx, root, key, startDepth)
 	crash.Here(crashPointReadAfter)

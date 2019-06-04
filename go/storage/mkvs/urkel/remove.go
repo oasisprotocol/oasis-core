@@ -21,7 +21,7 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth intern
 		// Remove from internal node and recursively collapse the path, if
 		// needed.
 		var changed bool
-		if key.BitLength() == int(depth) {
+		if key.BitLength() == depth {
 			n.LeafNode, changed, err = t.doRemove(ctx, n.LeafNode, depth, key)
 		} else if key.GetBit(depth) {
 			n.Right, changed, err = t.doRemove(ctx, n.Right, depth+1, key)

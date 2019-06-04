@@ -90,7 +90,7 @@ func (t *Tree) doGetSubtree(
 		s.LeafNode = leafNodePtr
 
 		// To traverse subtrees resize path bit vector, if needed.
-		if path.BitLength() == int(depth) {
+		if path.BitLength() == depth {
 			var newPath = make(Key, len(path)+1)
 			copy(newPath, path)
 			path = newPath
@@ -183,7 +183,7 @@ func (t *Tree) doGetPath(
 		return syncer.SubtreePointer{Index: syncer.InvalidSubtreeIndex, Valid: true}, nil
 	}
 
-	if int(depth) < key.BitLength() && !key.GetBit(depth) {
+	if depth < key.BitLength() && !key.GetBit(depth) {
 		// Off-path nodes are always full nodes.
 		idx, err := st.AddFullNode(node.Extract())
 		if err != nil {

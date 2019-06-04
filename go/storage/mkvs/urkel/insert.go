@@ -21,7 +21,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth intern
 		return t.cache.newLeafNode(key, val), false, nil
 	case *internal.InternalNode:
 		var existed bool
-		if key.BitLength() == int(depth) {
+		if key.BitLength() == depth {
 			// Key to insert ends at this depth. Add it as a LeafNode reference
 			// to the existing internal node.
 			n.LeafNode, existed, err = t.doInsert(ctx, n.LeafNode, depth, key, val)
@@ -58,7 +58,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth intern
 		// If the key mismatches, three cases are possible:
 		var leafNode, left, right *internal.Pointer
 		var existingBit bool
-		if key.BitLength() == int(depth) {
+		if key.BitLength() == depth {
 			// Case 1: key is a prefix of n.Key
 			leafNode = t.cache.newLeafNode(key, val)
 			if n.Key.GetBit(depth) {
@@ -68,7 +68,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth intern
 				left = ptr
 				right = nil
 			}
-		} else if n.Key.BitLength() == int(depth) {
+		} else if n.Key.BitLength() == depth {
 			// Case 2: n.Key is a prefix of key
 			leafNode = ptr
 			if key.GetBit(depth) {

@@ -20,7 +20,7 @@ func (t *Tree) doGet(ctx context.Context, ptr *internal.Pointer, depth internal.
 	case *internal.InternalNode:
 		// Internal node.
 		// Is lookup key a prefix of longer stored keys? Look in n.LeafNode.
-		if key.BitLength() == int(depth) {
+		if key.BitLength() == depth {
 			return t.doGet(ctx, n.LeafNode, depth, key)
 		}
 

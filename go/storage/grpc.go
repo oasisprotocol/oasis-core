@@ -210,12 +210,12 @@ func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
-	maxDepth := uint8(req.GetMaxDepth())
+	maxDepth := api.MKVSDepthType(req.GetMaxDepth())
 
 	nid := req.GetId()
 	nodeID := api.NodeID{
 		Path:  api.MKVSKey(nid.GetPath()),
-		Depth: uint8(nid.GetDepth()),
+		Depth: api.MKVSDepthType(nid.GetDepth()),
 	}
 
 	<-s.backend.Initialized()
@@ -243,7 +243,7 @@ func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 		return nil, errors.Wrap(err, "storage: failed to unmarshal key")
 	}
 
-	startDepth := uint8(req.GetStartDepth())
+	startDepth := api.MKVSDepthType(req.GetStartDepth())
 
 	<-s.backend.Initialized()
 	subtree, err := s.backend.GetPath(ctx, root, key, startDepth)
@@ -273,7 +273,7 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 
 	nodeID := api.NodeID{
 		Path:  path,
-		Depth: uint8(nid.GetDepth()),
+		Depth: api.MKVSDepthType(nid.GetDepth()),
 	}
 
 	<-s.backend.Initialized()

@@ -513,7 +513,7 @@ func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp
 	return &receipt, nil
 }
 
-func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth api.MKVSDepthType) (*api.Subtree, error) {
 	var req storage.GetSubtreeRequest
 	req.Root, _ = root.MarshalBinary()
 	req.MaxDepth = uint32(maxDepth)
@@ -540,7 +540,7 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 	return &subtree, nil
 }
 
-func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key api.MKVSKey, startDepth api.MKVSDepthType) (*api.Subtree, error) {
 	var req storage.GetPathRequest
 	req.Root, _ = root.MarshalBinary()
 	req.Key, _ = key.MarshalBinary()

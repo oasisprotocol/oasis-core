@@ -505,8 +505,8 @@ func ToMapKey(k []byte) string {
 }
 
 // BitLength returns the length of the key in bits.
-func (k Key) BitLength() int {
-	return len(k[:]) * 8
+func (k Key) BitLength() DepthType {
+	return DepthType(len(k[:]) * 8)
 }
 
 // GetKeyBit returns the given bit of the key.

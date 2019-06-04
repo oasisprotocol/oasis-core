@@ -182,6 +182,9 @@ type NodeID = urkel.NodeID
 // Key is a node's key spelled out from the root to the node.
 type MKVSKey = urkel.Key
 
+// Key is a node's key spelled out from the root to the node.
+type MKVSDepthType = urkel.DepthType
+
 // Node is either an InternalNode or a LeafNode.
 type Node = urkel.Node
 

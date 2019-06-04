@@ -98,13 +98,13 @@ message ApplyBatchResponse {
 
 message NodeID {
     bytes path = 1;
-    uint32 depth = 2;  // Actually uint8, but protobufs don't have that :/
+    uint32 depth = 2;  // MKVSDepthType
 }
 
 message GetSubtreeRequest {
     bytes root = 1;
     NodeID id = 2;
-    uint32 max_depth = 3;  // uint8
+    uint32 max_depth = 3;  // MKVSDepthType
 }
 
 message GetSubtreeResponse {
@@ -114,7 +114,7 @@ message GetSubtreeResponse {
 message GetPathRequest {
     bytes root = 1;
     bytes key = 2;
-    uint32 start_depth = 3;  // uint8
+    uint32 start_depth = 3;  // MKVSDepthType
 }
 
 message GetPathResponse {

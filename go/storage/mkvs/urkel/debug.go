@@ -20,7 +20,7 @@ func (t *Tree) doDump(ctx context.Context, w io.Writer, ptr *internal.Pointer, p
 	case nil:
 		fmt.Fprint(w, prefix+"<nil>")
 	case *internal.InternalNode:
-		if int(depth) >= path.BitLength() {
+		if depth >= path.BitLength() {
 			newPath := make(Key, depth/8+1)
 			copy(newPath[:], path[:])
 			path = newPath
@@ -62,7 +62,7 @@ func (t *Tree) doStats(ctx context.Context, s *Stats, ptr *internal.Pointer, pat
 		s.DeadNodeCount++
 	case *internal.InternalNode:
 		s.InternalNodeCount++
-		if int(depth) >= path.BitLength() {
+		if depth >= path.BitLength() {
 			newPath := make(Key, depth/8+1)
 			copy(newPath[:], path[:])
 			path = newPath

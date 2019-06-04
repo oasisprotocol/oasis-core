@@ -210,24 +210,24 @@ type HostRPCCallResponse struct {
 
 // HostStorageSyncGetSubtreeRequest is a host storage read syncer get subtree request message body.
 type HostStorageSyncGetSubtreeRequest struct {
-	RootHash  hash.Hash `codec:"root_hash"`
-	NodePath  []byte    `codec:"node_path"`
-	NodeDepth uint8     `codec:"node_depth"`
-	MaxDepth  uint8     `codec:"max_depth"`
+	RootHash  hash.Hash             `codec:"root_hash"`
+	NodePath  []byte                `codec:"node_path"`
+	NodeDepth storage.MKVSDepthType `codec:"node_depth"`
+	MaxDepth  storage.MKVSDepthType `codec:"max_depth"`
 }
 
 // HostStorageSyncGetPathRequest is a host storage read syncer get path request message body.
 type HostStorageSyncGetPathRequest struct {
-	RootHash   hash.Hash `codec:"root_hash"`
-	Key        []byte    `codec:"key"`
-	StartDepth uint8     `codec:"start_depth"`
+	RootHash   hash.Hash             `codec:"root_hash"`
+	Key        []byte                `codec:"key"`
+	StartDepth storage.MKVSDepthType `codec:"start_depth"`
 }
 
 // HostStorageSyncGetNodeRequest is a host storage read syncer get node request message body.
 type HostStorageSyncGetNodeRequest struct {
-	RootHash  hash.Hash `codec:"root_hash"`
-	NodePath  []byte    `codec:"node_path"`
-	NodeDepth uint8     `codec:"node_depth"`
+	RootHash  hash.Hash             `codec:"root_hash"`
+	NodePath  []byte                `codec:"node_path"`
+	NodeDepth storage.MKVSDepthType `codec:"node_depth"`
 }
 
 // HostStorageSyncGetValueRequest is a host storage read syncer get value message body.
