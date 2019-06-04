@@ -78,8 +78,8 @@ type cachedValue struct {
 	value []byte
 }
 
-func (v *cachedValue) Size() int {
-	return len(v.value)
+func (v *cachedValue) Size() uint64 {
+	return uint64(len(v.value))
 }
 
 func (b *cachingClientBackend) Get(ctx context.Context, key api.Key) ([]byte, error) {
@@ -353,7 +353,7 @@ func New(remote api.Backend) (api.Backend, error) {
 	})
 
 	local, err := lru.New(
-		lru.Capacity(int(viper.GetSizeInBytes(cfgCacheSize)), true),
+		lru.Capacity(uint64(viper.GetSizeInBytes(cfgCacheSize)), true),
 	)
 	if err != nil {
 		return nil, err

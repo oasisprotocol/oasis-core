@@ -14,7 +14,7 @@ var ErrTooLarge = errors.New("lru: value size exceeds maximum capacity")
 // own memory size in bytes.
 type Sizeable interface {
 	// Size returns the size of the instance in bytes.
-	Size() int
+	Size() uint64
 }
 
 // OnEvictFunc is the function signature for the on-evict callback.
@@ -33,8 +33,8 @@ type Cache struct {
 	onEvict OnEvictFunc
 
 	capacityInBytes bool
-	capacity        int
-	size            int
+	capacity        uint64
+	size            uint64
 }
 
 type cacheEntry struct {
@@ -105,7 +105,7 @@ func (c *Cache) Keys() []interface{} {
 
 // Size returns the current cache size in the units specified by a `Capacity`
 // option at creation time.
-func (c *Cache) Size() int {
+func (c *Cache) Size() uint64 {
 	c.Lock()
 	defer c.Unlock()
 
@@ -127,7 +127,7 @@ func (c *Cache) getEntry(key interface{}, isPeek bool) (interface{}, bool) {
 	return elem.Value.(*cacheEntry).value, true
 }
 
-func (c *Cache) evictEntries(targetCapacity int) {
+func (c *Cache) evictEntries(targetCapacity uint64) {
 	for c.lru.Len() > 0 && c.capacity-c.size < targetCapacity {
 		elem := c.lru.Back()
 		c.lru.Remove(elem)
@@ -142,7 +142,7 @@ func (c *Cache) evictEntries(targetCapacity int) {
 	}
 }
 
-func (c *Cache) getValueSize(value interface{}) int {
+func (c *Cache) getValueSize(value interface{}) uint64 {
 	if !c.capacityInBytes {
 		// Capacity at initialization time was set to a number of
 		// elements.
@@ -176,7 +176,7 @@ type Option func(c *Cache) error
 // `Sizable`.
 //
 // If no capacity is specified, the cache will have an unlimited size.
-func Capacity(capacity int, inBytes bool) Option {
+func Capacity(capacity uint64, inBytes bool) Option {
 	return func(c *Cache) error {
 		c.capacityInBytes = inBytes
 		c.capacity = capacity

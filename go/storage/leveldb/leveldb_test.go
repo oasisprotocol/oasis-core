@@ -23,7 +23,7 @@ func TestStorageLevelDB(t *testing.T) {
 	pk, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey()")
 
-	backend, err := New(filepath.Join(tmpDir, DBFile), filepath.Join(tmpDir, MKVSDBFile), timeSource, &pk)
+	backend, err := New(filepath.Join(tmpDir, DBFile), filepath.Join(tmpDir, MKVSDBFile), timeSource, &pk, 32*1024*1024, 100)
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 

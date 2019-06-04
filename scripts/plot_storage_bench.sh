@@ -5,8 +5,9 @@
 # Resulting PNG plots will be saved in the current working directory that
 # the script is called from.
 #
-# Storage backend name can optionally be passed as the first and only
-# argument to this script (memory backend is used by default).
+# Storage backend name can optionally be passed as the first argument to
+# this script (memory backend is used by default).  The optional second
+# argument specifies the data directory for the storage backend.
 #
 
 set -o errexit -o nounset -o pipefail
@@ -18,8 +19,11 @@ ROOT="$(cd $(dirname $0)/..; pwd -P)"
 BACKEND="memory"
 if [[ $# == 1 ]]; then
 	BACKEND="$1"
+elif [[ $# == 2 ]]; then
+	BACKEND="$1"
+	DATADIR="$2"
 elif [[ $# != 0 ]]; then
-	echo "Usage: $0 [backend]"
+	echo "Usage: $0 [backend [datadir]]"
 	exit 1
 fi
 
@@ -33,8 +37,12 @@ if [[ ! -x ${ROOT}/go/ekiden/ekiden ]]; then
 fi
 
 # Run benchmarks.
+ARGS="storage benchmark --log.level INFO --storage.backend ${BACKEND}"
+if [[ -n ${DATADIR+x} ]]; then
+	ARGS="${ARGS} --datadir ${DATADIR}"
+fi
 OUT="$(mktemp)"
-${ROOT}/go/ekiden/ekiden storage benchmark --log.level INFO --storage.backend ${BACKEND} > ${OUT}
+${ROOT}/go/ekiden/ekiden ${ARGS} > ${OUT}
 
 # CAS Insert.
 DATA_INSERT="$(mktemp)"
