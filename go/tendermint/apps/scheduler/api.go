@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	// TagElected is an ABCI transaction tag with which committee types were elected.
+	// TagElected is an ABCI begin block tag with which committee types were elected.
 	TagElected = []byte("scheduler.elected")
 
 	// QueryElected is a query for filtering blocks where we elected some committees.

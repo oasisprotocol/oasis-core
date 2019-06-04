@@ -16,7 +16,7 @@ const (
 )
 
 var (
-	// TagGenerated is an ABCI transaction tag for new beacons.
+	// TagGenerated is an ABCI begin block tag for new beacons.
 	// (value is a CBOR serialized beacon.GenerateEvent).
 	TagGenerated = []byte("beacon.generated")
 

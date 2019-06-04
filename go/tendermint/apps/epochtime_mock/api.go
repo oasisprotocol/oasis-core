@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	// TagEpoch is an ABCI transaction tag for specifying the set epoch.
+	// TagEpoch is an ABCI begin block tag for specifying the set epoch.
 	TagEpoch = []byte("epochtime_mock.epoch")
 
 	// QueryEpochChange is a query for filtering blocks where we changed the epoch.
