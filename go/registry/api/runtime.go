@@ -66,6 +66,9 @@ type Runtime struct {
 
 	// TEEHardware specifies the runtime's TEE hardware requirements.
 	TEEHardware node.TEEHardware `codec:"tee_hardware"`
+
+	// KeyManager is the key manager runtime ID for this runtime.
+	KeyManager signature.PublicKey `codec:"key_manager"`
 }
 
 // String returns a string representation of itself.
@@ -101,6 +104,11 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	if err := c.TEEHardware.FromProto(pb.GetTeeHardware()); err != nil {
 		return err
 	}
+
+	if err := c.KeyManager.UnmarshalBinary(pb.GetKeyManager()); err != nil {
+		return err
+	}
+
 	c.ReplicaGroupSize = pb.GetReplicaGroupSize()
 	c.ReplicaGroupBackupSize = pb.GetReplicaGroupBackupSize()
 	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
@@ -120,6 +128,9 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 		panic(err)
 	}
 	if pb.TeeHardware, err = c.TEEHardware.ToProto(); err != nil {
+		panic(err)
+	}
+	if pb.KeyManager, err = c.KeyManager.MarshalBinary(); err != nil {
 		panic(err)
 	}
 	pb.ReplicaGroupSize = c.ReplicaGroupSize

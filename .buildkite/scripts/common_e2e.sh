@@ -86,6 +86,8 @@ run_backend_tendermint_committee() {
         --runtime.storage_group_size ${storage_group_size} \
         ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}} \
         ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+        --runtime.keymanager ${EKIDEN_KM_RUNTIME_ID} \
+        --runtime.kind compute \
         --entity ${entity_dir} \
         --datadir ${entity_dir}
 

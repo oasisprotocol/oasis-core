@@ -21,6 +21,8 @@ message Runtime {
     uint64 registration_time = 7;
 
     uint32 kind = 8;
+
+    bytes key_manager = 9;
 }
 
 service RuntimeRegistry {

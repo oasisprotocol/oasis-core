@@ -39,7 +39,12 @@ const (
 	cfgStorageGroupSize              = "runtime.storage_group_size"
 	cfgTransactionSchedulerGroupSize = "runtime.transaction_scheduler_group_size"
 	cfgGenesisState                  = "runtime.genesis.state"
+	cfgKind                          = "runtime.kind"
+	cfgKeyManager                    = "runtime.keymanager"
 	cfgEntity                        = "entity"
+
+	optKindCompute    = "compute"
+	optKindKeyManager = "keymanager"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -255,6 +260,31 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		return nil, nil, err
 	}
 
+	var (
+		kmID signature.PublicKey
+		kind registry.RuntimeKind
+	)
+	s = viper.GetString(cfgKind)
+	switch strings.ToLower(s) {
+	case optKindCompute:
+		if err = kmID.UnmarshalHex(viper.GetString(cfgKeyManager)); err != nil {
+			logger.Error("failed to parse key manager ID",
+				"err", err,
+			)
+			return nil, nil, err
+		}
+	case optKindKeyManager:
+		kind = registry.KindKeyManager
+
+		// Key managers don't have their own key manager.
+		kmID = id
+	default:
+		logger.Error("invalid runtime kind",
+			cfgKind, s,
+		)
+		return nil, nil, fmt.Errorf("invalid runtime Kind")
+	}
+
 	// TODO: Support root upload when registering.
 	gen := registry.RuntimeGenesis{}
 	switch state := viper.GetString(cfgGenesisState); state {
@@ -316,12 +346,14 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 	return &registry.Runtime{
 		ID:                            id,
 		Genesis:                       gen,
-		TEEHardware:                   teeHardware,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
 		ReplicaAllowedStragglers:      uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
 		StorageGroupSize:              uint64(viper.GetInt64(cfgStorageGroupSize)),
 		TransactionSchedulerGroupSize: uint64(viper.GetInt64(cfgTransactionSchedulerGroupSize)),
+		TEEHardware:                   teeHardware,
+		KeyManager:                    kmID,
+		Kind:                          kind,
 		RegistrationTime:              ent.RegistrationTime,
 	}, privKey, nil
 }
@@ -365,6 +397,8 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
 		cmd.Flags().Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
 		cmd.Flags().String(cfgGenesisState, "", "Runtime state at genesis")
+		cmd.Flags().String(cfgKeyManager, "", "Key Manager Runtime ID")
+		cmd.Flags().String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
@@ -377,6 +411,8 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgStorageGroupSize,
 		cfgTransactionSchedulerGroupSize,
 		cfgGenesisState,
+		cfgKeyManager,
+		cfgKind,
 		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

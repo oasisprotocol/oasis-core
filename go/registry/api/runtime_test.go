@@ -18,6 +18,7 @@ func TestSerialization(t *testing.T) {
 		ReplicaGroupBackupSize:   72,
 		ReplicaAllowedStragglers: 81,
 		StorageGroupSize:         90,
+		KeyManager:               signature.PublicKey(key),
 	}
 
 	cp := c.ToProto()
