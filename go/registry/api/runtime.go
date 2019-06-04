@@ -42,9 +42,6 @@ type Runtime struct {
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `codec:"genesis"`
 
-	// Code is the runtime code body.
-	Code []byte `codec:"code"`
-
 	// ReplicaGroupSize is the size of the computation group.
 	ReplicaGroupSize uint64 `codec:"replica_group_size"`
 
@@ -101,7 +98,6 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return err
 	}
 
-	c.Code = append([]byte{}, pb.GetCode()...)
 	if err := c.TEEHardware.FromProto(pb.GetTeeHardware()); err != nil {
 		return err
 	}
@@ -123,7 +119,6 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
 		panic(err)
 	}
-	pb.Code = append([]byte{}, c.Code...)
 	if pb.TeeHardware, err = c.TEEHardware.ToProto(); err != nil {
 		panic(err)
 	}

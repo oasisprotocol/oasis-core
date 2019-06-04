@@ -316,7 +316,6 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 	return &registry.Runtime{
 		ID:                            id,
 		Genesis:                       gen,
-		Code:                          nil, // TBD
 		TEEHardware:                   teeHardware,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
