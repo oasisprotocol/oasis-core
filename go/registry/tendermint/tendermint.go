@@ -283,14 +283,14 @@ func (r *tendermintBackend) workerEvents(ctx context.Context) {
 	defer r.closedWg.Done()
 
 	// Subscribe to transactions which modify state.
-	sub, err := r.service.Subscribe("registry-worker", app.QueryApp)
+	sub, err := r.service.Subscribe("registry-worker", app.QueryChange)
 	if err != nil {
 		r.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer r.service.Unsubscribe("registry-worker", app.QueryApp) // nolint: errcheck
+	defer r.service.Unsubscribe("registry-worker", app.QueryChange) // nolint: errcheck
 
 	// Process transactions and emit notifications for our subscribers.
 	for {

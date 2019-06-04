@@ -1,6 +1,10 @@
 package registry
 
 import (
+	"bytes"
+
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -17,23 +21,45 @@ const (
 	AppName string = "999_registry"
 )
 
+type queryAnyEvent struct{}
+
+func (queryAnyEvent) Matches(tags map[string]string) bool {
+	if v, ok := tags[string(api.TagApplication)]; ok {
+		return bytes.Equal([]byte(v), []byte(AppName))
+	}
+	for _, k := range [][]byte{
+		TagRuntimeRegistered,
+		TagEntityRegistered,
+		TagNodesExpired,
+	} {
+		if _, ok := tags[string(k)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (queryAnyEvent) String() string {
+	return "registry.queryAnyEvent"
+}
+
 var (
-	// TagRuntimeRegistered is an ABCI transaction tag for new runtime
+	// TagRuntimeRegistered is an ABCI tag for new runtime
 	// registrations (value is runtime id).
 	TagRuntimeRegistered = []byte("registry.runtime.registered")
 
-	// TagEntityRegistered is an ABCI transaction tag for new entity
+	// TagEntityRegistered is an ABCI tag for new entity
 	// registrations (value is entity id).
 	TagEntityRegistered = []byte("registry.entity.registered")
 
-	// TagNodesExpired is an ABCI transaction tag for node deregistrations
+	// TagNodesExpired is an ABCI tag for node deregistrations
 	// due to expiration (value is a CBOR serialized vector of node
 	// descriptors).
 	TagNodesExpired = []byte("registry.nodes.expired")
 
-	// QueryApp is a query for filtering transactions processed by
-	// the registry application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	// QueryChange is a query for filtering blocks and transactions where
+	// any state changes.
+	QueryChange tmpubsub.Query = queryAnyEvent{}
 )
 
 const (
