@@ -18,7 +18,7 @@ impl ReadSync for UrkelTree {
         ctx: Context,
         root_hash: Hash,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -51,7 +51,7 @@ impl ReadSync for UrkelTree {
         ctx: Context,
         root_hash: Hash,
         key: &Key,
-        start_depth: u8,
+        start_depth: DepthType,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
         if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
@@ -127,10 +127,10 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
+        depth: DepthType,
         path: Key,
         st: &mut Subtree,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<SubtreePointer> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
@@ -216,7 +216,7 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
+        depth: DepthType,
         key: &Key,
         st: &mut Subtree,
     ) -> Fallible<SubtreePointer> {

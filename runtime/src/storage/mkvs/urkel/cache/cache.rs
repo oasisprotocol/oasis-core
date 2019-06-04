@@ -35,7 +35,7 @@ pub trait Cache {
     fn set_sync_root(&mut self, new_hash: Hash);
 
     /// Set the maximum depth for subtree prefetch.
-    fn set_prefetch_depth(&mut self, depth: u8);
+    fn set_prefetch_depth(&mut self, depth: DepthType);
     /// Get the read syncer backing this cache.
     fn get_read_syncer(&self) -> &Box<dyn ReadSync>;
 
@@ -94,8 +94,8 @@ pub trait Cache {
         ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
-        depth: u8,
-        max_depth: u8,
+        depth: DepthType,
+        max_depth: DepthType,
     ) -> Fallible<NodePtrRef>;
 
     /// Prefetch a subtree from the read syncer.
@@ -104,7 +104,7 @@ pub trait Cache {
         ctx: &Arc<Context>,
         subtree_root: Hash,
         subtree_path: Key,
-        depth: u8,
+        depth: DepthType,
     ) -> Fallible<NodePtrRef>;
 }
 

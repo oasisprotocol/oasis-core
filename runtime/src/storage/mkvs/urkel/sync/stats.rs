@@ -45,7 +45,7 @@ impl ReadSync for StatsCollector {
         ctx: Context,
         root_hash: Hash,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree> {
         self.subtree_fetches += 1;
         self.rs.get_subtree(ctx, root_hash, id, max_depth)
@@ -56,7 +56,7 @@ impl ReadSync for StatsCollector {
         ctx: Context,
         root_hash: Hash,
         key: &Key,
-        start_depth: u8,
+        start_depth: DepthType,
     ) -> Fallible<Subtree> {
         self.path_fetches += 1;
         self.rs.get_path(ctx, root_hash, key, start_depth)

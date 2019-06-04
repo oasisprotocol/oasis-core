@@ -52,6 +52,7 @@ fn main() {
     let txn_client = TxnClient::new(node.channel(), runtime_id, None);
     let kv_client = SimpleKeyValueClient::new(txn_client);
 
+    // Test simple [set,get] key calls
     let kv = KeyValue {
         key: String::from("hello_key"),
         value: String::from("hello_value"),
@@ -73,6 +74,30 @@ fn main() {
         None => {
             println!("Key not found");
             panic!("Key \"hello_value\" not found, but it should be.")
+        }
+    }
+
+    // Test [set, get] long key calls
+    let long_kv = KeyValue {
+        key: String::from("Unlock the potential of your data without compromising security or privacy"),
+        value: String::from("The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information etc."),
+    };
+    println!(
+        "Storing long key and value to database..."
+    );
+    let r: Option<String> = rt.block_on(kv_client.insert(long_kv.clone())).unwrap();
+    assert_eq!(r, None); // key should not exist in db before
+
+    println!("Getting long key...");
+    let r = rt.block_on(kv_client.get(long_kv.key.to_string())).unwrap();
+    match r {
+        Some(val) => {
+            println!("Got correct long value");
+            assert_eq!(val, long_kv.value)
+        } // key should exist in db
+        None => {
+            println!("Key not found");
+            panic!("Long key not found, but it should be.")
         }
     }
 

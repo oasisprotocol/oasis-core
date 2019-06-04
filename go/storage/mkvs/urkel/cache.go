@@ -47,6 +47,9 @@ type cache struct {
 	lruValues *list.List
 }
 
+// MaxPrefetchDepth is the maximum depth of the prefeteched tree
+const MaxPrefetchDepth = 255
+
 func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) cache {
 	return cache{
 		db:                    ndb,
@@ -310,7 +313,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 			}
 
 			var newPtr *internal.Pointer
-			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
+			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, id.Depth+MaxPrefetchDepth); err != nil {
 				return nil, err
 			}
 

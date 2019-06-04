@@ -18,7 +18,7 @@ impl UrkelTree {
         &self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
+        depth: DepthType,
         key: Key,
     ) -> Fallible<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(

@@ -26,12 +26,12 @@ pub trait Node {
 #[derive(Clone, Copy, Debug)]
 pub struct NodeID<'a> {
     pub path: &'a Key,
-    pub depth: u8,
+    pub depth: DepthType,
 }
 
 impl<'a> NodeID<'a> {
     /// Return a copy of this `NodeID` with a different depth.
-    pub fn at_depth(&self, depth: u8) -> NodeID {
+    pub fn at_depth(&self, depth: DepthType) -> NodeID {
         NodeID {
             path: self.path,
             depth: depth,
@@ -372,23 +372,29 @@ impl PartialEq for LeafNode {
 
 impl Eq for LeafNode {}
 
+// Key holds variable-length key.
 pub type Key = Vec<u8>;
+
+// DepthType determines the maximum length of the key in bits.
+//
+// max length = 2^size_of(DepthType)*8
+pub type DepthType = u16;
 
 pub trait KeyTrait {
     /// Get a single bit from the given hash.
-    fn get_bit(&self, bit: u8) -> bool;
+    fn get_bit(&self, bit: DepthType) -> bool;
     /// Set a single bit in the given hash and return the result. If bit>self, it resizes new Key.
-    fn set_bit(&self, bit: u8, val: bool) -> Key;
+    fn set_bit(&self, bit: DepthType, val: bool) -> Key;
     /// Returns the length of the key in bits.
-    fn bit_length(&self) -> u8;
+    fn bit_length(&self) -> DepthType;
 }
 
 impl KeyTrait for Key {
-    fn get_bit(&self, bit: u8) -> bool {
+    fn get_bit(&self, bit: DepthType) -> bool {
         (self[(bit / 8) as usize] & (1 << (7 - (bit % 8)))) != 0
     }
 
-    fn set_bit(&self, bit: u8, val: bool) -> Key {
+    fn set_bit(&self, bit: DepthType, val: bool) -> Key {
         let mut k: Key;
         if bit as usize >= self.len() * 8 {
             k = vec![0; bit as usize / 8 + 1];
@@ -406,8 +412,8 @@ impl KeyTrait for Key {
         k
     }
 
-    fn bit_length(&self) -> u8 {
-        self.len() as u8 * 8
+    fn bit_length(&self) -> DepthType {
+        (self.len() * 8) as DepthType
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, mem::size_of, rc::Rc};
 
 use failure::Fallible;
 
@@ -136,7 +136,7 @@ impl Marshal for LeafNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 2 || data[0] != NodeKind::Leaf as u8 {
+        if data.len() < 1+size_of::<DepthType>() || data[0] != NodeKind::Leaf as u8 {
             return Err(TreeError::MalformedNode.into());
         }
 
@@ -161,22 +161,23 @@ impl Marshal for LeafNode {
 impl Marshal for Key {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::new();
-        result.push(self.len() as u8);
+        result.append(&mut (self.len() as DepthType).marshal_binary()?);
         result.extend_from_slice(self);
         Ok(result)
     }
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 {
+        if data.len() < size_of::<DepthType>() {
             return Err(TreeError::MalformedKey.into());
         }
-        let key_len = data[0];
+        let key_len: DepthType;
+        key_len.unmarshal_binary(data)?;
 
-        if data.len() < 1 + key_len as usize {
+        if data.len() < size_of::<DepthType>() + key_len as usize {
             return Err(TreeError::MalformedKey.into());
         }
 
-        self.extend_from_slice(&data[1..(key_len as usize + 1)]);
-        Ok((key_len + 1) as usize)
+        self.extend_from_slice(&data[size_of::<DepthType>()..(size_of::<DepthType>() + key_len as usize)]);
+        Ok((key_len + key_len) as usize)
     }
 }
 

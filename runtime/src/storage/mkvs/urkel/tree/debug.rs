@@ -6,7 +6,7 @@ use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Traverse the tree and return some statistics about it.
-    pub fn stats(&mut self, ctx: Context, max_depth: u8) -> UrkelStats {
+    pub fn stats(&mut self, ctx: Context, max_depth: DepthType) -> UrkelStats {
         let ctx = ctx.freeze();
         let mut stats = UrkelStats {
             left_subtree_max_depths: BTreeMap::new(),
@@ -25,9 +25,9 @@ impl UrkelTree {
         stats: &mut UrkelStats,
         ptr: NodePtrRef,
         path: Key,
-        depth: u8,
-        max_depth: u8,
-    ) -> u8 {
+        depth: DepthType,
+        max_depth: DepthType,
+    ) -> DepthType {
         if max_depth > 0 && depth > max_depth {
             return depth;
         }
@@ -129,7 +129,7 @@ impl UrkelTree {
         w: &mut impl ::std::io::Write,
         ptr: NodePtrRef,
         path: Key,
-        depth: u8,
+        depth: DepthType,
     ) -> ::std::io::Result<()> {
         let prefix = repeat(" ").take(depth as usize * 2).collect::<String>();
 

@@ -161,18 +161,18 @@ pub enum Body {
     HostStorageSyncGetSubtreeRequest {
         root_hash: Hash,
         node_path: Key,
-        node_depth: u8,
-        max_depth: u8,
+        node_depth: DepthType,
+        max_depth: DepthType,
     },
     HostStorageSyncGetPathRequest {
         root_hash: Hash,
         key: Key,
-        start_depth: u8,
+        start_depth: DepthType,
     },
     HostStorageSyncGetNodeRequest {
         root_hash: Hash,
         node_path: Key,
-        node_depth: u8,
+        node_depth: DepthType,
     },
     HostStorageSyncGetValueRequest {
         root_hash: Hash,

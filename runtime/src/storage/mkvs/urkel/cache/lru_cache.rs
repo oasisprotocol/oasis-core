@@ -9,6 +9,8 @@ use crate::{
     storage::mkvs::urkel::{cache::*, sync::*, tree::*},
 };
 
+const MAX_PREFETCH_DEPTH: DepthType = 255;
+
 #[derive(Clone, Default)]
 pub struct CacheItemBox<Item: CacheItem + Default> {
     item: Rc<RefCell<Item>>,
@@ -127,7 +129,7 @@ pub struct LRUCache {
     internal_node_count: u64,
     leaf_node_count: u64,
 
-    prefetch_depth: u8,
+    prefetch_depth: DepthType,
 
     lru_values: LRUList<ValuePointer>,
     lru_nodes: LRUList<NodePointer>,
@@ -217,8 +219,8 @@ impl LRUCache {
         &mut self,
         st: &Subtree,
         sptr: &SubtreePointer,
-        depth: u8,
-        max_depth: u8,
+        depth: DepthType,
+        max_depth: DepthType,
     ) -> Fallible<NodePtrRef> {
         if depth > max_depth {
             return Err(CacheError::MaximumDepthExceeded.into());
@@ -283,7 +285,7 @@ impl Cache for LRUCache {
         self.sync_root = new_hash;
     }
 
-    fn set_prefetch_depth(&mut self, depth: u8) {
+    fn set_prefetch_depth(&mut self, depth: DepthType) {
         self.prefetch_depth = depth;
     }
 
@@ -400,7 +402,7 @@ impl Cache for LRUCache {
                     ptr.hash,
                     &subtree,
                     node_id.depth,
-                    (8 * Hash::len() - 1) as u8,
+                    node_id.depth+MAX_PREFETCH_DEPTH,
                 )?;
                 let new_ptr = new_ptr.borrow();
                 ptr.clean = new_ptr.clean;
@@ -479,8 +481,8 @@ impl Cache for LRUCache {
         ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
-        depth: u8,
-        max_depth: u8,
+        depth: DepthType,
+        max_depth: DepthType,
     ) -> Fallible<NodePtrRef> {
         let ptr = self._reconstruct_summary(st, &st.root, depth, max_depth)?;
         if ptr.borrow().is_null() {
@@ -506,7 +508,7 @@ impl Cache for LRUCache {
         ctx: &Arc<Context>,
         subtree_root: Hash,
         subtree_path: Key,
-        depth: u8,
+        depth: DepthType,
     ) -> Fallible<NodePtrRef> {
         if self.prefetch_depth == 0 {
             return Ok(NodePointer::null_ptr());

@@ -23,7 +23,7 @@ pub struct PendingLogEntry {
 pub struct UrkelOptions {
     node_capacity: usize,
     value_capacity: usize,
-    prefetch_depth: u8,
+    prefetch_depth: DepthType,
     root_hash: Option<Hash>,
 }
 
@@ -45,7 +45,7 @@ impl UrkelOptions {
     /// Set the prefetch depth for subtree prefetching.
     ///
     /// If unspecified or 0, no prefetching will be done.
-    pub fn with_prefetch_depth(mut self, prefetch_depth: u8) -> Self {
+    pub fn with_prefetch_depth(mut self, prefetch_depth: DepthType) -> Self {
         self.prefetch_depth = prefetch_depth;
         self
     }
@@ -66,7 +66,7 @@ impl UrkelOptions {
 #[derive(Debug, Default)]
 pub struct UrkelStats {
     /// The maximum depth of the tree.
-    pub max_depth: u8,
+    pub max_depth: DepthType,
     /// The counf of internal nodes in the tree structure.
     pub internal_node_count: u64,
     /// The count of leaf nodes in the tree structure.
@@ -77,9 +77,9 @@ pub struct UrkelStats {
     pub dead_node_count: u64,
 
     /// Maximum subtree depths at each level for left pointers.
-    pub left_subtree_max_depths: BTreeMap<u8, u8>,
+    pub left_subtree_max_depths: BTreeMap<DepthType, DepthType>,
     /// Maximum subtree depths at each level for right pointers.
-    pub right_subtree_max_depths: BTreeMap<u8, u8>,
+    pub right_subtree_max_depths: BTreeMap<DepthType, DepthType>,
 
     /// Statistics about the in-memory cache.
     pub cache: CacheStats,

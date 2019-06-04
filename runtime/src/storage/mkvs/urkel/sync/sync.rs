@@ -24,7 +24,7 @@ pub trait ReadSync {
         ctx: Context,
         root_hash: Hash,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree>;
 
     /// Retrieve a compressed path summary for the given key under
@@ -37,7 +37,7 @@ pub trait ReadSync {
         ctx: Context,
         root_hash: Hash,
         key: &Key,
-        start_depth: u8,
+        start_depth: DepthType,
     ) -> Fallible<Subtree>;
 
     /// Retrieve a specific node under the given root.

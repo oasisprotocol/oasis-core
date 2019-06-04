@@ -40,7 +40,7 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
+        depth: DepthType,
         key: &Key,
         val: Value,
     ) -> Fallible<(NodePtrRef, Option<Value>)> {

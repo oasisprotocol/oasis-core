@@ -21,7 +21,7 @@ impl ReadSync for NoopReadSyncer {
         _ctx: Context,
         _root_hash: Hash,
         _id: NodeID,
-        _max_depth: u8,
+        _max_depth: DepthType,
     ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }
@@ -31,7 +31,7 @@ impl ReadSync for NoopReadSyncer {
         _ctx: Context,
         _root_hash: Hash,
         _key: &Key,
-        _start_depth: u8,
+        _start_depth: DepthType,
     ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }

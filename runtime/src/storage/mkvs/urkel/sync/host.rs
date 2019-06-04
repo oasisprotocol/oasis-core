@@ -32,7 +32,7 @@ impl ReadSync for HostReadSyncer {
         ctx: Context,
         root_hash: Hash,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetSubtreeRequest {
             root_hash: root_hash,
@@ -56,7 +56,7 @@ impl ReadSync for HostReadSyncer {
         ctx: Context,
         root_hash: Hash,
         key: &Key,
-        start_depth: u8,
+        start_depth: DepthType,
     ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetPathRequest {
             root_hash: root_hash,
