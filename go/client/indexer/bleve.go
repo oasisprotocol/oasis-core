@@ -8,6 +8,7 @@ import (
 
 	"github.com/blevesearch/bleve"
 	bleveKeyword "github.com/blevesearch/bleve/analysis/analyzer/keyword"
+	"github.com/blevesearch/bleve/index/scorch"
 	bleveQuery "github.com/blevesearch/bleve/search/query"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -373,7 +374,7 @@ func NewBleveBackend(dataDir string) (Backend, error) {
 		}
 
 		// Create a new index.
-		index, err = bleve.New(path, mp)
+		index, err = bleve.NewUsing(path, mp, scorch.Name, scorch.Name, nil)
 		if err != nil {
 			return nil, err
 		}
