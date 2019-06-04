@@ -47,13 +47,13 @@ func New(ctx context.Context, dataDir string, epochtimeBackend epochtime.Backend
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(epochtimeBackend, signingKey)
+		impl = memory.New(signingKey)
 	case leveldb.BackendName:
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
 		mkvsDBDir := filepath.Join(dataDir, leveldb.MKVSDBFile)
 		lruSize := uint64(viper.GetSizeInBytes(cfgLRUSize))
 		applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
-		impl, err = leveldb.New(dbDir, mkvsDBDir, epochtimeBackend, signingKey, lruSize, applyLockLRUSlots)
+		impl, err = leveldb.New(dbDir, mkvsDBDir, signingKey, lruSize, applyLockLRUSlots)
 	case client.BackendName:
 		impl, err = client.New(ctx, epochtimeBackend, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:

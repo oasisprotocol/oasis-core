@@ -11,29 +11,19 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
 // BackendName is the name of this implementation.
 const BackendName = "memory"
 
-var (
-	_ api.Backend          = (*memoryBackend)(nil)
-	_ api.SweepableBackend = (*memoryBackend)(nil)
-)
-
-type memoryEntry struct {
-	expiration epochtime.EpochTime
-}
+var _ api.Backend = (*memoryBackend)(nil)
 
 type memoryBackend struct {
 	sync.RWMutex
 
-	logger  *logging.Logger
-	store   map[api.Key]*memoryEntry
-	sweeper *api.Sweeper
-	nodedb  nodedb.NodeDB
+	logger *logging.Logger
+	nodedb nodedb.NodeDB
 
 	signingKey *signature.PrivateKey
 }
@@ -148,40 +138,25 @@ func (b *memoryBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Ha
 	return tree.GetValue(ctx, root, id)
 }
 
-func (b *memoryBackend) PurgeExpired(epoch epochtime.EpochTime) {
-	b.Lock()
-	defer b.Unlock()
-
-	for key, ent := range b.store {
-		if ent.expiration < epoch {
-			b.logger.Debug("Expire",
-				"key", key,
-			)
-			delete(b.store, key)
-		}
-	}
-}
-
 func (b *memoryBackend) Cleanup() {
-	b.sweeper.Close()
 	b.nodedb.Close()
 }
 
 func (b *memoryBackend) Initialized() <-chan struct{} {
-	return b.sweeper.Initialized()
+	initCh := make(chan struct{})
+	close(initCh)
+	return initCh
 }
 
 // New constructs a new memory backed storage Backend instance.
-func New(timeSource epochtime.Backend, signingKey *signature.PrivateKey) api.Backend {
+func New(signingKey *signature.PrivateKey) api.Backend {
 	ndb, _ := nodedb.NewMemoryNodeDB()
 
 	b := &memoryBackend{
 		logger:     logging.GetLogger("storage/memory"),
-		store:      make(map[api.Key]*memoryEntry),
 		signingKey: signingKey,
 		nodedb:     ndb,
 	}
-	b.sweeper = api.NewSweeper(b, timeSource)
 
 	return b
 }

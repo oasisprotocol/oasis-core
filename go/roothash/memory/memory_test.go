@@ -31,7 +31,7 @@ func TestRootHashMemory(t *testing.T) {
 	cleanupFns = append(cleanupFns, registry.Cleanup)
 	scheduler := trivial.New(ctx, timeSource, registry, beacon, nil)
 	storagePrivKey, _ := signature.NewPrivateKey(rand.Reader)
-	storage := storage.New(timeSource, &storagePrivKey)
+	storage := storage.New(&storagePrivKey)
 	cleanupFns = append(cleanupFns, storage.Cleanup)
 
 	backend := New(ctx, scheduler, registry, nil, 10*time.Second)

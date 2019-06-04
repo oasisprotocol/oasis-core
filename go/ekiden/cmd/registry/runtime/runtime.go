@@ -24,7 +24,6 @@ import (
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
-	epochtimeMock "github.com/oasislabs/ekiden/go/epochtime/mock"
 	grpcRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
@@ -280,8 +279,7 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		}
 
 		// Construct an in-memory storage backend and compute the root. We
-		// need a dummy time source and receipt signing key for this.
-		timeSource := epochtimeMock.New()
+		// need a receipt signing key for this.
 		var sk signature.PrivateKey
 		if sk, err = signature.NewPrivateKey(rand.Reader); err != nil {
 			logger.Error("failed to generate dummy receipt signing key",
@@ -290,7 +288,7 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 			return nil, nil, err
 		}
 
-		backend := storageMemory.New(timeSource, &sk)
+		backend := storageMemory.New(&sk)
 		defer backend.Cleanup()
 
 		var root hash.Hash

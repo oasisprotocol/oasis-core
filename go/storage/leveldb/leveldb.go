@@ -18,7 +18,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -283,7 +282,7 @@ func checkVersion(db *leveldb.DB) error {
 
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
-func New(dbDir string, mkvsDBDir string, timeSource epochtime.Backend, signingKey *signature.PrivateKey, lruSizeInBytes uint64, applyLockLRUSlots uint64) (api.Backend, error) {
+func New(dbDir string, mkvsDBDir string, signingKey *signature.PrivateKey, lruSizeInBytes uint64, applyLockLRUSlots uint64) (api.Backend, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(leveldbCollectors...)
 	})

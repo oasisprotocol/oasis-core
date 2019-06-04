@@ -110,22 +110,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		defer pprof.StopCPUProfile()
 	}
 
-	// PurgeExpired.
-	sweeper, ok := storage.(storageAPI.SweepableBackend)
-	if ok {
-		res := testing.Benchmark(func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				sweeper.PurgeExpired(0)
-			}
-		})
-		logger.Info("PurgeExpired (none purged)",
-			"ns_per_op", res.NsPerOp(),
-		)
-		sweeper.PurgeExpired(9002)
-	} else {
-		logger.Warn("not Sweepable")
-	}
-
 	// Benchmark MKVS storage (single-insert).
 	for _, sz := range []int{
 		256, 512, 1024, 4096, 8192, 16384, 32768,

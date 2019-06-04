@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -22,7 +21,7 @@ var testValues = [][]byte{
 
 // StorageImplementationTests exercises the basic functionality of
 // a storage backend.
-func StorageImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, expiry bool) {
+func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	<-backend.Initialized()
 
 	// Test MKVS storage.

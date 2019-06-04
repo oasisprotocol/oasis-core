@@ -25,7 +25,6 @@ import (
 	roothashTests "github.com/oasislabs/ekiden/go/roothash/tests"
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
 	stakingTests "github.com/oasislabs/ekiden/go/staking/tests"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -257,11 +256,7 @@ func testBeacon(t *testing.T, node *testNode) {
 }
 
 func testStorage(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
-	_, supportsExpiry := (node.Storage).(storage.SweepableBackend)
-
-	storageTests.StorageImplementationTests(t, node.Storage, timeSource, supportsExpiry)
+	storageTests.StorageImplementationTests(t, node.Storage)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -326,9 +321,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 	debugClient, err := storageClient.New(ctx, timeSource, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
 
-	_, supportsExpiry := (node.Storage).(storage.SweepableBackend)
-
-	storageTests.StorageImplementationTests(t, debugClient, timeSource, supportsExpiry)
+	storageTests.StorageImplementationTests(t, debugClient)
 }
 
 func init() {

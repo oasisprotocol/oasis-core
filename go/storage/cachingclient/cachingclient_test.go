@@ -16,7 +16,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
@@ -33,7 +32,7 @@ func TestSingleAndPersistence(t *testing.T) {
 	var sk signature.PrivateKey
 	sk, err = signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	remote := memory.New(mock.New(), &sk)
+	remote := memory.New(&sk)
 	client, cacheDir := requireNewClient(t, remote)
 	defer func() {
 		os.RemoveAll(cacheDir)
@@ -66,7 +65,7 @@ func TestSingleAndPersistence(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	remote = memory.New(mock.New(), &sk)
+	remote = memory.New(&sk)
 	_, err = New(remote)
 	require.NoError(t, err, "New - reopen")
 

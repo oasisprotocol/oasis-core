@@ -8,7 +8,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -158,25 +157,12 @@ func (w *metricsWrapper) GetValue(ctx context.Context, root hash.Hash, id hash.H
 	return value, err
 }
 
-type sweepableMetricsWrapper struct {
-	metricsWrapper
-}
-
-func (w *sweepableMetricsWrapper) PurgeExpired(epoch epochtime.EpochTime) {
-	sweepable := w.Backend.(api.SweepableBackend)
-	sweepable.PurgeExpired(epoch)
-}
-
 func newMetricsWrapper(base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(storageCollectors...)
 	})
 
 	w := &metricsWrapper{Backend: base}
-
-	if _, ok := base.(api.SweepableBackend); ok {
-		return &sweepableMetricsWrapper{metricsWrapper: *w}
-	}
 
 	return w
 }
