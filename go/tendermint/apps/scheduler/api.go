@@ -10,7 +10,7 @@ const (
 	TransactionTag byte = 0x06
 
 	// AppName is the ABCI application name.
-	AppName string = "999_scheduler"
+	AppName string = "200_scheduler"
 
 	// QueryAllCommittees is a query path for getting all committees.
 	QueryAllCommittees = AppName + "/all-committees"
