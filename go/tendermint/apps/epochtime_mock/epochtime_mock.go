@@ -13,7 +13,6 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
 var _ abci.Application = (*epochTimeMockApplication)(nil)
@@ -119,7 +118,6 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 	)
 
 	state.setEpoch(future.Epoch, height)
-	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 	ctx.EmitTag(TagEpoch, cbor.Marshal(future.Epoch))
 
 	return nil

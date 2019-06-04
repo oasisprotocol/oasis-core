@@ -23,7 +23,6 @@ var (
 	// TagElected is an ABCI transaction tag with which committee types were elected.
 	TagElected = []byte("scheduler.elected")
 
-	// QueryApp is a query for filtering transactions processed by
-	// the mock epochtime application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	// QueryElected is a query for filtering blocks where we elected some committees.
+	QueryElected = api.QueryForTag(TagElected)
 )

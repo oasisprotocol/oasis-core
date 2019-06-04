@@ -77,6 +77,22 @@ func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
 	return tmquery.MustParse(fmt.Sprintf("%s='%s'", eventApp, eventType))
 }
 
+type queryTagPresent []byte
+
+func (q queryTagPresent) Matches(tags map[string]string) bool {
+	_, ok := tags[string(q)]
+	return ok
+}
+
+func (q queryTagPresent) String() string {
+	return fmt.Sprintf("queryTagPresent(%s)", string(q))
+}
+
+// QueryForTag generates a tmquery.Query for events that have a tag with the given key.
+func QueryForTag(presentKey []byte) tmpubsub.Query {
+	return queryTagPresent(presentKey)
+}
+
 // QueryGetByIDRequest is a request for fetching things by ids.
 type QueryGetByIDRequest struct {
 	ID signature.PublicKey

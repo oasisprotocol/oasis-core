@@ -24,9 +24,8 @@ var (
 	// TagEpoch is an ABCI transaction tag for specifying the set epoch.
 	TagEpoch = []byte("epochtime_mock.epoch")
 
-	// QueryApp is a query for filtering transactions processed by
-	// the mock epochtime application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	// QueryEpochChange is a query for filtering blocks where we changed the epoch.
+	QueryEpochChange = api.QueryForTag(TagEpoch)
 )
 
 // Tx is a transaction to be accepted by the mock epochtime app.

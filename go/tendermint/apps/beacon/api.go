@@ -20,7 +20,6 @@ var (
 	// (value is a CBOR serialized beacon.GenerateEvent).
 	TagGenerated = []byte("beacon.generated")
 
-	// QueryApp is a query for filtering transactions processed by the
-	// beacon application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	// QueryBeaconGenerated is a query for filtering blocks where we generated a beacon.
+	QueryBeaconGenerated = api.QueryForTag(TagGenerated)
 )

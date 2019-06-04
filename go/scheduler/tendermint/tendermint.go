@@ -83,7 +83,7 @@ func (s *tendermintScheduler) getCurrentCommittees() ([]*api.Committee, error) {
 
 func (s *tendermintScheduler) worker(ctx context.Context) {
 	// Subscribe to blocks which elect committees.
-	sub, err := s.service.Subscribe("scheduler-worker", app.QueryApp)
+	sub, err := s.service.Subscribe("scheduler-worker", app.QueryElected)
 	if err != nil {
 		s.logger.Error("failed to subscribe",
 			"err", err,
@@ -91,7 +91,7 @@ func (s *tendermintScheduler) worker(ctx context.Context) {
 		return
 	}
 	defer func() {
-		err := s.service.Unsubscribe("scheduler-worker", app.QueryApp)
+		err := s.service.Unsubscribe("scheduler-worker", app.QueryElected)
 		if err != nil {
 			s.logger.Error("failed to unsubscribe",
 				"err", err,

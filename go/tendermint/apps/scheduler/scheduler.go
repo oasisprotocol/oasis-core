@@ -19,7 +19,6 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
@@ -113,7 +112,6 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.TransactionScheduler); err != nil {
 			return fmt.Errorf("couldn't elect transaction scheduler committees: %s", err.Error())
 		}
-		ctx.EmitTag(api.TagApplication, []byte(app.Name()))
 		ctx.EmitTag(TagElected, cbor.Marshal([]scheduler.CommitteeKind{scheduler.Compute, scheduler.Storage, scheduler.TransactionScheduler}))
 	}
 	return nil
