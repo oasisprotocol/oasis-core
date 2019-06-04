@@ -133,6 +133,10 @@ func (s *MutableState) putCommittee(kind api.CommitteeKind, runtimeID signature.
 	)
 }
 
+func (s *MutableState) dropCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) {
+	s.tree.Remove([]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)))
+}
+
 // NewMutableState creates a new mutable scheduler state wrapper.
 func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}

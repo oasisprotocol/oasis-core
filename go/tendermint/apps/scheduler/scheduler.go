@@ -206,6 +206,8 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 }
 
 // Operates on consensus connection.
+// Return error if node should crash.
+// For non-fatal problems, save a problem condition to the state and return successfully.
 func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.Compute {
@@ -241,15 +243,28 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		sz = int(rt.TransactionSchedulerGroupSize)
 		rngCtx = rngContextTransactionScheduler
 	default:
+		// This is a problem with this code. Don't try to handle it at runtime.
 		return fmt.Errorf("scheduler: invalid committee type: %v", kind)
 	}
 	nrNodes := len(nodeList)
 
 	if sz == 0 {
-		return fmt.Errorf("scheduler: empty committee not allowed")
+		app.logger.Error("empty committee not allowed",
+			"kind", kind,
+			"runtime_id", rt.ID,
+		)
+		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
+		return nil
 	}
 	if sz > nrNodes {
-		return fmt.Errorf("scheduler: %v committee size %d exceeds available nodes %d", kind, sz, nrNodes)
+		app.logger.Error("committee size exceeds available nodes",
+			"kind", kind,
+			"runtime_id", rt.ID,
+			"sz", sz,
+			"nr_nodes", nrNodes,
+		)
+		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
+		return nil
 	}
 
 	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
