@@ -12,6 +12,10 @@ use crate::{
 const INSERT_ITEMS: usize = 1000;
 const ALL_ITEMS_ROOT: &str = "410a4d112994762fe7887daf0e3ca6b307200b65677672132caf73163fd3100b";
 
+const LONG_KEY: &str = "Unlock the potential of your data without compromising security or privacy";
+const LONG_VALUE: &str = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance.";
+const ALL_LONG_ITEMS_ROOT: &str = "5b4f767a6236c3960f59e2032fd1d08f5736087f5c8072c0b20cbab12f60ef20";
+
 fn generate_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(INSERT_ITEMS);
     let mut values: Vec<Vec<u8>> = Vec::with_capacity(INSERT_ITEMS);
@@ -19,6 +23,18 @@ fn generate_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     for i in 0..INSERT_ITEMS {
         keys.push(format!("key {}", i).into_bytes());
         values.push(format!("value {}", i).into_bytes());
+    }
+
+    (keys, values)
+}
+
+fn generate_long_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let mut keys: Vec<Vec<u8>> = Vec::with_capacity(LONG_KEY.len());
+    let mut values: Vec<Vec<u8>> = Vec::with_capacity(LONG_KEY.len());
+
+    for i in 0..LONG_KEY.len() {
+        keys.push(LONG_KEY[0..i+1].to_string().into_bytes());
+        values.push(LONG_VALUE.to_string().into_bytes());
     }
 
     (keys, values)
@@ -206,6 +222,59 @@ fn test_basic() {
     assert_eq!(log[0].kind(), LogEntryKind::Delete);
     tree.remove(Context::background(), key_zero)
         .expect("remove");
+}
+
+#[test]
+fn test_long_keys() {
+    let mut tree = UrkelTree::make()
+    .new(Context::background(), Box::new(NoopReadSyncer {}))
+    .expect("new_tree");
+
+    // First insert keys 0..n and remove them in order n..0.
+    let mut roots: Vec < Hash > = Vec::new();
+    let (keys, values) = generate_long_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+
+        let (_, hash) = UrkelTree::commit( & mut tree, Context::background()).expect("commit");
+        roots.push(hash);
+    }
+
+    for i in 0..keys.len() {
+        let value = tree
+        .get(Context::background(), keys[i].as_slice())
+        .expect("get")
+        .expect("get_some");
+        assert_eq !(values[i], value.as_slice());
+    }
+
+
+    assert_eq ! (format ! ("{:?}", roots[roots.len() - 1]), ALL_LONG_ITEMS_ROOT);
+
+    for i in (1..keys.len()).rev() {
+        tree.remove(Context::background(), keys[i].as_slice())
+        .expect("remove");
+
+        assert_eq ! (
+            None,
+            tree.get(Context::background(), keys[i].as_slice())
+            .expect("get")
+        );
+
+        let (_, hash) = UrkelTree::commit( & mut tree, Context::background()).expect("commit");
+        assert_eq ! (hash, roots[i - 1]);
+    }
+
+    tree.remove(Context::background(), keys[0].as_slice())
+    .expect("remove");
+
+    let (_, hash) = UrkelTree::commit( & mut tree, Context::background()).expect("commit");
+    assert_eq ! (hash, Hash::empty_hash());
 }
 
 #[test]
