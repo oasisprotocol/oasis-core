@@ -26,9 +26,9 @@ import (
 var (
 	_ abci.Application = (*schedulerApplication)(nil)
 
-	rngContextCompute              = []byte("EkS-Dummy-Compute")
-	rngContextStorage              = []byte("EkS-Dummy-Storage")
-	rngContextTransactionScheduler = []byte("EkS-Dummy-TransactionScheduler")
+	rngContextCompute              = []byte("EkS-ABCI-Compute")
+	rngContextStorage              = []byte("EkS-ABCI-Storage")
+	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 )
 
 type schedulerApplication struct {
