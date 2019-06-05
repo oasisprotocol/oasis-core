@@ -169,7 +169,7 @@ impl Marshal for Key {
         if data.len() < size_of::<DepthType>() {
             return Err(TreeError::MalformedKey.into());
         }
-        let key_len: DepthType;
+        let mut key_len: DepthType = 0;
         key_len.unmarshal_binary(data)?;
 
         if data.len() < size_of::<DepthType>() + key_len as usize {
@@ -177,7 +177,7 @@ impl Marshal for Key {
         }
 
         self.extend_from_slice(&data[size_of::<DepthType>()..(size_of::<DepthType>() + key_len as usize)]);
-        Ok((key_len + key_len) as usize)
+        Ok(size_of::<DepthType>() + key_len as usize)
     }
 }
 

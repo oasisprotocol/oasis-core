@@ -121,24 +121,6 @@ impl Subtree {
     }
 }
 
-impl Marshal for SubtreeIndex {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(size_of::<SubtreeIndex>());
-        result.write_u16::<LittleEndian>(*self)?;
-        Ok(result)
-    }
-
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < size_of::<SubtreeIndex>() {
-            Err(SubtreeError::Malformed.into())
-        } else {
-            let mut reader = Cursor::new(data);
-            *self = reader.read_u16::<LittleEndian>()?;
-            Ok(2)
-        }
-    }
-}
-
 // Size of the subtree pointer: index + flag byte.
 const SUBTREE_POINTER_LEN: usize = size_of::<SubtreeIndex>() + 1;
 impl Marshal for SubtreePointer {

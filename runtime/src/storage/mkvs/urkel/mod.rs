@@ -3,4 +3,4 @@ pub mod marshal;
 pub mod sync;
 mod tree;
 
-pub use tree::{Key, UrkelTree};
+pub use tree::{Key, DepthType, UrkelTree};

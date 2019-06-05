@@ -12,7 +12,7 @@ use crate::{
         roothash::Block,
         sgx::avr::AVR,
     },
-    storage::mkvs::{urkel::Key, WriteLog},
+    storage::mkvs::{urkel::Key, urkel::DepthType, WriteLog},
     transaction::types::TxnBatch,
 };
 

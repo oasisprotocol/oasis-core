@@ -1,8 +1,9 @@
 use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-
 use failure::Fallible;
+
+use crate::storage::mkvs::urkel::tree::DepthType;
 
 /// The `Marshal` trait is used for marshaling and unmarshaling Urkel trees.
 pub trait Marshal {
@@ -12,7 +13,7 @@ pub trait Marshal {
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize>;
 }
 
-impl Marshal for DepthType {
+impl Marshal for u16 {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(2);
         result.write_u16::<LittleEndian>(*self)?;

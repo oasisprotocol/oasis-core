@@ -9,6 +9,7 @@ use ekiden_runtime::{
                 marshal::Marshal,
                 sync::{NodeBox, NodeID, NodeRef, ReadSync, Subtree, Value},
                 Key,
+                DepthType,
             },
             UrkelTree, WriteLog,
         },
@@ -139,7 +140,7 @@ impl ReadSync for RemoteReadSync {
         _ctx: Context,
         root_hash: Hash,
         id: NodeID,
-        max_depth: u8,
+        max_depth: DepthType,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetSubtreeRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
@@ -166,7 +167,7 @@ impl ReadSync for RemoteReadSync {
         _ctx: Context,
         root_hash: Hash,
         key: &Key,
-        start_depth: u8,
+        start_depth: DepthType,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
         request.set_root(root_hash.as_ref().to_vec());
