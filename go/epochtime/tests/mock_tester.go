@@ -1,4 +1,4 @@
-// Packaget tests is a collection of epochtime implementation test cases.
+// Package tests is a collection of epochtime implementation test cases.
 package tests
 
 import (
