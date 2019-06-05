@@ -358,6 +358,30 @@ type TestNode struct {
 	SignedRegistration *node.SignedNode
 }
 
+// newTestNode creates a new signed test node.
+func newTestNode(pk signature.PrivateKey, role node.RolesMask, entityID signature.PublicKey, entityPK signature.PrivateKey, expiration epochtime.EpochTime, nodeRts []*node.Runtime, addr []node.Address) (*TestNode, error) {
+	var nod = TestNode{
+		PrivateKey: pk,
+		Node: &node.Node{
+			ID:               pk.Public(),
+			EntityID:         entityID,
+			Expiration:       uint64(expiration),
+			RegistrationTime: uint64(time.Now().Unix()),
+			Runtimes:         nodeRts,
+			Roles:            role,
+			Addresses:        addr,
+		},
+	}
+
+	signed, err := signature.SignSigned(entityPK, api.RegisterNodeSignatureContext, nod.Node)
+	if err != nil {
+		return nil, err
+	}
+	nod.SignedRegistration = &node.SignedNode{Signed: *signed}
+
+	return &nod, nil
+}
+
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
 func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*TestRuntime, expiration epochtime.EpochTime) ([]*TestNode, error) {
@@ -380,39 +404,28 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 
 	nodes := make([]*TestNode, 0, n)
 	for i := 0; i < n; i++ {
-		var nod TestNode
-		if nod.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
-			return nil, err
-		}
-
 		var role node.RolesMask
 		if i < nCompute {
 			role = node.RoleComputeWorker | node.RoleTransactionScheduler
 		} else {
 			role = node.RoleStorageWorker
 		}
-
-		nod.Node = &node.Node{
-			ID:               nod.PrivateKey.Public(),
-			EntityID:         ent.Entity.ID,
-			Expiration:       uint64(expiration),
-			RegistrationTime: uint64(time.Now().Unix()),
-			Runtimes:         nodeRts,
-			Roles:            role,
-		}
 		addr, err := node.NewAddress(node.AddressFamilyIPv4, []byte{192, 0, 2, byte(i + 1)}, 451)
 		if err != nil {
 			return nil, err
 		}
-		nod.Node.Addresses = append(nod.Node.Addresses, *addr)
+		var pk signature.PrivateKey
+		if pk, err = signature.NewPrivateKey(rng); err != nil {
+			return nil, err
+		}
 
-		signed, err := signature.SignSigned(ent.PrivateKey, api.RegisterNodeSignatureContext, nod.Node)
+		var nod *TestNode
+		nod, err = newTestNode(pk, role, ent.Entity.ID, ent.PrivateKey, expiration, nodeRts, []node.Address{*addr})
 		if err != nil {
 			return nil, err
 		}
-		nod.SignedRegistration = &node.SignedNode{Signed: *signed}
 
-		nodes = append(nodes, &nod)
+		nodes = append(nodes, nod)
 	}
 
 	return nodes, nil
@@ -513,6 +526,28 @@ func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, runtime *Test
 	require.Nil(rt.nodes, "runtime has no associated nodes")
 
 	return BulkPopulate(t, backend, []*TestRuntime{runtime}, seed)
+}
+
+// RegisterNode registers a TestNode
+func (rt *TestRuntime) RegisterNode(t *testing.T, backend api.Backend, n TestNode) *TestNode {
+	require := require.New(t)
+
+	nodeCh, nodeSub := backend.WatchNodes()
+	defer nodeSub.Close()
+
+	newNode, err := newTestNode(n.PrivateKey, n.Node.Roles, rt.entity.Entity.ID, rt.entity.PrivateKey, epochtime.EpochInvalid, n.Node.Runtimes, n.Node.Addresses)
+	require.NoError(err, "NewTestNodes")
+
+	err = backend.RegisterNode(context.Background(), newNode.SignedRegistration)
+	require.NoError(err, "RegisterNode")
+	select {
+	case ev := <-nodeCh:
+		require.EqualValues(newNode.Node, ev.Node, "registered node")
+		require.True(ev.IsRegistration, "event is registration")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive node registration event")
+	}
+	return newNode
 }
 
 // PopulateBulk bulk populates the registry for the given TestRuntimes.

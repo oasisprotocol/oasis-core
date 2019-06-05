@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -31,7 +32,7 @@ func TestClientWorker(t *testing.T) {
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
-	nodes := rt.Populate(t, registry, rt, seed)
+	_ = rt.Populate(t, registry, rt, seed)
 	rt.MustRegister(t, registry)
 	// Initialize storage client
 	client, err := New(ctx, timeSource, scheduler, registry)
@@ -58,13 +59,25 @@ func TestClientWorker(t *testing.T) {
 	require.Nil(r, "result should be nil")
 
 	// Confirm one of the registered nodes was assigned.
-	var connectedCommitteeNode *node.Node
-	for _, n := range nodes {
-		if n.HasRoles(node.RoleStorageWorker) && n.ID.String() == connectedNode.ID.String() {
-			connectedCommitteeNode = n
+	var connectedTestNode *registryTests.TestNode
+	for _, nt := range rt.TestNodes() {
+		if nt.Node.HasRoles(node.RoleStorageWorker) && nt.Node.ID.ToMapKey() == connectedNode.ID.ToMapKey() {
+			connectedTestNode = nt
 			break
 		}
 	}
-	require.NotNil(connectedCommitteeNode, "connected storage node not found in storage committee")
-	require.EqualValues(connectedCommitteeNode, connectedNode, "connected storage node belongs to storage committee")
+	require.NotNil(connectedTestNode, "connected storage node not found in storage committee")
+	require.EqualValues(connectedTestNode.Node, connectedNode, "connected storage node belongs to storage committee")
+
+	// Re-register storage node with changed address
+	addr := connectedTestNode.Node.Addresses[0]
+	newAddr, err := node.NewAddress(addr.Family, addr.Tuple.IP, addr.Tuple.Port+1)
+	require.NoError(err, "node.NewAddress()")
+	connectedTestNode.Node.Addresses[0] = *newAddr
+	connectedTestNode = rt.RegisterNode(t, registry, *connectedTestNode)
+
+	// TODO: avoid sleeping - might actually work without sleeping but would probably be race prone
+	time.Sleep(100 * time.Microsecond)
+	newConnectedNode := client.(*storageClientBackend).GetConnectedNode()
+	require.EqualValues(newConnectedNode, connectedTestNode.Node, "connected storage address was updated mid epoch")
 }

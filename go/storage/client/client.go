@@ -105,18 +105,26 @@ func (b *storageClientBackend) GetConnectedNode() *node.Node {
 	return b.connectionState.node
 }
 
-func (b *storageClientBackend) updateConnection() {
+func (b *storageClientBackend) updateConnection(midepoch bool) {
 	b.state.RLock()
 	defer b.state.RUnlock()
 
-	b.logger.Debug("storage client: updating connection")
+	b.logger.Debug("storage client: updating connection",
+		"midepoch", midepoch)
 
 	leaderKey := b.state.storageNodeLeaderKey[b.state.epoch]
+	if midepoch && leaderKey == nil {
+		b.logger.Debug("storage client: no leader yet, cannot update mid-epoch",
+			"midepoch", midepoch,
+			"epoch", b.state.epoch)
+		return
+	}
+
 	var leader *node.Node
 	nodeList := b.state.storageNodeList[b.state.epoch]
 
 	for _, node := range nodeList {
-		if node.ID.String() == leaderKey.String() {
+		if node.ID.ToMapKey() == leaderKey.ToMapKey() {
 			leader = node
 			break
 		}
@@ -130,9 +138,16 @@ func (b *storageClientBackend) updateConnection() {
 		return
 	}
 
-	// TODO: should we only update connection if key or address changed
 	b.connectionState.Lock()
 	defer b.connectionState.Unlock()
+
+	// Only update connection if node information changed
+	// TODO: if midepoch update, pass in the updated node
+	currentNode := b.connectionState.node
+	if currentNode == leader {
+		b.logger.Debug("storage client: no changes to leader, not updating connection")
+		return
+	}
 
 	var opts grpc.DialOption
 	if leader.Certificate == nil {
@@ -232,6 +247,27 @@ func (s *storageClientBackendState) prune() {
 		if epoch < pruneBefore {
 			delete(s.storageNodeLeaderKey, epoch)
 		}
+	}
+}
+
+func (s *storageClientBackendState) updateNodeInList(ctx context.Context, node *node.Node) {
+	s.Lock()
+	defer s.Unlock()
+	found := false
+	// Update node in nodeList if we have it
+	for i, n := range s.storageNodeList[s.epoch] {
+		// XXX: We can rely on registry that only allowed fields will be updated right?
+		if n.ID.ToMapKey() == node.ID.ToMapKey() {
+			found = true
+			s.storageNodeList[s.epoch][i] = node
+		}
+	}
+
+	if !found {
+		s.logger.Warn("storage node not found in node list for epoch",
+			"nodeID", node.ID.ToMapKey(),
+			"epoch", s.epoch,
+		)
 	}
 }
 
@@ -634,6 +670,9 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 	nodeListCh, sub := b.registry.WatchNodeList()
 	defer sub.Close()
 
+	nodesCh, sub := b.registry.WatchNodes()
+	defer sub.Close()
+
 	schedCh, sub := b.scheduler.WatchCommittees()
 	defer sub.Close()
 
@@ -659,6 +698,22 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 				)
 				continue
 			}
+		case ev := <-nodesCh:
+			// Skip non-registration events
+			if ev == nil || !ev.IsRegistration {
+				continue
+			}
+			// Skip non-storage nodes
+			if !ev.Node.HasRoles(node.RoleStorageWorker) {
+				continue
+			}
+			// Update node info in node list
+			b.state.updateNodeInList(ctx, ev.Node)
+			// Update connection mid-epoch
+			if !b.state.canUpdateConnection() {
+				continue
+			}
+			b.updateConnection(true)
 		case committee := <-schedCh:
 			b.logger.Debug("worker: scheduler committee for epoch",
 				"committee", committee,
@@ -695,6 +750,7 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 			}
 		}
 
+		// No epoch transition
 		if b.state.epoch == b.state.connectionEpoch {
 			continue
 		}
@@ -703,8 +759,7 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 		if !b.state.canUpdateConnection() {
 			continue
 		}
-
-		b.updateConnection()
+		b.updateConnection(false)
 		if !b.signaledInit {
 			b.signaledInit = true
 			close(b.initCh)
