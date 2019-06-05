@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -33,6 +34,9 @@ type MessageHandler interface {
 type epoch struct {
 	roundCtx       context.Context
 	cancelRoundCtx context.CancelFunc
+
+	epochCtx       context.Context
+	cancelEpochCtx context.CancelFunc
 
 	computeCommittee *scheduler.Committee
 	computeNodes     []*node.Node
@@ -130,14 +134,84 @@ func (g *Group) RoundTransition(ctx context.Context) {
 	g.activeEpoch.cancelRoundCtx = cancel
 }
 
+func (g *Group) checkIsActiveNode(ctx context.Context, node *node.Node) bool {
+	g.RLock()
+	defer g.RUnlock()
+
+	if g.activeEpoch == nil {
+		return false
+	}
+
+	for _, n := range g.activeEpoch.computeNodes {
+		if n == nil {
+			// we are nil
+			continue
+		}
+		if n.ID.ToMapKey() == node.ID.ToMapKey() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (g *Group) updateNodeInfo(ctx context.Context, node *node.Node) {
+	g.Lock()
+	defer g.Unlock()
+
+	if g.activeEpoch == nil {
+		return
+	}
+
+	for i, n := range g.activeEpoch.computeNodes {
+		if n == nil {
+			// we are nil
+			continue
+		}
+
+		if n.ID.ToMapKey() == node.ID.ToMapKey() {
+			// XXX: We can rely on registry that only allowed fields will be updated right?
+			g.activeEpoch.computeNodes[i] = node
+			return
+		}
+	}
+}
+
+func (g *Group) followNodeChanges(ctx context.Context, nodesCh <-chan *registry.NodeEvent, sub *pubsub.Subscription) {
+	defer sub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev := <-nodesCh:
+			// Skip if not registration
+			if ev == nil || !ev.IsRegistration {
+				continue
+			}
+			// Skip if not compute worker
+			if ev.Node.HasRoles(node.RoleComputeWorker | node.RoleTransactionScheduler) {
+				continue
+			}
+
+			// First check if node is active so we don't unnecessarily take Write lock.
+			if g.checkIsActiveNode(ctx, ev.Node) {
+				g.updateNodeInfo(ctx, ev.Node)
+			}
+		}
+	}
+}
+
 // EpochTransition processes an epoch transition that just happened.
 func (g *Group) EpochTransition(ctx context.Context, computeGroupHash hash.Hash, height int64) error {
 	g.Lock()
 	defer g.Unlock()
 
-	// Cancel context for the previous epoch.
 	if g.activeEpoch != nil {
+		// Cancel any round context left from the previous epoch.
 		(g.activeEpoch.cancelRoundCtx)()
+		// Cancel previous epoch context.
+		(g.activeEpoch.cancelEpochCtx)()
 	}
 
 	// Invalidate current epoch. In case we cannot process this transition,
@@ -218,12 +292,16 @@ func (g *Group) EpochTransition(ctx context.Context, computeGroupHash hash.Hash,
 	}
 
 	// Create round context.
-	roundCtx, cancel := context.WithCancel(ctx)
+	roundCtx, cancelRoundCtx := context.WithCancel(ctx)
+	// Create epoch context.
+	epochCtx, cancelEpochCtx := context.WithCancel(ctx)
 
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
 		roundCtx,
-		cancel,
+		cancelRoundCtx,
+		epochCtx,
+		cancelEpochCtx,
 		computeCommittee,
 		computeNodes,
 		computeGroupHash,
@@ -237,6 +315,11 @@ func (g *Group) EpochTransition(ctx context.Context, computeGroupHash hash.Hash,
 		"compute_role", computeRole,
 		"transaction_scheduler_role", transactionSchedulerRole,
 	)
+
+	// Create a channel here and pass it onwards, as we already have the Group lock.
+	func(nodesCh <-chan *registry.NodeEvent, sub *pubsub.Subscription) {
+		go g.followNodeChanges(epochCtx, nodesCh, sub)
+	}(g.registry.WatchNodes())
 
 	return nil
 }
