@@ -45,12 +45,6 @@ type cacheEntry struct {
 // Put inserts the key/value pair into the cache.  If the key is already present,
 // the value is updated, and the entry is moved to the most-recently-used position.
 func (c *Cache) Put(key, value interface{}) error {
-	// Sanity check that the value will fit.
-	valueSize := c.getValueSize(value)
-	if c.capacity > 0 && c.capacityInBytes && valueSize > c.capacity {
-		return ErrTooLarge
-	}
-
 	c.Lock()
 	defer c.Unlock()
 
@@ -60,6 +54,15 @@ func (c *Cache) Put(key, value interface{}) error {
 		c.lru.Remove(elem)
 		delete(c.entries, key)
 		c.size -= c.getValueSize(elem.Value.(*cacheEntry).value)
+	}
+
+	// Sanity check that the value will fit.
+	// We do this after removing a possibly existing key to make sure we have
+	// a consistent state in case the previous value was smaller, but the newer
+	// one is too large to fit.
+	valueSize := c.getValueSize(value)
+	if c.capacity > 0 && c.capacityInBytes && valueSize > c.capacity {
+		return ErrTooLarge
 	}
 
 	// Evict entries till there is enough capacity, be it slots or bytes.
