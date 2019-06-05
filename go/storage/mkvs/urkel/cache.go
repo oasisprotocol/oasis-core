@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -15,6 +16,8 @@ import (
 
 // cache handles the in-memory tree cache.
 type cache struct {
+	sync.Mutex
+
 	db db.NodeDB
 	rs syncer.ReadSyncer
 
