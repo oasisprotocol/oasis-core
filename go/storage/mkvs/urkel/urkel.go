@@ -123,6 +123,9 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 	})
 	t.cache.setSyncRoot(root)
 
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	// Try to prefetch the subtree at the root.
 	// NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
 	var path hash.Hash
@@ -148,6 +151,9 @@ func HasRoot(ndb db.NodeDB, root hash.Hash) bool {
 
 // Insert inserts a key/value pair into the tree.
 func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	hkey := hashKey(key)
 	var existed bool
 	newRoot, existed, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
@@ -169,6 +175,9 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 
 // Remove removes a key from the tree.
 func (t *Tree) Remove(ctx context.Context, key []byte) error {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	hkey := hashKey(key)
 	var changed bool
 	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, hkey)
@@ -190,18 +199,27 @@ func (t *Tree) Remove(ctx context.Context, key []byte) error {
 
 // Get looks up an existing key.
 func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	hkey := hashKey(key)
 	return t.doGet(ctx, t.cache.pendingRoot, 0, hkey)
 }
 
 // Dump dumps the tree into the given writer.
 func (t *Tree) Dump(ctx context.Context, w io.Writer) {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	t.doDump(ctx, w, t.cache.pendingRoot, hash.Hash{}, 0)
 	fmt.Fprintln(w, "")
 }
 
 // Stats traverses the tree and dumps some statistics.
 func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	stats := &Stats{
 		LeftSubtreeMaxDepths:  make(map[uint8]uint8),
 		RightSubtreeMaxDepths: make(map[uint8]uint8),
@@ -217,6 +235,9 @@ func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 // Commit commits tree updates to the underlying database and returns
 // the write log and new merkle root.
 func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
 	batch := t.cache.db.NewBatch()
 	defer batch.Reset()
 
