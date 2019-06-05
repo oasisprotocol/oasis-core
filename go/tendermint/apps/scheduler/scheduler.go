@@ -83,10 +83,6 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// TODO: We'll later have this for each type of committee.
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		app.logger.Debug("BeginBlock with epoch change %%%",
-			"epoch", epoch,
-		)
-
 		beaconState := beaconapp.NewMutableState(app.state.DeliverTxTree())
 		beacon, err := beaconState.GetBeacon(epoch)
 		if err != nil {
@@ -103,16 +99,27 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return fmt.Errorf("couldn't get nodes: %s", err.Error())
 		}
 
-		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.Compute); err != nil {
-			return fmt.Errorf("couldn't elect compute committees: %s", err.Error())
+		kinds := []scheduler.CommitteeKind{scheduler.Compute, scheduler.Storage, scheduler.TransactionScheduler}
+		for _, kind := range kinds {
+			if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, kind); err != nil {
+				return fmt.Errorf("couldn't elect %s committees: %s", kind, err.Error())
+			}
 		}
-		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.Storage); err != nil {
-			return fmt.Errorf("couldn't elect storage committees: %s", err.Error())
+		ctx.EmitTag(TagElected, cbor.Marshal(kinds))
+
+		var kindNames []string
+		for _, kind := range kinds {
+			kindNames = append(kindNames, kind.String())
 		}
-		if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, scheduler.TransactionScheduler); err != nil {
-			return fmt.Errorf("couldn't elect transaction scheduler committees: %s", err.Error())
+		var runtimeIDs []string
+		for _, rt := range runtimes {
+			runtimeIDs = append(runtimeIDs, rt.ID.String())
 		}
-		ctx.EmitTag(TagElected, cbor.Marshal([]scheduler.CommitteeKind{scheduler.Compute, scheduler.Storage, scheduler.TransactionScheduler}))
+		app.logger.Debug("finished electing committees",
+			"epoch", epoch,
+			"kinds", kindNames,
+			"runtimes", runtimeIDs,
+		)
 	}
 	return nil
 }
