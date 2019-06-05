@@ -402,7 +402,7 @@ impl Cache for LRUCache {
                     ptr.hash,
                     &subtree,
                     node_id.depth,
-                    node_id.depth+MAX_PREFETCH_DEPTH,
+                    node_id.depth + MAX_PREFETCH_DEPTH,
                 )?;
                 let new_ptr = new_ptr.borrow();
                 ptr.clean = new_ptr.clean;

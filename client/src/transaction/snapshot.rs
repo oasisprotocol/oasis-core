@@ -8,8 +8,7 @@ use ekiden_runtime::{
             urkel::{
                 marshal::Marshal,
                 sync::{NodeBox, NodeID, NodeRef, ReadSync, Subtree, Value},
-                Key,
-                DepthType,
+                DepthType, Key,
             },
             UrkelTree, WriteLog,
         },

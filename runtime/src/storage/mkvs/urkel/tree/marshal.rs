@@ -136,7 +136,7 @@ impl Marshal for LeafNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1+size_of::<DepthType>() || data[0] != NodeKind::Leaf as u8 {
+        if data.len() < 1 + size_of::<DepthType>() || data[0] != NodeKind::Leaf as u8 {
             return Err(TreeError::MalformedNode.into());
         }
 
@@ -176,7 +176,9 @@ impl Marshal for Key {
             return Err(TreeError::MalformedKey.into());
         }
 
-        self.extend_from_slice(&data[size_of::<DepthType>()..(size_of::<DepthType>() + key_len as usize)]);
+        self.extend_from_slice(
+            &data[size_of::<DepthType>()..(size_of::<DepthType>() + key_len as usize)],
+        );
         Ok(size_of::<DepthType>() + key_len as usize)
     }
 }

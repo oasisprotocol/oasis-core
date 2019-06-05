@@ -82,9 +82,7 @@ fn main() {
         key: String::from("Unlock the potential of your data without compromising security or privacy"),
         value: String::from("The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information etc."),
     };
-    println!(
-        "Storing long key and value to database..."
-    );
+    println!("Storing long key and value to database...");
     let r: Option<String> = rt.block_on(kv_client.insert(long_kv.clone())).unwrap();
     assert_eq!(r, None); // key should not exist in db before
 
