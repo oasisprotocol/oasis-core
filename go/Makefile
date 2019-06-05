@@ -25,7 +25,7 @@ lint:
 	@env -u GOPATH golangci-lint run
 
 # Test.
-test:
+test: generate
 	@env -u GOPATH $(EKIDEN_GO) test -race -v ./...
 
 .PHONY: all generate build lint test
