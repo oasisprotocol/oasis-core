@@ -114,7 +114,7 @@ func (b *leveldbBackend) apply(ctx context.Context, root hash.Hash, expectedNewR
 		}
 
 		// Also save tree root in local LRU cache.
-		_ = b.rootCache.Put(root, tree)
+		_ = b.rootCache.Put(r, tree)
 	}
 
 	return &r, nil
