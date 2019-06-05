@@ -24,42 +24,15 @@ type immutableState struct {
 	*abci.ImmutableState
 }
 
-func (s *immutableState) GetCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) ([]*api.CommitteeNode, error) {
+func (s *immutableState) GetCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) (*api.Committee, error) {
 	_, raw := s.Snapshot.Get([]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)))
 	if raw == nil {
 		return nil, nil
 	}
 
-	var members []*api.CommitteeNode
-	err := cbor.Unmarshal(raw, &members)
-	return members, err
-}
-
-func committeeFromEntry(key, value []byte) (*api.Committee, error) {
-	var (
-		runtimeIDHex string
-		kind         api.CommitteeKind
-	)
-	n, err := fmt.Sscanf(string(key), stateCommitteeMap, &kind, &runtimeIDHex)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't scan committee key: %s", err.Error())
-	}
-	if n < 2 {
-		return nil, fmt.Errorf("only scanned %d parts", n)
-	}
-	var runtimeID signature.PublicKey
-	if err := runtimeID.UnmarshalHex(runtimeIDHex); err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal committee runtime ID: %s", err.Error())
-	}
-	var members []*api.CommitteeNode
-	if err := cbor.Unmarshal(value, &members); err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal committee value: %s", err.Error())
-	}
-	return &api.Committee{
-		RuntimeID: runtimeID,
-		Kind:      kind,
-		Members:   members,
-	}, nil
+	var committee *api.Committee
+	err := cbor.Unmarshal(raw, &committee)
+	return committee, err
 }
 
 func (s *immutableState) getAllCommittees() ([]*api.Committee, error) {
@@ -69,7 +42,8 @@ func (s *immutableState) getAllCommittees() ([]*api.Committee, error) {
 		[]byte(fmt.Sprintf(stateCommitteeMap, uint8(api.MaxCommitteeKind), abci.FirstID)),
 		true,
 		func(key, value []byte) bool {
-			c, err := committeeFromEntry(key, value)
+			var c *api.Committee
+			err := cbor.Unmarshal(value, &c)
 			if err != nil {
 				logger.Error("couldn't get committee from state entry",
 					"key", key,
@@ -93,7 +67,8 @@ func (s *immutableState) getKindsCommittees(kinds []api.CommitteeKind) ([]*api.C
 			[]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), abci.LastID)),
 			true,
 			func(key, value []byte, version int64) bool {
-				c, err := committeeFromEntry(key, value)
+				var c *api.Committee
+				err := cbor.Unmarshal(value, &c)
 				if err != nil {
 					logger.Error("couldn't get committee from state entry",
 						"key", key,
@@ -126,10 +101,10 @@ type MutableState struct {
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) putCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey, members []*api.CommitteeNode) {
+func (s *MutableState) putCommittee(c *api.Committee) {
 	s.tree.Set(
-		[]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)),
-		cbor.Marshal(members),
+		[]byte(fmt.Sprintf(stateCommitteeMap, uint8(c.Kind), c.RuntimeID)),
+		cbor.Marshal(c),
 	)
 }
 

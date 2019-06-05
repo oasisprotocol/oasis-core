@@ -184,16 +184,16 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		members, err := schedState.GetCommittee(scheduler.Compute, rtID)
+		committee, err := schedState.GetCommittee(scheduler.Compute, rtID)
 		if err != nil {
-			app.logger.Error("checkCommittees: failed to get committee from scheduler",
+			app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
 				"err", err,
 				"runtime", rtID,
 			)
 			continue
 		}
-		if members == nil {
-			app.logger.Error("checkCommittees: scheduler gave us an empty compute committee",
+		if committee == nil {
+			app.logger.Debug("checkCommittees: no compute committee this epoch",
 				"runtime", rtID,
 			)
 			continue
@@ -207,10 +207,10 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		//
 		// TODO: Use a better check to allow for things like rescheduling.
 		round := rtState.Round
-		if round != nil && round.Pool.Committee.ValidFor == epoch {
+		if round != nil && round.Pool.Committee.ValidFor == committee.ValidFor {
 			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
 				"runtime", rtID,
-				"epoch", epoch,
+				"epoch", committee.ValidFor,
 			)
 			mk := rtID.ToMapKey()
 			if _, ok := newDescriptors[mk]; ok {
@@ -225,7 +225,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
 			"runtime", rtID,
-			"epoch", epoch,
+			"epoch", committee.ValidFor,
 			"round", blockNr,
 		)
 
@@ -235,7 +235,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		tree := app.state.DeliverTxTree()
 		regState := registryapp.NewMutableState(tree)
 		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-		for idx, committeeNode := range members {
+		for idx, committeeNode := range committee.Members {
 			var nodeRuntime *node.Runtime
 			node, err := regState.GetNode(committeeNode.PublicKey)
 			if err != nil {
@@ -260,12 +260,6 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 				CommitteeNode: idx,
 				Runtime:       nodeRuntime,
 			}
-		}
-		committee := &scheduler.Committee{
-			Kind:      scheduler.Compute,
-			Members:   members,
-			RuntimeID: rtID,
-			ValidFor:  epoch,
 		}
 		rtState.Round = newRound(committee, nodeInfo, blk, rtState.Runtime)
 
