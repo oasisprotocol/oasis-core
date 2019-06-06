@@ -233,13 +233,13 @@ type Backend interface {
 	// The expected new root is used to check if the new root after all the
 	// operations are applied already exists in the local DB.  If it does, the
 	// Apply is ignored.
-	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) (*MKVSReceipt, error)
+	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) ([]*MKVSReceipt, error)
 
 	// ApplyBatch applies multiple sets of operations against the MKVS and
 	// returns a single receipt covering all applied roots.
 	//
 	// See Apply for more details.
-	ApplyBatch(context.Context, []ApplyOp) (*MKVSReceipt, error)
+	ApplyBatch(context.Context, []ApplyOp) ([]*MKVSReceipt, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()

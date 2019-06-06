@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
 
@@ -38,13 +39,13 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 	}
 
 	<-s.backend.Initialized()
-	signedReceipt, err := s.backend.Apply(ctx, root, expectedNewRoot, log)
+	receipts, err := s.backend.Apply(ctx, root, expectedNewRoot, log)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ApplyResponse{Receipt: signedReceipt.MarshalCBOR()}, nil
+	return &pb.ApplyResponse{Receipts: cbor.Marshal(receipts)}, nil
 }
 
 func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) (*pb.ApplyBatchResponse, error) {
@@ -76,13 +77,13 @@ func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 	}
 
 	<-s.backend.Initialized()
-	signedReceipt, err := s.backend.ApplyBatch(ctx, ops)
+	receipts, err := s.backend.ApplyBatch(ctx, ops)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ApplyBatchResponse{Receipt: signedReceipt.MarshalCBOR()}, nil
+	return &pb.ApplyBatchResponse{Receipts: cbor.Marshal(receipts)}, nil
 }
 
 func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {

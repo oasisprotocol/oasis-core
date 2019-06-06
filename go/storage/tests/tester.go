@@ -50,21 +50,24 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	root.Empty()
 	wl := prepareWriteLog(testValues)
 	expectedNewRoot := calculateExpectedNewRoot(t, wl)
-	var mkvsReceipt *api.MKVSReceipt
-	var rb api.MKVSReceiptBody
+	var receipts []*api.MKVSReceipt
+	var receiptBody api.MKVSReceiptBody
 	var err error
 
 	// Apply write log to an empty root.
-	mkvsReceipt, err = backend.Apply(context.Background(), root, expectedNewRoot, wl)
+	receipts, err = backend.Apply(context.Background(), root, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
-	require.NotNil(t, mkvsReceipt, "Apply() should return a mkvsReceipt")
+	require.NotNil(t, receipts, "Apply() should return receipts")
 
-	// Check the MKVS receipt and obtain the new root from it.
-	err = mkvsReceipt.Open(&rb)
-	require.NoError(t, err, "mkvsReceipt.Open() should not return an error")
-	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version should be 1")
-	require.Equal(t, 1, len(rb.Roots), "mkvs receipt should contain 1 root")
-	require.EqualValues(t, expectedNewRoot, rb.Roots[0], "mkvs receipt root should equal the expected new root")
+	// Check the receipts and ensure they contain a new root that equals the
+	// expected new root.
+	for _, receipt := range receipts {
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipt.Open() should not return an error")
+		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
+		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
+		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
+	}
 
 	// Prepare another write log and form a set of apply operations.
 	wl2 := prepareWriteLog(testValues[0:2])
@@ -75,33 +78,36 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	}
 
 	// Apply a batch of operations against the MKVS.
-	mkvsReceipt, err = backend.ApplyBatch(context.Background(), applyOps)
+	receipts, err = backend.ApplyBatch(context.Background(), applyOps)
 	require.NoError(t, err, "ApplyBatch() should not return an error")
-	require.NotNil(t, mkvsReceipt, "ApplyBatch() should return a mkvsReceipt")
+	require.NotNil(t, receipts, "ApplyBatch() should return receipts")
 
-	// Check the MKVS receipt and obtain the new root from it.
-	err = mkvsReceipt.Open(&rb)
-	require.NoError(t, err, "mkvsReceipt.Open() should not return an error")
-	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version should be 1")
-	require.Equal(t, len(applyOps), len(rb.Roots), "mkvs receipt should contain as many roots as there were applyOps")
-	for i, applyOp := range applyOps {
-		require.EqualValues(t, applyOp.ExpectedNewRoot, rb.Roots[i], "mkvs receipt root for an applyOp should equal the expected new root")
+	// Check the receipts and ensure they contain a new root that equals the
+	// expected new root.
+	for _, receipt := range receipts {
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipt.Open() should not return an error")
+		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
+		require.Equal(t, len(applyOps), len(receiptBody.Roots), "receiptBody should contain as many roots as there were applyOps")
+		for i, applyOp := range applyOps {
+			require.EqualValues(t, applyOp.ExpectedNewRoot, receiptBody.Roots[i], "receiptBody root for an applyOp should equal the expected new root")
+		}
 	}
 
 	var emptyPath hash.Hash
 
 	// Get a subtree summary of the new root.
-	st, err := backend.GetSubtree(context.Background(), rb.Roots[0], api.NodeID{Path: emptyPath, Depth: 0}, 10)
+	st, err := backend.GetSubtree(context.Background(), receiptBody.Roots[0], api.NodeID{Path: emptyPath, Depth: 0}, 10)
 	require.NoError(t, err, "GetSubtree()")
 	require.NotNil(t, st, "subtree returned by GetSubtree()")
 
 	// Get a path summary of the new root.
-	st, err = backend.GetPath(context.Background(), rb.Roots[0], emptyPath, 0)
+	st, err = backend.GetPath(context.Background(), receiptBody.Roots[0], emptyPath, 0)
 	require.NoError(t, err, "GetPath()")
 	require.NotNil(t, st, "subtree returned by GetPath()")
 
 	// Get the root node.
-	n, err := backend.GetNode(context.Background(), rb.Roots[0], api.NodeID{Path: emptyPath, Depth: 0})
+	n, err := backend.GetNode(context.Background(), receiptBody.Roots[0], api.NodeID{Path: emptyPath, Depth: 0})
 	require.NoError(t, err, "GetNode()")
 	require.NotNil(t, n)
 
@@ -109,19 +115,23 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	origValue := testValues[2]
 	var hash hash.Hash
 	hash.FromBytes(origValue)
-	value, err := backend.GetValue(context.Background(), rb.Roots[0], hash)
+	value, err := backend.GetValue(context.Background(), receiptBody.Roots[0], hash)
 	require.NoError(t, err, "GetValue() should not return an error")
 	require.NotNil(t, value, "GetValue() should return a value")
 	require.Equal(t, value, origValue, "GetValue()'s returned value should equal the original value")
 
 	// Now try applying the same operations again, we should get the same root.
-	mkvsReceipt, err = backend.Apply(context.Background(), root, rb.Roots[0], wl)
-	require.NoError(t, err, "Apply()")
-	require.NotNil(t, mkvsReceipt, "mkvsReceipt")
-	err = mkvsReceipt.Open(&rb)
-	require.NoError(t, err, "mkvsReceipt.Open()")
-	require.Equal(t, uint16(1), rb.Version, "mkvs receipt version")
-	require.Equal(t, 1, len(rb.Roots), "mkvs receipt roots")
-	require.NotEqual(t, root, rb.Roots[0], "mkvs receipt root")
-	require.EqualValues(t, expectedNewRoot, rb.Roots[0], "mkvs receipt root")
+	receipts, err = backend.Apply(context.Background(), root, receiptBody.Roots[0], wl)
+	require.NoError(t, err, "Apply() should not return an error")
+	require.NotNil(t, receipts, "Apply() should return receipts")
+
+	// Check the receipts and ensure they contain a new root that equals the
+	// expected new root.
+	for _, receipt := range receipts {
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipt.Open() should not return an error")
+		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
+		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
+		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
+	}
 }

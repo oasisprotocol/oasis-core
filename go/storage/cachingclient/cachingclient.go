@@ -82,12 +82,12 @@ func (v *cachedValue) Size() uint64 {
 	return uint64(len(v.value))
 }
 
-func (b *cachingClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+func (b *cachingClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
 	// TODO: Implement caching for MKVS operations (issue #1664).
 	return b.remote.Apply(ctx, root, expectedNewRoot, log)
 }
 
-func (b *cachingClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+func (b *cachingClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
 	// TODO: Implement caching for MKVS operations (issue #1664).
 	return b.remote.ApplyBatch(ctx, ops)
 }

@@ -44,8 +44,8 @@ pub struct Header {
     pub io_root: Hash,
     /// State merkle root.
     pub state_root: Hash,
-    /// Storage receipt.
-    pub storage_receipt: SignatureBundle,
+    /// Storage receipt signatures.
+    pub storage_signatures: Option<Vec<SignatureBundle>>,
 }
 
 impl Header {
@@ -82,7 +82,7 @@ mod tests {
         let empty = Header::default();
         assert_eq!(
             empty.encoded_hash(),
-            Hash::from("4d449a81ebd463bc77718dc6d93ff38baa0c3c1587437dc283b96c3605c2cbea")
+            Hash::from("fb1a6451509ddc17e94582df50e0fd1842ffce903a9a8d362ff90a3084e8dbdd")
         );
 
         let populated = Header {
@@ -98,7 +98,7 @@ mod tests {
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("a97b8cb29db5cbe9d4e68d274402985b705b2e2d9e6a83491f2df6e1d9a8b0f6")
+            Hash::from("091d12549887474e7fc6651c73711bf1da4dc567cdc845f6b14afd7f376305fc")
         );
     }
 }

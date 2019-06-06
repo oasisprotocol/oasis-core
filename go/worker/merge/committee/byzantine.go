@@ -1,6 +1,7 @@
 package committee
 
 import (
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
@@ -58,7 +59,7 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 		},
 	}
 
-	receipt, err := n.commonNode.Storage.ApplyBatch(n.ctx, applyOps)
+	receipts, err := n.commonNode.Storage.ApplyBatch(n.ctx, applyOps)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
@@ -67,6 +68,11 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 		return
 	}
 
+	signatures := []signature.Signature{}
+	for _, receipt := range receipts {
+		signatures = append(signatures, receipt.Signature)
+	}
+
 	header.StateRoot = newStateRoot
-	header.StorageReceipt = receipt.Signature
+	header.StorageSignatures = signatures
 }

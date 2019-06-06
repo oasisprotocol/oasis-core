@@ -327,8 +327,8 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 
 		var root hash.Hash
 		root.Empty()
-		var r *storage.MKVSReceipt
-		if r, err = backend.Apply(context.Background(), root, root, log); err != nil {
+		var receipts []*storage.MKVSReceipt
+		if receipts, err = backend.Apply(context.Background(), root, root, log); err != nil {
 			logger.Error("failed to apply runtime genesis storage state",
 				"err", err,
 				"filename", state,
@@ -336,12 +336,13 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 			return nil, nil, err
 		}
 
-		var receipt storage.MKVSReceiptBody
-		if err = r.Open(&receipt); err != nil {
+		// Extract the root from the first receipt.
+		var receiptBody storage.MKVSReceiptBody
+		if err = receipts[0].Open(&receiptBody); err != nil {
 			return nil, nil, err
 		}
 
-		gen.StateRoot = receipt.Roots[0]
+		gen.StateRoot = receiptBody.Roots[0]
 
 	}
 
