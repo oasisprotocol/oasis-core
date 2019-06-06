@@ -2,7 +2,6 @@ package committee
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -15,14 +14,18 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
+	txnScheduler "github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
 )
 
 var (
-	ErrNotLeader = errors.New("not leader")
+	ErrNotLeader      = errors.New("not leader")
+	errIncorrectState = errors.New("incorrect state")
+	errNoBlocks       = errors.New("no blocks")
 )
 
 var (
@@ -40,20 +43,13 @@ var (
 	metricsOnce sync.Once
 )
 
-// Config is a committee node configuration.
-type Config struct {
-	MaxQueueSize      uint64
-	MaxBatchSize      uint64
-	MaxBatchSizeBytes uint64
-	MaxBatchTimeout   time.Duration
-}
-
 // Node is a committee node.
 type Node struct {
 	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
-	cfg Config
+	algorithm    txnScheduler.Algorithm
+	flushTimeout time.Duration
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -61,8 +57,6 @@ type Node struct {
 	stopOnce  sync.Once
 	quitCh    chan struct{}
 	initCh    chan struct{}
-
-	incomingQueue *incomingQueue
 
 	// Mutable and shared with common node's worker.
 	// Guarded by .commonNode.CrossNode.
@@ -132,20 +126,11 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 		return ErrNotLeader
 	}
 
-	if err := n.incomingQueue.Add(call); err != nil {
-		// Return success in case of duplicate calls to avoid the client
-		// mistaking this for an actual error.
-		if err == errCallAlreadyExists {
-			n.logger.Warn("ignoring duplicate call",
-				"call", hex.EncodeToString(call),
-			)
-			return nil
-		}
-
+	if err := n.algorithm.ScheduleTx(call); err != nil {
 		return err
 	}
 
-	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
+	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.algorithm.UnscheduledSize()))
 
 	return nil
 }
@@ -160,7 +145,7 @@ func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, err
 		return false, ErrNotLeader
 	}
 
-	return n.incomingQueue.IsQueued(id), nil
+	return n.algorithm.IsQueued(id), nil
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -195,7 +180,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	if epoch.IsTransactionSchedulerLeader() {
 		n.transitionLocked(StateWaitingForBatch{})
 	} else {
-		n.incomingQueue.Clear()
+		n.algorithm.Clear()
 		// Clear incoming queue if we are not a leader.
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 		n.transitionLocked(StateNotReady{})
@@ -220,36 +205,24 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	}
 }
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) checkIncomingQueueLocked(force bool) {
+// Dispatch dispatches a bach to the compute committee.
+func (n *Node) Dispatch(batch runtime.Batch) error {
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		return
+		return errIncorrectState
 	}
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 	// If we are not a leader or we don't have any blocks, don't do anything.
-	if !epoch.IsTransactionSchedulerLeader() || n.commonNode.CurrentBlock == nil {
-		return
+	if !epoch.IsTransactionSchedulerLeader() {
+		return ErrNotLeader
 	}
-
-	batch, err := n.incomingQueue.Take(force)
-	if err != nil {
-		return
+	if n.commonNode.CurrentBlock == nil {
+		return errNoBlocks
 	}
-	var processOk bool
-	defer func() {
-		if !processOk {
-			// Put the batch back into the incoming queue in case this failed.
-			if errAB := n.incomingQueue.AddBatch(batch); errAB != nil {
-				n.logger.Error("failed to add batch back into the incoming queue",
-					"err", errAB,
-				)
-			}
-		}
-
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.incomingQueue.Size()))
-	}()
 
 	// Leader node opens a new parent span for batch processing.
 	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)",
@@ -267,13 +240,12 @@ func (n *Node) checkIncomingQueueLocked(force bool) {
 		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
 		opentracing.ChildOf(batchSpanCtx),
 	)
-	err = n.commonNode.Group.PublishBatch(batchSpanCtx, batch, n.commonNode.CurrentBlock.Header)
-	if err != nil {
+	if err := n.commonNode.Group.PublishBatch(batchSpanCtx, batch, n.commonNode.CurrentBlock.Header); err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
 		)
-		return
+		return err
 	}
 	crash.Here(crashPointLeaderBatchPublishAfter)
 	spanPublish.Finish()
@@ -284,7 +256,7 @@ func (n *Node) checkIncomingQueueLocked(force bool) {
 		n.computeNode.HandleBatchFromTransactionSchedulerLocked(batch, batchSpanCtx)
 	}
 
-	processOk = true
+	return nil
 }
 
 func (n *Node) worker() {
@@ -303,12 +275,9 @@ func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
 
-	// Check incoming queue every MaxBatchTimeout.
-	incomingQueueTicker := time.NewTicker(n.cfg.MaxBatchTimeout)
-	defer incomingQueueTicker.Stop()
-
-	// Check incoming queue when signalled.
-	incomingQueueSignal := n.incomingQueue.Signal()
+	// Check incoming queue every FlushTimeout.
+	scheduleTicker := time.NewTicker(n.flushTimeout)
+	defer scheduleTicker.Stop()
 
 	// We are initialized.
 	close(n.initCh)
@@ -318,20 +287,9 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case <-incomingQueueTicker.C:
-			// Check incoming queue for a new batch.
-			func() {
-				n.commonNode.CrossNode.Lock()
-				defer n.commonNode.CrossNode.Unlock()
-				n.checkIncomingQueueLocked(true)
-			}()
-		case <-incomingQueueSignal:
-			// Check incoming queue for a new batch.
-			func() {
-				n.commonNode.CrossNode.Lock()
-				defer n.commonNode.CrossNode.Unlock()
-				n.checkIncomingQueueLocked(false)
-			}()
+		case <-scheduleTicker.C:
+			// Flush a batch from algorithm.
+			n.algorithm.Flush()
 		}
 	}
 }
@@ -339,7 +297,8 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	computeNode *computeCommittee.Node,
-	cfg Config,
+	algorithm txnScheduler.Algorithm,
+	flushTimeout time.Duration,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -350,16 +309,23 @@ func NewNode(
 	n := &Node{
 		commonNode:       commonNode,
 		computeNode:      computeNode,
-		cfg:              cfg,
+		algorithm:        algorithm,
+		flushTimeout:     flushTimeout,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
-		incomingQueue:    newIncomingQueue(cfg.MaxQueueSize, cfg.MaxBatchSize, cfg.MaxBatchSizeBytes),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
 		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.RuntimeID),
+	}
+
+	if err := algorithm.Initialize(n); err != nil {
+		n.logger.Error("Failed initializing txnscheduler algorithm",
+			"err", err,
+		)
+		return nil, err
 	}
 
 	return n, nil

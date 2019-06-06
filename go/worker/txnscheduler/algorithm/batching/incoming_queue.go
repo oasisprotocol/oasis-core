@@ -1,4 +1,4 @@
-package committee
+package batching
 
 import (
 	"errors"
@@ -25,18 +25,6 @@ type incomingQueue struct {
 	maxQueueSize      uint64
 	maxBatchSize      uint64
 	maxBatchSizeBytes uint64
-
-	signalCh chan struct{}
-}
-
-// Signal returns a channel that will be signalled when a new item becomes
-// available.
-//
-// NOTE: Code handling the signal should be prepared to handle spurious
-// signals, e.g., a signal being in the channel while nothing is available
-// in the queue (Take returning an error).
-func (q *incomingQueue) Signal() <-chan struct{} {
-	return q.signalCh
 }
 
 // Size returns the size of the incoming queue.
@@ -98,14 +86,6 @@ func (q *incomingQueue) addCallLocked(call []byte, callHash hash.Hash) {
 	q.queueSizeBytes += uint64(len(call))
 }
 
-func (q *incomingQueue) maybeSignal() {
-	// Only send the signal in case the previous signal has been handled.
-	select {
-	case q.signalCh <- struct{}{}:
-	default:
-	}
-}
-
 // Add adds a call to the incoming queue.
 func (q *incomingQueue) Add(call []byte) error {
 	var callHash hash.Hash
@@ -124,7 +104,6 @@ func (q *incomingQueue) Add(call []byte) error {
 	}
 
 	q.addCallLocked(call, callHash)
-	q.maybeSignal()
 
 	return nil
 }
@@ -158,8 +137,6 @@ func (q *incomingQueue) AddBatch(batch runtime.Batch) error {
 	for i, call := range batch {
 		q.addCallLocked(call, callHashes[i])
 	}
-
-	q.maybeSignal()
 
 	return nil
 }
@@ -228,6 +205,5 @@ func newIncomingQueue(maxQueueSize, maxBatchSize, maxBatchSizeBytes uint64) *inc
 		maxQueueSize:      maxQueueSize,
 		maxBatchSize:      maxBatchSize,
 		maxBatchSizeBytes: maxBatchSizeBytes,
-		signalCh:          make(chan struct{}, 1),
 	}
 }
