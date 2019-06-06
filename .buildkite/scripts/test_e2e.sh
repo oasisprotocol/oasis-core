@@ -105,6 +105,11 @@ run_client_km_restart() {
     EKIDEN_CLIENT_PID=$!
 }
 
+assert_compute_discrepancy_scenario_works() {
+    assert_no_round_timeouts
+    assert_compute_discrepancies
+}
+
 #############
 # Test suite.
 #
@@ -149,15 +154,15 @@ test_suite() {
     if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
         run_test \
             scenario=scenario_discrepancy \
-            name="e2e-${backend_name}-discrepancy" \
+            name="e2e-${backend_name}-compute-discrepancy" \
             backend_runner=$backend_runner \
             runtime=simple-keyvalue \
             client=simple-keyvalue \
-            on_success_hook=assert_no_round_timeouts
+            on_success_hook=assert_compute_discrepancy_scenario_works
     fi
 }
 
 ##########################################
 # Multiple validators tendermint backends.
 ##########################################
-test_suite tm-committee run_backend_tendermint_committee
+test_suite tm run_backend_tendermint_committee
