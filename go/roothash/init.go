@@ -45,7 +45,7 @@ func New(
 	case memory.BackendName:
 		impl = memory.New(ctx, scheduler, registry, nil, roundTimeout)
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, dataDir, timeSource, scheduler, beacon, tmService, roundTimeout)
+		impl, err = tendermint.New(ctx, dataDir, timeSource, beacon, tmService, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}

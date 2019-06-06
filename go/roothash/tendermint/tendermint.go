@@ -22,7 +22,6 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -358,7 +357,6 @@ func New(
 	ctx context.Context,
 	dataDir string,
 	timeSource epochtime.Backend,
-	sched scheduler.Backend,
 	beac beacon.Backend,
 	service service.TendermintService,
 	roundTimeout time.Duration,
@@ -369,14 +367,8 @@ func New(
 		return nil, errors.New("roothash/tendermint: need a block-based epochtime backend")
 	}
 
-	// We can only work with a block-based scheduler.
-	blockScheduler, ok := sched.(scheduler.BlockBackend)
-	if !ok {
-		return nil, errors.New("roothash/tendermint: need a block-based scheduler backend")
-	}
-
 	// Initialize and register the tendermint service component.
-	app := app.New(ctx, blockTimeSource, blockScheduler, beac, roundTimeout)
+	app := app.New(ctx, blockTimeSource, beac, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

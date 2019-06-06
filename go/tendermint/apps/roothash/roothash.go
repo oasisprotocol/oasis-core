@@ -56,7 +56,6 @@ type rootHashApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.BlockBackend
-	scheduler  scheduler.BlockBackend
 	beacon     beacon.Backend
 
 	roundTimeout time.Duration
@@ -678,7 +677,6 @@ func (app *rootHashApplication) tryFinalize(
 func New(
 	ctx context.Context,
 	timeSource epochtime.BlockBackend,
-	scheduler scheduler.BlockBackend,
 	beacon beacon.Backend,
 	roundTimeout time.Duration,
 ) abci.Application {
@@ -686,7 +684,6 @@ func New(
 		ctx:          ctx,
 		logger:       logging.GetLogger("tendermint/roothash"),
 		timeSource:   timeSource,
-		scheduler:    scheduler,
 		beacon:       beacon,
 		roundTimeout: roundTimeout,
 	}
