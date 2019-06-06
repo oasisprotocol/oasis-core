@@ -174,7 +174,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 
 	// Initialize and register the tendermint service component.
 	app := app.New(blockTimeSource)
-	if err := service.RegisterApplication(app); err != nil {
+	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
 

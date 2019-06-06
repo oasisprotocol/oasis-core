@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
+	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -369,7 +370,7 @@ func New(
 
 	// Initialize and register the tendermint service component.
 	app := app.New(ctx, blockTimeSource, beac, roundTimeout)
-	if err := service.RegisterApplication(app); err != nil {
+	if err := service.RegisterApplication(app, []string{schedulerapp.AppName}); err != nil {
 		return nil, err
 	}
 

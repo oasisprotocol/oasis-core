@@ -260,7 +260,7 @@ func (t *tendermintService) Pruner() abci.StatePruner {
 	return t.mux.Pruner()
 }
 
-func (t *tendermintService) RegisterApplication(app abci.Application) error {
+func (t *tendermintService) RegisterApplication(app abci.Application, deps []string) error {
 	if err := t.ForceInitialize(); err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 		return errors.New("tendermint: service already started")
 	}
 
-	return t.mux.Register(app)
+	return t.mux.Register(app, deps)
 }
 
 func (t *tendermintService) ForceInitialize() error {

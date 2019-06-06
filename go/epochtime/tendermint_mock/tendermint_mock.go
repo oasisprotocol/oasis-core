@@ -202,7 +202,7 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
 	// Initialze and register the tendermint service component.
 	app := app.New()
-	if err := service.RegisterApplication(app); err != nil {
+	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
 

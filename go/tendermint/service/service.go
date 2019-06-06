@@ -23,8 +23,9 @@ type TendermintService interface {
 	Started() <-chan struct{}
 
 	// RegisterApplication registers an ABCI multiplexer application
-	// with this service instance.
-	RegisterApplication(abci.Application) error
+	// with this service instance and check that its dependencies are
+	// registered.
+	RegisterApplication(abci.Application, []string) error
 
 	// ForceInitialize force-initializes the Tendermint service iff
 	// it has not been started.  Otherwise the routine has no effect
