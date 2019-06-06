@@ -23,7 +23,7 @@ use ekiden_runtime::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
         Context as RpcContext,
     },
-    RpcDispatcher, TxnDispatcher, BUILD_INFO,
+    RpcDemux, RpcDispatcher, TxnDispatcher, BUILD_INFO,
 };
 
 use self::kdf::Kdf;
@@ -45,7 +45,11 @@ fn init(_req: &InitRequest, ctx: &mut RpcContext) -> Fallible<InitResponse> {
 
 fn main() {
     // Initializer.
-    let init = |_: &_, _: &_, rpc: &mut RpcDispatcher, _txn: &mut TxnDispatcher| {
+    let init = |_: &_,
+                _: &_,
+                _rpc_demux: &mut RpcDemux,
+                rpc: &mut RpcDispatcher,
+                _txn: &mut TxnDispatcher| {
         // Register RPC methods exposed via EnclaveRPC to remote clients.
         {
             use crate::methods::*;

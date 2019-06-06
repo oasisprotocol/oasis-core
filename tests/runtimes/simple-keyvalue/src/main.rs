@@ -23,7 +23,7 @@ use ekiden_runtime::{
     register_runtime_txn_methods, runtime_context,
     storage::{StorageContext, MKVS},
     transaction::{dispatcher::CheckOnlySuccess, Context as TxnContext},
-    Protocol, RpcDispatcher, TxnDispatcher,
+    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 use simple_keyvalue_api::{with_api, KeyValue};
 
@@ -257,6 +257,7 @@ fn main() {
     // Initializer.
     let init = |protocol: &Arc<Protocol>,
                 rak: &Arc<RAK>,
+                _rpc_demux: &mut RpcDemux,
                 _rpc: &mut RpcDispatcher,
                 txn: &mut TxnDispatcher| {
         with_api! { register_runtime_txn_methods!(txn, api); }

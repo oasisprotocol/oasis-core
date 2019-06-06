@@ -62,7 +62,9 @@ pub mod types;
 
 // Re-exports.
 pub use self::{
-    init::start_runtime, protocol::Protocol, rpc::dispatcher::Dispatcher as RpcDispatcher,
+    init::start_runtime,
+    protocol::Protocol,
+    rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
     transaction::dispatcher::Dispatcher as TxnDispatcher,
 };
 
