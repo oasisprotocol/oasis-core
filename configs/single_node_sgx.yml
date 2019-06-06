@@ -81,7 +81,7 @@ storage:
 
 # Scheduler backend.
 scheduler:
-  backend: trivial
+  backend: tendermint
 
 # Registry backend.
 registry:
