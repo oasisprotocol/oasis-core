@@ -193,7 +193,7 @@ func (a *ApplicationServer) Mux() types.Application {
 //
 // All registration must be done before Start is called.  ABCI operations
 // that act on every single app (InitChain, BeginBlock, EndBlock) will be
-// called in registration order.
+// called in name lexicographic order.
 func (a *ApplicationServer) Register(app Application) error {
 	if a.started {
 		return errors.New("mux: multiplexer already started")
