@@ -46,7 +46,7 @@ run_dummy_node_tendermint() {
         --epochtime.backend tendermint_mock \
         --beacon.backend insecure \
         --storage.backend memory \
-        --scheduler.backend trivial \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --tendermint.consensus.timeout_commit 250ms \
