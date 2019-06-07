@@ -309,10 +309,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			// Timestamp
 			require.EqualValues(parent.Header.HeaderType, header.HeaderType, "block header type")
 			require.EqualValues(parent.Header.PreviousHash, header.PreviousHash, "block previous hash")
-			require.EqualValues(parent.Header.GroupHash, header.GroupHash, "block group hash")
 			require.EqualValues(parent.Header.IORoot, header.IORoot, "block I/O root")
 			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
-			require.EqualValues(parent.Header.CommitmentsHash, header.CommitmentsHash, "block commitments hash")
 
 			// We need to wait for the indexer to index the block. We could have a channel
 			// to subscribe to these updates and this would not be needed.

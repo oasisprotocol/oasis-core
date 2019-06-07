@@ -56,7 +56,6 @@ func NewEmptyBlock(child *Block, timestamp uint64, htype HeaderType) *Block {
 	blk.Header.IORoot.Empty()
 	// State root is unchanged.
 	blk.Header.StateRoot = child.Header.StateRoot
-	blk.Header.CommitmentsHash.Empty()
 
 	return &blk
 }

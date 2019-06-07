@@ -39,14 +39,10 @@ pub struct Header {
     pub header_type: u8,
     /// Previous block hash.
     pub previous_hash: Hash,
-    /// Computation group hash.
-    pub group_hash: Hash,
     /// I/O merkle root.
     pub io_root: Hash,
     /// State merkle root.
     pub state_root: Hash,
-    /// Commitments hash.
-    pub commitments_hash: Hash,
     /// Storage receipt.
     pub storage_receipt: SignatureBundle,
 }
