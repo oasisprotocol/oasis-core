@@ -58,6 +58,8 @@ func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) cache {
 		lruValues:             list.New(),
 		syncerGetNodeTimeout:  1 * time.Second,
 		syncerPrefetchTimeout: 5 * time.Second,
+		valueCapacity:         16 * 1024 * 1024,
+		nodeCapacity:          5000,
 	}
 }
 
@@ -125,7 +127,7 @@ func (c *cache) commitNode(ptr *internal.Pointer) {
 	}
 
 	// Evict nodes till there is enough capacity.
-	if c.nodeCapacity > 0 && c.nodeCapacity-(c.internalNodeCount+c.leafNodeCount) < 1 {
+	if c.nodeCapacity > 0 && c.internalNodeCount+c.leafNodeCount+1 > c.nodeCapacity {
 		c.evictNodes(1)
 	}
 
@@ -154,7 +156,7 @@ func (c *cache) commitValue(v *internal.Value) {
 	valueSize := uint64(len(v.Value))
 
 	// Evict values till there is enough capacity.
-	if c.valueCapacity > 0 && valueSize > c.valueCapacity-c.valueSize {
+	if c.valueCapacity > 0 && c.valueSize+valueSize > c.valueCapacity {
 		c.evictValues(valueSize)
 	}
 
@@ -171,11 +173,8 @@ func (c *cache) newValue(val []byte) *internal.Value {
 	return c.newValuePtr(&internal.Value{Value: val})
 }
 
-// tryRemoveNode tries to removes a tree node.
-//
-// Note that the node may not be actually removed if it is not possible
-// to do so (e.g., an internal node which still has children).
-func (c *cache) tryRemoveNode(ptr *internal.Pointer) {
+// removeNode removes a tree node.
+func (c *cache) removeNode(ptr *internal.Pointer) {
 	if ptr.LRU == nil {
 		// Node has not yet been committed to cache.
 		return
@@ -183,10 +182,14 @@ func (c *cache) tryRemoveNode(ptr *internal.Pointer) {
 
 	switch n := ptr.Node.(type) {
 	case *internal.InternalNode:
-		// We can only remove internal nodes if they have no cached children
-		// as otherwise we would need to remove the whole subtree.
-		if (n.Left != nil && n.Left.Node != nil) || (n.Right != nil && n.Right.Node != nil) {
-			return
+		// Remove subtrees first.
+		if n.Left != nil && n.Left.Node != nil {
+			c.removeNode(n.Left)
+			n.Left = nil
+		}
+		if n.Right != nil && n.Right.Node != nil {
+			c.removeNode(n.Right)
+			n.Right = nil
 		}
 	}
 
@@ -220,7 +223,7 @@ func (c *cache) removeValue(v *internal.Value) {
 
 // evictValues tries to evict values from the cache.
 func (c *cache) evictValues(targetCapacity uint64) {
-	for c.lruValues.Len() > 0 && c.valueCapacity-c.valueSize < targetCapacity {
+	for c.lruValues.Len() > 0 && c.valueSize+targetCapacity > c.valueCapacity {
 		elem := c.lruValues.Back()
 		v := elem.Value.(*internal.Value)
 		c.removeValue(v)
@@ -230,10 +233,10 @@ func (c *cache) evictValues(targetCapacity uint64) {
 // evictNodes tries to evict nodes from the cache.
 func (c *cache) evictNodes(targetCapacity uint64) {
 	// TODO: Consider optimizing this to know which nodes are eligible for removal.
-	for c.lruNodes.Len() > 0 && c.nodeCapacity-(c.internalNodeCount+c.leafNodeCount) < targetCapacity {
+	for c.lruNodes.Len() > 0 && c.internalNodeCount+c.leafNodeCount+targetCapacity > c.nodeCapacity {
 		elem := c.lruNodes.Back()
 		n := elem.Value.(*internal.Pointer)
-		c.tryRemoveNode(n)
+		c.removeNode(n)
 	}
 }
 

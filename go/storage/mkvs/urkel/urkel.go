@@ -66,7 +66,11 @@ func PrefetchDepth(depth uint8) Option {
 
 // Capacity sets the capacity of the in-memory cache.
 //
-// If no capacity is specified, the cache will have an unlimited size.
+// If no capacity is specified, the cache will have a maximum capacity of
+// 16MB for values and 5000 for nodes.
+//
+// If a capacity of 0 is specified, the cache will have an unlimited size
+// (not recommended, as this will cause unbounded memory growth).
 func Capacity(nodeCapacity uint64, valueCapacityBytes uint64) Option {
 	return func(t *Tree) {
 		t.cache.nodeCapacity = nodeCapacity
