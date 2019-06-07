@@ -115,36 +115,40 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 
 	for _, kind := range kinds {
 		var nodeList []*node.Node
-		var sz int
+		var workerSize, backupSize int
 		var ctx []byte
 		switch kind {
 		case api.KindCompute:
 			nodeList = s.computeNodeLists[epoch][rtID][rt.TEEHardware]
-			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
+			workerSize = int(rt.ReplicaGroupSize)
+			backupSize = int(rt.ReplicaGroupBackupSize)
 			ctx = rngContextCompute
 		case api.KindStorage:
 			nodeList = s.storageNodeLists[epoch]
-			sz = int(rt.StorageGroupSize)
+			workerSize = int(rt.StorageGroupSize)
+			backupSize = 0
 			ctx = rngContextStorage
 		case api.KindTransactionScheduler:
 			nodeList = s.txnSchedulerNodeLists[epoch][rtID]
-			sz = int(rt.TransactionSchedulerGroupSize)
+			workerSize = int(rt.TransactionSchedulerGroupSize)
+			backupSize = 0
 			ctx = rngContextTransactionScheduler
 		case api.KindMerge:
 			nodeList = s.mergeNodeLists[epoch][rtID]
 			// TODO: Allow independent group sizes.
-			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
+			workerSize = int(rt.ReplicaGroupSize)
+			backupSize = int(rt.ReplicaGroupBackupSize)
 			ctx = rngContextMerge
 		default:
 			return nil, fmt.Errorf("scheduler: invalid committee type: %v", kind)
 		}
 		nrNodes := len(nodeList)
 
-		if sz == 0 {
+		if workerSize == 0 {
 			return nil, fmt.Errorf("scheduler: empty committee not allowed")
 		}
-		if sz > nrNodes {
-			return nil, fmt.Errorf("scheduler: %v committee size %d exceeds available nodes %d", kind, sz, nrNodes)
+		if (workerSize + backupSize) > nrNodes {
+			return nil, fmt.Errorf("scheduler: %v committee size %d exceeds available nodes %d", kind, workerSize+backupSize, nrNodes)
 		}
 
 		drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], ctx)
@@ -161,7 +165,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			ValidFor:  epoch,
 		}
 
-		for i := 0; i < sz; i++ {
+		for i := 0; i < (workerSize + backupSize); i++ {
 			var role api.Role
 			switch {
 			case i == 0:
@@ -170,7 +174,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 				} else {
 					role = api.Worker
 				}
-			case i >= int(rt.ReplicaGroupSize):
+			case i >= workerSize:
 				role = api.BackupWorker
 			default:
 				role = api.Worker
