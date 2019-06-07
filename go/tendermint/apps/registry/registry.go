@@ -195,7 +195,7 @@ func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
 func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
-	nodes, err := state.getNodes()
+	nodes, err := state.GetNodes()
 	if err != nil {
 		app.logger.Error("onEpochChange: failed to get nodes",
 			"err", err,
