@@ -35,7 +35,8 @@ impl UrkelOptions {
     /// * `value_capacity` is the total size, in bytes, of values held
     ///   by the cache before eviction.
     ///
-    /// If unspecified or 0, the cache will have an unlimited capacity.
+    /// If set to 0, the relevant cache will have an unlimited capacity. If left
+    /// unspecified, the cache will default to 50_000 for nodes and 16MB for values.
     pub fn with_capacity(mut self, node_capacity: usize, value_capacity: usize) -> Self {
         self.node_capacity = node_capacity;
         self.value_capacity = value_capacity;
@@ -139,8 +140,8 @@ impl UrkelTree {
     /// Return an options struct to chain configuration calls on.
     pub fn make() -> UrkelOptions {
         UrkelOptions {
-            node_capacity: 0,
-            value_capacity: 0,
+            node_capacity: 50_000,
+            value_capacity: 16 * 1024 * 1024,
             prefetch_depth: 0,
             root_hash: None,
         }

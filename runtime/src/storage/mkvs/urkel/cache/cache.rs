@@ -47,7 +47,7 @@ pub trait Cache {
     fn new_value(&mut self, val: Value) -> ValuePtrRef;
 
     /// Try removing a node from the cache.
-    fn try_remove_node(&mut self, ptr: NodePtrRef);
+    fn remove_node(&mut self, ptr: NodePtrRef);
     /// Remove a value from the cache.
     fn remove_value(&mut self, ptr: ValuePtrRef);
 
