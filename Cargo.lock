@@ -299,8 +299,8 @@ dependencies = [
 
 [[package]]
 name = "deoxysii"
-version = "0.1.0"
-source = "git+https://github.com/oasislabs/deoxysii-rust#571885e506de4c11b9875a19c686afcc89f4d877"
+version = "0.2.0"
+source = "git+https://github.com/oasislabs/deoxysii-rust#4687841cc6bd090e39a5f2908f34f49d64046200"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "subtle 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -408,7 +408,7 @@ dependencies = [
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "deoxysii 0.1.0 (git+https://github.com/oasislabs/deoxysii-rust)",
+ "deoxysii 0.2.0 (git+https://github.com/oasislabs/deoxysii-rust)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "intrusive-collections 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2004,7 +2004,7 @@ dependencies = [
 "checksum crossbeam-utils 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)" = "f8306fcef4a7b563b76b7dd949ca48f52bc1141aa067d2ea09565f3e2652aa5c"
 "checksum crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "a2f4a431c5c9f662e1200b7c7f02c34e91361150e382089a8f2dec3ba680cbda"
 "checksum curve25519-dalek 1.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "e1f8a6fc0376eb52dc18af94915cc04dfdf8353746c0e8c550ae683a0815e5c1"
-"checksum deoxysii 0.1.0 (git+https://github.com/oasislabs/deoxysii-rust)" = "<none>"
+"checksum deoxysii 0.2.0 (git+https://github.com/oasislabs/deoxysii-rust)" = "<none>"
 "checksum derive-new 0.5.6 (registry+https://github.com/rust-lang/crates.io-index)" = "6ca414e896ae072546f4d789f452daaecf60ddee4c9df5dc6d5936d769e3d87c"
 "checksum digest 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "05f47366984d3ad862010e22c7ce81a7dbcaebbdfb37241a620f8b6596ee135c"
 "checksum either 1.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "5527cfe0d098f36e3f8839852688e63c8fff1c90b2b405aef730615f9a7bcf7b"
