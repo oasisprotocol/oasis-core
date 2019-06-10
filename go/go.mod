@@ -40,7 +40,7 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.0.1
 	github.com/libp2p/go-libp2p-protocol v0.0.1
 	github.com/multiformats/go-multiaddr v0.0.2
-	github.com/oasislabs/deoxysii v0.0.0-20190329164139-cc54819a5e4c
+	github.com/oasislabs/deoxysii v0.0.0-20190610083944-a3e81dcb2dde
 	github.com/oasislabs/go-codec v0.0.0-20190531083711-36f85e883b2a
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pkg/errors v0.8.1
