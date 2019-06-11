@@ -1,4 +1,3 @@
-extern crate byteorder;
 extern crate ekiden_keymanager_api;
 extern crate ekiden_runtime;
 extern crate failure;

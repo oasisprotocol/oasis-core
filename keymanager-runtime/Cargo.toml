@@ -17,7 +17,6 @@ lazy_static = "1.3.0"
 lru = "0.1.15"
 # TODO: Change to released version when 0.10.0 is released.
 serde_cbor = { git = "https://github.com/pyfisch/cbor", rev = "114ecaeac53799d0bf81ca8d1b980c7c419d76fe" }
-byteorder = "1.3.1"
 io-context = "0.2.0"
 rand = "0.6.5"
 sgx-isa = { version = "0.2.0", features = ["sgxstd"] }

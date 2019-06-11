@@ -1,7 +1,6 @@
 ///! Key Derivation Function
 use std::sync::{Arc, RwLock};
 
-use byteorder::{BigEndian, WriteBytesExt};
 use failure::Fallible;
 use lazy_static::lazy_static;
 use lru::LruCache;
@@ -85,6 +84,7 @@ struct Inner {
 
 impl Inner {
     fn derive_contract_key(&self, req: &RequestIds) -> Fallible<ContractKey> {
+        let checksum = self.get_checksum()?;
         let mut contract_secret = self.derive_contract_secret(req)?;
 
         // Note: The `name` parameter for cSHAKE is reserved for use by NIST.
@@ -108,6 +108,7 @@ impl Inner {
             PublicKey(*pk.as_bytes()),
             PrivateKey(sk.to_bytes()),
             state_key,
+            checksum,
         ))
     }
 
@@ -127,6 +128,13 @@ impl Inner {
         f.finalize(&mut k);
 
         Ok(k.to_vec())
+    }
+
+    fn get_checksum(&self) -> Fallible<Vec<u8>> {
+        match self.checksum.as_ref() {
+            Some(checksum) => Ok(checksum.clone()),
+            None => Err(KeyManagerError::NotInitialized.into()),
+        }
     }
 }
 
@@ -232,17 +240,13 @@ impl Kdf {
     }
 
     /// Signs the public key using the key manager key.
-    pub fn sign_public_key(
-        &self,
-        key: PublicKey,
-        timestamp: Option<u64>,
-    ) -> Fallible<SignedPublicKey> {
+    pub fn sign_public_key(&self, key: PublicKey) -> Fallible<SignedPublicKey> {
         let mut body = key.as_ref().to_vec();
-        if let Some(ts) = timestamp {
-            body.write_u64::<BigEndian>(ts).unwrap();
-        }
 
         let inner = self.inner.read().unwrap();
+        let checksum = inner.get_checksum()?;
+        body.extend_from_slice(&checksum);
+
         let signer = match inner.signer.as_ref() {
             Some(rak) => rak,
             None => return Err(KeyManagerError::NotInitialized.into()),
@@ -251,7 +255,7 @@ impl Kdf {
 
         Ok(SignedPublicKey {
             key,
-            timestamp,
+            checksum,
             signature,
         })
     }

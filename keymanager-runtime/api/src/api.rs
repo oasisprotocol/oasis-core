@@ -85,6 +85,8 @@ pub struct ContractKey {
     pub input_keypair: InputKeyPair,
     /// State encryption key
     pub state_key: StateKey,
+    /// Checksum of the key manager state.
+    pub checksum: Vec<u8>,
 }
 
 impl ContractKey {
@@ -101,25 +103,28 @@ impl ContractKey {
             PublicKey(*pk.as_bytes()),
             PrivateKey(sk.to_bytes()),
             state_key,
+            vec![],
         )
     }
 
     /// Create a set of `ContractKey`.
-    pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey) -> Self {
+    pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey, sum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair { pk, sk },
             state_key: k,
+            checksum: sum,
         }
     }
 
     /// Create a set of `ContractKey` with only the public key.
-    pub fn from_public_key(k: PublicKey) -> Self {
+    pub fn from_public_key(k: PublicKey, sum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair {
                 pk: k,
                 sk: PrivateKey::default(),
             },
             state_key: StateKey::default(),
+            checksum: sum,
         }
     }
 }
@@ -154,9 +159,9 @@ pub const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,
-    /// Timestamp representing the expiry of the returned key.
-    pub timestamp: Option<u64>,
-    /// Sign(sk, (key || timestamp)) from the key manager.
+    /// Checksum of the key manager state.
+    pub checksum: Vec<u8>,
+    /// Sign(sk, (key || checksum)) from the key manager.
     pub signature: Signature,
 }
 

@@ -48,7 +48,7 @@ impl KeyManagerClient for MockClient {
         let keys = self.keys.lock().unwrap();
         let result = keys.get(&contract_id).map(|ck| SignedPublicKey {
             key: ck.input_keypair.get_pk(),
-            timestamp: Some(0),
+            checksum: vec![],
             signature: Signature::default(),
         });
 

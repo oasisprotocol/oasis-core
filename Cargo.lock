@@ -384,7 +384,6 @@ dependencies = [
 name = "ekiden-keymanager-runtime"
 version = "0.3.0-alpha"
 dependencies = [
- "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ekiden-keymanager-api 0.3.0-alpha",
  "ekiden-keymanager-client 0.3.0-alpha",
  "ekiden-runtime 0.3.0-alpha",

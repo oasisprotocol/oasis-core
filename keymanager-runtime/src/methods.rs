@@ -8,11 +8,6 @@ use ekiden_runtime::common::sgx::avr::get_enclave_identity;
 
 use crate::kdf::Kdf;
 
-// We have not implemented key-expiry yet. So give all keys the maximum expiry of 2^53-1
-// because (as a convenience) that is the maximum safe number to use in JavaScript and its
-// more than enough to account for enough time.
-static MAX_KEY_TIMESTAMP: u64 = (1 << 53) - 1;
-
 /// See `Kdf::get_or_create_keys`.
 pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<ContractKey> {
     // Authenticate session info (this requires all clients are SGX enclaves).
@@ -36,9 +31,7 @@ pub fn get_public_key(
 ) -> Fallible<Option<SignedPublicKey>> {
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
-    pk.map_or(Ok(None), |pk| {
-        Ok(Some(kdf.sign_public_key(pk, Some(MAX_KEY_TIMESTAMP))?))
-    })
+    pk.map_or(Ok(None), |pk| Ok(Some(kdf.sign_public_key(pk)?)))
 }
 
 /// See `Kdf::replicate_master_secret`.
