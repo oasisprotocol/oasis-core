@@ -253,8 +253,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 
 	// Generate all the compute commitments.
 	var toCommit []*registryTests.TestNode
-	var computeCommits []commitment.ComputeCommitment
 	toCommit = append(toCommit, computeCommittee.leader)
+	var computeCommits []commitment.ComputeCommitment
 	toCommit = append(toCommit, computeCommittee.workers...)
 	for _, node := range toCommit {
 		commitBody := commitment.ComputeBody{
@@ -357,7 +357,7 @@ func mustGetCommittee(
 			if !rt.Runtime.ID.Equal(committee.RuntimeID) {
 				continue
 			}
-			if committee.Kind != scheduler.Compute && committee.Kind != scheduler.Merge {
+			if committee.Kind != scheduler.KindCompute && committee.Kind != scheduler.KindMerge {
 				continue
 			}
 
@@ -382,9 +382,9 @@ func mustGetCommittee(
 			require.Len(ret.backupWorkers, int(rt.Runtime.ReplicaGroupBackupSize), "workers exist")
 
 			switch committee.Kind {
-			case scheduler.Compute:
+			case scheduler.KindCompute:
 				computeCommittee = &ret
-			case scheduler.Merge:
+			case scheduler.KindMerge:
 				mergeCommittee = &ret
 			}
 

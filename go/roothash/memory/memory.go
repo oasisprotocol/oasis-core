@@ -85,9 +85,9 @@ func (s *runtimeState) onNewCommittees(ctx context.Context, committees []*schedu
 	var computeCommittee, mergeCommittee *scheduler.Committee
 	for _, c := range committees {
 		switch c.Kind {
-		case scheduler.Compute:
+		case scheduler.KindCompute:
 			computeCommittee = c
-		case scheduler.Merge:
+		case scheduler.KindMerge:
 			mergeCommittee = c
 		default:
 			// Skip other types of committees.
@@ -353,7 +353,7 @@ OUTER:
 			if !committee.RuntimeID.Equal(s.runtime.ID) {
 				continue
 			}
-			if committee.Kind != scheduler.Compute {
+			if committee.Kind != scheduler.KindCompute {
 				continue
 			}
 

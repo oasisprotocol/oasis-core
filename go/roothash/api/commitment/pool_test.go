@@ -59,7 +59,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	// Generate a committee.
 	cID := sk.Public().ToMapKey()
 	committee := &scheduler.Committee{
-		Kind: scheduler.Compute,
+		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Leader,
@@ -158,7 +158,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	// Generate a committee.
 	cID := sk.Public().ToMapKey()
 	committee := &scheduler.Committee{
-		Kind: scheduler.Compute,
+		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Leader,
@@ -280,7 +280,7 @@ func generateMockCommittee(t *testing.T) (
 	c2ID := sk2.Public().ToMapKey()
 	c3ID := sk3.Public().ToMapKey()
 	committee = &scheduler.Committee{
-		Kind: scheduler.Compute,
+		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Leader,
@@ -518,7 +518,7 @@ func TestPoolSerialization(t *testing.T) {
 	// Generate a committee.
 	cID := sk.Public().ToMapKey()
 	committee := &scheduler.Committee{
-		Kind: scheduler.Compute,
+		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Leader,
@@ -678,7 +678,7 @@ func TestMultiPoolSerialization(t *testing.T) {
 func TestPoolMergeCommitment(t *testing.T) {
 	rt, computeSks, computeCommittee, computeNodeInfo := generateMockCommittee(t)
 	_, mergeSks, mergeCommittee, mergeNodeInfo := generateMockCommittee(t)
-	mergeCommittee.Kind = scheduler.Merge
+	mergeCommittee.Kind = scheduler.KindMerge
 	computeCommitteeID := computeCommittee.EncodedMembersHash()
 
 	t.Run("NoDiscrepancy", func(t *testing.T) {

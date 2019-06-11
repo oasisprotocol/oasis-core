@@ -81,7 +81,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.Compute {
+	if p.Committee.Kind != scheduler.KindCompute {
 		return ErrInvalidCommitteeKind
 	}
 
@@ -217,9 +217,9 @@ func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
 
 		var h *block.Header
 		switch p.Committee.Kind {
-		case scheduler.Compute:
+		case scheduler.KindCompute:
 			h = &c.(OpenComputeCommitment).Body.Header
-		case scheduler.Merge:
+		case scheduler.KindMerge:
 			h = &c.(OpenMergeCommitment).Body.Header
 		default:
 			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
@@ -266,9 +266,9 @@ func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
 
 		var header *block.Header
 		switch p.Committee.Kind {
-		case scheduler.Compute:
+		case scheduler.KindCompute:
 			header = &c.(OpenComputeCommitment).Body.Header
-		case scheduler.Merge:
+		case scheduler.KindMerge:
 			header = &c.(OpenMergeCommitment).Body.Header
 		default:
 			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
@@ -367,7 +367,7 @@ func (p *Pool) AddMergeCommitment(
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.Merge {
+	if p.Committee.Kind != scheduler.KindMerge {
 		return ErrInvalidCommitteeKind
 	}
 

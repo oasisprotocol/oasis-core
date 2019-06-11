@@ -209,9 +209,9 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		var computeCommittee, mergeCommittee *scheduler.Committee
 		for _, c := range committees {
 			switch c.Kind {
-			case scheduler.Compute:
+			case scheduler.KindCompute:
 				computeCommittee = c
-			case scheduler.Merge:
+			case scheduler.KindMerge:
 				mergeCommittee = c
 			default:
 				// Skip other types of committees.

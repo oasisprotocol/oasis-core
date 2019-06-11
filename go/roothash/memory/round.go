@@ -56,10 +56,10 @@ func newRound(
 	block *block.Block,
 	runtime *registry.Runtime,
 ) *round {
-	if computeCommittee.Kind != scheduler.Compute {
+	if computeCommittee.Kind != scheduler.KindCompute {
 		panic("roothash/memory: non-compute committee passed to round ctor")
 	}
-	if mergeCommittee.Kind != scheduler.Merge {
+	if mergeCommittee.Kind != scheduler.KindMerge {
 		panic("roothash/memory: non-merge committee passed to round ctor")
 	}
 
