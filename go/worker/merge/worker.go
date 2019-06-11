@@ -1,37 +1,19 @@
-package txnscheduler
+package merge
 
 import (
-	"fmt"
-	"time"
+	"context"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
-	"github.com/oasislabs/ekiden/go/worker/compute"
-	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/merge/committee"
 	"github.com/oasislabs/ekiden/go/worker/registration"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
-
-// RuntimeConfig is a single runtime's configuration.
-type RuntimeConfig struct {
-	ID signature.PublicKey
-}
-
-// Config is the transaction scheduler configuration.
-type Config struct {
-	Backend      string
-	Algorithm    api.Algorithm
-	FlushTimeout time.Duration
-	Runtimes     []RuntimeConfig
-}
 
 // Runtime is a single runtime.
 type Runtime struct {
-	cfg *RuntimeConfig
-
+	id   signature.PublicKey
 	node *committee.Node
 }
 
@@ -43,32 +25,38 @@ func (r *Runtime) GetNode() *committee.Node {
 	return r.node
 }
 
-// Worker is a transaction scheduler handling many runtimes.
+// Config is the merge worker configuration.
+type Config struct {
+	Committee committee.Config
+}
+
+// Worker is a merge worker.
 type Worker struct {
 	enabled bool
 	cfg     Config
 
 	commonWorker *workerCommon.Worker
 	registration *registration.Registration
-	compute      *compute.Worker
 
 	runtimes map[signature.MapKey]*Runtime
 
-	quitCh chan struct{}
-	initCh chan struct{}
+	ctx       context.Context
+	cancelCtx context.CancelFunc
+	quitCh    chan struct{}
+	initCh    chan struct{}
 
 	logger *logging.Logger
 }
 
 // Name returns the service name.
 func (w *Worker) Name() string {
-	return "transaction scheduler"
+	return "merge worker"
 }
 
 // Start starts the service.
 func (w *Worker) Start() error {
 	if !w.enabled {
-		w.logger.Info("not starting transaction scheduler as it is disabled")
+		w.logger.Info("not starting merge worker as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
 		close(w.initCh)
@@ -100,7 +88,7 @@ func (w *Worker) Start() error {
 	// Start runtime services.
 	for _, rt := range w.runtimes {
 		w.logger.Info("starting services for runtime",
-			"runtime_id", rt.cfg.ID,
+			"runtime_id", rt.id,
 		)
 
 		if err := rt.node.Start(); err != nil {
@@ -120,7 +108,7 @@ func (w *Worker) Stop() {
 
 	for _, rt := range w.runtimes {
 		w.logger.Info("stopping services for runtime",
-			"runtime_id", rt.cfg.ID,
+			"runtime_id", rt.id,
 		)
 
 		rt.node.Stop()
@@ -148,15 +136,10 @@ func (w *Worker) Cleanup() {
 	}
 }
 
-// Initialized returns a channel that will be closed when the transaction scheduler is
-// initialized and ready to service requests.
+// Initialized returns a channel that will be closed when the merge worker
+// is initialized and ready to service requests.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
-}
-
-// GetConfig returns the worker's configuration.
-func (w *Worker) GetConfig() Config {
-	return w.cfg
 }
 
 // GetRuntime returns a registered runtime.
@@ -172,23 +155,17 @@ func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
 	return rt
 }
 
-func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
+func (w *Worker) registerRuntime(id signature.PublicKey) error {
 	w.logger.Info("registering new runtime",
-		"runtime_id", rtCfg.ID,
+		"runtime_id", id,
 	)
 
 	// Get other nodes from this runtime.
-	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
-	var computeNode *computeCommittee.Node
-	if w.compute.Enabled() {
-		computeNode = w.compute.GetRuntime(rtCfg.ID).GetNode()
-	}
+	commonNode := w.commonWorker.GetRuntime(id).GetNode()
 
 	node, err := committee.NewNode(
 		commonNode,
-		computeNode,
-		cfg.Algorithm,
-		cfg.FlushTimeout,
+		w.cfg.Committee,
 	)
 	if err != nil {
 		return err
@@ -197,13 +174,13 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 	commonNode.AddHooks(node)
 
 	rt := &Runtime{
-		cfg:  rtCfg,
+		id:   id,
 		node: node,
 	}
-	w.runtimes[rt.cfg.ID.ToMapKey()] = rt
+	w.runtimes[id.ToMapKey()] = rt
 
 	w.logger.Info("new runtime registered",
-		"runtime_id", rt.cfg.ID,
+		"runtime_id", id,
 	)
 
 	return nil
@@ -212,45 +189,39 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
-	compute *compute.Worker,
 	registration *registration.Registration,
 	cfg Config,
 ) (*Worker, error) {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
 	w := &Worker{
 		enabled:      enabled,
 		cfg:          cfg,
 		commonWorker: commonWorker,
 		registration: registration,
-		compute:      compute,
 		runtimes:     make(map[signature.MapKey]*Runtime),
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/txnscheduler"),
+		logger:       logging.GetLogger("worker/merge"),
 	}
 
 	if enabled {
 		if !w.commonWorker.Enabled() {
-			panic("common worker should have been enabled for transaction scheduler")
+			panic("common worker should have been enabled for merge worker")
 		}
-
-		if len(cfg.Runtimes) == 0 {
-			return nil, fmt.Errorf("txnscheduler/worker: no runtimes configured")
-		}
-
-		// Use existing gRPC server passed from the node.
-		newClientGRPCServer(commonWorker.Grpc.Server(), w)
 
 		// Register all configured runtimes.
-		for _, rtCfg := range cfg.Runtimes {
-			if err := w.registerRuntime(&cfg, &rtCfg); err != nil {
+		for _, runtimeID := range commonWorker.GetConfig().Runtimes {
+			if err := w.registerRuntime(runtimeID); err != nil {
 				return nil, err
 			}
 		}
 
-		// Register transaction scheduler worker role.
+		// Register merge worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
-			n.AddRoles(node.RoleTransactionScheduler)
-
+			n.AddRoles(node.RoleMergeWorker)
 			return nil
 		})
 	}

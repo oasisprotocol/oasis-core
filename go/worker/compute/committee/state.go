@@ -21,6 +21,8 @@ const (
 	WaitingForBatch = "WaitingForBatch"
 	// WaitingForBlock is the name of StateWaitingForBlock.
 	WaitingForBlock = "WaitingForBlock"
+	// WaitingForEvent is the name of StateWaitingForEvent.
+	WaitingForEvent = "WaitingForEvent"
 	// ProcessingBatch is the name of StateProcessingBatch.
 	ProcessingBatch = "ProcessingBatch"
 	// WaitingForFinalize is the name of StateWaitingForFinalize.
@@ -44,6 +46,8 @@ var validStateTransitions = map[StateName][]StateName{
 		WaitingForBlock,
 		// Received batch, current block is up to date.
 		ProcessingBatch,
+		// Received batch, waiting for disrepancy event.
+		WaitingForEvent,
 		// Epoch transition occurred and we are no longer in the committee.
 		NotReady,
 	},
@@ -53,6 +57,14 @@ var validStateTransitions = map[StateName][]StateName{
 		// Abort: seen newer block while waiting for block.
 		WaitingForBatch,
 		// Seen block that we were waiting for.
+		ProcessingBatch,
+	},
+
+	// Transitions from WaitingForEvent state.
+	WaitingForEvent: {
+		// Abort: seen newer block while waiting for event.
+		WaitingForBatch,
+		// Discrepancy event received.
 		ProcessingBatch,
 	},
 
@@ -122,6 +134,24 @@ func (s StateWaitingForBlock) Name() StateName {
 
 // String returns a string representation of the state.
 func (s StateWaitingForBlock) String() string {
+	return string(s.Name())
+}
+
+// StateWaitingForEvent is the waiting for event state.
+type StateWaitingForEvent struct {
+	// Batch that is being processed.
+	batch runtime.Batch
+	// Tracing for this batch.
+	batchSpanCtx opentracing.SpanContext
+}
+
+// Name returns the name of the state.
+func (s StateWaitingForEvent) Name() StateName {
+	return WaitingForEvent
+}
+
+// String returns a string representation of the state.
+func (s StateWaitingForEvent) String() string {
 	return string(s.Name())
 }
 

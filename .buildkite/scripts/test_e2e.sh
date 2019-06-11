@@ -55,12 +55,12 @@ scenario_basic() {
     set_epoch 1
 }
 
-scenario_discrepancy() {
+scenario_compute_discrepancy() {
     local runtime=$1
 
     # Initialize compute nodes.
     run_compute_node 1 ${runtime} \
-        --worker.byzantine.inject_discrepancies
+        --worker.compute.byzantine.inject_discrepancies
 
     run_compute_node 2 ${runtime}
     run_compute_node 3 ${runtime}
@@ -74,6 +74,40 @@ scenario_discrepancy() {
 
     # Advance epoch to elect a new committee.
     set_epoch 1
+}
+
+assert_compute_discrepancy_scenario_works() {
+    assert_no_panics
+    assert_no_round_timeouts
+    assert_compute_discrepancies
+}
+
+scenario_merge_discrepancy() {
+    local runtime=$1
+
+    # Initialize compute nodes.
+    run_compute_node 1 ${runtime} \
+        --worker.merge.byzantine.inject_discrepancies
+
+    run_compute_node 2 ${runtime}
+    run_compute_node 3 ${runtime}
+
+    # Initialize storage nodes.
+    run_storage_node 1
+    run_storage_node 2
+
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
+    wait_nodes 6
+
+    # Advance epoch to elect a new committee.
+    set_epoch 1
+}
+
+assert_merge_discrepancy_scenario_works() {
+    assert_no_panics
+    assert_no_round_timeouts
+    assert_no_compute_discrepancies
+    assert_merge_discrepancies
 }
 
 run_client_km_restart() {
@@ -148,16 +182,24 @@ test_suite() {
     # https://github.com/oasislabs/ekiden/issues/1730.
     if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
         run_test \
-            scenario=scenario_discrepancy \
-            name="e2e-${backend_name}-discrepancy" \
+            scenario=scenario_compute_discrepancy \
+            name="e2e-${backend_name}-compute-discrepancy" \
             backend_runner=$backend_runner \
             runtime=simple-keyvalue \
             client=simple-keyvalue \
-            on_success_hook=assert_no_round_timeouts
+            on_success_hook=assert_compute_discrepancy_scenario_works
     fi
+
+    run_test \
+        scenario=scenario_merge_discrepancy \
+        name="e2e-${backend_name}-merge-discrepancy" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue \
+        on_success_hook=assert_merge_discrepancy_scenario_works
 }
 
 ##########################################
 # Multiple validators tendermint backends.
 ##########################################
-test_suite tm-committee run_backend_tendermint_committee
+test_suite tm run_backend_tendermint_committee

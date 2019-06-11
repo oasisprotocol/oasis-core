@@ -3,15 +3,15 @@ package api
 
 import (
 	"context"
-	"encoding"
-	"encoding/hex"
 	"errors"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 )
 
 const (
@@ -29,46 +29,29 @@ var (
 	// ErrNotFound is the error returned when a block is not found.
 	ErrNotFound = errors.New("roothash: block not found")
 
-	_ encoding.BinaryMarshaler   = (*OpaqueCommitment)(nil)
-	_ encoding.BinaryUnmarshaler = (*OpaqueCommitment)(nil)
-	_ cbor.Marshaler             = (*DiscrepancyDetectedEvent)(nil)
-	_ cbor.Unmarshaler           = (*DiscrepancyDetectedEvent)(nil)
-
-	// RakSigContext is the context string of a batch's RAK signature.
-	RakSigContext = []byte("EkBatch-")
+	_ cbor.Marshaler   = (*ComputeDiscrepancyDetectedEvent)(nil)
+	_ cbor.Unmarshaler = (*ComputeDiscrepancyDetectedEvent)(nil)
+	_ cbor.Marshaler   = (*MergeDiscrepancyDetectedEvent)(nil)
+	_ cbor.Unmarshaler = (*MergeDiscrepancyDetectedEvent)(nil)
 )
 
-// OpaqueCommitment is an opaque commitment from a compute node.
-type OpaqueCommitment struct {
-	// Data is the opaque commitment.
-	Data []byte
+// Info contains information about a root hash backend.
+type Info struct {
+	// ComputeRoundTimeout is the compute round timeout.
+	ComputeRoundTimeout time.Duration
+	// MergeRoundTimeout is the merge round timeout.
+	MergeRoundTimeout time.Duration
 }
 
-// MarshalBinary encodes an opaque commitment into binary form.
-func (c *OpaqueCommitment) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, c.Data...)
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled opaque commitment.
-func (c *OpaqueCommitment) UnmarshalBinary(data []byte) error {
-	c.Data = append([]byte{}, data...)
-
-	return nil
-}
-
-// String returns a string representation of the opaque commitment.
-func (c *OpaqueCommitment) String() string {
-	return hex.EncodeToString(c.Data)
-}
-
-// Backend is a root hash consensus implementation.
+// Backend is a root hash implementation.
 type Backend interface {
+	// Info returns information about a root hash backend.
+	Info() Info
+
 	// GetLatestBlock returns the latest block.
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
-	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
 	GetLatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
 
 	// GetBlock returns the block at a specific height.
@@ -88,9 +71,11 @@ type Backend interface {
 	// blocks.
 	WatchPrunedBlocks() (<-chan *PrunedBlock, *pubsub.Subscription, error)
 
-	// Commit commits to a result of processing a batch of runtime invocations.
-	// TODO: ctx should be removed since we use tendermintBackend.ctx -Matevz
-	Commit(context.Context, signature.PublicKey, *OpaqueCommitment) error
+	// MergeCommit submits a batch of merge commitments.
+	MergeCommit(context.Context, signature.PublicKey, []commitment.MergeCommitment) error
+
+	// ComputeCommit submits a batch of compute commitments for slashing.
+	ComputeCommit(context.Context, signature.PublicKey, []commitment.ComputeCommitment) error
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
@@ -134,36 +119,41 @@ func MapAnnotatedBlockToBlock(annCh <-chan *AnnotatedBlock) <-chan *block.Block 
 	return ch
 }
 
-// DiscrepancyDetectedEvent is a discrepancy detected event.
-type DiscrepancyDetectedEvent struct {
-	// IORoot is the I/O merkle root that is set when a discrepancy
-	// is detected to signal to the backup workers that a computation
-	// should be re-executed.
-	//
-	// The backup workers should use this root to fetch the batch.
-	IORoot hash.Hash `codec:"io_root"`
-
-	// BlockHeader is the block header of the block on which the backup
-	// computation should be based.
-	BlockHeader block.Header `codec:"header"`
+// ComputeDiscrepancyDetectedEvent is a compute discrepancy detected event.
+type ComputeDiscrepancyDetectedEvent struct {
+	// CommitteeID is the identifier of the compute committee where a
+	// discrepancy has been detected.
+	CommitteeID hash.Hash `codec:"cid"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
-func (e *DiscrepancyDetectedEvent) MarshalCBOR() []byte {
+func (e *ComputeDiscrepancyDetectedEvent) MarshalCBOR() []byte {
 	return cbor.Marshal(e)
 }
 
-// UnmarshalCBOR decodes a CBOR marshaled block.
-func (e *DiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
+// UnmarshalCBOR decodes a CBOR marshaled event.
+func (e *ComputeDiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, e)
+}
+
+// MergeDiscrepancyDetectedEvent is a merge discrepancy detected event.
+type MergeDiscrepancyDetectedEvent struct {
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (e *MergeDiscrepancyDetectedEvent) MarshalCBOR() []byte {
+	return cbor.Marshal(e)
+}
+
+// UnmarshalCBOR decodes a CBOR marshaled event.
+func (e *MergeDiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
 }
 
 // Event is a protocol event.
 type Event struct {
-	// DiscrepancyDetected is the I/O merkle root that is set when a
-	// discrepancy is detected to signal to the backup workers that a
-	// computation should be re-executed.
-	DiscrepancyDetected *DiscrepancyDetectedEvent
+	ComputeDiscrepancyDetected *ComputeDiscrepancyDetectedEvent
+	MergeDiscrepancyDetected   *MergeDiscrepancyDetectedEvent
 }
 
 // MetricsMonitorable is the interface exposed by backends capable of

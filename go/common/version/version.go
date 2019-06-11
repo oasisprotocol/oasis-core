@@ -32,14 +32,14 @@ func (v Version) String() string {
 var (
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.
-	CommitteeProtocol = Version{Major: 0, Minor: 0, Patch: 1}
+	CommitteeProtocol = Version{Major: 0, Minor: 1, Patch: 0}
 
 	// BackendProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc.
 	//
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
-	BackendProtocol = Version{Major: 0, Minor: 1, Patch: 0}
+	BackendProtocol = Version{Major: 0, Minor: 2, Patch: 0}
 
 	// Tendermint exposes the tendermint core version.
 	Tendermint = parseSemVerStr(version.TMCoreSemVer)

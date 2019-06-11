@@ -78,12 +78,14 @@ type RolesMask uint32
 const (
 	// RoleComputeWorker is Ekiden Compute Worker role.
 	RoleComputeWorker RolesMask = 1 << 0
-	// RoleStorageWorker is Ekiden Storage node role.
+	// RoleStorageWorker is Ekiden Storage Worker role.
 	RoleStorageWorker RolesMask = 1 << 1
 	// RoleTransactionScheduler is Ekiden Transaction Scheduler role.
 	RoleTransactionScheduler RolesMask = 1 << 2
 	// RoleKeyManager is the Ekiden Key Manager role.
 	RoleKeyManager RolesMask = 1 << 3
+	// RoleMergeWorker is the Ekiden Merge Worker role.
+	RoleMergeWorker RolesMask = 1 << 4
 )
 
 // AddRoles adds the Node roles

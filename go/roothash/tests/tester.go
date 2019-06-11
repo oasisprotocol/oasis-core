@@ -32,7 +32,9 @@ type runtimeState struct {
 	id           string
 	rt           *registryTests.TestRuntime
 	genesisBlock *block.Block
-	committee    *testCommittee
+
+	computeCommittee *testCommittee
+	mergeCommittee   *testCommittee
 }
 
 // RootHashImplementationTests exercises the basic functionality of a
@@ -89,8 +91,6 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 	})
 
 	// TODO: Test the various failures.
-
-	// TODO: Test WatchBlocksSince (though it will be deprecated via #1009...)
 }
 
 func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
@@ -174,7 +174,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 		nodes[node.Node.ID.ToMapKey()] = node
 	}
 
-	s.committee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	s.computeCommittee, s.mergeCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -207,7 +207,7 @@ func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backe
 func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, storageBackend storage.Backend) {
 	require := require.New(t)
 
-	rt, committee := s.rt, s.committee
+	rt, computeCommittee, mergeCommittee := s.rt, s.computeCommittee, s.mergeCommittee
 
 	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
 	require.NoError(err, "GetLatestBlock")
@@ -244,7 +244,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			StateRoot:    ioRoot,
 		},
 	}
-	parent.Header.GroupHash.From(committee.committee.Members)
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
 	parent.Header.StorageReceipt = mustStore(t, storageBackend, []storage.ApplyOp{
 		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
@@ -252,29 +251,42 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
 	})
 
-	// Send all the commitments.
+	// Generate all the compute commitments.
 	var toCommit []*registryTests.TestNode
-	var commitments []*api.OpaqueCommitment
-	toCommit = append(toCommit, committee.leader)
-	toCommit = append(toCommit, committee.workers...)
+	var computeCommits []commitment.ComputeCommitment
+	toCommit = append(toCommit, computeCommittee.leader)
+	toCommit = append(toCommit, computeCommittee.workers...)
 	for _, node := range toCommit {
 		commitBody := commitment.ComputeBody{
-			Header: parent.Header,
-		}
-		if node != committee.leader {
-			commitBody.Header.StorageReceipt = signature.Signature{}
+			CommitteeID: computeCommittee.committee.EncodedMembersHash(),
+			Header:      parent.Header,
 		}
 		// `err` shadows outside.
 		commit, err := commitment.SignComputeCommitment(node.PrivateKey, &commitBody) // nolint: vetshadow
 		require.NoError(err, "SignSigned")
-		opaque := commit.ToOpaqueCommitment()
-		err = backend.Commit(context.Background(), rt.Runtime.ID, opaque)
-		require.NoError(err, "Commit")
 
-		commitments = append(commitments, opaque)
+		computeCommits = append(computeCommits, *commit)
 	}
 
-	parent.Header.CommitmentsHash.From(commitments) // For comparison.
+	// Generate all the merge commitments.
+	var mergeCommits []commitment.MergeCommitment
+	toCommit = []*registryTests.TestNode{}
+	toCommit = append(toCommit, mergeCommittee.leader)
+	toCommit = append(toCommit, mergeCommittee.workers...)
+	for _, node := range toCommit {
+		commitBody := commitment.MergeBody{
+			ComputeCommits: computeCommits,
+			Header:         parent.Header,
+		}
+		// `err` shadows outside.
+		commit, err := commitment.SignMergeCommitment(node.PrivateKey, &commitBody) // nolint: vetshadow
+		require.NoError(err, "SignSigned")
+
+		mergeCommits = append(mergeCommits, *commit)
+	}
+
+	err = backend.MergeCommit(context.Background(), rt.Runtime.ID, mergeCommits)
+	require.NoError(err, "MergeCommit")
 
 	// Ensure that the round was finalized.
 	for {
@@ -297,10 +309,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			// Timestamp
 			require.EqualValues(parent.Header.HeaderType, header.HeaderType, "block header type")
 			require.EqualValues(parent.Header.PreviousHash, header.PreviousHash, "block previous hash")
-			require.EqualValues(parent.Header.GroupHash, header.GroupHash, "block group hash")
 			require.EqualValues(parent.Header.IORoot, header.IORoot, "block I/O root")
 			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
-			require.EqualValues(parent.Header.CommitmentsHash, header.CommitmentsHash, "block commitments hash")
 
 			// We need to wait for the indexer to index the block. We could have a channel
 			// to subscribe to these updates and this would not be needed.
@@ -326,7 +336,13 @@ type testCommittee struct {
 	backupWorkers []*registryTests.TestNode
 }
 
-func mustGetCommittee(t *testing.T, rt *registryTests.TestRuntime, epoch epochtime.EpochTime, sched scheduler.Backend, nodes map[signature.MapKey]*registryTests.TestNode) *testCommittee {
+func mustGetCommittee(
+	t *testing.T,
+	rt *registryTests.TestRuntime,
+	epoch epochtime.EpochTime,
+	sched scheduler.Backend,
+	nodes map[signature.MapKey]*registryTests.TestNode,
+) (computeCommittee *testCommittee, mergeCommittee *testCommittee) {
 	require := require.New(t)
 
 	ch, sub := sched.WatchCommittees()
@@ -341,7 +357,7 @@ func mustGetCommittee(t *testing.T, rt *registryTests.TestRuntime, epoch epochti
 			if !rt.Runtime.ID.Equal(committee.RuntimeID) {
 				continue
 			}
-			if committee.Kind != scheduler.Compute {
+			if committee.Kind != scheduler.Compute && committee.Kind != scheduler.Merge {
 				continue
 			}
 
@@ -365,7 +381,18 @@ func mustGetCommittee(t *testing.T, rt *registryTests.TestRuntime, epoch epochti
 			require.Len(ret.workers, int(rt.Runtime.ReplicaGroupSize)-1, "workers exist")
 			require.Len(ret.backupWorkers, int(rt.Runtime.ReplicaGroupBackupSize), "workers exist")
 
-			return &ret
+			switch committee.Kind {
+			case scheduler.Compute:
+				computeCommittee = &ret
+			case scheduler.Merge:
+				mergeCommittee = &ret
+			}
+
+			if computeCommittee == nil || mergeCommittee == nil {
+				continue
+			}
+
+			return
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive committee event")
 		}
