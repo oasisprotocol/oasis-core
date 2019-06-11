@@ -167,7 +167,7 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	for _, n := range p.Committee.Members {
 		var check bool
 		if !p.Discrepancy {
-			check = n.Role == scheduler.Worker || n.Role == scheduler.Leader
+			check = n.Role == scheduler.Worker
 		} else {
 			check = n.Role == scheduler.BackupWorker
 		}
@@ -206,7 +206,7 @@ func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
 
 	for id, ni := range p.NodeInfo {
 		n := p.Committee.Members[ni.CommitteeNode]
-		if n.Role != scheduler.Worker && n.Role != scheduler.Leader {
+		if n.Role != scheduler.Worker {
 			continue
 		}
 

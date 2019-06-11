@@ -80,6 +80,18 @@ const (
 	KindMerge CommitteeKind = 3
 )
 
+// NeedsLeader returns if committee kind needs leader role.
+func (k CommitteeKind) NeedsLeader() bool {
+	switch k {
+	case KindCompute:
+		return false
+	case KindMerge:
+		return false
+	default:
+		return true
+	}
+}
+
 // String returns a string representation of a CommitteeKind.
 func (k CommitteeKind) String() string {
 	switch k {

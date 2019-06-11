@@ -184,7 +184,11 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			var role api.Role
 			switch {
 			case i == 0:
-				role = api.Leader
+				if kind.NeedsLeader() {
+					role = api.Leader
+				} else {
+					role = api.Worker
+				}
 			case i >= int(rt.ReplicaGroupSize):
 				role = api.BackupWorker
 			default:

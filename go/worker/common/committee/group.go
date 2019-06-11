@@ -120,8 +120,7 @@ func (e *EpochSnapshot) IsMergeMember() bool {
 // IsMergeWorker checks if the current node is a worker of the merge committee in
 // the current epoch.
 func (e *EpochSnapshot) IsMergeWorker() bool {
-	// TODO: Leader is ignored so it can easily be removed once we get rid of leaders.
-	return e.mergeRole == scheduler.Leader || e.mergeRole == scheduler.Worker
+	return e.mergeRole == scheduler.Worker
 }
 
 // IsMergeBackupWorker checks if the current node is a backup worker of the merge committee in

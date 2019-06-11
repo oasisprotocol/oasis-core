@@ -253,7 +253,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 
 	// Generate all the compute commitments.
 	var toCommit []*registryTests.TestNode
-	toCommit = append(toCommit, computeCommittee.leader)
 	var computeCommits []commitment.ComputeCommitment
 	toCommit = append(toCommit, computeCommittee.workers...)
 	for _, node := range toCommit {
@@ -271,7 +270,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	// Generate all the merge commitments.
 	var mergeCommits []commitment.MergeCommitment
 	toCommit = []*registryTests.TestNode{}
-	toCommit = append(toCommit, mergeCommittee.leader)
 	toCommit = append(toCommit, mergeCommittee.workers...)
 	for _, node := range toCommit {
 		commitBody := commitment.MergeBody{
@@ -366,7 +364,6 @@ func mustGetCommittee(
 			for _, member := range committee.Members {
 				node := nodes[member.PublicKey.ToMapKey()]
 				require.NotNil(node, "member is one of the nodes")
-
 				switch member.Role {
 				case scheduler.Worker:
 					ret.workers = append(ret.workers, node)
@@ -377,8 +374,13 @@ func mustGetCommittee(
 				}
 			}
 
-			require.NotNil(ret.leader, "leader exists")
-			require.Len(ret.workers, int(rt.Runtime.ReplicaGroupSize)-1, "workers exist")
+			if committee.Kind.NeedsLeader() {
+				require.Len(ret.workers, int(rt.Runtime.ReplicaGroupSize)-1, "workers exist")
+				require.NotNil(ret.leader, "leader exist")
+			} else {
+				require.Len(ret.workers, int(rt.Runtime.ReplicaGroupSize), "workers exist")
+				require.Nil(ret.leader, "no leader")
+			}
 			require.Len(ret.backupWorkers, int(rt.Runtime.ReplicaGroupBackupSize), "workers exist")
 
 			switch committee.Kind {

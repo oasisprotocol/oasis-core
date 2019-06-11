@@ -148,10 +148,14 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 			leaders++
 		}
 	}
+	if committee.Kind.NeedsLeader() {
+		require.Equal(1, leaders, "committee has a leader")
+	} else {
+		require.Equal(0, leaders, "committee shouldn't have a leader")
+	}
 
-	require.Equal(1, leaders, "committee has a leader")
-	if committee.Kind == api.KindCompute {
-		require.EqualValues(runtime.ReplicaGroupSize, leaders+workers, "committee has correct number of workers")
-		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, "committe has correct number of backups")
+	if committee.Kind == api.KindCompute || committee.Kind == api.KindMerge {
+		require.EqualValues(runtime.ReplicaGroupSize, workers, "committee has correct number of workers")
+		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, "committee has correct number of backups")
 	}
 }
