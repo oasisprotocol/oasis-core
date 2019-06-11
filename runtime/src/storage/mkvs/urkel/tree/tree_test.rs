@@ -232,6 +232,7 @@ fn test_insert_commit_batch() {
 #[test]
 fn test_insert_commit_each() {
     let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
 
@@ -260,6 +261,7 @@ fn test_insert_commit_each() {
 #[test]
 fn test_remove() {
     let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
     let mut roots: Vec<Hash> = Vec::new();
@@ -302,6 +304,7 @@ fn test_remove() {
 #[test]
 fn test_syncer_basic_no_prefetch() {
     let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
 
@@ -324,6 +327,7 @@ fn test_syncer_basic_no_prefetch() {
 
     let stats = StatsCollector::new(Box::new(tree));
     let remote_tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .with_root(hash)
         .new(Context::background(), Box::new(stats))
         .expect("with_root");
@@ -353,6 +357,7 @@ fn test_syncer_basic_no_prefetch() {
 #[test]
 fn test_syncer_basic_with_prefetch() {
     let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
 
@@ -375,6 +380,7 @@ fn test_syncer_basic_with_prefetch() {
 
     let stats = StatsCollector::new(Box::new(tree));
     let remote_tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .with_root(hash)
         .with_prefetch_depth(10)
         .new(Context::background(), Box::new(stats))
@@ -479,6 +485,7 @@ fn test_debug_dump() {
 #[test]
 fn test_debug_stats() {
     let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
         .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
 

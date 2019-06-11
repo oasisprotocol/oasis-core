@@ -106,7 +106,7 @@ where
         let mut evicted: Vec<Rc<RefCell<V>>> = Vec::new();
         if self.capacity > 0 {
             let target_size = val.borrow().get_cached_size();
-            while !self.list.is_empty() && self.capacity - self.size < target_size {
+            while !self.list.is_empty() && self.size + target_size > self.capacity {
                 let back = (*self.list.back().get().unwrap()).item.clone();
                 if self.remove(back.clone()) {
                     evicted.push(back);
@@ -190,7 +190,7 @@ impl LRUCache {
         self.lru_nodes.move_to_front(node)
     }
 
-    fn remove_node(&mut self, ptr: NodePtrRef) {
+    fn subtract_node(&mut self, ptr: NodePtrRef) {
         let mut ptr = ptr.borrow_mut();
         if ptr.is_null() {
             return;
@@ -311,23 +311,40 @@ impl Cache for LRUCache {
         self.new_value_ptr(val)
     }
 
-    fn try_remove_node(&mut self, ptr: NodePtrRef) {
-        if ptr.borrow().get_cache_extra().is_none() {
-            return;
-        }
+    fn remove_node(&mut self, ptr: NodePtrRef) {
+        let mut stack: Vec<NodePtrRef> = Vec::new();
+        stack.push(ptr);
+        while !stack.is_empty() {
+            let top = stack[stack.len() - 1].clone();
 
-        if let Some(ref node_ref) = ptr.borrow().node {
-            if let NodeBox::Internal(ref n) = *node_ref.borrow() {
-                // We can only remove internal nodes if they have no cached children
-                // as otherwise we would need to remove the whole subtree.
-                if n.left.borrow().has_node() || n.right.borrow().has_node() {
-                    return;
+            if top.borrow().get_cache_extra().is_none() {
+                stack.pop();
+                continue;
+            }
+
+            if let Some(ref node_ref) = top.borrow().node {
+                if let NodeBox::Internal(ref n) = *node_ref.borrow() {
+                    if n.left.borrow().has_node() {
+                        stack.push(n.left.clone());
+                        n.left.borrow_mut().node = None;
+                        continue;
+                    }
+                    if n.right.borrow().has_node() {
+                        stack.push(n.right.clone());
+                        n.right.borrow_mut().node = None;
+                        continue;
+                    }
+                }
+                if let NodeBox::Leaf(ref n) = *node_ref.borrow() {
+                    self.remove_value(n.value.clone());
                 }
             }
-        }
 
-        if self.lru_nodes.remove(ptr.clone()) {
-            self.remove_node(ptr);
+            stack.pop();
+
+            if self.lru_nodes.remove(top.clone()) {
+                self.subtract_node(top);
+            }
         }
     }
 
@@ -439,7 +456,7 @@ impl Cache for LRUCache {
         }
 
         for node in self.lru_nodes.evict_for_val(ptr.clone()).iter() {
-            self.remove_node(node.clone());
+            self.subtract_node(node.clone());
         }
         self.lru_nodes.add_to_front(ptr.clone());
 
