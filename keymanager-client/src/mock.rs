@@ -55,21 +55,6 @@ impl KeyManagerClient for MockClient {
         Box::new(future::ok(result))
     }
 
-    fn get_long_term_public_key(
-        &self,
-        _ctx: Context,
-        contract_id: ContractId,
-    ) -> BoxFuture<Option<SignedPublicKey>> {
-        let keys = self.keys.lock().unwrap();
-        let result = keys.get(&contract_id).map(|ck| SignedPublicKey {
-            key: ck.input_keypair.get_pk(),
-            timestamp: Some(0),
-            signature: Signature::default(),
-        });
-
-        Box::new(future::ok(result))
-    }
-
     fn replicate_master_secret(&self, _ctx: Context) -> BoxFuture<Option<MasterSecret>> {
         unimplemented!();
     }

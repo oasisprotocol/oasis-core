@@ -34,8 +34,6 @@ struct Inner {
     get_or_create_secret_keys_cache: RwLock<LruCache<ContractId, ContractKey>>,
     /// Local cache for the get_public_key KeyManager endpoint.
     get_public_key_cache: RwLock<LruCache<ContractId, SignedPublicKey>>,
-    /// Local cache for the get_long_term_public_key KeyManager endpoint.
-    get_long_term_public_key_cache: RwLock<LruCache<ContractId, SignedPublicKey>>,
 }
 
 /// A key manager client which talks to a remote key manager enclave.
@@ -51,7 +49,6 @@ impl RemoteClient {
                 rpc_client: Client::new(client),
                 get_or_create_secret_keys_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
                 get_public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
-                get_long_term_public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
             }),
         }
     }
@@ -108,10 +105,6 @@ impl KeyManagerClient for RemoteClient {
         let mut cache = self.inner.get_public_key_cache.write().unwrap();
         cache.clear();
         drop(cache);
-
-        let mut cache = self.inner.get_long_term_public_key_cache.write().unwrap();
-        cache.clear();
-        drop(cache);
     }
 
     fn get_or_create_keys(&self, ctx: Context, contract_id: ContractId) -> BoxFuture<ContractKey> {
@@ -162,33 +155,6 @@ impl KeyManagerClient for RemoteClient {
                 }),
         )
     }
-
-    fn get_long_term_public_key(
-        &self,
-        ctx: Context,
-        contract_id: ContractId,
-    ) -> BoxFuture<Option<SignedPublicKey>> {
-        let mut cache = self.inner.get_long_term_public_key_cache.write().unwrap();
-        if let Some(key) = cache.get(&contract_id) {
-            return Box::new(future::ok(Some(key.clone())));
-        }
-
-        // No entry in cache, fetch from key manager.
-        let inner = self.inner.clone();
-        Box::new(
-            self.inner
-                .rpc_client
-                .get_long_term_public_key(ctx, RequestIds::new(inner.runtime_id, contract_id))
-                .and_then(move |key| match key {
-                    Some(key) => {
-                        let mut cache = inner.get_long_term_public_key_cache.write().unwrap();
-                        cache.put(contract_id, key.clone());
-
-                        Ok(Some(key))
-                    }
-                    None => Ok(None),
-                }),
-        )
 
     fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Option<MasterSecret>> {
         Box::new(

@@ -178,7 +178,5 @@ runtime_api! {
 
     pub fn get_public_key(RequestIds) -> Option<SignedPublicKey>;
 
-    pub fn get_long_term_public_key(RequestIds) -> Option<SignedPublicKey>;
-
     pub fn replicate_master_secret(ReplicateRequest) -> ReplicateResponse;
 }

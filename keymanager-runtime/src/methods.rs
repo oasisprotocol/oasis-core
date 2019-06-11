@@ -41,16 +41,6 @@ pub fn get_public_key(
     })
 }
 
-/// See `Kdf::get_public_key`.
-pub fn get_long_term_public_key(
-    req: &RequestIds,
-    _ctx: &mut RpcContext,
-) -> Fallible<Option<SignedPublicKey>> {
-    let kdf = Kdf::global();
-    let pk = kdf.get_public_key(req)?;
-    pk.map_or(Ok(None), |pk| Ok(Some(kdf.sign_public_key(pk, None)?)))
-}
-
 /// See `Kdf::replicate_master_secret`.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 pub fn replicate_master_secret(
