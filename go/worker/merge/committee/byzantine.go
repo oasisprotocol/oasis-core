@@ -6,7 +6,7 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
-func (n *Node) byzantineMaybeInjectDiscrepancy(headers []*block.Header) {
+func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 	if !n.cfg.ByzantineInjectDiscrepancies {
 		return
 	}
@@ -15,7 +15,7 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(headers []*block.Header) {
 
 	// Change the state root by adding a new key. We need to actually commit the
 	// modified root to storage as we need a storage receipt.
-	stateTree, err := urkel.NewWithRoot(n.ctx, n.commonNode.Storage, nil, headers[0].StateRoot)
+	stateTree, err := urkel.NewWithRoot(n.ctx, n.commonNode.Storage, nil, header.StateRoot)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
@@ -46,13 +46,13 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(headers []*block.Header) {
 	applyOps := []storage.ApplyOp{
 		// I/O root (unchanged).
 		storage.ApplyOp{
-			Root:            headers[0].IORoot,
-			ExpectedNewRoot: headers[0].IORoot,
+			Root:            header.IORoot,
+			ExpectedNewRoot: header.IORoot,
 			WriteLog:        make(storage.WriteLog, 0),
 		},
 		// State root.
 		storage.ApplyOp{
-			Root:            headers[0].StateRoot,
+			Root:            header.StateRoot,
 			ExpectedNewRoot: newStateRoot,
 			WriteLog:        writeLog,
 		},
@@ -67,6 +67,6 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(headers []*block.Header) {
 		return
 	}
 
-	headers[0].StateRoot = newStateRoot
-	headers[0].StorageReceipt = receipt.Signature
+	header.StateRoot = newStateRoot
+	header.StorageReceipt = receipt.Signature
 }

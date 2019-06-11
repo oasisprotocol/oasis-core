@@ -26,7 +26,11 @@ func TestPoolDefault(t *testing.T) {
 	blk := block.NewGenesisBlock(id, 0)
 
 	body := ComputeBody{
-		Header: blk.Header,
+		Header: ComputeResultsHeader{
+			PreviousHash: blk.Header.PreviousHash,
+			IORoot:       blk.Header.IORoot,
+			StateRoot:    blk.Header.StateRoot,
+		},
 	}
 	commit, err := SignComputeCommitment(sk, &body)
 	require.NoError(t, err, "SignComputeCommitment")
@@ -84,23 +88,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	var id signature.PublicKey
-	childBlk := block.NewGenesisBlock(id, 0)
-	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-	body := ComputeBody{
-		CommitteeID: committee.EncodedMembersHash(),
-		Header:      parentBlk.Header,
-	}
-
-	// Generate dummy storage receipt.
-	receipt := storage.MKVSReceiptBody{
-		Version: 1,
-		Roots:   body.Header.RootsForStorageReceipt(),
-	}
-	signedReceipt, err := signature.SignSigned(sk, storage.MKVSReceiptSignatureContext, &receipt)
-	require.NoError(t, err, "SignSigned")
-	body.Header.StorageReceipt = signedReceipt.Signature
+	childBlk, parentBlk, body := generateComputeBody(t, committee)
 
 	commit, err := SignComputeCommitment(sk, &body)
 	require.NoError(t, err, "SignComputeCommitment")
@@ -130,11 +118,11 @@ func TestPoolSingleCommitment(t *testing.T) {
 	require.NoError(t, err, "CheckEnoughCommitments")
 
 	// There should be no discrepancy.
-	var header *block.Header
-	header, err = pool.DetectDiscrepancy()
+	dc, err := pool.DetectDiscrepancy()
 	require.NoError(t, err, "DetectDiscrepancy")
 	require.Equal(t, false, pool.Discrepancy)
-	require.EqualValues(t, &body.Header, header, "DD should return the same header")
+	header := dc.ToDDResult().(ComputeResultsHeader)
+	require.EqualValues(t, &body.Header, &header, "DD should return the same header")
 }
 
 func TestPoolSingleCommitmentTEE(t *testing.T) {
@@ -190,31 +178,10 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	var id signature.PublicKey
-	childBlk := block.NewGenesisBlock(id, 0)
-	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-	rakSigBody := block.BatchSigMessage{
-		PreviousBlock: *childBlk,
-		IORoot:        parentBlk.Header.IORoot,
-		StateRoot:     parentBlk.Header.StateRoot,
-	}
-	rakSig, err := signature.Sign(skRAK, RakSigContext, cbor.Marshal(rakSigBody))
+	childBlk, parentBlk, body := generateComputeBody(t, committee)
+	rakSig, err := signature.Sign(skRAK, ComputeResultsHeaderSignatureContext, body.Header.MarshalCBOR())
 	require.NoError(t, err, "Sign")
-	body := ComputeBody{
-		CommitteeID: committee.EncodedMembersHash(),
-		Header:      parentBlk.Header,
-		RakSig:      rakSig.Signature,
-	}
-
-	// Generate dummy storage receipt.
-	receipt := storage.MKVSReceiptBody{
-		Version: 1,
-		Roots:   body.Header.RootsForStorageReceipt(),
-	}
-	signedReceipt, err := signature.SignSigned(sk, storage.MKVSReceiptSignatureContext, &receipt)
-	require.NoError(t, err, "SignSigned")
-	body.Header.StorageReceipt = signedReceipt.Signature
+	body.RakSig = rakSig.Signature
 
 	commit, err := SignComputeCommitment(sk, &body)
 	require.NoError(t, err, "SignComputeCommitment")
@@ -244,79 +211,11 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.NoError(t, err, "CheckEnoughCommitments")
 
 	// There should be no discrepancy.
-	var header *block.Header
-	header, err = pool.DetectDiscrepancy()
+	dc, err := pool.DetectDiscrepancy()
 	require.NoError(t, err, "DetectDiscrepancy")
 	require.Equal(t, false, pool.Discrepancy)
-	require.EqualValues(t, &body.Header, header, "DD should return the same header")
-}
-
-func generateMockCommittee(t *testing.T) (
-	rt *registry.Runtime,
-	sks []signature.PrivateKey,
-	committee *scheduler.Committee,
-	nodeInfo map[signature.MapKey]NodeInfo,
-) {
-	// Generate a non-TEE runtime.
-	var rtID signature.PublicKey
-	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
-
-	rt = &registry.Runtime{
-		ID:          rtID,
-		TEEHardware: node.TEEHardwareInvalid,
-	}
-
-	// Generate commitment signing keys.
-	sk1, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
-	sk2, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
-	sk3, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
-	sks = append(sks, sk1, sk2, sk3)
-
-	// Generate a committee.
-	c1ID := sk1.Public().ToMapKey()
-	c2ID := sk2.Public().ToMapKey()
-	c3ID := sk3.Public().ToMapKey()
-	committee = &scheduler.Committee{
-		Kind: scheduler.KindCompute,
-		Members: []*scheduler.CommitteeNode{
-			&scheduler.CommitteeNode{
-				Role:      scheduler.Worker,
-				PublicKey: sk1.Public(),
-			},
-			&scheduler.CommitteeNode{
-				Role:      scheduler.Worker,
-				PublicKey: sk2.Public(),
-			},
-			&scheduler.CommitteeNode{
-				Role:      scheduler.BackupWorker,
-				PublicKey: sk3.Public(),
-			},
-		},
-	}
-	nodeInfo = map[signature.MapKey]NodeInfo{
-		c1ID: NodeInfo{
-			CommitteeNode: 0,
-			Runtime: &node.Runtime{
-				ID: rtID,
-			},
-		},
-		c2ID: NodeInfo{
-			CommitteeNode: 1,
-			Runtime: &node.Runtime{
-				ID: rtID,
-			},
-		},
-		c3ID: NodeInfo{
-			CommitteeNode: 2,
-			Runtime: &node.Runtime{
-				ID: rtID,
-			},
-		},
-	}
-	return
+	header := dc.ToDDResult().(ComputeResultsHeader)
+	require.EqualValues(t, &body.Header, &header, "DD should return the same header")
 }
 
 func TestPoolTwoCommitments(t *testing.T) {
@@ -334,31 +233,10 @@ func TestPoolTwoCommitments(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
+		childBlk, _, body := generateComputeBody(t, committee)
 
-		body := ComputeBody{
-			CommitteeID: committee.EncodedMembersHash(),
-			Header:      parentBlk.Header,
-		}
-
-		var comInvalidID hash.Hash
-		comInvalidID.FromBytes([]byte("invalid-committee-id"))
-		bodyInvalidID := ComputeBody{
-			CommitteeID: comInvalidID,
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
-		bodyInvalidID.Header.StorageReceipt = signedReceipt.Signature
+		bodyInvalidID := body
+		bodyInvalidID.CommitteeID.FromBytes([]byte("invalid-committee-id"))
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -396,11 +274,11 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "CheckEnoughCommitments")
 
 		// There should be no discrepancy.
-		var header *block.Header
-		header, err = pool.DetectDiscrepancy()
+		dc, err := pool.DetectDiscrepancy()
 		require.NoError(t, err, "DetectDiscrepancy")
 		require.Equal(t, false, pool.Discrepancy)
-		require.EqualValues(t, &body.Header, header, "DD should return the same header")
+		header := dc.ToDDResult().(ComputeResultsHeader)
+		require.EqualValues(t, &body.Header, &header, "DD should return the same header")
 	})
 
 	t.Run("Discrepancy", func(t *testing.T) {
@@ -412,23 +290,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-		body := ComputeBody{
-			CommitteeID: committee.EncodedMembersHash(),
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
+		childBlk, _, body := generateComputeBody(t, committee)
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -440,13 +302,13 @@ func TestPoolTwoCommitments(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receipt = storage.MKVSReceiptBody{
+		receipt := storage.MKVSReceiptBody{
 			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
+			Roots:   body.RootsForStorageReceipt(),
 		}
-		signedReceipt, err = signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
+		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
 		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
+		body.StorageReceipt = signedReceipt.Signature
 
 		commit2, err := SignComputeCommitment(sk2, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -491,11 +353,11 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "CheckEnoughCommitments")
 
 		// Discrepancy resolution should succeed.
-		var header *block.Header
-		header, err = pool.ResolveDiscrepancy()
+		dc, err := pool.ResolveDiscrepancy()
 		require.NoError(t, err, "ResolveDiscrepancy")
 		require.Equal(t, true, pool.Discrepancy)
-		require.EqualValues(t, &correctHeader, header, "DR should return the same header")
+		header := dc.ToDDResult().(ComputeResultsHeader)
+		require.EqualValues(t, &correctHeader, &header, "DR should return the same header")
 
 		// TODO: Test discrepancy resolution failure.
 	})
@@ -543,23 +405,7 @@ func TestPoolSerialization(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	var id signature.PublicKey
-	childBlk := block.NewGenesisBlock(id, 0)
-	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-	body := ComputeBody{
-		CommitteeID: committee.EncodedMembersHash(),
-		Header:      parentBlk.Header,
-	}
-
-	// Generate dummy storage receipt.
-	receipt := storage.MKVSReceiptBody{
-		Version: 1,
-		Roots:   body.Header.RootsForStorageReceipt(),
-	}
-	signedReceipt, err := signature.SignSigned(sk, storage.MKVSReceiptSignatureContext, &receipt)
-	require.NoError(t, err, "SignSigned")
-	body.Header.StorageReceipt = signedReceipt.Signature
+	childBlk, _, body := generateComputeBody(t, committee)
 
 	commit, err := SignComputeCommitment(sk, &body)
 	require.NoError(t, err, "SignComputeCommitment")
@@ -578,11 +424,11 @@ func TestPoolSerialization(t *testing.T) {
 	require.NoError(t, err, "CheckEnoughCommitments")
 
 	// There should be no discrepancy.
-	var header *block.Header
-	header, err = d.DetectDiscrepancy()
+	dc, err := pool.DetectDiscrepancy()
 	require.NoError(t, err, "DetectDiscrepancy")
-	require.Equal(t, false, d.Discrepancy)
-	require.EqualValues(t, &body.Header, header, "DD should return the same header")
+	require.Equal(t, false, pool.Discrepancy)
+	header := dc.ToDDResult().(ComputeResultsHeader)
+	require.EqualValues(t, &body.Header, &header, "DD should return the same header")
 }
 
 func TestMultiPoolSerialization(t *testing.T) {
@@ -608,28 +454,8 @@ func TestMultiPoolSerialization(t *testing.T) {
 	}
 
 	// Generate commitments.
-	var id signature.PublicKey
-	childBlk := block.NewGenesisBlock(id, 0)
-	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-	body1 := ComputeBody{
-		CommitteeID: com1ID,
-		Header:      parentBlk.Header,
-	}
-	body2 := ComputeBody{
-		CommitteeID: com2ID,
-		Header:      parentBlk.Header,
-	}
-
-	// Generate dummy storage receipt.
-	receipt := storage.MKVSReceiptBody{
-		Version: 1,
-		Roots:   parentBlk.Header.RootsForStorageReceipt(),
-	}
-	signedReceipt, err := signature.SignSigned(sks1[0], storage.MKVSReceiptSignatureContext, &receipt)
-	require.NoError(t, err, "SignSigned")
-	body1.Header.StorageReceipt = signedReceipt.Signature
-	body2.Header.StorageReceipt = signedReceipt.Signature
+	childBlk, _, body1 := generateComputeBody(t, committee1)
+	_, _, body2 := generateComputeBody(t, committee2)
 
 	// First committee.
 	c1commit1, err := SignComputeCommitment(sks1[0], &body1)
@@ -700,24 +526,8 @@ func TestPoolMergeCommitment(t *testing.T) {
 			},
 		}
 
-		// Generate a compute commitment.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-		body := ComputeBody{
-			CommitteeID: computeCommittee.EncodedMembersHash(),
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(computeSks[0], storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
+		// Generate a commitment.
+		childBlk, parentBlk, body := generateComputeBody(t, computeCommittee)
 
 		commit1, err := SignComputeCommitment(computeSks[0], &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -728,7 +538,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		// Generate a merge commitment.
 		mergeBody := MergeBody{
 			ComputeCommits: []ComputeCommitment{*commit1, *commit2},
-			Header:         body.Header,
+			Header:         parentBlk.Header,
 		}
 
 		mergeCommit1, err := SignMergeCommitment(mergeSks[0], &mergeBody)
@@ -763,11 +573,11 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.NoError(t, err, "CheckEnoughCommitments")
 
 		// There should be no discrepancy.
-		var header *block.Header
-		header, err = mergePool.DetectDiscrepancy()
+		dc, err := mergePool.DetectDiscrepancy()
 		require.NoError(t, err, "DetectDiscrepancy")
 		require.Equal(t, false, mergePool.Discrepancy)
-		require.EqualValues(t, &body.Header, header, "DD should return the same header")
+		header := dc.ToDDResult().(block.Header)
+		require.EqualValues(t, &parentBlk.Header, &header, "DD should return the same header")
 	})
 }
 
@@ -795,36 +605,11 @@ func TestMultiPool(t *testing.T) {
 		}
 
 		// Generate commitments.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
+		childBlk, _, body1 := generateComputeBody(t, committee1)
+		_, _, body2 := generateComputeBody(t, committee2)
 
-		body1 := ComputeBody{
-			CommitteeID: com1ID,
-			Header:      parentBlk.Header,
-		}
-		body2 := ComputeBody{
-			CommitteeID: com2ID,
-			Header:      parentBlk.Header,
-		}
-
-		var comInvalidID hash.Hash
-		comInvalidID.FromBytes([]byte("invalid-committee-id"))
-		bodyInvalidID := ComputeBody{
-			CommitteeID: comInvalidID,
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   parentBlk.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sks1[0], storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body1.Header.StorageReceipt = signedReceipt.Signature
-		body2.Header.StorageReceipt = signedReceipt.Signature
-		bodyInvalidID.Header.StorageReceipt = signedReceipt.Signature
+		bodyInvalidID := body1
+		bodyInvalidID.CommitteeID.FromBytes([]byte("invalid-committee-id"))
 
 		// First committee.
 		c1commit1, err := SignComputeCommitment(sks1[0], &body1)
@@ -907,28 +692,8 @@ func TestMultiPool(t *testing.T) {
 		}
 
 		// Generate commitments.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-		body1 := ComputeBody{
-			CommitteeID: com1ID,
-			Header:      parentBlk.Header,
-		}
-		body2 := ComputeBody{
-			CommitteeID: com2ID,
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   parentBlk.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sks1[0], storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body1.Header.StorageReceipt = signedReceipt.Signature
-		body2.Header.StorageReceipt = signedReceipt.Signature
+		childBlk, _, body1 := generateComputeBody(t, committee1)
+		_, _, body2 := generateComputeBody(t, committee2)
 
 		// First committee.
 		c1commit1, err := SignComputeCommitment(sks1[0], &body1)
@@ -943,13 +708,13 @@ func TestMultiPool(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body2.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receipt = storage.MKVSReceiptBody{
+		receipt := storage.MKVSReceiptBody{
 			Version: 1,
-			Roots:   body2.Header.RootsForStorageReceipt(),
+			Roots:   body2.RootsForStorageReceipt(),
 		}
-		signedReceipt, err = signature.SignSigned(sks1[0], storage.MKVSReceiptSignatureContext, &receipt)
+		signedReceipt, err := signature.SignSigned(sks1[0], storage.MKVSReceiptSignatureContext, &receipt)
 		require.NoError(t, err, "SignSigned")
-		body2.Header.StorageReceipt = signedReceipt.Signature
+		body2.StorageReceipt = signedReceipt.Signature
 
 		c2commit2, err := SignComputeCommitment(sks2[1], &body2)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -1009,31 +774,10 @@ func TestTryFinalize(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
+		childBlk, _, body := generateComputeBody(t, committee)
 
-		body := ComputeBody{
-			CommitteeID: committee.EncodedMembersHash(),
-			Header:      parentBlk.Header,
-		}
-
-		var comInvalidID hash.Hash
-		comInvalidID.FromBytes([]byte("invalid-committee-id"))
-		bodyInvalidID := ComputeBody{
-			CommitteeID: comInvalidID,
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
-		bodyInvalidID.Header.StorageReceipt = signedReceipt.Signature
+		bodyInvalidID := body
+		bodyInvalidID.CommitteeID.FromBytes([]byte("invalid-committee-id"))
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -1063,10 +807,10 @@ func TestTryFinalize(t *testing.T) {
 		err = pool.AddComputeCommitment(childBlk, commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
-		var header *block.Header
-		header, err = pool.TryFinalize(now, roundTimeout, false)
+		dc, err := pool.TryFinalize(now, roundTimeout, false)
 		require.NoError(t, err, "TryFinalize")
-		require.EqualValues(t, &body.Header, header, "DD should return the same header")
+		header := dc.ToDDResult().(ComputeResultsHeader)
+		require.EqualValues(t, &body.Header, &header, "DD should return the same header")
 		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
 	})
 
@@ -1079,23 +823,7 @@ func TestTryFinalize(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-		body := ComputeBody{
-			CommitteeID: committee.EncodedMembersHash(),
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
+		childBlk, _, body := generateComputeBody(t, committee)
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -1107,13 +835,13 @@ func TestTryFinalize(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receipt = storage.MKVSReceiptBody{
+		receipt := storage.MKVSReceiptBody{
 			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
+			Roots:   body.RootsForStorageReceipt(),
 		}
-		signedReceipt, err = signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
+		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
 		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
+		body.StorageReceipt = signedReceipt.Signature
 
 		commit2, err := SignComputeCommitment(sk2, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -1146,10 +874,10 @@ func TestTryFinalize(t *testing.T) {
 		err = pool.AddComputeCommitment(childBlk, commit3)
 		require.NoError(t, err, "AddComputeCommitment")
 
-		var header *block.Header
-		header, err = pool.TryFinalize(now, roundTimeout, false)
+		dc, err := pool.TryFinalize(now, roundTimeout, false)
 		require.NoError(t, err, "TryFinalize")
-		require.EqualValues(t, &correctHeader, header, "DR should return the same header")
+		header := dc.ToDDResult().(ComputeResultsHeader)
+		require.EqualValues(t, &correctHeader, &header, "DR should return the same header")
 		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
 	})
 
@@ -1162,23 +890,7 @@ func TestTryFinalize(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		var id signature.PublicKey
-		childBlk := block.NewGenesisBlock(id, 0)
-		parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
-
-		body := ComputeBody{
-			CommitteeID: committee.EncodedMembersHash(),
-			Header:      parentBlk.Header,
-		}
-
-		// Generate dummy storage receipt.
-		receipt := storage.MKVSReceiptBody{
-			Version: 1,
-			Roots:   body.Header.RootsForStorageReceipt(),
-		}
-		signedReceipt, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receipt)
-		require.NoError(t, err, "SignSigned")
-		body.Header.StorageReceipt = signedReceipt.Signature
+		childBlk, _, body := generateComputeBody(t, committee)
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -1215,10 +927,114 @@ func TestTryFinalize(t *testing.T) {
 		err = pool.AddComputeCommitment(childBlk, commit3)
 		require.NoError(t, err, "AddComputeCommitment")
 
-		var header *block.Header
-		header, err = pool.TryFinalize(now, roundTimeout, false)
+		dc, err := pool.TryFinalize(now, roundTimeout, false)
 		require.NoError(t, err, "TryFinalize")
-		require.EqualValues(t, &correctHeader, header, "DR should return the same header")
+		header := dc.ToDDResult().(ComputeResultsHeader)
+		require.EqualValues(t, &correctHeader, &header, "DR should return the same header")
 		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
 	})
+}
+
+func generateMockCommittee(t *testing.T) (
+	rt *registry.Runtime,
+	sks []signature.PrivateKey,
+	committee *scheduler.Committee,
+	nodeInfo map[signature.MapKey]NodeInfo,
+) {
+	// Generate a non-TEE runtime.
+	var rtID signature.PublicKey
+	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
+
+	rt = &registry.Runtime{
+		ID:          rtID,
+		TEEHardware: node.TEEHardwareInvalid,
+	}
+
+	// Generate commitment signing keys.
+	sk1, err := signature.NewPrivateKey(rand.Reader)
+	require.NoError(t, err, "NewPrivateKey")
+	sk2, err := signature.NewPrivateKey(rand.Reader)
+	require.NoError(t, err, "NewPrivateKey")
+	sk3, err := signature.NewPrivateKey(rand.Reader)
+	require.NoError(t, err, "NewPrivateKey")
+	sks = append(sks, sk1, sk2, sk3)
+
+	// Generate a committee.
+	c1ID := sk1.Public().ToMapKey()
+	c2ID := sk2.Public().ToMapKey()
+	c3ID := sk3.Public().ToMapKey()
+	committee = &scheduler.Committee{
+		Kind: scheduler.KindCompute,
+		Members: []*scheduler.CommitteeNode{
+			&scheduler.CommitteeNode{
+				Role:      scheduler.Worker,
+				PublicKey: sk1.Public(),
+			},
+			&scheduler.CommitteeNode{
+				Role:      scheduler.Worker,
+				PublicKey: sk2.Public(),
+			},
+			&scheduler.CommitteeNode{
+				Role:      scheduler.BackupWorker,
+				PublicKey: sk3.Public(),
+			},
+		},
+	}
+	nodeInfo = map[signature.MapKey]NodeInfo{
+		c1ID: NodeInfo{
+			CommitteeNode: 0,
+			Runtime: &node.Runtime{
+				ID: rtID,
+			},
+		},
+		c2ID: NodeInfo{
+			CommitteeNode: 1,
+			Runtime: &node.Runtime{
+				ID: rtID,
+			},
+		},
+		c3ID: NodeInfo{
+			CommitteeNode: 2,
+			Runtime: &node.Runtime{
+				ID: rtID,
+			},
+		},
+	}
+	return
+}
+
+func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.Block, *block.Block, ComputeBody) {
+	var id signature.PublicKey
+	childBlk := block.NewGenesisBlock(id, 0)
+	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
+
+	body := ComputeBody{
+		CommitteeID: committee.EncodedMembersHash(),
+		Header: ComputeResultsHeader{
+			PreviousHash: parentBlk.Header.PreviousHash,
+			IORoot:       parentBlk.Header.IORoot,
+			StateRoot:    parentBlk.Header.StateRoot,
+		},
+	}
+
+	// Generate dummy storage receipt.
+	receipt := generateComputeStorageReceipt(t, &body)
+	body.StorageReceipt = receipt
+	parentBlk.Header.StorageReceipt = receipt
+
+	return childBlk, parentBlk, body
+}
+
+func generateComputeStorageReceipt(t *testing.T, body *ComputeBody) signature.Signature {
+	sk, err := signature.NewPrivateKey(rand.Reader)
+	require.NoError(t, err, "NewPrivateKey")
+
+	receipt := storage.MKVSReceiptBody{
+		Version: 1,
+		Roots:   body.RootsForStorageReceipt(),
+	}
+	signedReceipt, err := signature.SignSigned(sk, storage.MKVSReceiptSignatureContext, &receipt)
+	require.NoError(t, err, "SignSigned")
+
+	return signedReceipt.Signature
 }

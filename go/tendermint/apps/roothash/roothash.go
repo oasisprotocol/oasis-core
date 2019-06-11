@@ -729,7 +729,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return
 	}
 
-	header, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
+	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -739,7 +739,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 
 		// Generate the final block.
 		blk := new(block.Block)
-		blk.Header = *header
+		blk.Header = commit.ToDDResult().(block.Header)
 		blk.Header.Timestamp = uint64(ctx.Now().Unix())
 
 		rtState.Round.MergePool.ResetCommitments()

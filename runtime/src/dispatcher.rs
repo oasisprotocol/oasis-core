@@ -16,7 +16,10 @@ use crate::{
             signature::{Signature, Signer},
         },
         logger::get_logger,
-        roothash::{Block, IO_KEY_INPUTS, IO_KEY_OUTPUTS, IO_KEY_TAGS},
+        roothash::{
+            Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT, IO_KEY_INPUTS,
+            IO_KEY_OUTPUTS, IO_KEY_TAGS,
+        },
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     rak::RAK,
@@ -36,7 +39,7 @@ use crate::{
     transaction::{
         dispatcher::Dispatcher as TxnDispatcher, types::TxnBatch, Context as TxnContext,
     },
-    types::{BatchSigMessage, Body, ComputedBatch, BATCH_HASH_CONTEXT},
+    types::{Body, ComputedBatch},
 };
 
 /// Maximum amount of requests that can be in the dispatcher queue.
@@ -302,21 +305,23 @@ impl Dispatcher {
                 .commit(Context::create_child(&ctx))
                 .expect("io commit must succeed");
 
+            let header = ComputeResultsHeader {
+                previous_hash: block.header.encoded_hash(),
+                io_root,
+                state_root: new_state_root,
+            };
+
             debug!(self.logger, "Transaction batch execution complete";
-                "io_root" => ?io_root,
-                "new_state_root" => ?new_state_root
+                "previous_hash" => ?header.previous_hash,
+                "io_root" => ?header.io_root,
+                "state_root" => ?header.state_root
             );
 
             let rak_sig = if self.rak.public_key().is_some() {
-                let rak_sig_message = BatchSigMessage {
-                    previous_block: &block,
-                    io_root: &io_root,
-                    state_root: &new_state_root,
-                };
                 self.rak
                     .sign(
-                        &BATCH_HASH_CONTEXT,
-                        &serde_cbor::to_vec(&rak_sig_message).unwrap(),
+                        &COMPUTE_RESULTS_HEADER_CONTEXT,
+                        &serde_cbor::to_vec(&header).unwrap(),
                     )
                     .unwrap()
             } else {
@@ -324,10 +329,9 @@ impl Dispatcher {
             };
 
             let result = ComputedBatch {
+                header,
                 io_write_log,
-                io_root,
                 state_write_log,
-                new_state_root,
                 rak_sig,
             };
 

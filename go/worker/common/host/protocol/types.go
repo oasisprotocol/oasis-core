@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -159,18 +160,14 @@ type WorkerCheckTxBatchResponse struct {
 
 // ComputedBatch is a computed batch.
 type ComputedBatch struct {
+	// Header is the compute results header.
+	Header commitment.ComputeResultsHeader `codec:"header"`
 	// Log that generates the I/O tree.
 	IOWriteLog storage.WriteLog `codec:"io_write_log"`
-	// I/O merkle root.
-	IORoot hash.Hash `codec:"io_root"`
-
 	// Batch of storage write operations.
 	StateWriteLog storage.WriteLog `codec:"state_write_log"`
-	// New state root hash.
-	NewStateRoot hash.Hash `codec:"new_state_root"`
-
-	// If this runtime uses a TEE, then this is the signature of the batch's
-	// BatchSigMessage with the node's RAK for this runtime.
+	// If this runtime uses a TEE, then this is the signature of Header with
+	// node's RAK for this runtime.
 	RakSig signature.RawSignature `codec:"rak_sig"`
 }
 

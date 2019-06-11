@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
@@ -74,9 +75,12 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 
 			ch <- &protocol.Body{WorkerExecuteTxBatchResponse: &protocol.WorkerExecuteTxBatchResponse{
 				Batch: protocol.ComputedBatch{
-					IOWriteLog:   ioWriteLog,
-					IORoot:       ioRoot,
-					NewStateRoot: stateRoot,
+					Header: commitment.ComputeResultsHeader{
+						PreviousHash: rq.Block.Header.EncodedHash(),
+						IORoot:       ioRoot,
+						StateRoot:    stateRoot,
+					},
+					IOWriteLog: ioWriteLog,
 				},
 				// No RakSig in mock reponse.
 			}}

@@ -101,6 +101,7 @@ var (
 
 // Config is a committee node configuration.
 type Config struct {
+	// TODO: Move this to common worker config.
 	StorageCommitTimeout time.Duration
 
 	ByzantineInjectDiscrepancies bool
@@ -306,11 +307,17 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		)
 	case StateWaitingForEvent:
 		// Block finalized without the need for a backup worker.
-		n.logger.Info("considering the round finalized")
+		n.logger.Info("considering the round finalized",
+			"round", blk.Header.Round,
+			"header_hash", blk.Header.EncodedHash(),
+		)
 		n.transitionLocked(StateWaitingForBatch{})
 	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
-		n.logger.Info("considering the round finalized")
+		n.logger.Info("considering the round finalized",
+			"round", blk.Header.Round,
+			"header_hash", blk.Header.EncodedHash(),
+		)
 		n.transitionLocked(StateWaitingForBatch{})
 
 		// Record time taken for successfully processing a batch.
@@ -458,10 +465,12 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
-	// Generate proposed block header.
-	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
-	blk.Header.IORoot = batch.IORoot
-	blk.Header.StateRoot = batch.NewStateRoot
+	// Generate proposed compute results.
+	proposedResults := &commitment.ComputeBody{
+		CommitteeID: epoch.GetComputeCommitteeID(),
+		Header:      batch.Header,
+		RakSig:      batch.RakSig,
+	}
 
 	// Commit I/O and state write logs to storage.
 	start := time.Now()
@@ -480,11 +489,11 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		// NOTE: Order is important for verifying the receipt.
 		applyOps := []storage.ApplyOp{
 			// I/O root.
-			storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: batch.IORoot, WriteLog: batch.IOWriteLog},
+			storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: batch.Header.IORoot, WriteLog: batch.IOWriteLog},
 			// State root.
 			storage.ApplyOp{
 				Root:            n.commonNode.CurrentBlock.Header.StateRoot,
-				ExpectedNewRoot: batch.NewStateRoot,
+				ExpectedNewRoot: batch.Header.StateRoot,
 				WriteLog:        batch.StateWriteLog,
 			},
 		}
@@ -506,7 +515,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			)
 			return err
 		}
-		if err = blk.Header.VerifyStorageReceipt(&receipt); err != nil {
+		if err = proposedResults.VerifyStorageReceipt(&receipt); err != nil {
 			n.logger.Error("failed to validate receipt",
 				"err", err,
 			)
@@ -514,7 +523,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		}
 
 		// No need to append the entire blob, just the signature/public key.
-		blk.Header.StorageReceipt = signedReceipt.Signature
+		proposedResults.StorageReceipt = signedReceipt.Signature
 
 		return nil
 	}()
@@ -526,11 +535,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	}
 
 	// Commit.
-	commit, err := commitment.SignComputeCommitment(*n.commonNode.Identity.NodeKey, &commitment.ComputeBody{
-		CommitteeID: epoch.GetComputeCommitteeID(),
-		Header:      blk.Header,
-		RakSig:      batch.RakSig,
-	})
+	commit, err := commitment.SignComputeCommitment(*n.commonNode.Identity.NodeKey, proposedResults)
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
 			"err", err,
