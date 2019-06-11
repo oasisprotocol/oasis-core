@@ -81,7 +81,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.Compute {
+	if p.Committee.Kind != scheduler.KindCompute {
 		return ErrInvalidCommitteeKind
 	}
 
@@ -167,7 +167,7 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	for _, n := range p.Committee.Members {
 		var check bool
 		if !p.Discrepancy {
-			check = n.Role == scheduler.Worker || n.Role == scheduler.Leader
+			check = n.Role == scheduler.Worker
 		} else {
 			check = n.Role == scheduler.BackupWorker
 		}
@@ -206,7 +206,7 @@ func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
 
 	for id, ni := range p.NodeInfo {
 		n := p.Committee.Members[ni.CommitteeNode]
-		if n.Role != scheduler.Worker && n.Role != scheduler.Leader {
+		if n.Role != scheduler.Worker {
 			continue
 		}
 
@@ -217,9 +217,9 @@ func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
 
 		var h *block.Header
 		switch p.Committee.Kind {
-		case scheduler.Compute:
+		case scheduler.KindCompute:
 			h = &c.(OpenComputeCommitment).Body.Header
-		case scheduler.Merge:
+		case scheduler.KindMerge:
 			h = &c.(OpenMergeCommitment).Body.Header
 		default:
 			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
@@ -266,9 +266,9 @@ func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
 
 		var header *block.Header
 		switch p.Committee.Kind {
-		case scheduler.Compute:
+		case scheduler.KindCompute:
 			header = &c.(OpenComputeCommitment).Body.Header
-		case scheduler.Merge:
+		case scheduler.KindMerge:
 			header = &c.(OpenMergeCommitment).Body.Header
 		default:
 			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
@@ -367,7 +367,7 @@ func (p *Pool) AddMergeCommitment(
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.Merge {
+	if p.Committee.Kind != scheduler.KindMerge {
 		return ErrInvalidCommitteeKind
 	}
 

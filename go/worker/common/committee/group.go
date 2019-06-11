@@ -93,12 +93,6 @@ func (e *EpochSnapshot) IsComputeMember() bool {
 	return e.computeRole != scheduler.Invalid
 }
 
-// IsComputeLeader checks if the current node is a leader of the compute committee
-// in the current epoch.
-func (e *EpochSnapshot) IsComputeLeader() bool {
-	return e.computeRole == scheduler.Leader
-}
-
 // IsComputeWorker checks if the current node is a worker of the compute committee
 // in the current epoch.
 func (e *EpochSnapshot) IsComputeWorker() bool {
@@ -126,8 +120,7 @@ func (e *EpochSnapshot) IsMergeMember() bool {
 // IsMergeWorker checks if the current node is a worker of the merge committee in
 // the current epoch.
 func (e *EpochSnapshot) IsMergeWorker() bool {
-	// TODO: Leader is ignored so it can easily be removed once we get rid of leaders.
-	return e.mergeRole == scheduler.Leader || e.mergeRole == scheduler.Worker
+	return e.mergeRole == scheduler.Worker
 }
 
 // IsMergeBackupWorker checks if the current node is a backup worker of the merge committee in
@@ -208,11 +201,11 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	var computeCommittee, txnSchedulerCommittee, mergeCommittee *scheduler.Committee
 	for _, cm := range committees {
 		switch cm.Kind {
-		case scheduler.Compute:
+		case scheduler.KindCompute:
 			computeCommittee = cm
-		case scheduler.TransactionScheduler:
+		case scheduler.KindTransactionScheduler:
 			txnSchedulerCommittee = cm
-		case scheduler.Merge:
+		case scheduler.KindMerge:
 			mergeCommittee = cm
 		}
 	}

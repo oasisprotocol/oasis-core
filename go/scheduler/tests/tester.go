@@ -53,15 +53,15 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 				}
 
 				switch committee.Kind {
-				case api.Compute:
+				case api.KindCompute:
 					require.Nil(compute, "haven't seen a compute committee yet")
 					compute = committee
 					require.Len(committee.Members, expectedCompute, "committee has all compute nodes")
-				case api.Storage:
+				case api.KindStorage:
 					require.Nil(storage, "haven't seen a storage committee yet")
 					require.Len(committee.Members, expectedStorage, "committee has all storage nodes")
 					storage = committee
-				case api.TransactionScheduler:
+				case api.KindTransactionScheduler:
 					require.Nil(transactionScheduler, "haven't seen a transaction scheduler committee yet")
 					require.Len(committee.Members, expectedTransactionScheduler, "committee has all transaction scheduler nodes")
 					transactionScheduler = committee
@@ -81,13 +81,13 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 		require.NoError(err, "GetCommittees")
 		for _, committee := range committees {
 			switch committee.Kind {
-			case api.Compute:
+			case api.KindCompute:
 				require.EqualValues(compute, committee, "fetched compute committee is identical")
 				compute = nil
-			case api.Storage:
+			case api.KindStorage:
 				require.EqualValues(storage, committee, "fetched storage committee is identical")
 				storage = nil
-			case api.TransactionScheduler:
+			case api.KindTransactionScheduler:
 				require.EqualValues(transactionScheduler, committee, "fetched transaction scheduler committee is identical")
 				transactionScheduler = nil
 			}
@@ -148,10 +148,14 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 			leaders++
 		}
 	}
+	if committee.Kind.NeedsLeader() {
+		require.Equal(1, leaders, "committee has a leader")
+	} else {
+		require.Equal(0, leaders, "committee shouldn't have a leader")
+	}
 
-	require.Equal(1, leaders, "committee has a leader")
-	if committee.Kind == api.Compute {
-		require.EqualValues(runtime.ReplicaGroupSize, leaders+workers, "committee has correct number of workers")
-		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, "committe has correct number of backups")
+	if committee.Kind == api.KindCompute || committee.Kind == api.KindMerge {
+		require.EqualValues(runtime.ReplicaGroupSize, workers, "committee has correct number of workers")
+		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, "committee has correct number of backups")
 	}
 }

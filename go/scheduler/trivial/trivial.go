@@ -109,9 +109,9 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 	beacon := s.beacons[epoch]
 
 	// Only generic compute runtimes need to elect all the committees.
-	kinds := []api.CommitteeKind{api.Compute}
+	kinds := []api.CommitteeKind{api.KindCompute}
 	if rt.IsCompute() {
-		kinds = append(kinds, []api.CommitteeKind{api.Storage, api.TransactionScheduler, api.Merge}...)
+		kinds = append(kinds, []api.CommitteeKind{api.KindStorage, api.KindTransactionScheduler, api.KindMerge}...)
 	}
 
 	for _, kind := range kinds {
@@ -119,19 +119,19 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 		var sz int
 		var ctx []byte
 		switch kind {
-		case api.Compute:
+		case api.KindCompute:
 			nodeList = s.computeNodeLists[epoch][rtID][rt.TEEHardware]
 			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
 			ctx = rngContextCompute
-		case api.Storage:
+		case api.KindStorage:
 			nodeList = s.storageNodeLists[epoch]
 			sz = int(rt.StorageGroupSize)
 			ctx = rngContextStorage
-		case api.TransactionScheduler:
+		case api.KindTransactionScheduler:
 			nodeList = s.txnSchedulerNodeLists[epoch][rtID]
 			sz = int(rt.TransactionSchedulerGroupSize)
 			ctx = rngContextTransactionScheduler
-		case api.Merge:
+		case api.KindMerge:
 			nodeList = s.mergeNodeLists[epoch][rtID]
 			// TODO: Allow independent group sizes.
 			sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
@@ -162,7 +162,7 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 		// badly.
 		// XXX: This only ensures the same storage node will be the leader if
 		// the list of registered storage nodes doesn't change.
-		if kind == api.Storage {
+		if kind == api.KindStorage {
 			// Sort nodes by their public key.
 			sort.Slice(nodeList, func(i, j int) bool { return nodeList[i].ID.String() < nodeList[j].ID.String() })
 			// Set idxs to identity instead of a random permutation.
@@ -184,7 +184,11 @@ func (s *trivialSchedulerState) elect(rt *registry.Runtime, epoch epochtime.Epoc
 			var role api.Role
 			switch {
 			case i == 0:
-				role = api.Leader
+				if kind.NeedsLeader() {
+					role = api.Leader
+				} else {
+					role = api.Worker
+				}
 			case i >= int(rt.ReplicaGroupSize):
 				role = api.BackupWorker
 			default:
