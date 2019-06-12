@@ -13,8 +13,7 @@ impl UrkelTree {
         let boxed_key = key.to_vec();
         let boxed_val = value.to_vec();
 
-        let (new_root, old_val) =
-            self._insert(&ctx, pending_root, &boxed_key, boxed_val.clone())?;
+        let (new_root, old_val) = self._insert(&ctx, pending_root, &boxed_key, &boxed_val)?;
         let existed = old_val != None;
         match self.pending_write_log.get_mut(&boxed_key) {
             None => {
@@ -45,19 +44,20 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         root_ptr_ref: NodePtrRef,
         key: &Key,
-        val: Value,
+        val: &Value,
     ) -> Fallible<(NodePtrRef, Option<Value>)> {
-        // new_node is the deep-most internal node containing the newly inserted/updated leaf as its
-        // child. The second tuple element is the old value, if the leaf has been updated.
-        let mut new_node: (NodePtrRef, Option<Value>) = (NodePointer::null_ptr(), None);
-
         // stack contains all *internal nodes* from the root to the point of insertion.
         let mut stack: Vec<NodePtrRef> = Vec::new();
+
+        // new_node is the *deep-most node of the stack* containing the newly inserted/updated
+        // leaf or the first node of the chain of new internal nodes. The second tuple
+        // element is the old value, if the leaf has been updated.
+        let mut new_node: (NodePtrRef, Option<Value>) = (NodePointer::null_ptr(), None);
 
         // node_ptr_ref is the current pointer to the node in the iteration.
         let mut node_ptr_ref: NodePtrRef = root_ptr_ref;
 
-        // d is the current depth in the iteration.
+        // d is the current bit-depth in the iteration.
         let mut d: DepthType = 0;
         while new_node.0.borrow().is_null() {
             let node_ref = self.cache.borrow_mut().deref_node_ptr(
@@ -81,12 +81,17 @@ impl UrkelTree {
                         // Insert the new node as leaf node and finish. Don't care for existing leaf
                         // node at this depth.
                         let new_leaf_node = self.cache.borrow_mut().new_leaf_node(key, val);
-                        noderef_as_mut!(node_ref.clone().unwrap(), Internal).leaf_node = new_leaf_node.clone();
+                        noderef_as_mut!(node_ref.clone().unwrap(), Internal).leaf_node =
+                            new_leaf_node.clone();
                         new_node = (
                             self.cache.borrow_mut().new_internal_node(
                                 new_leaf_node,
-                                noderef_as!(node_ref.clone().unwrap(), Internal).left.clone(),
-                                noderef_as!(node_ref.clone().unwrap(), Internal).right.clone(),
+                                noderef_as!(node_ref.clone().unwrap(), Internal)
+                                    .left
+                                    .clone(),
+                                noderef_as!(node_ref.clone().unwrap(), Internal)
+                                    .right
+                                    .clone(),
                             ),
                             None,
                         );
@@ -96,9 +101,13 @@ impl UrkelTree {
                         let go_right = key.get_bit(d);
 
                         let child_ptr_ref = if go_right {
-                            noderef_as!(node_ref.clone().unwrap(), Internal).right.clone()
+                            noderef_as!(node_ref.clone().unwrap(), Internal)
+                                .right
+                                .clone()
                         } else {
-                            noderef_as!(node_ref.clone().unwrap(), Internal).left.clone()
+                            noderef_as!(node_ref.clone().unwrap(), Internal)
+                                .left
+                                .clone()
                         };
                         let child_ref = self.cache.borrow_mut().deref_node_ptr(
                             ctx,
@@ -112,12 +121,17 @@ impl UrkelTree {
                         match classify_noderef!(?child_ref) {
                             NodeKind::None => {
                                 // If we reached the end of the tree, insert a new leaf and finish.
-                                let new_child_node = self.cache.borrow_mut().new_leaf_node(key, val);
+                                let new_child_node =
+                                    self.cache.borrow_mut().new_leaf_node(key, val);
                                 new_node = if go_right {
                                     (
                                         self.cache.borrow_mut().new_internal_node(
-                                            noderef_as!(node_ref.clone().unwrap(), Internal).leaf_node.clone(),
-                                            noderef_as!(node_ref.clone().unwrap(), Internal).left.clone(),
+                                            noderef_as!(node_ref.clone().unwrap(), Internal)
+                                                .leaf_node
+                                                .clone(),
+                                            noderef_as!(node_ref.clone().unwrap(), Internal)
+                                                .left
+                                                .clone(),
                                             new_child_node,
                                         ),
                                         None,
@@ -125,9 +139,13 @@ impl UrkelTree {
                                 } else {
                                     (
                                         self.cache.borrow_mut().new_internal_node(
-                                            noderef_as!(node_ref.clone().unwrap(), Internal).leaf_node.clone(),
+                                            noderef_as!(node_ref.clone().unwrap(), Internal)
+                                                .leaf_node
+                                                .clone(),
                                             new_child_node,
-                                            noderef_as!(node_ref.clone().unwrap(), Internal).right.clone(),
+                                            noderef_as!(node_ref.clone().unwrap(), Internal)
+                                                .right
+                                                .clone(),
                                         ),
                                         None,
                                     )
@@ -145,7 +163,8 @@ impl UrkelTree {
                 NodeKind::Leaf => {
                     // split_node is newly inserted internal node or updated leaf and will be a
                     // child of new_node.
-                    let mut split_node: (NodePtrRef, Option<Value>) = (NodePointer::null_ptr(), None);
+                    let mut split_node: (NodePtrRef, Option<Value>) =
+                        (NodePointer::null_ptr(), None);
                     // leaf_node, left, right pointers for split_node.
                     let mut split_node_ptrs: Option<(NodePtrRef, NodePtrRef, NodePtrRef)> = None;
 
@@ -155,10 +174,12 @@ impl UrkelTree {
                             match leaf.value.borrow().value {
                                 // TODO check comparison; hash
                                 Some(ref leaf_val) => {
-                                    if leaf_val == &val {
+                                    if leaf_val == val {
                                         // Value also matches, do nothing.
-                                        split_node =
-                                            (node_ptr_ref.clone(), leaf.value.borrow().value.clone());
+                                        split_node = (
+                                            node_ptr_ref.clone(),
+                                            leaf.value.borrow().value.clone(),
+                                        );
                                     }
                                 }
                                 _ => unreachable!(),
@@ -196,12 +217,14 @@ impl UrkelTree {
                                 Some((
                                     /* leaf_node */ node_ptr_ref.clone(),
                                     /* left */ NodePointer::null_ptr(),
-                                    /* right */ self.cache.borrow_mut().new_leaf_node(key, val),
+                                    /* right */
+                                    self.cache.borrow_mut().new_leaf_node(key, val),
                                 ))
                             } else {
                                 Some((
                                     /* leaf_node */ node_ptr_ref.clone(),
-                                    /* left */ self.cache.borrow_mut().new_leaf_node(key, val),
+                                    /* left */
+                                    self.cache.borrow_mut().new_leaf_node(key, val),
                                     /* right */ NodePointer::null_ptr(),
                                 ))
                             }
@@ -232,64 +255,95 @@ impl UrkelTree {
                     match split_node_ptrs {
                         Some(ptrs) => {
                             split_node = (
-                                self.cache.borrow_mut().new_internal_node(
-                                    ptrs.0,
-                                    ptrs.1,
-                                    ptrs.2,
-                                ),
+                                self.cache
+                                    .borrow_mut()
+                                    .new_internal_node(ptrs.0, ptrs.1, ptrs.2),
                                 None,
                             );
-                        },
+                        }
                         None => (), // split_node is a leaf
                     };
 
                     // Update pointers of the split_node's parent. To do this, we need to access
-                    // the internal node from the previous iteration by using stack.
-                    if stack.len()>0 {
-                        let parent_node_ptr_ref = match stack.last() {
-                            Some(parent) => parent,
-                            _ => unreachable!(),
-                        };
-                        let parent_node_ref = self.cache.borrow_mut().deref_node_ptr(
-                            ctx,
-                            NodeID {
-                                path: key,
-                                depth: d,
-                            },
-                            parent_node_ptr_ref.clone(),
-                            None,
-                        )?;
-                        new_node = if noderef_as!(parent_node_ref.clone().unwrap(), Internal).left
-                            == node_ptr_ref
-                        {
-                            (
-                                self.cache.borrow_mut().new_internal_node(
-                                    noderef_as!(parent_node_ref.clone().unwrap(), Internal).leaf_node.clone(),
-                                    split_node.0,
-                                    noderef_as!(parent_node_ref.clone().unwrap(), Internal).right.clone(),
-                                ),
-                                split_node.1,
-                            )
-                        } else if noderef_as!(parent_node_ref.clone().unwrap(), Internal).right
-                            == node_ptr_ref
-                        {
-                            (
-                                self.cache.borrow_mut().new_internal_node(
-                                    noderef_as!(parent_node_ref.clone().unwrap(), Internal).leaf_node.clone(),
-                                    noderef_as!(parent_node_ref.clone().unwrap(), Internal).left.clone(),
-                                    split_node.0,
-                                ),
-                                split_node.1,
-                            )
+                    // the internal node from the previous iteration by looking into stack.
+                    if !split_node.0.borrow().is_null() {
+                        // First create a chain of new internal nodes between the new split_node and
+                        // the deep-most internal node on stack.
+                        while d > 0 && d > stack.len() as DepthType {
+                            split_node = (
+                                if key.get_bit(d - 1) {
+                                    self.cache.borrow_mut().new_internal_node(
+                                        NodePointer::null_ptr(),
+                                        NodePointer::null_ptr(),
+                                        split_node.0,
+                                    )
+                                } else {
+                                    self.cache.borrow_mut().new_internal_node(
+                                        NodePointer::null_ptr(),
+                                        split_node.0,
+                                        NodePointer::null_ptr(),
+                                    )
+                                },
+                                None,
+                            );
+                            d -= 1;
+                        }
+
+                        // Then set the deep-most internal node's children.
+                        if stack.len() > 0 {
+                            let parent_node_ptr_ref = match stack.last() {
+                                Some(parent) => parent,
+                                _ => unreachable!(),
+                            };
+                            let parent_node_ref = self.cache.borrow_mut().deref_node_ptr(
+                                ctx,
+                                NodeID {
+                                    path: key,
+                                    depth: (stack.len() - 1) as DepthType,
+                                },
+                                parent_node_ptr_ref.clone(),
+                                None,
+                            )?;
+                            new_node = if noderef_as!(parent_node_ref.clone().unwrap(), Internal)
+                                .left
+                                == node_ptr_ref
+                            {
+                                (
+                                    self.cache.borrow_mut().new_internal_node(
+                                        noderef_as!(parent_node_ref.clone().unwrap(), Internal)
+                                            .leaf_node
+                                            .clone(),
+                                        split_node.0,
+                                        noderef_as!(parent_node_ref.clone().unwrap(), Internal)
+                                            .right
+                                            .clone(),
+                                    ),
+                                    split_node.1,
+                                )
+                            } else if noderef_as!(parent_node_ref.clone().unwrap(), Internal).right
+                                == node_ptr_ref
+                            {
+                                (
+                                    self.cache.borrow_mut().new_internal_node(
+                                        noderef_as!(parent_node_ref.clone().unwrap(), Internal)
+                                            .leaf_node
+                                            .clone(),
+                                        noderef_as!(parent_node_ref.clone().unwrap(), Internal)
+                                            .left
+                                            .clone(),
+                                        split_node.0,
+                                    ),
+                                    split_node.1,
+                                )
+                            } else {
+                                unreachable!()
+                            };
                         } else {
-                            unreachable!()
-                        };
-                    } else {
-                        // If stack is empty, then the only element in the tree was a single leaf.
-                        // split_node will become the new root.
-                        new_node = (split_node.0, split_node.1);
+                            // If stack is empty, then the only element in the tree was a single leaf.
+                            // split_node will become the new root.
+                            new_node = (split_node.0, split_node.1);
+                        }
                     }
-                    break;
                 }
             }
             d += 1;
@@ -336,7 +390,9 @@ impl UrkelTree {
 
                     if noderef_as!(node_ref.clone().unwrap(), Internal).left == child_ptr_ref {
                         noderef_as_mut!(node_ref.clone().unwrap(), Internal).left = new_node.0;
-                    } else if noderef_as!(node_ref.clone().unwrap(), Internal).right == child_ptr_ref {
+                    } else if noderef_as!(node_ref.clone().unwrap(), Internal).right
+                        == child_ptr_ref
+                    {
                         noderef_as_mut!(node_ref.clone().unwrap(), Internal).right = new_node.0;
                     } else {
                         unreachable!()

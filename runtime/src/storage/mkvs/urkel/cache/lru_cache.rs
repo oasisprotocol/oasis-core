@@ -181,7 +181,7 @@ impl LRUCache {
         }))
     }
 
-    fn new_value_ptr(&self, val: Value) -> ValuePtrRef {
+    fn new_value_ptr(&self, val: &Value) -> ValuePtrRef {
         Rc::new(RefCell::new(ValuePointer {
             value: Some(val.clone()),
             ..Default::default()
@@ -308,7 +308,7 @@ impl Cache for LRUCache {
         self.new_internal_node_ptr(Some(node))
     }
 
-    fn new_leaf_node(&mut self, key: &Key, val: Value) -> NodePtrRef {
+    fn new_leaf_node(&mut self, key: &Key, val: &Value) -> NodePtrRef {
         let node = Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             key: key.clone(),
             value: self.new_value(val),
@@ -317,7 +317,7 @@ impl Cache for LRUCache {
         self.new_leaf_node_ptr(Some(node))
     }
 
-    fn new_value(&mut self, val: Value) -> ValuePtrRef {
+    fn new_value(&mut self, val: &Value) -> ValuePtrRef {
         self.new_value_ptr(val)
     }
 

@@ -47,9 +47,9 @@ pub trait Cache {
         right: NodePtrRef,
     ) -> NodePtrRef;
     /// Create a new leaf node and returns a pointer to it.
-    fn new_leaf_node(&mut self, key: &Key, val: Value) -> NodePtrRef;
+    fn new_leaf_node(&mut self, key: &Key, val: &Value) -> NodePtrRef;
     /// Create a new value object and returns a pointer to it.
-    fn new_value(&mut self, val: Value) -> ValuePtrRef;
+    fn new_value(&mut self, val: &Value) -> ValuePtrRef;
 
     /// Try removing a node from the cache.
     fn try_remove_node(&mut self, ptr: NodePtrRef);
