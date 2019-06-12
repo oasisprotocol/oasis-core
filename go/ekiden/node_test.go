@@ -240,8 +240,19 @@ func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	signed, err := signature.SignSigned(*node.entityPrivKey, registry.DeregisterEntitySignatureContext, &ts)
 	require.NoError(t, err, "SignSigned")
 
+	// Subscribe to entity deregistration event.
+	ch, sub := node.Node.Registry.WatchEntities()
+	defer sub.Close()
+
 	err = node.Node.Registry.DeregisterEntity(context.Background(), signed)
 	require.NoError(t, err, "DeregisterEntity")
+
+	select {
+	case ev := <-ch:
+		require.False(t, ev.IsRegistration, "expected entity deregistration event")
+	case <-time.After(1 * time.Second):
+		t.Fatalf("Failed to receive entity deregistration event")
+	}
 
 	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
 }
