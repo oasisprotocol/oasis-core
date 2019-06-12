@@ -59,10 +59,9 @@ scenario_compute_discrepancy() {
     local runtime=$1
 
     # Initialize compute nodes.
-    run_compute_node 1 ${runtime} \
+    run_compute_node 1 ${runtime}
+    run_compute_node 2 ${runtime} \
         --worker.compute.byzantine.inject_discrepancies
-
-    run_compute_node 2 ${runtime}
     run_compute_node 3 ${runtime}
 
     # Initialize storage nodes.
