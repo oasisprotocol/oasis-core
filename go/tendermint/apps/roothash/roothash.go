@@ -191,7 +191,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 		if computeCommittee == nil {
-			app.logger.Debug("checkCommittees: no compute committee this epoch",
+			app.logger.Warn("checkCommittees: no compute committee this epoch",
 				"runtime", rtID,
 			)
 			continue
@@ -206,7 +206,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 		if mergeCommittee == nil {
-			app.logger.Debug("checkCommittees: no merge committee this epoch",
+			app.logger.Warn("checkCommittees: no merge committee this epoch",
 				"runtime", rtID,
 			)
 			continue
