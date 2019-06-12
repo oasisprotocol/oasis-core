@@ -35,7 +35,7 @@ type Handler interface {
 	IsPeerAuthorized(peerID []byte) bool
 
 	// HandlePeerMessage handles an incoming message from a peer.
-	HandlePeerMessage(peerID []byte, msg Message) error
+	HandlePeerMessage(peerID []byte, msg *Message) error
 }
 
 // P2P is a peer-to-peer node using libp2p.
@@ -104,7 +104,7 @@ func (p *P2P) addPeerInfo(peerID peer.ID, addresses [][]byte) error {
 	return nil
 }
 
-func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg Message) error {
+func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg *Message) error {
 	peerID, err := bytesToPeerID(node.P2P.ID)
 	if err != nil {
 		return backoff.Permanent(err)
@@ -128,7 +128,7 @@ func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg Message) err
 	}()
 
 	stream := NewStream(rawStream)
-	if err := stream.Write(&msg); err != nil {
+	if err := stream.Write(msg); err != nil {
 		return err
 	}
 
@@ -150,7 +150,7 @@ func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg Message) err
 //
 // If message publish fails, it is automatically retried until successful,
 // using an exponential backoff.
-func (p *P2P) Publish(ctx context.Context, node *node.Node, msg Message) {
+func (p *P2P) Publish(ctx context.Context, node *node.Node, msg *Message) {
 	go func() {
 		bctx := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
 
@@ -219,7 +219,7 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 		return
 	}
 
-	err := handler.HandlePeerMessage(rawPeerID, message)
+	err := handler.HandlePeerMessage(rawPeerID, &message)
 	response := &Message{
 		RuntimeID:   message.RuntimeID,
 		GroupHash:   message.GroupHash,

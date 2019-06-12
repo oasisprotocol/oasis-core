@@ -65,7 +65,7 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 
 	var committee *scheduler.Committee
 	for _, c := range committees {
-		if c.Kind != scheduler.TransactionScheduler {
+		if c.Kind != scheduler.KindTransactionScheduler {
 			continue
 		}
 		committee = c

@@ -272,12 +272,16 @@ github.com/multiformats/go-multistream v0.0.1 h1:JV4VfSdY9n7ECTtY59/TlSyFCzRILvY
 github.com/multiformats/go-multistream v0.0.1/go.mod h1:fJTiDfXJVmItycydCnNx4+wSzZ5NwG2FEVAI30fiovg=
 github.com/oasislabs/deoxysii v0.0.0-20190329164139-cc54819a5e4c h1:HXZEsKsQ6lDd1Afewj+Zt1fZw47RDXEqwj9zfGHtjtk=
 github.com/oasislabs/deoxysii v0.0.0-20190329164139-cc54819a5e4c/go.mod h1:lYp+eM7TUm0n0T/KE8FyKXLC226gDx7/UlGTUAO6W/4=
+github.com/oasislabs/deoxysii v0.0.0-20190610083944-a3e81dcb2dde h1:VtFvwkYI10rPxWK8cfqu4i40EeANErs7Qb0416RgQFc=
+github.com/oasislabs/deoxysii v0.0.0-20190610083944-a3e81dcb2dde/go.mod h1:PyjqElilQd4b7CBW+PT+ylPW06zHsb2Cr6ifPL6pWgM=
 github.com/oasislabs/go-codec v0.0.0-20190513052804-1ee93b6329db h1:7nhxAQ369c4nt6X6Mnn/KO+1CrWuZp3h1E/emD1fVUM=
 github.com/oasislabs/go-codec v0.0.0-20190513052804-1ee93b6329db/go.mod h1:Aun42SeUcfUG7JiwijrAymzM6sPVq1vMpLUDYRNANfo=
 github.com/oasislabs/go-codec v0.0.0-20190529151125-64f68cae5bf3 h1:COvdc1ciEBEPAPV+ihabYAIfbZDRtNqEQNlC2xynbJk=
 github.com/oasislabs/go-codec v0.0.0-20190529151125-64f68cae5bf3/go.mod h1:Aun42SeUcfUG7JiwijrAymzM6sPVq1vMpLUDYRNANfo=
 github.com/oasislabs/go-codec v0.0.0-20190531083711-36f85e883b2a h1:b0qqKgSZOL70feF643GjBRw8FQP/w6LJLPPTQq5dueE=
 github.com/oasislabs/go-codec v0.0.0-20190531083711-36f85e883b2a/go.mod h1:sw77L03j15GtDZvGIZ0WzaiGa6k+mIBkhpey8GhgoYI=
+github.com/oasislabs/go-codec v0.0.0-20190606112002-f93a8da4ee71 h1:YHr2qCxg5x/wyS6+TCJ/WXudH4i97Vay7TaSJXN1x3Y=
+github.com/oasislabs/go-codec v0.0.0-20190606112002-f93a8da4ee71/go.mod h1:sw77L03j15GtDZvGIZ0WzaiGa6k+mIBkhpey8GhgoYI=
 github.com/oasislabs/iavl v0.12.0-ekiden2 h1:kzdp6OTHYrn8TXlAo+2NsL84Qi2gqydFvjhWQZ/H9GM=
 github.com/oasislabs/iavl v0.12.0-ekiden2/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
@@ -418,6 +422,8 @@ golang.org/x/sys v0.0.0-20190219092855-153ac476189d/go.mod h1:STP8DvDyc/dI5b8T5h
 golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190228124157-a34e9553db1e h1:ZytStCyV048ZqDsWHiYDdoI2Vd4msMcrDECFxS+tL9c=
 golang.org/x/sys v0.0.0-20190228124157-a34e9553db1e/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/sys v0.0.0-20190403152447-81d4e9dc473e h1:nFYrTHrdrAOpShe27kaFHjsqYSEQ0KWqdWLu3xuZJts=
+golang.org/x/sys v0.0.0-20190403152447-81d4e9dc473e/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0 h1:g61tztE5qeGQ89tm6NTjjM9VPIm088od1l6aSorWRWg=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/tools v0.0.0-20180221164845-07fd8470d635/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=

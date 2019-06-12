@@ -64,6 +64,7 @@ var (
 		{"worker.storage.enabled", true},
 		{"worker.client.port", workerClientPort},
 		{"worker.txnscheduler.enabled", true},
+		{"worker.merge.enabled", true},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
 	}
 

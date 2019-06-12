@@ -13,6 +13,7 @@ import (
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/merge"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -30,7 +31,7 @@ const (
 
 	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
 
-	cfgByzantineInjectDiscrepancies = "worker.byzantine.inject_discrepancies"
+	cfgByzantineInjectDiscrepancies = "worker.compute.byzantine.inject_discrepancies"
 )
 
 func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
@@ -57,6 +58,7 @@ func Enabled() bool {
 func New(
 	dataDir string,
 	commonWorker *workerCommon.Worker,
+	mergeWorker *merge.Worker,
 	ias *ias.IAS,
 	keyManager *keymanager.Client,
 	registration *registration.Registration,
@@ -103,7 +105,7 @@ func New(
 		Runtimes:                  runtimes,
 	}
 
-	return newWorker(dataDir, Enabled(), commonWorker,
+	return newWorker(dataDir, Enabled(), commonWorker, mergeWorker,
 		ias, keyManager, registration, cfg)
 }
 
@@ -125,6 +127,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
 		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
+		_ = cmd.Flags().MarkHidden(cfgByzantineInjectDiscrepancies)
 	}
 
 	for _, v := range []string{

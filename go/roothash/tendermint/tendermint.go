@@ -22,6 +22,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
@@ -66,6 +67,15 @@ type tendermintBackend struct {
 
 	closeOnce sync.Once
 	closedCh  chan struct{}
+
+	roundTimeout time.Duration
+}
+
+func (r *tendermintBackend) Info() api.Info {
+	return api.Info{
+		ComputeRoundTimeout: r.roundTimeout,
+		MergeRoundTimeout:   r.roundTimeout,
+	}
 }
 
 func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
@@ -181,16 +191,31 @@ func (r *tendermintBackend) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubsu
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) Commit(ctx context.Context, id signature.PublicKey, commit *api.OpaqueCommitment) error {
+func (r *tendermintBackend) MergeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.MergeCommitment) error {
 	tx := app.Tx{
-		TxCommit: &app.TxCommit{
-			ID:         id,
-			Commitment: *commit,
+		TxMergeCommit: &app.TxMergeCommit{
+			ID:      id,
+			Commits: commits,
 		},
 	}
 
 	if err := r.service.BroadcastTx(app.TransactionTag, tx); err != nil {
-		return errors.Wrap(err, "roothash: commit failed")
+		return errors.Wrap(err, "roothash: merge commit failed")
+	}
+
+	return nil
+}
+
+func (r *tendermintBackend) ComputeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.ComputeCommitment) error {
+	tx := app.Tx{
+		TxComputeCommit: &app.TxComputeCommit{
+			ID:      id,
+			Commits: commits,
+		},
+	}
+
+	if err := r.service.BroadcastTx(app.TransactionTag, tx); err != nil {
+		return errors.Wrap(err, "roothash: compute commit failed")
 	}
 
 	return nil
@@ -337,8 +362,8 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					Height: r.lastBlockHeight,
 					Block:  block,
 				})
-			} else if bytes.Equal(pair.GetKey(), app.TagDiscrepancyDetected) {
-				var value app.ValueDiscrepancyDetected
+			} else if bytes.Equal(pair.GetKey(), app.TagMergeDiscrepancyDetected) {
+				var value app.ValueMergeDiscrepancyDetected
 				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
 					r.logger.Error("worker: failed to get discrepancy from tag",
 						"err", err,
@@ -347,7 +372,18 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 				}
 
 				notifiers := r.getRuntimeNotifiers(value.ID)
-				notifiers.eventNotifier.Broadcast(&api.Event{DiscrepancyDetected: &value.Event})
+				notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
+			} else if bytes.Equal(pair.GetKey(), app.TagComputeDiscrepancyDetected) {
+				var value app.ValueComputeDiscrepancyDetected
+				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
+					r.logger.Error("worker: failed to get discrepancy from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				notifiers := r.getRuntimeNotifiers(value.ID)
+				notifiers.eventNotifier.Broadcast(&api.Event{ComputeDiscrepancyDetected: &value.Event})
 			}
 		}
 	}
@@ -382,6 +418,7 @@ func New(
 		pruneNotifier:    pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
 		closedCh:         make(chan struct{}),
+		roundTimeout:     roundTimeout,
 	}
 
 	// Check if we need to index roothash blocks.

@@ -44,7 +44,7 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 			switch node.(type) {
 			case nil:
 				// No more children, delete the internal node as well.
-				t.cache.tryRemoveNode(ptr)
+				t.cache.removeNode(ptr)
 				return nil, true, nil
 			case *internal.LeafNode:
 				// Left is nil, right is leaf, merge nodes back.
@@ -71,7 +71,7 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 	case *internal.LeafNode:
 		// Remove from leaf node.
 		if n.Key.Equal(&key) {
-			t.cache.tryRemoveNode(ptr)
+			t.cache.removeNode(ptr)
 			return nil, true, nil
 		}
 

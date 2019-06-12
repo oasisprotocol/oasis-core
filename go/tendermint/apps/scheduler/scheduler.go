@@ -99,7 +99,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return fmt.Errorf("couldn't get nodes: %s", err.Error())
 		}
 
-		kinds := []scheduler.CommitteeKind{scheduler.Compute, scheduler.Storage, scheduler.TransactionScheduler}
+		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler}
 		for _, kind := range kinds {
 			if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, kind); err != nil {
 				return fmt.Errorf("couldn't elect %s committees: %s", kind, err.Error())
@@ -215,7 +215,7 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 // For non-fatal problems, save a problem condition to the state and return successfully.
 func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != scheduler.Compute {
+	if !rt.IsCompute() && kind != scheduler.KindCompute {
 		return nil
 	}
 
@@ -223,7 +223,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	var sz int
 	var rngCtx []byte
 	switch kind {
-	case scheduler.Compute:
+	case scheduler.KindCompute:
 		for _, n := range nodes {
 			if app.isSuitableComputeWorker(n, rt, request.Header.Time) {
 				nodeList = append(nodeList, n)
@@ -231,7 +231,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		}
 		sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
 		rngCtx = rngContextCompute
-	case scheduler.Storage:
+	case scheduler.KindStorage:
 		for _, n := range nodes {
 			if app.isSuitableStorageWorker(n) {
 				nodeList = append(nodeList, n)
@@ -239,7 +239,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		}
 		sz = int(rt.StorageGroupSize)
 		rngCtx = rngContextStorage
-	case scheduler.TransactionScheduler:
+	case scheduler.KindTransactionScheduler:
 		for _, n := range nodes {
 			if app.isSuitableTransactionScheduler(n, rt) {
 				nodeList = append(nodeList, n)
@@ -286,7 +286,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	// badly.
 	// XXX: This only ensures the same storage node will be the leader if
 	// the list of registered storage nodes doesn't change.
-	if kind == scheduler.Storage {
+	if kind == scheduler.KindStorage {
 		// Sort nodes by their public key.
 		sort.Slice(nodeList, func(i, j int) bool { return nodeList[i].ID.String() < nodeList[j].ID.String() })
 		// Set idxs to identity instead of a random permutation.

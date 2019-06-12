@@ -18,6 +18,8 @@ import (
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/ekiden/go/worker/merge"
+	mergeCommittee "github.com/oasislabs/ekiden/go/worker/merge/committee"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
@@ -64,6 +66,7 @@ type Worker struct {
 	cfg     Config
 
 	commonWorker *workerCommon.Worker
+	merge        *merge.Worker
 	ias          *ias.IAS
 	keyManager   *keymanager.Client
 	registration *registration.Registration
@@ -277,6 +280,10 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 
 	// Get other nodes from this runtime.
 	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
+	var mergeNode *mergeCommittee.Node
+	if w.merge.Enabled() {
+		mergeNode = w.merge.GetRuntime(rtCfg.ID).GetNode()
+	}
 
 	// Create worker host for the given runtime.
 	workerHost, err := w.newWorkerHost(cfg, rtCfg)
@@ -289,6 +296,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 
 	node, err := committee.NewNode(
 		commonNode,
+		mergeNode,
 		workerHost,
 		nodeCfg,
 	)
@@ -316,6 +324,7 @@ func newWorker(
 	dataDir string,
 	enabled bool,
 	commonWorker *workerCommon.Worker,
+	merge *merge.Worker,
 	ias *ias.IAS,
 	keyManager *keymanager.Client,
 	registration *registration.Registration,
@@ -339,6 +348,7 @@ func newWorker(
 		enabled:      enabled,
 		cfg:          cfg,
 		commonWorker: commonWorker,
+		merge:        merge,
 		ias:          ias,
 		keyManager:   keyManager,
 		registration: registration,

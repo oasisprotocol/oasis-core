@@ -66,30 +66,46 @@ type CommitteeNode struct {
 // CommitteeKind is the functionality a committee exists to provide.
 type CommitteeKind uint8
 
-// TODO: Add "Kind" prefix to all constants, use explicit values instead of iota.
 const (
-	// Compute is a compute committee.
-	Compute CommitteeKind = iota
+	// KindCompute is a compute committee.
+	KindCompute CommitteeKind = 0
 
-	// Storage is a storage committee.
-	Storage
+	// KindStorage is a storage committee.
+	KindStorage CommitteeKind = 1
 
-	// TransactionScheduler is a transaction scheduler committee.
-	TransactionScheduler
+	// KindTransactionScheduler is a transaction scheduler committee.
+	KindTransactionScheduler CommitteeKind = 2
+
+	// KindMerge is a merge committee.
+	KindMerge CommitteeKind = 3
 
 	// MaxCommitteeKind is a dummy value used for iterating all committee kinds.
-	MaxCommitteeKind
+	MaxCommitteeKind = 4
 )
+
+// NeedsLeader returns if committee kind needs leader role.
+func (k CommitteeKind) NeedsLeader() bool {
+	switch k {
+	case KindCompute:
+		return false
+	case KindMerge:
+		return false
+	default:
+		return true
+	}
+}
 
 // String returns a string representation of a CommitteeKind.
 func (k CommitteeKind) String() string {
 	switch k {
-	case Compute:
+	case KindCompute:
 		return "compute"
-	case Storage:
+	case KindStorage:
 		return "storage"
-	case TransactionScheduler:
+	case KindTransactionScheduler:
 		return "transaction"
+	case KindMerge:
+		return "merge"
 	default:
 		return fmt.Sprintf("unknown kind: %d", k)
 	}

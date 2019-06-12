@@ -104,7 +104,7 @@ impl UrkelTree {
                         let right_ref = match right_ref {
                             None => {
                                 // No more children, delete the internal node as well.
-                                self.cache.borrow_mut().try_remove_node(ptr.clone());
+                                self.cache.borrow_mut().remove_node(ptr.clone());
                                 return Ok((NodePointer::null_ptr(), true, old_val));
                             }
                             Some(node_ref) => node_ref,
@@ -144,7 +144,7 @@ impl UrkelTree {
                 let node_ref = node_ref.unwrap();
                 if noderef_as!(node_ref, Leaf).key == key {
                     let old_val = noderef_as!(node_ref, Leaf).value.borrow().value.clone();
-                    self.cache.borrow_mut().try_remove_node(ptr.clone());
+                    self.cache.borrow_mut().remove_node(ptr.clone());
                     return Ok((NodePointer::null_ptr(), true, old_val));
                 }
                 return Ok((ptr.clone(), false, None));

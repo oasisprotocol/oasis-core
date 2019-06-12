@@ -143,13 +143,13 @@ run_backend_tendermint_committee() {
         let grpc_debug_port=tm_port+36656
 
         ${EKIDEN_NODE} \
-            --log.level info \
+            --log.level debug \
             --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.log.verbose_debug \
             --grpc.debug.port ${grpc_debug_port} \
             --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
-            --beacon.backend tendermint \
+            --beacon.backend insecure \
             --metrics.mode none \
             --storage.backend client \
             --scheduler.backend tendermint \
@@ -204,6 +204,14 @@ run_compute_node() {
     local log_file=${EKIDEN_COMMITTEE_DIR}/worker-$id.log
     rm -rf ${log_file}
 
+    # Prepare keys to ensure deterministic committees.
+    if [[ -f "${WORKDIR}/tests/identities/worker-${id}.pem" ]]; then
+        mkdir -p ${data_dir}
+        chmod 700 ${data_dir}
+        cp ${WORKDIR}/tests/identities/worker-${id}.pem ${data_dir}/identity.pem
+        chmod 600 ${data_dir}/identity.pem
+    fi
+
     # Generate port number.
     let client_port=id+11000
     let p2p_port=id+12000
@@ -217,13 +225,13 @@ run_compute_node() {
     fi
 
     ${EKIDEN_NODE} \
-        --log.level info \
+        --log.level debug \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
+        --beacon.backend insecure \
         --metrics.mode none \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
@@ -240,6 +248,7 @@ run_compute_node() {
         ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
         --worker.txnscheduler.enabled \
         --worker.txnscheduler.batching.max_batch_size 1 \
+        --worker.merge.enabled \
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
@@ -293,7 +302,7 @@ run_storage_node() {
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
+        --beacon.backend insecure \
         --metrics.mode none \
         --storage.backend leveldb \
         --scheduler.backend tendermint \
@@ -312,8 +321,8 @@ run_storage_node() {
         2>&1 | tee ${log_file} | sed "s/^/[storage-node-${id}] /" &
 }
 
-# Cat all compute node logs.
-cat_compute_logs() {
+# Cat all worker node logs.
+cat_worker_logs() {
     cat ${EKIDEN_COMMITTEE_DIR}/worker-*.log
 }
 
@@ -375,7 +384,7 @@ run_keymanager_node() {
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
+        --beacon.backend insecure \
         --metrics.mode none \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
@@ -430,7 +439,7 @@ run_seed_node() {
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
+        --beacon.backend tendermint-insecure \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
@@ -586,19 +595,66 @@ run_test() {
 # Common assertions.
 ####################
 
+_assert_worker_logs_contain() {
+    required_code=$1
+    pattern=$2
+    msg=$3
+
+    set +ex
+    # NOTE: Cannot use pipes due to annoying SIGPIPE handling by cat causing
+    #       it to exit with code 141.
+    grep -q "${pattern}" <(cat_worker_logs)
+    if [[ $? != $required_code ]]; then
+        echo -e "\e[31;1mTEST ASSERTION FAILED: ${msg}\e[0m"
+        set -ex
+        exit 1
+    fi
+    set -ex
+}
+
+assert_worker_logs_contain() {
+    _assert_worker_logs_contain 0 "$1" "$2"
+}
+
+assert_worker_logs_not_contain() {
+    _assert_worker_logs_contain 1 "$1" "$2"
+}
+
+# Assert that there were no panics.
+assert_no_panics() {
+    assert_worker_logs_not_contain "panic:" "Panics detected during run."
+    assert_worker_logs_not_contain "CONSENSUS FAILURE" "Consensus failure detected during run."
+}
+
 # Assert that there are were no round timeouts.
 assert_no_round_timeouts() {
-    cat_compute_logs | (! grep -q 'FireTimer')
-    cat_compute_logs | (! grep -q 'round failed')
+    assert_worker_logs_not_contain "FireTimer" "Round timeouts detected during run."
+    assert_worker_logs_not_contain "round failed" "Failed rounds detected during run."
 }
 
 # Assert that there were no discrepancies.
 assert_no_discrepancies() {
-    cat_compute_logs | (! grep -q 'discrepancy detected')
+    assert_worker_logs_not_contain "discrepancy detected" "Discrepancy detected during run."
+}
+
+# Assert that there were no compute discrepancies.
+assert_no_compute_discrepancies() {
+    assert_worker_logs_not_contain "compute discrepancy detected" "Compute discrepancy detected during run."
+}
+
+# Assert that there were compute discrepancies.
+assert_compute_discrepancies() {
+    assert_worker_logs_contain "compute discrepancy detected" "Compute discrepancy NOT detected during run."
+}
+
+# Assert that there were merge discrepancies.
+assert_merge_discrepancies() {
+    assert_worker_logs_contain "merge discrepancy detected" "Merge discrepancy NOT detected during run."
 }
 
 # Assert that all computations ran successfully without hiccups.
 assert_basic_success() {
+    assert_no_panics
     assert_no_round_timeouts
     assert_no_discrepancies
 }

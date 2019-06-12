@@ -490,7 +490,7 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 				"epoch", committee.ValidFor,
 				"kind", committee.Kind)
 
-			if committee.Kind != scheduler.Storage {
+			if committee.Kind != scheduler.KindStorage {
 				continue
 			}
 
