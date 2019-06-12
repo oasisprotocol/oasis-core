@@ -241,7 +241,7 @@ func (r *tendermintBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscr
 }
 
 func (r *tendermintBackend) GetNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
-	epoch, err := r.timeSource.GetBlockEpoch(ctx, height)
+	epoch, err := r.timeSource.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}

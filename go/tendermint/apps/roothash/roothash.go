@@ -175,8 +175,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 	}
 
-
-	getBeaconFn := func() ([]byte, error ) {
+	getBeaconFn := func() ([]byte, error) {
 		beaconState := beaconapp.NewMutableState(tree)
 		return beaconState.GetBeacon()
 	}

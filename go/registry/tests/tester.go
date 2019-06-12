@@ -43,7 +43,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
 	require.NoError(t, err, "NewTestEntities")
 
-	epoch, err := timeSource.GetEpoch(context.Background())
+	epoch, err := timeSource.GetEpoch(context.Background(), 0)
 	require.NoError(t, err, "GetEpoch")
 
 	// All of these tests are combined because the Entity and Node structures

@@ -28,7 +28,7 @@ type keymanagerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -350,7 +350,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 	return status
 }
 
-func New(timeSource epochtime.BlockBackend) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &keymanagerApplication{
 		logger:     logging.GetLogger("tendermint/keymanager"),
 		timeSource: timeSource,

@@ -784,14 +784,14 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epo
 		return false, epochtime.EpochInvalid
 	}
 
-	previousEpoch, err := timeSource.GetBlockEpoch(s.ctx, blockHeight-1)
+	previousEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight-1)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
 		return false, epochtime.EpochInvalid
 	}
-	currentEpoch, err := timeSource.GetBlockEpoch(s.ctx, blockHeight)
+	currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,

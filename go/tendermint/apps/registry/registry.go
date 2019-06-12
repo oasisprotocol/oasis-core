@@ -347,7 +347,7 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetBlockEpoch(context.Background(), app.state.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
 	if err != nil {
 		return err
 	}

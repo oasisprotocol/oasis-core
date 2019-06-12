@@ -422,7 +422,7 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 }
 
 func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
-	epoch, err := s.timeSource.GetBlockEpoch(ctx, height)
+	epoch, err := s.timeSource.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}

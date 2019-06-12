@@ -158,7 +158,6 @@ func (w *blockWatcher) watch() {
 		w.BaseBackgroundService.Stop()
 	}()
 
-
 	// If we were just started, refresh the committee information from any
 	// block, otherwise just from epoch transition blocks.
 	gotFirstBlock := false

@@ -39,14 +39,7 @@ type tendermintMockBackend struct {
 	currentBlock int64
 }
 
-func (t *tendermintMockBackend) GetEpoch(ctx context.Context) (api.EpochTime, error) {
-	t.RLock()
-	defer t.RUnlock()
-
-	return t.epoch, nil
-}
-
-func (t *tendermintMockBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+func (t *tendermintMockBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
 	response, err := t.service.Query(app.QueryGetEpoch, nil, height)
 	if err != nil {
 		return 0, errors.Wrap(err, "epochtime: get block epoch query failed")

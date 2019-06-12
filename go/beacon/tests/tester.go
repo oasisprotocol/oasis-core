@@ -20,7 +20,7 @@ const recvTimeout = 1 * time.Second
 func BeaconImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend) {
 	require := require.New(t)
 
-	epoch, err := epochtime.GetEpoch(context.Background())
+	epoch, err := epochtime.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
 	ch, sub := backend.WatchBeacons()

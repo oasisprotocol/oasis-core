@@ -34,14 +34,12 @@ type tendermintBackend struct {
 	epoch        api.EpochTime
 }
 
-func (t *tendermintBackend) GetEpoch(ctx context.Context) (api.EpochTime, error) {
-	t.RLock()
-	defer t.RUnlock()
-
-	return t.epoch, nil
-}
-
-func (t *tendermintBackend) GetBlockEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+func (t *tendermintBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+	if height == 0 {
+		t.RLock()
+		defer t.RUnlock()
+		return t.epoch, nil
+	}
 	epoch := api.EpochTime(height / t.interval)
 
 	return epoch, nil
@@ -82,7 +80,7 @@ func (t *tendermintBackend) updateCached(ctx context.Context, block *tmtypes.Blo
 	t.Lock()
 	defer t.Unlock()
 
-	epoch, _ := t.GetBlockEpoch(ctx, block.Header.Height)
+	epoch, _ := t.GetEpoch(ctx, block.Header.Height)
 
 	t.epoch = epoch
 

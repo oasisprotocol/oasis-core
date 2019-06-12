@@ -25,8 +25,6 @@ const BackendName = "tendermint"
 
 var (
 	_ api.Backend = (*Backend)(nil)
-
-	errIncoherentTime = errors.New("beacon/tendermint: incoherent time")
 )
 
 // Backend is a tendermint backed random beacon.
@@ -49,8 +47,8 @@ type Backend struct {
 // Calling this method with height `0`, should return the
 // beacon for latest known block.
 func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
-	// Calling GetBlockEpoch with height `0` will return the epoch of the latest block.
-	beaconEpoch, err := t.timeSource.GetBlockEpoch(ctx, height)
+	// Calling GetEpoch with height `0` will return the epoch of the latest block.
+	beaconEpoch, err := t.timeSource.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}
