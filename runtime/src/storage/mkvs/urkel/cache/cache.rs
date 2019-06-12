@@ -122,7 +122,7 @@ where
 }
 
 /// Callback type used for updating cache items after a commit.
-pub type CacheUpdater<C> = Box<Fn(&mut C) -> ()>;
+pub type CacheUpdater<C> = Box<dyn Fn(&mut C) -> ()>;
 
 /// A list of cache update callbacks.
 pub struct UpdateList<C: Cache> {
