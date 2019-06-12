@@ -45,17 +45,21 @@ type Backend struct {
 	}
 }
 
-// GetBeacon gets the beacon for the provided epoch.
-func (t *Backend) GetBeacon(ctx context.Context, epoch epochtime.EpochTime) ([]byte, error) {
-	if epoch == epochtime.EpochInvalid {
-		return nil, errIncoherentTime
+// GetBeacon gets the beacon for the provided block height.
+// Calling this method with height `0`, should return the
+// beacon for latest known block.
+func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
+	// Calling GetBlockEpoch with height `0` will return the epoch of the latest block.
+	beaconEpoch, err := t.timeSource.GetBlockEpoch(ctx, height)
+	if err != nil {
+		return nil, err
 	}
 
-	if beacon := t.getCached(epoch); beacon != nil {
+	if beacon := t.getCached(beaconEpoch); beacon != nil {
 		return beacon, nil
 	}
 
-	resp, err := t.service.Query(app.QueryGetBeacon, &tmapi.QueryGetByEpochRequest{Epoch: epoch}, 0)
+	resp, err := t.service.Query(app.QueryGetBeacon, nil, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "beacon: failed to query beacon")
 	}
@@ -72,18 +76,6 @@ func (t *Backend) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.Subscriptio
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
-}
-
-// GetBlockBeacon gets the beacon for the provided block height iff it
-// exists.  Calling this routine after the epoch notification when an
-// appropriate timesource is used should be generally safe.
-func (t *Backend) GetBlockBeacon(ctx context.Context, height int64) ([]byte, error) {
-	epoch, err := t.timeSource.GetBlockEpoch(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	return t.GetBeacon(ctx, epoch)
 }
 
 func (t *Backend) getCached(epoch epochtime.EpochTime) []byte {

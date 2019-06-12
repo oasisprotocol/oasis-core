@@ -11,7 +11,6 @@ import (
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 // Code is a status code for ABCI requests.
@@ -83,9 +82,4 @@ func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
 // QueryGetByIDRequest is a request for fetching things by ids.
 type QueryGetByIDRequest struct {
 	ID signature.PublicKey
-}
-
-// QueryGetByEpochRequest is a request for fetching things by epoch.
-type QueryGetByEpochRequest struct {
-	Epoch epochtime.EpochTime
 }

@@ -450,7 +450,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		var newBeacon []byte
 		switch getBeaconFn {
 		case nil:
-			newBeacon, err = s.beacon.GetBlockBeacon(ctx, height)
+			newBeacon, err = s.beacon.GetBeacon(ctx, height)
 		default:
 			newBeacon, err = getBeaconFn()
 		}

@@ -12,7 +12,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	tmbeacon "github.com/oasislabs/ekiden/go/beacon/tendermint"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -176,18 +175,10 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 	}
 
-	// Explicitly query the beacon for the epoch.
-	var getBeaconFn scheduler.GetBeaconFunc
-	switch app.beacon.(type) {
-	case *tmbeacon.Backend:
-		getBeaconFn = func() ([]byte, error) {
-			beaconState := beaconapp.NewMutableState(tree)
-			return beaconState.GetBeacon(epoch)
-		}
-	default:
-		getBeaconFn = func() ([]byte, error) {
-			return app.beacon.GetBeacon(app.ctx, epoch)
-		}
+
+	getBeaconFn := func() ([]byte, error ) {
+		beaconState := beaconapp.NewMutableState(tree)
+		return beaconState.GetBeacon()
 	}
 
 	for _, rtState := range state.getRuntimes() {

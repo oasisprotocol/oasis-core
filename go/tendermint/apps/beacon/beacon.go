@@ -53,7 +53,7 @@ func (app *beaconApplication) OnRegister(state *abci.ApplicationState, queryRout
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(QueryGetBeacon, api.QueryGetByEpochRequest{}, app.queryGetBeacon)
+	queryRouter.AddRoute(QueryGetBeacon, nil, app.queryGetBeacon)
 }
 
 func (app *beaconApplication) OnCleanup() {
@@ -104,9 +104,8 @@ func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {
 }
 
 func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByEpochRequest)
 	state := s.(*immutableState)
-	return state.GetBeacon(request.Epoch)
+	return state.GetBeacon()
 }
 
 func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {

@@ -38,7 +38,7 @@ recvLoop:
 			require.Len(ev.Beacon, api.BeaconSize, "WatchBeacons - length")
 
 			var b []byte
-			b, err = backend.GetBeacon(context.Background(), epoch)
+			b, err = backend.GetBeacon(context.Background(), 0)
 			require.NoError(err, "GetBeacon")
 			require.Equal(b, ev.Beacon, "GetBeacon - beacon")
 			break recvLoop
