@@ -170,7 +170,9 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 	runtimes, _ := regState.GetRuntimes()
 	newDescriptors := make(map[signature.MapKey]*registry.Runtime)
 	for _, v := range runtimes {
-		newDescriptors[v.ID.ToMapKey()] = v
+		if v.Kind == registry.KindCompute {
+			newDescriptors[v.ID.ToMapKey()] = v
+		}
 	}
 
 	// Explicitly query the beacon for the epoch.
