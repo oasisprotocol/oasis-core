@@ -27,7 +27,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 	case trivial.BackendName:
 		return trivial.New(ctx, timeSource, reg, beacon, service), nil
 	case tendermint.BackendName:
-		return tendermint.New(ctx, timeSource, service)
+		return tendermint.New(ctx, timeSource, beacon, service)
 	default:
 		return nil, fmt.Errorf("scheduler: unsupported backend: '%v'", backend)
 	}

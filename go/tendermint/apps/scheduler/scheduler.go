@@ -9,6 +9,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
@@ -19,7 +20,6 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
 
@@ -37,6 +37,7 @@ type schedulerApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.BlockBackend
+	beacon     beaconabci.Backend
 }
 
 func (app *schedulerApplication) Name() string {
@@ -84,8 +85,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// TODO: We'll later have this for each type of committee.
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		beaconState := beaconapp.NewMutableState(app.state.DeliverTxTree())
-		beacon, err := beaconState.GetBeacon(epoch)
+		beacon, err := app.beacon.GetBeaconABCI(ctx, app.state.DeliverTxTree(), epoch)
 		if err != nil {
 			return fmt.Errorf("couldn't get beacon: %s", err.Error())
 		}
@@ -365,9 +365,11 @@ func (app *schedulerApplication) electAll(ctx *abci.Context, request types.Reque
 // New constructs a new scheduler application instance.
 func New(
 	timeSource epochtime.BlockBackend,
+	beacon beaconabci.Backend,
 ) abci.Application {
 	return &schedulerApplication{
 		logger:     logging.GetLogger("tendermint/scheduler"),
 		timeSource: timeSource,
+		beacon:     beacon,
 	}
 }

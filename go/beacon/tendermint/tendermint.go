@@ -8,13 +8,16 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/tendermint/iavl"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -24,8 +27,9 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend      = (*Backend)(nil)
-	_ api.BlockBackend = (*Backend)(nil)
+	_ api.Backend        = (*Backend)(nil)
+	_ api.BlockBackend   = (*Backend)(nil)
+	_ beaconabci.Backend = (*Backend)(nil)
 
 	errIncoherentTime = errors.New("beacon/tendermint: incoherent time")
 )
@@ -85,6 +89,12 @@ func (t *Backend) GetBlockBeacon(ctx context.Context, height int64) ([]byte, err
 	}
 
 	return t.GetBeacon(ctx, epoch)
+}
+
+// GetBeaconABCI gets the beacon for the provided epoch.
+func (t *Backend) GetBeaconABCI(ctx *abci.Context, tree *iavl.MutableTree, epoch epochtime.EpochTime) ([]byte, error) {
+	state := app.NewMutableState(tree)
+	return state.GetBeacon(epoch)
 }
 
 func (t *Backend) getCached(epoch epochtime.EpochTime) []byte {
