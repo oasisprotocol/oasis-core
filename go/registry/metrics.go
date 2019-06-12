@@ -97,12 +97,12 @@ func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *api.Signed
 	return nil
 }
 
-func (w *metricsWrapper) GetBlockNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
-	return w.Backend.GetBlockNodeList(ctx, height)
+func (w *metricsWrapper) GetNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+	return w.Backend.GetNodeList(ctx, height)
 }
 
-func (w *metricsWrapper) GetBlockRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	return w.Backend.GetBlockRuntimes(ctx, height)
+func (w *metricsWrapper) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
+	return w.Backend.GetRuntimes(ctx, height)
 }
 
 func (w *metricsWrapper) Cleanup() {

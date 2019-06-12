@@ -200,7 +200,7 @@ func doList(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	runtimes, err := client.GetRuntimes(context.Background(), &grpcRegistry.RuntimesRequest{})
+	runtimes, err := client.GetRuntimes(context.Background(), &grpcRegistry.RuntimesRequest{Height: 0})
 	if err != nil {
 		logger.Error("failed to query runtimes",
 			"err", err,

@@ -114,17 +114,7 @@ func (r *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey
 	return r.getLatestBlockAt(id, height)
 }
 
-func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
-	annCh, sub, err := r.WatchAnnotatedBlocks(id)
-	if err != nil {
-		return nil, nil, err
-	}
-	ch := api.MapAnnotatedBlockToBlock(annCh)
-
-	return ch, sub, nil
-}
-
-func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
 	notifiers := r.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
@@ -133,7 +123,6 @@ func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan
 		// WatchBlocksSince.
 		notifiers.Lock()
 		defer notifiers.Unlock()
-
 		if notifiers.lastBlock != nil {
 			ch.In() <- &api.AnnotatedBlock{
 				Height: notifiers.lastBlockHeight,

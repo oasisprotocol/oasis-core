@@ -7,10 +7,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/service"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
@@ -160,16 +158,12 @@ func (w *blockWatcher) watch() {
 		w.BaseBackgroundService.Stop()
 	}()
 
-	// Start watching roothash blocks.
-	var blocksAnn <-chan *roothash.AnnotatedBlock
-	var blocksSub *pubsub.Subscription
-	var err error
 
 	// If we were just started, refresh the committee information from any
 	// block, otherwise just from epoch transition blocks.
 	gotFirstBlock := false
-
-	blocksAnn, blocksSub, err = w.common.roothash.WatchAnnotatedBlocks(w.id)
+	// Start watching roothash blocks.
+	blocks, blocksSub, err := w.common.roothash.WatchBlocks(w.id)
 	if err != nil {
 		w.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -184,7 +178,7 @@ func (w *blockWatcher) watch() {
 
 		// Wait for stuff to happen.
 		select {
-		case blk := <-blocksAnn:
+		case blk := <-blocks:
 			current = blk.Block
 			height = blk.Height
 

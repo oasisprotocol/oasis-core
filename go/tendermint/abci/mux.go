@@ -753,7 +753,7 @@ func (s *ApplicationState) BlockHeight() int64 {
 	return s.blockHeight
 }
 
-// BlockHash returns the last commited block hash.
+// BlockHash returns the last committed block hash.
 func (s *ApplicationState) BlockHash() []byte {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()

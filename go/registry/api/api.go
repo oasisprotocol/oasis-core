@@ -136,15 +136,12 @@ type Backend interface {
 	// GetRuntime gets a runtime by ID.
 	GetRuntime(context.Context, signature.PublicKey) (*Runtime, error)
 
-	// GetRuntimes gets a list of all registered runtimes.
-	GetRuntimes(context.Context) ([]*Runtime, error)
-
-	// GetBlockNodeList returns the NodeList at the specified block height.
-	GetBlockNodeList(context.Context, int64) (*NodeList, error)
-
-	// GetBlockRuntimes returns the registered Runtimes at the specified
+	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.
-	GetBlockRuntimes(context.Context, int64) ([]*Runtime, error)
+	GetRuntimes(context.Context, int64) ([]*Runtime, error)
+
+	// GetNodeList returns the NodeList at the specified block height.
+	GetNodeList(context.Context, int64) (*NodeList, error)
 
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.

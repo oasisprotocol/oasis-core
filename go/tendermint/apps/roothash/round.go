@@ -70,15 +70,6 @@ func newRound(
 	mergePool *commitment.Pool,
 	blk *block.Block,
 ) *round {
-	if computeCommittee.Kind != scheduler.KindCompute {
-		panic("roothash/tendermint: non-compute committee passed to round ctor")
-	}
-	if mergeCommittee.Kind != scheduler.KindMerge {
-		panic("roothash/tendermint: non-merge committee passed to round ctor")
-	}
-
-	// TODO: Support multiple compute committees (#1775).
-	cID := computeCommittee.EncodedMembersHash()
 	r := &round{
 		CurrentBlock: blk,
 		ComputePool:  computePool,

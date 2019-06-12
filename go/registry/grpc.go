@@ -297,7 +297,7 @@ func (s *grpcServer) GetRuntime(ctx context.Context, req *pb.RuntimeRequest) (*p
 }
 
 func (s *grpcServer) GetRuntimes(ctx context.Context, req *pb.RuntimesRequest) (*pb.RuntimesResponse, error) {
-	runtimes, err := s.backend.GetRuntimes(ctx)
+	runtimes, err := s.backend.GetRuntimes(ctx, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}

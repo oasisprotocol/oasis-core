@@ -265,7 +265,7 @@ func (s *trivialSchedulerState) updateRuntimes(ctx context.Context, epoch epocht
 		return err
 	}
 
-	runtimes, err = reg.GetBlockRuntimes(ctx, height)
+	runtimes, err = reg.GetRuntimes(ctx, height)
 
 	if err != nil {
 		return err
@@ -469,7 +469,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 
 	if runtimes := s.state.runtimes[epoch]; runtimes == nil {
 		var runtimes []*registry.Runtime
-		runtimes, err = s.registry.GetBlockRuntimes(ctx, height)
+		runtimes, err = s.registry.GetRuntimes(ctx, height)
 		if err != nil {
 			return nil, err
 		}
@@ -488,7 +488,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 
 	if nodeList := s.state.computeNodeLists[epoch]; nodeList == nil {
 		var nl *registry.NodeList
-		nl, err = s.registry.GetBlockNodeList(ctx, height)
+		nl, err = s.registry.GetNodeList(ctx, height)
 		if err != nil {
 			return nil, err
 		}

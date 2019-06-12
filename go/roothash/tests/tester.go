@@ -104,14 +104,14 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	var genesisBlock *block.Block
 	select {
 	case blk := <-ch:
-		header := blk.Header
+		header := blk.Block.Header
 
 		require.EqualValues(header.Version, 0, "block version")
 		require.EqualValues(0, header.Round, "block round")
 		require.Equal(block.Normal, header.HeaderType, "block header type")
 		require.True(header.IORoot.IsEmpty(), "block I/O root empty")
 		require.True(header.StateRoot.IsEmpty(), "block root hash empty")
-		genesisBlock = blk
+		genesisBlock = blk.Block
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive block")
 	}
@@ -146,7 +146,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	require.NoError(err, "GetEpoch")
 
 	// Subscribe to blocks for all of the runtimes.
-	var blkChannels []<-chan *block.Block
+	var blkChannels []<-chan *api.AnnotatedBlock
 	for i := range states {
 		v := states[i]
 		ch, sub, err := backend.WatchBlocks(v.rt.Runtime.ID)
@@ -166,7 +166,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	}
 }
 
-func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *block.Block) {
+func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *api.AnnotatedBlock) {
 	require := require.New(t)
 
 	nodes := make(map[signature.MapKey]*registryTests.TestNode)
@@ -180,7 +180,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 	for {
 		select {
 		case blk := <-ch:
-			header := blk.Header
+			header := blk.Block.Header
 
 			if header.HeaderType != block.EpochTransition {
 				continue
@@ -295,7 +295,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	for {
 		select {
 		case blk := <-ch:
-			header := blk.Header
+			header := blk.Block.Header
 
 			// Ensure that WatchBlocks uses the correct latest block.
 			require.True(header.Round >= child.Header.Round, "WatchBlocks must start at child block")
@@ -322,7 +322,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			// Check if we can fetch the block via GetBlock.
 			gblk, err := backend.GetBlock(context.Background(), rt.Runtime.ID, header.Round)
 			require.NoError(err, "GetBlock")
-			require.EqualValues(blk, gblk, "GetBlock")
+			require.EqualValues(blk.Block, gblk, "GetBlock")
 
 			// Nothing more to do after the block was received.
 			return

@@ -11,7 +11,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -260,11 +259,7 @@ func (n *Node) worker() {
 	defer (n.cancelCtx)()
 
 	// Start watching roothash blocks.
-	var blocksAnn <-chan *roothash.AnnotatedBlock
-	var blocksPlain <-chan *block.Block
-	var blocksSub *pubsub.Subscription
-	var err error
-	blocksAnn, blocksSub, err = n.Roothash.WatchAnnotatedBlocks(n.RuntimeID)
+	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.RuntimeID)
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -291,19 +286,12 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case blk := <-blocksAnn:
+		case blk := <-blocks:
 			// Received a block (annotated).
 			func() {
 				n.CrossNode.Lock()
 				defer n.CrossNode.Unlock()
 				n.handleNewBlockLocked(blk.Block, blk.Height)
-			}()
-		case blk := <-blocksPlain:
-			// Received a block (plain).
-			func() {
-				n.CrossNode.Lock()
-				defer n.CrossNode.Unlock()
-				n.handleNewBlockLocked(blk, 0)
 			}()
 		case ev := <-events:
 			// Received an event.

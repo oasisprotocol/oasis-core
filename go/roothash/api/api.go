@@ -57,16 +57,13 @@ type Backend interface {
 	// GetBlock returns the block at a specific height.
 	GetBlock(context.Context, signature.PublicKey, uint64) (*block.Block, error)
 
-	// WatchAnnotatedBlocks returns a channel that produces a stream of
+	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
-	WatchAnnotatedBlocks(signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
-
-	// WatchBlocks returns a channel that produces a stream of blocks.
 	//
 	// The latest block if any will get pushed to the stream immediately.
 	// Subsequent blocks will be pushed into the stream as they are
 	// confirmed.
-	WatchBlocks(signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error)
+	WatchBlocks(signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
 
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
@@ -93,25 +90,6 @@ type AnnotatedBlock struct {
 
 	// Block is the roothash block.
 	Block *block.Block
-}
-
-// MapAnnotatedBlockToBlock maps a channel of annotated blocks to a channel of
-// plain blocks.
-func MapAnnotatedBlockToBlock(annCh <-chan *AnnotatedBlock) <-chan *block.Block {
-	ch := make(chan *block.Block)
-	go func() {
-		for {
-			ann, ok := <-annCh
-			if !ok {
-				close(ch)
-				return
-			}
-
-			ch <- ann.Block
-		}
-	}()
-
-	return ch
 }
 
 // ComputeDiscrepancyDetectedEvent is a compute discrepancy detected event.

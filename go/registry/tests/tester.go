@@ -294,7 +294,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 
 	require := require.New(t)
 
-	existingRuntimes, err := backend.GetRuntimes(context.Background())
+	existingRuntimes, err := backend.GetRuntimes(context.Background(), 0)
 	require.NoError(err, "GetRuntimes")
 
 	entities, err := NewTestEntities(seed, 1)
@@ -309,7 +309,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 
 	rt.MustRegister(t, backend)
 
-	registeredRuntimes, err := backend.GetRuntimes(context.Background())
+	registeredRuntimes, err := backend.GetRuntimes(context.Background(), 0)
 	require.NoError(err, "GetRuntimes")
 	// NOTE: There can be two runtimes registered here instead of one because the worker
 	//       tests that run before this register their own runtime and this runtime

@@ -240,7 +240,7 @@ func (r *tendermintBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscr
 	return typedCh, sub
 }
 
-func (r *tendermintBackend) GetBlockNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+func (r *tendermintBackend) GetNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
 	epoch, err := r.timeSource.GetBlockEpoch(ctx, height)
 	if err != nil {
 		return nil, err
@@ -255,8 +255,8 @@ func (r *tendermintBackend) Cleanup() {
 	})
 }
 
-func (r *tendermintBackend) GetRuntimes(ctx context.Context) ([]*api.Runtime, error) {
-	response, err := r.service.Query(app.QueryGetRuntimes, nil, 0)
+func (r *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
+	response, err := r.service.Query(app.QueryGetRuntimes, nil, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "registry: get runtimes query failed")
 	}
@@ -267,15 +267,6 @@ func (r *tendermintBackend) GetRuntimes(ctx context.Context) ([]*api.Runtime, er
 	}
 
 	return runtimes, nil
-}
-
-func (r *tendermintBackend) GetBlockRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	epoch, err := r.timeSource.GetBlockEpoch(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.getRuntimes(ctx, epoch)
 }
 
 func (r *tendermintBackend) workerEvents(ctx context.Context) {
@@ -588,7 +579,7 @@ func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 
 // New constructs a new tendermint backed registry Backend instance.
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
-	// Initialze and register the tendermint service component.
+	// Initialize and register the tendermint service component.
 	app := app.New(timeSource)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
@@ -607,7 +598,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 	r.cached.runtimes = make(map[epochtime.EpochTime][]*api.Runtime)
 	r.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		wr := ch.In()
-		runtimes, err := r.GetRuntimes(ctx)
+		runtimes, err := r.GetRuntimes(ctx, 0)
 		if err != nil {
 			r.logger.Error("runtime notifier: unable to get a list of runtimes",
 				"err", err,

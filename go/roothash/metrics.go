@@ -40,8 +40,8 @@ type metricsWrapper struct {
 	api.Backend
 }
 
-func (w *metricsWrapper) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
-	return w.Backend.WatchAnnotatedBlocks(id)
+func (w *metricsWrapper) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+	return w.Backend.WatchBlocks(id)
 }
 
 func (w *metricsWrapper) worker() {
