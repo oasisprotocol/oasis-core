@@ -41,6 +41,7 @@ const (
 	cfgGenesisState                  = "runtime.genesis.state"
 	cfgKind                          = "runtime.kind"
 	cfgKeyManager                    = "runtime.keymanager"
+	cfgOutput                        = "runtime.genesis.file"
 	cfgEntity                        = "entity"
 
 	optKindCompute    = "compute"
@@ -61,6 +62,7 @@ var (
 		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdFlags.RegisterDebugTestEntity(cmd)
 			registerRuntimeFlags(cmd)
+			registerOutputFlag(cmd)
 		},
 		Run: doInitGenesis,
 	}
@@ -129,7 +131,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Write out the signed runtime registration.
 	b := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, runtimeGenesisFilename), b, 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(dataDir, viper.GetString(cfgOutput)), b, 0600); err != nil {
 		logger.Error("failed to write signed runtime genesis registration",
 			"err", err,
 		)
@@ -387,6 +389,18 @@ func loadEntity(dataDir string) (*entity.Entity, *signature.PrivateKey, error) {
 	return entity.Load(dataDir)
 }
 
+func registerOutputFlag(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgOutput, runtimeGenesisFilename, "File name of the document to be written under datadir")
+	}
+
+	for _, v := range []string{
+		cfgOutput,
+	} {
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
+}
+
 func registerRuntimeFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgID, "", "Runtime ID")
@@ -437,6 +451,7 @@ func Register(parentCmd *cobra.Command) {
 	}
 
 	registerRuntimeFlags(initGenesisCmd)
+	registerOutputFlag(initGenesisCmd)
 
 	cmdGrpc.RegisterClientFlags(listCmd, false)
 	cmdFlags.RegisterVerbose(listCmd)
