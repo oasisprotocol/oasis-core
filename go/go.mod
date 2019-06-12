@@ -41,7 +41,7 @@ require (
 	github.com/libp2p/go-libp2p-protocol v0.0.1
 	github.com/multiformats/go-multiaddr v0.0.2
 	github.com/oasislabs/deoxysii v0.0.0-20190610083944-a3e81dcb2dde
-	github.com/oasislabs/go-codec v0.0.0-20190606112002-f93a8da4ee71
+	github.com/oasislabs/go-codec v0.0.0-20190612092255-497cc071f728
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.2
