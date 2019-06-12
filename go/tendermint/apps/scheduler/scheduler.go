@@ -29,6 +29,7 @@ var (
 	rngContextCompute              = []byte("EkS-ABCI-Compute")
 	rngContextStorage              = []byte("EkS-ABCI-Storage")
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
+	rngContextMerge                = []byte("EkS-ABCI-Merge")
 )
 
 type schedulerApplication struct {
@@ -99,7 +100,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return fmt.Errorf("couldn't get nodes: %s", err.Error())
 		}
 
-		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler}
+		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler, scheduler.KindMerge}
 		for _, kind := range kinds {
 			if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, kind); err != nil {
 				return fmt.Errorf("couldn't elect %s committees: %s", kind, err.Error())
@@ -210,6 +211,19 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 	return false
 }
 
+func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registry.Runtime) bool {
+	if !n.HasRoles(node.RoleMergeWorker) {
+		return false
+	}
+	for _, nrt := range n.Runtimes {
+		if !nrt.ID.Equal(rt.ID) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
@@ -247,6 +261,15 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		}
 		sz = int(rt.TransactionSchedulerGroupSize)
 		rngCtx = rngContextTransactionScheduler
+	case scheduler.KindMerge:
+		for _, n := range nodes {
+			if app.isSuitableMergeWorker(n, rt) {
+				nodeList = append(nodeList, n)
+			}
+		}
+		// TODO: Allow independent group sizes.
+		sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
+		rngCtx = rngContextMerge
 	default:
 		// This is a problem with this code. Don't try to handle it at runtime.
 		return fmt.Errorf("scheduler: invalid committee type: %v", kind)
