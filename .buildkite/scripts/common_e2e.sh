@@ -439,7 +439,7 @@ run_seed_node() {
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint-insecure \
+        --beacon.backend insecure \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \

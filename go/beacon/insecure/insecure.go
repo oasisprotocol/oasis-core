@@ -10,18 +10,23 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/tendermint/iavl"
+
+	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
 // BackendName is the name of this implementation.
 const BackendName = "insecure"
 
 var (
-	_ api.Backend      = (*insecureDummy)(nil)
-	_ api.BlockBackend = (*insecureDummy)(nil)
+	_ api.Backend        = (*insecureDummy)(nil)
+	_ api.BlockBackend   = (*insecureDummy)(nil)
+	_ beaconabci.Backend = (*insecureDummy)(nil)
 
 	dummyContext = []byte("EkB-Dumm")
 
@@ -36,7 +41,7 @@ type insecureDummy struct {
 	lastEpoch epochtime.EpochTime
 }
 
-func (r *insecureDummy) GetBeacon(ctx context.Context, epoch epochtime.EpochTime) ([]byte, error) {
+func (r *insecureDummy) computeBeacon(epoch epochtime.EpochTime) [32]byte {
 	// Simulate a per-epoch shared random beacon value with
 	// `SHA512_256("EkB-Dumm" | to_le_64(epoch))` as it is a reasonable
 	// approximation of a well behaved random beacon, just without the
@@ -44,8 +49,11 @@ func (r *insecureDummy) GetBeacon(ctx context.Context, epoch epochtime.EpochTime
 	seed := make([]byte, len(dummyContext)+8)
 	copy(seed[:], dummyContext)
 	binary.LittleEndian.PutUint64(seed[len(dummyContext):], uint64(epoch))
-	ret := sha512.Sum512_256(seed)
+	return sha512.Sum512_256(seed)
+}
 
+func (r *insecureDummy) GetBeacon(ctx context.Context, epoch epochtime.EpochTime) ([]byte, error) {
+	ret := r.computeBeacon(epoch)
 	return ret[:], nil
 }
 
@@ -69,6 +77,12 @@ func (r *insecureDummy) GetBlockBeacon(ctx context.Context, height int64) ([]byt
 	}
 
 	return r.GetBeacon(ctx, epoch)
+}
+
+// GetBeaconABCI gets the beacon for the provided epoch.
+func (r *insecureDummy) GetBeaconABCI(ctx *abci.Context, tree *iavl.MutableTree, epoch epochtime.EpochTime) ([]byte, error) {
+	ret := r.computeBeacon(epoch)
+	return ret[:], nil
 }
 
 func (r *insecureDummy) worker(ctx context.Context) {
