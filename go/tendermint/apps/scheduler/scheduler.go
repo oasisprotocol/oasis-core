@@ -327,7 +327,11 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		var role scheduler.Role
 		switch {
 		case i == 0:
-			role = scheduler.Leader
+			if kind.NeedsLeader() {
+				role = scheduler.Leader
+			} else {
+				role = scheduler.Worker
+			}
 		case i >= int(rt.ReplicaGroupSize):
 			role = scheduler.BackupWorker
 		default:
