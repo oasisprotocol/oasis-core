@@ -131,7 +131,7 @@ struct Inner {
     /// Unique session identifier.
     session_id: types::SessionID,
     /// Used transport.
-    transport: Box<Transport>,
+    transport: Box<dyn Transport>,
     /// Internal send queue receiver, only available until the controller
     /// is spawned (is None later).
     recvq: Mutex<Option<mpsc::Receiver<SendqRequest>>>,
@@ -149,7 +149,7 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    fn new(transport: Box<Transport>, builder: Builder) -> Self {
+    fn new(transport: Box<dyn Transport>, builder: Builder) -> Self {
         let (tx, rx) = mpsc::channel(SENDQ_BACKLOG);
 
         Self {
@@ -240,7 +240,7 @@ impl RpcClient {
                             .and_then(move |_| {
                                 Self::call_raw(inner.clone(), Context::create_child(&ctx), request)
                             })
-                            .then(move |result| -> Box<Future<Item = (), Error = ()> + Send> {
+                            .then(move |result| -> Box<dyn Future<Item = (), Error = ()> + Send> {
                                 match result {
                                     ref r if r.is_ok() || retries >= inner2.max_retries => {
                                         drop(rsp_tx.send(result));

@@ -31,7 +31,7 @@ use simple_keyvalue_api::{with_api, KeyValue};
 include!(concat!(env!("OUT_DIR"), "/km_enclave_hash.rs"));
 
 struct Context {
-    km_client: Arc<KeyManagerClient>,
+    km_client: Arc<dyn KeyManagerClient>,
 }
 
 /// Insert a key/value pair.
@@ -174,7 +174,7 @@ impl EncryptionContext {
     }
 
     /// Get encrypted MKVS entry.
-    pub fn get(&self, mkvs: &MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn get(&self, mkvs: &dyn MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
         let ciphertext = match mkvs.get(ctx, &key) {
             Some(ciphertext) => ciphertext,
@@ -187,7 +187,7 @@ impl EncryptionContext {
     /// Insert encrypted MKVS entry.
     pub fn insert(
         &self,
-        mkvs: &mut MKVS,
+        mkvs: &mut dyn MKVS,
         ctx: IoContext,
         key: &[u8],
         value: &[u8],
@@ -207,7 +207,7 @@ impl EncryptionContext {
     }
 
     /// Remove encrypted MKVS entry.
-    pub fn remove(&self, mkvs: &mut MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn remove(&self, mkvs: &mut dyn MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
         let ciphertext = match mkvs.remove(ctx, &key) {
             Some(ciphertext) => ciphertext,

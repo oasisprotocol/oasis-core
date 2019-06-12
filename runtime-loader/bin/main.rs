@@ -48,7 +48,7 @@ fn main() {
     proxy::start_proxies(matches.clone());
 
     // Create appropriate loader and run the runtime.
-    let loader: Box<Loader> = match mode {
+    let loader: Box<dyn Loader> = match mode {
         "sgxs" => Box::new(SgxsLoader),
         "elf" => Box::new(ElfLoader),
         _ => panic!("Invalid runtime type specified"),

@@ -77,7 +77,7 @@ struct Inner {
     /// Master secret.
     master_secret: Option<MasterSecret>,
     checksum: Option<Vec<u8>>,
-    signer: Option<Arc<signature::Signer>>,
+    signer: Option<Arc<dyn signature::Signer>>,
     cache: LruCache<Vec<u8>, ContractKey>,
 }
 
@@ -168,7 +168,7 @@ impl Kdf {
 
         #[cfg(target_env = "sgx")]
         {
-            let signer: Arc<signature::Signer> = ctx.rak.clone();
+            let signer: Arc<dyn signature::Signer> = ctx.rak.clone();
             inner.signer = Some(signer);
 
             f.update(ctx.rak.public_key().unwrap().as_ref());
@@ -181,7 +181,7 @@ impl Kdf {
 
             f.update(priv_key.public_key().as_ref());
 
-            let signer: Arc<signature::Signer> = priv_key;
+            let signer: Arc<dyn signature::Signer> = priv_key;
             inner.signer = Some(signer);
         }
         f.finalize(&mut k);

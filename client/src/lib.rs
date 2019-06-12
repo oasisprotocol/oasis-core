@@ -28,7 +28,7 @@ pub mod rpc;
 pub mod transaction;
 
 /// Boxed future type.
-pub type BoxFuture<T> = Box<futures::Future<Item = T, Error = failure::Error> + Send>;
+pub type BoxFuture<T> = Box<dyn futures::Future<Item = T, Error = failure::Error> + Send>;
 
 // Re-exports.
 pub use self::rpc::RpcClient;

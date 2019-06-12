@@ -86,7 +86,7 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     /// Create a new runtime call dispatcher.
-    pub fn new(initializer: Option<Box<Initializer>>, rak: Arc<RAK>) -> Arc<Self> {
+    pub fn new(initializer: Option<Box<dyn Initializer>>, rak: Arc<RAK>) -> Arc<Self> {
         let (tx, rx) = channel::bounded(BACKLOG_SIZE);
         let dispatcher = Arc::new(Dispatcher {
             logger: get_logger("runtime/dispatcher"),
@@ -115,7 +115,7 @@ impl Dispatcher {
         Ok(())
     }
 
-    fn run(&self, initializer: Option<Box<Initializer>>, rx: channel::Receiver<QueueItem>) {
+    fn run(&self, initializer: Option<Box<dyn Initializer>>, rx: channel::Receiver<QueueItem>) {
         // Wait for the protocol instance to be available.
         let protocol = {
             let mut guard = self.protocol.lock().unwrap();
