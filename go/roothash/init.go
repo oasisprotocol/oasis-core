@@ -14,7 +14,6 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/memory"
 	"github.com/oasislabs/ekiden/go/roothash/tendermint"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -42,8 +41,6 @@ func New(
 	var err error
 
 	switch strings.ToLower(backend) {
-	case memory.BackendName:
-		impl = memory.New(ctx, scheduler, registry, nil, roundTimeout)
 	case tendermint.BackendName:
 		impl, err = tendermint.New(ctx, dataDir, timeSource, scheduler, beacon, tmService, roundTimeout)
 	default:
@@ -60,7 +57,7 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, memory.BackendName, "Root hash backend")
+		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Root hash backend")
 		cmd.Flags().Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
 	}
 

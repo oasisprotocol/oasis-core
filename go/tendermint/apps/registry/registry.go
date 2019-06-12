@@ -31,7 +31,7 @@ type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 }
 
 func (app *registryApplication) Name() string {
@@ -428,7 +428,7 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.BlockBackend) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &registryApplication{
 		logger:     logging.GetLogger("tendermint/registry"),
 		timeSource: timeSource,

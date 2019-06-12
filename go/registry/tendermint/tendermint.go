@@ -28,14 +28,13 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend      = (*tendermintBackend)(nil)
-	_ api.BlockBackend = (*tendermintBackend)(nil)
+	_ api.Backend = (*tendermintBackend)(nil)
 )
 
 type tendermintBackend struct {
 	logger *logging.Logger
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 	service    service.TendermintService
 
 	entityNotifier   *pubsub.Broker
@@ -589,21 +588,15 @@ func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 
 // New constructs a new tendermint backed registry Backend instance.
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
-	// We can only work with a block-based epochtime.
-	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errors.New("registry/tendermint: need a block-based epochtime backend")
-	}
-
 	// Initialze and register the tendermint service component.
-	app := app.New(blockTimeSource)
+	app := app.New(timeSource)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
 
 	r := &tendermintBackend{
 		logger:           logging.GetLogger("registry/tendermint"),
-		timeSource:       blockTimeSource,
+		timeSource:       timeSource,
 		service:          service,
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),

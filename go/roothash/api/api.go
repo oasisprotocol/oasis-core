@@ -57,6 +57,10 @@ type Backend interface {
 	// GetBlock returns the block at a specific height.
 	GetBlock(context.Context, signature.PublicKey, uint64) (*block.Block, error)
 
+	// WatchAnnotatedBlocks returns a channel that produces a stream of
+	// annotated blocks.
+	WatchAnnotatedBlocks(signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
+
 	// WatchBlocks returns a channel that produces a stream of blocks.
 	//
 	// The latest block if any will get pushed to the stream immediately.
@@ -79,15 +83,6 @@ type Backend interface {
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
-}
-
-// BlockBackend is a root hash backend that is backed by a blockchain.
-type BlockBackend interface {
-	Backend
-
-	// WatchAnnotatedBlocks returns a channel that produces a stream of
-	// annotated blocks.
-	WatchAnnotatedBlocks(signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
 }
 
 // AnnotatedBlock is an annotated roothash block.

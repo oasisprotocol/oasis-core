@@ -139,6 +139,13 @@ type Backend interface {
 	// GetRuntimes gets a list of all registered runtimes.
 	GetRuntimes(context.Context) ([]*Runtime, error)
 
+	// GetBlockNodeList returns the NodeList at the specified block height.
+	GetBlockNodeList(context.Context, int64) (*NodeList, error)
+
+	// GetBlockRuntimes returns the registered Runtimes at the specified
+	// block height.
+	GetBlockRuntimes(context.Context, int64) ([]*Runtime, error)
+
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
 	WatchRuntimes() (<-chan *Runtime, *pubsub.Subscription)
@@ -172,18 +179,6 @@ type NodeEvent struct {
 type NodeList struct {
 	Epoch epochtime.EpochTime
 	Nodes []*node.Node
-}
-
-// BlockBackend is a Backend that is backed by a blockchain.
-type BlockBackend interface {
-	Backend
-
-	// GetBlockNodeList returns the NodeList at the specified block height.
-	GetBlockNodeList(context.Context, int64) (*NodeList, error)
-
-	// GetBlockRuntimes returns the registered Runtimes at the specified
-	// block height.
-	GetBlockRuntimes(context.Context, int64) ([]*Runtime, error)
 }
 
 type Timestamp uint64

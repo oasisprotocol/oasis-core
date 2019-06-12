@@ -37,8 +37,7 @@ const (
 )
 
 var (
-	_ api.Backend      = (*tendermintBackend)(nil)
-	_ api.BlockBackend = (*tendermintBackend)(nil)
+	_ api.Backend = (*tendermintBackend)(nil)
 )
 
 type runtimeBrokers struct {
@@ -406,20 +405,8 @@ func New(
 	service service.TendermintService,
 	roundTimeout time.Duration,
 ) (api.Backend, error) {
-	// We can only work with a block-based epochtime.
-	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errors.New("roothash/tendermint: need a block-based epochtime backend")
-	}
-
-	// We can only work with a block-based scheduler.
-	blockScheduler, ok := sched.(scheduler.BlockBackend)
-	if !ok {
-		return nil, errors.New("roothash/tendermint: need a block-based scheduler backend")
-	}
-
 	// Initialize and register the tendermint service component.
-	app := app.New(ctx, blockTimeSource, blockScheduler, beac, roundTimeout)
+	app := app.New(ctx, timeSource, sched, beac, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

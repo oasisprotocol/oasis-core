@@ -52,13 +52,7 @@ type blockWatcher struct {
 }
 
 func (w *blockWatcher) refreshCommittee(height int64) error {
-	var committees []*scheduler.Committee
-	var err error
-	if sched, ok := w.common.scheduler.(scheduler.BlockBackend); ok {
-		committees, err = sched.GetBlockCommittees(w.common.ctx, w.id, height, nil)
-	} else {
-		committees, err = w.common.scheduler.GetCommittees(w.common.ctx, w.id)
-	}
+	committees, err := w.common.scheduler.GetBlockCommittees(w.common.ctx, w.id, height, nil)
 	if err != nil {
 		return err
 	}
@@ -168,7 +162,6 @@ func (w *blockWatcher) watch() {
 
 	// Start watching roothash blocks.
 	var blocksAnn <-chan *roothash.AnnotatedBlock
-	var blocksPlain <-chan *block.Block
 	var blocksSub *pubsub.Subscription
 	var err error
 
@@ -176,11 +169,7 @@ func (w *blockWatcher) watch() {
 	// block, otherwise just from epoch transition blocks.
 	gotFirstBlock := false
 
-	if rh, ok := w.common.roothash.(roothash.BlockBackend); ok {
-		blocksAnn, blocksSub, err = rh.WatchAnnotatedBlocks(w.id)
-	} else {
-		blocksPlain, blocksSub, err = w.common.roothash.WatchBlocks(w.id)
-	}
+	blocksAnn, blocksSub, err = w.common.roothash.WatchAnnotatedBlocks(w.id)
 	if err != nil {
 		w.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -198,10 +187,6 @@ func (w *blockWatcher) watch() {
 		case blk := <-blocksAnn:
 			current = blk.Block
 			height = blk.Height
-
-		case blk := <-blocksPlain:
-			current = blk
-			height = 0
 
 		case newWatch := <-w.newCh:
 			w.watched[*newWatch.id] = newWatch

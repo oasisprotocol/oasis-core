@@ -46,7 +46,8 @@ const (
 )
 
 var (
-	_ api.Backend = (*storageClientBackend)(nil)
+	_ api.Backend       = (*storageClientBackend)(nil)
+	_ api.ClientBackend = (*storageClientBackend)(nil)
 )
 
 // ErrStorageNotAvailable is the error returned when a storage is not
@@ -101,7 +102,7 @@ type backendState struct {
 	connectionEpoch epochtime.EpochTime
 }
 
-// GetConnectedNode returns registry node information about the connected
+// GetConnectedNodes returns registry node information about the connected
 // storage nodes.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 	b.connectedNodesState.RLock()

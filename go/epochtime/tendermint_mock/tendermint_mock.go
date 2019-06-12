@@ -24,7 +24,7 @@ const (
 	BackendName = "tendermint_mock"
 )
 
-var _ api.BlockBackend = (*tendermintMockBackend)(nil)
+var _ api.Backend = (*tendermintMockBackend)(nil)
 
 type tendermintMockBackend struct {
 	sync.RWMutex

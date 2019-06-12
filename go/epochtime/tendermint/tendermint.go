@@ -19,7 +19,7 @@ const (
 	BackendName = "tendermint"
 )
 
-var _ api.BlockBackend = (*tendermintBackend)(nil)
+var _ api.Backend = (*tendermintBackend)(nil)
 
 type tendermintBackend struct {
 	sync.RWMutex

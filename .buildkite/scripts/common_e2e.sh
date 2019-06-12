@@ -163,7 +163,7 @@ run_backend_tendermint_committee() {
             --grpc.debug.port ${grpc_debug_port} \
             --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
-            --beacon.backend insecure \
+            --beacon.backend tendermint \
             --metrics.mode none \
             --storage.backend client \
             --scheduler.backend trivial \
@@ -249,7 +249,7 @@ run_compute_node() {
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend insecure \
+        --beacon.backend tendermint \
         --metrics.mode none \
         --scheduler.backend trivial \
         --registry.backend tendermint \
@@ -323,7 +323,7 @@ run_storage_node() {
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend insecure \
+        --beacon.backend tendermint \
         --metrics.mode none \
         --storage.backend leveldb \
         --scheduler.backend trivial \
@@ -383,7 +383,7 @@ run_client_node() {
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend insecure \
+        --beacon.backend tendermint \
         --metrics.mode none \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
@@ -467,7 +467,7 @@ run_keymanager_node() {
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend insecure \
+        --beacon.backend tendermint \
         --metrics.mode none \
         --scheduler.backend trivial \
         --registry.backend tendermint \
@@ -526,7 +526,7 @@ run_seed_node() {
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend insecure \
+        --beacon.backend tendermint \
         --scheduler.backend trivial \
         --registry.backend tendermint \
         --roothash.backend tendermint \

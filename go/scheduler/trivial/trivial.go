@@ -29,15 +29,12 @@ import (
 const BackendName = "trivial"
 
 var (
-	_ api.Backend      = (*trivialScheduler)(nil)
-	_ api.BlockBackend = (*trivialScheduler)(nil)
+	_ api.Backend = (*trivialScheduler)(nil)
 
 	rngContextCompute              = []byte("EkS-Dummy-Compute")
 	rngContextStorage              = []byte("EkS-Dummy-Storage")
 	rngContextTransactionScheduler = []byte("EkS-Dummy-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-Dummy-Merge")
-
-	errIncompatibleBackends = fmt.Errorf("scheduler/trivial: incompatible backend(s) for block operations")
 )
 
 type trivialScheduler struct {
@@ -248,7 +245,7 @@ func (s *trivialSchedulerState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
-func (s *trivialSchedulerState) updateRuntimes(ctx context.Context, epoch epochtime.EpochTime, ts epochtime.Backend, reg registry.Backend) error {
+func (s *trivialSchedulerState) updateRuntimes(ctx context.Context, epoch epochtime.EpochTime, timeSource epochtime.Backend, reg registry.Backend) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -261,22 +258,15 @@ func (s *trivialSchedulerState) updateRuntimes(ctx context.Context, epoch epocht
 		runtimes []*registry.Runtime
 		err      error
 	)
-	if blkReg, ok := reg.(registry.BlockBackend); ok {
-		blkTs, ok := ts.(epochtime.BlockBackend)
-		if !ok {
-			return errIncompatibleBackends
-		}
 
-		var height int64
-		height, err = blkTs.GetEpochBlock(ctx, epoch)
-		if err != nil {
-			return err
-		}
-
-		runtimes, err = blkReg.GetBlockRuntimes(ctx, height)
-	} else {
-		runtimes, err = reg.GetRuntimes(ctx)
+	var height int64
+	height, err = timeSource.GetEpochBlock(ctx, epoch)
+	if err != nil {
+		return err
 	}
+
+	runtimes, err = reg.GetBlockRuntimes(ctx, height)
+
 	if err != nil {
 		return err
 	}
@@ -432,15 +422,7 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 }
 
 func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
-	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errIncompatibleBackends
-	}
-	reg, ok := s.registry.(registry.BlockBackend)
-	if !ok {
-		return nil, errIncompatibleBackends
-	}
-	epoch, err := timeSource.GetBlockEpoch(ctx, height)
+	epoch, err := s.timeSource.GetBlockEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -468,11 +450,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 		var newBeacon []byte
 		switch getBeaconFn {
 		case nil:
-			beacon, ok := s.beacon.(beacon.BlockBackend)
-			if !ok {
-				return nil, errIncompatibleBackends
-			}
-			newBeacon, err = beacon.GetBlockBeacon(ctx, height)
+			newBeacon, err = s.beacon.GetBlockBeacon(ctx, height)
 		default:
 			newBeacon, err = getBeaconFn()
 		}
@@ -491,7 +469,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 
 	if runtimes := s.state.runtimes[epoch]; runtimes == nil {
 		var runtimes []*registry.Runtime
-		runtimes, err = reg.GetBlockRuntimes(ctx, height)
+		runtimes, err = s.registry.GetBlockRuntimes(ctx, height)
 		if err != nil {
 			return nil, err
 		}
@@ -510,7 +488,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 
 	if nodeList := s.state.computeNodeLists[epoch]; nodeList == nil {
 		var nl *registry.NodeList
-		nl, err = reg.GetBlockNodeList(ctx, height)
+		nl, err = s.registry.GetBlockNodeList(ctx, height)
 		if err != nil {
 			return nil, err
 		}
@@ -637,21 +615,7 @@ func (s *trivialScheduler) worker(ctx context.Context) { //nolint:gocyclo
 }
 
 func (s *trivialScheduler) getEpochTransitionTime(ctx context.Context, epoch epochtime.EpochTime) (time.Time, error) {
-	timeSource, ok := s.timeSource.(epochtime.BlockBackend)
-	if !ok || s.service == nil {
-		// Incompatible time backend, no BFT time available.  This
-		// WILL cause inconsitencies if the attestations happen to
-		// expire at inconvenient times.
-		//
-		// This isn't treated as an error under the assumption that
-		// if the user configures a non-BFT time source, they are
-		// presumably ok with the consequences of their decision.
-		//
-		// All production deployments will never hit this code path.
-		return time.Now(), nil
-	}
-
-	blockHeight, err := timeSource.GetEpochBlock(ctx, epoch)
+	blockHeight, err := s.timeSource.GetEpochBlock(ctx, epoch)
 	if err != nil {
 		return time.Time{}, err
 	}

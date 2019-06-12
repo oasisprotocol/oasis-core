@@ -30,7 +30,7 @@ type beaconApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 }
 
 func (app *beaconApplication) Name() string {
@@ -163,7 +163,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.Gener
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.BlockBackend) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &beaconApplication{
 		logger:     logging.GetLogger("tendermint/beacon"),
 		timeSource: timeSource,

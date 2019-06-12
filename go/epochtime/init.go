@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/epochtime/tendermint"
 	"github.com/oasislabs/ekiden/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -25,8 +24,6 @@ const (
 func New(ctx context.Context, tmService service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
-	case mock.BackendName:
-		return mock.New(), nil
 	case tendermint.BackendName:
 		interval := viper.GetInt64(cfgTendermintInterval)
 		return tendermint.New(ctx, tmService, interval)

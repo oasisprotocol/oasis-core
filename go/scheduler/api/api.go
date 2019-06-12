@@ -150,6 +150,13 @@ type Backend interface {
 	// runtime ID, for the current epoch.
 	GetCommittees(context.Context, signature.PublicKey) ([]*Committee, error)
 
+	// GetBlockCommittees returns the vector of committees for a given
+	// runtime ID, at the specified block height, and optional callback
+	// for querying the beacon for a given epoch/block height.
+	//
+	// Iff the callback is nil, `beacon.GetBlockBeacon` will be used.
+	GetBlockCommittees(context.Context, signature.PublicKey, int64, GetBeaconFunc) ([]*Committee, error)
+
 	// WatchCommittees returns a channel that produces a stream of
 	// Committee.
 	//
@@ -159,18 +166,6 @@ type Backend interface {
 
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()
-}
-
-// BlockBackend is a Backend that is backed by a blockchain.
-type BlockBackend interface {
-	Backend
-
-	// GetBlockCommittees returns the vector of committees for a given
-	// runtime ID, at the specified block height, and optional callback
-	// for querying the beacon for a given epoch/block height.
-	//
-	// Iff the callback is nil, `beacon.GetBlockBeacon` will be used.
-	GetBlockCommittees(context.Context, signature.PublicKey, int64, GetBeaconFunc) ([]*Committee, error)
 }
 
 // GetBeaconFunc is the callback used to query a beacon from a BlockBackend.

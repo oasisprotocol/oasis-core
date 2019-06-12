@@ -21,7 +21,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/epochtime/mock"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -70,7 +69,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	// Initialize the various backends.
-	timeSource := mock.New()
 	pk, err := signature.NewPrivateKey(rand.Reader)
 	if err != nil {
 		logger.Error("failed to generate new private key",
@@ -79,7 +77,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		return
 	}
 
-	storage, err := storage.New(context.Background(), dataDir, timeSource, nil, nil, &pk)
+	storage, err := storage.New(context.Background(), dataDir, nil, nil, nil, &pk)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

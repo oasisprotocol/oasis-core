@@ -24,8 +24,7 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend      = (*Backend)(nil)
-	_ api.BlockBackend = (*Backend)(nil)
+	_ api.Backend = (*Backend)(nil)
 
 	errIncoherentTime = errors.New("beacon/tendermint: incoherent time")
 )
@@ -34,7 +33,7 @@ var (
 type Backend struct {
 	logger *logging.Logger
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 	service    service.TendermintService
 	notifier   *pubsub.Broker
 
@@ -173,20 +172,15 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		return nil, err
 	}
 
-	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errors.New("beacon/tendermint: need a block-based epochtime backend")
-	}
-
 	// Initialize and register the tendermint service component.
-	app := app.New(blockTimeSource)
+	app := app.New(timeSource)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
 
 	t := &Backend{
 		logger:     logging.GetLogger("beacon/tendermint"),
-		timeSource: blockTimeSource,
+		timeSource: timeSource,
 		service:    service,
 		notifier:   pubsub.NewBroker(true),
 	}

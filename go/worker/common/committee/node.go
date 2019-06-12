@@ -264,11 +264,7 @@ func (n *Node) worker() {
 	var blocksPlain <-chan *block.Block
 	var blocksSub *pubsub.Subscription
 	var err error
-	if rh, ok := n.Roothash.(roothash.BlockBackend); ok {
-		blocksAnn, blocksSub, err = rh.WatchAnnotatedBlocks(n.RuntimeID)
-	} else {
-		blocksPlain, blocksSub, err = n.Roothash.WatchBlocks(n.RuntimeID)
-	}
+	blocksAnn, blocksSub, err = n.Roothash.WatchAnnotatedBlocks(n.RuntimeID)
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
