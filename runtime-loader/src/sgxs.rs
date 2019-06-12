@@ -32,7 +32,7 @@ impl UsercallExtension for HostService {
         addr: &str,
         _local_addr: Option<&mut String>,
         _peer_addr: Option<&mut String>,
-    ) -> IoResult<Option<Box<SyncStream>>> {
+    ) -> IoResult<Option<Box<dyn SyncStream>>> {
         match &*addr {
             "worker-host" => {
                 // Connect to worker host socket.

@@ -111,7 +111,7 @@ struct MethodHandlerDispatchImpl<Call, Output> {
     /// Method descriptor.
     descriptor: MethodDescriptor,
     /// Method handler.
-    handler: Box<MethodHandler<Call, Output>>,
+    handler: Box<dyn MethodHandler<Call, Output>>,
 }
 
 impl<Call, Output> MethodHandlerDispatch for MethodHandlerDispatchImpl<Call, Output>
@@ -134,7 +134,7 @@ where
 /// Runtime method dispatcher implementation.
 pub struct Method {
     /// Method dispatcher.
-    dispatcher: Box<MethodHandlerDispatch>,
+    dispatcher: Box<dyn MethodHandlerDispatch>,
 }
 
 impl Method {
@@ -172,11 +172,11 @@ pub struct Dispatcher {
     /// Registered runtime methods.
     methods: HashMap<String, Method>,
     /// Registered batch handler.
-    batch_handler: Option<Box<BatchHandler>>,
+    batch_handler: Option<Box<dyn BatchHandler>>,
     /// Registered context initializer.
-    ctx_initializer: Option<Box<ContextInitializer>>,
+    ctx_initializer: Option<Box<dyn ContextInitializer>>,
     /// Registered finalizer.
-    finalizer: Option<Box<Finalizer>>,
+    finalizer: Option<Box<dyn Finalizer>>,
 }
 
 impl Dispatcher {

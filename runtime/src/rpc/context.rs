@@ -13,7 +13,7 @@ pub struct Context {
     /// Information about the session the RPC call was delivered over.
     pub session_info: Option<Arc<SessionInfo>>,
     /// Runtime-specific context.
-    pub runtime: Box<Any>,
+    pub runtime: Box<dyn Any>,
 }
 
 impl Context {

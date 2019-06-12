@@ -54,7 +54,7 @@ struct MethodHandlerDispatchImpl<Rq, Rsp> {
     /// Method descriptor.
     descriptor: MethodDescriptor,
     /// Method handler.
-    handler: Box<MethodHandler<Rq, Rsp>>,
+    handler: Box<dyn MethodHandler<Rq, Rsp>>,
 }
 
 impl<Rq, Rsp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Rq, Rsp>
@@ -79,7 +79,7 @@ where
 /// RPC method dispatcher implementation.
 pub struct Method {
     /// Method dispatcher.
-    dispatcher: Box<MethodHandlerDispatch>,
+    dispatcher: Box<dyn MethodHandlerDispatch>,
 }
 
 impl Method {

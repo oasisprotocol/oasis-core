@@ -10,7 +10,7 @@ use log;
 use std::{env, sync::Arc};
 
 /// Starts the runtime.
-pub fn start_runtime(initializer: Option<Box<Initializer>>) {
+pub fn start_runtime(initializer: Option<Box<dyn Initializer>>) {
     // Output backtraces.
     env::set_var("RUST_BACKTRACE", "1");
 

@@ -7,8 +7,8 @@ use std::{cell::RefCell, sync::Arc};
 use super::{KeyValue, MKVS};
 
 struct Ctx {
-    mkvs: *mut MKVS,
-    untrusted_local: Arc<KeyValue>,
+    mkvs: *mut dyn MKVS,
+    untrusted_local: Arc<dyn KeyValue>,
 }
 
 thread_local! {
@@ -18,7 +18,7 @@ thread_local! {
 struct CtxGuard;
 
 impl CtxGuard {
-    fn new<M>(mkvs: &mut M, untrusted_local: Arc<KeyValue>) -> Self
+    fn new<M>(mkvs: &mut M, untrusted_local: Arc<dyn KeyValue>) -> Self
     where
         M: MKVS + 'static,
     {
@@ -47,7 +47,7 @@ pub struct StorageContext;
 
 impl StorageContext {
     /// Enter the storage context.
-    pub fn enter<M, F, R>(mkvs: &mut M, untrusted_local: Arc<KeyValue>, f: F) -> R
+    pub fn enter<M, F, R>(mkvs: &mut M, untrusted_local: Arc<dyn KeyValue>, f: F) -> R
     where
         M: MKVS + 'static,
         F: FnOnce() -> R,
@@ -63,7 +63,7 @@ impl StorageContext {
     /// Will panic if called outside `StorageContext::enter`.
     pub fn with_current<F, R>(f: F) -> R
     where
-        F: FnOnce(&mut MKVS, &Arc<KeyValue>) -> R,
+        F: FnOnce(&mut dyn MKVS, &Arc<dyn KeyValue>) -> R,
     {
         CTX.with(|ctx| {
             let ctx = ctx.borrow();

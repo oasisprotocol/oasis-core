@@ -17,7 +17,7 @@ pub struct Context<'a> {
     /// The block header accompanying this transaction.
     pub header: &'a Header,
     /// Runtime-specific context.
-    pub runtime: Box<Any>,
+    pub runtime: Box<dyn Any>,
 
     /// Flag indicating whether to only perform transaction check rather than
     /// running the transaction.
