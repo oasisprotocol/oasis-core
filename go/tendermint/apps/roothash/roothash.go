@@ -190,7 +190,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
+		committees, err := app.scheduler.GetCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,

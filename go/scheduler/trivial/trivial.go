@@ -402,17 +402,6 @@ func (s *trivialScheduler) Cleanup() {
 	})
 }
 
-func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
-	s.state.RLock()
-	defer s.state.RUnlock()
-
-	comMap := s.state.committees[s.state.epoch]
-	if comMap == nil {
-		return nil, nil
-	}
-	return comMap[id.ToMapKey()], nil
-}
-
 func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
 	typedCh := make(chan *api.Committee)
 	sub := s.notifier.Subscribe()
@@ -421,7 +410,7 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
+func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
 	epoch, err := s.timeSource.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
@@ -458,7 +447,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 			return nil, err
 		}
 
-		s.logger.Debug("GetBlockCommittees: setting cached beacon",
+		s.logger.Debug("GetCommittees: setting cached beacon",
 			"epoch", epoch,
 			"height", height,
 			"beacon", hex.EncodeToString(newBeacon),
@@ -503,7 +492,7 @@ func (s *trivialScheduler) GetBlockCommittees(ctx context.Context, id signature.
 	return s.state.elect(rt, epoch, nil)
 }
 
-func (s *trivialScheduler) electAll(notifier *pubsub.Broker) {
+func (s *trivialScheduler) electAll() {
 	s.state.Lock()
 	defer s.state.Unlock()
 
@@ -610,7 +599,7 @@ func (s *trivialScheduler) worker(ctx context.Context) { //nolint:gocyclo
 			"epoch", s.state.epoch,
 		)
 
-		s.electAll(s.notifier)
+		s.electAll()
 	}
 }
 

@@ -50,7 +50,7 @@ type blockWatcher struct {
 }
 
 func (w *blockWatcher) refreshCommittee(height int64) error {
-	committees, err := w.common.scheduler.GetBlockCommittees(w.common.ctx, w.id, height, nil)
+	committees, err := w.common.scheduler.GetCommittees(w.common.ctx, w.id, height, nil)
 	if err != nil {
 		return err
 	}

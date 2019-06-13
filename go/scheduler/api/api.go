@@ -146,16 +146,12 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 
 // Backend is a scheduler implementation.
 type Backend interface {
-	// GetCommittees returns a vector of the committees for a given
-	// runtime ID, for the current epoch.
-	GetCommittees(context.Context, signature.PublicKey) ([]*Committee, error)
-
-	// GetBlockCommittees returns the vector of committees for a given
+	// GetCommittees returns the vector of committees for a given
 	// runtime ID, at the specified block height, and optional callback
 	// for querying the beacon for a given epoch/block height.
 	//
 	// Iff the callback is nil, `beacon.GetBlockBeacon` will be used.
-	GetBlockCommittees(context.Context, signature.PublicKey, int64, GetBeaconFunc) ([]*Committee, error)
+	GetCommittees(context.Context, signature.PublicKey, int64, GetBeaconFunc) ([]*Committee, error)
 
 	// WatchCommittees returns a channel that produces a stream of
 	// Committee.
