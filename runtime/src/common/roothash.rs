@@ -4,6 +4,7 @@
 //!
 //! This **MUST** be kept in sync with go/roothash/api/block.
 //!
+use serde_cbor;
 use serde_derive::{Deserialize, Serialize};
 
 use super::crypto::{hash::Hash, signature::SignatureBundle};
@@ -45,4 +46,59 @@ pub struct Header {
     pub state_root: Hash,
     /// Storage receipt.
     pub storage_receipt: SignatureBundle,
+}
+
+impl Header {
+    /// Returns a hash of an encoded header.
+    pub fn encoded_hash(&self) -> Hash {
+        Hash::digest_bytes(&serde_cbor::to_vec(&self).unwrap())
+    }
+}
+
+/// Compute results header signature context.
+#[cfg_attr(not(target_env = "sgx"), allow(unused))]
+pub const COMPUTE_RESULTS_HEADER_CONTEXT: [u8; 8] = *b"EkComRHd";
+
+/// The header of a computed batch output by a runtime. This header is a
+/// compressed representation (e.g., hashes instead of full content) of
+/// the actual results.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ComputeResultsHeader {
+    /// Hash of the previous block header this batch was computed against.
+    pub previous_hash: Hash,
+    /// The I/O merkle root.
+    pub io_root: Hash,
+    /// The root hash of the state after computing this batch.
+    pub state_root: Hash,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_consistent_hash() {
+        // NOTE: These hashes MUST be synced with go/roothash/api/block/header_test.go.
+        let empty = Header::default();
+        assert_eq!(
+            empty.encoded_hash(),
+            Hash::from("4d449a81ebd463bc77718dc6d93ff38baa0c3c1587437dc283b96c3605c2cbea")
+        );
+
+        let populated = Header {
+            version: 42,
+            namespace: Namespace::from(Hash::empty_hash().as_ref()),
+            round: 1000,
+            timestamp: 1560257841,
+            header_type: 1,
+            previous_hash: empty.encoded_hash(),
+            io_root: Hash::empty_hash(),
+            state_root: Hash::empty_hash(),
+            ..Default::default()
+        };
+        assert_eq!(
+            populated.encoded_hash(),
+            Hash::from("a97b8cb29db5cbe9d4e68d274402985b705b2e2d9e6a83491f2df6e1d9a8b0f6")
+        );
+    }
 }

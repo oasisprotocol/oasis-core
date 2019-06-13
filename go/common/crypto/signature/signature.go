@@ -381,8 +381,6 @@ type Signature struct {
 
 	// Signature is the actual raw signature.
 	Signature RawSignature `codec:"signature"`
-
-	// TODO: Attestation.
 }
 
 // Sign generates a signature with the private key over the context and
@@ -433,8 +431,6 @@ func (s *Signature) FromProto(pb *common.Signature) error {
 	if err := s.Signature.UnmarshalBinary(pb.GetSignature()); err != nil {
 		return err
 	}
-
-	// TODO: Attestation.
 
 	return nil
 }

@@ -9,27 +9,12 @@ use crate::{
             hash::Hash,
             signature::{PublicKey, Signature},
         },
-        roothash::Block,
+        roothash::{Block, ComputeResultsHeader},
         sgx::avr::AVR,
     },
     storage::mkvs::WriteLog,
     transaction::types::TxnBatch,
 };
-
-/// Batch attestation context.
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
-pub const BATCH_HASH_CONTEXT: [u8; 8] = *b"EkBatch-";
-
-/// Batch attestation parameters.
-#[derive(Serialize)]
-pub struct BatchSigMessage<'a> {
-    /// The block (partial fields) that we computed this batch on.
-    pub previous_block: &'a Block,
-    /// The I/O merkle root.
-    pub io_root: &'a Hash,
-    /// The root hash of the state after computing this batch.
-    pub state_root: &'a Hash,
-}
 
 /// Value of a tag's transaction index when the tag refers to the block.
 pub const TAG_TXN_INDEX_BLOCK: i32 = -1;
@@ -68,14 +53,12 @@ impl serde::Serialize for Tag {
 /// Computed batch.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComputedBatch {
+    /// Compute results header.
+    pub header: ComputeResultsHeader,
     /// Log that generates the I/O tree.
     pub io_write_log: WriteLog,
-    /// I/O merkle root.
-    pub io_root: Hash,
     /// Log of changes to the state tree.
     pub state_write_log: WriteLog,
-    /// New state merkle root.
-    pub new_state_root: Hash,
     /// If this runtime uses a TEE, then this is the signature of the batch's
     /// BatchSigMessage with the node's RAK for this runtime.
     pub rak_sig: Signature,

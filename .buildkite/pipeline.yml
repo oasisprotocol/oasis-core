@@ -188,6 +188,10 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
+    artifact_paths:
+      - e2e/*/*.log
+    env:
+      TEST_BASE_DIR: e2e
     agents:
       buildkite_agent_size: large
     plugins:
@@ -198,6 +202,10 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
+    artifact_paths:
+      - e2e/*/*.log
+    env:
+      TEST_BASE_DIR: e2e
     agents:
       buildkite_agent_size: large
     plugins:
@@ -212,6 +220,10 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
+    artifact_paths:
+      - e2e/*/*.log
+    env:
+      TEST_BASE_DIR: e2e
     agents:
       queue: intel-sgx
     plugins:
@@ -222,6 +234,10 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
+    artifact_paths:
+      - e2e/*/*.log
+    env:
+      TEST_BASE_DIR: e2e
     agents:
       queue: intel-sgx
     plugins:

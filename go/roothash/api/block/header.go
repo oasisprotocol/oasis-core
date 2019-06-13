@@ -194,12 +194,3 @@ func (h *Header) VerifyStorageReceipt(receipt *storage.MKVSReceiptBody) error {
 
 	return nil
 }
-
-// BatchSigMessage is batch attestation parameters.
-//
-// Keep the roothash RAK validation in sync with changes to this structure.
-type BatchSigMessage struct {
-	PreviousBlock Block     `codec:"previous_block"`
-	IORoot        hash.Hash `codec:"io_root"`
-	StateRoot     hash.Hash `codec:"state_root"`
-}

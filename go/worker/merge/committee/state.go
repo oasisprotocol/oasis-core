@@ -1,9 +1,9 @@
 package committee
 
 import (
+	"context"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 )
 
@@ -17,6 +17,8 @@ const (
 	WaitingForResults = "WaitingForResults"
 	// WaitingForEvent is the name of StateWaitingForEvent.
 	WaitingForEvent = "WaitingForEvent"
+	// ProcessingMerge is the name of StateProcessingMerge.
+	ProcessingMerge = "ProcessingMerge"
 	// WaitingForFinalize is the name of StateWaitingForFinalize.
 	WaitingForFinalize = "WaitingForFinalize"
 )
@@ -33,21 +35,27 @@ var validStateTransitions = map[StateName][]StateName{
 
 	// Transitions from WaitingForResults state.
 	WaitingForResults: {
+		// Abort: seen newer block while waiting for results.
+		WaitingForFinalize,
 		// We are waiting for more results.
 		WaitingForResults,
 		// Received results, waiting for disrepancy event.
 		WaitingForEvent,
-		// All results have been merged.
-		WaitingForFinalize,
-		// Epoch transition occurred and we are no longer in the committee.
-		NotReady,
+		// Got all results, merging.
+		ProcessingMerge,
 	},
 
 	// Transitions from WaitingForEvent state.
 	WaitingForEvent: {
 		// Abort: seen newer block while waiting for event.
-		WaitingForResults,
+		WaitingForFinalize,
 		// Discrepancy event received.
+		ProcessingMerge,
+	},
+
+	// Transitions from ProcessingMerge state.
+	ProcessingMerge: {
+		// Merge completed (or abort due to newer block seen).
 		WaitingForFinalize,
 	},
 
@@ -99,7 +107,7 @@ func (s StateWaitingForResults) String() string {
 // StateWaitingForEvent is the waiting for results state.
 type StateWaitingForEvent struct {
 	commitments []commitment.ComputeCommitment
-	headers     []*block.Header
+	results     []*commitment.ComputeResultsHeader
 }
 
 // Name returns the name of the state.
@@ -109,6 +117,22 @@ func (s StateWaitingForEvent) Name() StateName {
 
 // String returns a string representation of the state.
 func (s StateWaitingForEvent) String() string {
+	return string(s.Name())
+}
+
+// StateProcessingMerge is the processing merge state.
+type StateProcessingMerge struct {
+	doneCh <-chan *commitment.MergeBody
+	cancel context.CancelFunc
+}
+
+// Name returns the name of the state.
+func (s StateProcessingMerge) Name() StateName {
+	return ProcessingMerge
+}
+
+// String returns a string representation of the state.
+func (s StateProcessingMerge) String() string {
 	return string(s.Name())
 }
 

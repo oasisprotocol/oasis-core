@@ -277,7 +277,7 @@ func (s *runtimeState) tryFinalizeMerge(forced bool) { // nolint: gocyclo
 	latestBlock, _ := s.getLatestBlockImpl()
 	blockNr := latestBlock.Header.Round
 
-	header, err := s.round.mergePool.TryFinalize(now, s.rootHash.roundTimeout, forced)
+	commit, err := s.round.mergePool.TryFinalize(now, s.rootHash.roundTimeout, forced)
 	switch err {
 	case nil:
 		// Add the new block to the block chain.
@@ -287,7 +287,7 @@ func (s *runtimeState) tryFinalizeMerge(forced bool) { // nolint: gocyclo
 
 		// Generate the final block.
 		blk := new(block.Block)
-		blk.Header = *header
+		blk.Header = commit.ToDDResult().(block.Header)
 		blk.Header.Timestamp = uint64(now.Unix())
 
 		s.rootHash.allBlockNotifier.Broadcast(blk)

@@ -22,6 +22,8 @@ const (
 	ContextDeliverTx
 	// ContextBeginBlock is BeginBlock context.
 	ContextBeginBlock
+	// ContextEndBlock is EndBlock context.
+	ContextEndBlock
 )
 
 // OnCommitHook is a function used as a on commit hook.

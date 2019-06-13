@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"time"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -11,6 +13,7 @@ import (
 
 const (
 	cfgWorkerEnabled                = "worker.merge.enabled"
+	cfgStorageCommitTimeout         = "worker.merge.storage_commit_timeout"
 	cfgByzantineInjectDiscrepancies = "worker.merge.byzantine.inject_discrepancies"
 )
 
@@ -26,6 +29,7 @@ func New(
 ) (*Worker, error) {
 	cfg := Config{
 		Committee: committee.Config{
+			StorageCommitTimeout:         viper.GetDuration(cfgStorageCommitTimeout),
 			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
 	}
@@ -38,6 +42,7 @@ func New(
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable merge worker process")
+		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
 		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies")
 		_ = cmd.Flags().MarkHidden(cfgByzantineInjectDiscrepancies)
@@ -45,6 +50,7 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	for _, v := range []string{
 		cfgWorkerEnabled,
+		cfgStorageCommitTimeout,
 		cfgByzantineInjectDiscrepancies,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck

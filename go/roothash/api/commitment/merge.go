@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
@@ -43,6 +44,24 @@ type OpenMergeCommitment struct {
 	MergeCommitment
 
 	Body *MergeBody `codec:"body"`
+}
+
+// MostlyEqual returns true if the commitment is mostly equal to another
+// specified commitment as per discrepancy detection criteria.
+func (c OpenMergeCommitment) MostlyEqual(other OpenCommitment) bool {
+	return c.Body.Header.MostlyEqual(&other.(OpenMergeCommitment).Body.Header)
+}
+
+// ToVote returns a hash that represents a vote for this commitment as
+// per discrepancy resolution criteria.
+func (c OpenMergeCommitment) ToVote() hash.Hash {
+	return c.Body.Header.EncodedHash()
+}
+
+// ToDDResult returns a commitment-specific result after discrepancy
+// detection.
+func (c OpenMergeCommitment) ToDDResult() interface{} {
+	return c.Body.Header
 }
 
 // Open validates the merge commitment signature, and de-serializes the body.

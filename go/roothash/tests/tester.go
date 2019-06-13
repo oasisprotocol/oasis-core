@@ -258,7 +258,12 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	for _, node := range toCommit {
 		commitBody := commitment.ComputeBody{
 			CommitteeID: computeCommittee.committee.EncodedMembersHash(),
-			Header:      parent.Header,
+			Header: commitment.ComputeResultsHeader{
+				PreviousHash: parent.Header.PreviousHash,
+				IORoot:       parent.Header.IORoot,
+				StateRoot:    parent.Header.StateRoot,
+			},
+			StorageReceipt: parent.Header.StorageReceipt,
 		}
 		// `err` shadows outside.
 		commit, err := commitment.SignComputeCommitment(node.PrivateKey, &commitBody) // nolint: vetshadow

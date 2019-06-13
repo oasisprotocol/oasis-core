@@ -497,11 +497,6 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		ctx.outputType = ContextBeginBlock
 	}
 
-	// Fire all application timers first.
-	for _, app := range mux.appsByLexOrder {
-		fireTimers(ctx, mux.state, app)
-	}
-
 	// Dispatch BeginBlock to all applications.
 	for _, app := range mux.appsByLexOrder {
 		if err := app.BeginBlock(ctx, req); err != nil {
@@ -581,6 +576,14 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		"block_height", mux.state.BlockHeight(),
 	)
 
+	ctx := NewContext(ContextEndBlock, mux.currentTime)
+
+	// Fire all application timers first.
+	for _, app := range mux.appsByLexOrder {
+		fireTimers(ctx, mux.state, app)
+	}
+
+	// Dispatch EndBlock to all applications.
 	resp := mux.BaseApplication.EndBlock(req)
 	for _, app := range mux.appsByLexOrder {
 		newResp, err := app.EndBlock(req)
@@ -595,6 +598,11 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 			resp = newResp
 		}
 	}
+
+	ctx.fireOnCommitHooks(mux.state)
+
+	// Update tags.
+	resp.Tags = ctx.Tags()
 
 	return resp
 }
