@@ -375,25 +375,30 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		return
 	}
 
-	// TODO: Check that we have everything from all committees (#1775).
+	// Check that we have everything from all committees.
+	result := commit.ToDDResult().(commitment.ComputeResultsHeader)
+	state.results = append(state.results, &result)
+	if len(state.results) < len(state.pool.Committees) {
+		n.logger.Debug("still waiting for other committees")
+		// State transition to store the updated results.
+		n.transitionLocked(state)
+		return
+	}
 
 	n.logger.Info("have valid commitments from all committees, merging")
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	commitments := state.pool.GetComputeCommitments()
-	// TODO: Collect results from all committees (#1775).
-	result := commit.ToDDResult().(commitment.ComputeResultsHeader)
-	results := []*commitment.ComputeResultsHeader{&result}
 
 	if epoch.IsMergeBackupWorker() {
 		// Backup workers only perform merge after receiving a discrepancy event.
-		n.transitionLocked(StateWaitingForEvent{commitments: commitments, results: results})
+		n.transitionLocked(StateWaitingForEvent{commitments: commitments, results: state.results})
 		return
 	}
 
 	// No discrepancy, perform merge.
-	n.startMergeLocked(commitments, results)
+	n.startMergeLocked(commitments, state.results)
 }
 
 // Guarded by n.commonNode.CrossNode.
