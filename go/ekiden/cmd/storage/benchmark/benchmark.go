@@ -77,7 +77,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		return
 	}
 
-	storage, err := storage.New(context.Background(), dataDir, nil, nil, nil, &pk)
+	storage, err := storage.New(context.Background(), dataDir, nil, nil, &pk)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

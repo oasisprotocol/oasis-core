@@ -336,7 +336,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)
 	}
-	debugClient, err := storageClient.New(ctx, nil, nil, nil)
+	debugClient, err := storageClient.New(ctx, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
 	storageTests.StorageImplementationTests(t, debugClient)
 }

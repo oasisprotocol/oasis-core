@@ -5,13 +5,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
 var (
@@ -150,17 +150,8 @@ type Backend interface {
 type ClientBackend interface {
 	Backend
 
+	// GetConnectedNodes returns currently connected storage nodes.
 	GetConnectedNodes() []*node.Node
-}
-
-// HashStorageKey generates a storage key from its value.
-//
-// All backends MUST use this method to hash values (generate keys).
-func HashStorageKey(value []byte) Key {
-	sum := sha512.Sum512_256(value)
-	var k Key
-	copy(k[:], sum[:])
-	return k
 }
 
 // Genesis is the storage genesis state.

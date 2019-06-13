@@ -1,6 +1,5 @@
 // Package client implements a client for Ekiden storage nodes.
-// The client obtains storage info by following scheduler committees and always
-// connects to storage nodes scheduled for the latest epoch.
+// The client obtains storage info by following scheduler committees.
 // NOTE: The client assumes committees for all runtimes share the same
 // storage committee.
 package client
@@ -26,7 +25,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -60,9 +58,8 @@ var ErrStorageNotAvailable = errors.New("storage client: storage not available")
 type storageClientBackend struct {
 	logger *logging.Logger
 
-	timeSource epochtime.Backend
-	scheduler  scheduler.Backend
-	registry   registry.Backend
+	scheduler scheduler.Backend
+	registry  registry.Backend
 
 	state               *backendState
 	connectedNodesState *connectedNodesState
@@ -89,17 +86,13 @@ type clientState struct {
 	resolverCleanupCb func()
 }
 
-// backendState contains the most recent epoch information and the lists of
-// scheduled storage committees for each epoch.
+// backendState contains the most recent list of scheduled storage committees.
 type backendState struct {
 	sync.RWMutex
 
 	logger *logging.Logger
 
-	storageNodeLists map[epochtime.EpochTime][]*node.Node
-
-	epoch           epochtime.EpochTime
-	connectionEpoch epochtime.EpochTime
+	storageNodeList []*node.Node
 }
 
 // GetConnectedNodes returns registry node information about the connected
@@ -111,13 +104,13 @@ func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 	return b.connectedNodesState.nodes
 }
 
-func (b *storageClientBackend) updateNodesConnections() {
+func (b *storageClientBackend) updateNodeConnections() {
 	b.state.RLock()
 	defer b.state.RUnlock()
 
 	b.logger.Debug("updating connections to nodes")
 
-	nodeList := b.state.storageNodeLists[b.state.epoch]
+	nodeList := b.state.storageNodeList
 
 	// TODO: Should we only update connections if keys or addresses have
 	// changed?
@@ -201,67 +194,28 @@ func (b *storageClientBackend) updateNodesConnections() {
 		return
 	}
 
+	if !b.signaledInit {
+		b.signaledInit = true
+		close(b.initCh)
+	}
+
 	// TODO: Stop in-flight storage requests and retry them after new committee
 	// is known.
 	b.connectedNodesState.nodes = connNodes
 	b.connectedNodesState.clientStates = connClientStates
-	b.state.connectionEpoch = b.state.epoch
 }
 
-func (s *backendState) canUpdateConnections() bool {
-	s.RLock()
-	defer s.RUnlock()
-	return s.storageNodeLists[s.epoch] != nil
-}
-
-func (s *backendState) updateEpoch(epoch epochtime.EpochTime) {
-	s.Lock()
-	defer s.Unlock()
-
-	if epoch == s.epoch {
-		return
-	}
-	s.logger.Debug("worker: epoch transition",
-		"prev_epoch", s.epoch,
-		"epoch", epoch,
-	)
-
-	s.epoch = epoch
-}
-
-func (s *backendState) prune() {
-	s.Lock()
-	defer s.Unlock()
-
-	pruneBefore := s.epoch - 1
-	if pruneBefore > s.epoch {
-		return
-	}
-
-	for epoch := range s.storageNodeLists {
-		if epoch < pruneBefore {
-			delete(s.storageNodeLists, epoch)
-		}
-	}
-}
-
-func (s *backendState) updateStorageNodeList(ctx context.Context, epoch epochtime.EpochTime, nodes []*node.Node) error {
-	s.Lock()
-	defer s.Unlock()
-
-	// Re-scheduling within epoch not allowed, so if there is node list already there
-	// nothing to do.
-	if s.storageNodeLists[epoch] != nil {
-		return nil
-	}
-
+func (s *backendState) updateStorageNodeList(ctx context.Context, nodes []*node.Node) error {
 	storageNodes := []*node.Node{}
 	for _, n := range nodes {
 		if n.HasRoles(node.RoleStorageWorker) {
 			storageNodes = append(storageNodes, n)
 		}
 	}
-	s.storageNodeLists[epoch] = storageNodes
+
+	s.Lock()
+	defer s.Unlock()
+	s.storageNodeList = storageNodes
 
 	return nil
 }
@@ -570,33 +524,23 @@ func (b *storageClientBackend) Initialized() <-chan struct{} {
 }
 
 func (b *storageClientBackend) watcher(ctx context.Context) {
-	timeCh, sub := b.timeSource.WatchEpochs()
+	schedCh, sub := b.scheduler.WatchCommittees()
 	defer sub.Close()
 
 	nodeListCh, sub := b.registry.WatchNodeList()
-	defer sub.Close()
-
-	schedCh, sub := b.scheduler.WatchCommittees()
 	defer sub.Close()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case epoch := <-timeCh:
-			b.logger.Debug("worker: epoch transition", "epoch", epoch)
-			b.state.updateEpoch(epoch)
-			b.state.prune()
 		case ev := <-nodeListCh:
 			if ev == nil {
 				continue
 			}
-			b.logger.Debug("worker: node list for epoch",
-				"epoch", ev.Epoch,
-			)
-
-			if err := b.state.updateStorageNodeList(ctx, ev.Epoch, ev.Nodes); err != nil {
-				b.logger.Error("worker: failed to update storage list for epoch",
+			b.logger.Debug("got new storage node list")
+			if err := b.state.updateStorageNodeList(ctx, ev.Nodes); err != nil {
+				b.logger.Error("worker: failed to update storage list",
 					"err", err,
 				)
 				continue
@@ -616,28 +560,16 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 				continue
 			}
 
-		}
+			// Update storage node connection.
+			b.updateNodeConnections()
 
-		if b.state.epoch == b.state.connectionEpoch {
-			continue
+			b.logger.Debug("updated connections to nodes")
 		}
-		b.logger.Debug("epoch changed since last connection")
-
-		if !b.state.canUpdateConnections() {
-			continue
-		}
-
-		b.updateNodesConnections()
-		if !b.signaledInit {
-			b.signaledInit = true
-			close(b.initCh)
-		}
-		b.logger.Debug("updated connections to nodes")
 	}
 }
 
 // New creates a new client
-func New(ctx context.Context, epochtimeBackend epochtime.Backend, schedulerBackend scheduler.Backend, registryBackend registry.Backend) (api.Backend, error) {
+func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBackend registry.Backend) (api.Backend, error) {
 	logger := logging.GetLogger("storage/client")
 
 	if viper.GetString(cfgDebugClientAddress) != "" {
@@ -670,10 +602,9 @@ func New(ctx context.Context, epochtimeBackend epochtime.Backend, schedulerBacke
 		client := storage.NewStorageClient(conn)
 
 		b := &storageClientBackend{
-			logger:     logger,
-			timeSource: epochtimeBackend,
-			scheduler:  schedulerBackend,
-			registry:   registryBackend,
+			logger:    logger,
+			scheduler: schedulerBackend,
+			registry:  registryBackend,
 			connectedNodesState: &connectedNodesState{
 				nodes: []*node.Node{&node.Node{}},
 				clientStates: []*clientState{&clientState{
@@ -690,19 +621,16 @@ func New(ctx context.Context, epochtimeBackend epochtime.Backend, schedulerBacke
 	}
 
 	b := &storageClientBackend{
-		logger:     logger,
-		timeSource: epochtimeBackend,
-		scheduler:  schedulerBackend,
-		registry:   registryBackend,
+		logger:    logger,
+		scheduler: schedulerBackend,
+		registry:  registryBackend,
 		connectedNodesState: &connectedNodesState{
 			nodes:        []*node.Node{},
 			clientStates: []*clientState{},
 		},
 		state: &backendState{
-			logger:           logger,
-			storageNodeLists: make(map[epochtime.EpochTime][]*node.Node),
-			epoch:            epochtime.EpochInvalid,
-			connectionEpoch:  epochtime.EpochInvalid,
+			logger:          logger,
+			storageNodeList: []*node.Node{},
 		},
 		initCh: make(chan struct{}),
 	}

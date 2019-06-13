@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -32,7 +31,7 @@ const (
 )
 
 // New constructs a new Backend based on the configuration flags.
-func New(ctx context.Context, dataDir string, epochtimeBackend epochtime.Backend, schedulerBackend scheduler.Backend,
+func New(ctx context.Context, dataDir string, schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend, signingKey *signature.PrivateKey) (api.Backend, error) {
 	var impl api.Backend
 	var err error
@@ -59,10 +58,10 @@ func New(ctx context.Context, dataDir string, epochtimeBackend epochtime.Backend
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
 		impl, err = leveldb.New(dbDir, signingKey, lruSize, applyLockLRUSlots)
 	case client.BackendName:
-		impl, err = client.New(ctx, epochtimeBackend, schedulerBackend, registryBackend)
+		impl, err = client.New(ctx, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
 		var remote api.Backend
-		remote, err = client.New(ctx, epochtimeBackend, schedulerBackend, registryBackend)
+		remote, err = client.New(ctx, schedulerBackend, registryBackend)
 		if err != nil {
 			return nil, err
 		}

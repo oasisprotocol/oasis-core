@@ -2,6 +2,13 @@ package tests
 
 import (
 	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -12,11 +19,6 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"testing"
-	"time"
 )
 
 // ClientWorkerTests implements tests for client worker
@@ -33,7 +35,7 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 
 	rt.MustRegister(t, registry)
 	// Initialize storage client
-	client, err := storageClient.New(ctx, timeSource, scheduler, registry)
+	client, err := storageClient.New(ctx, scheduler, registry)
 	require.NoError(err, "NewStorageClient")
 	// Create mock root hash and id hash for GetValue().
 	var root, id hash.Hash
@@ -51,13 +53,13 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 	// Wait for initialization
 	<-client.Initialized()
 
-	connectedNodes := client.(*storageClientBackend).GetConnectedNodes()
+	// Need to wait a bit for client to update with newly populated nodes.
+	time.Sleep(5 * time.Second)
+
+	connectedNodes := client.(api.ClientBackend).GetConnectedNodes()
 	// NOTE: This number will change if the StorageGroupSize in
 	/// registryTests.NewTestRuntime() changes.
 	require.Equal(len(connectedNodes), 3, "storage client should be connected to all storage nodes")
-
-	// Wait a bit for client to update.
-	time.Sleep(1 * time.Second)
 
 	// TimeOut is expected, as test nodes do not actually start storage worker.
 	r, err = client.GetValue(ctx, root, id)
