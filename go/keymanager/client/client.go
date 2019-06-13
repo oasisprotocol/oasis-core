@@ -182,7 +182,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		n := nodeMap[v.ToMapKey()]
 		if n == nil {
 			c.logger.Warn("key manager node missing descriptor",
-				"id", n.ID,
+				"id", v,
 			)
 			continue
 		}
