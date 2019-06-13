@@ -26,6 +26,7 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #   EKIDEN_IAS_PROXY_PORT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
+#   EKIDEN_CLIENT_SOCKET
 #   EKIDEN_ENTITY_PRIVATE_KEY
 #
 # Optional named arguments:
@@ -155,13 +156,11 @@ run_backend_tendermint_committee() {
             --scheduler.backend trivial \
             --registry.backend tendermint \
             --roothash.backend tendermint \
-            --roothash.tendermint.index_blocks \
             --genesis.file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
             --tendermint.debug.addr_book_lenient \
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-            --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
             --datadir ${datadir} \
             &
 
@@ -174,6 +173,9 @@ run_backend_tendermint_committee() {
         # and start refusing connections.
         sleep 3
     done
+
+    # Run the client node.
+    run_client_node 1
 }
 
 # Run a compute node.
@@ -321,6 +323,63 @@ run_storage_node() {
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
         2>&1 | sed "s/^/[storage-node-${id}] /" &
+}
+
+# Run a client node.
+#
+# Requires that EKIDEN_GENESIS_FILE is set.
+# Exits with an error otherwise.
+#
+# Sets:
+#   EKIDEN_CLIENT_SOCKET
+#
+# Arguments:
+#   id - client node index
+#
+run_client_node() {
+    # Process arguments.
+    local id=$1
+    shift || true
+
+    # Ensure the genesis file is available.
+    if [[ "${EKIDEN_GENESIS_FILE:-}" == "" ]]; then
+        echo "ERROR: Genesis file not configured. Did you use run_backend_tendermint_committee?"
+        exit 1
+    fi
+
+    local data_dir=${EKIDEN_COMMITTEE_DIR}/client-$id
+    rm -rf ${data_dir}
+    local log_file=${EKIDEN_COMMITTEE_DIR}/client-$id.log
+    rm -rf ${log_file}
+
+    # Export some variables.
+    EKIDEN_CLIENT_SOCKET=${data_dir}/internal.sock
+
+    # Generate port numbers.
+    let tm_port=id+13200
+
+    ${EKIDEN_NODE} \
+        --log.level debug \
+        --log.file ${log_file} \
+        --grpc.log.verbose_debug \
+        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
+        --epochtime.tendermint.interval 30 \
+        --beacon.backend insecure \
+        --metrics.mode none \
+        --storage.backend cachingclient \
+        --storage.cachingclient.file ${data_dir}/storage-cache \
+        --scheduler.backend trivial \
+        --registry.backend tendermint \
+        --roothash.backend tendermint \
+        --roothash.tendermint.index_blocks \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.debug.addr_book_lenient \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
+        --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
+        --datadir ${data_dir} \
+        2>&1 | sed "s/^/[client-node-${id}] /" &
 }
 
 # Cat all worker node logs.
@@ -487,14 +546,14 @@ run_basic_client() {
     rm -rf ${log_file}
 
     # Wait for the socket to appear.
-    while [ ! -S "${EKIDEN_VALIDATOR_SOCKET}" ]
+    while [ ! -S "${EKIDEN_CLIENT_SOCKET}" ]
     do
       echo "Waiting for internal Ekiden node socket to appear..."
       sleep 1
     done
 
     ${WORKDIR}/target/debug/${client}-client \
-        --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --node-address unix:${EKIDEN_CLIENT_SOCKET} \
         --runtime-id ${EKIDEN_RUNTIME_ID} \
         ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[client] /" &
     EKIDEN_CLIENT_PID=$!
