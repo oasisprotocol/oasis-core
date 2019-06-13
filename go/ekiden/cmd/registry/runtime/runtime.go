@@ -39,7 +39,13 @@ const (
 	cfgStorageGroupSize              = "runtime.storage_group_size"
 	cfgTransactionSchedulerGroupSize = "runtime.transaction_scheduler_group_size"
 	cfgGenesisState                  = "runtime.genesis.state"
+	cfgKind                          = "runtime.kind"
+	cfgKeyManager                    = "runtime.keymanager"
+	cfgOutput                        = "runtime.genesis.file"
 	cfgEntity                        = "entity"
+
+	optKindCompute    = "compute"
+	optKindKeyManager = "keymanager"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -54,7 +60,9 @@ var (
 		Use:   "init_genesis",
 		Short: "initialize a runtime for genesis",
 		PreRun: func(cmd *cobra.Command, args []string) {
+			cmdFlags.RegisterDebugTestEntity(cmd)
 			registerRuntimeFlags(cmd)
+			registerOutputFlag(cmd)
 		},
 		Run: doInitGenesis,
 	}
@@ -64,6 +72,7 @@ var (
 		Short: "register a runtime",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdGrpc.RegisterClientFlags(cmd, false)
+			cmdFlags.RegisterDebugTestEntity(cmd)
 			cmdFlags.RegisterRetries(cmd)
 			registerRuntimeFlags(cmd)
 		},
@@ -122,7 +131,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Write out the signed runtime registration.
 	b := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, runtimeGenesisFilename), b, 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(dataDir, viper.GetString(cfgOutput)), b, 0600); err != nil {
 		logger.Error("failed to write signed runtime genesis registration",
 			"err", err,
 		)
@@ -245,12 +254,37 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, privKey, err := entity.Load(viper.GetString(cfgEntity))
+	ent, privKey, err := loadEntity(viper.GetString(cfgEntity))
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
 		)
 		return nil, nil, err
+	}
+
+	var (
+		kmID signature.PublicKey
+		kind registry.RuntimeKind
+	)
+	s = viper.GetString(cfgKind)
+	switch strings.ToLower(s) {
+	case optKindCompute:
+		if err = kmID.UnmarshalHex(viper.GetString(cfgKeyManager)); err != nil {
+			logger.Error("failed to parse key manager ID",
+				"err", err,
+			)
+			return nil, nil, err
+		}
+	case optKindKeyManager:
+		kind = registry.KindKeyManager
+
+		// Key managers don't have their own key manager.
+		kmID = id
+	default:
+		logger.Error("invalid runtime kind",
+			cfgKind, s,
+		)
+		return nil, nil, fmt.Errorf("invalid runtime Kind")
 	}
 
 	// TODO: Support root upload when registering.
@@ -314,13 +348,14 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 	return &registry.Runtime{
 		ID:                            id,
 		Genesis:                       gen,
-		Code:                          nil, // TBD
-		TEEHardware:                   teeHardware,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
 		ReplicaAllowedStragglers:      uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
 		StorageGroupSize:              uint64(viper.GetInt64(cfgStorageGroupSize)),
 		TransactionSchedulerGroupSize: uint64(viper.GetInt64(cfgTransactionSchedulerGroupSize)),
+		TEEHardware:                   teeHardware,
+		KeyManager:                    kmID,
+		Kind:                          kind,
 		RegistrationTime:              ent.RegistrationTime,
 	}, privKey, nil
 }
@@ -346,6 +381,26 @@ func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, is
 	return signed, err
 }
 
+func loadEntity(dataDir string) (*entity.Entity, *signature.PrivateKey, error) {
+	if cmdFlags.DebugTestEntity() {
+		return entity.TestEntity()
+	}
+
+	return entity.Load(dataDir)
+}
+
+func registerOutputFlag(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgOutput, runtimeGenesisFilename, "File name of the document to be written under datadir")
+	}
+
+	for _, v := range []string{
+		cfgOutput,
+	} {
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
+}
+
 func registerRuntimeFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgID, "", "Runtime ID")
@@ -356,6 +411,8 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
 		cmd.Flags().Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
 		cmd.Flags().String(cfgGenesisState, "", "Runtime state at genesis")
+		cmd.Flags().String(cfgKeyManager, "", "Key Manager Runtime ID")
+		cmd.Flags().String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
@@ -368,6 +425,8 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgStorageGroupSize,
 		cfgTransactionSchedulerGroupSize,
 		cfgGenesisState,
+		cfgKeyManager,
+		cfgKind,
 		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
@@ -384,7 +443,15 @@ func Register(parentCmd *cobra.Command) {
 		runtimeCmd.AddCommand(v)
 	}
 
+	for _, v := range []*cobra.Command{
+		initGenesisCmd,
+		registerCmd,
+	} {
+		cmdFlags.RegisterDebugTestEntity(v)
+	}
+
 	registerRuntimeFlags(initGenesisCmd)
+	registerOutputFlag(initGenesisCmd)
 
 	cmdGrpc.RegisterClientFlags(listCmd, false)
 	cmdFlags.RegisterVerbose(listCmd)

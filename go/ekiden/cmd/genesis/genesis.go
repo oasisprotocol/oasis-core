@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -167,6 +168,32 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *
 
 		regSt.Entities = append(regSt.Entities, &entity)
 	}
+	if flags.DebugTestEntity() {
+		ent, privKey, err := entity.TestEntity()
+		if err != nil {
+			l.Error("failed to retrive test entity",
+				"err", err,
+			)
+			return err
+		}
+
+		signed, err := entity.SignEntity(*privKey, registry.RegisterGenesisEntitySignatureContext, ent)
+		if err != nil {
+			l.Error("failed to sign test entity",
+				"err", err,
+			)
+			return err
+		}
+
+		if err = signed.Open(registry.RegisterGenesisEntitySignatureContext, ent); err != nil {
+			l.Error("signed entity does not round trip",
+				"err", err,
+			)
+			return err
+		}
+
+		regSt.Entities = append(regSt.Entities, signed)
+	}
 
 	for _, v := range runtimes {
 		b, err := ioutil.ReadFile(v)
@@ -292,6 +319,8 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+
+	flags.RegisterDebugTestEntity(cmd)
 }
 
 // Register registers the genesis sub-command and all of it's children.

@@ -13,12 +13,12 @@ func TestSerialization(t *testing.T) {
 	key, _, _ := ed25519.GenerateKey(nil)
 	c := Runtime{
 		ID:                       signature.PublicKey(key),
-		Code:                     []byte{0x12, 0x13, 0x14, 0x15, 0x16},
 		TEEHardware:              node.TEEHardwareIntelSGX,
 		ReplicaGroupSize:         63,
 		ReplicaGroupBackupSize:   72,
 		ReplicaAllowedStragglers: 81,
 		StorageGroupSize:         90,
+		KeyManager:               signature.PublicKey(key),
 	}
 
 	cp := c.ToProto()

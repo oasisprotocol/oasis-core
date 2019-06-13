@@ -47,6 +47,7 @@ var (
 		{"log.level.default", "DEBUG"},
 		{"epochtime.backend", "tendermint_mock"},
 		{"beacon.backend", "tendermint"},
+		{"keymanager.backend", "tendermint"},
 		{"registry.backend", "tendermint"},
 		{"roothash.backend", "tendermint"},
 		{"roothash.tendermint.index_blocks", true},
@@ -66,6 +67,7 @@ var (
 		{"worker.txnscheduler.enabled", true},
 		{"worker.merge.enabled", true},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
+		{"debug.allow_test_keys", true},
 	}
 
 	testRuntime = &registry.Runtime{

@@ -82,7 +82,7 @@ func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
 	return &node, nil
 }
 
-func (s *immutableState) getNodes() ([]*node.Node, error) {
+func (s *immutableState) GetNodes() ([]*node.Node, error) {
 	items, err := s.getAll(stateNodeMap, &node.Node{})
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func (s *immutableState) getNodes() ([]*node.Node, error) {
 }
 
 func (s *immutableState) getNodesRaw() ([]byte, error) {
-	nodes, err := s.getNodes()
+	nodes, err := s.GetNodes()
 	if err != nil {
 		return nil, err
 	}

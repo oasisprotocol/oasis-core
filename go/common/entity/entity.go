@@ -3,6 +3,7 @@ package entity
 
 import (
 	"crypto/rand"
+	"crypto/sha512"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -29,6 +30,9 @@ var (
 
 	_ cbor.Marshaler   = (*Entity)(nil)
 	_ cbor.Unmarshaler = (*Entity)(nil)
+
+	testEntity           Entity
+	testEntityPrivateKey signature.PrivateKey
 )
 
 // Entity represents an entity that controls one or more Nodes and or
@@ -157,6 +161,11 @@ func Generate(baseDir string) (*Entity, *signature.PrivateKey, error) {
 	return ent, &privKey, nil
 }
 
+// TestEntity returns the built-in test entity and private key.
+func TestEntity() (*Entity, *signature.PrivateKey, error) {
+	return &testEntity, &testEntityPrivateKey, nil
+}
+
 func getPaths(baseDir string) (string, string) {
 	return filepath.Join(baseDir, entityFilename), filepath.Join(baseDir, privKeyFilename)
 }
@@ -181,4 +190,16 @@ func SignEntity(privateKey signature.PrivateKey, context []byte, entity *Entity)
 	return &SignedEntity{
 		Signed: *signed,
 	}, nil
+}
+
+func init() {
+	seed := sha512.Sum512_256([]byte("ekiden test entity key seed"))
+	if err := testEntityPrivateKey.UnmarshalSeed(seed[:]); err != nil {
+		panic("entity: failed to generate test entity private key")
+	}
+	testEntityPublicKey := testEntityPrivateKey.Public()
+	signature.RegisterTestPublicKey(testEntityPublicKey)
+
+	testEntity.ID = testEntityPublicKey
+	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
 }

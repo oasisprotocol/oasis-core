@@ -82,7 +82,7 @@ var (
 
 // OnProcessStart is the function called after a worker process has been
 // started.
-type OnProcessStart func(*protocol.Protocol) error
+type OnProcessStart func(*protocol.Protocol, *node.CapabilityTEE) error
 
 // ProxySpecification contains all necessary details about a single proxy.
 type ProxySpecification struct {
@@ -742,6 +742,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 	switch h.teeHardware {
 	case node.TEEHardwareInvalid:
 		// No initialization needed.
+		p.capabilityTEE = nil
 	case node.TEEHardwareIntelSGX:
 		if err = h.initCapabilityTEESgx(p); err != nil {
 			return nil, errors.Wrap(err, "worker: error initializing SGX CapabilityTEE")
@@ -754,7 +755,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 	}
 
 	if h.onProcessStart != nil {
-		if err = h.onProcessStart(proto); err != nil {
+		if err = h.onProcessStart(proto, p.capabilityTEE); err != nil {
 			return nil, errors.Wrap(err, "worker: process post-start hook failed")
 		}
 	}

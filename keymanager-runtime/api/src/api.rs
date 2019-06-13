@@ -17,7 +17,12 @@ impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
 /// Key manager initialization request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct InitRequest {
-    // TODO: Policy, peers, checksum, etc.
+    /// True iff the enclave may generate a new master secret.
+    pub may_generate: bool,
+    /// Checksum for validating replication.
+    #[serde(with = "serde_bytes")]
+    pub checksum: Vec<u8>,
+    // TODO: Policy.
 }
 
 /// Key manager initialization response.
@@ -28,6 +33,30 @@ pub struct InitResponse {
     /// Checksum for validating replication.
     #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
+}
+
+/// Context used for th einit response signature.
+pub const INIT_RESPONSE_CONTEXT: [u8; 8] = *b"EkKmIniR";
+
+/// Signed InitResponse.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SignedInitResponse {
+    /// InitResponse.
+    pub init_response: InitResponse,
+    /// Sign(init_response).
+    pub signature: Signature,
+}
+
+/// Key manager replication request.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ReplicateRequest {
+    // Empty.
+}
+
+/// Key manager replication response.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ReplicateResponse {
+    pub master_secret: MasterSecret,
 }
 
 /// Request runtime/contract id tuple.
@@ -61,6 +90,9 @@ pub struct ContractKey {
     pub input_keypair: InputKeyPair,
     /// State encryption key
     pub state_key: StateKey,
+    /// Checksum of the key manager state.
+    #[serde(with = "serde_bytes")]
+    pub checksum: Vec<u8>,
 }
 
 impl ContractKey {
@@ -77,25 +109,28 @@ impl ContractKey {
             PublicKey(*pk.as_bytes()),
             PrivateKey(sk.to_bytes()),
             state_key,
+            vec![],
         )
     }
 
     /// Create a set of `ContractKey`.
-    pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey) -> Self {
+    pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey, sum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair { pk, sk },
             state_key: k,
+            checksum: sum,
         }
     }
 
     /// Create a set of `ContractKey` with only the public key.
-    pub fn from_public_key(k: PublicKey) -> Self {
+    pub fn from_public_key(k: PublicKey, sum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair {
                 pk: k,
                 sk: PrivateKey::default(),
             },
             state_key: StateKey::default(),
+            checksum: sum,
         }
     }
 }
@@ -130,9 +165,10 @@ pub const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,
-    /// Timestamp representing the expiry of the returned key.
-    pub timestamp: Option<u64>,
-    /// Sign(sk, (key || timestamp)) from the key manager.
+    /// Checksum of the key manager state.
+    #[serde(with = "serde_bytes")]
+    pub checksum: Vec<u8>,
+    /// Sign(sk, (key || checksum)) from the key manager.
     pub signature: Signature,
 }
 
@@ -141,10 +177,14 @@ pub struct SignedPublicKey {
 pub enum KeyManagerError {
     #[fail(display = "client session is not authenticated")]
     NotAuthenticated,
+    #[fail(display = "client session authentication is invalid")]
+    InvalidAuthentication,
     #[fail(display = "key manager is not initialized")]
     NotInitialized,
-    #[fail(display = "key manager is already initialized")]
-    AlreadyInitialized,
+    #[fail(display = "key manager state corrupted")]
+    StateCorrupted,
+    #[fail(display = "key manager replication required")]
+    ReplicationRequired,
 }
 
 runtime_api! {
@@ -152,5 +192,5 @@ runtime_api! {
 
     pub fn get_public_key(RequestIds) -> Option<SignedPublicKey>;
 
-    pub fn get_long_term_public_key(RequestIds) -> Option<SignedPublicKey>;
+    pub fn replicate_master_secret(ReplicateRequest) -> ReplicateResponse;
 }

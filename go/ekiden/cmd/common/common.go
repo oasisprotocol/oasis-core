@@ -11,12 +11,14 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 )
 
 const (
-	cfgConfigFile = "config"
-	cfgDataDir    = "datadir"
+	cfgConfigFile    = "config"
+	cfgDataDir       = "datadir"
+	cfgAllowTestKeys = "debug.allow_test_keys"
 )
 
 var (
@@ -56,6 +58,7 @@ func Init() error {
 	initFns := []func() error{
 		initDataDir,
 		initLogging,
+		initPublicKeyBlacklist,
 	}
 
 	for _, fn := range initFns {
@@ -79,10 +82,12 @@ func Logger() *logging.Logger {
 func RegisterRootFlags(rootCmd *cobra.Command) {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	rootCmd.PersistentFlags().String(cfgDataDir, "", "data directory")
+	rootCmd.PersistentFlags().Bool(cfgAllowTestKeys, false, "Allow test keys (UNSAFE)")
 
 	for _, v := range []string{
 		cfgConfigFile,
 		cfgDataDir,
+		cfgAllowTestKeys,
 	} {
 		_ = viper.BindPFlag(v, rootCmd.PersistentFlags().Lookup(v))
 	}
@@ -141,6 +146,11 @@ func normalizePath(f string) string {
 		return filepath.Clean(f)
 	}
 	return f
+}
+
+func initPublicKeyBlacklist() error {
+	signature.BuildPublicKeyBlacklist(viper.GetBool(cfgAllowTestKeys))
+	return nil
 }
 
 // GetOutputWriter will create a file if the config string is set,

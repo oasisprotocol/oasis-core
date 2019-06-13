@@ -650,7 +650,6 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 
 	rt.Runtime = &api.Runtime{
 		ID:                            rt.PrivateKey.Public(),
-		Code:                          []byte("tu ne cede malis, sed contra audentior ito"),
 		ReplicaGroupSize:              3,
 		ReplicaGroupBackupSize:        5,
 		ReplicaAllowedStragglers:      1,

@@ -38,6 +38,7 @@ message Node {
 message NodeRuntime {
     bytes id = 1;
     Capabilities capabilities = 2;
+    bytes extra_info = 3;
 }
 
 message Capabilities {

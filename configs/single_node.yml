@@ -8,6 +8,14 @@
 #
 datadir: /tmp/ekiden-single-node
 
+# Debug.
+#
+# Enable test keys, and the built in test entity to reduce config maintenance
+# burden.
+debug:
+  allow_test_keys: true
+  test_entity: true
+
 # Logging.
 # Per-module log levels are defined below. If you prefer just one unified log level, you can use:
 # log:
@@ -52,6 +60,7 @@ worker:
     port: 9100
   keymanager:
     enabled: true
+    may_generate: true
     runtime:
       id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       binary: target/debug/ekiden-keymanager-runtime
@@ -92,6 +101,10 @@ roothash:
 tendermint:
   consensus:
     timeout_commit: 1s
+
+# Key manager backend configuration.
+keymanager:
+  backend: tendermint
 
 # Client configuration.
 client:
