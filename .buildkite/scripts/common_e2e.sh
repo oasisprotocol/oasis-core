@@ -3,7 +3,7 @@
 ################################
 
 # Temporary test base directory.
-TEST_BASE_DIR=$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)
+TEST_BASE_DIR=$(realpath ${TEST_BASE_DIR:-$(mktemp -d --tmpdir ekiden-e2e-XXXXXXXXXX)})
 
 # Path to Ekiden root.
 EKIDEN_ROOT_PATH=${EKIDEN_ROOT_PATH:-${WORKDIR}}
@@ -226,6 +226,7 @@ run_compute_node() {
 
     ${EKIDEN_NODE} \
         --log.level debug \
+        --log.file ${log_file} \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
@@ -255,7 +256,7 @@ run_compute_node() {
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
-        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[compute-node-${id}] /" &
+        ${extra_args} 2>&1 | sed "s/^/[compute-node-${id}] /" &
 }
 
 # Run a storage node.
@@ -299,6 +300,7 @@ run_storage_node() {
 
     ${EKIDEN_NODE} \
         --log.level debug \
+        --log.file ${log_file} \
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
@@ -318,7 +320,7 @@ run_storage_node() {
         --worker.p2p.port ${p2p_port} \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${data_dir} \
-        2>&1 | tee ${log_file} | sed "s/^/[storage-node-${id}] /" &
+        2>&1 | sed "s/^/[storage-node-${id}] /" &
 }
 
 # Cat all worker node logs.
@@ -379,6 +381,7 @@ run_keymanager_node() {
 
     ${EKIDEN_NODE} \
         --log.level debug \
+        --log.file ${log_file} \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
@@ -403,7 +406,7 @@ run_keymanager_node() {
         --worker.keymanager.runtime.id ${EKIDEN_KM_RUNTIME_ID} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
-        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[key-manager] /" &
+        ${extra_args} 2>&1 | sed "s/^/[key-manager] /" &
 }
 
 # Run a seed node.
@@ -435,6 +438,7 @@ run_seed_node() {
 
     ${EKIDEN_NODE} \
         --log.level info \
+        --log.file ${log_file} \
         --metrics.mode none \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
@@ -447,7 +451,7 @@ run_seed_node() {
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \
         --datadir ${data_dir} \
-        ${extra_args} 2>&1 | tee ${log_file} | sed "s/^/[seed-node-${id}] /" &
+        ${extra_args} 2>&1 | sed "s/^/[seed-node-${id}] /" &
 
     # 'show-node-id' relies on key file to be present.
     while [ ! -f "${data_dir}/identity_pub.pem" ]
