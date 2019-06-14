@@ -6,6 +6,7 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -125,6 +126,8 @@ func (s StateWaitingForBatch) String() string {
 
 // StateWaitingForBlock is the waiting for block state.
 type StateWaitingForBlock struct {
+	// I/O root from the transaction scheduler containing the inputs.
+	ioRoot hash.Hash
 	// Batch that is waiting to be processed.
 	batch runtime.Batch
 	// Tracing for this batch.
@@ -145,6 +148,8 @@ func (s StateWaitingForBlock) String() string {
 
 // StateWaitingForEvent is the waiting for event state.
 type StateWaitingForEvent struct {
+	// I/O root from the transaction scheduler containing the inputs.
+	ioRoot hash.Hash
 	// Batch that is being processed.
 	batch runtime.Batch
 	// Tracing for this batch.
@@ -163,6 +168,8 @@ func (s StateWaitingForEvent) String() string {
 
 // StateProcessingBatch is the processing batch state.
 type StateProcessingBatch struct {
+	// I/O root from the transaction scheduler containing the inputs.
+	ioRoot hash.Hash
 	// Batch that is being processed.
 	batch runtime.Batch
 	// Tracing for this batch.

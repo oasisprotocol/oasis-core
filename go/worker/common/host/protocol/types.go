@@ -157,8 +157,8 @@ type WorkerLocalRPCCallResponse struct {
 
 // WorkerCheckTxBatchRequest is a worker check tx batch request message body.
 type WorkerCheckTxBatchRequest struct {
-	// Batch of runtime calls to check.
-	Calls runtime.Batch `codec:"calls"`
+	// Batch of runtime inputs to check.
+	Inputs runtime.Batch `codec:"inputs"`
 	// Block on which the batch check should be based.
 	Block roothash.Block `codec:"block"`
 }
@@ -189,8 +189,11 @@ func (b *ComputedBatch) String() string {
 
 // WorkerExecuteTxBatchRequest is a worker execute tx batch request message body.
 type WorkerExecuteTxBatchRequest struct {
-	// Batch of runtime calls.
-	Calls runtime.Batch `codec:"calls"`
+	// IORoot is the I/O root containing the inputs (transactions) that
+	// the compute node should use. It must match what is passed in "inputs".
+	IORoot hash.Hash `codec:"io_root"`
+	// Batch of inputs (transactions).
+	Inputs runtime.Batch `codec:"inputs"`
 	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }

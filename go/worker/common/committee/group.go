@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -436,7 +435,12 @@ func (g *Group) publishLocked(
 }
 
 // PublishScheduledBatch publishes a batch to all members in the compute committee.
-func (g *Group) PublishScheduledBatch(spanCtx opentracing.SpanContext, batch runtime.Batch, hdr block.Header) error {
+func (g *Group) PublishScheduledBatch(
+	spanCtx opentracing.SpanContext,
+	ioRoot hash.Hash,
+	storageReceipt signature.Signature,
+	hdr block.Header,
+) error {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -448,17 +452,20 @@ func (g *Group) PublishScheduledBatch(spanCtx opentracing.SpanContext, batch run
 		spanCtx,
 		g.activeEpoch.computeCommittee,
 		g.activeEpoch.computeNodes,
-		// Publish to all committee members.
+		// Publish to all compute committee members.
 		func(n *scheduler.CommitteeNode) bool { return true },
 		&p2p.Message{
-			LeaderBatchDispatch: &p2p.LeaderBatchDispatch{
-				Batch:  batch,
-				Header: hdr,
+			TxnSchedulerBatchDispatch: &p2p.TxnSchedulerBatchDispatch{
+				IORoot:         ioRoot,
+				StorageReceipt: storageReceipt,
+				Header:         hdr,
 			},
 		},
 	)
 }
 
+// PublishComputeFinished publishes a compute commitment to all members in the merge
+// committee.
 func (g *Group) PublishComputeFinished(spanCtx opentracing.SpanContext, c *commitment.ComputeCommitment) error {
 	g.RLock()
 	defer g.RUnlock()
@@ -471,7 +478,7 @@ func (g *Group) PublishComputeFinished(spanCtx opentracing.SpanContext, c *commi
 		spanCtx,
 		g.activeEpoch.mergeCommittee,
 		g.activeEpoch.mergeNodes,
-		// Publish to all committee members.
+		// Publish to all merge committee members.
 		func(n *scheduler.CommitteeNode) bool { return true },
 		&p2p.Message{
 			ComputeWorkerFinished: &p2p.ComputeWorkerFinished{

@@ -121,14 +121,15 @@ pub enum Body {
         response: Vec<u8>,
     },
     WorkerCheckTxBatchRequest {
-        calls: TxnBatch,
+        inputs: TxnBatch,
         block: Block,
     },
     WorkerCheckTxBatchResponse {
         results: TxnBatch,
     },
     WorkerExecuteTxBatchRequest {
-        calls: TxnBatch,
+        io_root: Hash,
+        inputs: TxnBatch,
         block: Block,
     },
     WorkerExecuteTxBatchResponse {
