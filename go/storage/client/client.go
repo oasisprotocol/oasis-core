@@ -168,11 +168,11 @@ func (b *storageClientBackend) updateConnection() {
 		)
 		return
 	}
-	addresses := []resolver.Address{}
+	var resolverState resolver.State
 	for _, addr := range leader.Addresses {
-		addresses = append(addresses, resolver.Address{Addr: addr.String()})
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 	}
-	manualResolver.NewAddress(addresses)
+	manualResolver.UpdateState(resolverState)
 
 	client := storage.NewStorageClient(conn)
 	b.logger.Debug("storage client: storage node connection updated",

@@ -130,6 +130,7 @@ run_client_km_restart() {
         # Wait for the key manager node to be synced.
         ${EKIDEN_NODE} debug client wait-sync \
             --address unix:${EKIDEN_COMMITTEE_DIR}/key-manager/internal.sock
+        sleep 10 # HACK: KM initialization involves tendermint
 
         # Run client on a different key so that it will require another
         # trip to the key manager.

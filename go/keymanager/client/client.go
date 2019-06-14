@@ -177,7 +177,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 
 	// Build the new state.
 	certPool := x509.NewCertPool()
-	var addresses []resolver.Address
+	var resolverState resolver.State
 	for _, v := range status.Nodes {
 		n := nodeMap[v.ToMapKey()]
 		if n == nil {
@@ -198,7 +198,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		certPool.AddCert(cert)
 
 		for _, addr := range n.Addresses {
-			addresses = append(addresses, resolver.Address{Addr: addr.String()})
+			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 		}
 	}
 
@@ -224,7 +224,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		)
 		return
 	}
-	manualResolver.NewAddress(addresses)
+	manualResolver.UpdateState(resolverState)
 
 	c.logger.Debug("updated connection",
 		"id", status.ID,

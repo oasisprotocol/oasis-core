@@ -8,6 +8,8 @@ package logging
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	goLog "log"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +17,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/spf13/pflag"
+
+	goLogging "github.com/whyrusleeping/go-logging"
 )
 
 var (
@@ -258,6 +262,15 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 		backend.setupLogLevelLocked(l.logger)
 	}
 	backend.earlyLoggers = nil
+
+	// libp2p/IPFS uses yet another logging library, that appears to be a
+	// wrapper around go-logging.  Because it's quality IPFS code, it's
+	// configured via env vars, from the package `init()`.
+	//
+	// Till we can write a nice wrapper around it, to make it do what we
+	// want, reach into the underlying library and squelch it.
+	goLogging.Reset()
+	_ = goLogging.SetBackend(goLogging.NewLogBackend(ioutil.Discard, "libp2p", goLog.LstdFlags))
 
 	return nil
 }

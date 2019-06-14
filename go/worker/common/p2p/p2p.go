@@ -9,12 +9,9 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/libp2p/go-libp2p"
-	libp2pCrypto "github.com/libp2p/go-libp2p-crypto"
-	libp2pHost "github.com/libp2p/go-libp2p-host"
-	libp2pNet "github.com/libp2p/go-libp2p-net"
-	"github.com/libp2p/go-libp2p-peer"
-	"github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-protocol"
+	"github.com/libp2p/go-libp2p-core"
+	libp2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 
@@ -26,7 +23,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/common/configparser"
 )
 
-var protocolName = protocol.ID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
+var protocolName = core.ProtocolID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
 
 // Handler is a handler for P2P messages.
 type Handler interface {
@@ -44,14 +41,14 @@ type P2P struct {
 
 	registerAddresses []multiaddr.Multiaddr
 
-	host     libp2pHost.Host
+	host     core.Host
 	handlers map[signature.MapKey]Handler
 
 	logger *logging.Logger
 }
 
-func bytesToPeerID(raw []byte) (peer.ID, error) {
-	var id peer.ID
+func bytesToPeerID(raw []byte) (core.PeerID, error) {
+	var id core.PeerID
 	if err := id.Unmarshal(raw); err != nil {
 		return "", err
 	}
@@ -82,7 +79,7 @@ func (p *P2P) Info() node.P2PInfo {
 	}
 }
 
-func (p *P2P) addPeerInfo(peerID peer.ID, addresses [][]byte) error {
+func (p *P2P) addPeerInfo(peerID core.PeerID, addresses [][]byte) error {
 	if addresses == nil {
 		return errors.New("nil address list")
 	}
@@ -234,12 +231,12 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 	_ = stream.Write(response)
 }
 
-func (p *P2P) handleStream(rawStream libp2pNet.Stream) {
+func (p *P2P) handleStream(rawStream core.Stream) {
 	stream := NewStream(rawStream)
 	go p.handleStreamMessages(stream)
 }
 
-func (p *P2P) handleConnection(conn libp2pNet.Conn) {
+func (p *P2P) handleConnection(conn core.Conn) {
 	p.logger.Debug("new connection from peer",
 		"peer_id", conn.RemotePeer(),
 	)
