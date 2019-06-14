@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -18,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
+	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -173,7 +173,7 @@ func New(ctx context.Context,
 	}
 
 	// We can only work with an ABCI beacon.
-	abciBeacon, ok := beacon.(beaconabci.Backend)
+	abciBeacon, ok := beacon.(tmbeacon.Backend)
 	if !ok {
 		return nil, errors.New("scheduler/tendermint: need an ABCI beacon backend")
 	}

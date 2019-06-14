@@ -12,21 +12,21 @@ import (
 
 	"github.com/tendermint/iavl"
 
-	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 )
 
 // BackendName is the name of this implementation.
 const BackendName = "insecure"
 
 var (
-	_ api.Backend        = (*insecureDummy)(nil)
-	_ api.BlockBackend   = (*insecureDummy)(nil)
-	_ beaconabci.Backend = (*insecureDummy)(nil)
+	_ api.Backend      = (*insecureDummy)(nil)
+	_ api.BlockBackend = (*insecureDummy)(nil)
+	_ tmbeacon.Backend = (*insecureDummy)(nil)
 
 	dummyContext = []byte("EkB-Dumm")
 

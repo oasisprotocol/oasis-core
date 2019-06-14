@@ -11,7 +11,6 @@ import (
 	"github.com/tendermint/iavl"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -20,6 +19,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
+	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -27,9 +27,9 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend        = (*Backend)(nil)
-	_ api.BlockBackend   = (*Backend)(nil)
-	_ beaconabci.Backend = (*Backend)(nil)
+	_ api.Backend      = (*Backend)(nil)
+	_ api.BlockBackend = (*Backend)(nil)
+	_ tmbeacon.Backend = (*Backend)(nil)
 
 	errIncoherentTime = errors.New("beacon/tendermint: incoherent time")
 )

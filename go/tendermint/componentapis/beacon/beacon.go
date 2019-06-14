@@ -1,4 +1,4 @@
-package abci
+package beacon
 
 import (
 	"github.com/tendermint/iavl"

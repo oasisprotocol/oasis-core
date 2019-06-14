@@ -9,7 +9,6 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	beaconabci "github.com/oasislabs/ekiden/go/beacon/abci"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
@@ -21,6 +20,7 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 )
 
 var (
@@ -37,7 +37,7 @@ type schedulerApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.BlockBackend
-	beacon     beaconabci.Backend
+	beacon     tmbeacon.Backend
 }
 
 func (app *schedulerApplication) Name() string {
@@ -365,7 +365,7 @@ func (app *schedulerApplication) electAll(ctx *abci.Context, request types.Reque
 // New constructs a new scheduler application instance.
 func New(
 	timeSource epochtime.BlockBackend,
-	beacon beaconabci.Backend,
+	beacon tmbeacon.Backend,
 ) abci.Application {
 	return &schedulerApplication{
 		logger:     logging.GetLogger("tendermint/scheduler"),
