@@ -42,7 +42,7 @@ require (
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/kr/pty v1.1.5 // indirect
 	github.com/libp2p/go-libp2p v0.1.1
-	github.com/libp2p/go-libp2p-core v0.0.3 // indirect
+	github.com/libp2p/go-libp2p-core v0.0.3
 	github.com/libp2p/go-libp2p-crypto v0.1.0
 	github.com/libp2p/go-libp2p-host v0.1.0
 	github.com/libp2p/go-libp2p-net v0.1.0
