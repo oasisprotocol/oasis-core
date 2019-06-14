@@ -19,6 +19,7 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
@@ -26,6 +27,7 @@ import (
 var (
 	errIncorrectState = errors.New("merge: incorrect state")
 	errSeenNewerBlock = errors.New("merge: seen newer block")
+	errMergeFailed    = errors.New("merge: failed to perform merge")
 )
 
 var (
@@ -63,6 +65,9 @@ var (
 
 // Config is a committee node configuration.
 type Config struct {
+	// TODO: Move this to common worker config.
+	StorageCommitTimeout time.Duration
+
 	ByzantineInjectDiscrepancies bool
 }
 
@@ -152,6 +157,14 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 	return false, nil
 }
 
+func (n *Node) bumpReselect() {
+	select {
+	case n.reselect <- struct{}{}:
+	default:
+		// If there's one already queued, we don't need to do anything.
+	}
+}
+
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) transitionLocked(state NodeState) {
 	n.logger.Info("state transition",
@@ -176,6 +189,8 @@ func (n *Node) transitionLocked(state NodeState) {
 
 	n.state = state
 	n.stateTransitions.Broadcast(state)
+	// Restart our worker's select in case our state-specific channels have changed.
+	n.bumpReselect()
 }
 
 func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) StateWaitingForResults {
@@ -247,7 +262,10 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	switch n.state.(type) {
 	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
-		n.logger.Info("considering the round finalized")
+		n.logger.Info("considering the round finalized",
+			"round", blk.Header.Round,
+			"header_hash", blk.Header.EncodedHash(),
+		)
 
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 		n.transitionLocked(n.newStateWaitingForResultsLocked(epoch))
@@ -312,7 +330,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	roundTimeout := n.commonNode.Roothash.Info().ComputeRoundTimeout
 
 	logger := n.logger.With("committee_id", pool.GetCommitteeID())
-	header, err := pool.TryFinalize(now, roundTimeout, didTimeout)
+	commit, err := pool.TryFinalize(now, roundTimeout, didTimeout)
 	switch err {
 	case nil:
 	case commitment.ErrStillWaiting:
@@ -323,7 +341,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		// We may also be able to already perform discrepancy resolution, check if
 		// this is possible. This may be the case if we receive commits from backup
 		// workers before receiving commits from regular workers.
-		header, err = pool.TryFinalize(now, roundTimeout, false)
+		commit, err = pool.TryFinalize(now, roundTimeout, false)
 		if err == nil {
 			// Discrepancy was already resolved, proceed with merge.
 			break
@@ -357,33 +375,107 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	commitments := state.pool.GetComputeCommitments()
-	// TODO: Collect headers from all committees (#1775).
-	headers := []*block.Header{header}
+	// TODO: Collect results from all committees (#1775).
+	result := commit.ToDDResult().(commitment.ComputeResultsHeader)
+	results := []*commitment.ComputeResultsHeader{&result}
 
 	if epoch.IsMergeBackupWorker() {
 		// Backup workers only perform merge after receiving a discrepancy event.
-		n.transitionLocked(StateWaitingForEvent{commitments: commitments, headers: headers})
+		n.transitionLocked(StateWaitingForEvent{commitments: commitments, results: results})
 		return
 	}
 
 	// No discrepancy, perform merge.
-	n.startMergeLocked(commitments, headers)
+	n.startMergeLocked(commitments, results)
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, headers []*block.Header) {
-	// TODO: Actually merge, currently we don't have anything to merge as there
-	//       is only a single committee (#1775).
+func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, results []*commitment.ComputeResultsHeader) {
+	doneCh := make(chan *commitment.MergeBody, 1)
+	ctx, cancel := context.WithCancel(n.ctx)
 
-	// TODO: Make sure that merge is performed in the background to not block.
+	// Create empty block based on previous block while we hold the lock.
+	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
+	stateRoot := n.commonNode.CurrentBlock.Header.StateRoot
 
-	n.byzantineMaybeInjectDiscrepancy(headers)
+	n.transitionLocked(StateProcessingMerge{doneCh: doneCh, cancel: cancel})
+
+	// Start processing merge in a separate goroutine. This is to make it possible
+	// to abort the merge if a newer block is seen while we are merging.
+	go func() {
+		defer close(doneCh)
+
+		// TODO: Actually merge, currently we don't have anything to merge as there
+		//       is only a single committee (#1775).
+		_ = stateRoot
+		blk.Header.IORoot = results[0].IORoot
+		blk.Header.StateRoot = results[0].StateRoot
+
+		// Merge results to storage.
+		ctx, cancel = context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
+		defer cancel()
+
+		// NOTE: Order is important for verifying the receipt.
+		applyOps := []storage.ApplyOp{
+			// I/O root.
+			storage.ApplyOp{
+				Root:            blk.Header.IORoot,
+				ExpectedNewRoot: blk.Header.IORoot,
+				WriteLog:        make(storage.WriteLog, 0),
+			},
+			// State root.
+			storage.ApplyOp{
+				Root:            blk.Header.StateRoot,
+				ExpectedNewRoot: blk.Header.StateRoot,
+				WriteLog:        make(storage.WriteLog, 0),
+			},
+		}
+
+		signedReceipt, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
+		if err != nil {
+			n.logger.Error("failed to apply to storage",
+				"err", err,
+			)
+			return
+		}
+
+		// TODO: Ensure that the receipt is actually signed by the
+		// storage node.  For now accept a signature from anyone.
+		var receipt storage.MKVSReceiptBody
+		if err = signedReceipt.Open(&receipt); err != nil {
+			n.logger.Error("failed to open signed receipt",
+				"err", err,
+			)
+			return
+		}
+		if err = blk.Header.VerifyStorageReceipt(&receipt); err != nil {
+			n.logger.Error("failed to validate receipt",
+				"err", err,
+			)
+			return
+		}
+
+		// No need to append the entire blob, just the signature/public key.
+		blk.Header.StorageReceipt = signedReceipt.Signature
+
+		n.byzantineMaybeInjectDiscrepancy(&blk.Header)
+
+		doneCh <- &commitment.MergeBody{
+			ComputeCommits: commitments,
+			Header:         blk.Header,
+		}
+	}()
+}
+
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) proposeHeaderLocked(result *commitment.MergeBody) {
+	n.logger.Debug("proposing header",
+		"previous_hash", result.Header.PreviousHash,
+		"round", result.Header.Round,
+	)
 
 	// Submit MC-Commit to BFT for DD and finalization.
-	mc, err := commitment.SignMergeCommitment(*n.commonNode.Identity.NodeKey, &commitment.MergeBody{
-		ComputeCommits: commitments,
-		Header:         *headers[0],
-	})
+	mc, err := commitment.SignMergeCommitment(*n.commonNode.Identity.NodeKey, result)
 	if err != nil {
 		n.logger.Error("failed to sign merge commitment",
 			"err", err,
@@ -414,9 +506,13 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, head
 
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) abortMergeLocked(reason error) {
-	_, ok := n.state.(StateWaitingForResults)
-	if !ok {
-		// We can only abort if we are waiting for results.
+	switch state := n.state.(type) {
+	case StateWaitingForEvent:
+	case StateWaitingForResults:
+	case StateProcessingMerge:
+		// Cancel merge processing.
+		state.cancel()
+	default:
 		return
 	}
 
@@ -458,7 +554,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 	// Backup worker, start processing merge.
 	n.logger.Info("backup worker activating and processing merge")
-	n.startMergeLocked(state.commitments, state.headers)
+	n.startMergeLocked(state.commitments, state.results)
 }
 
 func (n *Node) worker() {
@@ -480,17 +576,20 @@ func (n *Node) worker() {
 	// We are initialized.
 	close(n.initCh)
 
-	// TODO: Add timer for merge round timeout.
-
 	for {
-		// Check if we are currently waiting for results. In this case we also
-		// need to select over the timer channel.
+		// Select over some channels based on current state.
 		var timerCh <-chan time.Time
+		var mergeDoneCh <-chan *commitment.MergeBody
 		func() {
 			n.commonNode.CrossNode.Lock()
 			defer n.commonNode.CrossNode.Unlock()
-			if state, ok := n.state.(StateWaitingForResults); ok {
+
+			switch state := n.state.(type) {
+			case StateWaitingForResults:
 				timerCh = state.timer.C
+			case StateProcessingMerge:
+				mergeDoneCh = state.doneCh
+			default:
 			}
 		}()
 
@@ -512,6 +611,19 @@ func (n *Node) worker() {
 
 				for _, pool := range state.pool.GetTimeoutCommittees(time.Now()) {
 					n.tryFinalizeResultsLocked(pool, true)
+				}
+			}()
+		case result := <-mergeDoneCh:
+			func() {
+				n.commonNode.CrossNode.Lock()
+				defer n.commonNode.CrossNode.Unlock()
+
+				if result == nil {
+					n.logger.Warn("merge aborted")
+					n.abortMergeLocked(errMergeFailed)
+				} else {
+					n.logger.Info("merge completed, proposing header")
+					n.proposeHeaderLocked(result)
 				}
 			}()
 		case <-n.reselect:
@@ -540,6 +652,7 @@ func NewNode(
 		initCh:           make(chan struct{}),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
+		reselect:         make(chan struct{}, 1),
 		logger:           logging.GetLogger("worker/merge/committee").With("runtime_id", commonNode.RuntimeID),
 	}
 

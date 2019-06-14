@@ -42,9 +42,6 @@ type Runtime struct {
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `codec:"genesis"`
 
-	// Code is the runtime code body.
-	Code []byte `codec:"code"`
-
 	// ReplicaGroupSize is the size of the computation group.
 	ReplicaGroupSize uint64 `codec:"replica_group_size"`
 
@@ -69,6 +66,9 @@ type Runtime struct {
 
 	// TEEHardware specifies the runtime's TEE hardware requirements.
 	TEEHardware node.TEEHardware `codec:"tee_hardware"`
+
+	// KeyManager is the key manager runtime ID for this runtime.
+	KeyManager signature.PublicKey `codec:"key_manager"`
 }
 
 // String returns a string representation of itself.
@@ -101,10 +101,14 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return err
 	}
 
-	c.Code = append([]byte{}, pb.GetCode()...)
 	if err := c.TEEHardware.FromProto(pb.GetTeeHardware()); err != nil {
 		return err
 	}
+
+	if err := c.KeyManager.UnmarshalBinary(pb.GetKeyManager()); err != nil {
+		return err
+	}
+
 	c.ReplicaGroupSize = pb.GetReplicaGroupSize()
 	c.ReplicaGroupBackupSize = pb.GetReplicaGroupBackupSize()
 	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
@@ -123,8 +127,10 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
 		panic(err)
 	}
-	pb.Code = append([]byte{}, c.Code...)
 	if pb.TeeHardware, err = c.TEEHardware.ToProto(); err != nil {
+		panic(err)
+	}
+	if pb.KeyManager, err = c.KeyManager.MarshalBinary(); err != nil {
 		panic(err)
 	}
 	pb.ReplicaGroupSize = c.ReplicaGroupSize

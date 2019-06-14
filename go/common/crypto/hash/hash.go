@@ -88,6 +88,6 @@ func (h *Hash) IsEmpty() bool {
 }
 
 // String returns the string representation of a hash.
-func (h *Hash) String() string {
+func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
 }

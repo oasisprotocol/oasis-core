@@ -168,7 +168,9 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 	runtimes, _ := regState.GetRuntimes()
 	newDescriptors := make(map[signature.MapKey]*registry.Runtime)
 	for _, v := range runtimes {
-		newDescriptors[v.ID.ToMapKey()] = v
+		if v.Kind == registry.KindCompute {
+			newDescriptors[v.ID.ToMapKey()] = v
+		}
 	}
 
 	schedState := schedulerapp.NewMutableState(tree)
@@ -717,7 +719,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return
 	}
 
-	header, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
+	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -727,7 +729,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 
 		// Generate the final block.
 		blk := new(block.Block)
-		blk.Header = *header
+		blk.Header = commit.ToDDResult().(block.Header)
 		blk.Header.Timestamp = uint64(ctx.Now().Unix())
 
 		rtState.Round.MergePool.ResetCommitments()

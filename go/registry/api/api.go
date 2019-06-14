@@ -341,6 +341,18 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 	}
 
 	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
+	switch rt.Kind {
+	case KindCompute:
+		if rt.ID.Equal(rt.KeyManager) {
+			return nil, ErrInvalidArgument
+		}
+	case KindKeyManager:
+		if !rt.ID.Equal(rt.KeyManager) {
+			return nil, ErrInvalidArgument
+		}
+	default:
+		return nil, ErrInvalidArgument
+	}
 
 	if !isGenesis && !rt.Genesis.StateRoot.IsEmpty() {
 		// TODO: Verify storage receipt for the state root, reject such registrations for now.

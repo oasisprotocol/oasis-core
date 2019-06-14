@@ -2,12 +2,11 @@ package commitment
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -28,6 +27,8 @@ var (
 	ErrBadComputeCommits      = errors.New("roothash/commitment: bad compute commitments")
 	ErrInvalidCommitteeID     = errors.New("roothash/commitment: invalid committee ID")
 )
+
+var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
 
 // NodeInfo contains information about a node that is member of a committee.
 type NodeInfo struct {
@@ -95,6 +96,8 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 		return ErrNotInCommittee
 	}
 
+	// TODO: Check for signs of double signing (#1804).
+
 	// Ensure the node did not already submit a commitment.
 	if _, ok := p.Commitments[id]; ok {
 		return ErrAlreadyCommitted
@@ -110,30 +113,36 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 	// Verify RAK-attestation.
 	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := p.NodeInfo[id].Runtime.Capabilities.TEE.RAK
-		batchSigMessage := block.BatchSigMessage{
-			PreviousBlock: *blk,
-			IORoot:        header.IORoot,
-			StateRoot:     header.StateRoot,
-		}
-		if !rak.Verify(RakSigContext, cbor.Marshal(batchSigMessage), body.RakSig[:]) {
+		if !rak.Verify(ComputeResultsHeaderSignatureContext, header.MarshalCBOR(), body.RakSig[:]) {
 			return ErrRakSigInvalid
 		}
-	}
-
-	// Check if the block is based on the previous block.
-	if !header.IsParentOf(&blk.Header) {
-		return ErrNotBasedOnCorrectBlock
 	}
 
 	// Verify that this is for the correct committee.
 	cID := p.GetCommitteeID()
 	if !cID.Equal(&body.CommitteeID) {
+		logger.Debug("compute commitment has invalid committee ID",
+			"expected_committee_id", cID,
+			"committee_id", body.CommitteeID,
+			"node_id", id,
+		)
 		return ErrInvalidCommitteeID
+	}
+
+	// Check if the block is based on the previous block.
+	if !header.IsParentOf(&blk.Header) {
+		logger.Debug("compute commitment is not based on correct block",
+			"committee_id", cID,
+			"node_id", id,
+			"expected_previous_hash", blk.Header.EncodedHash(),
+			"previous_hash", header.PreviousHash,
+		)
+		return ErrNotBasedOnCorrectBlock
 	}
 
 	// Check if the header refers to hashes in storage.
 	// TODO: Actually check that the storage receipt was signed by a storage node.
-	if err := header.VerifyStorageReceiptSignature(); err != nil {
+	if err := body.VerifyStorageReceiptSignature(); err != nil {
 		return err
 	}
 
@@ -200,8 +209,8 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 // the pool.
 //
 // The caller must verify that there are enough commitments in the pool.
-func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
-	var header *block.Header
+func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
+	var commit OpenCommitment
 	var discrepancyDetected bool
 
 	for id, ni := range p.NodeInfo {
@@ -215,39 +224,29 @@ func (p *Pool) DetectDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		var h *block.Header
-		switch p.Committee.Kind {
-		case scheduler.KindCompute:
-			h = &c.(OpenComputeCommitment).Body.Header
-		case scheduler.KindMerge:
-			h = &c.(OpenMergeCommitment).Body.Header
-		default:
-			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
+		if commit == nil {
+			commit = c
 		}
-
-		if header == nil {
-			header = h
-		}
-		if !header.MostlyEqual(h) {
+		if !commit.MostlyEqual(c) {
 			discrepancyDetected = true
 		}
 	}
 
-	if header == nil || discrepancyDetected {
+	if commit == nil || discrepancyDetected {
 		p.Discrepancy = true
 		return nil, ErrDiscrepancyDetected
 	}
 
-	return header, nil
+	return commit, nil
 }
 
 // ResolveDiscrepancy performs discrepancy resolution on the current commitments
 // in the pool.
 //
 // The caller must verify that there are enough commitments in the pool.
-func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
+func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 	type voteEnt struct {
-		header *block.Header
+		commit OpenCommitment
 		tally  int
 	}
 
@@ -264,20 +263,10 @@ func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
 			continue
 		}
 
-		var header *block.Header
-		switch p.Committee.Kind {
-		case scheduler.KindCompute:
-			header = &c.(OpenComputeCommitment).Body.Header
-		case scheduler.KindMerge:
-			header = &c.(OpenMergeCommitment).Body.Header
-		default:
-			panic(fmt.Sprintf("roothash/commitment: unsupported committee type: %s", p.Committee.Kind))
-		}
-
-		k := header.EncodedHash()
+		k := c.ToVote()
 		if ent, ok := votes[k]; !ok {
 			votes[k] = &voteEnt{
-				header: header,
+				commit: c,
 				tally:  1,
 			}
 		} else {
@@ -288,7 +277,7 @@ func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
 	minVotes := (backupNodes / 2) + 1
 	for _, ent := range votes {
 		if ent.tally >= minVotes {
-			return ent.header, nil
+			return ent.commit, nil
 		}
 	}
 
@@ -298,7 +287,7 @@ func (p *Pool) ResolveDiscrepancy() (*block.Header, error) {
 // TryFinalize attempts to finalize the commitments by performing discrepancy
 // detection and discrepancy resolution, based on the state of the pool. It may
 // request the caller to schedule timeouts by setting NextTimeout appropriately.
-func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout bool) (*block.Header, error) {
+func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout bool) (OpenCommitment, error) {
 	var err error
 	var rearmTimer bool
 	defer func() {
@@ -337,23 +326,23 @@ func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout
 	}
 
 	// Attempt to finalize, based on the discrepancy flag.
-	var header *block.Header
+	var commit OpenCommitment
 	if !p.Discrepancy {
 		// Fast path -- no discrepancy yet, check for one.
-		header, err = p.DetectDiscrepancy()
+		commit, err = p.DetectDiscrepancy()
 		if err != nil {
 			rearmTimer = true
 			return nil, err
 		}
 	} else {
 		// Discrepancy resolution.
-		header, err = p.ResolveDiscrepancy()
+		commit, err = p.ResolveDiscrepancy()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return header, nil
+	return commit, nil
 }
 
 // AddMergeCommitment verifies and adds a new merge commitment to the pool.
@@ -396,6 +385,11 @@ func (p *Pool) AddMergeCommitment(
 
 	// Check if the block is based on the previous block.
 	if !header.IsParentOf(&blk.Header) {
+		logger.Debug("merge commitment is not based on correct block",
+			"node_id", id,
+			"expected_previous_hash", blk.Header.EncodedHash(),
+			"previous_hash", header.PreviousHash,
+		)
 		return ErrNotBasedOnCorrectBlock
 	}
 
@@ -414,6 +408,10 @@ func (p *Pool) AddMergeCommitment(
 			// Only set a flag so that we add all valid compute commitments
 			// to the compute committment pool.
 			hasError = true
+
+			logger.Debug("invalid compute commitment while adding merge commitment",
+				"err", err,
+			)
 		}
 	}
 	if hasError {
@@ -430,12 +428,18 @@ func (p *Pool) AddMergeCommitment(
 			// If there was no discrepancy yet there must not be one now.
 			_, err = sp.DetectDiscrepancy()
 			if err != nil {
+				logger.Debug("discrepancy detection failed for compute committee",
+					"err", err,
+				)
 				return ErrBadComputeCommits
 			}
 		} else {
 			// If there was a discrepancy before it must be resolved now.
 			_, err = sp.ResolveDiscrepancy()
 			if err != nil {
+				logger.Debug("discrepancy resolution failed for compute committee",
+					"err", err,
+				)
 				return ErrBadComputeCommits
 			}
 		}

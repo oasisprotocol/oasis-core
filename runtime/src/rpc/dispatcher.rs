@@ -17,6 +17,21 @@ enum DispatchError {
     MethodNotFound { method: String },
 }
 
+/// Custom context initializer.
+pub trait ContextInitializer {
+    /// Called to initialize the context.
+    fn init(&self, ctx: &mut Context);
+}
+
+impl<F> ContextInitializer for F
+where
+    F: Fn(&mut Context),
+{
+    fn init(&self, ctx: &mut Context) {
+        (*self)(ctx)
+    }
+}
+
 /// Descriptor of a RPC API method.
 #[derive(Clone, Debug)]
 pub struct MethodDescriptor {
@@ -115,6 +130,8 @@ pub struct Dispatcher {
     methods: HashMap<String, Method>,
     /// Registered local RPC methods.
     local_methods: HashMap<String, Method>,
+    /// Registered context initializer.
+    ctx_initializer: Option<Box<ContextInitializer>>,
 }
 
 impl Dispatcher {
@@ -123,6 +140,7 @@ impl Dispatcher {
         Self {
             methods: HashMap::new(),
             local_methods: HashMap::new(),
+            ctx_initializer: None,
         }
     }
 
@@ -134,8 +152,20 @@ impl Dispatcher {
         };
     }
 
+    /// Configure context initializer.
+    pub fn set_context_initializer<I>(&mut self, initializer: I)
+    where
+        I: ContextInitializer + 'static,
+    {
+        self.ctx_initializer = Some(Box::new(initializer));
+    }
+
     /// Dispatch request.
     pub fn dispatch(&self, request: Request, mut ctx: Context) -> Response {
+        if let Some(ref ctx_init) = self.ctx_initializer {
+            ctx_init.init(&mut ctx);
+        }
+
         match self.dispatch_fallible(request, &mut ctx, false) {
             Ok(response) => response,
             Err(error) => Response {

@@ -7,21 +7,22 @@ option go_package = "github.com/oasislabs/ekiden/go/grpc/registry";
 
 message Runtime {
     bytes id = 1;
-    bytes code = 2;
 
-    common.CapabilitiesTEE.Hardware tee_hardware = 3;
+    common.CapabilitiesTEE.Hardware tee_hardware = 2;
 
-    uint64 replica_group_size = 4;
+    uint64 replica_group_size = 3;
 
-    uint64 storage_group_size = 5;
+    uint64 storage_group_size = 4;
 
-    uint64 replica_group_backup_size = 6;
+    uint64 replica_group_backup_size = 5;
 
-    uint64 replica_allowed_stragglers = 7;
+    uint64 replica_allowed_stragglers = 6;
 
-    uint64 registration_time = 8;
+    uint64 registration_time = 7;
 
-    uint32 kind = 9;
+    uint32 kind = 8;
+
+    bytes key_manager = 9;
 }
 
 service RuntimeRegistry {

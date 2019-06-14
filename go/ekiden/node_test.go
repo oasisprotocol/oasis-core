@@ -47,6 +47,7 @@ var (
 		{"log.level.default", "DEBUG"},
 		{"epochtime.backend", "tendermint_mock"},
 		{"beacon.backend", "tendermint"},
+		{"keymanager.backend", "tendermint"},
 		{"registry.backend", "tendermint"},
 		{"roothash.backend", "tendermint"},
 		{"roothash.tendermint.index_blocks", true},
@@ -66,6 +67,7 @@ var (
 		{"worker.txnscheduler.enabled", true},
 		{"worker.merge.enabled", true},
 		{"client.indexer.runtimes", []string{testRuntimeID}},
+		{"debug.allow_test_keys", true},
 	}
 
 	testRuntime = &registry.Runtime{
@@ -240,8 +242,19 @@ func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	signed, err := signature.SignSigned(*node.entityPrivKey, registry.DeregisterEntitySignatureContext, &ts)
 	require.NoError(t, err, "SignSigned")
 
+	// Subscribe to entity deregistration event.
+	ch, sub := node.Node.Registry.WatchEntities()
+	defer sub.Close()
+
 	err = node.Node.Registry.DeregisterEntity(context.Background(), signed)
 	require.NoError(t, err, "DeregisterEntity")
+
+	select {
+	case ev := <-ch:
+		require.False(t, ev.IsRegistration, "expected entity deregistration event")
+	case <-time.After(1 * time.Second):
+		t.Fatalf("Failed to receive entity deregistration event")
+	}
 
 	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
 }

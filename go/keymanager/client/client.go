@@ -4,6 +4,7 @@ package client
 import (
 	"context"
 	"crypto/x509"
+	"encoding/base64"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -18,6 +19,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/keymanager/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/worker/common/enclaverpc"
 )
@@ -39,90 +41,176 @@ type Client struct {
 
 	logger *logging.Logger
 
-	registry          registry.Backend
+	backend  api.Backend
+	registry registry.Backend
+
+	state map[signature.MapKey]*clientState
+	kmMap map[signature.MapKey]signature.PublicKey
+
+	debugClient *enclaverpc.Client
+}
+
+type clientState struct {
+	status            *api.Status
 	conn              *grpc.ClientConn
 	client            *enclaverpc.Client
 	resolverCleanupFn func()
 }
 
+func (st *clientState) kill() {
+	if st.resolverCleanupFn != nil {
+		st.resolverCleanupFn()
+		st.resolverCleanupFn = nil
+	}
+	if st.conn != nil {
+		st.conn.Close()
+		st.conn = nil
+	}
+}
+
 // CallRemote calls a runtime-specific key manager via remote EnclaveRPC.
 func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, data []byte) ([]byte, error) {
+	if c.debugClient != nil {
+		return c.debugClient.CallEnclave(ctx, data)
+	}
+
+	c.logger.Debug("remote query",
+		"id", runtimeID,
+		"data", base64.StdEncoding.EncodeToString(data),
+	)
+
 	c.RLock()
 	defer c.RUnlock()
-	if c.client == nil {
+
+	id := runtimeID.ToMapKey()
+	kmID := c.kmMap[id]
+	if kmID == nil {
+		if c.state[id] == nil {
+			return nil, ErrKeyManagerNotAvailable
+		}
+
+		// The target query is for a keymanager runtime ID, probably
+		// replication.
+		kmID = runtimeID
+	}
+
+	st := c.state[kmID.ToMapKey()]
+	if st == nil || st.client == nil {
 		return nil, ErrKeyManagerNotAvailable
 	}
 
-	// TODO: The runtimeID is currently entirely ignored.  `data` also contains
-	// a runtimeID for the purpose of separating keys.
-
-	return c.client.CallEnclave(ctx, data)
+	return st.client.CallEnclave(ctx, data)
 }
 
 func (c *Client) worker() {
-	// TODO: The "correct" way to implement this is to schedule the key manager,
-	// but for now just work under the assumption that this is running on staging
-	// and or prod, and there is only one KM node registered at once, that all
-	// the runtimes will use.
+	stCh, stSub := c.backend.WatchStatuses()
+	defer stSub.Close()
 
-	ch, sub := c.registry.WatchNodeList()
-	defer sub.Close()
+	rtCh, rtSub := c.registry.WatchRuntimes()
+	defer rtSub.Close()
 
-	findFirstKMNode := func(l []*node.Node) *node.Node {
-		for _, n := range l {
-			if n.HasRoles(node.RoleKeyManager) {
-				return n
+	nlCh, nlSub := c.registry.WatchNodeList()
+	defer nlSub.Close()
+
+	for {
+		select {
+		case st := <-stCh:
+			nl, err := c.registry.GetNodes(context.TODO())
+			if err != nil {
+				c.logger.Error("failed to poll node list",
+					"err", err,
+				)
+				continue
 			}
+			c.updateState(st, nl)
+		case rt := <-rtCh:
+			c.updateRuntime(rt)
+		case nl := <-nlCh:
+			c.updateNodes(nl.Nodes)
 		}
-		return nil
-	}
-
-	for nl := range ch {
-		c.logger.Debug("updating node list",
-			"epoch", nl.Epoch,
-		)
-
-		c.updateConnection(findFirstKMNode(nl.Nodes))
 	}
 }
 
-func (c *Client) updateConnection(n *node.Node) {
-	if n == nil {
-		c.logger.Error("failed to update connection, no key manager nodes found")
-		return
-	}
-
-	if n.Certificate == nil {
-		// TODO: The registry should reject such registrations, so this should never happen.
-		c.logger.Error("key manager node registered without certificate, refusing to communicate",
-			"node_id", n.ID,
-		)
-		return
-	}
-
-	// TODO: Only update the connection if the key or address changed.
+func (c *Client) updateRuntime(rt *registry.Runtime) {
 	c.Lock()
 	defer c.Unlock()
 
-	cert, err := n.Certificate.Parse()
-	if err != nil {
-		c.logger.Error("failed to parse key manager certificate",
-			"err", err,
+	switch rt.Kind {
+	case registry.KindCompute:
+		c.logger.Debug("set new runtime key manager",
+			"id", rt.ID,
+			"km_id", rt.KeyManager,
 		)
+		c.kmMap[rt.ID.ToMapKey()] = rt.KeyManager
+	case registry.KindKeyManager:
+		c.kmMap[rt.ID.ToMapKey()] = rt.ID
+	default:
+	}
+}
+
+func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
+	c.logger.Debug("updating connection state",
+		"id", status.ID,
+	)
+
+	nodeMap := make(map[signature.MapKey]*node.Node)
+	for _, n := range nodeList {
+		nodeMap[n.ID.ToMapKey()] = n
+	}
+
+	c.Lock()
+	defer c.Unlock()
+
+	idKey := status.ID.ToMapKey()
+	st := c.state[idKey]
+
+	// It's not possible to service requests for this key manager.
+	if !status.IsInitialized || len(status.Nodes) == 0 {
+		// Kill the conn and return.
+		if st != nil {
+			st.kill()
+			c.state[idKey] = nil
+		}
+
 		return
 	}
+
+	// Build the new state.
 	certPool := x509.NewCertPool()
-	certPool.AddCert(cert)
+	var addresses []resolver.Address
+	for _, v := range status.Nodes {
+		n := nodeMap[v.ToMapKey()]
+		if n == nil {
+			c.logger.Warn("key manager node missing descriptor",
+				"id", v,
+			)
+			continue
+		}
+
+		cert, err := n.Certificate.Parse()
+		if err != nil {
+			c.logger.Error("failed to parse key manager certificate",
+				"id", n.ID,
+				"err", err,
+			)
+			continue
+		}
+		certPool.AddCert(cert)
+
+		for _, addr := range n.Addresses {
+			addresses = append(addresses, resolver.Address{Addr: addr.String()})
+		}
+	}
+
 	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
 	opts := grpc.WithTransportCredentials(creds)
 
-	if c.resolverCleanupFn != nil {
-		c.resolverCleanupFn()
-		c.resolverCleanupFn = nil
-	}
-	if c.conn != nil {
-		c.conn.Close()
-		c.conn = nil
+	// TODO: This probably could skip updating the connection sometimes.
+
+	// Kill the old state if it exists.
+	if st != nil {
+		st.kill()
+		c.state[idKey] = nil
 	}
 
 	// Note: While this may look screwed up, the resolver needs the client conn
@@ -136,25 +224,42 @@ func (c *Client) updateConnection(n *node.Node) {
 		)
 		return
 	}
-	var addresses []resolver.Address
-	for _, addr := range n.Addresses {
-		addresses = append(addresses, resolver.Address{Addr: addr.String()})
-	}
 	manualResolver.NewAddress(addresses)
 
 	c.logger.Debug("updated connection",
-		"node", n,
+		"id", status.ID,
 	)
 
-	c.client = enclaverpc.NewFromConn(conn, kmEndpoint)
-	c.conn = conn
-	c.resolverCleanupFn = cleanupFn
+	c.state[idKey] = &clientState{
+		status:            status,
+		conn:              conn,
+		client:            enclaverpc.NewFromConn(conn, kmEndpoint),
+		resolverCleanupFn: cleanupFn,
+	}
+}
+
+func (c *Client) updateNodes(nodeList []*node.Node) {
+	var statuses []*api.Status
+
+	// This is ok because the caller's leaf functions are the only thing
+	// that mutates the status list.
+	c.RLock()
+	for _, v := range c.state {
+		statuses = append(statuses, v.status)
+	}
+	c.RUnlock()
+
+	for _, v := range statuses {
+		c.updateState(v, nodeList)
+	}
 }
 
 // New creates a new key manager client instance.
-func New(registryBackend registry.Backend) (*Client, error) {
+func New(backend api.Backend, registryBackend registry.Backend) (*Client, error) {
 	c := &Client{
 		logger: logging.GetLogger("keymanager/client"),
+		state:  make(map[signature.MapKey]*clientState),
+		kmMap:  make(map[signature.MapKey]signature.PublicKey),
 	}
 
 	if debugAddress := viper.GetString(cfgDebugClientAddress); debugAddress != "" {
@@ -165,13 +270,15 @@ func New(registryBackend registry.Backend) (*Client, error) {
 			return nil, errors.Wrap(err, "keymanager/client: failed to create debug client")
 		}
 
-		c.client = client
+		c.debugClient = client
 
 		return c, nil
 	}
 
 	// Standard configuration watches the various backends.
+	c.backend = backend
 	c.registry = registryBackend
+
 	go c.worker()
 
 	return c, nil

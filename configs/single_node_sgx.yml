@@ -8,6 +8,14 @@
 #
 datadir: /tmp/ekiden-single-node-sgx
 
+# Debug.
+#
+# Enable test keys, and the built in test entity to reduce config maintenance
+# burden.
+debug:
+  allow_test_keys: true
+  test_entity: true
+
 # Logging.
 # Per-module log levels are defined below. If you prefer just one unified log level, you can use:
 # log:
@@ -55,6 +63,7 @@ worker:
   keymanager:
     enabled: true
     tee_hardware: intel-sgx
+    may_generate: true
     runtime:
       id: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       binary: target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
@@ -99,6 +108,10 @@ roothash:
 tendermint:
   consensus:
     timeout_commit: 1s
+
+# Key manager backend configuration.
+keymanager:
+  backend: tendermint
 
 # Client configuration.
 client:

@@ -317,8 +317,19 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
 	require.EqualValues(rt.Runtime, registeredRuntimes[len(registeredRuntimes)-1], "expected runtime is registered")
 
+	// Subscribe to entity deregistration event.
+	ch, sub := backend.WatchEntities()
+	defer sub.Close()
+
 	err = backend.DeregisterEntity(context.Background(), entity.SignedDeregistration)
 	require.NoError(err, "DeregisterEntity")
+
+	select {
+	case ev := <-ch:
+		require.False(ev.IsRegistration, "expected entity deregistration event")
+	case <-time.After(recvTimeout):
+		t.Fatalf("Failed to receive entity deregistration event")
+	}
 
 	// TODO: Test the various failures.
 
@@ -639,7 +650,6 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 
 	rt.Runtime = &api.Runtime{
 		ID:                            rt.PrivateKey.Public(),
-		Code:                          []byte("tu ne cede malis, sed contra audentior ito"),
 		ReplicaGroupSize:              3,
 		ReplicaGroupBackupSize:        5,
 		ReplicaAllowedStragglers:      1,

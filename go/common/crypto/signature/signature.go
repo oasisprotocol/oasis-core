@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"golang.org/x/crypto/ed25519"
 
@@ -79,6 +80,9 @@ var (
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
 	_ encoding.BinaryUnmarshaler = (*PrivateKey)(nil)
+
+	testPublicKeys        sync.Map
+	blacklistedPublicKeys sync.Map
 )
 
 // MapKey is a PublicKey as a fixed sized byte array for use as a map key.
@@ -103,6 +107,9 @@ func (k PublicKey) Verify(context, message, sig []byte) bool {
 		return false
 	}
 	if len(sig) != SignatureSize {
+		return false
+	}
+	if _, isBlacklisted := blacklistedPublicKeys.Load(k.ToMapKey()); isBlacklisted {
 		return false
 	}
 
@@ -299,6 +306,12 @@ func (k *PrivateKey) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// UnmarshalSeed decodes a RFC 8032 seed into a private key.
+func (k *PrivateKey) UnmarshalSeed(seed []byte) error {
+	nk := ed25519.NewKeyFromSeed(seed)
+	return k.UnmarshalBinary(nk[:])
+}
+
 // UnmarshalPEM decodes a PEM marshaled PrivateKey.
 func (k *PrivateKey) UnmarshalPEM(data []byte) error {
 	b, err := unmarshalPEM(privPEMType, data)
@@ -381,8 +394,6 @@ type Signature struct {
 
 	// Signature is the actual raw signature.
 	Signature RawSignature `codec:"signature"`
-
-	// TODO: Attestation.
 }
 
 // Sign generates a signature with the private key over the context and
@@ -433,8 +444,6 @@ func (s *Signature) FromProto(pb *common.Signature) error {
 	if err := s.Signature.UnmarshalBinary(pb.GetSignature()); err != nil {
 		return err
 	}
-
-	// TODO: Attestation.
 
 	return nil
 }
@@ -516,6 +525,24 @@ type SignedPublicKey struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedPublicKey) Open(context []byte, pub *PublicKey) error { // nolint: interfacer
 	return s.Signed.Open(context, pub)
+}
+
+// RegisterTestPublicKey registers a hardcoded test public key with the
+// internal public key blacklist.
+func RegisterTestPublicKey(pk PublicKey) {
+	testPublicKeys.Store(pk.ToMapKey(), true)
+}
+
+// BuildPublicKeyBlacklist builds the public key blacklist.
+func BuildPublicKeyBlacklist(allowTestKeys bool) {
+	if !allowTestKeys {
+		testPublicKeys.Range(func(k, v interface{}) bool {
+			blacklistedPublicKeys.Store(k, v)
+			return true
+		})
+	}
+
+	// Explicitly forbid other keys here.
 }
 
 func digest(context, message []byte) ([]byte, error) {

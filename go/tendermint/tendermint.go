@@ -174,16 +174,13 @@ func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
 	message := cbor.Marshal(tx)
 	data := append([]byte{tag}, message...)
 
-	response, err := t.client.BroadcastTxCommit(data)
+	response, err := t.client.BroadcastTxSync(data)
 	if err != nil {
 		return errors.Wrap(err, "broadcast tx: commit failed")
 	}
 
-	if response.CheckTx.Code != api.CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: check tx failed: %s", response.CheckTx.Info)
-	}
-	if response.DeliverTx.Code != api.CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: deliver tx failed: %s", response.DeliverTx.Info)
+	if response.Code != api.CodeOK.ToInt() {
+		return fmt.Errorf("broadcast tx: check tx failed: %d", response.Code)
 	}
 
 	return nil

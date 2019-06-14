@@ -117,7 +117,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate a new entity.
-	ent, privKey, err := entity.Generate(dataDir)
+	ent, privKey, err := loadOrGenerateEntity(dataDir, true)
 	if err != nil {
 		logger.Error("failed to generate entity",
 			"err", err,
@@ -161,7 +161,7 @@ func doRegisterOrDeregister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ent, privKey, err := entity.Load(dataDir)
+	ent, privKey, err := loadOrGenerateEntity(dataDir, false)
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,
@@ -290,6 +290,18 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
+func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, *signature.PrivateKey, error) {
+	if cmdFlags.DebugTestEntity() {
+		return entity.TestEntity()
+	}
+
+	if generate {
+		return entity.Generate(dataDir)
+	}
+
+	return entity.Load(dataDir)
+}
+
 // Register registers the entity sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
@@ -305,6 +317,14 @@ func Register(parentCmd *cobra.Command) {
 	cmdFlags.RegisterRetries(registerCmd)
 	cmdFlags.RegisterRetries(deregisterCmd)
 	cmdFlags.RegisterVerbose(listCmd)
+
+	for _, v := range []*cobra.Command{
+		initCmd,
+		registerCmd,
+		deregisterCmd,
+	} {
+		cmdFlags.RegisterDebugTestEntity(v)
+	}
 
 	for _, v := range []*cobra.Command{
 		registerCmd,
