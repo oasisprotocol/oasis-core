@@ -38,7 +38,7 @@ var (
 
 	// QueryApp is a query for filtering transactions processed by
 	// the root hash application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 
 	// QueryUpdate is a query for filtering transactions where root hash
 	// application state has been updated. This is required as state can

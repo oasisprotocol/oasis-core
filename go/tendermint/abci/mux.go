@@ -536,7 +536,7 @@ func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
 
 	// Append application name tag.
 	ctx := NewContext(ContextDeliverTx, mux.currentTime)
-	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 
 	err = app.DeliverTx(ctx, tx[1:])
 	if err != nil {

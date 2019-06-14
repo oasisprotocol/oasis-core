@@ -21,7 +21,7 @@ var (
 
 	// QueryApp is a query for filtering transactions processed by the
 	// key manager application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )
 
 const (
