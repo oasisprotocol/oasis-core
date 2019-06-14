@@ -60,13 +60,7 @@ pub mod tracing;
 pub mod transaction;
 pub mod types;
 
-// Re-exports.
-pub use self::{
-    init::start_runtime,
-    protocol::Protocol,
-    rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
-    transaction::dispatcher::Dispatcher as TxnDispatcher,
-};
+use crate::common::version::{Version, PROTOCOL_VERSION};
 
 #[cfg(target_env = "sgx")]
 use self::common::sgx::avr::{get_enclave_identity, MrSigner};
@@ -106,6 +100,7 @@ lazy_static! {
         };
 
         BuildInfo {
+            protocol_version: PROTOCOL_VERSION,
             is_secure,
         }
     };
@@ -113,6 +108,16 @@ lazy_static! {
 
 /// Runtime build information.
 pub struct BuildInfo {
+    /// Supported runtime protocol version.
+    pub protocol_version: Version,
     /// True iff the build can provide integrity and confidentiality.
     pub is_secure: bool,
 }
+
+// Re-exports.
+pub use self::{
+    init::start_runtime,
+    protocol::Protocol,
+    rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
+    transaction::dispatcher::Dispatcher as TxnDispatcher,
+};

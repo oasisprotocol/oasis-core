@@ -41,6 +41,7 @@ func initVersions() {
 
 	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
 {{- with ekidenVersion }}
+Runtime protocol version: {{ .RuntimeProtocol }}
 Backend protocol version: {{ .BackendProtocol }}
 Compute committee protocol version: {{ .ComputeCommitteeProtocol }}
 Tendermint core version: {{ .Tendermint }}

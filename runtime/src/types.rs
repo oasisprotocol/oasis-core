@@ -76,6 +76,10 @@ pub enum Body {
     },
 
     // Worker interface.
+    WorkerInfoRequest {},
+    WorkerInfoResponse {
+        protocol_version: u64,
+    },
     WorkerPingRequest {},
     WorkerShutdownRequest {},
     WorkerAbortRequest {},
