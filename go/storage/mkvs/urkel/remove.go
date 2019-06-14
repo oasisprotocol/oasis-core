@@ -48,7 +48,10 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 				return nil, true, nil
 			case *internal.LeafNode:
 				// Left is nil, right is leaf, merge nodes back.
-				return n.Right, true, nil
+				right := n.Right
+				n.Right = nil
+				t.cache.removeNode(ptr)
+				return right, true, nil
 			}
 		case *internal.LeafNode:
 			if node, err = t.cache.derefNodePtr(ctx, lrID, n.Right, nil); err != nil {
@@ -58,7 +61,10 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 			switch node.(type) {
 			case nil:
 				// Right is nil, left is leaf, merge nodes back.
-				return n.Left, true, nil
+				left := n.Left
+				n.Left = nil
+				t.cache.removeNode(ptr)
+				return left, true, nil
 			}
 		}
 
