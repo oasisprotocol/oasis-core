@@ -18,18 +18,19 @@ type Message struct {
 	// belongs to. It is used as a namespace.
 	RuntimeID signature.PublicKey `codec:"runtime_id"`
 
-	// GroupHash is the hash identifying the group this message
-	// is from/to. Messages with non-matching group hashes will
-	// be discarded.
-	GroupHash hash.Hash `codec:"group_hash"`
+	// GroupVersion is the version of all elected committees (the consensus
+	// block height of last processed committee election). Messages with
+	// non-matching group versions will be discarded.
+	GroupVersion int64 `codec:"group_version"`
 
 	// Jaeger's span context in binary format.
 	SpanContext []byte `codec:"span"`
 
+	// Message types.
+
 	Ack   *Ack
 	Error *Error
 
-	// Batch dispatch.
 	TxnSchedulerBatchDispatch *TxnSchedulerBatchDispatch
 	ComputeWorkerFinished     *ComputeWorkerFinished
 }

@@ -194,43 +194,43 @@ func (n *Node) transitionLocked(state NodeState) {
 }
 
 func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) StateWaitingForResults {
-	committee := epoch.GetComputeCommittee()
-	nodes := epoch.GetComputeNodes()
-	cID := committee.EncodedMembersHash()
-	nodeInfo := make(map[signature.MapKey]commitment.NodeInfo, len(nodes))
-	for idx, nd := range nodes {
-		var nodeRuntime *node.Runtime
-		for _, r := range nd.Runtimes {
-			if !r.ID.Equal(n.commonNode.RuntimeID) {
+	pool := &commitment.MultiPool{
+		Committees: make(map[hash.Hash]*commitment.Pool),
+	}
+
+	for cID, ci := range epoch.GetComputeCommittees() {
+		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo, len(ci.Nodes))
+		for idx, nd := range ci.Nodes {
+			var nodeRuntime *node.Runtime
+			for _, r := range nd.Runtimes {
+				if !r.ID.Equal(n.commonNode.RuntimeID) {
+					continue
+				}
+				nodeRuntime = r
+				break
+			}
+			if nodeRuntime == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				n.logger.Warn("committee member not registered with this runtime",
+					"node", nd.ID,
+				)
 				continue
 			}
-			nodeRuntime = r
-			break
-		}
-		if nodeRuntime == nil {
-			// We currently prevent this case throughout the rest of the system.
-			// Still, it's prudent to check.
-			n.logger.Warn("committee member not registered with this runtime",
-				"node", nd.ID,
-			)
-			continue
+
+			nodeInfo[nd.ID.ToMapKey()] = commitment.NodeInfo{
+				CommitteeNode: idx,
+				Runtime:       nodeRuntime,
+			}
 		}
 
-		nodeInfo[nd.ID.ToMapKey()] = commitment.NodeInfo{
-			CommitteeNode: idx,
-			Runtime:       nodeRuntime,
+		pool.Committees[cID] = &commitment.Pool{
+			Runtime:   epoch.GetRuntime(),
+			Committee: ci.Committee,
+			NodeInfo:  nodeInfo,
 		}
 	}
 
-	pool := &commitment.MultiPool{
-		Committees: map[hash.Hash]*commitment.Pool{
-			cID: &commitment.Pool{
-				Runtime:   epoch.GetRuntime(),
-				Committee: committee,
-				NodeInfo:  nodeInfo,
-			},
-		},
-	}
 	return StateWaitingForResults{
 		pool:  pool,
 		timer: time.NewTimer(infiniteTimeout),
