@@ -31,15 +31,22 @@ type mockAVR struct {
 	Nonce                 string `codec:"nonce,omitempty"`
 }
 
-func newMockAVR(quote []byte, nonce string) []byte {
+func newMockAVR(quote []byte, nonce string) ([]byte, error) {
 	avr := &mockAVR{
 		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
 		ISVEnclaveQuoteStatus: "OK",
 		ISVEnclaveQuoteBody:   quote[:ias.QuoteLen],
 		Nonce:                 nonce,
 	}
+	q, err := ias.DecodeQuote(avr.ISVEnclaveQuoteBody)
+	if err != nil {
+		return nil, err
+	}
+	if err = q.Verify(); err != nil {
+		return nil, err
+	}
 
-	return json.Marshal(avr)
+	return json.Marshal(avr), nil
 }
 
 // IAS is an IAS proxy client.
@@ -79,10 +86,23 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, non
 		// Generate mock AVR when IAS is not configured. Signature and certificate chain are empty
 		// and such a report will not pass any verification so it can only be used with verification
 		// disabled (e.g., built with EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1).
-		avr = newMockAVR(quote, nonce)
+		avr, err = newMockAVR(quote, nonce)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		sig = cbor.FixSliceForSerde(nil)
 		chain = cbor.FixSliceForSerde(nil)
 		return
+	}
+
+	// Ensure the quote passes basic sanity/security checks before even
+	// bothering to contact the backend.
+	untrustedQuote, err := ias.DecodeQuote(quote)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err = untrustedQuote.Verify(); err != nil {
+		return nil, nil, nil, err
 	}
 
 	evidence := ias.Evidence{

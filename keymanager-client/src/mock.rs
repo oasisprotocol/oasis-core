@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Mutex};
 use ekiden_client::BoxFuture;
 use ekiden_keymanager_api::*;
 use ekiden_runtime::common::crypto::signature::Signature;
-use futures::future;
+use futures::{future, Future};
 use io_context::Context;
 
 use super::KeyManagerClient;
@@ -42,17 +42,16 @@ impl KeyManagerClient for MockClient {
 
     fn get_public_key(
         &self,
-        _ctx: Context,
+        ctx: Context,
         contract_id: ContractId,
     ) -> BoxFuture<Option<SignedPublicKey>> {
-        let keys = self.keys.lock().unwrap();
-        let result = keys.get(&contract_id).map(|ck| SignedPublicKey {
-            key: ck.input_keypair.get_pk(),
-            checksum: vec![],
-            signature: Signature::default(),
-        });
-
-        Box::new(future::ok(result))
+        Box::new(self.get_or_create_keys(ctx, contract_id).map(|ck| {
+            Some(SignedPublicKey {
+                key: ck.input_keypair.get_pk(),
+                checksum: vec![],
+                signature: Signature::default(),
+            })
+        }))
     }
 
     fn replicate_master_secret(&self, _ctx: Context) -> BoxFuture<Option<MasterSecret>> {
