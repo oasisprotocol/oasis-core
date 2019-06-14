@@ -156,7 +156,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	}
 
 	if len(st.Entities) > 0 || len(st.Runtimes) > 0 {
-		ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	}
 
 	return nil
@@ -217,7 +217,7 @@ func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 	// Iff any nodes have expired, force-emit the application tag so
 	// the change is picked up.
-	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	ctx.EmitTag(TagNodesExpired, cbor.Marshal(expiredNodes))
 
 	return nil

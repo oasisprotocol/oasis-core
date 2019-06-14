@@ -21,5 +21,5 @@ var (
 
 	// QueryApp is a query for filtering transactions processed by the
 	// beacon application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )

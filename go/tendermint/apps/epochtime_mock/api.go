@@ -26,7 +26,7 @@ var (
 
 	// QueryApp is a query for filtering transactions processed by
 	// the mock epochtime application.
-	QueryApp = api.QueryForEvent(api.TagApplication, []byte(AppName))
+	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )
 
 // Tx is a transaction to be accepted by the mock epochtime app.

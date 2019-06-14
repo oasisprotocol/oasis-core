@@ -119,7 +119,7 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 	)
 
 	state.setEpoch(future.Epoch, height)
-	ctx.EmitTag(api.TagApplication, []byte(app.Name()))
+	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	ctx.EmitTag(TagEpoch, cbor.Marshal(future.Epoch))
 
 	return nil

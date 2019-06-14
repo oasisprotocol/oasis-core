@@ -169,7 +169,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 
 	// Emit the update event if required.
 	if len(toEmit) > 0 {
-		ctx.EmitTag(tmapi.TagApplication, []byte(app.Name()))
+		ctx.EmitTag([]byte(app.Name()), tmapi.TagAppNameValue)
 		ctx.EmitTag(TagStatusUpdate, cbor.Marshal(toEmit))
 	}
 
