@@ -81,6 +81,25 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08", root.String())
 	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: nil}})
 	require.Equal(t, log[0].Type(), LogDelete)
+
+	// Test close.
+	tree.Close()
+
+	err = tree.Insert(ctx, keyZero, valueZero)
+	require.Error(t, err, "Insert after Close")
+	require.Equal(t, err, ErrClosed, "Insert must return ErrClosed after Close")
+
+	_, err = tree.Get(ctx, keyZero)
+	require.Error(t, err, "Get after Close")
+	require.Equal(t, err, ErrClosed, "Get must return ErrClosed after Close")
+
+	err = tree.Remove(ctx, keyZero)
+	require.Error(t, err, "Remove after Close")
+	require.Equal(t, err, ErrClosed, "Remove must return ErrClosed after Close")
+
+	_, _, err = tree.Commit(ctx)
+	require.Error(t, err, "Commit after Close")
+	require.Equal(t, err, ErrClosed, "Commit must return ErrClosed after Close")
 }
 
 func testInsertCommitBatch(t *testing.T, ndb db.NodeDB) {
