@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 )
 
 const (
@@ -149,7 +150,9 @@ func normalizePath(f string) string {
 }
 
 func initPublicKeyBlacklist() error {
-	signature.BuildPublicKeyBlacklist(viper.GetBool(cfgAllowTestKeys))
+	allowTestKeys := viper.GetBool(cfgAllowTestKeys)
+	signature.BuildPublicKeyBlacklist(allowTestKeys)
+	ias.BuildMrsignerBlacklist(allowTestKeys)
 	return nil
 }
 
