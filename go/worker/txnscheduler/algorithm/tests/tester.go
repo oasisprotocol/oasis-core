@@ -9,6 +9,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
 )
 
@@ -21,7 +22,7 @@ func (t *testDispatcher) Clear() {
 	t.DispatchedBatches = []runtime.Batch{}
 }
 
-func (t *testDispatcher) Dispatch(batch runtime.Batch) error {
+func (t *testDispatcher) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	if t.ShouldFail {
 		return errors.New("dispatch failed")
 	}
@@ -39,6 +40,11 @@ func AlgorithmImplementationTests(
 	// Initialize Algorithm.
 	err := algorithm.Initialize(&td)
 	require.NoError(t, err, "Initialize(td)")
+
+	// Simulate an epoch transition.
+	epoch := &committee.EpochSnapshot{}
+	err = algorithm.EpochTransition(epoch)
+	require.NoError(t, err, "EpochTransition")
 
 	// Run the test cases.
 	t.Run("ScheduleTxs", func(t *testing.T) {

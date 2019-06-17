@@ -189,7 +189,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 		crash.Here(crashPointBatchReceiveAfter)
 
 		bd := message.TxnSchedulerBatchDispatch
-		err := n.queueBatchBlocking(ctx, bd.IORoot, bd.StorageReceipt, bd.Header)
+		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageReceipt, bd.Header)
 		if err != nil {
 			return false, err
 		}
@@ -200,6 +200,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 
 func (n *Node) queueBatchBlocking(
 	ctx context.Context,
+	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	storageReceipt signature.Signature,
 	hdr block.Header,
@@ -266,16 +267,23 @@ func (n *Node) queueBatchBlocking(
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(ioRoot, batch, batchSpanCtx, hdr)
+	return n.handleExternalBatchLocked(committeeID, ioRoot, batch, batchSpanCtx, hdr)
 }
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	batchSpanCtx opentracing.SpanContext,
+	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	batch runtime.Batch,
 ) {
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	expectedID := epoch.GetComputeCommitteeID()
+	if !expectedID.Equal(&committeeID) {
+		return
+	}
+
 	n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
 }
 
@@ -389,15 +397,20 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
-	if epoch.IsComputeBackupWorker() {
+	switch {
+	case epoch.IsComputeWorker():
+		// Worker, start processing immediately.
+		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
+	case epoch.IsComputeBackupWorker():
 		// Backup worker, wait for discrepancy event.
 		n.transitionLocked(StateWaitingForEvent{
 			ioRoot:       ioRoot,
 			batch:        batch,
 			batchSpanCtx: batchSpanCtx,
 		})
-	} else {
-		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
+	default:
+		// Currently not a member of a compute committee, log.
+		n.logger.Warn("not a compute committee member, ignoring batch")
 	}
 }
 
@@ -660,7 +673,16 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 		return
 	}
 
-	// TODO: Check if this is for our committee.
+	// Check if the discrepancy occurred in our committee.
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	expectedID := epoch.GetComputeCommitteeID()
+	if !expectedID.Equal(&dis.CommitteeID) {
+		n.logger.Debug("ignoring discrepancy event for a different committee",
+			"expected_committee", expectedID,
+			"committee", dis.CommitteeID,
+		)
+		return
+	}
 
 	n.logger.Warn("compute discrepancy detected",
 		"committee_id", dis.CommitteeID,
@@ -681,6 +703,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) handleExternalBatchLocked(
+	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	batch runtime.Batch,
 	batchSpanCtx opentracing.SpanContext,
@@ -697,6 +720,16 @@ func (n *Node) handleExternalBatchLocked(
 	if !epoch.IsComputeMember() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
+	}
+
+	// We only accept batches for our own committee.
+	expectedID := epoch.GetComputeCommitteeID()
+	if !expectedID.Equal(&committeeID) {
+		n.logger.Error("got external batch for a different compute committee",
+			"expected_committee", expectedID,
+			"committee", committeeID,
+		)
+		return nil
 	}
 
 	// Check if we have the correct block -- in this case, start processing the batch.

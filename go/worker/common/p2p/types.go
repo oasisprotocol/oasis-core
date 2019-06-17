@@ -40,6 +40,9 @@ type Message struct {
 type TxnSchedulerBatchDispatch struct {
 	// TODO: Txn scheduler should explicitly sign the message (#1790).
 
+	// CommitteeID is the committee ID of the target compute committee.
+	CommitteeID hash.Hash `codec:"cid"`
+
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the compute node should use.
 	IORoot hash.Hash `codec:"io_root"`

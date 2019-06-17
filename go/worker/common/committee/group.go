@@ -450,6 +450,7 @@ func (g *Group) publishLocked(
 // PublishScheduledBatch publishes a batch to all members in the compute committee.
 func (g *Group) PublishScheduledBatch(
 	spanCtx opentracing.SpanContext,
+	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	storageReceipt signature.Signature,
 	hdr block.Header,
@@ -459,13 +460,6 @@ func (g *Group) PublishScheduledBatch(
 
 	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerCommittee.Role != scheduler.Leader {
 		return errors.New("group: not leader of txn scheduler committee")
-	}
-
-	// TODO: Txn scheduler should determine the destination committee ID.
-	var committeeID hash.Hash
-	for id := range g.activeEpoch.computeCommittees {
-		committeeID = id
-		break
 	}
 
 	cc := g.activeEpoch.computeCommittees[committeeID]
@@ -478,6 +472,7 @@ func (g *Group) PublishScheduledBatch(
 		cc,
 		&p2p.Message{
 			TxnSchedulerBatchDispatch: &p2p.TxnSchedulerBatchDispatch{
+				CommitteeID:    committeeID,
 				IORoot:         ioRoot,
 				StorageReceipt: storageReceipt,
 				Header:         hdr,

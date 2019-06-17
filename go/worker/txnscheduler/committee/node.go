@@ -181,6 +181,14 @@ func (n *Node) transitionLocked(state NodeState) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	if epoch.IsTransactionSchedulerLeader() {
+		if err := n.algorithm.EpochTransition(epoch); err != nil {
+			n.logger.Error("scheduling algorithm failed to process epoch transition",
+				"err", err,
+			)
+			n.transitionLocked(StateNotReady{})
+			return
+		}
+
 		n.transitionLocked(StateWaitingForBatch{})
 	} else {
 		n.algorithm.Clear()
@@ -213,9 +221,8 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
-// TODO: Support multiple committees (#1775).
 // Dispatch dispatches a bach to the compute committee.
-func (n *Node) Dispatch(batch runtime.Batch) error {
+func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
@@ -284,6 +291,7 @@ func (n *Node) Dispatch(batch runtime.Batch) error {
 	)
 	err = n.commonNode.Group.PublishScheduledBatch(
 		batchSpanCtx,
+		committeeID,
 		ioRoot,
 		ioReceipt.Signature,
 		n.commonNode.CurrentBlock.Header,
@@ -304,7 +312,7 @@ func (n *Node) Dispatch(batch runtime.Batch) error {
 		if n.computeNode == nil {
 			n.logger.Error("scheduler says we are a compute worker, but we are not")
 		} else {
-			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, ioRoot, batch)
+			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, committeeID, ioRoot, batch)
 		}
 	}
 

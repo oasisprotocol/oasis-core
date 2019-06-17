@@ -4,6 +4,7 @@ package api
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/worker/common/committee"
 )
 
 // Algorithm defines an algorithm for scheduling incoming transaction.
@@ -12,6 +13,10 @@ type Algorithm interface {
 	// Algorithm should use the provided transaction dispatcher to dispatch
 	// scheduled transactions.
 	Initialize(td TransactionDispatcher) error
+
+	// EpochTransition notifies the transaction scheduler about a new
+	// epoch transition, passing in an epoch snapshot.
+	EpochTransition(epoch *committee.EpochSnapshot) error
 
 	// ScheduleTx attempts to schedule a transaction.
 	// XXX: When needed by more complex algorithms, extend the 'tx'
@@ -34,7 +39,5 @@ type Algorithm interface {
 // TransactionDispatcher dispatches transactions to a scheduled compute committee.
 type TransactionDispatcher interface {
 	// Dispatch attempts to dispatch a batch to a compute committee.
-	// XXX: when multiple committees per runtime are supported, add
-	// committeeId here.
-	Dispatch(batch runtime.Batch) error
+	Dispatch(committeeID hash.Hash, batch runtime.Batch) error
 }
