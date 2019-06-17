@@ -417,8 +417,7 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 	go func() {
 		defer close(doneCh)
 
-		// TODO: Actually merge, currently we don't have anything to merge as there
-		//       is only a single committee (#1775).
+		// TODO: Actually merge (#1823).
 		_ = stateRoot
 		blk.Header.IORoot = results[0].IORoot
 		blk.Header.StateRoot = results[0].StateRoot

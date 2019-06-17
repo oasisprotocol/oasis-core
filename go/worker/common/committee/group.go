@@ -31,7 +31,7 @@ type MessageHandler interface {
 }
 
 // CommitteeInfo contains information about a committee of nodes.
-type CommitteeInfo struct {  // nolint: golint
+type CommitteeInfo struct { // nolint: golint
 	Role      scheduler.Role
 	Committee *scheduler.Committee
 	Nodes     []*node.Node
