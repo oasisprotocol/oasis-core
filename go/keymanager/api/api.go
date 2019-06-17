@@ -41,7 +41,8 @@ type Status struct {
 	// Nodes is the list of currently active key manager node IDs.
 	Nodes []signature.PublicKey `codec:"nodes"`
 
-	// TODO: Policy
+	// Policy is the key manager policy.
+	Policy *SignedPolicySGX `codec:"policy"`
 }
 
 // Backend is a key manager management implementation.

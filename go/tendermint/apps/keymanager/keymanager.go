@@ -235,6 +235,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 		IsInitialized: oldStatus.IsInitialized,
 		IsSecure:      oldStatus.IsSecure,
 		Checksum:      oldStatus.Checksum,
+		Policy:        oldStatus.Policy,
 	}
 
 	for _, n := range nodes {
