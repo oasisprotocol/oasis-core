@@ -110,6 +110,11 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse,
 	return &untrustedSignedInitResponse.InitResponse, nil
 }
 
+// Genesis is the key manager management genesis state.
+type Genesis struct {
+	Statuses []*Status `codec:"statuses,omit_empty"`
+}
+
 func init() {
 	// Old `INSECURE_SIGNING_KEY_PKCS8`.
 	var oldTestKey signature.PublicKey

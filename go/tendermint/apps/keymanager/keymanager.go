@@ -8,6 +8,8 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -66,8 +68,56 @@ func (app *keymanagerApplication) ForeignCheckTx(ctx *abci.Context, other abci.A
 }
 
 func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
-	// TODO: Implement support for this, once it is sensible to do so.
-	// Note: Registry app needs to be moved above the keymanager one.
+	st := doc.KeyManager
+
+	app.logger.Debug("InitChain: Genesis state",
+		"state", string(json.Marshal(st)),
+	)
+
+	// TODO: The better thing to do would be to move the registry init
+	// before the keymanager, and just query the registry for the runtime
+	// list.
+	regSt := doc.Registry
+	rtMap := make(map[signature.MapKey]*registry.Runtime)
+	for _, v := range regSt.Runtimes {
+		rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, true)
+		if err != nil {
+			app.logger.Error("InitChain: Invalid runtime",
+				"err", err,
+			)
+			continue
+		}
+
+		if rt.Kind == registry.KindKeyManager {
+			rtMap[rt.ID.ToMapKey()] = rt
+		}
+	}
+
+	var toEmit []*api.Status
+	state := NewMutableState(app.state.DeliverTxTree())
+	for _, v := range st.Statuses {
+		rt := rtMap[v.ID.ToMapKey()]
+		if rt == nil {
+			app.logger.Error("InitChain: State for unknown runtime",
+				"id", v.ID,
+			)
+			continue
+		}
+
+		app.logger.Debug("InitChain: Registering genesis key manager",
+			"id", v.ID,
+		)
+
+		// Set, enqueue for emit.
+		state.setStatus(v)
+		toEmit = append(toEmit, v)
+	}
+
+	if len(toEmit) > 0 {
+		ctx.EmitTag([]byte(app.Name()), tmapi.TagAppNameValue)
+		ctx.EmitTag(TagStatusUpdate, cbor.Marshal(toEmit))
+	}
+
 	return nil
 }
 
@@ -167,6 +217,9 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 		}
 	}
 
+	// Note: It may be a good idea to sweep statuses that don't have runtimes,
+	// but as runtime registrations last forever, so this shouldn't be possible.
+
 	// Emit the update event if required.
 	if len(toEmit) > 0 {
 		ctx.EmitTag([]byte(app.Name()), tmapi.TagAppNameValue)
@@ -197,6 +250,20 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			}
 		}
 		if nodeRt == nil {
+			continue
+		}
+
+		var teeOk bool
+		if nodeRt.Capabilities.TEE == nil {
+			teeOk = kmrt.TEEHardware == node.TEEHardwareInvalid
+		} else {
+			teeOk = kmrt.TEEHardware == nodeRt.Capabilities.TEE.Hardware
+		}
+		if !teeOk {
+			app.logger.Error("TEE hardware mismatch",
+				"id", kmrt.ID,
+				"node_id", n.ID,
+			)
 			continue
 		}
 
@@ -231,7 +298,15 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			// Not initialized.  The first node gets to be the source
 			// of truth, every other node will sync off it.
 
-			// TODO: Sanity check IsSecure/Checksum.
+			// Allow false -> true transitions, but not the reverse, so that
+			// it is possible to set the security status in the genesis block.
+			if initResponse.IsSecure != status.IsSecure && !initResponse.IsSecure {
+				app.logger.Error("Security status mismatch for runtime",
+					"id", kmrt.ID,
+					"node_id", n.ID,
+				)
+				continue
+			}
 			status.IsSecure = initResponse.IsSecure
 			status.IsInitialized = true
 			status.Checksum = initResponse.Checksum
