@@ -2,12 +2,12 @@
 package beacon
 
 import (
-	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
+	"golang.org/x/crypto/sha3"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -110,12 +110,36 @@ func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]by
 }
 
 func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
-	b := getBeacon(epoch, req.Hash)
+	var entropy []byte
+
+	height := app.state.BlockHeight()
+	if height <= 1 {
+		// No meaningful previous commit, use the block hash.  This isn't
+		// fantastic, but it's only for one epoch.
+		app.logger.Debug("onEpochChange: using block hash as entropy")
+		entropy = req.Hash
+	} else {
+		// Use the previous commit hash as the entropy input, under the theory
+		// that the merkle root of all the commits that went into the last
+		// block is harder for any single validator to game than the block
+		// hash.
+		//
+		// TODO: This still isn't ideal, and an entirely different beacon
+		// entropy source should be written, be it based around SCRAPE,
+		// a VDF, naive commit-reveal, or even just calling an SGX enclave.
+		app.logger.Debug("onEpochChange: using commit hash as entropy")
+		entropy = req.Header.GetLastCommitHash()
+	}
+	if len(entropy) == 0 {
+		return errors.New("onEpochChange: failed to obtain entropy")
+	}
+
+	b := getBeacon(epoch, entropy)
 
 	app.logger.Debug("onEpochChange: generated beacon",
 		"epoch", epoch,
 		"beacon", hex.EncodeToString(b),
-		"block_hash", hex.EncodeToString(req.Hash),
+		"block_hash", hex.EncodeToString(entropy),
 		"height", app.state.BlockHeight(),
 	)
 
@@ -147,12 +171,10 @@ func New(timeSource epochtime.BlockBackend) abci.Application {
 }
 
 func getBeacon(epoch epochtime.EpochTime, entropy []byte) []byte {
-	// TODO: This isn't a great source of entropy and is likely vulnerable to
-	// being gamed by at least the validators.
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], uint64(epoch))
 
-	h := sha512.New512_256()
+	h := sha3.New256()
 	_, _ = h.Write(entropyCtx)
 	_, _ = h.Write(entropy)
 	_, _ = h.Write(tmp[:])
