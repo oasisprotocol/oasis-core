@@ -1,5 +1,5 @@
-// Package db implements a persistent node database for Urkel trees.
-package db
+// Package api provides a persistent node database interface for Urkel trees.
+package api
 
 import (
 	"errors"

@@ -6,7 +6,8 @@ import (
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	memoryNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -150,7 +151,7 @@ func (b *memoryBackend) Initialized() <-chan struct{} {
 
 // New constructs a new memory backed storage Backend instance.
 func New(signingKey *signature.PrivateKey) api.Backend {
-	ndb, _ := nodedb.NewMemoryNodeDB()
+	ndb, _ := memoryNodedb.New()
 
 	b := &memoryBackend{
 		logger:     logging.GetLogger("storage/memory"),

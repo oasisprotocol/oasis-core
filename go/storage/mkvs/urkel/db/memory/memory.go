@@ -1,13 +1,15 @@
-package db
+// Package memory provides a memory-backed node database.
+package memory
 
 import (
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-var _ NodeDB = (*memoryNodeDB)(nil)
+var _ api.NodeDB = (*memoryNodeDB)(nil)
 
 type memoryItem struct {
 	refs  int
@@ -20,8 +22,8 @@ type memoryNodeDB struct {
 	items map[hash.Hash]*memoryItem
 }
 
-// NewMemoryNodeDB creates a new in-memory node database.
-func NewMemoryNodeDB() (NodeDB, error) {
+// New creates a new in-memory node database.
+func New() (api.NodeDB, error) {
 	return &memoryNodeDB{
 		items: make(map[hash.Hash]*memoryItem),
 	}, nil
@@ -74,7 +76,7 @@ func (d *memoryNodeDB) putLocked(id hash.Hash, item interface{}) error {
 func (d *memoryNodeDB) getLocked(id hash.Hash) (interface{}, error) {
 	item := d.items[id]
 	if item == nil {
-		return nil, ErrNodeNotFound
+		return nil, api.ErrNodeNotFound
 	}
 
 	return item.value, nil
@@ -100,7 +102,7 @@ type memoryBatch struct {
 	ops []func() error
 }
 
-func (d *memoryNodeDB) NewBatch() Batch {
+func (d *memoryNodeDB) NewBatch() api.Batch {
 	return &memoryBatch{
 		db: d,
 	}

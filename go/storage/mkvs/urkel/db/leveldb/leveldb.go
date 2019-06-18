@@ -1,4 +1,5 @@
-package db
+// Package leveldb provides a LevelDB-backed node database.
+package leveldb
 
 import (
 	"sync"
@@ -7,11 +8,12 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
 var (
-	_ NodeDB = (*leveldbNodeDB)(nil)
+	_ api.NodeDB = (*leveldbNodeDB)(nil)
 
 	nodeKeyPrefix  = []byte{'N'}
 	valueKeyPrefix = []byte{'V'}
@@ -23,42 +25,14 @@ type leveldbNodeDB struct {
 	closeOnce sync.Once
 }
 
-// NewLevelDBNodeDB creates a new LevelDB-backed node database.
-func NewLevelDBNodeDB(dirname string) (NodeDB, error) {
+// New creates a new LevelDB-backed node database.
+func New(dirname string) (api.NodeDB, error) {
 	db, err := leveldb.OpenFile(dirname, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return &leveldbNodeDB{db: db}, nil
-}
-
-// NodeUnmarshalBinary unmarshales internal.Node
-func NodeUnmarshalBinary(bytes []byte) (internal.Node, error) {
-	// Nodes can be either Internal or Leaf nodes.
-	// Check the first byte and deserialize appropriately.
-	var node internal.Node
-	if len(bytes) > 1 {
-		switch bytes[0] {
-		case internal.PrefixLeafNode:
-			var leaf internal.LeafNode
-			if err := leaf.UnmarshalBinary(bytes); err != nil {
-				return nil, err
-			}
-			node = internal.Node(&leaf)
-		case internal.PrefixInternalNode:
-			var inode internal.InternalNode
-			if err := inode.UnmarshalBinary(bytes); err != nil {
-				return nil, err
-			}
-			node = internal.Node(&inode)
-		default:
-			panic("urkel/utils: stored node is neither leaf nor internal node")
-		}
-	} else {
-		panic("urkel/utils: stored node is corrupt")
-	}
-	return node, nil
 }
 
 func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
@@ -69,12 +43,12 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal
 	bytes, err := d.db.Get(append(nodeKeyPrefix, ptr.Hash[:]...), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			err = ErrNodeNotFound
+			err = api.ErrNodeNotFound
 		}
 		return nil, err
 	}
 
-	return NodeUnmarshalBinary(bytes)
+	return internal.NodeUnmarshalBinary(bytes)
 }
 
 func (d *leveldbNodeDB) GetValue(id hash.Hash) ([]byte, error) {
@@ -97,7 +71,7 @@ type leveldbBatch struct {
 	bat *leveldb.Batch
 }
 
-func (d *leveldbNodeDB) NewBatch() Batch {
+func (d *leveldbNodeDB) NewBatch() api.Batch {
 	return &leveldbBatch{
 		db:  d,
 		bat: new(leveldb.Batch),

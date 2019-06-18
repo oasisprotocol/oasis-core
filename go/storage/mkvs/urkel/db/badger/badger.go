@@ -1,4 +1,5 @@
-package db
+// Package badger provides a Badger-backed node database.
+package badger
 
 import (
 	"github.com/dgraph-io/badger/v2"
@@ -6,11 +7,17 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-// NewBadgerNodeDB creates a new BadgerDB-backed node database.
-func NewBadgerNodeDB(opts badger.Options) (NodeDB, error) {
+var (
+	nodeKeyPrefix  = []byte{'N'}
+	valueKeyPrefix = []byte{'V'}
+)
+
+// New creates a new BadgerDB-backed node database.
+func New(opts badger.Options) (api.NodeDB, error) {
 	db := &badgerNodeDB{
 		logger: logging.GetLogger("urkel/db/badger"),
 	}
@@ -40,7 +47,7 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.
 	switch err {
 	case nil:
 	case badger.ErrKeyNotFound:
-		return nil, ErrNodeNotFound
+		return nil, api.ErrNodeNotFound
 	default:
 		d.logger.Error("failed to Get node from backing store",
 			"err", err,
@@ -51,7 +58,7 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.
 	var node internal.Node
 	if err = item.Value(func(val []byte) error {
 		var vErr error
-		node, vErr = NodeUnmarshalBinary(val)
+		node, vErr = internal.NodeUnmarshalBinary(val)
 		return vErr
 	}); err != nil {
 		d.logger.Error("failed to unmarshal node",
@@ -86,7 +93,7 @@ func (d *badgerNodeDB) GetValue(id hash.Hash) ([]byte, error) {
 	return v, nil
 }
 
-func (d *badgerNodeDB) NewBatch() Batch {
+func (d *badgerNodeDB) NewBatch() api.Batch {
 	// WARNING: There is a maximum batch size and maximum batch entry count.
 	// Both of these things are derived from the MaxTableSize option.
 	//

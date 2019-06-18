@@ -483,3 +483,31 @@ func (v *Value) SizedUnmarshalBinary(data []byte) (int, error) {
 	v.UpdateHash()
 	return valueLen + 4, nil
 }
+
+// NodeUnmarshalBinary unmarshals a node of arbitrary type.
+func NodeUnmarshalBinary(bytes []byte) (Node, error) {
+	// Nodes can be either Internal or Leaf nodes.
+	// Check the first byte and deserialize appropriately.
+	var node Node
+	if len(bytes) > 1 {
+		switch bytes[0] {
+		case PrefixLeafNode:
+			var leaf LeafNode
+			if err := leaf.UnmarshalBinary(bytes); err != nil {
+				return nil, err
+			}
+			node = Node(&leaf)
+		case PrefixInternalNode:
+			var inode InternalNode
+			if err := inode.UnmarshalBinary(bytes); err != nil {
+				return nil, err
+			}
+			node = Node(&inode)
+		default:
+			return nil, ErrMalformed
+		}
+	} else {
+		return nil, ErrMalformed
+	}
+	return node, nil
+}
