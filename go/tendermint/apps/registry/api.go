@@ -124,12 +124,3 @@ type OutputRegisterRuntime struct {
 	// Registered runtime.
 	Runtime registry.Runtime
 }
-
-// GenesisState is the registry genesis state.
-type GenesisState struct {
-	// Entities is the initial list of entities.
-	Entities []*entity.SignedEntity `codec:"entities,omit_empty"`
-
-	// Runtimes is the initial list of runtimes.
-	Runtimes []*registry.SignedRuntime `codec:"runtimes,omit_empty"`
-}
