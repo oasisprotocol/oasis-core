@@ -17,12 +17,14 @@ impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
 /// Key manager initialization request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct InitRequest {
-    /// True iff the enclave may generate a new master secret.
-    pub may_generate: bool,
     /// Checksum for validating replication.
     #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
-    // TODO: Policy.
+    /// Policy for queries/replication.
+    #[serde(with = "serde_bytes")]
+    pub policy: Vec<u8>,
+    /// True iff the enclave may generate a new master secret.
+    pub may_generate: bool,
 }
 
 /// Key manager initialization response.
@@ -33,6 +35,9 @@ pub struct InitResponse {
     /// Checksum for validating replication.
     #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
+    /// Checksum for identifying policy.
+    #[serde(with = "serde_bytes")]
+    pub policy_checksum: Vec<u8>,
 }
 
 /// Context used for th einit response signature.

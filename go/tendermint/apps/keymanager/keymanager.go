@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -20,6 +21,8 @@ import (
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 )
+
+var emptyHashSha3 = sha3.Sum256(nil)
 
 type keymanagerApplication struct {
 	logger *logging.Logger
@@ -238,6 +241,12 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 		Policy:        oldStatus.Policy,
 	}
 
+	var rawPolicy []byte
+	if status.Policy != nil {
+		rawPolicy = cbor.Marshal(status.Policy)
+	}
+	policyHash := sha3.Sum256(rawPolicy)
+
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleKeyManager) {
 			continue
@@ -272,6 +281,28 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 		if err != nil {
 			app.logger.Error("failed to validate ExtraInfo",
 				"err", err,
+				"id", kmrt.ID,
+				"node_id", n.ID,
+			)
+			continue
+		}
+
+		var nodePolicyHash [32]byte
+		switch len(initResponse.PolicyChecksum) {
+		case 0:
+			nodePolicyHash = emptyHashSha3
+		case 32:
+			copy(nodePolicyHash[:], initResponse.PolicyChecksum)
+		default:
+			app.logger.Error("failed to parse policy checksum",
+				"err", err,
+				"id", kmrt.ID,
+				"node_id", n.ID,
+			)
+			continue
+		}
+		if policyHash != nodePolicyHash {
+			app.logger.Error("Policy checksum mismatch for runtime",
 				"id", kmrt.ID,
 				"node_id", n.ID,
 			)

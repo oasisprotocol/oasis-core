@@ -63,8 +63,9 @@ type Backend interface {
 // InitResponse is the initialization RPC response, returned as part of a
 // SignedInitResponse from the key manager enclave.
 type InitResponse struct {
-	IsSecure bool   `codec:"is_secure"`
-	Checksum []byte `codec:"checksum"`
+	IsSecure       bool   `codec:"is_secure"`
+	Checksum       []byte `codec:"checksum"`
+	PolicyChecksum []byte `codec:"policy_checksum"`
 }
 
 // SignedInitResponse is the signed initialization RPC response, returned

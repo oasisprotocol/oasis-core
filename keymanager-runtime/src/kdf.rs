@@ -166,12 +166,7 @@ impl Kdf {
 
     /// Initialize the KDF internal state.
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    pub fn init(
-        &self,
-        req: &InitRequest,
-        ctx: &mut RpcContext,
-        //client: Arc<KeyManagerClient>,
-    ) -> Fallible<SignedInitResponse> {
+    pub fn init(&self, req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
 
         // How initialization proceeds depends on the state and the request.
@@ -280,6 +275,7 @@ impl Kdf {
         let init_response = InitResponse {
             is_secure: BUILD_INFO.is_secure,
             checksum: inner.checksum.as_ref().unwrap().clone(),
+            policy_checksum: vec![], // TODO
         };
 
         let body = serde_cbor::to_vec(&init_response)?;

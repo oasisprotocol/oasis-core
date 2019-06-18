@@ -192,6 +192,7 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 	// Initialize the key manager.
 	type InitRequest struct {
 		Checksum    []byte `codec:"checksum"`
+		Policy      []byte `codec:"policy"`
 		MayGenerate bool   `codec:"may_generate"`
 	}
 	type InitCall struct { // nolint: maligned
@@ -212,10 +213,16 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 		status = &api.Status{}
 	}
 
+	var policy []byte
+	if status.Policy != nil {
+		policy = cbor.Marshal(status.Policy)
+	}
+
 	call := InitCall{
 		Method: "init",
 		Args: InitRequest{
 			Checksum:    cbor.FixSliceForSerde(status.Checksum),
+			Policy:      cbor.FixSliceForSerde(policy),
 			MayGenerate: w.mayGenerate,
 		},
 	}
