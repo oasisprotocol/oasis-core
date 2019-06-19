@@ -258,16 +258,23 @@ func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
 // HandleNewBlockLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+
 	// Perform actions based on current state.
 	switch n.state.(type) {
+	case StateWaitingForEvent:
+		// Block finalized without the need for a backup worker.
+		n.logger.Info("considering the round finalized",
+			"round", blk.Header.Round,
+			"header_hash", blk.Header.EncodedHash(),
+		)
+		n.transitionLocked(n.newStateWaitingForResultsLocked(epoch))
 	case StateWaitingForFinalize:
 		// A new block means the round has been finalized.
 		n.logger.Info("considering the round finalized",
 			"round", blk.Header.Round,
 			"header_hash", blk.Header.EncodedHash(),
 		)
-
-		epoch := n.commonNode.Group.GetEpochSnapshot()
 		n.transitionLocked(n.newStateWaitingForResultsLocked(epoch))
 	}
 }
@@ -507,7 +514,6 @@ func (n *Node) proposeHeaderLocked(result *commitment.MergeBody) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) abortMergeLocked(reason error) {
 	switch state := n.state.(type) {
-	case StateWaitingForEvent:
 	case StateWaitingForResults:
 	case StateProcessingMerge:
 		// Cancel merge processing.

@@ -58,6 +58,10 @@ var validStateTransitions = map[StateName][]StateName{
 		WaitingForBatch,
 		// Seen block that we were waiting for.
 		ProcessingBatch,
+		// Seen block that we were waiting for, waiting for disrepancy event.
+		WaitingForEvent,
+		// Epoch transition occurred and we are no longer in the committee.
+		NotReady,
 	},
 
 	// Transitions from WaitingForEvent state.
@@ -66,6 +70,8 @@ var validStateTransitions = map[StateName][]StateName{
 		WaitingForBatch,
 		// Discrepancy event received.
 		ProcessingBatch,
+		// Epoch transition occurred and we are no longer in the committee.
+		NotReady,
 	},
 
 	// Transitions from ProcessingBatch state.
