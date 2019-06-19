@@ -8,7 +8,10 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-var ErrNodeNotFound = errors.New("urkel: node not found in node db")
+var (
+	ErrRootNotFound = errors.New("urkel: root not found in node db")
+	ErrNodeNotFound = errors.New("urkel: node not found in node db")
+)
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {

@@ -301,8 +301,14 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 	}
 
 	if ptr.Node != nil {
-		c.useNode(ptr)
-		return ptr.Node, nil
+		// If this is a leaf node, check if the value has been evicted. In this case
+		// treat it as if we need to re-fetch the node.
+		if n, ok := ptr.Node.(*internal.LeafNode); ok && n.Value.Value == nil {
+			c.removeNode(ptr)
+		} else {
+			c.useNode(ptr)
+			return ptr.Node, nil
+		}
 	}
 
 	if !ptr.Clean || ptr.Hash.IsEmpty() {

@@ -14,6 +14,7 @@ import (
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
 	memoryDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
+	murkDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/murkdb"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
@@ -497,6 +498,28 @@ func TestUrkelLevelDBBackend(t *testing.T) {
 
 		// Create a LevelDB-backed Node DB.
 		ndb, err := levelDb.New(dir)
+		require.NoError(t, err, "New")
+
+		return ndb, dir
+	},
+		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
+			ndb.Close()
+
+			dir, ok := custom.(string)
+			require.True(t, ok, "finiBackend")
+
+			os.RemoveAll(dir)
+		})
+}
+
+func TestUrkelHybridBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := ioutil.TempDir("", "mkvs.test.murkdb")
+		require.NoError(t, err, "TempDir")
+
+		// Create a MurkDB-backed Node DB.
+		ndb, err := murkDb.New(dir)
 		require.NoError(t, err, "New")
 
 		return ndb, dir
