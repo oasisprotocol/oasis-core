@@ -53,13 +53,14 @@ message ApplyBatchResponse {
 
 message NodeID {
     bytes path = 1;
-    uint32 depth = 2;  // DepthType
+    // bit_depth is actually Depth (uint16), but protobufs don't have that :/
+    uint32 bit_depth = 2;
 }
 
 message GetSubtreeRequest {
     bytes root = 1;
     NodeID id = 2;
-    uint32 max_depth = 3;  // DepthType
+    uint32 max_depth = 3;  // Depth
 }
 
 message GetSubtreeResponse {
@@ -69,7 +70,7 @@ message GetSubtreeResponse {
 message GetPathRequest {
     bytes root = 1;
     bytes key = 2;
-    uint32 start_depth = 3;  // DepthType
+    uint32 start_bit_depth = 3;  // Depth
 }
 
 message GetPathResponse {

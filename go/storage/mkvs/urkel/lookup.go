@@ -7,8 +7,10 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, depth node.DepthType, key node.Key) ([]byte, error) {
-	node, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, Depth: depth}, ptr, key)
+func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key, depth node.Depth) ([]byte, error) {
+	// NB: bitDepth is the bit depth of parent of ptr, so add one bit to fetch
+	// the node corresponding to key.
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, key)
 	if err != nil {
 		return nil, err
 	}
@@ -17,19 +19,24 @@ func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, depth node.DepthTyp
 	case nil:
 		// Reached a nil node, there is nothing here.
 		return nil, nil
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		// Internal node.
-		// Is lookup key a prefix of longer stored keys? Look in n.LeafNode.
-		if key.BitLength() == depth {
-			return t.doGet(ctx, n.LeafNode, depth, key)
+		// Does lookup key end here? Look into LeafNode.
+		if key.BitLength() == bitDepth+n.LabelBitLength {
+			return t.doGet(ctx, n.LeafNode, bitDepth+n.LabelBitLength, key, depth)
+		}
+
+		// Lookup key is too short for the current n.Label. It's not stored.
+		if key.BitLength() < bitDepth+n.LabelBitLength {
+			return nil, nil
 		}
 
 		// Continue recursively based on a bit value.
-		if key.GetBit(depth) {
-			return t.doGet(ctx, n.Right, depth+1, key)
+		if key.GetBit(bitDepth + n.LabelBitLength) {
+			return t.doGet(ctx, n.Right, bitDepth+n.LabelBitLength, key, depth+1)
 		}
 
-		return t.doGet(ctx, n.Left, depth+1, key)
+		return t.doGet(ctx, n.Left, bitDepth+n.LabelBitLength, key, depth+1)
 	case *node.LeafNode:
 		// Reached a leaf node, check if key matches.
 		if n.Key.Equal(key) {

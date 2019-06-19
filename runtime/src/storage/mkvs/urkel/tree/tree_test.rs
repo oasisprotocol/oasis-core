@@ -10,23 +10,26 @@ use crate::{
 };
 
 const INSERT_ITEMS: usize = 1000;
-const ALL_ITEMS_ROOT: &str = "410a4d112994762fe7887daf0e3ca6b307200b65677672132caf73163fd3100b";
+const ALL_ITEMS_ROOT: &str = "ba5abbff59303163a97872669961f826d0f18d97d3c14781d29b8551d6199ffe";
 
-const LONG_KEY: &str = "Unlock the potential of your data without compr...";
+const LONG_KEY: &str = "Unlock the potential of your data without compromising security or privacy";
 const LONG_VALUE: &str = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance.";
 const ALL_LONG_ITEMS_ROOT: &str =
-    "4f64f9434731fb1cb8a575110827e81c99a09dd28f9d96b424bfa36acc007323";
+    "6478927992bf805fd95bed0b5c28ebab4b2c8a3f81f5d5c9b3aba2b2ddfdc3d2";
 
-fn generate_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
-    let mut keys: Vec<Vec<u8>> = Vec::with_capacity(INSERT_ITEMS);
-    let mut values: Vec<Vec<u8>> = Vec::with_capacity(INSERT_ITEMS);
+fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let mut keys: Vec<Vec<u8>> = Vec::with_capacity(count);
+    let mut values: Vec<Vec<u8>> = Vec::with_capacity(count);
 
-    for i in 0..INSERT_ITEMS {
-        keys.push(format!("key {}", i).into_bytes());
-        values.push(format!("value {}", i).into_bytes());
+    for i in 0..count {
+        keys.push(format!("{}key {}", prefix, i).into_bytes());
+        values.push(format!("{}value {}", prefix, i).into_bytes());
     }
 
     (keys, values)
+}
+fn generate_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    generate_key_value_pairs_ex("".to_string(), INSERT_ITEMS)
 }
 
 fn generate_long_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
@@ -179,7 +182,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "cc5f7c451f669131522718c3ece6ffa16004babfa9062fcb19a8402c4cab438b"
+        "e0cc7ad73816cf11cc4157aaae220c7cdc70ad6557115cc3bebf54c9081b695a"
     );
     // Order of transactions in writelog is arbitrary.
     assert_eq!(
@@ -246,7 +249,8 @@ fn test_long_keys() {
         )
         .expect("insert");
 
-        let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
         roots.push(hash);
     }
 
@@ -270,14 +274,132 @@ fn test_long_keys() {
                 .expect("get")
         );
 
-        let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
         assert_eq!(hash, roots[i - 1]);
     }
 
     tree.remove(Context::background(), keys[0].as_slice())
         .expect("remove");
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    assert_eq!(hash, Hash::empty_hash());
+}
+
+#[test]
+fn test_empty_keys() {
+    let mut tree = UrkelTree::make()
+        .new(Context::background(), Box::new(NoopReadSyncer {}))
+        .expect("new_tree");
+
+    fn test_empty_key(tree: &mut UrkelTree) {
+        let empty_key = b"";
+        let empty_value = b"empty value";
+
+        tree.insert(Context::background(), empty_key, empty_value)
+            .expect("insert");
+
+        let value = tree
+            .get(Context::background(), empty_key)
+            .expect("get")
+            .expect("get_some");
+        assert_eq!(empty_value, value.as_slice());
+
+        tree.remove(Context::background(), empty_key)
+            .expect("remove");
+
+        assert_eq!(
+            None,
+            tree.get(Context::background(), empty_key).expect("get")
+        );
+    }
+
+    fn test_zeroth_discriminator_bit(tree: &mut UrkelTree) {
+        let key1 = &[0x7f as u8, 0xab];
+        let key2 = &[0xff as u8, 0xab];
+        let value1 = b"value 1";
+        let value2 = b"value 2";
+
+        tree.insert(Context::background(), key1, value1)
+            .expect("insert");
+        tree.insert(Context::background(), key2, value2)
+            .expect("insert");
+
+        let value = tree
+            .get(Context::background(), key1)
+            .expect("get")
+            .expect("get_some");
+        assert_eq!(value1, value.as_slice());
+        let value = tree
+            .get(Context::background(), key2)
+            .expect("get")
+            .expect("get_some");
+        assert_eq!(value2, value.as_slice());
+
+        tree.remove(Context::background(), key1).expect("remove");
+        assert_eq!(None, tree.get(Context::background(), key1).expect("get"));
+
+        tree.remove(Context::background(), key2).expect("remove");
+        assert_eq!(None, tree.get(Context::background(), key2).expect("get"));
+    }
+
+    test_empty_key(&mut tree);
+    test_zeroth_discriminator_bit(&mut tree);
+
+    // First insert keys 0..n and remove them in order n..0.
+    let mut roots: Vec<Hash> = Vec::new();
+    let (keys, values) = generate_long_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+
+        test_empty_key(&mut tree);
+        test_zeroth_discriminator_bit(&mut tree);
+
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
+        roots.push(hash);
+    }
+
+    for i in 0..keys.len() {
+        let value = tree
+            .get(Context::background(), keys[i].as_slice())
+            .expect("get")
+            .expect("get_some");
+        assert_eq!(values[i], value.as_slice());
+    }
+
+    for i in (1..keys.len()).rev() {
+        tree.remove(Context::background(), keys[i].as_slice())
+            .expect("remove");
+
+        assert_eq!(
+            None,
+            tree.get(Context::background(), keys[i].as_slice())
+                .expect("get")
+        );
+
+        test_empty_key(&mut tree);
+        test_zeroth_discriminator_bit(&mut tree);
+
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
+        assert_eq!(hash, roots[i - 1]);
+    }
+
+    tree.remove(Context::background(), keys[0].as_slice())
+        .expect("remove");
+
+    test_empty_key(&mut tree);
+    test_zeroth_discriminator_bit(&mut tree);
+
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(hash, Hash::empty_hash());
 }
 
@@ -405,7 +527,8 @@ fn test_remove() {
             .expect("get_some");
         assert_eq!(values[i], value.as_slice());
 
-        let (_, _) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, _) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
     }
 
     for i in 0..keys.len() {
@@ -418,10 +541,12 @@ fn test_remove() {
                 .expect("get")
         );
 
-        let (_, _) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, _) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
     }
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(hash, Hash::empty_hash());
 }
 
@@ -477,7 +602,7 @@ fn test_syncer_basic_no_prefetch() {
             .expect("stats");
         assert_eq!(0, stats.subtree_fetches, "subtree fetches (no prefetch)");
         assert_eq!(0, stats.node_fetches, "node fetches (no prefetch)");
-        assert_eq!(40, stats.path_fetches, "path fetches (no prefetch)");
+        assert_eq!(637, stats.path_fetches, "path fetches (no prefetch)");
         assert_eq!(0, stats.value_fetches, "value fetches (no prefetch)");
     }
 }
@@ -514,7 +639,7 @@ fn test_syncer_basic_with_prefetch() {
             hash,
             ..Default::default()
         })
-        .with_prefetch_depth(10)
+        .with_prefetch_depth(12)
         .new(Context::background(), Box::new(stats))
         .expect("with_root");
 
@@ -535,7 +660,7 @@ fn test_syncer_basic_with_prefetch() {
             .expect("stats");
         assert_eq!(1, stats.subtree_fetches, "subtree fetches (with prefetch)");
         assert_eq!(0, stats.node_fetches, "node fetches (with prefetch)");
-        assert_eq!(36, stats.path_fetches, "path fetches (with prefetch)");
+        assert_eq!(224, stats.path_fetches, "path fetches (with prefetch)");
         assert_eq!(0, stats.value_fetches, "value fetches (with prefetch)");
     }
 }
@@ -572,7 +697,6 @@ fn test_syncer_get_path() {
         .expect("with_root");
 
     for i in 0..keys.len() {
-        let hkey = Hash::digest_bytes(&keys[i]);
         let st = remote_tree
             .get_path(
                 Context::background(),
@@ -580,7 +704,7 @@ fn test_syncer_get_path() {
                     hash,
                     ..Default::default()
                 },
-                hkey,
+                &keys[i],
                 0,
             )
             .expect("get_path");
@@ -591,7 +715,7 @@ fn test_syncer_get_path() {
             match classify_noderef!(?n) {
                 NodeKind::Leaf => {
                     let n = n.unwrap();
-                    if noderef_as!(n, Leaf).key == hkey {
+                    if noderef_as!(n, Leaf).key == keys[i] {
                         assert_eq!(
                             values[i],
                             noderef_as!(n, Leaf)
@@ -647,6 +771,7 @@ fn test_syncer_remove() {
         .expect("with_root");
 
     for i in (0..keys.len()).rev() {
+        println!("i={}", i);
         remote_tree
             .remove(Context::background(), keys[i].as_slice())
             .expect("remove");
@@ -682,7 +807,7 @@ fn test_value_eviction() {
 
     let stats = tree.stats(Context::background(), 0);
     assert_eq!(
-        1532, stats.cache.internal_node_count,
+        999, stats.cache.internal_node_count,
         "cache.internal_node_count"
     );
     assert_eq!(1000, stats.cache.leaf_node_count, "cache.leaf_node_count");
@@ -693,11 +818,22 @@ fn test_value_eviction() {
 #[test]
 fn test_node_eviction() {
     let mut tree = UrkelTree::make()
-        .with_capacity(512, 0)
+        .with_capacity(128, 0)
         .new(Context::background(), Box::new(NoopReadSyncer {}))
         .expect("new_tree");
 
-    let (keys, values) = generate_key_value_pairs();
+    let (keys, values) = generate_key_value_pairs_ex("foo".to_string(), 150);
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+    }
+    UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+
+    let (keys, values) = generate_key_value_pairs_ex("foo key 1".to_string(), 150);
     for i in 0..keys.len() {
         tree.insert(
             Context::background(),
@@ -711,12 +847,12 @@ fn test_node_eviction() {
     let stats = tree.stats(Context::background(), 0);
     // Only a subset of nodes should remain in cache.
     assert_eq!(
-        324, stats.cache.internal_node_count,
+        67, stats.cache.internal_node_count,
         "cache.internal_node_count"
     );
-    assert_eq!(188, stats.cache.leaf_node_count, "cache.leaf_node_count");
+    assert_eq!(61, stats.cache.leaf_node_count, "cache.leaf_node_count");
     // Only a subset of the leaf values should remain in cache.
-    assert_eq!(1673, stats.cache.leaf_value_size, "cache.leaf_value_size");
+    assert_eq!(1032, stats.cache.leaf_value_size, "cache.leaf_value_size");
 }
 
 #[test]
@@ -729,6 +865,8 @@ fn test_debug_dump() {
     tree.insert(Context::background(), b"foo 2", b"bar 2")
         .expect("insert");
     tree.insert(Context::background(), b"foo 3", b"bar 3")
+        .expect("insert");
+    tree.insert(Context::background(), b"foo", b"bar")
         .expect("insert");
 
     let mut output: Vec<u8> = Vec::new();
@@ -754,11 +892,11 @@ fn test_debug_stats() {
     }
 
     let stats = tree.stats(Context::background(), 0);
-    assert_eq!(56, stats.max_depth, "max_depth");
-    assert_eq!(1532, stats.internal_node_count, "internal_node_count");
+    assert_eq!(14, stats.max_depth, "max_depth");
+    assert_eq!(999, stats.internal_node_count, "internal_node_count");
     assert_eq!(901, stats.leaf_node_count, "leaf_node_count");
     assert_eq!(8107, stats.leaf_value_size, "leaf_value_size");
-    assert_eq!(632, stats.dead_node_count, "dead_node_count");
+    assert_eq!(99, stats.dead_node_count, "dead_node_count");
     // Cached node counts will update on commit.
     assert_eq!(
         0, stats.cache.internal_node_count,
@@ -771,13 +909,13 @@ fn test_debug_stats() {
     UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     let stats = tree.stats(Context::background(), 0);
-    assert_eq!(56, stats.max_depth, "max_depth");
-    assert_eq!(1532, stats.internal_node_count, "internal_node_count");
+    assert_eq!(14, stats.max_depth, "max_depth");
+    assert_eq!(999, stats.internal_node_count, "internal_node_count");
     assert_eq!(901, stats.leaf_node_count, "leaf_node_count");
     assert_eq!(8107, stats.leaf_value_size, "leaf_value_size");
-    assert_eq!(632, stats.dead_node_count, "dead_node_count");
+    assert_eq!(99, stats.dead_node_count, "dead_node_count");
     assert_eq!(
-        1532, stats.cache.internal_node_count,
+        999, stats.cache.internal_node_count,
         "cache.internal_node_count"
     );
     assert_eq!(1000, stats.cache.leaf_node_count, "cache.leaf_node_count");

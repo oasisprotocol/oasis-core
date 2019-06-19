@@ -115,7 +115,7 @@ func (ba *badgerBackend) Initialized() <-chan struct{} {
 	return ba.initCh
 }
 
-func (ba *badgerBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (ba *badgerBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
 	tree, err := ba.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func (ba *badgerBackend) GetSubtree(ctx context.Context, root api.Root, id api.N
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (ba *badgerBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (ba *badgerBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
 	tree, err := ba.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err

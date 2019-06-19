@@ -220,24 +220,24 @@ type HostRPCCallResponse struct {
 
 // HostStorageSyncGetSubtreeRequest is a host storage read syncer get subtree request message body.
 type HostStorageSyncGetSubtreeRequest struct {
-	Root      storage.Root `codec:"root"`
-	NodePath  []byte    `codec:"node_path"`
-	NodeDepth storage.DepthType        `codec:"node_depth"`
-	MaxDepth  storage.DepthType        `codec:"max_depth"`
+	Root         storage.Root  `codec:"root"`
+	NodePath     []byte        `codec:"node_path"`
+	NodeBitDepth storage.Depth `codec:"node_bit_depth"`
+	MaxDepth     storage.Depth `codec:"max_depth"`
 }
 
 // HostStorageSyncGetPathRequest is a host storage read syncer get path request message body.
 type HostStorageSyncGetPathRequest struct {
-	Root       storage.Root `codec:"root"`
-	Key        []byte    `codec:"key"`
-	StartDepth storage.DepthType        `codec:"start_depth"`
+	Root          storage.Root  `codec:"root"`
+	Key           []byte        `codec:"key"`
+	StartBitDepth storage.Depth `codec:"start_bit_depth"`
 }
 
 // HostStorageSyncGetNodeRequest is a host storage read syncer get node request message body.
 type HostStorageSyncGetNodeRequest struct {
-	Root      storage.Root `codec:"root"`
-	NodePath  []byte    `codec:"node_path"`
-	NodeDepth storage.DepthType        `codec:"node_depth"`
+	Root         storage.Root  `codec:"root"`
+	NodePath     []byte        `codec:"node_path"`
+	NodeBitDepth storage.Depth `codec:"node_bit_depth"`
 }
 
 // HostStorageSyncSerializedResponse is a host storage read syncer response body containing serialized data.

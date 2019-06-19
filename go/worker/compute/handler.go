@@ -52,14 +52,14 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetSubtree(root_hash, node_path, node_depth, max_depth)",
 			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
 			opentracing.Tag{Key: "node_path", Value: rq.NodePath},
-			opentracing.Tag{Key: "node_depth", Value: rq.NodeDepth},
+			opentracing.Tag{Key: "node_bit_depth", Value: rq.NodeBitDepth},
 			opentracing.Tag{Key: "max_depth", Value: rq.MaxDepth},
 		)
 		defer span.Finish()
 
 		nodeID := storage.NodeID{
-			Path:  rq.NodePath,
-			Depth: rq.NodeDepth,
+			Path:     rq.NodePath,
+			BitDepth: rq.NodeBitDepth,
 		}
 
 		subtree, err := h.storage.GetSubtree(sctx, rq.Root, nodeID, rq.MaxDepth)
@@ -79,11 +79,11 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetPath(root_hash, key, start_depth)",
 			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
 			opentracing.Tag{Key: "key", Value: rq.Key},
-			opentracing.Tag{Key: "start_depth", Value: rq.StartDepth},
+			opentracing.Tag{Key: "start_bit_depth", Value: rq.StartBitDepth},
 		)
 		defer span.Finish()
 
-		subtree, err := h.storage.GetPath(sctx, rq.Root, rq.Key, rq.StartDepth)
+		subtree, err := h.storage.GetPath(sctx, rq.Root, rq.Key, rq.StartBitDepth)
 		if err != nil {
 			return nil, err
 		}
@@ -100,13 +100,13 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetNode(root_hash, node_path, node_depth)",
 			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
 			opentracing.Tag{Key: "node_path", Value: rq.NodePath},
-			opentracing.Tag{Key: "node_depth", Value: rq.NodeDepth},
+			opentracing.Tag{Key: "node_depth", Value: rq.NodeBitDepth},
 		)
 		defer span.Finish()
 
 		nodeID := storage.NodeID{
-			Path:  rq.NodePath,
-			Depth: rq.NodeDepth,
+			Path:     rq.NodePath,
+			BitDepth: rq.NodeBitDepth,
 		}
 
 		node, err := h.storage.GetNode(sctx, rq.Root, nodeID)

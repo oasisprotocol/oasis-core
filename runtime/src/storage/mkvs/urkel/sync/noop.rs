@@ -3,10 +3,7 @@ use std::any::Any;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{sync::*, tree::*},
-};
+use crate::storage::mkvs::urkel::{sync::*, tree::*};
 
 /// A no-op read syncer which doesn't support any of the required operations.
 pub struct NoopReadSyncer {}
@@ -21,7 +18,7 @@ impl ReadSync for NoopReadSyncer {
         _ctx: Context,
         _root: Root,
         _id: NodeID,
-        _max_depth: DepthType,
+        _max_depth: Depth,
     ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }
@@ -31,7 +28,7 @@ impl ReadSync for NoopReadSyncer {
         _ctx: Context,
         _root: Root,
         _key: &Key,
-        _start_depth: DepthType,
+        _start_depth: Depth,
     ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }

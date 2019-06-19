@@ -37,13 +37,15 @@ pub trait Cache {
     fn set_sync_root(&mut self, root: Root);
 
     /// Set the maximum depth for subtree prefetch.
-    fn set_prefetch_depth(&mut self, depth: DepthType);
+    fn set_prefetch_depth(&mut self, depth: Depth);
     /// Get the read syncer backing this cache.
     fn get_read_syncer(&self) -> &Box<dyn ReadSync>;
 
     /// Create a new internal node and returns a pointer to it.
     fn new_internal_node(
         &mut self,
+        label: &Key,
+        label_bit_length: Depth,
         leaf_node: NodePtrRef,
         left: NodePtrRef,
         right: NodePtrRef,
@@ -58,13 +60,26 @@ pub trait Cache {
     /// Remove a value from the cache.
     fn remove_value(&mut self, ptr: ValuePtrRef);
 
-    /// Convert a node path into a node pointer.
+    /// Returns the node spelled out by id.path of length id.bit_depth.
     ///
-    /// Calling this method may invoke the underlying read syncer.
-    fn deref_node_id(&mut self, ctx: &Arc<Context>, node_id: NodeID) -> Fallible<NodePtrRef>;
+    /// Beside the node, this function also returns bit depth of the node's parent.
+    ///
+    /// id.Path.len() must always be at least id.bit_depth/8 bytes long.
+    ///
+    /// If there is an InternalNode and its LeafNode spelled out by the same id, then this function
+    /// returns an InternalNode. If id is empty, then this function returns the root.
+    ///
+    /// WARNING: If the requested node does not exist in the tree, this function
+    /// returns either nil or some other arbitrary node.
+    fn deref_node_id(
+        &mut self,
+        ctx: &Arc<Context>,
+        node_id: NodeID,
+    ) -> Fallible<(NodePtrRef, Depth)>;
     /// Dereference a node pointer into a concrete node object.
     ///
-    /// Calling this method may invoke the underlying read syncer.
+    /// This may result in node database accesses or remote syncing if the node
+    /// is not available locally.
     fn deref_node_ptr(
         &mut self,
         ctx: &Arc<Context>,
@@ -100,8 +115,8 @@ pub trait Cache {
         ctx: &Arc<Context>,
         root: Hash,
         st: &Subtree,
-        depth: DepthType,
-        max_depth: DepthType,
+        depth: Depth,
+        max_depth: Depth,
     ) -> Fallible<NodePtrRef>;
 
     /// Prefetch a subtree from the read syncer.
@@ -110,7 +125,7 @@ pub trait Cache {
         ctx: &Arc<Context>,
         subtree_root: Hash,
         subtree_path: Key,
-        depth: DepthType,
+        depth: Depth,
     ) -> Fallible<NodePtrRef>;
 }
 

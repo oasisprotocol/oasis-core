@@ -12,14 +12,10 @@ use crate::{
         roothash::{Block, ComputeResultsHeader},
         sgx::avr::AVR,
     },
-<<<<<<< HEAD
-    storage::mkvs::{urkel::sync::Root, WriteLog},
-=======
     storage::mkvs::{
-        urkel::{DepthType, Key},
+        urkel::{sync::Root, Depth, Key},
         WriteLog,
     },
->>>>>>> Add support for custom keys and lengths in Urkel tree
     transaction::types::TxnBatch,
 };
 
@@ -156,18 +152,18 @@ pub enum Body {
     HostStorageSyncGetSubtreeRequest {
         root: Root,
         node_path: Key,
-        node_depth: DepthType,
-        max_depth: DepthType,
+        node_bit_depth: Depth,
+        max_depth: Depth,
     },
     HostStorageSyncGetPathRequest {
         root: Root,
         key: Key,
-        start_depth: DepthType,
+        start_bit_depth: Depth,
     },
     HostStorageSyncGetNodeRequest {
         root: Root,
         node_path: Key,
-        node_depth: DepthType,
+        node_bit_depth: Depth,
     },
     HostStorageSyncSerializedResponse {
         #[serde(with = "serde_bytes")]

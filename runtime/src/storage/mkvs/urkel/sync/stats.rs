@@ -3,10 +3,7 @@ use std::any::Any;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{sync::*, tree::*},
-};
+use crate::storage::mkvs::urkel::{sync::*, tree::*};
 
 /// A proxy read syncer which keeps track of call statistics.
 pub struct StatsCollector {
@@ -45,7 +42,7 @@ impl ReadSync for StatsCollector {
         ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: DepthType,
+        max_depth: Depth,
     ) -> Fallible<Subtree> {
         self.subtree_fetches += 1;
         self.rs.get_subtree(ctx, root, id, max_depth)
@@ -56,7 +53,7 @@ impl ReadSync for StatsCollector {
         ctx: Context,
         root: Root,
         key: &Key,
-        start_depth: DepthType,
+        start_depth: Depth,
     ) -> Fallible<Subtree> {
         self.path_fetches += 1;
         self.rs.get_path(ctx, root, key, start_depth)

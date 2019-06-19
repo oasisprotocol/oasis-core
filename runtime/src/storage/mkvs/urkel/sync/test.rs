@@ -3,10 +3,7 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{marshal::*, sync::*, tree::*},
-};
+use crate::storage::mkvs::urkel::{marshal::*, sync::*, tree::*};
 
 #[test]
 fn test_simple() {
@@ -31,7 +28,7 @@ fn test_simple() {
             },
             NodeID {
                 path: &Key::new(),
-                depth: 0,
+                bit_depth: 0,
             },
             24,
         )
@@ -57,7 +54,7 @@ impl ReadSync for DummySerialSyncer {
         ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: DepthType,
+        max_depth: Depth,
     ) -> Fallible<Subtree> {
         let obj = self.backing.get_subtree(ctx, root, id, max_depth)?;
         let bytes = obj.marshal_binary()?;
@@ -71,7 +68,7 @@ impl ReadSync for DummySerialSyncer {
         ctx: Context,
         root: Root,
         key: &Key,
-        start_depth: DepthType,
+        start_depth: Depth,
     ) -> Fallible<Subtree> {
         let obj = self.backing.get_path(ctx, root, key, start_depth)?;
         let bytes = obj.marshal_binary()?;

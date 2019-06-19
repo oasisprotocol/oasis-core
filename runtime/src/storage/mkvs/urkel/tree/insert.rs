@@ -14,7 +14,7 @@ impl UrkelTree {
         let boxed_val = value.to_vec();
 
         let (new_root, old_val) =
-            self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val.clone())?;
+            self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val.clone(), 0)?;
         let existed = old_val != None;
         match self.pending_write_log.get_mut(&boxed_key) {
             None => {
@@ -40,19 +40,22 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: DepthType,
+        bit_depth: Depth,
         key: &Key,
         val: Value,
+        depth: Depth,
     ) -> Fallible<(NodePtrRef, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             NodeID {
                 path: key,
-                depth: depth,
+                bit_depth: bit_depth + 1,
             },
             ptr.clone(),
             None,
         )?;
+
+        let (_, key_remainder) = key.split(bit_depth, key.bit_length());
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
@@ -60,69 +63,144 @@ impl UrkelTree {
             }
             NodeKind::Internal => {
                 let node_ref = node_ref.unwrap();
+                let (leaf_node, left, right): (NodePtrRef, NodePtrRef, NodePtrRef);
+                let cp_len: Depth;
+                let label_prefix: Key;
+                if let NodeBox::Internal(ref mut n) = *node_ref.borrow_mut() {
+                    cp_len = n.label.common_prefix_len(
+                        n.label_bit_length,
+                        &key_remainder,
+                        key.bit_length() - bit_depth,
+                    );
 
-                let rec_node = match *node_ref.borrow() {
-                    NodeBox::Internal(ref int) => {
-                        if key.bit_length() == depth {
-                            int.leaf_node.clone()
-                        } else if key.get_bit(depth) {
-                            int.right.clone()
+                    if cp_len == n.label_bit_length {
+                        // The current part of key matched the node's Label. Do recursion.
+                        let r: (NodePtrRef, Option<Value>);
+                        if key.bit_length() == bit_depth + n.label_bit_length {
+                            // Key to insert ends exactly at this node. Add it to the
+                            // existing internal node as LeafNode.
+                            r = self._insert(
+                                ctx,
+                                n.leaf_node.clone(),
+                                bit_depth + n.label_bit_length,
+                                key,
+                                val,
+                                depth,
+                            )?;
+                            n.leaf_node = r.0;
+                        } else if key.get_bit(bit_depth + n.label_bit_length) {
+                            // Insert recursively based on the bit value.
+                            r = self._insert(
+                                ctx,
+                                n.right.clone(),
+                                bit_depth + n.label_bit_length,
+                                key,
+                                val,
+                                depth + 1,
+                            )?;
+                            n.right = r.0;
                         } else {
-                            int.left.clone()
+                            r = self._insert(
+                                ctx,
+                                n.left.clone(),
+                                bit_depth + n.label_bit_length,
+                                key,
+                                val,
+                                depth + 1,
+                            )?;
+                            n.left = r.0;
+                        }
+
+                        if !n.leaf_node.borrow().clean
+                            || !n.left.borrow().clean
+                            || !n.right.borrow().clean
+                        {
+                            n.clean = false;
+                            ptr.borrow_mut().clean = false;
+                            // No longer eligible for eviction as it is dirty.
+                            self.cache
+                                .borrow_mut()
+                                .rollback_node(ptr.clone(), NodeKind::Internal);
+                        }
+
+                        return Ok((ptr, r.1));
+                    }
+
+                    // Key mismatches the label at position cp_len. Split the edge and
+                    // insert new leaf.
+                    let label_split = n.label.split(cp_len, n.label_bit_length);
+                    label_prefix = label_split.0;
+                    n.label = label_split.1;
+                    n.label_bit_length = n.label_bit_length - cp_len;
+                    n.clean = false;
+                    ptr.borrow_mut().clean = false;
+                    // No longer eligible for eviction as it is dirty.
+                    self.cache
+                        .borrow_mut()
+                        .rollback_node(ptr.clone(), NodeKind::Internal);
+
+                    let new_leaf = self.cache.borrow_mut().new_leaf_node(key, val);
+                    if key.bit_length() - bit_depth == cp_len {
+                        // The key is a prefix of existing path.
+                        leaf_node = new_leaf;
+                        if n.label.get_bit(0) {
+                            left = NodePointer::null_ptr();
+                            right = ptr;
+                        } else {
+                            left = ptr;
+                            right = NodePointer::null_ptr();
+                        }
+                    } else {
+                        leaf_node = NodePointer::null_ptr();
+                        if key_remainder.get_bit(cp_len) {
+                            left = ptr;
+                            right = new_leaf;
+                        } else {
+                            left = new_leaf;
+                            right = ptr;
                         }
                     }
-                    _ => unreachable!(),
-                };
-                let mut new_depth = depth + 1;
-                if key.bit_length() == depth {
-                    new_depth = depth;
-                }
-
-                let (new_root, old_val) = self._insert(ctx, rec_node, new_depth, key, val)?;
-
-                if key.bit_length() == depth {
-                    noderef_as_mut!(node_ref, Internal).leaf_node = new_root;
-                } else if key.get_bit(depth) {
-                    noderef_as_mut!(node_ref, Internal).right = new_root;
                 } else {
-                    noderef_as_mut!(node_ref, Internal).left = new_root;
+                    return Err(format_err!(
+                        "insert.rs: unknown internal node_ref {:?}",
+                        node_ref
+                    ));
                 }
 
-                if let NodeBox::Internal(ref mut int) = *node_ref.borrow_mut() {
-                    if !int.left.borrow().clean || !int.right.borrow().clean {
-                        int.clean = false;
-                        ptr.borrow_mut().clean = false;
-                        // No longer eligible for eviction as it is dirty.
-                        self.cache
-                            .borrow_mut()
-                            .rollback_node(ptr.clone(), NodeKind::Internal);
-                    }
-                }
-                return Ok((ptr.clone(), old_val));
+                return Ok((
+                    self.cache.borrow_mut().new_internal_node(
+                        &label_prefix,
+                        cp_len,
+                        leaf_node,
+                        left,
+                        right,
+                    ),
+                    None,
+                ));
             }
             NodeKind::Leaf => {
                 // If the key matches, we can just update the value.
                 let node_ref = node_ref.unwrap();
-                let mut pointers: (NodePtrRef, NodePtrRef, NodePtrRef); // leaf_node, left, right
-                let mut leaf_key = Key::new();
-                if let NodeBox::Leaf(ref mut leaf) = *node_ref.borrow_mut() {
-                    leaf_key = leaf.key.clone();
-
+                let (leaf_node, left, right): (NodePtrRef, NodePtrRef, NodePtrRef);
+                let cp_len: Depth;
+                let label_prefix: Key;
+                if let NodeBox::Leaf(ref mut n) = *node_ref.borrow_mut() {
                     // Should always succeed.
-                    if leaf_key == *key {
-                        match leaf.value.borrow().value {
+                    if n.key == *key {
+                        // If the key matches, we can just update the value.
+                        match n.value.borrow().value {
                             // TODO check comparison; hash
                             Some(ref leaf_val) => {
                                 if leaf_val == &val {
-                                    return Ok((ptr.clone(), leaf.value.borrow().value.clone()));
+                                    return Ok((ptr.clone(), n.value.borrow().value.clone()));
                                 }
                             }
                             _ => {}
                         };
-                        self.cache.borrow_mut().remove_value(leaf.value.clone());
-                        let old_val = leaf.value.borrow().value.clone();
-                        leaf.value = self.cache.borrow_mut().new_value(val);
-                        leaf.clean = false;
+                        self.cache.borrow_mut().remove_value(n.value.clone());
+                        let old_val = n.value.borrow().value.clone();
+                        n.value = self.cache.borrow_mut().new_value(val);
+                        n.clean = false;
                         ptr.borrow_mut().clean = false;
                         // No longer eligible for eviction as it is dirty.
                         self.cache
@@ -130,77 +208,65 @@ impl UrkelTree {
                             .rollback_node(ptr.clone(), NodeKind::Leaf);
                         return Ok((ptr.clone(), old_val));
                     }
-                }
 
-                // If the key mismatches, three cases are possible:
-                if key.bit_length() == depth {
-                    // Case 1: key is a prefix of leaf_key
-                    pointers = if leaf_key.get_bit(depth) {
-                        (
-                            /* leaf_node */
-                            self.cache.borrow_mut().new_leaf_node(key, val),
-                            /* left */ NodePointer::null_ptr(),
-                            /* right */ ptr.clone(),
-                        )
+                    let (_, leaf_key_remainder) = n.key.split(bit_depth, n.key.bit_length());
+                    cp_len = leaf_key_remainder.common_prefix_len(
+                        n.key.bit_length() - bit_depth,
+                        &key_remainder,
+                        key.bit_length() - bit_depth,
+                    );
+
+                    // Key mismatches the label at position cp_len. Split the edge.
+                    label_prefix = leaf_key_remainder
+                        .split(cp_len, leaf_key_remainder.bit_length())
+                        .0;
+                    let new_leaf = self.cache.borrow_mut().new_leaf_node(key, val);
+
+                    if key.bit_length() - bit_depth == cp_len {
+                        // Inserted key is a prefix of the label.
+                        leaf_node = new_leaf;
+                        if leaf_key_remainder.get_bit(cp_len) {
+                            left = NodePointer::null_ptr();
+                            right = ptr;
+                        } else {
+                            left = ptr;
+                            right = NodePointer::null_ptr();
+                        }
+                    } else if n.key.bit_length() - bit_depth == cp_len {
+                        // Label is a prefix of the inserted key.
+                        leaf_node = ptr;
+                        if key_remainder.get_bit(cp_len) {
+                            left = NodePointer::null_ptr();
+                            right = new_leaf;
+                        } else {
+                            left = new_leaf;
+                            right = NodePointer::null_ptr();
+                        }
                     } else {
-                        (
-                            /* leaf_node */
-                            self.cache.borrow_mut().new_leaf_node(key, val),
-                            /* left */ ptr.clone(),
-                            /* right */ NodePointer::null_ptr(),
-                        )
-                    }
-                } else if leaf_key.bit_length() == depth {
-                    // Case 2: leaf_key is a prefix of key
-                    pointers = if key.get_bit(depth) {
-                        (
-                            /* leaf_node */ ptr.clone(),
-                            /* left */ NodePointer::null_ptr(),
-                            /* right */ self.cache.borrow_mut().new_leaf_node(key, val),
-                        )
-                    } else {
-                        (
-                            /* leaf_node */ ptr.clone(),
-                            /* left */ self.cache.borrow_mut().new_leaf_node(key, val),
-                            /* right */ NodePointer::null_ptr(),
-                        )
+                        leaf_node = NodePointer::null_ptr();
+                        if key_remainder.get_bit(cp_len) {
+                            left = ptr;
+                            right = new_leaf;
+                        } else {
+                            left = new_leaf;
+                            right = ptr;
+                        }
                     }
                 } else {
-                    // Case 3: length of common prefix of n.Key and key is shorter than
-                    //         leaf_key.len() and key.len()
-                    pointers = if key.get_bit(depth) != leaf_key.get_bit(depth) {
-                        if leaf_key.get_bit(depth) {
-                            (
-                                /* leaf_node */ NodePointer::null_ptr(),
-                                /* left */
-                                self.cache.borrow_mut().new_leaf_node(key, val),
-                                /* right */ ptr.clone(),
-                            )
-                        } else {
-                            (
-                                /* leaf_node */ NodePointer::null_ptr(),
-                                /* left */ ptr.clone(),
-                                /* right */
-                                self.cache.borrow_mut().new_leaf_node(key, val),
-                            )
-                        }
-                    } else {
-                        let (new_root, _) = self._insert(ctx, ptr.clone(), depth + 1, key, val)?;
-                        if leaf_key.get_bit(depth) {
-                            // (leaf_node, left, right)
-                            (NodePointer::null_ptr(), NodePointer::null_ptr(), new_root)
-                        } else {
-                            // (leaf_node, left, right)
-                            (NodePointer::null_ptr(), new_root, NodePointer::null_ptr())
-                        }
-                    };
+                    return Err(format_err!(
+                        "insert.rs: invalid leaf node_ref {:?}",
+                        node_ref
+                    ));
                 }
 
-                let new_internal = self
-                    .cache
-                    .borrow_mut()
-                    .new_internal_node(pointers.0, pointers.1, pointers.2);
-                return Ok((new_internal.clone(), None));
+                let new_internal = self.cache.borrow_mut().new_internal_node(
+                    &label_prefix,
+                    cp_len,
+                    leaf_node,
+                    left,
+                    right,
+                );
+                return Ok((new_internal, None));
             }
         }
     }

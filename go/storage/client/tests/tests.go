@@ -59,9 +59,9 @@ func ClientWorkerTests(
 	require.NoError(err, "NewStorageClient")
 
 	// Create mock root hash and id hash for GetValue().
-	var rootHash, id hash.Hash
+	var rootHash hash.Hash
+	id := api.Key("key")
 	rootHash.FromBytes([]byte("non-existing"))
-	id.FromBytes([]byte("key"))
 
 	root := api.Root{
 		Namespace: runtimeIDToNamespace(t, rt.Runtime.ID),

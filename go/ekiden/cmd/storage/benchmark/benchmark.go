@@ -169,7 +169,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		res = testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			for i := 0; i < b.N; i++ {
-				_, err = storage.GetSubtree(context.Background(), newRoot, storageAPI.NodeID{Path: []byte{}, Depth: 0}, 10)
+				_, err = storage.GetSubtree(context.Background(), newRoot, storageAPI.NodeID{Path: []byte{}, BitDepth: 0}, 10)
 				if err != nil {
 					b.Fatalf("failed to GetSubtree(): %v", err)
 				}

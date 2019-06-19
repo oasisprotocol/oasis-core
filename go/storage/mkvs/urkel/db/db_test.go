@@ -102,7 +102,7 @@ func TestHashedWriteLog(t *testing.T) {
 			Node: &node.LeafNode{
 				Clean: true,
 				Hash:  h,
-				Key:   h,
+				Key:   wl[i].Key,
 				Value: &node.Value{
 					Clean: true,
 					Hash:  h,

@@ -12,7 +12,7 @@ use ekiden_runtime::{
             urkel::{
                 marshal::Marshal,
                 sync::{NodeBox, NodeID, NodeRef, ReadSync, Root, Subtree},
-                DepthType, Key,
+                Depth, Key,
             },
             UrkelTree, WriteLog,
         },
@@ -155,14 +155,14 @@ impl ReadSync for RemoteReadSync {
         _ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: DepthType,
+        max_depth: Depth,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetSubtreeRequest::new();
         request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
             nid.set_path(id.path.clone());
-            nid.set_depth(id.depth.into());
+            nid.set_bit_depth(id.bit_depth.into());
             nid
         });
         request.set_max_depth(max_depth.into());
@@ -182,12 +182,12 @@ impl ReadSync for RemoteReadSync {
         _ctx: Context,
         root: Root,
         key: &Key,
-        start_depth: DepthType,
+        start_bit_depth: Depth,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
         request.set_root(cbor::to_vec(&root));
-        request.set_key(key.marshal_binary().to_vec());
-        request.set_start_depth(start_depth.into());
+        request.set_key(key.marshal_binary()?.to_vec());
+        request.set_start_bit_depth(start_bit_depth.into());
 
         let response = self
             .0
@@ -205,7 +205,7 @@ impl ReadSync for RemoteReadSync {
         request.set_id({
             let mut nid = api::storage::NodeID::new();
             nid.set_path(id.path.clone());
-            nid.set_depth(id.depth.into());
+            nid.set_bit_depth(id.bit_depth.into());
             nid
         });
 

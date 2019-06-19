@@ -4,9 +4,11 @@ package node
 import (
 	"bytes"
 	"container/list"
+	"crypto/sha512"
 	"encoding"
 	"encoding/binary"
 	"fmt"
+	"math/bits"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -137,15 +139,22 @@ func (r *Root) EncodedHash() hash.Hash {
 
 // ID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
+//
+// BitDepth is a sum of bits on the path from the root to the node in compressed
+// urkel tree. Depth is a number of hops from the root to the node and is
+// provided for convenience e.g. when fetching a subtree of given depth.
+//
+// If there exist InternalNode and LeafNode having the same Key and BitDepth,
+// ID represents the InternalNode.
 type ID struct {
-	Path  Key
-	Depth DepthType
+	Path     Key
+	BitDepth Depth
 }
 
-// AtDepth returns a ID representing the same path at a specified
-// depth.
-func (n ID) AtDepth(d DepthType) ID {
-	return ID{Path: n.Path, Depth: d}
+// AtBitDepth returns a ID representing the same path at a specified
+// bit depth.
+func (n ID) AtBitDepth(bd Depth) ID {
+	return ID{Path: n.Path, BitDepth: bd}
 }
 
 // Pointer is a pointer to another node.
@@ -202,11 +211,11 @@ func (p *Pointer) ExtractUnchecked() *Pointer {
 }
 
 // Copy makes deep copy of the Pointer to LeafNode excluding LRU and DBInternal.
-func (p *Pointer) CopyLeafNodePtr() *Pointer {
+func (p *Pointer) CopyLeafNodePtr(requireClean bool) *Pointer {
 	if p == nil {
 		return nil
 	}
-	if !p.Clean {
+	if requireClean && !p.Clean {
 		panic("urkel: CopyLeafNodePtr called on dirty pointer")
 	}
 
@@ -264,12 +273,14 @@ type Node interface {
 }
 
 // InternalNode is an internal node with two children and possibly a leaf.
-type InternalNode struct { // nolint: golint
-	Clean    bool
-	Hash     hash.Hash
-	LeafNode *Pointer // for the key ending at this depth
-	Left     *Pointer
-	Right    *Pointer
+type InternalNode struct {
+	Hash           hash.Hash
+	Label          Key   // label on the incoming edge
+	LabelBitLength Depth // length of the label in bits
+	Clean          bool
+	LeafNode       *Pointer // for the key ending at this depth
+	Left           *Pointer
+	Right          *Pointer
 }
 
 // UpdateHash updates the node's cached hash by recomputing it.
@@ -279,8 +290,9 @@ func (n *InternalNode) UpdateHash() {
 	leafNodeHash := n.LeafNode.GetHash()
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
+	labelHash := sha512.Sum512_256(append(n.LabelBitLength.MarshalBinary(), n.Label...))
 
-	n.Hash.FromBytes([]byte{PrefixInternalNode}, leafNodeHash[:], leftHash[:], rightHash[:])
+	n.Hash.FromBytes([]byte{PrefixInternalNode}, labelHash[:], leafNodeHash[:], leftHash[:], rightHash[:])
 }
 
 // GetHash returns the node's cached hash.
@@ -289,26 +301,42 @@ func (n *InternalNode) GetHash() hash.Hash {
 }
 
 // Extract makes a copy of the node containing only hash references.
+//
+// For LeafNode, it makes a deep copy so that the parent internal node always
+// ships it since we cannot address the LeafNode uniquely with NodeID (both the
+// internal node and LeafNode have the same path and bit depth).
 func (n *InternalNode) Extract() Node {
 	if !n.Clean {
 		panic("urkel: extract called on dirty node")
 	}
-	return n.ExtractUnchecked()
+	return &InternalNode{
+		Clean:          true,
+		Hash:           n.Hash,
+		Label:          n.Label,
+		LabelBitLength: n.LabelBitLength,
+		// LeafNode is always contained in internal node.
+		LeafNode: n.LeafNode.CopyLeafNodePtr(true),
+		Left:     n.Left.ExtractUnchecked(),
+		Right:    n.Right.ExtractUnchecked(),
+	}
 }
 
-// Extract makes a copy of the node containing only hash references
-// without checking the dirty flag.
-// For LeafNode, it makes a deep copy so that
-// the parent internal node always ships it since we cannot address the
-// LeafNode uniquely with NodeID (both the internal node and LeafNode have
-// the same path and depth).
+// Extract makes a copy of the node containing only hash references without
+// checking the dirty flag.
+//
+// For LeafNode, it makes a deep copy so that the parent internal node always
+// ships it since we cannot address the LeafNode uniquely with NodeID (both the
+// internal node and LeafNode have the same path and bit depth).
 func (n *InternalNode) ExtractUnchecked() Node {
 	return &InternalNode{
-		Clean: true,
-		Hash:  n.Hash,
-		LeafNode: n.LeafNode.CopyLeafNodePtr(),
-		Left:  n.Left.ExtractUnchecked(),
-		Right: n.Right.ExtractUnchecked(),
+		Clean:          true,
+		Hash:           n.Hash,
+		Label:          n.Label,
+		LabelBitLength: n.LabelBitLength,
+		// LeafNode is always contained in internal node.
+		LeafNode: n.LeafNode.CopyLeafNodePtr(false),
+		Left:     n.Left.ExtractUnchecked(),
+		Right:    n.Right.ExtractUnchecked(),
 	}
 }
 
@@ -336,6 +364,7 @@ func (n *InternalNode) Validate(h hash.Hash) error {
 
 // MarshalBinary encodes an internal node into binary form.
 func (n *InternalNode) MarshalBinary() (data []byte, err error) {
+	// Internal node's LeafNode is always marshaled along the internal node.
 	var leafNodeBinary []byte
 	if n.LeafNode == nil {
 		leafNodeBinary = make([]byte, 1)
@@ -349,11 +378,19 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
 
-	data = make([]byte, 1+len(leafNodeBinary)+hash.Size*2)
-	data[0] = PrefixInternalNode
-	copy(data[1:1+len(leafNodeBinary)], leafNodeBinary[:])
-	copy(data[1+len(leafNodeBinary):1+len(leafNodeBinary)+hash.Size], leftHash[:])
-	copy(data[1+len(leafNodeBinary)+hash.Size:], rightHash[:])
+	data = make([]byte, 1+int(unsafe.Sizeof(n.LabelBitLength))+len(n.Label)+len(leafNodeBinary)+hash.Size*2)
+	pos := 0
+	data[pos] = PrefixInternalNode
+	pos++
+	copy(data[pos:pos+int(unsafe.Sizeof(n.LabelBitLength))], n.LabelBitLength.MarshalBinary()[:])
+	pos += int(unsafe.Sizeof(n.LabelBitLength))
+	copy(data[pos:pos+len(n.Label)], n.Label)
+	pos += len(n.Label)
+	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
+	pos += len(leafNodeBinary)
+	copy(data[pos:pos+hash.Size], leftHash[:])
+	pos += hash.Size
+	copy(data[pos:], rightHash[:])
 	return
 }
 
@@ -365,33 +402,50 @@ func (n *InternalNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node.
 func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+1+hash.Size*2 {
-		return 0, ErrMalformedNode
-	}
-	if data[0] != PrefixInternalNode {
+	if len(data) < 1+int(unsafe.Sizeof(n.LabelBitLength))+1+hash.Size*2 {
 		return 0, ErrMalformedNode
 	}
 
-	leafNodeBinarySize := 1
-	if data[1] == PrefixNilNode {
+	pos := 0
+	if data[pos] != PrefixInternalNode {
+		return 0, ErrMalformedNode
+	}
+	pos++
+
+	if _, err := n.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
+		return 0, errors.Wrap(err, "urkel: failed to unmarshal LabelBitLength")
+	}
+	labelLen := n.LabelBitLength.ToBytes()
+	pos += int(unsafe.Sizeof(n.LabelBitLength))
+
+	n.Label = make(Key, labelLen)
+	copy(n.Label, data[pos:pos+labelLen])
+	pos += labelLen
+
+	if data[pos] == PrefixNilNode {
 		n.LeafNode = nil
+		pos++
 	} else {
 		leafNode := LeafNode{}
+		var leafNodeBinarySize int
 		var err error
-		if leafNodeBinarySize, err = leafNode.SizedUnmarshalBinary(data[1:]); err != nil {
+		if leafNodeBinarySize, err = leafNode.SizedUnmarshalBinary(data[pos:]); err != nil {
 			return 0, errors.Wrap(err, "urkel: failed to unmarshal leaf node")
 		}
 		n.LeafNode = &Pointer{Clean: true, Hash: leafNode.Hash, Node: &leafNode}
+		pos += leafNodeBinarySize
 	}
 
 	var leftHash hash.Hash
-	if err := leftHash.UnmarshalBinary(data[1+leafNodeBinarySize : 1+leafNodeBinarySize+hash.Size]); err != nil {
+	if err := leftHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
 		return 0, errors.Wrap(err, "urkel: failed to unmarshal left hash")
 	}
+	pos += hash.Size
 	var rightHash hash.Hash
-	if err := rightHash.UnmarshalBinary(data[1+leafNodeBinarySize+hash.Size : 1+leafNodeBinarySize+2*hash.Size]); err != nil {
+	if err := rightHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
 		return 0, errors.Wrapf(err, "urkel: failed to unmarshal right hash")
 	}
+	pos += hash.Size
 
 	n.Clean = true
 
@@ -409,7 +463,7 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 
 	n.UpdateHash()
 
-	return 1 + leafNodeBinarySize + hash.Size*2, nil
+	return pos, nil
 }
 
 // Equal compares a node with some other node.
@@ -422,9 +476,9 @@ func (n *InternalNode) Equal(other Node) bool {
 	}
 	if other, ok := other.(*InternalNode); ok {
 		if n.Clean && other.Clean {
-			return n.Hash.Equal(&other.Hash)
+			return n.Hash.Equal(&other.Hash) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
 		}
-		return n.LeafNode.Equal(other.LeafNode) && n.Left.Equal(other.Left) && n.Right.Equal(other.Right)
+		return n.LeafNode.Equal(other.LeafNode) && n.Left.Equal(other.Left) && n.Right.Equal(other.Right) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
 	}
 	return false
 }
@@ -576,16 +630,37 @@ func (n *LeafNode) Copy() LeafNode {
 // Key holds variable-length key.
 type Key []byte
 
-// DepthType determines the maximum length of the key in bits.
+// Depth determines the maximum length of the key in bits.
 //
-// maxKeyLengthInBits = 2^size_of(DepthType)*8
-type DepthType uint16
+// maxKeyLengthInBits = 2^size_of(Depth)*8
+type Depth uint16
 
-// DepthSize is the size of DepthType in bytes. This should go away once Go adds
-// compile-time sizeof() method.
-const DepthSize = 2
+// DepthSize is the size of Depth in bytes.
+const DepthSize = int(unsafe.Sizeof(Depth(0)))
 
-// MarshalBinary encodes a key into binary form.
+// ToBytes returns the number of bytes needed to fit given bits.
+func (dt Depth) ToBytes() int {
+	size := dt / 8
+	if dt%8 != 0 {
+		size++
+	}
+	return int(size)
+}
+
+// MarshalBinary encodes a Depth into binary form.
+func (dt Depth) MarshalBinary() []byte {
+	data := make([]byte, DepthSize)
+	binary.LittleEndian.PutUint16(data, uint16(dt))
+	return data
+}
+
+// MarshalBinary encodes a Depth into binary form.
+func (dt *Depth) UnmarshalBinary(data []byte) (int, error) {
+	*dt = Depth(binary.LittleEndian.Uint16(data[0:DepthSize]))
+	return DepthSize, nil
+}
+
+// MarshalBinary encodes a key length in bytes + key into binary form.
 func (k Key) MarshalBinary() (data []byte, err error) {
 	data = make([]byte, DepthSize+len(k))
 	binary.LittleEndian.PutUint16(data[0:DepthSize], uint16(len(k)))
@@ -595,28 +670,28 @@ func (k Key) MarshalBinary() (data []byte, err error) {
 	return
 }
 
-// UnmarshalBinary decodes a binary marshaled key.
+// UnmarshalBinary decodes a binary marshaled key including the length in bytes.
 func (k *Key) UnmarshalBinary(data []byte) error {
 	_, err := k.SizedUnmarshalBinary(data)
 	return err
 }
 
-// SizedUnmarshalBinary decodes a binary marshaled key.
+// SizedUnmarshalBinary decodes a binary marshaled key incl. length in bytes.
 func (k *Key) SizedUnmarshalBinary(data []byte) (int, error) {
 	if len(data) < DepthSize {
 		return 0, ErrMalformedKey
 	}
 
 	keyLen := binary.LittleEndian.Uint16(data[0:DepthSize])
-	if len(data) < int(DepthSize+keyLen) {
+	if len(data) < DepthSize+int(keyLen) {
 		return 1, ErrMalformedKey
 	}
 
 	if keyLen > 0 {
 		*k = make([]byte, keyLen)
-		copy(*k, data[DepthSize:DepthSize+keyLen])
+		copy(*k, data[DepthSize:DepthSize+int(keyLen)])
 	}
-	return int(DepthSize + keyLen), nil
+	return DepthSize + int(keyLen), nil
 }
 
 // Equal compares the key with some other key.
@@ -633,19 +708,19 @@ func ToMapKey(k []byte) string {
 }
 
 // BitLength returns the length of the key in bits.
-func (k Key) BitLength() DepthType {
-	return DepthType(len(k[:]) * 8)
+func (k Key) BitLength() Depth {
+	return Depth(len(k[:]) * 8)
 }
 
 // GetKeyBit returns the given bit of the key.
-func (k Key) GetBit(bit DepthType) bool {
+func (k Key) GetBit(bit Depth) bool {
 	return k[bit/8]&(1<<(7-(bit%8))) != 0
 }
 
 // SetKeyBit sets the bit at the given position bit to value val.
 //
-// This function is immutable and returns a new instance of internal.Key
-func (k Key) SetBit(bit DepthType, val bool) Key {
+// This function is immutable and returns a new instance of Key
+func (k Key) SetBit(bit Depth, val bool) Key {
 	var kb = make(Key, len(k))
 	copy(kb[:], k[:])
 	mask := byte(1 << (7 - (bit % 8)))
@@ -655,6 +730,114 @@ func (k Key) SetBit(bit DepthType, val bool) Key {
 		kb[bit/8] &= mask
 	}
 	return kb
+}
+
+// Split performs bit-wise split of the key.
+//
+// keyLen is the length of the key in bits and splitPoint is the index of the
+// first suffix bit.
+// This function is immutable and returns two new instances of Key.
+func (k Key) Split(splitPoint Depth, keyLen Depth) (prefix Key, suffix Key) {
+	if splitPoint > keyLen {
+		panic(fmt.Sprintf("urkel: splitPoint %+v greater than keyLen %+v", splitPoint, keyLen))
+	}
+	prefixLen := Depth(splitPoint.ToBytes())
+	suffixLen := Depth((keyLen - splitPoint).ToBytes())
+	prefix = make(Key, prefixLen)
+	suffix = make(Key, suffixLen)
+
+	copy(prefix[:], k[:])
+	// Clean the remainder of the byte.
+	if splitPoint%8 != 0 {
+		prefix[prefixLen-1] &= 0xff << (8 - splitPoint%8)
+	}
+
+	for i := Depth(0); i < suffixLen; i++ {
+		// First set the left chunk of the byte
+		suffix[i] = k[i+splitPoint/8] << (splitPoint % 8)
+		// ...and the right chunk, if we haven't reached the end of k yet.
+		if splitPoint%8 != 0 && i+splitPoint/8+1 != Depth(len(k)) {
+			suffix[i] |= k[i+splitPoint/8+1] >> (8 - splitPoint%8)
+		}
+	}
+
+	return
+}
+
+// Merge bit-wise merges key of given length with another key of given length.
+//
+// keyLen is the length of the original key in bits and k2Len is the length of
+// another key in bits.
+// This function is immutable and returns a new instance of Key.
+func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) Key {
+	newKey := make(Key, (keyLen + k2Len).ToBytes())
+	copy(newKey[:], k[:])
+
+	for i := 0; i < len(k2); i++ {
+		// First set the right chunk of the previous byte
+		if keyLen%8 != 0 && len(k) > 0 {
+			newKey[len(k)+i-1] |= k2[i] >> (keyLen % 8)
+		}
+		// ...and the next left chunk, if we haven't reached the end of newKey
+		// yet.
+		if len(k)+i < len(newKey) {
+			// another mod 8 to prevent bit shifting for 8 bits
+			newKey[len(k)+i] |= k2[i] << ((8 - keyLen%8) % 8)
+		}
+	}
+
+	return newKey
+}
+
+// AppendBit appends the given bit to the key.
+//
+// This function is immutable and returns a new instance of Key.
+func (k Key) AppendBit(keyLen Depth, val bool) Key {
+	newKey := make(Key, (keyLen + 1).ToBytes())
+	copy(newKey[:len(k)], k[:])
+
+	if val {
+		newKey[keyLen/8] |= 0x80 >> (keyLen % 8)
+	} else {
+		newKey[keyLen/8] &^= 0x80 >> (keyLen % 8)
+	}
+
+	return newKey
+}
+
+// CommonPrefix computes length of common prefix of k and k2.
+//
+// Additionally, keyBitLen and k2bitLen are key lengths in bits of k and k2
+// respectively.
+func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) (bitLength Depth) {
+	minKeyLen := len(k)
+	if len(k2) < len(k) {
+		minKeyLen = len(k2)
+	}
+
+	// Compute the common prefix byte-wise.
+	i := Depth(0)
+	for ; i < Depth(minKeyLen) && k[i] == k2[i]; i++ {
+	}
+
+	// Prefixes match i bytes and maybe some more bits below.
+	bitLength = i * 8
+
+	if i != Depth(len(k)) && i != Depth(len(k2)) {
+		// We got a mismatch somewhere along the way. We need to compute how
+		// many additional bits in i-th byte match.
+		bitLength += Depth(bits.LeadingZeros8(k[i] ^ k2[i]))
+	}
+
+	// In any case, bitLength should never exceed length of the shorter key.
+	if bitLength > keyBitLen {
+		bitLength = keyBitLen
+	}
+	if bitLength > k2bitLen {
+		bitLength = k2bitLen
+	}
+
+	return
 }
 
 // Value holds the value.
@@ -798,10 +981,10 @@ func UnmarshalBinary(bytes []byte) (Node, error) {
 			}
 			node = Node(&inode)
 		default:
-			return nil, ErrMalformed
+			return nil, ErrMalformedNode
 		}
 	} else {
-		return nil, ErrMalformed
+		return nil, ErrMalformedNode
 	}
 	return node, nil
 }

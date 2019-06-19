@@ -3,7 +3,6 @@ package urkel
 import (
 	"context"
 	"fmt"
-	"hash"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
@@ -14,11 +13,15 @@ type insertResult struct {
 	existed      bool
 }
 
-func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth node.DepthType, key node.Key, val []byte) (insertResult, error) {
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, Depth: depth}, ptr, nil)
+func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key, val []byte, depth node.Depth) (insertResult, error) {
+	// NB: bitDepth is the bit depth of parent of ptr, so add one bit to fetch
+	// the node corresponding to key.
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, nil)
 	if err != nil {
 		return insertResult{}, err
 	}
+
+	_, keyRemainder := key.Split(bitDepth, key.BitLength())
 
 	switch n := nd.(type) {
 	case nil:
@@ -31,40 +34,80 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth node.Depth
 		}
 		return result, nil
 	case *node.InternalNode:
+		cpLength := n.Label.CommonPrefixLen(n.LabelBitLength, keyRemainder, key.BitLength()-bitDepth)
 		var result insertResult
 
-		if key.BitLength() == depth {
-			// Key to insert ends at this depth. Add it as a LeafNode reference
-			// to the existing internal node.
-			result, err = t.doInsert(ctx, n.LeafNode, depth, key, val)
-		} else if key.GetBit(depth) {
-			// Otherwise, insert recursively based on a bit value.
-			result, err = t.doInsert(ctx, n.Right, depth+1, key, val)
+		if cpLength == n.LabelBitLength {
+			// The current part of key matched the node's Label. Do recursion.
+			if key.BitLength() == bitDepth+n.LabelBitLength {
+				// Key to insert ends exactly at this node. Add it to the
+				// existing internal node as LeafNode.
+				result, err = t.doInsert(ctx, n.LeafNode, bitDepth+n.LabelBitLength, key, val, depth)
+			} else if key.GetBit(bitDepth + n.LabelBitLength) {
+				// Insert recursively based on the bit value.
+				result, err = t.doInsert(ctx, n.Right, bitDepth+n.LabelBitLength, key, val, depth+1)
+			} else {
+				result, err = t.doInsert(ctx, n.Left, bitDepth+n.LabelBitLength, key, val, depth+1)
+			}
+
+			if err != nil {
+				return result, err
+			}
+
+			if key.BitLength() == bitDepth+n.LabelBitLength {
+				n.LeafNode = result.newRoot
+			} else if key.GetBit(bitDepth + n.LabelBitLength) {
+				n.Right = result.newRoot
+			} else {
+				n.Left = result.newRoot
+			}
+
+			if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
+				n.Clean = false
+				ptr.Clean = false
+				// No longer eligible for eviction as it is dirty.
+				t.cache.rollbackNode(ptr)
+			}
+
+			result.newRoot = ptr
+			return result, nil
+		}
+
+		// Key mismatches the label at position cpLength. Split the edge and
+		// insert new leaf.
+		labelPrefix, labelSuffix := n.Label.Split(cpLength, n.LabelBitLength)
+		n.Label = labelSuffix
+		n.LabelBitLength = n.LabelBitLength - cpLength
+		n.Clean = false
+		ptr.Clean = false
+		// No longer eligible for eviction as it is dirty.
+		t.cache.rollbackNode(ptr)
+
+		newLeaf := t.cache.newLeafNode(key, val)
+		var leafNode, left, right *node.Pointer
+
+		if key.BitLength()-bitDepth == cpLength {
+			// The key is a prefix of existing path.
+			leafNode = newLeaf
+			if labelSuffix.GetBit(0) {
+				left = nil
+				right = ptr
+			} else {
+				left = ptr
+				right = nil
+			}
+		} else if keyRemainder.GetBit(cpLength) {
+			left = ptr
+			right = newLeaf
 		} else {
-			result, err = t.doInsert(ctx, n.Left, depth+1, key, val)
+			left = newLeaf
+			right = ptr
 		}
-		if err != nil {
-			return insertResult{}, err
-		}
-
-		if key.BitLength() == depth {
-			n.LeafNode = result.newRoot
-		}
-		} else if key.GetBit(depth) {
-			n.Right = result.newRoot
-		} else {
-			n.Left = result.newRoot
-		}
-
-		if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
-			n.Clean = false
-			ptr.Clean = false
-			// No longer eligible for eviction as it is dirty.
-			t.cache.rollbackNode(ptr)
-		}
-
-		result.newRoot = ptr
-		return result, nil
+		return insertResult{
+			newRoot:      t.cache.newInternalNode(labelPrefix, cpLength, leafNode, left, right),
+			insertedLeaf: newLeaf,
+			existed:      false,
+		}, nil
 	case *node.LeafNode:
 		// If the key matches, we can just update the value.
 		if n.Key.Equal(key) {
@@ -89,69 +132,46 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth node.Depth
 			}, nil
 		}
 
-		// If the key mismatches, three cases are possible:
+		var result insertResult
+		_, leafKeyRemainder := n.Key.Split(bitDepth, n.Key.BitLength())
+		cpLength := leafKeyRemainder.CommonPrefixLen(n.Key.BitLength()-bitDepth, keyRemainder, key.BitLength()-bitDepth)
+
+		// Key mismatches the label at position cpLength. Split the edge.
+		labelPrefix, _ := leafKeyRemainder.Split(cpLength, leafKeyRemainder.BitLength())
+		newLeaf := t.cache.newLeafNode(key, val)
+		result.insertedLeaf = newLeaf
 		var leafNode, left, right *node.Pointer
-		var existingBit bool
-		if key.BitLength() == depth {
-			// Case 1: key is a prefix of leafNode.Key.
-			leafNode = t.cache.newLeafNode(key, val)
-			result.insertedLeaf = leafNode
-			if n.Key.GetBit(depth) {
+
+		if key.BitLength()-bitDepth == cpLength {
+			// Inserted key is a prefix of the label.
+			leafNode = newLeaf
+			if leafKeyRemainder.GetBit(cpLength) {
 				left = nil
 				right = ptr
 			} else {
 				left = ptr
 				right = nil
 			}
-		} else if n.Key.BitLength() == depth {
-			// Case 2: leafNode.Key is a prefix of key.
+		} else if n.Key.BitLength()-bitDepth == cpLength {
+			// Label is a prefix of the inserted key.
 			leafNode = ptr
-			if key.GetBit(depth) {
+			if keyRemainder.GetBit(cpLength) {
 				left = nil
-				right = t.cache.newLeafNode(key, val)
-				result.insertedLeaf = right
+				right = newLeaf
 			} else {
-				left = t.cache.newLeafNode(key, val)
+				left = newLeaf
 				right = nil
-				result.insertedLeaf = left
 			}
+		} else if keyRemainder.GetBit(cpLength) {
+			left = ptr
+			right = newLeaf
 		} else {
-			// Case 3: length of common prefix of leafNode.Key and key is
-			//         shorter than len(n.Key) and len(key).
-			existingBit = n.Key.GetBit(depth)
-			newBit := key.GetBit(depth)
-
-			if existingBit != newBit {
-				// Bits mismatched at this depth, create an internal node with
-				// two leaves.
-				if existingBit {
-					left = t.cache.newLeafNode(key, val)
-					right = ptr
-				} else {
-					left = ptr
-					right = t.cache.newLeafNode(key, val)
-				}
-			} else {
-				// Bits matched at this depth. Go into recursion and then create
-				// an internal node with two leaves.
-				if existingBit {
-					left = nil
-					right, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
-				} else {
-					left, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
-					right = nil
-				}
-				if err != nil {
-					return nil, false, err
-				}
-			}
+			left = newLeaf
+			right = ptr
 		}
 
-		return insertResult{
-			newRoot:      t.cache.newInternalNode(leafNode, left, right),
-			insertedLeaf: result.insertedLeaf,
-			existed:      false,
-		}, nil
+		result.newRoot = t.cache.newInternalNode(labelPrefix, cpLength, leafNode, left, right)
+		return result, nil
 	default:
 		panic(fmt.Sprintf("urkel: unknown node type: %+v", n))
 	}

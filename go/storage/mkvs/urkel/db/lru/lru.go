@@ -231,7 +231,7 @@ func (d *lruNodeDB) NewBatch() api.Batch {
 	}
 }
 
-func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *urkel.Pointer) api.Subtree {
+func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth urkel.Depth, subtreeRoot *urkel.Pointer) api.Subtree {
 	if subtree == nil {
 		return &memorySubtree{batch: b}
 	}
@@ -273,7 +273,7 @@ type memorySubtree struct {
 	batch *memoryBatch
 }
 
-func (s *memorySubtree) PutNode(depth uint8, ptr *urkel.Pointer) error {
+func (s *memorySubtree) PutNode(depth urkel.Depth, ptr *urkel.Pointer) error {
 	// We must use the unchecked version here as the node has not yet been
 	// committed so it is still considered dirty even though the hash has
 	// already been updated.
@@ -284,7 +284,7 @@ func (s *memorySubtree) PutNode(depth uint8, ptr *urkel.Pointer) error {
 	return nil
 }
 
-func (s *memorySubtree) VisitCleanNode(depth uint8, ptr *urkel.Pointer) error {
+func (s *memorySubtree) VisitCleanNode(depth urkel.Depth, ptr *urkel.Pointer) error {
 	return nil
 }
 

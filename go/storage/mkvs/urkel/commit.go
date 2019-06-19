@@ -16,7 +16,7 @@ func doCommit(
 	cache *cache,
 	batch db.Batch,
 	subtree db.Subtree,
-	depth uint8,
+	depth node.Depth,
 	ptr *node.Pointer,
 ) (h hash.Hash, err error) {
 	if ptr == nil {
@@ -47,9 +47,9 @@ func doCommit(
 			panic("urkel: non-clean pointer has clean node")
 		}
 
-		for _, subNode := range []*internal.Pointer{n.LeafNode, n.Left, n.Right} {
-			newSubtree = batch.MaybeStartSubtree(subtree, depth+n.LabelBitLength, subNode)
-			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+n.LabelBitLength, subNode); err != nil {
+		for _, subNode := range []*node.Pointer{n.LeafNode, n.Left, n.Right} {
+			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
+			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode); err != nil {
 				return
 			}
 			if newSubtree != subtree {

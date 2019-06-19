@@ -126,7 +126,7 @@ func (d *leveldbNodeDB) NewBatch() api.Batch {
 	}
 }
 
-func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *node.Pointer) api.Subtree {
+func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, subtreeRoot *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &leveldbSubtree{batch: b}
 	}
@@ -174,7 +174,7 @@ type leveldbSubtree struct {
 	batch *leveldbBatch
 }
 
-func (s *leveldbSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
+func (s *leveldbSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
@@ -195,7 +195,7 @@ func (s *leveldbSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 
-func (s *leveldbSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
+func (s *leveldbSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) error {
 	return nil
 }
 

@@ -11,21 +11,22 @@ impl UrkelTree {
         let ctx = ctx.freeze();
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
-        Ok(self._get(&ctx, pending_root, 0, boxed_key)?)
+        Ok(self._get(&ctx, pending_root, 0, &boxed_key, 0)?)
     }
 
     fn _get(
         &self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: DepthType,
-        key: Key,
+        bit_depth: Depth,
+        key: &Key,
+        depth: Depth,
     ) -> Fallible<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             NodeID {
                 path: &key,
-                depth: depth,
+                bit_depth: bit_depth + 1,
             },
             ptr,
             Some(&key),
@@ -37,38 +38,53 @@ impl UrkelTree {
                 return Ok(None);
             }
             NodeKind::Internal => {
-                // Internal node.
-                // Is lookup key a prefix of longer stored keys? Look in node_ref.leaf_node.
                 let node_ref = node_ref.unwrap();
-                if key.bit_length() == depth {
-                    return self._get(
-                        ctx,
-                        noderef_as!(node_ref, Internal).leaf_node.clone(),
-                        depth,
-                        key,
-                    );
+                if let NodeBox::Internal(ref mut n) = *node_ref.borrow_mut() {
+                    // Internal node.
+                    // Does lookup key end here? Look into LeafNode.
+                    if key.bit_length() == bit_depth + n.label_bit_length {
+                        return self._get(
+                            ctx,
+                            n.leaf_node.clone(),
+                            bit_depth + n.label_bit_length,
+                            key,
+                            depth,
+                        );
+                    }
+
+                    // Lookup key is too short for the current n.Label. It's not stored.
+                    if key.bit_length() < bit_depth + n.label_bit_length {
+                        return Ok(None);
+                    }
+
+                    // Continue recursively based on a bit value.
+                    if key.get_bit(bit_depth + n.label_bit_length) {
+                        return self._get(
+                            ctx,
+                            n.right.clone(),
+                            bit_depth + n.label_bit_length,
+                            key,
+                            depth + 1,
+                        );
+                    } else {
+                        return self._get(
+                            ctx,
+                            n.left.clone(),
+                            bit_depth + n.label_bit_length,
+                            key,
+                            depth + 1,
+                        );
+                    }
                 }
-                // Continue recursively based on a bit value.
-                else if key.get_bit(depth) {
-                    return self._get(
-                        ctx,
-                        noderef_as!(node_ref, Internal).right.clone(),
-                        depth + 1,
-                        key,
-                    );
-                } else {
-                    return self._get(
-                        ctx,
-                        noderef_as!(node_ref, Internal).left.clone(),
-                        depth + 1,
-                        key,
-                    );
-                }
+                return Err(format_err!(
+                    "lookup.rs: invalid internal node_ref {:?}",
+                    node_ref
+                ));
             }
             NodeKind::Leaf => {
                 // Reached a leaf node, check if key matches.
                 let node_ref = node_ref.unwrap();
-                if noderef_as!(node_ref, Leaf).key == key {
+                if noderef_as!(node_ref, Leaf).key == *key {
                     return Ok(self
                         .cache
                         .borrow_mut()

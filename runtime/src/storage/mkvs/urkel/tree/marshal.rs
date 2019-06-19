@@ -79,6 +79,8 @@ impl Marshal for InternalNode {
 
         let mut result: Vec<u8> = Vec::with_capacity(1 + leaf_node_binary.len() + 2 * Hash::len());
         result.push(NodeKind::Internal as u8);
+        result.append(&mut self.label_bit_length.marshal_binary()?);
+        result.extend_from_slice(&self.label);
         result.extend_from_slice(leaf_node_binary.as_ref());
         result.extend_from_slice(self.left.borrow().hash.as_ref());
         result.extend_from_slice(self.right.borrow().hash.as_ref());
@@ -87,19 +89,28 @@ impl Marshal for InternalNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + 1 + 2 * Hash::len() || data[0] != NodeKind::Internal as u8 {
+        let mut pos = 0;
+        if data.len() < 1 + size_of::<Depth>() + 1 + 2 * Hash::len()
+            || data[pos] != NodeKind::Internal as u8
+        {
             return Err(TreeError::MalformedNode.into());
         }
+        pos += 1;
 
-        let leaf_node_binary_len: usize;
-        if data[1] == NodeKind::None as u8 {
+        pos += self.label_bit_length.unmarshal_binary(&data[pos..])?;
+        self.label = vec![0; self.label_bit_length.to_bytes()];
+        self.label
+            .clone_from_slice(&data[pos..pos + self.label_bit_length.to_bytes()]);
+        pos += self.label_bit_length.to_bytes();
+
+        if data[pos] == NodeKind::None as u8 {
             self.leaf_node = NodePointer::null_ptr();
-            leaf_node_binary_len = 1;
+            pos += 1;
         } else {
             let mut leaf_node = LeafNode {
                 ..Default::default()
             };
-            leaf_node_binary_len = leaf_node.unmarshal_binary(&data[1..])?;
+            pos += leaf_node.unmarshal_binary(&data[pos..])?;
             self.leaf_node = Rc::new(RefCell::new(NodePointer {
                 clean: true,
                 hash: leaf_node.get_hash(),
@@ -108,12 +119,10 @@ impl Marshal for InternalNode {
             }));
         };
 
-        let left_hash =
-            Hash::from(&data[(1 + leaf_node_binary_len)..(1 + leaf_node_binary_len + Hash::len())]);
-        let right_hash = Hash::from(
-            &data[(1 + leaf_node_binary_len + Hash::len())
-                ..(1 + leaf_node_binary_len + 2 * Hash::len())],
-        );
+        let left_hash = Hash::from(&data[pos..pos + Hash::len()]);
+        pos += Hash::len();
+        let right_hash = Hash::from(&data[pos..pos + Hash::len()]);
+        pos += Hash::len();
 
         self.clean = true;
 
@@ -140,7 +149,7 @@ impl Marshal for InternalNode {
 
         self.update_hash();
 
-        Ok(1 + leaf_node_binary_len + 2 * Hash::len())
+        Ok(pos)
     }
 }
 
@@ -155,7 +164,7 @@ impl Marshal for LeafNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + size_of::<DepthType>() || data[0] != NodeKind::Leaf as u8 {
+        if data.len() < 1 + size_of::<Depth>() || data[0] != NodeKind::Leaf as u8 {
             return Err(TreeError::MalformedNode.into());
         }
 
@@ -180,25 +189,23 @@ impl Marshal for LeafNode {
 impl Marshal for Key {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
         let mut result: Vec<u8> = Vec::new();
-        result.append(&mut (self.len() as DepthType).marshal_binary()?);
+        result.append(&mut (self.len() as Depth).marshal_binary()?);
         result.extend_from_slice(self);
         Ok(result)
     }
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < size_of::<DepthType>() {
+        if data.len() < size_of::<Depth>() {
             return Err(TreeError::MalformedKey.into());
         }
-        let mut key_len: DepthType = 0;
+        let mut key_len: Depth = 0;
         key_len.unmarshal_binary(data)?;
 
-        if data.len() < size_of::<DepthType>() + key_len as usize {
+        if data.len() < size_of::<Depth>() + key_len as usize {
             return Err(TreeError::MalformedKey.into());
         }
 
-        self.extend_from_slice(
-            &data[size_of::<DepthType>()..(size_of::<DepthType>() + key_len as usize)],
-        );
-        Ok(size_of::<DepthType>() + key_len as usize)
+        self.extend_from_slice(&data[size_of::<Depth>()..(size_of::<Depth>() + key_len as usize)]);
+        Ok(size_of::<Depth>() + key_len as usize)
     }
 }
 

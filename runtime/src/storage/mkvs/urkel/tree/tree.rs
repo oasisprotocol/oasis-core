@@ -9,10 +9,7 @@ use std::{
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, sync::*, tree::*},
-};
+use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
 
 pub struct PendingLogEntry {
     pub key: Vec<u8>,
@@ -24,7 +21,7 @@ pub struct PendingLogEntry {
 pub struct UrkelOptions {
     node_capacity: usize,
     value_capacity: usize,
-    prefetch_depth: DepthType,
+    prefetch_depth: Depth,
     root: Option<Root>,
 }
 
@@ -47,7 +44,7 @@ impl UrkelOptions {
     /// Set the prefetch depth for subtree prefetching.
     ///
     /// If unspecified or 0, no prefetching will be done.
-    pub fn with_prefetch_depth(mut self, prefetch_depth: DepthType) -> Self {
+    pub fn with_prefetch_depth(mut self, prefetch_depth: Depth) -> Self {
         self.prefetch_depth = prefetch_depth;
         self
     }
@@ -68,7 +65,7 @@ impl UrkelOptions {
 #[derive(Debug, Default)]
 pub struct UrkelStats {
     /// The maximum depth of the tree.
-    pub max_depth: DepthType,
+    pub max_depth: Depth,
     /// The counf of internal nodes in the tree structure.
     pub internal_node_count: u64,
     /// The count of leaf nodes in the tree structure.
@@ -79,9 +76,9 @@ pub struct UrkelStats {
     pub dead_node_count: u64,
 
     /// Maximum subtree depths at each level for left pointers.
-    pub left_subtree_max_depths: BTreeMap<DepthType, DepthType>,
+    pub left_subtree_max_depths: BTreeMap<Depth, Depth>,
     /// Maximum subtree depths at each level for right pointers.
-    pub right_subtree_max_depths: BTreeMap<DepthType, DepthType>,
+    pub right_subtree_max_depths: BTreeMap<Depth, Depth>,
 
     /// Statistics about the in-memory cache.
     pub cache: CacheStats,

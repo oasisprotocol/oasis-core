@@ -137,7 +137,7 @@ func (w *metricsWrapper) ApplyBatch(
 	return receipts, err
 }
 
-func (w *metricsWrapper) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.DepthType) (*api.Subtree, error) {
+func (w *metricsWrapper) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
 	start := time.Now()
 	st, err := w.Backend.GetSubtree(ctx, root, id, maxDepth)
 	storageLatency.With(labelGetSubtree).Observe(time.Since(start).Seconds())
@@ -150,7 +150,7 @@ func (w *metricsWrapper) GetSubtree(ctx context.Context, root api.Root, id api.N
 	return st, err
 }
 
-func (w *metricsWrapper) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.DepthType) (*api.Subtree, error) {
+func (w *metricsWrapper) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
 	start := time.Now()
 	st, err := w.Backend.GetPath(ctx, root, key, startDepth)
 	storageLatency.With(labelGetPath).Observe(time.Since(start).Seconds())

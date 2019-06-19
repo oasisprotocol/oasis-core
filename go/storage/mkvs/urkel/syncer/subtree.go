@@ -73,11 +73,13 @@ func (s *SubtreePointer) Equal(other *SubtreePointer) bool {
 // InternalNodeSummary is a compressed (index-only) representation of an
 // internal node.
 type InternalNodeSummary struct {
-	invalid bool
-
+	Label    node.Key
 	LeafNode SubtreePointer
 	Left     SubtreePointer
 	Right    SubtreePointer
+
+	LabelBitLength node.Depth
+	invalid        bool
 }
 
 // MarshalBinary encodes an internal node summary into binary form.
@@ -95,10 +97,23 @@ func (s *InternalNodeSummary) MarshalBinary() (data []byte, err error) {
 	if right, err = s.Right.MarshalBinary(); err != nil {
 		return
 	}
-	data = make([]byte, len(leafNode)+len(left)+len(right))
-	copy(data[:len(leafNode)], leafNode)
-	copy(data[len(leafNode):len(leafNode)+len(left)], left)
-	copy(data[len(leafNode)+len(left):], right)
+	data = make([]byte, node.DepthSize+len(s.Label)+len(leafNode)+len(left)+len(right))
+
+	pos := 0
+	copy(data[pos:pos+node.DepthSize], s.LabelBitLength.MarshalBinary()[:])
+	pos += node.DepthSize
+
+	copy(data[pos:pos+len(s.Label)], s.Label)
+	pos += len(s.Label)
+
+	copy(data[pos:pos+len(leafNode)], leafNode)
+	pos += len(leafNode)
+
+	copy(data[pos:pos+len(left)], left)
+	pos += len(left)
+
+	copy(data[pos:], right)
+
 	return
 }
 
@@ -110,27 +125,47 @@ func (s *InternalNodeSummary) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node summary.
 func (s *InternalNodeSummary) SizedUnmarshalBinary(data []byte) (int, error) {
+	var labelLen int
 	var leafNodeLen int
 	var leftLen int
 	var rightLen int
 	var err error
+
+	ds := 0
+	pos := 0
+	if ds, err = s.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
+		return 0, err
+	}
+	labelLen = s.LabelBitLength.ToBytes()
+	pos += ds
+
+	s.Label = make(node.Key, labelLen)
+	copy(s.Label, data[pos:pos+labelLen])
+	pos += labelLen
+
 	leafNode := SubtreePointer{}
-	if leafNodeLen, err = leafNode.SizedUnmarshalBinary(data); err != nil {
+	if leafNodeLen, err = leafNode.SizedUnmarshalBinary(data[pos:]); err != nil {
 		return 0, err
 	}
+	pos += leafNodeLen
+
 	left := SubtreePointer{}
-	if leftLen, err = left.SizedUnmarshalBinary(data[leafNodeLen:]); err != nil {
+	if leftLen, err = left.SizedUnmarshalBinary(data[pos:]); err != nil {
 		return 0, err
 	}
+	pos += leftLen
+
 	right := SubtreePointer{}
-	if rightLen, err = right.SizedUnmarshalBinary(data[leafNodeLen+leftLen:]); err != nil {
+	if rightLen, err = right.SizedUnmarshalBinary(data[pos:]); err != nil {
 		return 0, err
 	}
+	pos += rightLen
+
 	s.LeafNode = leafNode
 	s.Left = left
 	s.Right = right
 	s.invalid = false
-	return leafNodeLen + leftLen + rightLen, nil
+	return pos, nil
 }
 
 // Equal compares a node summary with some other node summary.
