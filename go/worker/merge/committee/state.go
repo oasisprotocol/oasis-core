@@ -48,9 +48,11 @@ var validStateTransitions = map[StateName][]StateName{
 	// Transitions from WaitingForEvent state.
 	WaitingForEvent: {
 		// Abort: seen newer block while waiting for event.
-		WaitingForFinalize,
+		WaitingForResults,
 		// Discrepancy event received.
 		ProcessingMerge,
+		// Epoch transition occurred and we are not in the committee.
+		NotReady,
 	},
 
 	// Transitions from ProcessingMerge state.
