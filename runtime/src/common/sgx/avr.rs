@@ -206,8 +206,7 @@ pub struct AVR {
 pub struct AuthenticatedAVR {
     pub report_data: Vec<u8>,
     // TODO: add other av report/quote body/report fields we want to give the consumer
-    pub mr_enclave: MrEnclave,
-    pub mr_signer: MrSigner,
+    pub identity: EnclaveIdentity,
     pub timestamp: i64,
     pub nonce: String,
 }
@@ -322,8 +321,10 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
 
     Ok(AuthenticatedAVR {
         report_data: quote_body.report_body.report_data,
-        mr_enclave: quote_body.report_body.mr_enclave,
-        mr_signer: quote_body.report_body.mr_signer,
+        identity: EnclaveIdentity {
+            mr_enclave: quote_body.report_body.mr_enclave,
+            mr_signer: quote_body.report_body.mr_signer,
+        },
         timestamp,
         nonce: nonce.to_string(),
     })
@@ -448,6 +449,7 @@ pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
 }
 
 /// Enclave identity.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EnclaveIdentity {
     pub mr_enclave: MrEnclave,
     pub mr_signer: MrSigner,

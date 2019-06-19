@@ -231,12 +231,14 @@ impl Session {
         let rak_binding: RAKBinding = serde_cbor::from_slice(rak_binding)?;
         let authenticated_avr = avr::verify(&rak_binding.avr)?;
 
+        // TODO: Verify MRSIGNER?.
+
         // Verify MRENCLAVE.
         if let Some(ref mr_enclave) = self.remote_mrenclave {
-            if mr_enclave != &authenticated_avr.mr_enclave {
+            if mr_enclave != &authenticated_avr.identity.mr_enclave {
                 return Err(SessionError::MismatchedMrEnclave {
                     expected: mr_enclave.clone(),
-                    actual: authenticated_avr.mr_enclave,
+                    actual: authenticated_avr.identity.mr_enclave,
                 }
                 .into());
             }

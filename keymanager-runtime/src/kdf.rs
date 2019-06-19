@@ -18,14 +18,14 @@ use ekiden_keymanager_api::{
     ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
     INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
-use ekiden_keymanager_client::KeyManagerClient;
+use ekiden_keymanager_client::{KeyManagerClient, RemoteClient};
 use ekiden_runtime::{
     common::{
         crypto::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
             signature,
         },
-        sgx::egetkey::egetkey,
+        sgx::{avr, egetkey::egetkey},
     },
     executor::Executor,
     rpc::Context as RpcContext,
@@ -33,6 +33,8 @@ use ekiden_runtime::{
     storage::StorageContext,
     BUILD_INFO,
 };
+
+use crate::{context::Context as KmContext, policy::Policy};
 
 lazy_static! {
     // Global KDF object.
@@ -67,10 +69,6 @@ const INSECURE_SIGNING_KEY_SEED: &str = "ekiden test key manager RAK seed";
 const MASTER_SECRET_STORAGE_KEY: &'static [u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
 const MASTER_SECRET_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal master secret v0";
-
-pub(crate) struct Context {
-    pub km_client: Arc<dyn KeyManagerClient>,
-}
 
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
@@ -166,7 +164,12 @@ impl Kdf {
 
     /// Initialize the KDF internal state.
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    pub fn init(&self, req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
+    pub fn init(
+        &self,
+        req: &InitRequest,
+        ctx: &mut RpcContext,
+        policy_checksum: Vec<u8>,
+    ) -> Fallible<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
 
         // How initialization proceeds depends on the state and the request.
@@ -197,11 +200,23 @@ impl Kdf {
                     // Couldn't load, fetch the master secret from another
                     // enclave instance.
 
-                    let rctx = runtime_context!(ctx, Context);
+                    let rctx = runtime_context!(ctx, KmContext);
 
-                    let result = rctx
-                        .km_client
-                        .replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
+                    // TODO: Build this from Policy.may_replicate_from.
+                    let mr_enclave = match avr::get_enclave_identity() {
+                        Some(id) => Some(id.mr_enclave),
+                        None => None,
+                    };
+                    let km_client = RemoteClient::new_runtime(
+                        rctx.runtime_id,
+                        mr_enclave,
+                        rctx.protocol.clone(),
+                        ctx.rak.clone(),
+                        1, // Not used, doesn't matter.
+                    );
+
+                    let result =
+                        km_client.replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
                     let master_secret =
                         Executor::with_current(|executor| executor.block_on(result))?;
                     (master_secret.unwrap(), true)
@@ -273,9 +288,9 @@ impl Kdf {
 
         // Build the response and sign it with the RAK.
         let init_response = InitResponse {
-            is_secure: BUILD_INFO.is_secure,
+            is_secure: BUILD_INFO.is_secure && !Policy::unsafe_skip(),
             checksum: inner.checksum.as_ref().unwrap().clone(),
-            policy_checksum: vec![], // TODO
+            policy_checksum,
         };
 
         let body = serde_cbor::to_vec(&init_response)?;

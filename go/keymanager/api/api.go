@@ -124,6 +124,15 @@ func init() {
 	signature.RegisterTestPublicKey(oldTestKey)
 
 	// Register all the seed derived SGX key manger test keys.
-	testPrivateKey := signature.NewTestPrivateKey("ekiden test key manager RAK seed")
-	TestPublicKey = testPrivateKey.Public()
+	for idx, v := range []string{
+		"ekiden test key manager RAK seed", // DO NOT REORDER.
+		"ekiden key manager test multisig key 0",
+		"ekiden key manager test multisig key 1",
+		"ekiden key manager test multisig key 2",
+	} {
+		tmpPrivateKey := signature.NewTestPrivateKey(v)
+		if idx == 0 {
+			TestPublicKey = tmpPrivateKey.Public()
+		}
+	}
 }
