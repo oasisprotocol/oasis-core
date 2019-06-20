@@ -27,6 +27,15 @@ impl PrivateKey {
         PrivateKey(key)
     }
 
+    /// Generate a new private key from a test key seed.
+    pub fn from_test_seed(seed: String) -> Self {
+        let seed = Hash::digest_bytes(seed.as_bytes());
+        let key =
+            Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(seed.as_ref())).unwrap();
+
+        PrivateKey(key)
+    }
+
     /// Loads the private key pair from PKCS8 encoded data.
     pub fn from_pkcs8(key: &[u8]) -> Fallible<Self> {
         let key = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(key))?;

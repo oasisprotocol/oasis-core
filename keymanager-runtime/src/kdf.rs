@@ -61,14 +61,8 @@ lazy_static! {
 }
 
 /// A dummy key for use in non-SGX tests where integrity is not needed.
-/// Public Key: 0x9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f
 #[cfg(not(target_env = "sgx"))]
-const INSECURE_SIGNING_KEY_PKCS8: &'static [u8] = &[
-    48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 124, 181, 54, 35, 91, 34, 238,
-    29, 127, 17, 115, 64, 41, 135, 165, 19, 211, 246, 106, 37, 136, 149, 157, 187, 145, 157, 192,
-    170, 25, 201, 141, 161, 35, 3, 33, 0, 157, 65, 168, 116, 184, 14, 57, 164, 12, 150, 68, 233,
-    100, 240, 228, 249, 103, 16, 12, 145, 101, 75, 253, 118, 102, 67, 95, 233, 6, 175, 6, 15,
-];
+const INSECURE_SIGNING_KEY_SEED: &str = "ekiden test key manager RAK seed";
 
 const MASTER_SECRET_STORAGE_KEY: &'static [u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
@@ -274,8 +268,9 @@ impl Kdf {
         }
         #[cfg(not(target_env = "sgx"))]
         {
-            let priv_key =
-                Arc::new(signature::PrivateKey::from_pkcs8(INSECURE_SIGNING_KEY_PKCS8).unwrap());
+            let priv_key = Arc::new(signature::PrivateKey::from_test_seed(
+                INSECURE_SIGNING_KEY_SEED.to_string(),
+            ));
 
             let signer: Arc<dyn signature::Signer> = priv_key;
             inner.signer = Some(signer);
