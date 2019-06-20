@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/memory"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 const cacheSize = 10
@@ -39,16 +39,10 @@ func TestSingleAndPersistence(t *testing.T) {
 	}()
 
 	wl := makeTestWriteLog([]byte("TestSingle"), cacheSize)
-	var root, expectedNewRoot hash.Hash
-	root.Empty()
-	// Use in-memory Urkel tree to calculate the expected new root.
-	tree := urkel.New(nil, nil)
-	for _, logEntry := range wl {
-		_ = tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
-	}
-	_, expectedNewRoot, err = tree.Commit(context.Background())
-	require.NoError(t, err, "error calculating mkvs's expectedNewRoot")
+	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl)
 
+	var root hash.Hash
+	root.Empty()
 	receipts, err := client.Apply(context.Background(), root, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")

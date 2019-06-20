@@ -28,7 +28,7 @@ func prepareWriteLog(values [][]byte) api.WriteLog {
 	return wl
 }
 
-func calculateExpectedNewRoot(t *testing.T, wl api.WriteLog) hash.Hash {
+func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog) hash.Hash {
 	// Use in-memory Urkel tree to calculate the expected new root.
 	tree := urkel.New(nil, nil)
 	for _, logEntry := range wl {
@@ -49,7 +49,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	var root hash.Hash
 	root.Empty()
 	wl := prepareWriteLog(testValues)
-	expectedNewRoot := calculateExpectedNewRoot(t, wl)
+	expectedNewRoot := CalculateExpectedNewRoot(t, wl)
 	var receipts []*api.MKVSReceipt
 	var receiptBody api.MKVSReceiptBody
 	var err error
@@ -71,7 +71,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 
 	// Prepare another write log and form a set of apply operations.
 	wl2 := prepareWriteLog(testValues[0:2])
-	expectedNewRoot2 := calculateExpectedNewRoot(t, wl2)
+	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2)
 	applyOps := []api.ApplyOp{
 		api.ApplyOp{Root: root, ExpectedNewRoot: expectedNewRoot, WriteLog: wl},
 		api.ApplyOp{Root: root, ExpectedNewRoot: expectedNewRoot2, WriteLog: wl2},
