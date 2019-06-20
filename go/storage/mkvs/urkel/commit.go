@@ -31,11 +31,22 @@ func (u *cacheUpdates) Commit() {
 // doCommit commits all dirty nodes and values into the underlying node
 // database. This operation may cause committed nodes and values to be
 // evicted from the in-memory cache.
-func doCommit(ctx context.Context, cache *cache, upd *cacheUpdates, batch db.Batch, ptr *internal.Pointer) (h hash.Hash, err error) {
+func doCommit(
+	ctx context.Context,
+	cache *cache,
+	upd *cacheUpdates,
+	batch db.Batch,
+	subtree db.Subtree,
+	depth uint8,
+	ptr *internal.Pointer,
+) (h hash.Hash, err error) {
 	if ptr == nil {
 		h.Empty()
 		return
 	} else if ptr.Clean {
+		if err = subtree.VisitCleanNode(depth, ptr); err != nil {
+			return
+		}
 		h = ptr.Hash
 		return
 	}
@@ -55,21 +66,29 @@ func doCommit(ctx context.Context, cache *cache, upd *cacheUpdates, batch db.Bat
 	case *internal.InternalNode:
 		// Internal node.
 		if n.Clean {
-			ptr.Hash = n.Hash
-			break
+			panic("urkel: non-clean pointer has clean node")
 		}
 
-		if _, err = doCommit(ctx, cache, upd, batch, n.Left); err != nil {
+		newSubtree := batch.MaybeStartSubtree(subtree, depth+1, n.Left)
+		if _, err = doCommit(ctx, cache, upd, batch, newSubtree, depth+1, n.Left); err != nil {
 			return
 		}
-		if _, err = doCommit(ctx, cache, upd, batch, n.Right); err != nil {
+		if newSubtree != subtree {
+			newSubtree.Commit()
+		}
+
+		newSubtree = batch.MaybeStartSubtree(subtree, depth+1, n.Right)
+		if _, err = doCommit(ctx, cache, upd, batch, newSubtree, depth+1, n.Right); err != nil {
 			return
+		}
+		if newSubtree != subtree {
+			newSubtree.Commit()
 		}
 
 		n.UpdateHash()
 
-		if cerr := batch.PutNode(ptr); cerr != nil {
-			err = cerr
+		// Store the node.
+		if err = subtree.PutNode(depth, ptr); err != nil {
 			return
 		}
 
@@ -80,16 +99,11 @@ func doCommit(ctx context.Context, cache *cache, upd *cacheUpdates, batch db.Bat
 	case *internal.LeafNode:
 		// Leaf node.
 		if n.Clean {
-			ptr.Hash = n.Hash
-			break
+			panic("urkel: non-clean pointer has clean node")
 		}
 
 		if !n.Value.Clean {
 			n.Value.UpdateHash()
-
-			if err = batch.PutValue(n.Value.Value); err != nil {
-				return
-			}
 
 			upd.Add(func() {
 				n.Value.Clean = true
@@ -99,7 +113,8 @@ func doCommit(ctx context.Context, cache *cache, upd *cacheUpdates, batch db.Bat
 
 		n.UpdateHash()
 
-		if err = batch.PutNode(ptr); err != nil {
+		// Store the node.
+		if err = subtree.PutNode(depth, ptr); err != nil {
 			return
 		}
 

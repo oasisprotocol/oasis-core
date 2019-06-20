@@ -108,43 +108,11 @@ func (d *memoryNodeDB) NewBatch() api.Batch {
 	}
 }
 
-func (b *memoryBatch) PutNode(ptr *internal.Pointer) error {
-	if ptr == nil || ptr.Node == nil {
-		panic("urkel: attempted to put invalid pointer to node database")
+func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *internal.Pointer) api.Subtree {
+	if subtree == nil {
+		return &memorySubtree{batch: b}
 	}
-
-	b.ops = append(b.ops, func() error {
-		return b.db.putLocked(ptr.Node.GetHash(), ptr.Node)
-	})
-	return nil
-}
-
-func (b *memoryBatch) RemoveNode(ptr *internal.Pointer) error {
-	if ptr == nil || ptr.Node == nil {
-		panic("urkel: attempted to remove invalid pointer from node database")
-	}
-
-	b.ops = append(b.ops, func() error {
-		return b.db.removeLocked(ptr.Node.GetHash())
-	})
-	return nil
-}
-
-func (b *memoryBatch) PutValue(value []byte) error {
-	var id hash.Hash
-	id.FromBytes(value)
-
-	b.ops = append(b.ops, func() error {
-		return b.db.putLocked(id, value)
-	})
-	return nil
-}
-
-func (b *memoryBatch) RemoveValue(id hash.Hash) error {
-	b.ops = append(b.ops, func() error {
-		return b.db.removeLocked(id)
-	})
-	return nil
+	return subtree
 }
 
 func (b *memoryBatch) Commit(root hash.Hash) error {
@@ -163,4 +131,31 @@ func (b *memoryBatch) Commit(root hash.Hash) error {
 
 func (b *memoryBatch) Reset() {
 	b.ops = nil
+}
+
+type memorySubtree struct {
+	batch *memoryBatch
+}
+
+func (s *memorySubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+	switch n := ptr.Node.(type) {
+	case *internal.InternalNode:
+		s.batch.ops = append(s.batch.ops, func() error {
+			return s.batch.db.putLocked(n.Hash, ptr.Node)
+		})
+	case *internal.LeafNode:
+		s.batch.ops = append(s.batch.ops, func() error {
+			_ = s.batch.db.putLocked(n.Value.Hash, n.Value.Value)
+			return s.batch.db.putLocked(n.Hash, ptr.Node)
+		})
+	}
+	return nil
+}
+
+func (s *memorySubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+	return nil
+}
+
+func (s *memorySubtree) Commit() error {
+	return nil
 }

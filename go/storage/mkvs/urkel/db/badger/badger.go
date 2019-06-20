@@ -118,38 +118,11 @@ type badgerBatch struct {
 	bat *badger.WriteBatch
 }
 
-func (ba *badgerBatch) PutNode(ptr *internal.Pointer) error {
-	if ptr == nil || ptr.Node == nil {
-		panic("urkel/db/badger: attempted to put invalid pointer to node database")
+func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *internal.Pointer) api.Subtree {
+	if subtree == nil {
+		return &badgerSubtree{batch: ba}
 	}
-
-	data, err := ptr.Node.MarshalBinary()
-	if err != nil {
-		return errors.Wrap(err, "urkel/db/badger: failed to marshal node")
-	}
-
-	hash := ptr.Node.GetHash()
-	return ba.bat.Set(append(nodeKeyPrefix, hash[:]...), data)
-}
-
-func (ba *badgerBatch) RemoveNode(ptr *internal.Pointer) error {
-	if ptr == nil || ptr.Node == nil {
-		panic("urkel/db/badger: attempted to remove invalid node pointer from node database")
-	}
-
-	hash := ptr.Node.GetHash()
-	return ba.bat.Delete(append(nodeKeyPrefix, hash[:]...))
-}
-
-func (ba *badgerBatch) PutValue(value []byte) error {
-	var id hash.Hash
-	id.FromBytes(value)
-
-	return ba.bat.Set(append(valueKeyPrefix, id[:]...), value)
-}
-
-func (ba *badgerBatch) RemoveValue(id hash.Hash) error {
-	return ba.bat.Delete(append(valueKeyPrefix, id[:]...))
+	return subtree
 }
 
 func (ba *badgerBatch) Commit(root hash.Hash) error {
@@ -162,4 +135,38 @@ func (ba *badgerBatch) Commit(root hash.Hash) error {
 
 func (ba *badgerBatch) Reset() {
 	ba.bat.Cancel()
+}
+
+type badgerSubtree struct {
+	batch *badgerBatch
+}
+
+func (s *badgerSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+	data, err := ptr.Node.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	switch n := ptr.Node.(type) {
+	case *internal.InternalNode:
+		if err = s.batch.bat.Set(append(nodeKeyPrefix, n.Hash[:]...), data); err != nil {
+			return err
+		}
+	case *internal.LeafNode:
+		if err = s.batch.bat.Set(append(valueKeyPrefix, n.Value.Hash[:]...), n.Value.Value); err != nil {
+			return err
+		}
+		if err = s.batch.bat.Set(append(nodeKeyPrefix, n.Hash[:]...), data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *badgerSubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+	return nil
+}
+
+func (s *badgerSubtree) Commit() error {
+	return nil
 }

@@ -15,7 +15,7 @@ type NodeDB interface {
 	// GetNode lookups up a node in the database.
 	GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error)
 
-	// GetNode lookups up a value in the database.
+	// GetValue lookups up a value in the database.
 	GetValue(id hash.Hash) ([]byte, error)
 
 	// NewBatch starts a new batch.
@@ -25,29 +25,28 @@ type NodeDB interface {
 	Close()
 }
 
+// Subtree is a NodeDB-specific subtree implementation.
+type Subtree interface {
+	// PutNode persists a node in the NodeDB.
+	PutNode(depth uint8, ptr *internal.Pointer) error
+
+	// VisitCleanNode is called for any clean node encountered during commit
+	// for which no further processing will be done (as it is marked clean).
+	//
+	// The specific NodeDB implementation may wish to do further processing.
+	VisitCleanNode(depth uint8, ptr *internal.Pointer) error
+
+	// Commit marks the subtree as complete.
+	Commit() error
+}
+
 // Batch is a NodeDB-specific batch implementation.
 type Batch interface {
-	// PutNode inserts a node into the database. If a node already
-	// exists it increments its reference counter.
+	// MaybeStartSubtree returns a new subtree instance that can be used for
+	// persisting nodes under a given root.
 	//
-	// The passed pointer's DBInternal may be modified by this call.
-	PutNode(ptr *internal.Pointer) error
-
-	// RemoveNode decrements the reference counter on the node with the
-	// given identifier. If the reference counter becomes negative
-	// it removes the node.
-	//
-	// The passed pointer's DBInternal may be modified by this call.
-	RemoveNode(ptr *internal.Pointer) error
-
-	// PutValue inserts a value into the database. If a value already
-	// exists it increments its reference counter.
-	PutValue(value []byte) error
-
-	// RemoveValue decrements the reference counter on the value with the
-	// given identifier. If the reference counter becomes negative
-	// it removes the value.
-	RemoveValue(id hash.Hash) error
+	// Depth is the depth of the node that subtreeRoot points to.
+	MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *internal.Pointer) Subtree
 
 	// Commit commits the batch.
 	Commit(root hash.Hash) error
@@ -85,24 +84,8 @@ func (d *nopNodeDB) NewBatch() Batch {
 	return &nopBatch{}
 }
 
-// PutNode does nothing.
-func (b *nopBatch) PutNode(ptr *internal.Pointer) error {
-	return nil
-}
-
-// RemoveNode does nothing.
-func (b *nopBatch) RemoveNode(ptr *internal.Pointer) error {
-	return nil
-}
-
-// PutValue does nothing.
-func (b *nopBatch) PutValue(value []byte) error {
-	return nil
-}
-
-// RemoveValue does nothing.
-func (b *nopBatch) RemoveValue(id hash.Hash) error {
-	return nil
+func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *internal.Pointer) Subtree {
+	return &nopSubtree{}
 }
 
 // Commit does nothing.
@@ -112,4 +95,19 @@ func (b *nopBatch) Commit(root hash.Hash) error {
 
 // Reset does nothing.
 func (b *nopBatch) Reset() {
+}
+
+// nopSubtree is a no-op subtree.
+type nopSubtree struct{}
+
+func (s *nopSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+	return nil
+}
+
+func (s *nopSubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+	return nil
+}
+
+func (s *nopSubtree) Commit() error {
+	return nil
 }

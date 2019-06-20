@@ -78,44 +78,11 @@ func (d *leveldbNodeDB) NewBatch() api.Batch {
 	}
 }
 
-func (b *leveldbBatch) PutNode(ptr *internal.Pointer) error {
-	if ptr == nil || ptr.Node == nil {
-		panic("urkel/db/leveldb: attempted to put invalid pointer to node database")
+func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *internal.Pointer) api.Subtree {
+	if subtree == nil {
+		return &leveldbSubtree{batch: b}
 	}
-
-	hash := ptr.Node.GetHash()
-
-	data, err := ptr.Node.MarshalBinary()
-	if err != nil {
-		return err
-	}
-
-	b.bat.Put(append(nodeKeyPrefix, hash[:]...), data)
-	return nil
-}
-
-func (b *leveldbBatch) RemoveNode(ptr *internal.Pointer) error {
-	if ptr == nil || ptr.Node == nil {
-		panic("urkel/db/leveldb: attempted to remove invalid pointer from node database")
-	}
-
-	hash := ptr.Node.GetHash()
-
-	b.bat.Delete(append(nodeKeyPrefix, hash[:]...))
-	return nil
-}
-
-func (b *leveldbBatch) PutValue(value []byte) error {
-	var id hash.Hash
-	id.FromBytes(value)
-
-	b.bat.Put(append(valueKeyPrefix, id[:]...), value)
-	return nil
-}
-
-func (b *leveldbBatch) RemoveValue(id hash.Hash) error {
-	b.bat.Delete(append(valueKeyPrefix, id[:]...))
-	return nil
+	return subtree
 }
 
 func (b *leveldbBatch) Commit(root hash.Hash) error {
@@ -130,4 +97,32 @@ func (b *leveldbBatch) Commit(root hash.Hash) error {
 
 func (b *leveldbBatch) Reset() {
 	b.bat.Reset()
+}
+
+type leveldbSubtree struct {
+	batch *leveldbBatch
+}
+
+func (s *leveldbSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+	data, err := ptr.Node.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	switch n := ptr.Node.(type) {
+	case *internal.InternalNode:
+		s.batch.bat.Put(append(nodeKeyPrefix, n.Hash[:]...), data)
+	case *internal.LeafNode:
+		s.batch.bat.Put(append(valueKeyPrefix, n.Value.Hash[:]...), n.Value.Value)
+		s.batch.bat.Put(append(nodeKeyPrefix, n.Hash[:]...), data)
+	}
+	return nil
+}
+
+func (s *leveldbSubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+	return nil
+}
+
+func (s *leveldbSubtree) Commit() error {
+	return nil
 }

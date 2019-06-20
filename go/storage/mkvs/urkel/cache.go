@@ -431,11 +431,14 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 		return nil, errors.New("urkel: reconstructed root pointer is nil")
 	}
 
-	batch := c.db.NewBatch()
-	defer batch.Reset()
+	// Create a no-op database so we can run commit. We don't want to persist
+	// everything we retrieve from a remote endpoint as this may be dangerous.
+	db, _ := db.NewNopNodeDB()
+	batch := db.NewBatch()
+	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
 	updates := &cacheUpdates{}
-	syncRoot, err := doCommit(ctx, c, updates, batch, ptr)
+	syncRoot, err := doCommit(ctx, c, updates, batch, subtree, depth, ptr)
 	if err != nil {
 		return nil, err
 	}
@@ -444,10 +447,6 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 			root,
 			syncRoot,
 		)
-	}
-
-	if err = batch.Commit(root); err != nil {
-		return nil, err
 	}
 	updates.Commit()
 
