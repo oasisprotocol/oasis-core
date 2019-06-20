@@ -111,6 +111,12 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse,
 }
 
 func init() {
-	_ = TestPublicKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
-	signature.RegisterTestPublicKey(TestPublicKey)
+	// Old `INSECURE_SIGNING_KEY_PKCS8`.
+	var oldTestKey signature.PublicKey
+	_ = oldTestKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
+	signature.RegisterTestPublicKey(oldTestKey)
+
+	// Register all the seed derived SGX key manger test keys.
+	testPrivateKey := signature.NewTestPrivateKey("ekiden test key manager RAK seed")
+	TestPublicKey = testPrivateKey.Public()
 }

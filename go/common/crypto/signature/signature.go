@@ -387,6 +387,23 @@ func NewPrivateKey(rng io.Reader) (k PrivateKey, err error) {
 	return
 }
 
+// NewTestPrivateKey generates a new private key deterministically from
+// a test key name string, registers it as a test key, and returns
+// the private key.
+//
+// This routine will panic on failure.
+func NewTestPrivateKey(name string) PrivateKey {
+	seed := sha512.Sum512_256([]byte(name))
+
+	var k PrivateKey
+	if err := k.UnmarshalSeed(seed[:]); err != nil {
+		panic("signature: failed to unmarshal test key seed")
+	}
+	RegisterTestPublicKey(k.Public())
+
+	return k
+}
+
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.

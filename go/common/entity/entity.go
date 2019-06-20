@@ -3,7 +3,6 @@ package entity
 
 import (
 	"crypto/rand"
-	"crypto/sha512"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -193,13 +192,7 @@ func SignEntity(privateKey signature.PrivateKey, context []byte, entity *Entity)
 }
 
 func init() {
-	seed := sha512.Sum512_256([]byte("ekiden test entity key seed"))
-	if err := testEntityPrivateKey.UnmarshalSeed(seed[:]); err != nil {
-		panic("entity: failed to generate test entity private key")
-	}
-	testEntityPublicKey := testEntityPrivateKey.Public()
-	signature.RegisterTestPublicKey(testEntityPublicKey)
-
-	testEntity.ID = testEntityPublicKey
+	testEntityPrivateKey = signature.NewTestPrivateKey("ekiden test entity key seed")
+	testEntity.ID = testEntityPrivateKey.Public()
 	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
 }
