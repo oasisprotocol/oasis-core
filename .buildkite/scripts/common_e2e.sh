@@ -387,7 +387,7 @@ run_client_node() {
         --metrics.mode none \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --scheduler.backend trivial \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --roothash.tendermint.index_blocks \
