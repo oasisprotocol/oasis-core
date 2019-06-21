@@ -111,6 +111,8 @@ impl UrkelTree {
                         };
                         if let NodeBox::Leaf(_) = *right_ref.borrow() {
                             // Left is None, right is a leaf, merge nodes back.
+                            noderef_as_mut!(node_ref, Internal).right = NodePointer::null_ptr();
+                            self.cache.borrow_mut().remove_node(ptr.clone());
                             return Ok((int_right.clone(), true, old_val));
                         };
                     }
@@ -124,6 +126,8 @@ impl UrkelTree {
                             )?;
                             if let None = right_ref {
                                 // Right is None, left is a leaf, merge nodes back.
+                                noderef_as_mut!(node_ref, Internal).left = NodePointer::null_ptr();
+                                self.cache.borrow_mut().remove_node(ptr.clone());
                                 return Ok((int_left.clone(), true, old_val));
                             };
                         }

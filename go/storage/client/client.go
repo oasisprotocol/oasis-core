@@ -1,15 +1,15 @@
-// Package client implements a client for an ekiden storage node.
-// Client obtains storage info by following scheduler committees.
-// Note: client assumes committees for all runtimes share the same
-// storage committee. Although client does follow per epoch storage
-// committee changes, this is not exposed and client will always
-// connect to the most recently scheduled storage node it knows
-// about.
+// Package client implements a client for Ekiden storage nodes.
+// The client obtains storage info by following scheduler committees and always
+// connects to storage nodes scheduled for the latest epoch.
+// NOTE: The client assumes committees for all runtimes share the same
+// storage committee.
 package client
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"crypto/x509"
+	"math/rand"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -21,7 +21,7 @@ import (
 	"google.golang.org/grpc/resolver"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -52,6 +52,9 @@ var (
 // available.
 var ErrStorageNotAvailable = errors.New("storage client: storage not available")
 
+// storageClientBackend contains all information about the client storage API
+// backend, including the backend state and the connected storage committee
+// nodes' state.
 type storageClientBackend struct {
 	logger *logging.Logger
 
@@ -59,8 +62,8 @@ type storageClientBackend struct {
 	scheduler  scheduler.Backend
 	registry   registry.Backend
 
-	state           *storageClientBackendState
-	connectionState *storageClientConnectionState
+	state               *backendState
+	connectedNodesState *connectedNodesState
 
 	haltCtx      context.Context
 	cancelFn     context.CancelFunc
@@ -68,135 +71,148 @@ type storageClientBackend struct {
 	signaledInit bool
 }
 
-// storageClientConnectionState contains the latest scheduled
-// storage client and connection.
-type storageClientConnectionState struct {
+// connectedNodesState contains information about the latest connected storage
+// committee nodes and their corresponding client states.
+type connectedNodesState struct {
 	sync.RWMutex
 
+	nodes        []*node.Node
+	clientStates []*clientState
+}
+
+// clientState contains information about a connected storage node.
+type clientState struct {
 	client            storage.StorageClient
 	conn              *grpc.ClientConn
 	resolverCleanupCb func()
-	node              *node.Node
 }
 
-// storageClientBackendState contains the most recent epoch information,
-// and per epoch registry node lists and scheduler storage committees
-type storageClientBackendState struct {
+// backendState contains the most recent epoch information and the lists of
+// scheduled storage committees for each epoch.
+type backendState struct {
 	sync.RWMutex
 
 	logger *logging.Logger
 
-	storageNodeList      map[epochtime.EpochTime][]*node.Node
-	storageNodeLeaderKey map[epochtime.EpochTime]*signature.PublicKey
+	storageNodeLists map[epochtime.EpochTime][]*node.Node
 
 	epoch           epochtime.EpochTime
 	connectionEpoch epochtime.EpochTime
 }
 
 // GetConnectedNode returns registry node information about the connected
-// storage node.
-func (b *storageClientBackend) GetConnectedNode() *node.Node {
-	b.connectionState.RLock()
-	defer b.connectionState.RUnlock()
+// storage nodes.
+func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
+	b.connectedNodesState.RLock()
+	defer b.connectedNodesState.RUnlock()
 
-	return b.connectionState.node
+	return b.connectedNodesState.nodes
 }
 
-func (b *storageClientBackend) updateConnection() {
+func (b *storageClientBackend) updateNodesConnections() {
 	b.state.RLock()
 	defer b.state.RUnlock()
 
-	b.logger.Debug("storage client: updating connection")
+	b.logger.Debug("updating connections to nodes")
 
-	leaderKey := b.state.storageNodeLeaderKey[b.state.epoch]
-	var leader *node.Node
-	nodeList := b.state.storageNodeList[b.state.epoch]
+	nodeList := b.state.storageNodeLists[b.state.epoch]
+
+	// TODO: Should we only update connections if keys or addresses have
+	// changed?
+	b.connectedNodesState.Lock()
+	defer b.connectedNodesState.Unlock()
+
+	connNodes := []*node.Node{}
+	connClientStates := []*clientState{}
+	numConnNodes := 0
+
+	// Clean-up previous resolvers.
+	for _, clientState := range b.connectedNodesState.clientStates {
+		if cleanup := clientState.resolverCleanupCb; cleanup != nil {
+			cleanup()
+		}
+	}
 
 	for _, node := range nodeList {
-		if node.ID.String() == leaderKey.String() {
-			leader = node
-			break
+		var opts grpc.DialOption
+		if node.Certificate == nil {
+			// NOTE: This should only happen in tests, where nodes register
+			// without a certificate.
+			// TODO: This can be rejected once node_tests register with a
+			// certificate.
+			opts = grpc.WithInsecure()
+			b.logger.Warn("storage committee member registered without certificate, using insecure connection!",
+				"member", node,
+			)
+		} else {
+			nodeCert, err := node.Certificate.Parse()
+			if err != nil {
+				b.logger.Error("failed to parse storage committee member's certificate",
+					"member", node,
+				)
+				continue
+			}
+			certPool := x509.NewCertPool()
+			certPool.AddCert(nodeCert)
+			creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
+			opts = grpc.WithTransportCredentials(creds)
 		}
-	}
 
-	if leader == nil {
-		b.logger.Error("storage client: cannot update connection, committee leader not found in node list",
-			"leader_key", leaderKey.String(),
-			"node_list", nodeList,
-		)
-		return
-	}
+		if len(node.Addresses) == 0 {
+			b.logger.Error("cannot update connection, storage committee member does not have any addresses",
+				"member", node,
+			)
+			continue
+		}
 
-	// TODO: should we only update connection if key or address changed
-	b.connectionState.Lock()
-	defer b.connectionState.Unlock()
+		manualResolver, address, cleanupCb := manual.NewManualResolver()
 
-	var opts grpc.DialOption
-	if leader.Certificate == nil {
-		// TODO: This should only happen in tests, where nodes register without Certificate.
-		// This can be rejected once node_tests do register with a Certificate.
-		opts = grpc.WithInsecure()
-		b.logger.Warn("storage client: storage committee leader registered without certificate, using insecure connection!")
-	} else {
-		nodeCert, err := leader.Certificate.Parse()
+		conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
 		if err != nil {
-			return
+			b.logger.Error("cannot update connection, failed dialing storage node",
+				"node", node,
+				"err", err,
+			)
+			continue
 		}
-		certPool := x509.NewCertPool()
-		certPool.AddCert(nodeCert)
-		creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
-		opts = grpc.WithTransportCredentials(creds)
-	}
+		var resolverState resolver.State
+		for _, addr := range node.Addresses {
+			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+		}
+		manualResolver.UpdateState(resolverState)
 
-	if len(leader.Addresses) == 0 {
-		b.logger.Error("storage client: cannot update connection, committee leader does not have any addresses",
-			"leader", leader,
+		numConnNodes++
+		connNodes = append(connNodes, node)
+		connClientStates = append(connClientStates, &clientState{
+			client:            storage.NewStorageClient(conn),
+			conn:              conn,
+			resolverCleanupCb: cleanupCb,
+		})
+		b.logger.Debug("storage node connection updated",
+			"node", node,
+		)
+	}
+	if numConnNodes == 0 {
+		b.logger.Error("failed to connect to any of the storage committee members",
+			"members", nodeList,
 		)
 		return
 	}
 
-	// cleanup previous resolver
-	b.connectionState.resolverCleanupCb()
-
-	manualResolver, address, cleanupCb := manual.NewManualResolver()
-
-	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
-	if err != nil {
-		b.logger.Error("storage client: cannot update connection, failed dialing leader",
-			"leader", leader,
-			"err", err,
-		)
-		return
-	}
-	addresses := []resolver.Address{}
-	for _, addr := range leader.Addresses {
-		addresses = append(addresses, resolver.Address{Addr: addr.String()})
-	}
-	manualResolver.NewAddress(addresses)
-
-	client := storage.NewStorageClient(conn)
-	b.logger.Debug("storage client: storage node connection updated",
-		"node", leader,
-	)
-
-	// XXX: once static single storage node is no longer assumed, make sure
-	// to block storage requests on epoch transition, and retry them after
-	// the node committee for new epoch is known.
-	b.connectionState.client = client
-	b.connectionState.conn = conn
-	b.connectionState.node = leader
-	b.connectionState.resolverCleanupCb = cleanupCb
+	// TODO: Stop in-flight storage requests and retry them after new committee
+	// is known.
+	b.connectedNodesState.nodes = connNodes
+	b.connectedNodesState.clientStates = connClientStates
 	b.state.connectionEpoch = b.state.epoch
 }
 
-func (s *storageClientBackendState) canUpdateConnection() bool {
+func (s *backendState) canUpdateConnections() bool {
 	s.RLock()
 	defer s.RUnlock()
-
-	return s.storageNodeList[s.epoch] != nil && s.storageNodeLeaderKey[s.epoch] != nil
+	return s.storageNodeLists[s.epoch] != nil
 }
 
-func (s *storageClientBackendState) updateEpoch(epoch epochtime.EpochTime) {
+func (s *backendState) updateEpoch(epoch epochtime.EpochTime) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -211,7 +227,7 @@ func (s *storageClientBackendState) updateEpoch(epoch epochtime.EpochTime) {
 	s.epoch = epoch
 }
 
-func (s *storageClientBackendState) prune() {
+func (s *backendState) prune() {
 	s.Lock()
 	defer s.Unlock()
 
@@ -220,25 +236,20 @@ func (s *storageClientBackendState) prune() {
 		return
 	}
 
-	for epoch := range s.storageNodeList {
+	for epoch := range s.storageNodeLists {
 		if epoch < pruneBefore {
-			delete(s.storageNodeList, epoch)
-		}
-	}
-	for epoch := range s.storageNodeLeaderKey {
-		if epoch < pruneBefore {
-			delete(s.storageNodeLeaderKey, epoch)
+			delete(s.storageNodeLists, epoch)
 		}
 	}
 }
 
-func (s *storageClientBackendState) updateStorageNodeList(ctx context.Context, epoch epochtime.EpochTime, nodes []*node.Node) error {
+func (s *backendState) updateStorageNodeList(ctx context.Context, epoch epochtime.EpochTime, nodes []*node.Node) error {
 	s.Lock()
 	defer s.Unlock()
 
 	// Re-scheduling within epoch not allowed, so if there is node list already there
 	// nothing to do.
-	if s.storageNodeList[epoch] != nil {
+	if s.storageNodeLists[epoch] != nil {
 		return nil
 	}
 
@@ -248,25 +259,115 @@ func (s *storageClientBackendState) updateStorageNodeList(ctx context.Context, e
 			storageNodes = append(storageNodes, n)
 		}
 	}
-	s.storageNodeList[epoch] = storageNodes
+	s.storageNodeLists[epoch] = storageNodes
 
 	return nil
 }
 
-func (s *storageClientBackendState) updateStorageLeader(ctx context.Context, epoch epochtime.EpochTime, nodeKey signature.PublicKey) error {
-	s.Lock()
-	defer s.Unlock()
+type grpcResponse struct {
+	resp interface{}
+	err  error
+	// This node pointer is used to identify a (potentially) misbehaving node.
+	node *node.Node
+}
 
-	// XXX: Storage client assumes that all runtimes share the same single storage node
-	// leader. We only set the first storage node received for each epoch, and ignore
-	// the rest.
-	if s.storageNodeLeaderKey[epoch] != nil {
-		return nil
+func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse), expectedNewRoots []hash.Hash) (*api.MKVSReceipt, error) {
+	b.connectedNodesState.RLock()
+	defer b.connectedNodesState.RUnlock()
+
+	n := len(b.connectedNodesState.nodes)
+	if n == 0 {
+		return nil, ErrStorageNotAvailable
+	}
+	// Use a buffered channel to allow all "write" goroutines to return as soon
+	// as they are finished.
+	ch := make(chan *grpcResponse, n)
+	for i, clientState := range b.connectedNodesState.clientStates {
+		go fn(ctx, clientState.client, b.connectedNodesState.nodes[i], ch)
+	}
+	successes := 0
+	receipts := make([]*api.MKVSReceipt, 0, n)
+	for i := 0; i < n; i++ {
+		var response *grpcResponse
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case response = <-ch:
+		}
+		if response.err != nil {
+			b.logger.Error("failed to get response from a storage node",
+				"node", response.node,
+				"err", response.err,
+			)
+			continue
+		}
+
+		var receiptRaw []byte
+		var err error
+		switch resp := response.resp.(type) {
+		case *storage.ApplyResponse:
+			receiptRaw = resp.GetReceipt()
+		case *storage.ApplyBatchResponse:
+			receiptRaw = resp.GetReceipt()
+		default:
+			b.logger.Error("got unexpected response type from a storage node",
+				"node", response.node,
+				"resp", resp,
+			)
+			continue
+		}
+		var receipt api.MKVSReceipt
+		if err = receipt.UnmarshalCBOR(receiptRaw); err != nil {
+			b.logger.Error("failed to unmarshal receipt for a storage node",
+				"node", response.node,
+				"err", err,
+			)
+			continue
+		}
+		// TODO: After we switch to https://github.com/oasislabs/ed25519, use
+		// batch verification. This should be implemented as part of:
+		// https://github.com/oasislabs/ekiden/issues/1351.
+		var receiptBody api.MKVSReceiptBody
+		if err = receipt.Open(&receiptBody); err != nil {
+			b.logger.Error("failed to open receipt for a storage node",
+				"node", response.node,
+				"err", err,
+			)
+			continue
+		}
+		// Check that obtained root(s) equal the expected new root(s).
+		equal := true
+		if len(receiptBody.Roots) != len(expectedNewRoots) {
+			equal = false
+		}
+		for i := range receiptBody.Roots {
+			if receiptBody.Roots[i] != expectedNewRoots[i] {
+				equal = false
+			}
+		}
+		if !equal {
+			b.logger.Error("obtained root(s) don't equal the expected new root(s)",
+				"node", response.node,
+				"obtainedRoots", receiptBody.Roots,
+				"expectedNewRoots", expectedNewRoots,
+			)
+			continue
+		}
+		successes++
+		// TODO: Only wait for F+1 successful writes:
+		// https://github.com/oasislabs/ekiden/issues/1821.
+		receipts = append(receipts, &receipt)
+	}
+	if successes == 0 {
+		return nil, errors.New("storage client: failed to write to any storage node")
+	}
+	if successes < n {
+		b.logger.Warn("write operation was only successfully applied to %d out of %d connected nodes", successes, n)
 	}
 
-	s.storageNodeLeaderKey[epoch] = &nodeKey
-
-	return nil
+	// TODO: This method should return all storage receipts it obtained:
+	// https://github.com/oasislabs/ekiden/issues/1791.
+	return receipts[0], nil
 }
 
 func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
@@ -281,29 +382,20 @@ func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expect
 		})
 	}
 
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.Apply(ctx, &req)
-	b.connectionState.RUnlock()
-
-	if err != nil {
-		return nil, err
-	}
-
-	var receipt api.MKVSReceipt
-	if err = receipt.UnmarshalCBOR(resp.GetReceipt()); err != nil {
-		return nil, errors.Wrap(err, "storage client: failed to unmarshal receipt")
-	}
-
-	return &receipt, nil
+	return b.writeWithClient(ctx, func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
+		resp, err := c.Apply(ctx, &req)
+		ch <- &grpcResponse{
+			resp: resp,
+			err:  err,
+			node: node,
+		}
+	}, []hash.Hash{expectedNewRoot})
 }
 
 func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
 	var req storage.ApplyBatchRequest
 	req.Ops = make([]*storage.ApplyOp, 0, len(ops))
+	expectedNewRoots := make([]hash.Hash, 0, len(ops))
 	for _, op := range ops {
 		var pOp storage.ApplyOp
 		pOp.Root, _ = op.Root.MarshalBinary()
@@ -316,26 +408,51 @@ func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp
 			})
 		}
 		req.Ops = append(req.Ops, &pOp)
+		expectedNewRoots = append(expectedNewRoots, op.ExpectedNewRoot)
 	}
 
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
+	return b.writeWithClient(ctx, func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
+		resp, err := c.ApplyBatch(ctx, &req)
+		ch <- &grpcResponse{
+			resp: resp,
+			err:  err,
+			node: node,
+		}
+	}, expectedNewRoots)
+}
+
+func (b *storageClientBackend) readWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient) (interface{}, error)) (interface{}, error) {
+	b.connectedNodesState.RLock()
+	defer b.connectedNodesState.RUnlock()
+
+	n := len(b.connectedNodesState.nodes)
+
+	if n == 0 {
 		return nil, ErrStorageNotAvailable
 	}
-	resp, err := b.connectionState.client.ApplyBatch(ctx, &req)
-	b.connectionState.RUnlock()
+	// TODO: Use a more clever approach to choose the order in which to read
+	// from the connected nodes:
+	// https://github.com/oasislabs/ekiden/issues/1815.
+	rng := rand.New(mathrand.New(cryptorand.Reader))
 
-	if err != nil {
-		return nil, err
+	var err error
+	var resp interface{}
+	for _, randIndex := range rng.Perm(n) {
+		clientState := b.connectedNodesState.clientStates[randIndex]
+		resp, err = fn(ctx, clientState.client)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil {
+			b.logger.Error("failed to get response from a storage node",
+				"node", b.connectedNodesState.nodes[randIndex],
+				"err", err,
+			)
+			continue
+		}
+		return resp, err
 	}
-
-	var receipt api.MKVSReceipt
-	if err = receipt.UnmarshalCBOR(resp.GetReceipt()); err != nil {
-		return nil, errors.Wrap(err, "storage client: failed to unmarshal receipt")
-	}
-
-	return &receipt, nil
+	return nil, err
 }
 
 func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
@@ -345,17 +462,13 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
 	req.Id.Path, _ = id.Path.MarshalBinary()
 
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.GetSubtree(ctx, &req)
-	b.connectionState.RUnlock()
-
+	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+		return c.GetSubtree(ctx, &req)
+	})
 	if err != nil {
 		return nil, err
 	}
+	resp := respRaw.(*storage.GetSubtreeResponse)
 
 	var subtree api.Subtree
 	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
@@ -371,17 +484,13 @@ func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key 
 	req.Key, _ = key.MarshalBinary()
 	req.StartDepth = uint32(startDepth)
 
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.GetPath(ctx, &req)
-	b.connectionState.RUnlock()
-
+	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+		return c.GetPath(ctx, &req)
+	})
 	if err != nil {
 		return nil, err
 	}
+	resp := respRaw.(*storage.GetPathResponse)
 
 	var subtree api.Subtree
 	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
@@ -397,17 +506,13 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
 	req.Id.Path, _ = id.Path.MarshalBinary()
 
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.GetNode(ctx, &req)
-	b.connectionState.RUnlock()
-
+	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+		return c.GetNode(ctx, &req)
+	})
 	if err != nil {
 		return nil, err
 	}
+	resp := respRaw.(*storage.GetNodeResponse)
 
 	node, err := urkelDb.NodeUnmarshalBinary(resp.GetNode())
 	if err != nil {
@@ -422,29 +527,29 @@ func (b *storageClientBackend) GetValue(ctx context.Context, root hash.Hash, id 
 	req.Root, _ = root.MarshalBinary()
 	req.Id, _ = id.MarshalBinary()
 
-	b.connectionState.RLock()
-	if b.connectionState.client == nil {
-		b.connectionState.RUnlock()
-		return nil, ErrStorageNotAvailable
-	}
-	resp, err := b.connectionState.client.GetValue(ctx, &req)
-	b.connectionState.RUnlock()
-
+	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+		return c.GetValue(ctx, &req)
+	})
 	if err != nil {
 		return nil, err
 	}
+	resp := respRaw.(*storage.GetValueResponse)
 
 	return resp.GetValue(), nil
 }
 
 func (b *storageClientBackend) Cleanup() {
-	b.connectionState.Lock()
-	defer b.connectionState.Unlock()
+	b.connectedNodesState.Lock()
+	defer b.connectedNodesState.Unlock()
 
 	b.cancelFn()
-	b.connectionState.resolverCleanupCb()
-	if b.connectionState.conn != nil {
-		b.connectionState.conn.Close()
+	for _, clientState := range b.connectedNodesState.clientStates {
+		if callBack := clientState.resolverCleanupCb; callBack != nil {
+			callBack()
+		}
+		if clientState.conn != nil {
+			clientState.conn.Close()
+		}
 	}
 }
 
@@ -499,42 +604,23 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 				continue
 			}
 
-			var leader *scheduler.CommitteeNode
-			for _, n := range committee.Members {
-				if n.Role == scheduler.Leader {
-					leader = n
-					break
-				}
-			}
-
-			if leader == nil {
-				b.logger.Error("worker: received storage committee without leader")
-				continue
-			}
-
-			if err := b.state.updateStorageLeader(ctx, committee.ValidFor, leader.PublicKey); err != nil {
-				b.logger.Error("worker: failed to update storage leader for epoch",
-					"err", err,
-				)
-				continue
-			}
 		}
 
 		if b.state.epoch == b.state.connectionEpoch {
 			continue
 		}
-		b.logger.Debug("storage client: epoch changed since last connection")
+		b.logger.Debug("epoch changed since last connection")
 
-		if !b.state.canUpdateConnection() {
+		if !b.state.canUpdateConnections() {
 			continue
 		}
 
-		b.updateConnection()
+		b.updateNodesConnections()
 		if !b.signaledInit {
 			b.signaledInit = true
 			close(b.initCh)
 		}
-		b.logger.Debug("storage client: updated connection")
+		b.logger.Debug("updated connections to nodes")
 	}
 }
 
@@ -576,11 +662,14 @@ func New(ctx context.Context, epochtimeBackend epochtime.Backend, schedulerBacke
 			timeSource: epochtimeBackend,
 			scheduler:  schedulerBackend,
 			registry:   registryBackend,
-			connectionState: &storageClientConnectionState{
-				conn:   conn,
-				client: client,
+			connectedNodesState: &connectedNodesState{
+				nodes: []*node.Node{&node.Node{}},
+				clientStates: []*clientState{&clientState{
+					client: client,
+					conn:   conn,
+				}},
 			},
-			state:  &storageClientBackendState{},
+			state:  &backendState{},
 			initCh: make(chan struct{}),
 		}
 		close(b.initCh)
@@ -589,17 +678,19 @@ func New(ctx context.Context, epochtimeBackend epochtime.Backend, schedulerBacke
 	}
 
 	b := &storageClientBackend{
-		logger:          logger,
-		timeSource:      epochtimeBackend,
-		scheduler:       schedulerBackend,
-		registry:        registryBackend,
-		connectionState: &storageClientConnectionState{resolverCleanupCb: func() {}},
-		state: &storageClientBackendState{
-			logger:               logger,
-			storageNodeList:      make(map[epochtime.EpochTime][]*node.Node),
-			storageNodeLeaderKey: make(map[epochtime.EpochTime]*signature.PublicKey),
-			epoch:                epochtime.EpochInvalid,
-			connectionEpoch:      epochtime.EpochInvalid,
+		logger:     logger,
+		timeSource: epochtimeBackend,
+		scheduler:  schedulerBackend,
+		registry:   registryBackend,
+		connectedNodesState: &connectedNodesState{
+			nodes:        []*node.Node{},
+			clientStates: []*clientState{},
+		},
+		state: &backendState{
+			logger:           logger,
+			storageNodeLists: make(map[epochtime.EpochTime][]*node.Node),
+			epoch:            epochtime.EpochInvalid,
+			connectionEpoch:  epochtime.EpochInvalid,
 		},
 		initCh: make(chan struct{}),
 	}

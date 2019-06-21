@@ -90,6 +90,8 @@ func (k CommitteeKind) NeedsLeader() bool {
 		return false
 	case KindMerge:
 		return false
+	case KindStorage:
+		return false
 	default:
 		return true
 	}

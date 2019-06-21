@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -148,14 +149,24 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 			leaders++
 		}
 	}
-	if committee.Kind.NeedsLeader() {
-		require.Equal(1, leaders, "committee has a leader")
-	} else {
-		require.Equal(0, leaders, "committee shouldn't have a leader")
-	}
 
-	if committee.Kind == api.KindCompute || committee.Kind == api.KindMerge {
-		require.EqualValues(runtime.ReplicaGroupSize, workers, "committee has correct number of workers")
-		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, "committee has correct number of backups")
+	if committee.Kind.NeedsLeader() {
+		require.Equal(1, leaders, fmt.Sprintf("%s committee should have a leader", committee.Kind))
+	} else {
+		require.Equal(0, leaders, fmt.Sprintf("%s committee shouldn't have a leader", committee.Kind))
+	}
+	switch committee.Kind {
+	case api.KindCompute, api.KindMerge:
+		require.EqualValues(runtime.ReplicaGroupSize, workers, fmt.Sprintf("%s committee should have the correct number of workers", committee.Kind))
+		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, fmt.Sprintf("%s compute committee should have the correct number of backup workers", committee.Kind))
+	case api.KindStorage, api.KindTransactionScheduler:
+		numCommitteeMembersWithoutLeader := len(committee.Members)
+		if committee.Kind.NeedsLeader() {
+			numCommitteeMembersWithoutLeader--
+		}
+		require.EqualValues(numCommitteeMembersWithoutLeader, workers, fmt.Sprintf("all %s committee members except for the leader (if present) should be workers", committee.Kind))
+		require.Equal(0, backups, fmt.Sprintf("%s committee shouldn't have a backup workers", committee.Kind))
+	default:
+		require.FailNow(fmt.Sprintf("unknown committee kind: %s", committee.Kind))
 	}
 }

@@ -210,16 +210,23 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 //
 // The caller must verify that there are enough commitments in the pool.
 func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
+	if p.Committee == nil {
+		return nil, ErrNoCommittee
+	}
+
 	var commit OpenCommitment
 	var discrepancyDetected bool
 
-	for id, ni := range p.NodeInfo {
-		n := p.Committee.Members[ni.CommitteeNode]
+	// NOTE: It is very important that the iteration order is deterministic
+	//       to ensure that the same commit is chosen on all nodes. This is
+	//       because some fields in the commit may not be subject to discrepancy
+	//       detection (e.g., storage receipts).
+	for _, n := range p.Committee.Members {
 		if n.Role != scheduler.Worker {
 			continue
 		}
 
-		c, ok := p.Commitments[id]
+		c, ok := p.Commitments[n.PublicKey.ToMapKey()]
 		if !ok {
 			continue
 		}
@@ -245,6 +252,10 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 //
 // The caller must verify that there are enough commitments in the pool.
 func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
+	if p.Committee == nil {
+		return nil, ErrNoCommittee
+	}
+
 	type voteEnt struct {
 		commit OpenCommitment
 		tally  int

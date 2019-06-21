@@ -3,14 +3,14 @@ package p2p
 import (
 	"time"
 
-	libp2pNet "github.com/libp2p/go-libp2p-net"
+	"github.com/libp2p/go-libp2p-core"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 )
 
 // Stream is a CBOR message stream wrapper.
 type Stream struct {
-	libp2pNet.Stream
+	core.Stream
 
 	codec *cbor.MessageCodec
 
@@ -37,7 +37,7 @@ func (s *Stream) Write(msg interface{}) error {
 }
 
 // NewStream creates a new stream.
-func NewStream(stream libp2pNet.Stream) *Stream {
+func NewStream(stream core.Stream) *Stream {
 	return &Stream{
 		Stream:       stream,
 		codec:        cbor.NewMessageCodec(stream),

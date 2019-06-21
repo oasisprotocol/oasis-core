@@ -44,6 +44,10 @@ func TestPoolDefault(t *testing.T) {
 	require.Equal(t, ErrNoCommittee, err)
 	_, err = pool.DetectDiscrepancy()
 	require.Error(t, err, "DetectDiscrepancy")
+	require.Equal(t, ErrNoCommittee, err)
+	_, err = pool.ResolveDiscrepancy()
+	require.Error(t, err, "ResolveDiscrepancy")
+	require.Equal(t, ErrNoCommittee, err)
 }
 
 func TestPoolSingleCommitment(t *testing.T) {

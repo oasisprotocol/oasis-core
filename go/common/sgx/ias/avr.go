@@ -62,6 +62,8 @@ var (
 		ReasonAACompromise:         "aACompromise",
 	}
 
+	mrsignerBlacklist = make(map[[32]byte]bool)
+
 	_ cbor.Marshaler   = (*AVRBundle)(nil)
 	_ cbor.Unmarshaler = (*AVRBundle)(nil)
 )
@@ -235,7 +237,15 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 	}
 
 	switch len(a.ISVEnclaveQuoteBody) {
-	case 0, QuoteLen:
+	case 0:
+	case QuoteLen:
+		untrustedQuote, err := a.Quote()
+		if err != nil {
+			return errors.Wrap(err, "ias/avr: malformed quote")
+		}
+		if err = untrustedQuote.Verify(); err != nil {
+			return errors.Wrap(err, "ias/avr: invalid quote")
+		}
 	default:
 		return fmt.Errorf("ias/avr: invalid isvEnclaveQuoteBody length")
 	}
@@ -384,6 +394,27 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trust
 // of the process' lifetime.
 func SetSkipVerify() {
 	unsafeSkipVerify = true
+}
+
+// BuildMrsignerBlacklist builds the MRSIGNER blacklist.
+func BuildMrsignerBlacklist(allowTestKeys bool) {
+	if !allowTestKeys {
+		for _, v := range []string{
+			"9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", // Fortanix test key
+		} {
+			raw, err := hex.DecodeString(v)
+			if err != nil {
+				panic("ias/avr: failed to decode MRSIGNER: " + v)
+			}
+			if len(raw) != 32 {
+				panic("ias/avr: malformed MRSIGNER: " + v)
+			}
+
+			var b [32]byte
+			copy(b[:], raw)
+			mrsignerBlacklist[b] = true
+		}
+	}
 }
 
 func init() {

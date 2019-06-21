@@ -116,11 +116,11 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 	defer conn.Close()
 	client := txnscheduler.NewTransactionSchedulerClient(conn)
 
-	var addresses []resolver.Address
+	var resolverState resolver.State
 	for _, addr := range nodeMeta.Addresses {
-		addresses = append(addresses, resolver.Address{Addr: addr.String()})
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 	}
-	manualResolver.NewAddress(addresses)
+	manualResolver.UpdateState(resolverState)
 
 	op := func() error {
 		_, err := client.SubmitTx(submitCtx.ctx, req)

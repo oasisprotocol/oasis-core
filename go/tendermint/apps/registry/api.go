@@ -3,8 +3,6 @@ package registry
 import (
 	"bytes"
 
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -57,9 +55,9 @@ var (
 	// descriptors).
 	TagNodesExpired = []byte("registry.nodes.expired")
 
-	// QueryChange is a query for filtering blocks and transactions where
-	// any state changes.
-	QueryChange tmpubsub.Query = queryAnyEvent{}
+	// QueryApp is a query for filtering events processed by
+	// the registry application.
+	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )
 
 const (

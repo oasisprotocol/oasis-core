@@ -68,6 +68,9 @@ pub use self::{
     transaction::dispatcher::Dispatcher as TxnDispatcher,
 };
 
+#[cfg(target_env = "sgx")]
+use self::common::sgx::avr::{get_enclave_identity, MrSigner};
+
 lazy_static! {
     pub static ref BUILD_INFO: BuildInfo = {
         // Non-SGX builds are insecure by definition.
@@ -93,6 +96,11 @@ lazy_static! {
 
             // The enclave MUST NOT be a debug one.
             let maybe_secure = maybe_secure & !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);
+
+            // The enclave MUST NOT be signed by a test key,
+            let enclave_identity = get_enclave_identity().unwrap();
+            let fortanix_mrsigner = MrSigner::from("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a");
+            let maybe_secure = maybe_secure & (enclave_identity.mr_signer != fortanix_mrsigner);
 
             maybe_secure
         };

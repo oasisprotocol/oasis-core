@@ -86,6 +86,14 @@ type Quote struct {
 	Report Report
 }
 
+// Verify checks the quote for validity.
+func (q *Quote) Verify() error {
+	if mrsignerBlacklist[q.Report.MRSIGNER] {
+		return fmt.Errorf("ias/quote: blacklisted MRSIGNER")
+	}
+	return nil
+}
+
 // DecodeQuote decodes an enclave quote.
 func DecodeQuote(data []byte) (*Quote, error) {
 	// Signature length is variable, and also more importantly, missing

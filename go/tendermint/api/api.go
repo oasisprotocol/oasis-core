@@ -55,9 +55,9 @@ func (c Code) String() string {
 	}
 }
 
-// TagApplication is an ABCI transaction tag for denoting which application
-// processed the given transaction. Value is the given application name.
-var TagApplication = []byte("ekiden.app")
+// TagAppNameValue is the value that should be used in the `AppName` tag
+// used for denoting which application processed the given transaction.
+var TagAppNameValue = []byte("1")
 
 // GetTag looks up a specific tag in a list of tags and returns its value if any.
 //

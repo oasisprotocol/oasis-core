@@ -52,23 +52,23 @@ func TestClientWorker(t *testing.T) {
 	// Wait for initialization
 	<-client.Initialized()
 
-	connectedNode := client.(*storageClientBackend).GetConnectedNode()
+	connectedNodes := client.(*storageClientBackend).GetConnectedNodes()
+	// NOTE: This number will change if the StorageGroupSize in
+	/// registryTests.NewTestRuntime() changes.
+	require.Equal(len(connectedNodes), 3, "storage client should be connected to all storage nodes")
 
-	require.NotNil(connectedNode, "storage node should be connected")
 	// TimeOut is expected, as test nodes do not actually start storage worker.
 	r, err = client.GetValue(ctx, root, id)
 	require.Error(err, "storage client should error")
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")
 
-	// Confirm one of the registered nodes was assigned.
-	var connectedCommitteeNode *node.Node
+	// Check that all schedules storage nodes are connected to.
+	scheduledStorageNodes := []*node.Node{}
 	for _, n := range nodes {
-		if n.HasRoles(node.RoleStorageWorker) && n.ID.String() == connectedNode.ID.String() {
-			connectedCommitteeNode = n
-			break
+		if n.HasRoles(node.RoleStorageWorker) {
+			scheduledStorageNodes = append(scheduledStorageNodes, n)
 		}
 	}
-	require.NotNil(connectedCommitteeNode, "connected storage node not found in storage committee")
-	require.EqualValues(connectedCommitteeNode, connectedNode, "connected storage node belongs to storage committee")
+	require.ElementsMatch(scheduledStorageNodes, connectedNodes, "storage client should be connected to all scheduled storage nodes (and only to them)")
 }
