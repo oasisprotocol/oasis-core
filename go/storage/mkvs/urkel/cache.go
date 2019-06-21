@@ -153,11 +153,15 @@ func (c *cache) commitNode(ptr *internal.Pointer) {
 	}
 
 	ptr.LRU = c.lruNodes.PushFront(ptr)
-	switch ptr.Node.(type) {
+	switch n := ptr.Node.(type) {
 	case *internal.InternalNode:
 		c.internalNodeCount++
 	case *internal.LeafNode:
 		c.leafNodeCount++
+
+		if n.Value != nil {
+			c.commitValue(n.Value)
+		}
 	}
 }
 
@@ -310,6 +314,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 	switch err {
 	case nil:
 		ptr.Node = node
+		// Commit node to cache.
+		c.commitNode(ptr)
 	case db.ErrNodeNotFound:
 		// Node not found in local node database, try the syncer.
 		var cancel context.CancelFunc
@@ -327,6 +333,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 			}
 
 			ptr.Node = node
+			// Commit node to cache.
+			c.commitNode(ptr)
 		} else {
 			// If target key is known, we can try prefetching the whole path
 			// instead of one node at a time.
@@ -335,6 +343,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 				return nil, err
 			}
 
+			// reconstructSubtree commits nodes to cache so a separate commitNode
+			// is not needed.
 			var newPtr *internal.Pointer
 			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
 				return nil, err
