@@ -514,11 +514,6 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	ctx.fireOnCommitHooks(mux.state)
 
 	if tags := ctx.Tags(); tags != nil {
-		for _, t := range tags {
-			if bytes.Equal(t.Key, api.TagApplication) {
-				panic(fmt.Sprintf("mux: BeginBlock tag %s=%s sets TagApplication on shared event", t.Key, t.Value))
-			}
-		}
 		response.Tags = append(response.Tags, tags...)
 	}
 	return response
