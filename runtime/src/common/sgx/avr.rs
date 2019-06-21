@@ -455,19 +455,29 @@ pub struct EnclaveIdentity {
     pub mr_signer: MrSigner,
 }
 
-// Get the current running enclave's identity.
-pub fn get_enclave_identity() -> Option<EnclaveIdentity> {
-    #[cfg(target_env = "sgx")]
-    {
-        let report = Report::for_self();
-        Some(EnclaveIdentity {
-            mr_enclave: MrEnclave(report.mrenclave),
-            mr_signer: MrSigner(report.mrsigner),
-        })
+impl EnclaveIdentity {
+    pub fn default() -> Self {
+        Self {
+            mr_enclave: MrEnclave::default(),
+            mr_signer: MrSigner::default(),
+        }
     }
 
-    #[cfg(not(target_env = "sgx"))]
-    None
+    pub fn current() -> Option<Self> {
+        #[cfg(target_env = "sgx")]
+        {
+            let report = Report::for_self();
+            Some(EnclaveIdentity {
+                mr_enclave: MrEnclave(report.mrenclave),
+                mr_signer: MrSigner(report.mrsigner),
+            })
+        }
+
+        // TODO: There should be a mechanism for setting mock values for
+        // the purpose of testing.
+        #[cfg(not(target_env = "sgx"))]
+        None
+    }
 }
 
 #[cfg(test)]

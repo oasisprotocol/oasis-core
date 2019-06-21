@@ -203,7 +203,7 @@ impl Kdf {
                     let rctx = runtime_context!(ctx, KmContext);
 
                     // TODO: Build this from Policy.may_replicate_from.
-                    let mr_enclave = match avr::get_enclave_identity() {
+                    let mr_enclave = match avr::EnclaveIdentity::current() {
                         Some(id) => Some(id.mr_enclave),
                         None => None,
                     };

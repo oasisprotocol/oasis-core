@@ -63,7 +63,7 @@ pub mod types;
 use crate::common::version::{Version, PROTOCOL_VERSION};
 
 #[cfg(target_env = "sgx")]
-use self::common::sgx::avr::{get_enclave_identity, MrSigner};
+use self::common::sgx::avr::{EnclaveIdentity, MrSigner};
 
 lazy_static! {
     pub static ref BUILD_INFO: BuildInfo = {
@@ -92,7 +92,7 @@ lazy_static! {
             let maybe_secure = maybe_secure & !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);
 
             // The enclave MUST NOT be signed by a test key,
-            let enclave_identity = get_enclave_identity().unwrap();
+            let enclave_identity = EnclaveIdentity::current().unwrap();
             let fortanix_mrsigner = MrSigner::from("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a");
             let maybe_secure = maybe_secure & (enclave_identity.mr_signer != fortanix_mrsigner);
 

@@ -20,10 +20,7 @@ use ekiden_runtime::{
             signature::{PrivateKey, PublicKey},
         },
         runtime::RuntimeId,
-        sgx::{
-            avr::{get_enclave_identity, EnclaveIdentity},
-            egetkey::egetkey,
-        },
+        sgx::{avr::EnclaveIdentity, egetkey::egetkey},
     },
     rpc::Context as RpcContext,
     runtime_context,
@@ -157,7 +154,7 @@ impl Policy {
         // an authenticated manner.
         #[cfg(target_env = "sgx")]
         {
-            let our_id = get_enclave_identity().expect("failed to query MRSIGNER/MRENCLAVE");
+            let our_id = EnclaveIdentity::current().expect("failed to query MRSIGNER/MRENCLAVE");
             if our_id == *remote_enclave {
                 return Ok(());
             }
@@ -282,7 +279,7 @@ impl CachedPolicy {
         //
         // TODO: Need a mock enclave identity for non-sgx builds if we want to
         // ever test policies with such a build.
-        let enclave_identity = match get_enclave_identity() {
+        let enclave_identity = match EnclaveIdentity::current() {
             Some(enclave_identity) => RawEnclaveId::from(enclave_identity),
             None => return Ok(cached_policy),
         };

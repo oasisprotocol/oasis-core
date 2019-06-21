@@ -79,7 +79,7 @@ impl RAK {
                 private_key: None,
                 avr: None,
                 avr_timestamp: None,
-                enclave_identity: avr::get_enclave_identity(),
+                enclave_identity: avr::EnclaveIdentity::current(),
                 target_info: None,
                 nonce: None,
             }),
