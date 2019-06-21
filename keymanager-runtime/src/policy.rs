@@ -171,6 +171,27 @@ impl Policy {
         }
     }
 
+    /// Return the set of enclave identities we are allowed to replicate from.
+    pub fn may_replicate_from(&self) -> Option<HashSet<EnclaveIdentity>> {
+        let inner = self.inner.read().unwrap();
+        let mut src_set = match inner.policy.as_ref() {
+            Some(policy) => policy.may_replicate_from.clone(),
+            None => HashSet::new(),
+        };
+
+        match EnclaveIdentity::current() {
+            Some(id) => {
+                src_set.insert(id);
+            }
+            None => {}
+        };
+
+        match src_set.is_empty() {
+            true => None,
+            false => Some(src_set),
+        }
+    }
+
     fn load_policy() -> Option<CachedPolicy> {
         let ciphertext = StorageContext::with_current(|_mkvs, untrusted_local| {
             untrusted_local.get(POLICY_STORAGE_KEY.to_vec())

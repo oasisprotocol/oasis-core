@@ -25,7 +25,7 @@ use ekiden_runtime::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
             signature,
         },
-        sgx::{avr, egetkey::egetkey},
+        sgx::egetkey::egetkey,
     },
     executor::Executor,
     rpc::Context as RpcContext,
@@ -202,14 +202,9 @@ impl Kdf {
 
                     let rctx = runtime_context!(ctx, KmContext);
 
-                    // TODO: Build this from Policy.may_replicate_from.
-                    let mr_enclave = match avr::EnclaveIdentity::current() {
-                        Some(id) => Some(id.mr_enclave),
-                        None => None,
-                    };
                     let km_client = RemoteClient::new_runtime(
                         rctx.runtime_id,
-                        mr_enclave,
+                        Policy::global().may_replicate_from(),
                         rctx.protocol.clone(),
                         ctx.rak.clone(),
                         1, // Not used, doesn't matter.

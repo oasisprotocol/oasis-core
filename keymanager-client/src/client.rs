@@ -1,5 +1,8 @@
 //! Key manager client which talks to a remote key manager enclave.
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock},
+};
 
 use futures::{future, prelude::*};
 #[cfg(not(target_env = "sgx"))]
@@ -10,7 +13,7 @@ use lru::LruCache;
 use ekiden_client::{create_rpc_api_client, BoxFuture, RpcClient};
 use ekiden_keymanager_api::*;
 use ekiden_runtime::{
-    common::{runtime::RuntimeId, sgx::avr::MrEnclave},
+    common::{runtime::RuntimeId, sgx::avr::EnclaveIdentity},
     protocol::Protocol,
     rak::RAK,
     rpc::session,
@@ -56,7 +59,7 @@ impl RemoteClient {
     /// Create a new key manager client with runtime-internal transport.
     pub fn new_runtime(
         runtime_id: RuntimeId,
-        mrenclave: Option<MrEnclave>,
+        enclaves: Option<HashSet<EnclaveIdentity>>,
         protocol: Arc<Protocol>,
         rak: Arc<RAK>,
         keys_cache_sizes: usize,
@@ -65,7 +68,7 @@ impl RemoteClient {
             runtime_id,
             RpcClient::new_runtime(
                 session::Builder::new()
-                    .remote_mrenclave(mrenclave)
+                    .remote_enclaves(enclaves)
                     .local_rak(rak),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
@@ -78,14 +81,14 @@ impl RemoteClient {
     #[cfg(not(target_env = "sgx"))]
     pub fn new_grpc(
         runtime_id: RuntimeId,
-        mrenclave: Option<MrEnclave>,
+        enclaves: Option<HashSet<EnclaveIdentity>>,
         channel: Channel,
         keys_cache_sizes: usize,
     ) -> Self {
         Self::new(
             runtime_id,
             RpcClient::new_grpc(
-                session::Builder::new().remote_mrenclave(mrenclave),
+                session::Builder::new().remote_enclaves(enclaves),
                 channel,
                 &format!("{}://{:?}", KEY_MANAGER_ENDPOINT, runtime_id),
             ),
