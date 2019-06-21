@@ -235,7 +235,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	}
 
 	var nodeList []*node.Node
-	var sz int
+	var workerSize, backupSize int
 	var rngCtx []byte
 	switch kind {
 	case scheduler.KindCompute:
@@ -244,7 +244,8 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 				nodeList = append(nodeList, n)
 			}
 		}
-		sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
+		workerSize = int(rt.ReplicaGroupSize)
+		backupSize = int(rt.ReplicaGroupBackupSize)
 		rngCtx = rngContextCompute
 	case scheduler.KindStorage:
 		for _, n := range nodes {
@@ -252,7 +253,8 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 				nodeList = append(nodeList, n)
 			}
 		}
-		sz = int(rt.StorageGroupSize)
+		workerSize = int(rt.StorageGroupSize)
+		backupSize = 0
 		rngCtx = rngContextStorage
 	case scheduler.KindTransactionScheduler:
 		for _, n := range nodes {
@@ -260,7 +262,8 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 				nodeList = append(nodeList, n)
 			}
 		}
-		sz = int(rt.TransactionSchedulerGroupSize)
+		workerSize = int(rt.TransactionSchedulerGroupSize)
+		backupSize = 0
 		rngCtx = rngContextTransactionScheduler
 	case scheduler.KindMerge:
 		for _, n := range nodes {
@@ -269,7 +272,8 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 			}
 		}
 		// TODO: Allow independent group sizes.
-		sz = int(rt.ReplicaGroupSize + rt.ReplicaGroupBackupSize)
+		workerSize = int(rt.ReplicaGroupSize)
+		backupSize = int(rt.ReplicaGroupBackupSize)
 		rngCtx = rngContextMerge
 	default:
 		// This is a problem with this code. Don't try to handle it at runtime.
@@ -277,7 +281,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	}
 	nrNodes := len(nodeList)
 
-	if sz == 0 {
+	if workerSize == 0 {
 		app.logger.Error("empty committee not allowed",
 			"kind", kind,
 			"runtime_id", rt.ID,
@@ -285,11 +289,12 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
 		return nil
 	}
-	if sz > nrNodes {
+	if (workerSize + backupSize) > nrNodes {
 		app.logger.Error("committee size exceeds available nodes",
 			"kind", kind,
 			"runtime_id", rt.ID,
-			"sz", sz,
+			"worker_size", workerSize,
+			"backup_size", backupSize,
 			"nr_nodes", nrNodes,
 		)
 		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
@@ -307,7 +312,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 
 	var members []*scheduler.CommitteeNode
 
-	for i := 0; i < sz; i++ {
+	for i := 0; i < (workerSize + backupSize); i++ {
 		var role scheduler.Role
 		switch {
 		case i == 0:
@@ -316,7 +321,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 			} else {
 				role = scheduler.Worker
 			}
-		case i >= int(rt.ReplicaGroupSize):
+		case i >= workerSize:
 			role = scheduler.BackupWorker
 		default:
 			role = scheduler.Worker
