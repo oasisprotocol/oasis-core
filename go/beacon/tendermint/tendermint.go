@@ -141,14 +141,14 @@ func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataN
 }
 
 func (t *Backend) worker(ctx context.Context) {
-	sub, err := t.service.Subscribe("beacon-worker", app.QueryBeaconGenerated)
+	sub, err := t.service.Subscribe("beacon-worker", app.QueryApp)
 	if err != nil {
 		t.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer t.service.Unsubscribe("beacon-worker", app.QueryBeaconGenerated) // nolint: errcheck
+	defer t.service.Unsubscribe("beacon-worker", app.QueryApp) // nolint: errcheck
 
 	for {
 		var event interface{}

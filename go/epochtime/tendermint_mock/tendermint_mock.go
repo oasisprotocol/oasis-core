@@ -114,14 +114,14 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 
 func (t *tendermintMockBackend) worker(ctx context.Context) {
 	// Subscribe to blocks which advance the epoch.
-	sub, err := t.service.Subscribe("epochtime-worker", app.QueryEpochChange)
+	sub, err := t.service.Subscribe("epochtime-worker", app.QueryApp)
 	if err != nil {
 		t.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer t.service.Unsubscribe("epochtime-worker", app.QueryEpochChange) // nolint: errcheck
+	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
 
 	// Populate current epoch (if available).
 	response, err := t.service.Query(app.QueryGetEpoch, nil, 0)

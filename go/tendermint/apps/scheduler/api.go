@@ -23,6 +23,7 @@ var (
 	// TagElected is an ABCI begin block tag with which committee types were elected.
 	TagElected = []byte("scheduler.elected")
 
-	// QueryElected is a query for filtering blocks where we elected some committees.
-	QueryElected = api.QueryForTag(TagElected)
+	// QueryApp is a query for filtering events processed by
+	// the scheduler application.
+	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )

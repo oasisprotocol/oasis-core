@@ -19,6 +19,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 )
@@ -106,6 +107,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 				return fmt.Errorf("couldn't elect %s committees: %s", kind, err.Error())
 			}
 		}
+		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 		ctx.EmitTag(TagElected, cbor.Marshal(kinds))
 
 		var kindNames []string
