@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"fmt"
 	"math/rand"
-	"sort"
 	"time"
 
 	"github.com/tendermint/tendermint/abci/types"
@@ -304,24 +303,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
 
-	var idxs []int
-	// NOTE: We currently don't support replicated storage.
-	// The storage client currently connects to the storage committee
-	// leader and if it would change between epochs, things would go pretty
-	// badly.
-	// XXX: This only ensures the same storage node will be the leader if
-	// the list of registered storage nodes doesn't change.
-	if kind == scheduler.KindStorage {
-		// Sort nodes by their public key.
-		sort.Slice(nodeList, func(i, j int) bool { return nodeList[i].ID.String() < nodeList[j].ID.String() })
-		// Set idxs to identity instead of a random permutation.
-		idxs = make([]int, len(nodeList))
-		for i := range idxs {
-			idxs[i] = i
-		}
-	} else {
-		idxs = rng.Perm(nrNodes)
-	}
+	idxs := rng.Perm(nrNodes)
 
 	var members []*scheduler.CommitteeNode
 
