@@ -61,13 +61,13 @@ func (r *nopReadSyncer) GetSubtree(ctx context.Context, root hash.Hash, id inter
 }
 
 func (r *nopReadSyncer) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*Subtree, error) {
-	return nil, ErrUnsupported
+	return nil, ErrNodeNotFound
 }
 
 func (r *nopReadSyncer) GetNode(ctx context.Context, root hash.Hash, id internal.NodeID) (internal.Node, error) {
-	return nil, ErrUnsupported
+	return nil, ErrNodeNotFound
 }
 
 func (r *nopReadSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	return nil, ErrUnsupported
+	return nil, ErrValueNotFound
 }
