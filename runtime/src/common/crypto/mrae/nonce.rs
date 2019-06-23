@@ -7,7 +7,7 @@ use failure::{format_err, Fallible};
 /// Size of the nonce in bytes.
 pub use super::deoxysii::NONCE_SIZE;
 /// Size of tag portion of the nonce in bytes. These bytes will never update.
-const TAG_SIZE: usize = 11;
+pub const TAG_SIZE: usize = 11;
 
 /// 120 bit nonce with a 88 bit tag and 32 bit counter. If the counter exceeds
 /// 32 bits, then the nonce is no longer valid and must be refreshed with a new
