@@ -24,6 +24,7 @@ var (
 // Role is the role a given node plays in a committee.
 type Role uint8
 
+// TODO: Rename these to include the Role prefix.
 const (
 	// Invalid is an invalid role (should never appear on the wire).
 	Invalid Role = 0

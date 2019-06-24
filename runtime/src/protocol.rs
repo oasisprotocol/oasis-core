@@ -22,6 +22,7 @@ use crate::{
     storage::KeyValue,
     tracing,
     types::{Body, Message, MessageType},
+    BUILD_INFO,
 };
 
 #[cfg(not(target_env = "sgx"))]
@@ -226,6 +227,9 @@ impl Protocol {
 
     fn handle_request(&self, ctx: Context, id: u64, request: Body) -> Fallible<Option<Body>> {
         match request {
+            Body::WorkerInfoRequest {} => Ok(Some(Body::WorkerInfoResponse {
+                protocol_version: BUILD_INFO.protocol_version.into(),
+            })),
             Body::WorkerPingRequest {} => Ok(Some(Body::Empty {})),
             Body::WorkerShutdownRequest {} => {
                 info!(self.logger, "Received worker shutdown request");

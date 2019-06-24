@@ -61,8 +61,8 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 			}
 
 			tree := urkel.New(nil, nil)
-			_ = tree.Insert(ctx, block.IoKeyInputs, rq.Calls.MarshalCBOR())
-			_ = tree.Insert(ctx, block.IoKeyOutputs, rq.Calls.MarshalCBOR())
+			_ = tree.Insert(ctx, block.IoKeyInputs, rq.Inputs.MarshalCBOR())
+			_ = tree.Insert(ctx, block.IoKeyOutputs, rq.Inputs.MarshalCBOR())
 			_ = tree.Insert(ctx, block.IoKeyTags, cbor.Marshal(tags))
 			ioWriteLog, ioRoot, err := tree.Commit(ctx)
 			if err != nil {

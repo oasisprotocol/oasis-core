@@ -194,43 +194,43 @@ func (n *Node) transitionLocked(state NodeState) {
 }
 
 func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) StateWaitingForResults {
-	committee := epoch.GetComputeCommittee()
-	nodes := epoch.GetComputeNodes()
-	cID := committee.EncodedMembersHash()
-	nodeInfo := make(map[signature.MapKey]commitment.NodeInfo, len(nodes))
-	for idx, nd := range nodes {
-		var nodeRuntime *node.Runtime
-		for _, r := range nd.Runtimes {
-			if !r.ID.Equal(n.commonNode.RuntimeID) {
+	pool := &commitment.MultiPool{
+		Committees: make(map[hash.Hash]*commitment.Pool),
+	}
+
+	for cID, ci := range epoch.GetComputeCommittees() {
+		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo, len(ci.Nodes))
+		for idx, nd := range ci.Nodes {
+			var nodeRuntime *node.Runtime
+			for _, r := range nd.Runtimes {
+				if !r.ID.Equal(n.commonNode.RuntimeID) {
+					continue
+				}
+				nodeRuntime = r
+				break
+			}
+			if nodeRuntime == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				n.logger.Warn("committee member not registered with this runtime",
+					"node", nd.ID,
+				)
 				continue
 			}
-			nodeRuntime = r
-			break
-		}
-		if nodeRuntime == nil {
-			// We currently prevent this case throughout the rest of the system.
-			// Still, it's prudent to check.
-			n.logger.Warn("committee member not registered with this runtime",
-				"node", nd.ID,
-			)
-			continue
+
+			nodeInfo[nd.ID.ToMapKey()] = commitment.NodeInfo{
+				CommitteeNode: idx,
+				Runtime:       nodeRuntime,
+			}
 		}
 
-		nodeInfo[nd.ID.ToMapKey()] = commitment.NodeInfo{
-			CommitteeNode: idx,
-			Runtime:       nodeRuntime,
+		pool.Committees[cID] = &commitment.Pool{
+			Runtime:   epoch.GetRuntime(),
+			Committee: ci.Committee,
+			NodeInfo:  nodeInfo,
 		}
 	}
 
-	pool := &commitment.MultiPool{
-		Committees: map[hash.Hash]*commitment.Pool{
-			cID: &commitment.Pool{
-				Runtime:   epoch.GetRuntime(),
-				Committee: committee,
-				NodeInfo:  nodeInfo,
-			},
-		},
-	}
 	return StateWaitingForResults{
 		pool:  pool,
 		timer: time.NewTimer(infiniteTimeout),
@@ -375,25 +375,30 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		return
 	}
 
-	// TODO: Check that we have everything from all committees (#1775).
+	// Check that we have everything from all committees.
+	result := commit.ToDDResult().(commitment.ComputeResultsHeader)
+	state.results = append(state.results, &result)
+	if len(state.results) < len(state.pool.Committees) {
+		n.logger.Debug("still waiting for other committees")
+		// State transition to store the updated results.
+		n.transitionLocked(state)
+		return
+	}
 
 	n.logger.Info("have valid commitments from all committees, merging")
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	commitments := state.pool.GetComputeCommitments()
-	// TODO: Collect results from all committees (#1775).
-	result := commit.ToDDResult().(commitment.ComputeResultsHeader)
-	results := []*commitment.ComputeResultsHeader{&result}
 
 	if epoch.IsMergeBackupWorker() {
 		// Backup workers only perform merge after receiving a discrepancy event.
-		n.transitionLocked(StateWaitingForEvent{commitments: commitments, results: results})
+		n.transitionLocked(StateWaitingForEvent{commitments: commitments, results: state.results})
 		return
 	}
 
 	// No discrepancy, perform merge.
-	n.startMergeLocked(commitments, results)
+	n.startMergeLocked(commitments, state.results)
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -412,8 +417,7 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 	go func() {
 		defer close(doneCh)
 
-		// TODO: Actually merge, currently we don't have anything to merge as there
-		//       is only a single committee (#1775).
+		// TODO: Actually merge (#1823).
 		_ = stateRoot
 		blk.Header.IORoot = results[0].IORoot
 		blk.Header.StateRoot = results[0].StateRoot

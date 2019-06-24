@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
@@ -21,6 +22,7 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -29,11 +31,13 @@ import (
 )
 
 var (
-	errSeenNewerBlock    = errors.New("compute: seen newer block")
-	errWorkerAborted     = errors.New("compute: worker aborted batch processing")
-	errIncomatibleHeader = errors.New("compute: incompatible header")
-	errIncorrectRole     = errors.New("compute: incorrect role")
-	errIncorrectState    = errors.New("compute: incorrect state")
+	errSeenNewerBlock     = errors.New("compute: seen newer block")
+	errWorkerAborted      = errors.New("compute: worker aborted batch processing")
+	errIncompatibleHeader = errors.New("compute: incompatible header")
+	errInvalidReceipt     = errors.New("compute: invalid storage receipt")
+	errStorageFailed      = errors.New("compute: failed to fetch from storage")
+	errIncorrectRole      = errors.New("compute: incorrect role")
+	errIncorrectState     = errors.New("compute: incorrect state")
 )
 
 var (
@@ -181,11 +185,11 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.LeaderBatchDispatch != nil {
+	if message.TxnSchedulerBatchDispatch != nil {
 		crash.Here(crashPointBatchReceiveAfter)
 
-		bd := message.LeaderBatchDispatch
-		err := n.queueBatchBlocking(ctx, bd.Batch, bd.Header)
+		bd := message.TxnSchedulerBatchDispatch
+		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageReceipt, bd.Header)
 		if err != nil {
 			return false, err
 		}
@@ -194,13 +198,66 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 	return false, nil
 }
 
-func (n *Node) queueBatchBlocking(ctx context.Context, batch runtime.Batch, hdr block.Header) error {
+func (n *Node) queueBatchBlocking(
+	ctx context.Context,
+	committeeID hash.Hash,
+	ioRoot hash.Hash,
+	storageReceipt signature.Signature,
+	hdr block.Header,
+) error {
 	// Quick check to see if header is compatible.
 	if !bytes.Equal(hdr.Namespace[:], n.commonNode.RuntimeID) {
 		n.logger.Warn("received incompatible header in external batch",
 			"header", hdr,
 		)
-		return errIncomatibleHeader
+		return errIncompatibleHeader
+	}
+
+	// TODO: Actually check that the storage receipt was signed by a storage node (#1809).
+
+	// Verify storage receipt.
+	receipt := storage.MKVSReceiptBody{
+		Version: 1,
+		Roots:   []hash.Hash{ioRoot},
+	}
+
+	signed := signature.Signed{
+		Blob:      receipt.MarshalCBOR(),
+		Signature: storageReceipt,
+	}
+
+	var check storage.MKVSReceipt
+	if err := signed.Open(storage.MKVSReceiptSignatureContext, &check); err != nil {
+		n.logger.Warn("received invalid storage receipt in external batch",
+			"err", err,
+		)
+		return errInvalidReceipt
+	}
+
+	// Fetch inputs from storage.
+	ioTree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, ioRoot)
+	if err != nil {
+		n.logger.Error("failed to fetch inputs from storage",
+			"err", err,
+		)
+		return errStorageFailed
+	}
+	defer ioTree.Close()
+
+	rawBatch, err := ioTree.Get(ctx, block.IoKeyInputs)
+	if err != nil {
+		n.logger.Error("failed to fetch inputs from storage",
+			"err", err,
+		)
+		return errStorageFailed
+	}
+
+	var batch runtime.Batch
+	if err = batch.UnmarshalCBOR(rawBatch); err != nil {
+		n.logger.Error("failed to unmarshal inputs",
+			"err", err,
+		)
+		return errStorageFailed
 	}
 
 	var batchSpanCtx opentracing.SpanContext
@@ -210,13 +267,24 @@ func (n *Node) queueBatchBlocking(ctx context.Context, batch runtime.Batch, hdr 
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(batch, batchSpanCtx, hdr)
+	return n.handleExternalBatchLocked(committeeID, ioRoot, batch, batchSpanCtx, hdr)
 }
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleBatchFromTransactionSchedulerLocked(batchSpanCtx opentracing.SpanContext, batch runtime.Batch) {
-	n.maybeStartProcessingBatchLocked(batch, batchSpanCtx)
+func (n *Node) HandleBatchFromTransactionSchedulerLocked(
+	batchSpanCtx opentracing.SpanContext,
+	committeeID hash.Hash,
+	ioRoot hash.Hash,
+	batch runtime.Batch,
+) {
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	expectedID := epoch.GetComputeCommitteeID()
+	if !expectedID.Equal(&committeeID) {
+		return
+	}
+
+	n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
 }
 
 func (n *Node) bumpReselect() {
@@ -285,7 +353,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		// Check if this was the block we were waiting for.
 		if header.MostlyEqual(state.header) {
 			n.logger.Info("received block needed for batch processing")
-			n.maybeStartProcessingBatchLocked(state.batch, state.batchSpanCtx)
+			n.maybeStartProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx)
 			break
 		}
 
@@ -326,22 +394,28 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) maybeStartProcessingBatchLocked(batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
+func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
-	if epoch.IsComputeBackupWorker() {
+	switch {
+	case epoch.IsComputeWorker():
+		// Worker, start processing immediately.
+		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
+	case epoch.IsComputeBackupWorker():
 		// Backup worker, wait for discrepancy event.
 		n.transitionLocked(StateWaitingForEvent{
+			ioRoot:       ioRoot,
 			batch:        batch,
 			batchSpanCtx: batchSpanCtx,
 		})
-	} else {
-		n.startProcessingBatchLocked(batch, batchSpanCtx)
+	default:
+		// Currently not a member of a compute committee, log.
+		n.logger.Warn("not a compute committee member, ignoring batch")
 	}
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startProcessingBatchLocked(batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
+func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
 	if n.commonNode.CurrentBlock == nil {
 		panic("attempted to start processing batch with a nil block")
 	}
@@ -350,22 +424,26 @@ func (n *Node) startProcessingBatchLocked(batch runtime.Batch, batchSpanCtx open
 		"batch", batch,
 	)
 
+	if err := n.byzantineMaybeInjectDiscrepancy(&ioRoot, batch); err != nil {
+		n.abortBatchLocked(err)
+		return
+	}
+
 	// Create batch processing context and channel for receiving the response.
 	ctx, cancel := context.WithCancel(n.ctx)
 	done := make(chan *protocol.ComputedBatch, 1)
 
 	rq := &protocol.Body{
 		WorkerExecuteTxBatchRequest: &protocol.WorkerExecuteTxBatchRequest{
-			Calls: batch,
-			Block: *n.commonNode.CurrentBlock,
+			IORoot: ioRoot,
+			Inputs: batch,
+			Block:  *n.commonNode.CurrentBlock,
 		},
 	}
 
-	n.byzantineMaybeInjectDiscrepancy(rq.WorkerExecuteTxBatchRequest.Calls)
-
 	batchStartTime := time.Now()
 	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
-	n.transitionLocked(StateProcessingBatch{batch, batchSpanCtx, batchStartTime, cancel, done})
+	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done})
 
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
@@ -483,13 +561,14 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
-		var emptyRoot hash.Hash
-		emptyRoot.Empty()
-
 		// NOTE: Order is important for verifying the receipt.
 		applyOps := []storage.ApplyOp{
 			// I/O root.
-			storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: batch.Header.IORoot, WriteLog: batch.IOWriteLog},
+			storage.ApplyOp{
+				Root:            state.ioRoot,
+				ExpectedNewRoot: batch.Header.IORoot,
+				WriteLog:        batch.IOWriteLog,
+			},
 			// State root.
 			storage.ApplyOp{
 				Root:            n.commonNode.CurrentBlock.Header.StateRoot,
@@ -594,7 +673,16 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 		return
 	}
 
-	// TODO: Check if this is for our committee.
+	// Check if the discrepancy occurred in our committee.
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	expectedID := epoch.GetComputeCommitteeID()
+	if !expectedID.Equal(&dis.CommitteeID) {
+		n.logger.Debug("ignoring discrepancy event for a different committee",
+			"expected_committee", expectedID,
+			"committee", dis.CommitteeID,
+		)
+		return
+	}
 
 	n.logger.Warn("compute discrepancy detected",
 		"committee_id", dis.CommitteeID,
@@ -610,11 +698,17 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 	// Backup worker, start processing a batch.
 	n.logger.Info("backup worker activating and processing batch")
-	n.startProcessingBatchLocked(state.batch, state.batchSpanCtx)
+	n.startProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx)
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) handleExternalBatchLocked(batch runtime.Batch, batchSpanCtx opentracing.SpanContext, hdr block.Header) error {
+func (n *Node) handleExternalBatchLocked(
+	committeeID hash.Hash,
+	ioRoot hash.Hash,
+	batch runtime.Batch,
+	batchSpanCtx opentracing.SpanContext,
+	hdr block.Header,
+) error {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
 		return errIncorrectState
@@ -628,9 +722,19 @@ func (n *Node) handleExternalBatchLocked(batch runtime.Batch, batchSpanCtx opent
 		return errIncorrectRole
 	}
 
+	// We only accept batches for our own committee.
+	expectedID := epoch.GetComputeCommitteeID()
+	if !expectedID.Equal(&committeeID) {
+		n.logger.Error("got external batch for a different compute committee",
+			"expected_committee", expectedID,
+			"committee", committeeID,
+		)
+		return nil
+	}
+
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.commonNode.CurrentBlock.Header.MostlyEqual(&hdr) {
-		n.maybeStartProcessingBatchLocked(batch, batchSpanCtx)
+		n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
 		return nil
 	}
 
@@ -642,11 +746,12 @@ func (n *Node) handleExternalBatchLocked(batch runtime.Batch, batchSpanCtx opent
 		n.logger.Warn("got external batch based on incompatible header",
 			"header", hdr,
 		)
-		return errIncomatibleHeader
+		return errIncompatibleHeader
 	}
 
 	// Wait for the correct block to arrive.
 	n.transitionLocked(StateWaitingForBlock{
+		ioRoot:       ioRoot,
 		batch:        batch,
 		batchSpanCtx: batchSpanCtx,
 		header:       &hdr,

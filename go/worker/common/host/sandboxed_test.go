@@ -192,7 +192,7 @@ func testCheckTxRequest(t *testing.T, host Host) {
 
 	rspCh, err := host.MakeRequest(ctx, &protocol.Body{
 		WorkerCheckTxBatchRequest: &protocol.WorkerCheckTxBatchRequest{
-			Calls: batch,
+			Inputs: batch,
 		},
 	})
 	require.NoError(t, err, "MakeRequest")

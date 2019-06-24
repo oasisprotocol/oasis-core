@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -31,26 +30,40 @@ type MessageHandler interface {
 	HandlePeerMessage(ctx context.Context, message *p2p.Message) error
 }
 
+// CommitteeInfo contains information about a committee of nodes.
+type CommitteeInfo struct { // nolint: golint
+	Role      scheduler.Role
+	Committee *scheduler.Committee
+	Nodes     []*node.Node
+}
+
 type epoch struct {
 	roundCtx       context.Context
 	cancelRoundCtx context.CancelFunc
 
-	computeCommitteeID hash.Hash
-	computeCommittee   *scheduler.Committee
-	computeNodes       []*node.Node
+	// groupVersion is the consensus backend block height of the last processed
+	// committee election.
+	groupVersion int64
 
-	txnSchedulerCommittee    *scheduler.Committee
+	// computeCommittee is the compute committee we are a member of.
+	computeCommittee *CommitteeInfo
+	// computeCommitteeID is the identifier of our compute committee.
+	computeCommitteeID hash.Hash
+	// computeCommittees are all compute committees.
+	computeCommittees map[hash.Hash]*CommitteeInfo
+	// computeCommitteesByPeer is a set of P2P peer IDs of compute committee
+	// members.
+	computeCommitteesByPeer map[string]bool
+
+	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
+	txnSchedulerCommittee *CommitteeInfo
+	// txnSchedulerLeaderPeerID is the P2P peer ID of txn scheduler leader.
 	txnSchedulerLeaderPeerID []byte
 
-	mergeCommittee *scheduler.Committee
-	mergeNodes     []*node.Node
+	// mergeCommittee is the merge committee we are a member of.
+	mergeCommittee *CommitteeInfo
 
 	runtime *registry.Runtime
-
-	// Keep these at the end for struct packing.
-	computeRole      scheduler.Role
-	txnSchedulerRole scheduler.Role
-	mergeRole        scheduler.Role
 }
 
 // EpochSnapshot is an immutable snapshot of epoch state.
@@ -63,8 +76,7 @@ type EpochSnapshot struct {
 
 	runtime *registry.Runtime
 
-	computeCommittee *scheduler.Committee
-	computeNodes     []*node.Node
+	computeCommittees map[hash.Hash]*CommitteeInfo
 }
 
 // GetRuntime returns the current runtime descriptor.
@@ -72,19 +84,17 @@ func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
 }
 
-// GetComputeCommittee returns the current compute committee.
-func (e *EpochSnapshot) GetComputeCommittee() *scheduler.Committee {
-	return e.computeCommittee
+// GetComputeCommittees returns the current compute committees.
+func (e *EpochSnapshot) GetComputeCommittees() map[hash.Hash]*CommitteeInfo {
+	return e.computeCommittees
 }
 
-// GetComputeCommitteeID returns the current committee members hash.
+// GetComputeCommitteeID returns ID of the compute committee the current node is
+// a member of.
+//
+// NOTE: Will return an invalid all-zero ID if not a member.
 func (e *EpochSnapshot) GetComputeCommitteeID() hash.Hash {
 	return e.computeCommitteeID
-}
-
-// GetComputeNodes returns the nodes in the current compute committee.
-func (e *EpochSnapshot) GetComputeNodes() []*node.Node {
-	return e.computeNodes
 }
 
 // IsComputeMember checks if the current node is a member of the compute committee
@@ -197,30 +207,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
-	// Find the current committees.
-	var computeCommittee, txnSchedulerCommittee, mergeCommittee *scheduler.Committee
-	for _, cm := range committees {
-		switch cm.Kind {
-		case scheduler.KindCompute:
-			computeCommittee = cm
-		case scheduler.KindTransactionScheduler:
-			txnSchedulerCommittee = cm
-		case scheduler.KindMerge:
-			mergeCommittee = cm
-		}
-	}
-	if computeCommittee == nil {
-		return errors.New("no compute committee")
-	}
-	if txnSchedulerCommittee == nil {
-		return errors.New("no transaction scheduler committee")
-	}
-	if mergeCommittee == nil {
-		return errors.New("no merge committee")
-	}
-
-	computeCommitteeID := computeCommittee.EncodedMembersHash()
-
 	publicIdentity := g.identity.NodeKey.Public()
 
 	determineRole := func(c *scheduler.Committee) (nodes []*node.Node, leader int, role scheduler.Role, err error) {
@@ -246,27 +232,58 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return
 	}
 
-	// Determine our role in the compute committee.
-	computeNodes, _, computeRole, err := determineRole(computeCommittee)
-	if err != nil {
-		return err
-	}
-
-	// Determine our role in the transaction scheduler committee.
-	txnSchedulerNodes, leader, txnSchedulerRole, err := determineRole(txnSchedulerCommittee)
-	if err != nil {
-		return err
-	}
-
+	// Find the current committees.
+	computeCommittees := make(map[hash.Hash]*CommitteeInfo)
+	computeCommitteesByPeer := make(map[string]bool)
+	var computeCommittee, txnSchedulerCommittee, mergeCommittee *CommitteeInfo
+	var computeCommitteeID hash.Hash
 	var txnSchedulerLeaderPeerID []byte
-	if leader != -1 {
-		txnSchedulerLeaderPeerID = txnSchedulerNodes[leader].P2P.ID
-	}
+	for _, cm := range committees {
+		nodes, leader, role, rerr := determineRole(cm)
+		if rerr != nil {
+			return rerr
+		}
 
-	// Determine our role in the merge committee.
-	mergeNodes, _, mergeRole, err := determineRole(mergeCommittee)
-	if err != nil {
-		return err
+		ci := &CommitteeInfo{
+			Role:      role,
+			Committee: cm,
+			Nodes:     nodes,
+		}
+
+		switch cm.Kind {
+		case scheduler.KindCompute:
+			// There can be multiple compute committees per runtime.
+			cID := cm.EncodedMembersHash()
+			computeCommittees[cID] = ci
+			if role != scheduler.Invalid {
+				if computeCommittee != nil {
+					return errors.New("member of multiple compute committees")
+				}
+
+				computeCommittee = ci
+				computeCommitteeID = cID
+			}
+
+			for _, n := range nodes {
+				computeCommitteesByPeer[string(n.P2P.ID)] = true
+			}
+		case scheduler.KindTransactionScheduler:
+			txnSchedulerCommittee = ci
+			if leader != -1 {
+				txnSchedulerLeaderPeerID = nodes[leader].P2P.ID
+			}
+		case scheduler.KindMerge:
+			mergeCommittee = ci
+		}
+	}
+	if len(computeCommittees) == 0 {
+		return errors.New("no compute committees")
+	}
+	if txnSchedulerCommittee == nil {
+		return errors.New("no transaction scheduler committee")
+	}
+	if mergeCommittee == nil {
+		return errors.New("no merge committee")
 	}
 
 	// Fetch current runtime descriptor.
@@ -282,23 +299,28 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	g.activeEpoch = &epoch{
 		roundCtx,
 		cancel,
-		computeCommitteeID,
+		height,
 		computeCommittee,
-		computeNodes,
+		computeCommitteeID,
+		computeCommittees,
+		computeCommitteesByPeer,
 		txnSchedulerCommittee,
 		txnSchedulerLeaderPeerID,
 		mergeCommittee,
-		mergeNodes,
 		runtime,
-		computeRole,
-		txnSchedulerRole,
-		mergeRole,
+	}
+
+	// Compute committee may be nil in case we are not a member of any committee.
+	var computeRole scheduler.Role
+	if computeCommittee != nil {
+		computeRole = computeCommittee.Role
 	}
 
 	g.logger.Info("epoch transition complete",
+		"group_version", height,
 		"compute_role", computeRole,
-		"transaction_scheduler_role", txnSchedulerRole,
-		"merge_role", mergeRole,
+		"transaction_scheduler_role", txnSchedulerCommittee.Role,
+		"merge_role", mergeCommittee.Role,
 	)
 
 	return nil
@@ -310,22 +332,25 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil {
-		return &EpochSnapshot{
-			computeRole:      scheduler.Invalid,
-			txnSchedulerRole: scheduler.Invalid,
-			mergeRole:        scheduler.Invalid,
-		}
+		return &EpochSnapshot{}
 	}
 
-	return &EpochSnapshot{
-		computeRole:        g.activeEpoch.computeRole,
-		computeCommitteeID: g.activeEpoch.computeCommitteeID,
-		txnSchedulerRole:   g.activeEpoch.txnSchedulerRole,
-		mergeRole:          g.activeEpoch.mergeRole,
-		runtime:            g.activeEpoch.runtime,
-		computeCommittee:   g.activeEpoch.computeCommittee,
-		computeNodes:       g.activeEpoch.computeNodes,
+	s := &EpochSnapshot{
+		// NOTE: Transaction scheduler and merge committees are always set.
+		txnSchedulerRole:  g.activeEpoch.txnSchedulerCommittee.Role,
+		mergeRole:         g.activeEpoch.mergeCommittee.Role,
+		runtime:           g.activeEpoch.runtime,
+		computeCommittees: g.activeEpoch.computeCommittees,
 	}
+
+	// Compute committee may be nil in case we are not a member of any committee.
+	cc := g.activeEpoch.computeCommittee
+	if cc != nil {
+		s.computeRole = cc.Role
+		s.computeCommitteeID = g.activeEpoch.computeCommitteeID
+	}
+
+	return s
 }
 
 // IsPeerAuthorized returns true if a given peer should be allowed to send
@@ -343,22 +368,14 @@ func (g *Group) IsPeerAuthorized(peerID []byte) bool {
 
 	// If we are in the compute committee, we accept messages from the transaction
 	// scheduler committee leader.
-	if g.activeEpoch.computeRole != scheduler.Invalid && g.activeEpoch.txnSchedulerLeaderPeerID != nil {
+	if g.activeEpoch.computeCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID != nil {
 		authorized = authorized || bytes.Equal(peerID, g.activeEpoch.txnSchedulerLeaderPeerID)
 	}
 
-	// If we are in the merge committee, we accept messages from the compute committee.
-	if g.activeEpoch.mergeRole != scheduler.Invalid {
-		for _, n := range g.activeEpoch.computeNodes {
-			if n == nil {
-				continue
-			}
-
-			if bytes.Equal(peerID, n.P2P.ID) {
-				authorized = true
-				break
-			}
-		}
+	// If we are in the merge committee, we accept messages from any compute committee member.
+	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
+		_, ok := g.activeEpoch.computeCommitteesByPeer[string(peerID)]
+		authorized = authorized || ok
 	}
 
 	return authorized
@@ -375,8 +392,8 @@ func (g *Group) HandlePeerMessage(peerID []byte, message *p2p.Message) error {
 		// Ensure that both peers have the same view of the current group. If this
 		// is not the case, this means that one of the nodes processed an epoch
 		// transition and the other one didn't.
-		if !message.GroupHash.Equal(&g.activeEpoch.computeCommitteeID) {
-			return nil, errors.New("message is not for the current group")
+		if message.GroupVersion != g.activeEpoch.groupVersion {
+			return nil, errors.New("group version mismatch")
 		}
 
 		return g.activeEpoch.roundCtx, nil
@@ -401,9 +418,7 @@ func (g *Group) HandlePeerMessage(peerID []byte, message *p2p.Message) error {
 
 func (g *Group) publishLocked(
 	spanCtx opentracing.SpanContext,
-	c *scheduler.Committee,
-	nodes []*node.Node,
-	filter func(*scheduler.CommitteeNode) bool,
+	ci *CommitteeInfo,
 	msg *p2p.Message,
 ) error {
 	pubCtx := g.activeEpoch.roundCtx
@@ -415,64 +430,70 @@ func (g *Group) publishLocked(
 
 	// Populate message fields.
 	msg.RuntimeID = g.runtimeID
-	msg.GroupHash = g.activeEpoch.computeCommitteeID
+	msg.GroupVersion = g.activeEpoch.groupVersion
 	msg.SpanContext = scBinary
 
 	// Publish batch to given committee.
 	publicIdentity := g.identity.NodeKey.Public()
-	for index, member := range c.Members {
-		if !filter(member) {
-			continue
-		}
+	for index, member := range ci.Committee.Members {
 		if member.PublicKey.Equal(publicIdentity) {
 			// Do not publish to self.
 			continue
 		}
 
-		g.p2p.Publish(pubCtx, nodes[index], msg)
+		g.p2p.Publish(pubCtx, ci.Nodes[index], msg)
 	}
 
 	return nil
 }
 
 // PublishScheduledBatch publishes a batch to all members in the compute committee.
-func (g *Group) PublishScheduledBatch(spanCtx opentracing.SpanContext, batch runtime.Batch, hdr block.Header) error {
+func (g *Group) PublishScheduledBatch(
+	spanCtx opentracing.SpanContext,
+	committeeID hash.Hash,
+	ioRoot hash.Hash,
+	storageReceipt signature.Signature,
+	hdr block.Header,
+) error {
 	g.RLock()
 	defer g.RUnlock()
 
-	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerRole != scheduler.Leader {
-		return errors.New("not leader")
+	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerCommittee.Role != scheduler.Leader {
+		return errors.New("group: not leader of txn scheduler committee")
+	}
+
+	cc := g.activeEpoch.computeCommittees[committeeID]
+	if cc == nil {
+		return errors.New("group: invalid compute committee")
 	}
 
 	return g.publishLocked(
 		spanCtx,
-		g.activeEpoch.computeCommittee,
-		g.activeEpoch.computeNodes,
-		// Publish to all committee members.
-		func(n *scheduler.CommitteeNode) bool { return true },
+		cc,
 		&p2p.Message{
-			LeaderBatchDispatch: &p2p.LeaderBatchDispatch{
-				Batch:  batch,
-				Header: hdr,
+			TxnSchedulerBatchDispatch: &p2p.TxnSchedulerBatchDispatch{
+				CommitteeID:    committeeID,
+				IORoot:         ioRoot,
+				StorageReceipt: storageReceipt,
+				Header:         hdr,
 			},
 		},
 	)
 }
 
+// PublishComputeFinished publishes a compute commitment to all members in the merge
+// committee.
 func (g *Group) PublishComputeFinished(spanCtx opentracing.SpanContext, c *commitment.ComputeCommitment) error {
 	g.RLock()
 	defer g.RUnlock()
 
-	if g.activeEpoch == nil || g.activeEpoch.computeRole == scheduler.Invalid {
-		return errors.New("not member")
+	if g.activeEpoch == nil || g.activeEpoch.computeCommittee == nil {
+		return errors.New("group: not member of compute committee")
 	}
 
 	return g.publishLocked(
 		spanCtx,
 		g.activeEpoch.mergeCommittee,
-		g.activeEpoch.mergeNodes,
-		// Publish to all committee members.
-		func(n *scheduler.CommitteeNode) bool { return true },
 		&p2p.Message{
 			ComputeWorkerFinished: &p2p.ComputeWorkerFinished{
 				Commitment: *c,
