@@ -16,6 +16,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/storage/badger"
 	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	"github.com/oasislabs/ekiden/go/storage/leveldb"
@@ -45,13 +46,17 @@ func New(ctx context.Context, dataDir string, epochtimeBackend epochtime.Backend
 	}
 
 	backend := viper.GetString(cfgBackend)
+	lruSize := uint64(viper.GetSizeInBytes(cfgLRUSize))
+	applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
+
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
 		impl = memory.New(signingKey)
+	case badger.BackendName:
+		dbDir := filepath.Join(dataDir, badger.DBFile)
+		impl, err = badger.New(dbDir, signingKey, lruSize, applyLockLRUSlots)
 	case leveldb.BackendName:
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
-		lruSize := uint64(viper.GetSizeInBytes(cfgLRUSize))
-		applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
 		impl, err = leveldb.New(dbDir, signingKey, lruSize, applyLockLRUSlots)
 	case client.BackendName:
 		impl, err = client.New(ctx, epochtimeBackend, schedulerBackend, registryBackend)
