@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::BTreeMap,
+    fmt,
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -145,5 +146,11 @@ impl UrkelTree {
             prefetch_depth: 0,
             root_hash: None,
         }
+    }
+}
+
+impl fmt::Debug for UrkelTree {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.cache.borrow().get_pending_root().fmt(f)
     }
 }

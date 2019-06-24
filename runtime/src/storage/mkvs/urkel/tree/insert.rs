@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 use failure::Fallible;
 use io_context::Context;
@@ -120,10 +120,7 @@ impl UrkelTree {
                 };
                 let new_bit = get_key_bit(&key, depth);
 
-                let none_ptr = Rc::new(RefCell::new(NodePointer {
-                    node: None,
-                    ..Default::default()
-                }));
+                let none_ptr = NodePointer::null_ptr();
                 let pointers = if new_bit != existing_bit {
                     if existing_bit {
                         (
