@@ -79,7 +79,6 @@ test_migration() {
     # Re-use storage db in the new storage node.
     mkdir -p ${TEST_BASE_DIR}/committee-2/storage-1
     chmod 700 ${TEST_BASE_DIR}/committee-2/storage-1
-    cp -a ${TEST_BASE_DIR}/committee-1/storage-1/storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage-1/
     cp -a ${TEST_BASE_DIR}/committee-1/storage-1/mkvs_storage.leveldb.db ${TEST_BASE_DIR}/committee-2/storage-1/
 
     # Start the second network.
