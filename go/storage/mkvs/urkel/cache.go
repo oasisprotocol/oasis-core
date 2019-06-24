@@ -447,8 +447,7 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 	batch := db.NewBatch()
 	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
-	updates := &cacheUpdates{}
-	syncRoot, err := doCommit(ctx, c, updates, batch, subtree, depth, ptr)
+	syncRoot, err := doCommit(ctx, c, batch, subtree, depth, ptr)
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +457,11 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 			syncRoot,
 		)
 	}
-	updates.Commit()
+	// We must commit even though this is a no-op database in order to fire
+	// the on-commit hooks.
+	if err := batch.Commit(root); err != nil {
+		return nil, err
+	}
 
 	return ptr, nil
 }

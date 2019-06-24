@@ -275,17 +275,17 @@ func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 
 	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
 
-	updates := &cacheUpdates{}
-	root, err := doCommit(ctx, &t.cache, updates, batch, subtree, 0, t.cache.pendingRoot)
+	root, err := doCommit(ctx, &t.cache, batch, subtree, 0, t.cache.pendingRoot)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
-	subtree.Commit()
+	if err := subtree.Commit(); err != nil {
+		return nil, hash.Hash{}, err
+	}
 
 	if err := batch.Commit(root); err != nil {
 		return nil, hash.Hash{}, err
 	}
-	updates.Commit()
 
 	var log WriteLog
 	for _, entry := range t.pendingWriteLog {

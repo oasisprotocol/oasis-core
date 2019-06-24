@@ -48,11 +48,32 @@ type Batch interface {
 	// Depth is the depth of the node that subtreeRoot points to.
 	MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *internal.Pointer) Subtree
 
+	// OnCommit registers a hook to run after a successful commit.
+	OnCommit(hook func())
+
 	// Commit commits the batch.
 	Commit(root hash.Hash) error
 
 	// Reset resets the batch for another use.
 	Reset()
+}
+
+// BaseBatch encapsulates basic functionality of a batch so it doesn't need
+// to be reimplemented by each concrete batch implementation.
+type BaseBatch struct {
+	onCommitHooks []func()
+}
+
+func (b *BaseBatch) OnCommit(hook func()) {
+	b.onCommitHooks = append(b.onCommitHooks, hook)
+}
+
+func (b *BaseBatch) Commit(root hash.Hash) error {
+	for _, hook := range b.onCommitHooks {
+		hook()
+	}
+	b.onCommitHooks = nil
+	return nil
 }
 
 // nopNodeDB is a no-op node database which doesn't persist anything.
@@ -78,7 +99,9 @@ func (d *nopNodeDB) Close() {
 }
 
 // nopBatch is a no-op batch.
-type nopBatch struct{}
+type nopBatch struct {
+	BaseBatch
+}
 
 func (d *nopNodeDB) NewBatch() Batch {
 	return &nopBatch{}
@@ -88,12 +111,6 @@ func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *
 	return &nopSubtree{}
 }
 
-// Commit does nothing.
-func (b *nopBatch) Commit(root hash.Hash) error {
-	return nil
-}
-
-// Reset does nothing.
 func (b *nopBatch) Reset() {
 }
 

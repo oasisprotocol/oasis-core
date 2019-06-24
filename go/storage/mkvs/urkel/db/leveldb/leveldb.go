@@ -67,6 +67,8 @@ func (d *leveldbNodeDB) Close() {
 }
 
 type leveldbBatch struct {
+	api.BaseBatch
+
 	db  *leveldbNodeDB
 	bat *leveldb.Batch
 }
@@ -92,7 +94,7 @@ func (b *leveldbBatch) Commit(root hash.Hash) error {
 
 	b.Reset()
 
-	return nil
+	return b.BaseBatch.Commit(root)
 }
 
 func (b *leveldbBatch) Reset() {

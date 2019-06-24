@@ -8,33 +8,12 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 )
 
-// cacheUpdates contains a list of pending cache updates to be applied
-// after another operation (e.g., a database commit) has succeeded to
-// avoid corrupting the in-memory cache.
-type cacheUpdates struct {
-	updates []func()
-}
-
-// Add queues a cache update function.
-func (u *cacheUpdates) Add(update func()) {
-	u.updates = append(u.updates, update)
-}
-
-// Commit runs all the queued cache update functions in order.
-func (u *cacheUpdates) Commit() {
-	for _, update := range u.updates {
-		update()
-	}
-	u.updates = []func(){}
-}
-
 // doCommit commits all dirty nodes and values into the underlying node
 // database. This operation may cause committed nodes and values to be
 // evicted from the in-memory cache.
 func doCommit(
 	ctx context.Context,
 	cache *cache,
-	upd *cacheUpdates,
 	batch db.Batch,
 	subtree db.Subtree,
 	depth uint8,
@@ -54,10 +33,9 @@ func doCommit(
 	// Pointer is not clean, we need to perform some hash computations.
 
 	// NOTE: Irreversible cache operations like clearing the dirty flags
-	//       and updating node/value cache status must be queued via the
-	//       provided cacheUpdates instance as the database operations
-	//       can fail and this must not cause the in-memory cache to be
-	//       corrupted.
+	//       and updating node/value cache status must be queued via batch
+	//       on-commit hooks as the database operations can fail and this
+	//       must not cause the in-memory cache to be corrupted.
 
 	switch n := ptr.Node.(type) {
 	case nil:
@@ -70,19 +48,23 @@ func doCommit(
 		}
 
 		newSubtree := batch.MaybeStartSubtree(subtree, depth+1, n.Left)
-		if _, err = doCommit(ctx, cache, upd, batch, newSubtree, depth+1, n.Left); err != nil {
+		if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, n.Left); err != nil {
 			return
 		}
 		if newSubtree != subtree {
-			newSubtree.Commit()
+			if err = newSubtree.Commit(); err != nil {
+				return
+			}
 		}
 
 		newSubtree = batch.MaybeStartSubtree(subtree, depth+1, n.Right)
-		if _, err = doCommit(ctx, cache, upd, batch, newSubtree, depth+1, n.Right); err != nil {
+		if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, n.Right); err != nil {
 			return
 		}
 		if newSubtree != subtree {
-			newSubtree.Commit()
+			if err = newSubtree.Commit(); err != nil {
+				return
+			}
 		}
 
 		n.UpdateHash()
@@ -92,7 +74,7 @@ func doCommit(
 			return
 		}
 
-		upd.Add(func() {
+		batch.OnCommit(func() {
 			n.Clean = true
 		})
 		ptr.Hash = n.Hash
@@ -105,7 +87,7 @@ func doCommit(
 		if !n.Value.Clean {
 			n.Value.UpdateHash()
 
-			upd.Add(func() {
+			batch.OnCommit(func() {
 				n.Value.Clean = true
 				cache.commitValue(n.Value)
 			})
@@ -118,13 +100,13 @@ func doCommit(
 			return
 		}
 
-		upd.Add(func() {
+		batch.OnCommit(func() {
 			n.Clean = true
 		})
 		ptr.Hash = n.Hash
 	}
 
-	upd.Add(func() {
+	batch.OnCommit(func() {
 		ptr.Clean = true
 		cache.commitNode(ptr)
 	})

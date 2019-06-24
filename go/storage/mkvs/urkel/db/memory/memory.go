@@ -82,21 +82,9 @@ func (d *memoryNodeDB) getLocked(id hash.Hash) (interface{}, error) {
 	return item.value, nil
 }
 
-func (d *memoryNodeDB) removeLocked(id hash.Hash) error {
-	item := d.items[id]
-	if item == nil {
-		return nil
-	}
-
-	item.refs--
-	if item.refs <= 0 {
-		delete(d.items, id)
-	}
-
-	return nil
-}
-
 type memoryBatch struct {
+	api.BaseBatch
+
 	db *memoryNodeDB
 
 	ops []func() error
@@ -126,7 +114,7 @@ func (b *memoryBatch) Commit(root hash.Hash) error {
 	}
 	b.Reset()
 
-	return nil
+	return b.BaseBatch.Commit(root)
 }
 
 func (b *memoryBatch) Reset() {

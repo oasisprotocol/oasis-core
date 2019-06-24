@@ -115,6 +115,8 @@ func (d *badgerNodeDB) Close() {
 }
 
 type badgerBatch struct {
+	api.BaseBatch
+
 	bat *badger.WriteBatch
 }
 
@@ -130,7 +132,7 @@ func (ba *badgerBatch) Commit(root hash.Hash) error {
 		return err
 	}
 
-	return nil
+	return ba.BaseBatch.Commit(root)
 }
 
 func (ba *badgerBatch) Reset() {
