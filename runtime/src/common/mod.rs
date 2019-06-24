@@ -8,3 +8,4 @@ pub mod roothash;
 pub mod runtime;
 pub mod sgx;
 pub mod time;
+pub mod version;

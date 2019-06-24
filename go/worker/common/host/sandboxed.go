@@ -22,6 +22,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/sgx/aesm"
 	cias "github.com/oasislabs/ekiden/go/common/sgx/ias"
+	"github.com/oasislabs/ekiden/go/common/version"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
@@ -39,6 +40,8 @@ const (
 
 	// Worker connect timeout.
 	workerConnectTimeout = 5 * time.Second
+	// Worker runtime information request timeout.
+	workerInfoTimeout = 1 * time.Second
 	// Worker RAK initialization timeout.
 	// This can take a long time in deployments that run multiple
 	// nodes on a single machine, all sharing the same EPC.
@@ -407,6 +410,29 @@ func (h *sandboxedHost) Quit() <-chan struct{} {
 func (h *sandboxedHost) Cleanup() {
 }
 
+func (h *sandboxedHost) checkInfo(worker *process) error {
+	ctx, cancel := context.WithTimeout(context.Background(), workerInfoTimeout)
+	defer cancel()
+
+	// Request information about the running runtime and abort if the protocol
+	// version is incompatible.
+	rsp, err := worker.protocol.Call(ctx, &protocol.Body{WorkerInfoRequest: &protocol.Empty{}})
+	if err != nil || rsp.WorkerInfoResponse == nil {
+		return errors.Wrap(err, "error while requesting runtime info")
+	}
+
+	info := rsp.WorkerInfoResponse
+	if info.ProtocolVersion != version.RuntimeProtocol.ToU64() {
+		h.logger.Error("runtime has incompatible protocol version",
+			"version", info.ProtocolVersion,
+			"expected_version", version.RuntimeProtocol.ToU64(),
+		)
+		return errors.New("incompatible runtime protocol version")
+	}
+
+	return nil
+}
+
 func (h *sandboxedHost) initCapabilityTEESgx(worker *process) error {
 	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
 	defer cancel()
@@ -737,6 +763,11 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 		logger:       logger,
 	}
 	go p.worker()
+
+	// Check runtime version information.
+	if err = h.checkInfo(p); err != nil {
+		return nil, errors.Wrap(err, "worker: error checking runtime info")
+	}
 
 	// Initialize the worker's CapabilityTEE.
 	switch h.teeHardware {

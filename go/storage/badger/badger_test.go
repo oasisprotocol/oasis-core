@@ -1,4 +1,4 @@
-package leveldb
+package badger
 
 import (
 	"crypto/rand"
@@ -13,7 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
-func TestStorageLevelDB(t *testing.T) {
+func TestStorageBadger(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "ekiden-storage-leveldb-test")
 	require.NoError(t, err, "TempDir()")
 	defer os.RemoveAll(tmpDir)

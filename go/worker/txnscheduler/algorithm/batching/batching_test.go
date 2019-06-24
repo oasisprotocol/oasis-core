@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/tests"
 )
 
-func TestBatchingAlgo(t *testing.T) {
+func TestBatchingAlgorithm(t *testing.T) {
 	viper.Set(cfgMaxQueueSize, 100)
 	viper.Set(cfgMaxBatchSize, 10)
 	viper.Set(cfgMaxBatchSizeBytes, "16mb")

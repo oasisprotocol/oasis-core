@@ -92,8 +92,9 @@ func (s StateNotReady) String() string {
 
 // StateWaitingForResults is the waiting for results state.
 type StateWaitingForResults struct {
-	pool  *commitment.MultiPool
-	timer *time.Timer
+	pool    *commitment.MultiPool
+	timer   *time.Timer
+	results []*commitment.ComputeResultsHeader
 }
 
 // Name returns the name of the state.

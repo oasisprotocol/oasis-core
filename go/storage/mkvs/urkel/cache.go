@@ -63,6 +63,27 @@ func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) cache {
 	}
 }
 
+func (c *cache) close() {
+	// Clear references.
+	c.db = nil
+	c.rs = nil
+	c.pendingRoot = nil
+	c.lruNodes = nil
+	c.lruValues = nil
+
+	// Reset sync root.
+	c.syncRoot.Empty()
+
+	// Reset statistics.
+	c.valueSize = 0
+	c.internalNodeCount = 0
+	c.leafNodeCount = 0
+}
+
+func (c *cache) isClosed() bool {
+	return c.db == nil
+}
+
 func (c *cache) setSyncRoot(root hash.Hash) {
 	c.syncRoot = root
 }

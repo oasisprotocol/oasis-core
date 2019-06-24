@@ -122,6 +122,7 @@ impl NodePointer {
     pub fn null_ptr() -> NodePtrRef {
         Rc::new(RefCell::new(NodePointer {
             node: None,
+            clean: true,
             hash: Hash::empty_hash(),
             ..Default::default()
         }))

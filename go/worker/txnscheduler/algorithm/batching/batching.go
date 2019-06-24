@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
 )
 
@@ -24,6 +25,8 @@ type batchingState struct {
 	incomingQueue *incomingQueue
 
 	dispatcher api.TransactionDispatcher
+
+	epoch *committee.EpochSnapshot
 
 	logger *logging.Logger
 }
@@ -43,8 +46,23 @@ func (s *batchingState) scheduleBatch(force bool) error {
 		return err
 	}
 
+	// We cannot schedule anything until there is an epoch transition.
+	if s.epoch == nil {
+		s.logger.Warn("not scheduling before epoch transition")
+		return nil
+	}
+
 	if len(batch) > 0 {
-		if err := s.dispatcher.Dispatch(batch); err != nil {
+		// The simple batching algorithm only supports a single compute committee. Use
+		// with multiple committees will currently cause the rounds to fail as all other
+		// committees will be idle.
+		var committeeID hash.Hash
+		for id := range s.epoch.GetComputeCommittees() {
+			committeeID = id
+			break
+		}
+
+		if err := s.dispatcher.Dispatch(committeeID, batch); err != nil {
 			// Put the batch back into the incoming queue in case this failed.
 			if errAB := s.incomingQueue.AddBatch(batch); errAB != nil {
 				s.logger.Error("failed to add batch back into the incoming queue",
@@ -55,6 +73,11 @@ func (s *batchingState) scheduleBatch(force bool) error {
 		}
 	}
 
+	return nil
+}
+
+func (s *batchingState) EpochTransition(epoch *committee.EpochSnapshot) error {
+	s.epoch = epoch
 	return nil
 }
 

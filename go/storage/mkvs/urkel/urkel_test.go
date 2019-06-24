@@ -21,6 +21,64 @@ const (
 	allItemsRoot = "5f101fe53bb5d0b17e8bcdd07e08078c66627e2bd0d8a9f64e967eb67fe7d420"
 )
 
+var (
+	_ syncer.ReadSyncer = (*dummySerialSyncer)(nil)
+)
+
+type dummySerialSyncer struct {
+	backing syncer.ReadSyncer
+}
+
+func (s *dummySerialSyncer) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*syncer.Subtree, error) {
+	obj, err := s.backing.GetSubtree(ctx, root, id, maxDepth)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := obj.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	st := &syncer.Subtree{}
+	err = st.UnmarshalBinary(bytes)
+	if err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+func (s *dummySerialSyncer) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*syncer.Subtree, error) {
+	obj, err := s.backing.GetPath(ctx, root, key, startDepth)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := obj.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	st := &syncer.Subtree{}
+	err = st.UnmarshalBinary(bytes)
+	if err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id internal.NodeID) (internal.Node, error) {
+	obj, err := s.backing.GetNode(ctx, root, id)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := obj.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	return db.NodeUnmarshalBinary(bytes)
+}
+
+func (s *dummySerialSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
+	return s.backing.GetValue(ctx, root, id)
+}
+
 func testBasic(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
@@ -81,6 +139,25 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08", root.String())
 	require.Equal(t, log, WriteLog{LogEntry{Key: keyOne, Value: nil}})
 	require.Equal(t, log[0].Type(), LogDelete)
+
+	// Test close.
+	tree.Close()
+
+	err = tree.Insert(ctx, keyZero, valueZero)
+	require.Error(t, err, "Insert after Close")
+	require.Equal(t, err, ErrClosed, "Insert must return ErrClosed after Close")
+
+	_, err = tree.Get(ctx, keyZero)
+	require.Error(t, err, "Get after Close")
+	require.Equal(t, err, ErrClosed, "Get must return ErrClosed after Close")
+
+	err = tree.Remove(ctx, keyZero)
+	require.Error(t, err, "Remove after Close")
+	require.Equal(t, err, ErrClosed, "Remove must return ErrClosed after Close")
+
+	_, _, err = tree.Commit(ctx)
+	require.Error(t, err, "Commit after Close")
+	require.Equal(t, err, ErrClosed, "Commit must return ErrClosed after Close")
 }
 
 func testInsertCommitBatch(t *testing.T, ndb db.NodeDB) {
@@ -212,6 +289,42 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
+func testSyncerNilNodes(t *testing.T, ndb db.NodeDB) {
+	var err error
+
+	ctx := context.Background()
+	tree := New(nil, nil)
+
+	// Arbitrary sequence of operations. The point is to produce a tree with
+	// an internal node where at least one of the children is a null pointer.
+	err = tree.Insert(ctx, []byte("foo"), []byte("bar"))
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(ctx, []byte("carrot"), []byte("stick"))
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(ctx, []byte("ping"), []byte("pong"))
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(ctx, []byte("moo"), []byte("boo"))
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(ctx, []byte("aardvark"), []byte("aah"))
+	require.NoError(t, err, "Insert")
+
+	// Verify at least one null pointer somewhere.
+
+	_, root, err := tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+
+	wire := &dummySerialSyncer{
+		backing: tree,
+	}
+	remote, err := NewWithRoot(ctx, wire, nil, root)
+	require.NoError(t, err, "NewWithRoot")
+
+	// Now try inserting a k-v pair that will force the tree to traverse through the nil node
+	// and dereference it.
+	err = remote.Insert(ctx, []byte("insert"), []byte("key"))
+	require.NoError(t, err, "Insert")
+}
+
 func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb, Capacity(0, 512))
@@ -335,6 +448,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testSyncerBasic(t, backend)
+	})
+	t.Run("SyncerNilNodes", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testSyncerNilNodes(t, backend)
 	})
 	t.Run("ValueEviction", func(t *testing.T) {
 		backend, custom := initBackend(t)

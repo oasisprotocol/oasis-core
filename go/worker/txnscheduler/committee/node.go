@@ -15,8 +15,10 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/common/tracing"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -179,6 +181,14 @@ func (n *Node) transitionLocked(state NodeState) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	if epoch.IsTransactionSchedulerLeader() {
+		if err := n.algorithm.EpochTransition(epoch); err != nil {
+			n.logger.Error("scheduling algorithm failed to process epoch transition",
+				"err", err,
+			)
+			n.transitionLocked(StateNotReady{})
+			return
+		}
+
 		n.transitionLocked(StateWaitingForBatch{})
 	} else {
 		n.algorithm.Clear()
@@ -212,7 +222,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
 // Dispatch dispatches a bach to the compute committee.
-func (n *Node) Dispatch(batch runtime.Batch) error {
+func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
@@ -237,16 +247,56 @@ func (n *Node) Dispatch(batch runtime.Batch) error {
 	defer batchSpan.Finish()
 	batchSpanCtx := batchSpan.Context()
 
-	// Dispatch batch to group.
-	var batchID hash.Hash
-	batchID.From(batch)
+	// Generate the initial I/O root containing only the inputs (outputs and
+	// tags will be added later by the compute nodes).
+	ioTree := urkel.New(nil, nil)
+	if err := ioTree.Insert(n.ctx, block.IoKeyInputs, batch.MarshalCBOR()); err != nil {
+		n.logger.Error("failed to create I/O tree",
+			"err", err,
+		)
+		return err
+	}
 
+	ioWriteLog, ioRoot, err := ioTree.Commit(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to create I/O tree",
+			"err", err,
+		)
+		return err
+	}
+
+	// Commit I/O tree to storage and obtain a receipt.
+	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Apply(ioWriteLog)",
+		opentracing.ChildOf(batchSpanCtx),
+	)
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	ioReceipt, err := n.commonNode.Storage.Apply(ctx, emptyRoot, ioRoot, ioWriteLog)
+	if err != nil {
+		spanInsert.Finish()
+		n.logger.Error("failed to commit I/O tree to storage",
+			"err", err,
+		)
+		return err
+	}
+	spanInsert.Finish()
+
+	// Dispatch batch to group.
 	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
-		opentracing.Tag{Key: "batchHash", Value: batchID},
+		opentracing.Tag{Key: "ioRoot", Value: ioRoot},
 		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
 		opentracing.ChildOf(batchSpanCtx),
 	)
-	if err := n.commonNode.Group.PublishScheduledBatch(batchSpanCtx, batch, n.commonNode.CurrentBlock.Header); err != nil {
+	err = n.commonNode.Group.PublishScheduledBatch(
+		batchSpanCtx,
+		committeeID,
+		ioRoot,
+		ioReceipt.Signature,
+		n.commonNode.CurrentBlock.Header,
+	)
+	if err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
@@ -262,7 +312,7 @@ func (n *Node) Dispatch(batch runtime.Batch) error {
 		if n.computeNode == nil {
 			n.logger.Error("scheduler says we are a compute worker, but we are not")
 		} else {
-			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, batch)
+			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, committeeID, ioRoot, batch)
 		}
 	}
 

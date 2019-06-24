@@ -3,6 +3,7 @@ package urkel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -12,6 +13,9 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
+
+// ErrClosed is the error returned when methods are used after Close is called.
+var ErrClosed = errors.New("urkel: tree is closed")
 
 // Re-export the node structures, as we need them in the storage API.
 type NodeID = internal.NodeID
@@ -158,6 +162,10 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
+	if t.cache.isClosed() {
+		return ErrClosed
+	}
+
 	hkey := hashKey(key)
 	var existed bool
 	newRoot, existed, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
@@ -181,6 +189,10 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 func (t *Tree) Remove(ctx context.Context, key []byte) error {
 	t.cache.Lock()
 	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return ErrClosed
+	}
 
 	hkey := hashKey(key)
 	var changed bool
@@ -206,6 +218,10 @@ func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
+	if t.cache.isClosed() {
+		return nil, ErrClosed
+	}
+
 	hkey := hashKey(key)
 	return t.doGet(ctx, t.cache.pendingRoot, 0, hkey)
 }
@@ -215,6 +231,10 @@ func (t *Tree) Dump(ctx context.Context, w io.Writer) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
+	if t.cache.isClosed() {
+		return
+	}
+
 	t.doDump(ctx, w, t.cache.pendingRoot, hash.Hash{}, 0)
 	fmt.Fprintln(w, "")
 }
@@ -223,6 +243,10 @@ func (t *Tree) Dump(ctx context.Context, w io.Writer) {
 func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 	t.cache.Lock()
 	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return Stats{}
+	}
 
 	stats := &Stats{
 		LeftSubtreeMaxDepths:  make(map[uint8]uint8),
@@ -241,6 +265,10 @@ func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return nil, hash.Hash{}, ErrClosed
+	}
 
 	batch := t.cache.db.NewBatch()
 	defer batch.Reset()
@@ -270,6 +298,20 @@ func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 	t.cache.setSyncRoot(root)
 
 	return log, root, nil
+}
+
+// Close releases resources associated with this tree. After calling this
+// method the tree MUST NOT be used anymore and all methods will return
+// the ErrClosed error.
+//
+// Any pending write operations are discarded. If you need to persist them
+// you need to call Commit before calling this method.
+func (t *Tree) Close() {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
+	t.cache.close()
+	t.pendingWriteLog = nil
 }
 
 // Size calculates the size of the tree in bytes.

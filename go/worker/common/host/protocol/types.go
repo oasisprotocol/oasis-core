@@ -10,6 +10,9 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
+// NOTE: Bump RuntimeProtocol version in go/common/version if you
+//       change any of the structures below.
+
 // MessageType is a message type.
 type MessageType uint8
 
@@ -52,6 +55,8 @@ type Body struct {
 	Error *Error
 
 	// Worker interface.
+	WorkerInfoRequest                    *Empty
+	WorkerInfoResponse                   *WorkerInfoResponse
 	WorkerPingRequest                    *Empty
 	WorkerShutdownRequest                *Empty
 	WorkerCapabilityTEERakInitRequest    *WorkerCapabilityTEERakInitRequest
@@ -92,6 +97,12 @@ type Empty struct {
 // Error is a message body representing an error.
 type Error struct {
 	Message string `codec:"message"`
+}
+
+// WorkerInfoResponse is a worker info response message body.
+type WorkerInfoResponse struct {
+	// ProtocolVersion is the runtime protocol version supported by the worker.
+	ProtocolVersion uint64 `codec:"protocol_version"`
 }
 
 // WorkerCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE
@@ -146,8 +157,8 @@ type WorkerLocalRPCCallResponse struct {
 
 // WorkerCheckTxBatchRequest is a worker check tx batch request message body.
 type WorkerCheckTxBatchRequest struct {
-	// Batch of runtime calls to check.
-	Calls runtime.Batch `codec:"calls"`
+	// Batch of runtime inputs to check.
+	Inputs runtime.Batch `codec:"inputs"`
 	// Block on which the batch check should be based.
 	Block roothash.Block `codec:"block"`
 }
@@ -178,8 +189,11 @@ func (b *ComputedBatch) String() string {
 
 // WorkerExecuteTxBatchRequest is a worker execute tx batch request message body.
 type WorkerExecuteTxBatchRequest struct {
-	// Batch of runtime calls.
-	Calls runtime.Batch `codec:"calls"`
+	// IORoot is the I/O root containing the inputs (transactions) that
+	// the compute node should use. It must match what is passed in "inputs".
+	IORoot hash.Hash `codec:"io_root"`
+	// Batch of inputs (transactions).
+	Inputs runtime.Batch `codec:"inputs"`
 	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }
