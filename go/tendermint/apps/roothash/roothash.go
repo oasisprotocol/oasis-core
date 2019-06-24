@@ -203,9 +203,9 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
 		for idx, n := range computeCommittee.Members {
 			var nodeRuntime *node.Runtime
-			node, err := regState.GetNode(n.PublicKey)
-			if err != nil {
-				return errors.Wrap(err, "checkCommittees: failed to query node")
+			node, err1 := regState.GetNode(n.PublicKey)
+			if err1 != nil {
+				return errors.Wrap(err1, "checkCommittees: failed to query node")
 			}
 			for _, r := range node.Runtimes {
 				if !r.ID.Equal(rtID) {
