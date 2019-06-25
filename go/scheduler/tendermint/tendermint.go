@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
+	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
@@ -125,36 +126,42 @@ func (s *tendermintScheduler) worker(ctx context.Context) {
 
 // Called from worker.
 func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tags := ev.ResultBeginBlock.GetTags()
+	events := ev.ResultBeginBlock.GetEvents()
 
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), app.TagElected) {
-			var kinds []api.CommitteeKind
-			if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
-				s.logger.Error("worker: malformed elected committee types list",
-					"err", err,
-				)
-				continue
-			}
+	for _, tmEv := range events {
+		if tmEv.GetType() != tmapi.EventTypeEkiden {
+			continue
+		}
 
-			raw, err := s.service.Query(app.QueryKindsCommittees, kinds, ev.Block.Header.Height)
-			if err != nil {
-				s.logger.Error("worker: couldn't query elected committees",
-					"err", err,
-				)
-				continue
-			}
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.TagElected) {
+				var kinds []api.CommitteeKind
+				if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
+					s.logger.Error("worker: malformed elected committee types list",
+						"err", err,
+					)
+					continue
+				}
 
-			var committees []*api.Committee
-			if err := cbor.Unmarshal(raw, &committees); err != nil {
-				s.logger.Error("worker: malformed elected committees",
-					"err", err,
-				)
-				continue
-			}
+				raw, err := s.service.Query(app.QueryKindsCommittees, kinds, ev.Block.Header.Height)
+				if err != nil {
+					s.logger.Error("worker: couldn't query elected committees",
+						"err", err,
+					)
+					continue
+				}
 
-			for _, c := range committees {
-				s.notifier.Broadcast(c)
+				var committees []*api.Committee
+				if err := cbor.Unmarshal(raw, &committees); err != nil {
+					s.logger.Error("worker: malformed elected committees",
+						"err", err,
+					)
+					continue
+				}
+
+				for _, c := range committees {
+					s.notifier.Broadcast(c)
+				}
 			}
 		}
 	}
