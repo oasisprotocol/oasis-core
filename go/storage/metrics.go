@@ -64,9 +64,9 @@ type metricsWrapper struct {
 	api.Backend
 }
 
-func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
 	start := time.Now()
-	receipt, err := w.Backend.Apply(ctx, root, expectedNewRoot, log)
+	receipts, err := w.Backend.Apply(ctx, root, expectedNewRoot, log)
 	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
 
 	var size int
@@ -80,12 +80,12 @@ func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewR
 	}
 
 	storageCalls.With(labelApply).Inc()
-	return receipt, err
+	return receipts, err
 }
 
-func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
 	start := time.Now()
-	receipt, err := w.Backend.ApplyBatch(ctx, ops)
+	receipts, err := w.Backend.ApplyBatch(ctx, ops)
 	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())
 
 	var size int
@@ -101,7 +101,7 @@ func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*ap
 	}
 
 	storageCalls.With(labelApplyBatch).Inc()
-	return receipt, err
+	return receipts, err
 }
 
 func (w *metricsWrapper) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {

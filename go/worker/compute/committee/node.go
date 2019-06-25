@@ -189,7 +189,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 		crash.Here(crashPointBatchReceiveAfter)
 
 		bd := message.TxnSchedulerBatchDispatch
-		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageReceipt, bd.Header)
+		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header)
 		if err != nil {
 			return false, err
 		}
@@ -202,7 +202,7 @@ func (n *Node) queueBatchBlocking(
 	ctx context.Context,
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
-	storageReceipt signature.Signature,
+	storageSignatures []signature.Signature,
 	hdr block.Header,
 ) error {
 	// Quick check to see if header is compatible.
@@ -213,25 +213,26 @@ func (n *Node) queueBatchBlocking(
 		return errIncompatibleHeader
 	}
 
-	// TODO: Actually check that the storage receipt was signed by a storage node (#1809).
+	// TODO: Actually check that the storage receipts were signed by storage
+	// nodes: https://github.com/oasislabs/ekiden/issues/1809.
 
-	// Verify storage receipt.
-	receipt := storage.MKVSReceiptBody{
+	// Verify storage receipt signatures.
+	receiptBody := storage.MKVSReceiptBody{
 		Version: 1,
 		Roots:   []hash.Hash{ioRoot},
 	}
-
-	signed := signature.Signed{
-		Blob:      receipt.MarshalCBOR(),
-		Signature: storageReceipt,
-	}
-
-	var check storage.MKVSReceipt
-	if err := signed.Open(storage.MKVSReceiptSignatureContext, &check); err != nil {
-		n.logger.Warn("received invalid storage receipt in external batch",
-			"err", err,
-		)
-		return errInvalidReceipt
+	receipt := storage.MKVSReceipt{}
+	receipt.Signed.Blob = receiptBody.MarshalCBOR()
+	for _, sig := range storageSignatures {
+		receipt.Signed.Signature = sig
+		var tmp storage.MKVSReceiptBody
+		if err := receipt.Open(&tmp); err != nil {
+			n.logger.Warn("received invalid storage receipt signature in external batch",
+				"signature", sig,
+				"err", err,
+			)
+			return errInvalidReceipt
+		}
 	}
 
 	// Fetch inputs from storage.
@@ -577,7 +578,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			},
 		}
 
-		signedReceipt, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
+		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
 		if err != nil {
 			n.logger.Error("failed to apply to storage",
 				"err", err,
@@ -585,24 +586,28 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			return err
 		}
 
-		// TODO: Ensure that the receipt is actually signed by the
-		// storage node.  For now accept a signature from anyone.
-		var receipt storage.MKVSReceiptBody
-		if err = signedReceipt.Open(&receipt); err != nil {
-			n.logger.Error("failed to open signed receipt",
-				"err", err,
-			)
-			return err
+		// TODO: Ensure that all receipts are actually signed by storage nodes.
+		// For now accept a signature from anyone.
+		signatures := []signature.Signature{}
+		for _, receipt := range receipts {
+			var receiptBody storage.MKVSReceiptBody
+			if err = receipt.Open(&receiptBody); err != nil {
+				n.logger.Error("failed to open receipt",
+					"receipt", receipt,
+					"err", err,
+				)
+				return err
+			}
+			if err = proposedResults.VerifyStorageReceipt(&receiptBody); err != nil {
+				n.logger.Error("failed to validate receipt body",
+					"receipt body", receiptBody,
+					"err", err,
+				)
+				return err
+			}
+			signatures = append(signatures, receipt.Signature)
 		}
-		if err = proposedResults.VerifyStorageReceipt(&receipt); err != nil {
-			n.logger.Error("failed to validate receipt",
-				"err", err,
-			)
-			return err
-		}
-
-		// No need to append the entire blob, just the signature/public key.
-		proposedResults.StorageReceipt = signedReceipt.Signature
+		proposedResults.StorageSignatures = signatures
 
 		return nil
 	}()

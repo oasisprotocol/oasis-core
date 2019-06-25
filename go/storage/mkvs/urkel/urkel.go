@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
@@ -273,16 +273,19 @@ func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 	batch := t.cache.db.NewBatch()
 	defer batch.Reset()
 
-	updates := &cacheUpdates{}
-	root, err := doCommit(ctx, &t.cache, updates, batch, t.cache.pendingRoot)
+	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
+
+	root, err := doCommit(ctx, &t.cache, batch, subtree, 0, t.cache.pendingRoot)
 	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	if err := subtree.Commit(); err != nil {
 		return nil, hash.Hash{}, err
 	}
 
 	if err := batch.Commit(root); err != nil {
 		return nil, hash.Hash{}, err
 	}
-	updates.Commit()
 
 	var log WriteLog
 	for _, entry := range t.pendingWriteLog {

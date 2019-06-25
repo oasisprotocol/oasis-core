@@ -10,7 +10,6 @@ require (
 	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524
 	github.com/Netflix/go-expect v0.0.0-20180928190340-9d1f4485533b // indirect
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
-	github.com/VividCortex/gohistogram v1.0.0 // indirect
 	github.com/blevesearch/bleve v0.7.1-0.20190531184658-92623347bffc
 	github.com/blevesearch/blevex v0.0.0-20180227211930-4b158bb555a3 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
@@ -22,7 +21,7 @@ require (
 	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/cznic/strutil v0.0.0-20181122101858-275e90344537 // indirect
-	github.com/dgraph-io/badger/v2 v2.0.0-rc2
+	github.com/dgraph-io/badger/v2 v2.0.0-rc.2.0.20190624233936-91ce6876dbdc
 	github.com/eapache/channels v1.1.0
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
@@ -36,11 +35,9 @@ require (
 	github.com/go-logfmt/logfmt v0.4.0 // indirect
 	github.com/golang/protobuf v1.3.1
 	github.com/golang/snappy v0.0.1
-	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.0
 	github.com/hinshun/vt10x v0.0.0-20180809195222-d55458df857c // indirect
-	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/kr/pty v1.1.5 // indirect
 	github.com/libp2p/go-libp2p v0.1.1
 	github.com/libp2p/go-libp2p-core v0.0.3
@@ -63,7 +60,6 @@ require (
 	github.com/prometheus/client_golang v0.9.4
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20190512091148-babf20351dd7 // indirect
-	github.com/rs/cors v1.6.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/smartystreets/assertions v1.0.0 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a // indirect
@@ -78,12 +74,11 @@ require (
 	github.com/tecbot/gorocksdb v0.0.0-20190519120508-025c3cf4ffb4 // indirect
 	github.com/tendermint/go-amino v0.15.0 // indirect
 	github.com/tendermint/iavl v0.12.2
-	github.com/tendermint/tendermint v0.31.7
+	github.com/tendermint/tendermint v0.32.0
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.0-20170515211332-0457bb6b88fc
-	go.etcd.io/bbolt v1.3.3 // indirect
 	golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8
 	golang.org/x/net v0.0.0-20190613194153-d28f0bde5980
 	golang.org/x/sys v0.0.0-20190614084037-d442b75600c5 // indirect

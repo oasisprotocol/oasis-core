@@ -14,15 +14,16 @@ extern crate zeroize;
 
 use std::{str::FromStr, sync::Arc};
 
+mod context;
 mod kdf;
 mod methods;
+mod policy;
 
 use failure::Fallible;
 
 use ekiden_keymanager_api::*;
-use ekiden_keymanager_client::RemoteClient;
 use ekiden_runtime::{
-    common::{runtime::RuntimeId, sgx::avr},
+    common::runtime::RuntimeId,
     rak::RAK,
     register_runtime_rpc_methods,
     rpc::{
@@ -32,17 +33,18 @@ use ekiden_runtime::{
     Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
-use self::kdf::Kdf;
+use self::{kdf::Kdf, policy::Policy};
 
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
-    Kdf::global().init(&req, ctx)
+    let policy_checksum = Policy::global().init(ctx, &req.policy)?;
+    Kdf::global().init(&req, ctx, policy_checksum)
 }
 
 fn main() {
     // Initializer.
     let init = |protocol: &Arc<Protocol>,
-                rak: &Arc<RAK>,
+                _rak: &Arc<RAK>,
                 _rpc_demux: &mut RpcDemux,
                 rpc: &mut RpcDispatcher,
                 _txn: &mut TxnDispatcher| {
@@ -71,23 +73,11 @@ fn main() {
             RuntimeId::from_str("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
                 .unwrap();
 
-        // We will only replicate from ourselves for now, once migration
-        // support is required, this needs to change somehow.
-        let mr_enclave = match avr::get_enclave_identity() {
-            Some(id) => Some(id.mr_enclave),
-            None => None,
-        };
-        let km_client = Arc::new(RemoteClient::new_runtime(
-            runtime_id,
-            mr_enclave,
-            protocol.clone(),
-            rak.clone(),
-            1, // Not used, doesn't matter.
-        ));
-
+        let km_proto = protocol.clone(); // Shut up the borrow checker.
         rpc.set_context_initializer(move |ctx: &mut RpcContext| {
-            ctx.runtime = Box::new(kdf::Context {
-                km_client: km_client.clone(),
+            ctx.runtime = Box::new(context::Context {
+                runtime_id,
+                protocol: km_proto.clone(),
             })
         });
     };

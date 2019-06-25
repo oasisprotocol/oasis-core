@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
@@ -29,6 +30,8 @@ type Document struct {
 	Storage storage.Genesis `codec:"storage"`
 	// Staking is the staking genesis state.
 	Staking staking.Genesis `codec:"staking"`
+	// KeyManager is the key manager genesis state.
+	KeyManager keymanager.Genesis `codec:"keymanager"`
 	// Validators is the list of validators at genesis.
 	Validators []*Validator `codec:"validators"`
 	// Extra data is arbitrary extra data that is part of the

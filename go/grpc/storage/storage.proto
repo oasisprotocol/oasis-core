@@ -25,7 +25,8 @@ message ApplyRequest {
 }
 
 message ApplyResponse {
-    bytes receipt = 1; // MKVSReceipt, serialized to CBOR
+    // A list of MKVSReceipts, serialized to CBOR.
+    bytes receipts = 1;
 }
 
 message ApplyOp {
@@ -39,7 +40,8 @@ message ApplyBatchRequest {
 }
 
 message ApplyBatchResponse {
-    bytes receipt = 1; // MKVSReceipt, serialized to CBOR
+    // A list of MKVSReceipts, serialized to CBOR.
+    bytes receipts = 1;
 }
 
 message NodeID {

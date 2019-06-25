@@ -14,6 +14,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/json"
+	"github.com/oasislabs/ekiden/go/common/sgx"
 )
 
 const nonceMaxLen = 32
@@ -62,7 +63,7 @@ var (
 		ReasonAACompromise:         "aACompromise",
 	}
 
-	mrsignerBlacklist = make(map[[32]byte]bool)
+	mrsignerBlacklist = make(map[sgx.Mrsigner]bool)
 
 	_ cbor.Marshaler   = (*AVRBundle)(nil)
 	_ cbor.Unmarshaler = (*AVRBundle)(nil)
@@ -402,17 +403,11 @@ func BuildMrsignerBlacklist(allowTestKeys bool) {
 		for _, v := range []string{
 			"9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", // Fortanix test key
 		} {
-			raw, err := hex.DecodeString(v)
-			if err != nil {
+			var signer sgx.Mrsigner
+			if err := signer.UnmarshalHex(v); err != nil {
 				panic("ias/avr: failed to decode MRSIGNER: " + v)
 			}
-			if len(raw) != 32 {
-				panic("ias/avr: malformed MRSIGNER: " + v)
-			}
-
-			var b [32]byte
-			copy(b[:], raw)
-			mrsignerBlacklist[b] = true
+			mrsignerBlacklist[signer] = true
 		}
 	}
 }

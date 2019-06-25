@@ -28,6 +28,9 @@ const (
 	CodeNotFound           Code = Code(6)
 )
 
+// The ABCI event type to denote ABCI mux applications.
+const EventTypeEkiden = "ekiden"
+
 // ToInt returns an integer representation of the status code.
 func (c Code) ToInt() uint32 {
 	return uint32(c)
@@ -74,7 +77,7 @@ func GetTag(tags []tmcommon.KVPair, tag []byte) []byte {
 
 // QueryForEvent generates a tmquery.Query for a specific event type.
 func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
-	return tmquery.MustParse(fmt.Sprintf("%s='%s'", eventApp, eventType))
+	return tmquery.MustParse(fmt.Sprintf("%s.%s='%s'", EventTypeEkiden, eventApp, eventType))
 }
 
 // QueryGetByIDRequest is a request for fetching things by ids.

@@ -5,7 +5,7 @@ import (
 	"github.com/tendermint/iavl"
 	dbm "github.com/tendermint/tendermint/libs/db"
 
-	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
+	"github.com/oasislabs/ekiden/go/tendermint/db"
 )
 
 // MuxState is an open ABCI mux state database.
@@ -26,7 +26,7 @@ func (s *MuxState) Tree() *iavl.ImmutableTree {
 
 // OpenMuxState opens the ABCI mux state for inspection.
 func OpenMuxState(filename string) (*MuxState, error) {
-	db, err := bolt.New(filename)
+	db, err := db.New(filename, true)
 	if err != nil {
 		return nil, err
 	}

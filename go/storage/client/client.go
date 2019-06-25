@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
@@ -30,7 +31,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	urkelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -271,7 +272,7 @@ type grpcResponse struct {
 	node *node.Node
 }
 
-func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse), expectedNewRoots []hash.Hash) (*api.MKVSReceipt, error) {
+func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse), expectedNewRoots []hash.Hash) ([]*api.MKVSReceipt, error) {
 	b.connectedNodesState.RLock()
 	defer b.connectedNodesState.RUnlock()
 
@@ -302,13 +303,13 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 			continue
 		}
 
-		var receiptRaw []byte
+		var receiptsRaw []byte
 		var err error
 		switch resp := response.resp.(type) {
 		case *storage.ApplyResponse:
-			receiptRaw = resp.GetReceipt()
+			receiptsRaw = resp.GetReceipts()
 		case *storage.ApplyBatchResponse:
-			receiptRaw = resp.GetReceipt()
+			receiptsRaw = resp.GetReceipts()
 		default:
 			b.logger.Error("got unexpected response type from a storage node",
 				"node", response.node,
@@ -316,14 +317,26 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 			)
 			continue
 		}
-		var receipt api.MKVSReceipt
-		if err = receipt.UnmarshalCBOR(receiptRaw); err != nil {
-			b.logger.Error("failed to unmarshal receipt for a storage node",
+		// NOTE: All storage backend implementations of apply operations return
+		// a list of storage receipts. However, a concrete storage backend,
+		// e.g. storage/leveldb, actually returns a single storage receipt in a
+		// list.
+		receiptInAList := make([]api.MKVSReceipt, 1)
+		if err = cbor.Unmarshal(receiptsRaw, receiptInAList); err != nil {
+			b.logger.Error("failed to unmarshal receipt in a list from a storage node",
 				"node", response.node,
 				"err", err,
 			)
 			continue
 		}
+		if len(receiptInAList) != 1 {
+			b.logger.Error("got more than one receipt from a storage node",
+				"node", response.node,
+				"num_receipts", len(receiptInAList),
+			)
+			continue
+		}
+		receipt := receiptInAList[0]
 		// TODO: After we switch to https://github.com/oasislabs/ed25519, use
 		// batch verification. This should be implemented as part of:
 		// https://github.com/oasislabs/ekiden/issues/1351.
@@ -365,12 +378,10 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 		b.logger.Warn("write operation was only successfully applied to %d out of %d connected nodes", successes, n)
 	}
 
-	// TODO: This method should return all storage receipts it obtained:
-	// https://github.com/oasislabs/ekiden/issues/1791.
-	return receipts[0], nil
+	return receipts, nil
 }
 
-func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
 	var req storage.ApplyRequest
 	req.Root, _ = root.MarshalBinary()
 	req.ExpectedNewRoot, _ = expectedNewRoot.MarshalBinary()
@@ -392,7 +403,7 @@ func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expect
 	}, []hash.Hash{expectedNewRoot})
 }
 
-func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
 	var req storage.ApplyBatchRequest
 	req.Ops = make([]*storage.ApplyOp, 0, len(ops))
 	expectedNewRoots := make([]hash.Hash, 0, len(ops))
@@ -514,7 +525,7 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	}
 	resp := respRaw.(*storage.GetNodeResponse)
 
-	node, err := urkelDb.NodeUnmarshalBinary(resp.GetNode())
+	node, err := urkel.NodeUnmarshalBinary(resp.GetNode())
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client: failed to unmarshal node")
 	}

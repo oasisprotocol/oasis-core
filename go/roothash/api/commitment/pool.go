@@ -140,9 +140,10 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	// Check if the header refers to hashes in storage.
-	// TODO: Actually check that the storage receipt was signed by a storage node.
-	if err := body.VerifyStorageReceiptSignature(); err != nil {
+	// Check if the header refers to merkle roots in storage.
+	// TODO: Actually check that the storage receipt signatures were made by
+	// the storage nodes.
+	if err := body.VerifyStorageReceiptSignatures(); err != nil {
 		return err
 	}
 
@@ -456,9 +457,10 @@ func (p *Pool) AddMergeCommitment(
 		}
 	}
 
-	// Check if the header refers to hashes in storage.
-	// TODO: Actually check that the storage receipt was signed by a storage node.
-	if err = header.VerifyStorageReceiptSignature(); err != nil {
+	// Check if the header refers to merkle roots in storage.
+	// TODO: Actually check that the storage receipt signatures were made by
+	// the storage nodes.
+	if err = header.VerifyStorageReceiptSignatures(); err != nil {
 		return err
 	}
 

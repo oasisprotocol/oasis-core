@@ -442,7 +442,7 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 			},
 		}
 
-		signedReceipt, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
+		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
 		if err != nil {
 			n.logger.Error("failed to apply to storage",
 				"err", err,
@@ -450,24 +450,28 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 			return
 		}
 
-		// TODO: Ensure that the receipt is actually signed by the
-		// storage node.  For now accept a signature from anyone.
-		var receipt storage.MKVSReceiptBody
-		if err = signedReceipt.Open(&receipt); err != nil {
-			n.logger.Error("failed to open signed receipt",
-				"err", err,
-			)
-			return
+		// TODO: Ensure that the receipt is actually signed by storage nodes.
+		// For now accept a signature from anyone.
+		signatures := []signature.Signature{}
+		for _, receipt := range receipts {
+			var receiptBody storage.MKVSReceiptBody
+			if err = receipt.Open(&receiptBody); err != nil {
+				n.logger.Error("failed to open receipt",
+					"receipt", receipt,
+					"err", err,
+				)
+				return
+			}
+			if err = blk.Header.VerifyStorageReceipt(&receiptBody); err != nil {
+				n.logger.Error("failed to validate receipt body",
+					"receipt body", receiptBody,
+					"err", err,
+				)
+				return
+			}
+			signatures = append(signatures, receipt.Signature)
 		}
-		if err = blk.Header.VerifyStorageReceipt(&receipt); err != nil {
-			n.logger.Error("failed to validate receipt",
-				"err", err,
-			)
-			return
-		}
-
-		// No need to append the entire blob, just the signature/public key.
-		blk.Header.StorageReceipt = signedReceipt.Signature
+		blk.Header.StorageSignatures = signatures
 
 		n.byzantineMaybeInjectDiscrepancy(&blk.Header)
 

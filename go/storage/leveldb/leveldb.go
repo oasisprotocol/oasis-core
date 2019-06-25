@@ -9,7 +9,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	levelNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
 )
 
 const (
@@ -47,26 +48,28 @@ func (b *leveldbBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*a
 	}, nil
 }
 
-func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
-	var roots []hash.Hash
+func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+	var newRoots []hash.Hash
 	for _, op := range ops {
-		root, err := b.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
+		newRoot, err := b.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
 		if err != nil {
 			return nil, err
 		}
-		roots = append(roots, *root)
+		newRoots = append(newRoots, *newRoot)
 	}
 
-	return b.signReceipt(ctx, roots)
+	receipt, err := b.signReceipt(ctx, newRoots)
+	return []*api.MKVSReceipt{receipt}, err
 }
 
-func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
-	r, err := b.rootCache.Apply(ctx, root, expectedNewRoot, log)
+func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+	newRoot, err := b.rootCache.Apply(ctx, root, expectedNewRoot, log)
 	if err != nil {
 		return nil, err
 	}
 
-	return b.signReceipt(ctx, []hash.Hash{*r})
+	receipt, err := b.signReceipt(ctx, []hash.Hash{*newRoot})
+	return []*api.MKVSReceipt{receipt}, err
 }
 
 func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
@@ -120,7 +123,7 @@ func (b *leveldbBackend) Initialized() <-chan struct{} {
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
 func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes uint64, applyLockLRUSlots uint64) (api.Backend, error) {
-	ndb, err := nodedb.NewLevelDBNodeDB(dbDir)
+	ndb, err := levelNodedb.New(dbDir)
 	if err != nil {
 		ndb.Close()
 		return nil, err

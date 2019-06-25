@@ -8,10 +8,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	badgerDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
+	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
+	memoryDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
@@ -72,7 +76,7 @@ func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id inte
 	if err != nil {
 		return nil, err
 	}
-	return db.NodeUnmarshalBinary(bytes)
+	return NodeUnmarshalBinary(bytes)
 }
 
 func (s *dummySerialSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
@@ -347,9 +351,9 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 
 func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
-	tree := New(nil, ndb, Capacity(512, 0))
+	tree := New(nil, ndb, Capacity(128, 0))
 
-	keys, values := generateKeyValuePairs()
+	keys, values := generateKeyValuePairsEx("foo", 150)
 	for i := 0; i < len(keys); i++ {
 		err := tree.Insert(ctx, keys[i], values[i])
 		require.NoError(t, err, "Insert")
@@ -358,12 +362,21 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	_, _, err := tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
 
+	keys, values = generateKeyValuePairsEx("foo key 1", 150)
+	for i := 0; i < len(keys); i++ {
+		err = tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	_, _, err = tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+
 	stats := tree.Stats(ctx, 0)
 	// Only a subset of nodes should remain in cache.
-	require.EqualValues(t, 313, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 199, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
+	require.EqualValues(t, 89, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 39, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 1770, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 676, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 func testDebugDump(t *testing.T, ndb db.NodeDB) {
@@ -420,6 +433,32 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 8890, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
+func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
+	batch := ndb.NewBatch()
+	defer batch.Reset()
+
+	var calls []int
+
+	batch.OnCommit(func() {
+		calls = append(calls, 1)
+	})
+	batch.OnCommit(func() {
+		calls = append(calls, 2)
+	})
+	batch.OnCommit(func() {
+		calls = append(calls, 3)
+	})
+
+	require.True(t, len(calls) == 0, "OnCommit hooks should not fire before commit")
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	err := batch.Commit(emptyRoot)
+	require.NoError(t, err, "Commit")
+	require.EqualValues(t, calls, []int{1, 2, 3}, "OnCommit hooks should fire in order")
+}
+
 // TODO: More tests for write logs.
 // TODO: More tests with bad syncer outputs.
 
@@ -474,12 +513,17 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		defer finiBackend(t, backend, custom)
 		testDebugStats(t, backend)
 	})
+	t.Run("OnCommitHooks", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testOnCommitHooks(t, backend)
+	})
 }
 
 func TestUrkelMemoryBackend(t *testing.T) {
 	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
 		// Create a memory-backed Node DB.
-		ndb, _ := db.NewMemoryNodeDB()
+		ndb, _ := memoryDb.New()
 		return ndb, nil
 	},
 		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
@@ -494,8 +538,30 @@ func TestUrkelLevelDBBackend(t *testing.T) {
 		require.NoError(t, err, "TempDir")
 
 		// Create a LevelDB-backed Node DB.
-		ndb, err := db.NewLevelDBNodeDB(dir)
-		require.NoError(t, err, "NewLevelDBNodeDB")
+		ndb, err := levelDb.New(dir)
+		require.NoError(t, err, "New")
+
+		return ndb, dir
+	},
+		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
+			ndb.Close()
+
+			dir, ok := custom.(string)
+			require.True(t, ok, "finiBackend")
+
+			os.RemoveAll(dir)
+		})
+}
+
+func TestUrkelBadgerBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := ioutil.TempDir("", "mkvs.test.badger")
+		require.NoError(t, err, "TempDir")
+
+		// Create a Badger-backed Node DB.
+		ndb, err := badgerDb.New(badger.DefaultOptions(dir).WithLogger(nil))
+		require.NoError(t, err, "New")
 
 		return ndb, dir
 	},
@@ -583,7 +649,7 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	ctx := context.Background()
 
 	for n := 0; n < b.N; n++ {
-		ndb, _ := db.NewMemoryNodeDB()
+		ndb, _ := memoryDb.New()
 		tree := New(nil, ndb)
 
 		for i := 0; i < numValues; i++ {
@@ -599,13 +665,17 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	}
 }
 
-func generateKeyValuePairs() ([][]byte, [][]byte) {
-	keys := make([][]byte, insertItems)
-	values := make([][]byte, insertItems)
-	for i := 0; i < insertItems; i++ {
-		keys[i] = []byte(fmt.Sprintf("key %d", i))
-		values[i] = []byte(fmt.Sprintf("value %d", i))
+func generateKeyValuePairsEx(prefix string, count int) ([][]byte, [][]byte) {
+	keys := make([][]byte, count)
+	values := make([][]byte, count)
+	for i := 0; i < count; i++ {
+		keys[i] = []byte(fmt.Sprintf("%skey %d", prefix, i))
+		values[i] = []byte(fmt.Sprintf("%svalue %d", prefix, i))
 	}
 
 	return keys, values
+}
+
+func generateKeyValuePairs() ([][]byte, [][]byte) {
+	return generateKeyValuePairsEx("", insertItems)
 }

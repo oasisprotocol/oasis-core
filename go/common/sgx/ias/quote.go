@@ -3,6 +3,8 @@ package ias
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/oasislabs/ekiden/go/common/sgx"
 )
 
 const (
@@ -61,8 +63,8 @@ type Report struct {
 	CPUSVN     [16]byte
 	MiscSelect uint32
 	Attributes [16]byte
-	MRENCLAVE  [32]byte
-	MRSIGNER   [32]byte
+	MRENCLAVE  sgx.Mrenclave
+	MRSIGNER   sgx.Mrsigner
 	ISVProdID  uint16
 	ISVSVN     uint16
 	ReportData [64]byte
@@ -72,8 +74,8 @@ func (r *Report) decode(data []byte) error {
 	copy(r.CPUSVN[:], data[0:])
 	r.MiscSelect = binary.LittleEndian.Uint32(data[16:])
 	copy(r.Attributes[:], data[48:])
-	copy(r.MRENCLAVE[:], data[64:])
-	copy(r.MRSIGNER[:], data[128:])
+	_ = r.MRENCLAVE.UnmarshalBinary(data[64 : 64+sgx.MrenclaveSize])
+	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrsignerSize])
 	r.ISVProdID = binary.LittleEndian.Uint16(data[256:])
 	r.ISVSVN = binary.LittleEndian.Uint16(data[258:])
 	copy(r.ReportData[:], data[320:])

@@ -109,8 +109,9 @@ type Header struct { // nolint: maligned
 	// StateRoot is the state merkle root.
 	StateRoot hash.Hash `codec:"state_root"`
 
-	// StorageReceipt is the storage receipt for the hashes.
-	StorageReceipt signature.Signature `codec:"storage_receipt"`
+	// StorageSignatures are the storage receipt signatures for the merkle
+	// roots.
+	StorageSignatures []signature.Signature `codec:"storage_signatures"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -120,12 +121,12 @@ func (h *Header) IsParentOf(child *Header) bool {
 }
 
 // MostlyEqual compares vs another header for equality, omitting the
-// StorageReceipt field as it is not universally guaranteed to be present.
+// StorageSignatures field as it is not universally guaranteed to be present.
 //
 // Locations where this matter should do the comparison manually.
 func (h *Header) MostlyEqual(cmp *Header) bool {
 	a, b := *h, *cmp
-	a.StorageReceipt, b.StorageReceipt = signature.Signature{}, signature.Signature{}
+	a.StorageSignatures, b.StorageSignatures = []signature.Signature{}, []signature.Signature{}
 	aHash, bHash := a.EncodedHash(), b.EncodedHash()
 	return aHash.Equal(&bHash)
 }
@@ -158,24 +159,30 @@ func (h *Header) RootsForStorageReceipt() []hash.Hash {
 	}
 }
 
-// VerifyStorageReceiptSignature validates that the storage receipt
-// signature matches the hashes.
+// VerifyStorageReceiptSignatures validates that the storage receipt signatures
+// match the signatures for the current merkle roots.
 //
-// Note: Ensuring that the signature is signed by the keypair that is
+// Note: Ensuring that the signatures are signed by keypair(s) that are
 // expected is the responsibility of the caller.
-func (h *Header) VerifyStorageReceiptSignature() error {
-	receipt := storage.MKVSReceiptBody{
+//
+// TODO: After we switch to https://github.com/oasislabs/ed25519, use batch
+// verification. This should be implemented as part of:
+// https://github.com/oasislabs/ekiden/issues/1351.
+func (h *Header) VerifyStorageReceiptSignatures() error {
+	receiptBody := storage.MKVSReceiptBody{
 		Version: 1,
 		Roots:   h.RootsForStorageReceipt(),
 	}
-
-	signed := signature.Signed{
-		Blob:      receipt.MarshalCBOR(),
-		Signature: h.StorageReceipt,
+	receipt := storage.MKVSReceipt{}
+	receipt.Signed.Blob = receiptBody.MarshalCBOR()
+	for _, sig := range h.StorageSignatures {
+		receipt.Signed.Signature = sig
+		var tmp storage.MKVSReceiptBody
+		if err := receipt.Open(&tmp); err != nil {
+			return err
+		}
 	}
-
-	var check storage.MKVSReceipt
-	return signed.Open(storage.MKVSReceiptSignatureContext, &check)
+	return nil
 }
 
 // VerifyStorageReceipt validates that the provided storage receipt

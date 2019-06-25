@@ -63,10 +63,10 @@ func (h *ComputeResultsHeader) UnmarshalCBOR(data []byte) error {
 
 // ComputeBody holds the data signed in a compute worker commitment.
 type ComputeBody struct {
-	CommitteeID    hash.Hash              `codec:"cid"`
-	Header         ComputeResultsHeader   `codec:"header"`
-	StorageReceipt signature.Signature    `codec:"storage_receipt"`
-	RakSig         signature.RawSignature `codec:"rak_sig"`
+	CommitteeID       hash.Hash              `codec:"cid"`
+	Header            ComputeResultsHeader   `codec:"header"`
+	StorageSignatures []signature.Signature  `codec:"storage_signatures"`
+	RakSig            signature.RawSignature `codec:"rak_sig"`
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of
@@ -78,24 +78,30 @@ func (m *ComputeBody) RootsForStorageReceipt() []hash.Hash {
 	}
 }
 
-// VerifyStorageReceiptSignature validates that the storage receipt
-// signature matches the hashes.
+// VerifyStorageReceiptSignature validates that the storage receipt signatures
+// match the signatures for the current merkle roots.
 //
-// Note: Ensuring that the signature is signed by the keypair that is
+// Note: Ensuring that the signature is signed by the keypair(s) that are
 // expected is the responsibility of the caller.
-func (m *ComputeBody) VerifyStorageReceiptSignature() error {
-	receipt := storage.MKVSReceiptBody{
+//
+// TODO: After we switch to https://github.com/oasislabs/ed25519, use batch
+// verification. This should be implemented as part of:
+// https://github.com/oasislabs/ekiden/issues/1351.
+func (m *ComputeBody) VerifyStorageReceiptSignatures() error {
+	receiptBody := storage.MKVSReceiptBody{
 		Version: 1,
 		Roots:   m.RootsForStorageReceipt(),
 	}
-
-	signed := signature.Signed{
-		Blob:      receipt.MarshalCBOR(),
-		Signature: m.StorageReceipt,
+	receipt := storage.MKVSReceipt{}
+	receipt.Signed.Blob = receiptBody.MarshalCBOR()
+	for _, sig := range m.StorageSignatures {
+		receipt.Signed.Signature = sig
+		var tmp storage.MKVSReceiptBody
+		if err := receipt.Open(&tmp); err != nil {
+			return err
+		}
 	}
-
-	var check storage.MKVSReceipt
-	return signed.Open(storage.MKVSReceiptSignatureContext, &check)
+	return nil
 }
 
 // VerifyStorageReceipt validates that the provided storage receipt

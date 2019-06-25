@@ -452,7 +452,7 @@ func (g *Group) PublishScheduledBatch(
 	spanCtx opentracing.SpanContext,
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
-	storageReceipt signature.Signature,
+	storageSignatures []signature.Signature,
 	hdr block.Header,
 ) error {
 	g.RLock()
@@ -472,10 +472,10 @@ func (g *Group) PublishScheduledBatch(
 		cc,
 		&p2p.Message{
 			TxnSchedulerBatchDispatch: &p2p.TxnSchedulerBatchDispatch{
-				CommitteeID:    committeeID,
-				IORoot:         ioRoot,
-				StorageReceipt: storageReceipt,
-				Header:         hdr,
+				CommitteeID:       committeeID,
+				IORoot:            ioRoot,
+				StorageSignatures: storageSignatures,
+				Header:            hdr,
 			},
 		},
 	)

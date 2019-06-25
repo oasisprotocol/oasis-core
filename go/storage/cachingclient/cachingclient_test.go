@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/memory"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 const cacheSize = 10
@@ -39,27 +39,23 @@ func TestSingleAndPersistence(t *testing.T) {
 	}()
 
 	wl := makeTestWriteLog([]byte("TestSingle"), cacheSize)
-	var root, expectedNewRoot hash.Hash
+	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl)
+
+	var root hash.Hash
 	root.Empty()
-	// Use in-memory Urkel tree to calculate the expected new root.
-	tree := urkel.New(nil, nil)
-	for _, logEntry := range wl {
-		_ = tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
+	receipts, err := client.Apply(context.Background(), root, expectedNewRoot, wl)
+	require.NoError(t, err, "Apply() should not return an error")
+	require.NotNil(t, receipts, "Apply() should return receipts")
+
+	// Check the receipts and ensure they contain a new root that equals the
+	// expected new root.
+	var receiptBody api.MKVSReceiptBody
+	for _, receipt := range receipts {
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipt.Open() should not return an error")
+		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
+		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
-	_, expectedNewRoot, err = tree.Commit(context.Background())
-	require.NoError(t, err, "error calculating mkvs's expectedNewRoot")
-
-	mkvsReceipt, err := client.Apply(context.Background(), root, expectedNewRoot, wl)
-	require.NoError(t, err, "error applying write log")
-	require.NotNil(t, mkvsReceipt, "mkvsReceipt of apply should not be nil")
-
-	// Check the MKVS receipt and obtain the new root from it.
-	var rb api.MKVSReceiptBody
-	err = mkvsReceipt.Open(&rb)
-	require.NoError(t, err, "error opening mkvsReceipt")
-	require.Equal(t, 1, len(rb.Roots), "mkvs receipt should have 1 root")
-	require.NotEqual(t, root, rb.Roots[0], "mkvs receipt's root should not equal the (old) root")
-	require.EqualValues(t, expectedNewRoot, rb.Roots[0], "mkvs receipt's new root should equal the expected new root")
 
 	// TODO: Check if retrieving values from MKVS uses cache.
 

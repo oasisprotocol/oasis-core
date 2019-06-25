@@ -245,7 +245,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		},
 	}
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
-	parent.Header.StorageReceipt = mustStore(t, storageBackend, []storage.ApplyOp{
+	parent.Header.StorageSignatures = mustStore(t, storageBackend, []storage.ApplyOp{
 		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
 		// NOTE: Twice to get a receipt over both roots which we set to the same value.
 		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
@@ -263,7 +263,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 				IORoot:       parent.Header.IORoot,
 				StateRoot:    parent.Header.StateRoot,
 			},
-			StorageReceipt: parent.Header.StorageReceipt,
+			StorageSignatures: parent.Header.StorageSignatures,
 		}
 		// `err` shadows outside.
 		commit, err := commitment.SignComputeCommitment(node.PrivateKey, &commitBody) // nolint: vetshadow
@@ -406,11 +406,15 @@ func mustGetCommittee(
 	}
 }
 
-func mustStore(t *testing.T, store storage.Backend, ops []storage.ApplyOp) signature.Signature {
+func mustStore(t *testing.T, store storage.Backend, ops []storage.ApplyOp) []signature.Signature {
 	require := require.New(t)
 
-	receipt, err := store.ApplyBatch(context.Background(), ops)
+	receipts, err := store.ApplyBatch(context.Background(), ops)
 	require.NoError(err, "Apply")
 
-	return receipt.Signed.Signature
+	signatures := []signature.Signature{}
+	for _, receipt := range receipts {
+		signatures = append(signatures, receipt.Signed.Signature)
+	}
+	return signatures
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
@@ -265,7 +266,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		return err
 	}
 
-	// Commit I/O tree to storage and obtain a receipt.
+	// Commit I/O tree to storage and obtain receipts.
 	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Apply(ioWriteLog)",
 		opentracing.ChildOf(batchSpanCtx),
 	)
@@ -273,7 +274,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
-	ioReceipt, err := n.commonNode.Storage.Apply(ctx, emptyRoot, ioRoot, ioWriteLog)
+	ioReceipts, err := n.commonNode.Storage.Apply(ctx, emptyRoot, ioRoot, ioWriteLog)
 	if err != nil {
 		spanInsert.Finish()
 		n.logger.Error("failed to commit I/O tree to storage",
@@ -289,11 +290,15 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
 		opentracing.ChildOf(batchSpanCtx),
 	)
+	ioReceiptSignatures := []signature.Signature{}
+	for _, receipt := range ioReceipts {
+		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
+	}
 	err = n.commonNode.Group.PublishScheduledBatch(
 		batchSpanCtx,
 		committeeID,
 		ioRoot,
-		ioReceipt.Signature,
+		ioReceiptSignatures,
 		n.commonNode.CurrentBlock.Header,
 	)
 	if err != nil {

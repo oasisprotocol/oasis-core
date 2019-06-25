@@ -6,7 +6,8 @@ import (
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	memoryNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -80,7 +81,7 @@ func (b *memoryBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*ap
 	}, nil
 }
 
-func (b *memoryBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
+func (b *memoryBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
 	var roots []hash.Hash
 	for _, op := range ops {
 		root, err := b.apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
@@ -90,16 +91,17 @@ func (b *memoryBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api
 		roots = append(roots, *root)
 	}
 
-	return b.signReceipt(ctx, roots)
+	receipt, err := b.signReceipt(ctx, roots)
+	return []*api.MKVSReceipt{receipt}, err
 }
 
-func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
+func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
 	r, err := b.apply(ctx, root, expectedNewRoot, log)
 	if err != nil {
 		return nil, err
 	}
-
-	return b.signReceipt(ctx, []hash.Hash{*r})
+	receipt, err := b.signReceipt(ctx, []hash.Hash{*r})
+	return []*api.MKVSReceipt{receipt}, err
 }
 
 func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
@@ -150,7 +152,7 @@ func (b *memoryBackend) Initialized() <-chan struct{} {
 
 // New constructs a new memory backed storage Backend instance.
 func New(signingKey *signature.PrivateKey) api.Backend {
-	ndb, _ := nodedb.NewMemoryNodeDB()
+	ndb, _ := memoryNodedb.New()
 
 	b := &memoryBackend{
 		logger:     logging.GetLogger("storage/memory"),

@@ -1,5 +1,5 @@
 //! Secure channel session.
-use std::{io::Write, sync::Arc};
+use std::{collections::HashSet, io::Write, sync::Arc};
 
 use failure::Fallible;
 use serde_cbor;
@@ -29,14 +29,8 @@ enum SessionError {
     InvalidState,
     #[fail(display = "session closed")]
     Closed,
-    #[fail(
-        display = "mismatched MRENCLAVE (expected: {:?} actual: {:?})",
-        expected, actual
-    )]
-    MismatchedMrEnclave {
-        expected: avr::MrEnclave,
-        actual: avr::MrEnclave,
-    },
+    #[fail(display = "mismatched enclave identity")]
+    MismatchedEnclaveIdentity,
 }
 
 /// Information about a session.
@@ -58,7 +52,7 @@ pub struct Session {
     session: Option<snow::Session>,
     local_static_pub: Vec<u8>,
     rak: Option<Arc<RAK>>,
-    remote_mrenclave: Option<avr::MrEnclave>,
+    remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
     info: Option<Arc<SessionInfo>>,
     state: State,
     buf: Vec<u8>,
@@ -69,13 +63,13 @@ impl Session {
         session: snow::Session,
         local_static_pub: Vec<u8>,
         rak: Option<Arc<RAK>>,
-        remote_mrenclave: Option<avr::MrEnclave>,
+        remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
     ) -> Self {
         Self {
             session: Some(session),
             local_static_pub,
             rak,
-            remote_mrenclave,
+            remote_enclaves,
             info: None,
             state: State::Handshake1,
             buf: vec![0u8; 65535],
@@ -216,14 +210,10 @@ impl Session {
         remote_static: &[u8],
     ) -> Fallible<Option<Arc<SessionInfo>>> {
         if rak_binding.is_empty() {
-            // If MRENCLAVE verification is required and no RAK binding has been
-            // provided, we must abort the session.
-            if let Some(ref mr_enclave) = self.remote_mrenclave {
-                return Err(SessionError::MismatchedMrEnclave {
-                    expected: mr_enclave.clone(),
-                    actual: avr::MrEnclave::default(),
-                }
-                .into());
+            // If enclave identity verification is required and no RAK binding
+            // has been provided, we must abort the session.
+            if self.remote_enclaves.is_some() {
+                return Err(SessionError::MismatchedEnclaveIdentity.into());
             }
             return Ok(None);
         }
@@ -231,14 +221,10 @@ impl Session {
         let rak_binding: RAKBinding = serde_cbor::from_slice(rak_binding)?;
         let authenticated_avr = avr::verify(&rak_binding.avr)?;
 
-        // Verify MRENCLAVE.
-        if let Some(ref mr_enclave) = self.remote_mrenclave {
-            if mr_enclave != &authenticated_avr.mr_enclave {
-                return Err(SessionError::MismatchedMrEnclave {
-                    expected: mr_enclave.clone(),
-                    actual: authenticated_avr.mr_enclave,
-                }
-                .into());
+        // Verify MRSIGNER/MRENCLAVE.
+        if let Some(ref remote_enclaves) = self.remote_enclaves {
+            if !remote_enclaves.contains(&authenticated_avr.identity) {
+                return Err(SessionError::MismatchedEnclaveIdentity.into());
             }
         }
 
@@ -291,7 +277,7 @@ pub struct RAKBinding {
 #[derive(Clone)]
 pub struct Builder {
     rak: Option<Arc<RAK>>,
-    remote_mrenclave: Option<avr::MrEnclave>,
+    remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
 }
 
 impl Builder {
@@ -299,18 +285,18 @@ impl Builder {
     pub fn new() -> Self {
         Self {
             rak: None,
-            remote_mrenclave: None,
+            remote_enclaves: None,
         }
     }
 
-    /// Return remote MRENCLAVE if configured in the builder.
-    pub fn get_remote_mrenclave(&self) -> &Option<avr::MrEnclave> {
-        &self.remote_mrenclave
+    /// Return remote enclave identities if configured in the builder.
+    pub fn get_remote_enclaves(&self) -> &Option<HashSet<avr::EnclaveIdentity>> {
+        &self.remote_enclaves
     }
 
-    /// Enable remote MRENCLAVE verification.
-    pub fn remote_mrenclave(mut self, mrenclave: Option<avr::MrEnclave>) -> Self {
-        self.remote_mrenclave = mrenclave;
+    /// Enable remote enclave identity verification.
+    pub fn remote_enclaves(mut self, enclaves: Option<HashSet<avr::EnclaveIdentity>>) -> Self {
+        self.remote_enclaves = enclaves;
         self
     }
 
@@ -326,33 +312,33 @@ impl Builder {
         snow::Builder<'a>,
         snow::Keypair,
         Option<Arc<RAK>>,
-        Option<avr::MrEnclave>,
+        Option<HashSet<avr::EnclaveIdentity>>,
     ) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
         let rak = self.rak.take();
-        let remote_mrenclave = self.remote_mrenclave.take();
+        let remote_enclaves = self.remote_enclaves.take();
         let keypair = noise_builder.generate_keypair().unwrap();
 
-        (noise_builder, keypair, rak, remote_mrenclave)
+        (noise_builder, keypair, rak, remote_enclaves)
     }
 
     /// Build initiator session.
     pub fn build_initiator(self) -> Session {
-        let (builder, keypair, rak, mrenclave) = self.build();
+        let (builder, keypair, rak, enclaves) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_initiator()
             .unwrap();
-        Session::new(session, keypair.public, rak, mrenclave)
+        Session::new(session, keypair.public, rak, enclaves)
     }
 
     /// Build responder session.
     pub fn build_responder(self) -> Session {
-        let (builder, keypair, rak, mrenclave) = self.build();
+        let (builder, keypair, rak, enclaves) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_responder()
             .unwrap();
-        Session::new(session, keypair.public, rak, mrenclave)
+        Session::new(session, keypair.public, rak, enclaves)
     }
 }

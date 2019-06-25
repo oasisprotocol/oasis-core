@@ -47,8 +47,8 @@ type TxnSchedulerBatchDispatch struct {
 	// the compute node should use.
 	IORoot hash.Hash `codec:"io_root"`
 
-	// StorageReceipt is the storage receipt for the I/O root.
-	StorageReceipt signature.Signature `codec:"storage_receipt"`
+	// StorageSignatures are the storage receipt signatures for the I/O root.
+	StorageSignatures []signature.Signature `codec:"storage_signatures"`
 
 	// Header is the block header on which the batch should be
 	// based.

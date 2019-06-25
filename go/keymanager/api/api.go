@@ -41,7 +41,8 @@ type Status struct {
 	// Nodes is the list of currently active key manager node IDs.
 	Nodes []signature.PublicKey `codec:"nodes"`
 
-	// TODO: Policy
+	// Policy is the key manager policy.
+	Policy *SignedPolicySGX `codec:"policy"`
 }
 
 // Backend is a key manager management implementation.
@@ -62,8 +63,9 @@ type Backend interface {
 // InitResponse is the initialization RPC response, returned as part of a
 // SignedInitResponse from the key manager enclave.
 type InitResponse struct {
-	IsSecure bool   `codec:"is_secure"`
-	Checksum []byte `codec:"checksum"`
+	IsSecure       bool   `codec:"is_secure"`
+	Checksum       []byte `codec:"checksum"`
+	PolicyChecksum []byte `codec:"policy_checksum"`
 }
 
 // SignedInitResponse is the signed initialization RPC response, returned
@@ -110,7 +112,27 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse,
 	return &untrustedSignedInitResponse.InitResponse, nil
 }
 
+// Genesis is the key manager management genesis state.
+type Genesis struct {
+	Statuses []*Status `codec:"statuses,omit_empty"`
+}
+
 func init() {
-	_ = TestPublicKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
-	signature.RegisterTestPublicKey(TestPublicKey)
+	// Old `INSECURE_SIGNING_KEY_PKCS8`.
+	var oldTestKey signature.PublicKey
+	_ = oldTestKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
+	signature.RegisterTestPublicKey(oldTestKey)
+
+	// Register all the seed derived SGX key manger test keys.
+	for idx, v := range []string{
+		"ekiden test key manager RAK seed", // DO NOT REORDER.
+		"ekiden key manager test multisig key 0",
+		"ekiden key manager test multisig key 1",
+		"ekiden key manager test multisig key 2",
+	} {
+		tmpPrivateKey := signature.NewTestPrivateKey(v)
+		if idx == 0 {
+			TestPublicKey = tmpPrivateKey.Public()
+		}
+	}
 }

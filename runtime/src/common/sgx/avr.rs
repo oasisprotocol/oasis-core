@@ -206,8 +206,7 @@ pub struct AVR {
 pub struct AuthenticatedAVR {
     pub report_data: Vec<u8>,
     // TODO: add other av report/quote body/report fields we want to give the consumer
-    pub mr_enclave: MrEnclave,
-    pub mr_signer: MrSigner,
+    pub identity: EnclaveIdentity,
     pub timestamp: i64,
     pub nonce: String,
 }
@@ -322,8 +321,10 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
 
     Ok(AuthenticatedAVR {
         report_data: quote_body.report_body.report_data,
-        mr_enclave: quote_body.report_body.mr_enclave,
-        mr_signer: quote_body.report_body.mr_signer,
+        identity: EnclaveIdentity {
+            mr_enclave: quote_body.report_body.mr_enclave,
+            mr_signer: quote_body.report_body.mr_signer,
+        },
         timestamp,
         nonce: nonce.to_string(),
     })
@@ -448,24 +449,44 @@ pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
 }
 
 /// Enclave identity.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EnclaveIdentity {
     pub mr_enclave: MrEnclave,
     pub mr_signer: MrSigner,
 }
 
-// Get the current running enclave's identity.
-pub fn get_enclave_identity() -> Option<EnclaveIdentity> {
-    #[cfg(target_env = "sgx")]
-    {
-        let report = Report::for_self();
-        Some(EnclaveIdentity {
-            mr_enclave: MrEnclave(report.mrenclave),
-            mr_signer: MrSigner(report.mrsigner),
-        })
+impl EnclaveIdentity {
+    pub fn default() -> Self {
+        Self {
+            mr_enclave: MrEnclave::default(),
+            mr_signer: MrSigner::default(),
+        }
     }
 
-    #[cfg(not(target_env = "sgx"))]
-    None
+    pub fn current() -> Option<Self> {
+        #[cfg(target_env = "sgx")]
+        {
+            let report = Report::for_self();
+            Some(EnclaveIdentity {
+                mr_enclave: MrEnclave(report.mrenclave),
+                mr_signer: MrSigner(report.mrsigner),
+            })
+        }
+
+        // TODO: There should be a mechanism for setting mock values for
+        // the purpose of testing.
+        #[cfg(not(target_env = "sgx"))]
+        None
+    }
+
+    pub fn fortanix_test(mrenclave: MrEnclave) -> Self {
+        Self {
+            mr_enclave: mrenclave,
+            mr_signer: MrSigner::from(
+                "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a",
+            ),
+        }
+    }
 }
 
 #[cfg(test)]

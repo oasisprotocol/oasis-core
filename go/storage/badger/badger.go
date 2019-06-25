@@ -13,7 +13,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	badgerNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
 )
 
 const (
@@ -36,13 +37,10 @@ type badgerBackend struct {
 func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLockLRUSlots uint64) (api.Backend, error) {
 	logger := logging.GetLogger("storage/badger")
 
-	opts := badger.LSMOnlyOptions
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
-	opts.Logger = &badgerLogger{logger: logger}
-	// TODO: We may need to crank up MaxTableSize at some point.
+	opts := badger.DefaultOptions(dbDir)
+	opts = opts.WithLogger(NewLogAdapter(logger))
 
-	ndb, err := nodedb.NewBadgerNodeDB(opts)
+	ndb, err := badgerNodedb.New(opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to open node database")
 	}
@@ -65,26 +63,28 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 	}, nil
 }
 
-func (ba *badgerBackend) Apply(ctx context.Context, root, expectedNewRoot hash.Hash, log api.WriteLog) (*api.MKVSReceipt, error) {
-	r, err := ba.rootCache.Apply(ctx, root, expectedNewRoot, log)
+func (ba *badgerBackend) Apply(ctx context.Context, root, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+	newRoot, err := ba.rootCache.Apply(ctx, root, expectedNewRoot, log)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to Apply")
 	}
 
-	return ba.signReceipt(ctx, []hash.Hash{*r})
+	receipt, err := ba.signReceipt(ctx, []hash.Hash{*newRoot})
+	return []*api.MKVSReceipt{receipt}, err
 }
 
-func (ba *badgerBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) (*api.MKVSReceipt, error) {
-	roots := make([]hash.Hash, 0, len(ops))
+func (ba *badgerBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+	newRoots := make([]hash.Hash, 0, len(ops))
 	for _, op := range ops {
-		root, err := ba.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
+		newRoot, err := ba.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
 		if err != nil {
 			return nil, errors.Wrap(err, "storage/badger: failed to Apply, op")
 		}
-		roots = append(roots, *root)
+		newRoots = append(newRoots, *newRoot)
 	}
 
-	return ba.signReceipt(ctx, roots)
+	receipt, err := ba.signReceipt(ctx, newRoots)
+	return []*api.MKVSReceipt{receipt}, err
 }
 
 func (ba *badgerBackend) Cleanup() {
@@ -132,11 +132,11 @@ func (ba *badgerBackend) GetValue(ctx context.Context, root hash.Hash, id hash.H
 }
 
 func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.MKVSReceipt, error) {
-	receipt := api.MKVSReceiptBody{
+	receiptBody := api.MKVSReceiptBody{
 		Version: 1,
 		Roots:   roots,
 	}
-	signed, err := signature.SignSigned(*ba.signingKey, api.MKVSReceiptSignatureContext, &receipt)
+	signed, err := signature.SignSigned(*ba.signingKey, api.MKVSReceiptSignatureContext, &receiptBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to sign receipt")
 	}
@@ -144,6 +144,13 @@ func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*a
 	return &api.MKVSReceipt{
 		Signed: *signed,
 	}, nil
+}
+
+// NewLogAdapter returns a badger.Logger backed by an ekiden logger.
+func NewLogAdapter(logger *logging.Logger) badger.Logger {
+	return &badgerLogger{
+		logger: logger,
+	}
 }
 
 type badgerLogger struct {

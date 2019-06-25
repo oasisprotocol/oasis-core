@@ -106,21 +106,27 @@ func (r *tendermintBackend) worker(ctx context.Context) {
 }
 
 func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
-	tags := ev.ResultBeginBlock.GetTags()
-	tags = append(tags, ev.ResultEndBlock.GetTags()...)
+	events := ev.ResultBeginBlock.GetEvents()
+	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), app.TagStatusUpdate) {
-			var statuses []*api.Status
-			if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
-				r.logger.Error("worker: failed to get statuses from tag",
-					"err", err,
-				)
-				continue
-			}
+	for _, tmEv := range events {
+		if tmEv.GetType() != tmapi.EventTypeEkiden {
+			continue
+		}
 
-			for _, status := range statuses {
-				r.notifier.Broadcast(status)
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.TagStatusUpdate) {
+				var statuses []*api.Status
+				if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
+					r.logger.Error("worker: failed to get statuses from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				for _, status := range statuses {
+					r.notifier.Broadcast(status)
+				}
 			}
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/epochtime/api"
+	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/epochtime_mock"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
@@ -160,20 +161,26 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 }
 
 func (t *tendermintMockBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tags := ev.ResultBeginBlock.GetTags()
+	events := ev.ResultBeginBlock.GetEvents()
 
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), app.TagEpoch) {
-			var epoch api.EpochTime
-			if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
-				t.logger.Error("worker: malformed mock epoch",
-					"err", err,
-				)
-				continue
-			}
+	for _, tmEv := range events {
+		if tmEv.GetType() != tmapi.EventTypeEkiden {
+			continue
+		}
 
-			if t.updateCached(ev.Block.Header.Height, epoch) {
-				t.notifier.Broadcast(t.epoch)
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.TagEpoch) {
+				var epoch api.EpochTime
+				if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
+					t.logger.Error("worker: malformed mock epoch",
+						"err", err,
+					)
+					continue
+				}
+
+				if t.updateCached(ev.Block.Header.Height, epoch) {
+					t.notifier.Broadcast(t.epoch)
+				}
 			}
 		}
 	}

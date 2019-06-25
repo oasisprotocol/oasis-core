@@ -134,19 +134,19 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 				wl := storageAPI.WriteLog{storageAPI.LogEntry{Key: key, Value: buf}}
 				b.StartTimer()
 
-				var mkvsReceipt *storageAPI.MKVSReceipt
-				mkvsReceipt, err = storage.Apply(context.Background(), root, unknown, wl)
+				var receipts []*storageAPI.MKVSReceipt
+				receipts, err = storage.Apply(context.Background(), root, unknown, wl)
 				if err != nil {
 					b.Fatalf("failed to Apply(): %v", err)
 				}
 
-				// Open the receipt and obtain the new root from it.
+				// Open the first receipt and obtain the new root from it.
 				b.StopTimer()
-				var rb storageAPI.MKVSReceiptBody
-				if err = mkvsReceipt.Open(&rb); err != nil {
+				var receiptBody storageAPI.MKVSReceiptBody
+				if err = receipts[0].Open(&receiptBody); err != nil {
 					b.Fatalf("failed to Open(): %v", err)
 				}
-				newRoot = rb.Roots[0]
+				newRoot = receiptBody.Roots[0]
 				b.StartTimer()
 			}
 		})

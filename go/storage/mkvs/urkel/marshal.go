@@ -15,3 +15,8 @@ var (
 type SizedBinaryUnmarshaler interface {
 	SizedUnmarshalBinary(data []byte) (int, error)
 }
+
+// NodeUnmarshalBinary unmarshals a node of arbitrary type.
+func NodeUnmarshalBinary(bytes []byte) (internal.Node, error) {
+	return internal.NodeUnmarshalBinary(bytes)
+}
