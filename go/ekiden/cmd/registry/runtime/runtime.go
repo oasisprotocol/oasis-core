@@ -3,7 +3,6 @@ package runtime
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
@@ -27,7 +25,7 @@ import (
 	grpcRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	storageMemory "github.com/oasislabs/ekiden/go/storage/memory"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -312,38 +310,28 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 			return nil, nil, err
 		}
 
-		// Construct an in-memory storage backend and compute the root. We
-		// need a receipt signing key for this.
-		var sk signature.PrivateKey
-		if sk, err = signature.NewPrivateKey(rand.Reader); err != nil {
-			logger.Error("failed to generate dummy receipt signing key",
-				"err", err,
-			)
-			return nil, nil, err
+		// Use in-memory Urkel tree to calculate the new root.
+		tree := urkel.New(nil, nil)
+		ctx := context.Background()
+		for _, logEntry := range log {
+			err := tree.Insert(ctx, logEntry.Key, logEntry.Value)
+			if err != nil {
+				logger.Error("failed to apply runtime genesis storage state",
+					"err", err,
+					"filename", state,
+				)
+				return nil, nil, err
+			}
 		}
-
-		backend := storageMemory.New(&sk)
-		defer backend.Cleanup()
-
-		var root hash.Hash
-		root.Empty()
-		var receipts []*storage.MKVSReceipt
-		if receipts, err = backend.Apply(context.Background(), root, root, log); err != nil {
+		_, newRoot, err := tree.Commit(ctx)
+		if err != nil {
 			logger.Error("failed to apply runtime genesis storage state",
 				"err", err,
 				"filename", state,
 			)
 			return nil, nil, err
 		}
-
-		// Extract the root from the first receipt.
-		var receiptBody storage.MKVSReceiptBody
-		if err = receipts[0].Open(&receiptBody); err != nil {
-			return nil, nil, err
-		}
-
-		gen.StateRoot = receiptBody.Roots[0]
-
+		gen.StateRoot = newRoot
 	}
 
 	return &registry.Runtime{
