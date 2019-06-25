@@ -510,13 +510,11 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		}
 	}
 
-	response := mux.BaseApplication.BeginBlock(req)
-
 	ctx.fireOnCommitHooks(mux.state)
 
-	if tags := ctx.Tags(); tags != nil {
-		response.Tags = append(response.Tags, tags...)
-	}
+	response := mux.BaseApplication.BeginBlock(req)
+	response.Events = ctx.GetEvents()
+
 	return response
 }
 
@@ -568,9 +566,9 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	ctx.fireOnCommitHooks(mux.state)
 
 	return types.ResponseDeliverTx{
-		Code: api.CodeOK.ToInt(),
-		Data: cbor.Marshal(ctx.Data()),
-		Tags: ctx.Tags(),
+		Code:   api.CodeOK.ToInt(),
+		Data:   cbor.Marshal(ctx.Data()),
+		Events: ctx.GetEvents(),
 	}
 }
 
@@ -606,7 +604,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	ctx.fireOnCommitHooks(mux.state)
 
 	// Update tags.
-	resp.Tags = ctx.Tags()
+	resp.Events = ctx.GetEvents()
 
 	return resp
 }

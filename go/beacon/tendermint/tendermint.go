@@ -107,25 +107,31 @@ func (t *Backend) setCached(ev *api.GenerateEvent) {
 }
 
 func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tags := ev.ResultBeginBlock.GetTags()
+	events := ev.ResultBeginBlock.GetEvents()
 
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), app.TagGenerated) {
-			var genEv api.GenerateEvent
-			if err := cbor.Unmarshal(pair.GetValue(), &genEv); err != nil {
-				t.logger.Error("worker: failed to get beacon event from tag",
-					"err", err,
+	for _, tmEv := range events {
+		if tmEv.GetType() != tmapi.EventTypeEkiden {
+			continue
+		}
+
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.TagGenerated) {
+				var genEv api.GenerateEvent
+				if err := cbor.Unmarshal(pair.GetValue(), &genEv); err != nil {
+					t.logger.Error("worker: failed to get beacon event from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				t.logger.Debug("worker: got new beacon",
+					"epoch", genEv.Epoch,
+					"beacon", hex.EncodeToString(genEv.Beacon),
 				)
-				continue
+
+				t.setCached(&genEv)
+				t.notifier.Broadcast(&genEv)
 			}
-
-			t.logger.Debug("worker: got new beacon",
-				"epoch", genEv.Epoch,
-				"beacon", hex.EncodeToString(genEv.Beacon),
-			)
-
-			t.setCached(&genEv)
-			t.notifier.Broadcast(&genEv)
 		}
 	}
 }
