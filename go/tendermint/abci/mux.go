@@ -326,7 +326,9 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 	return mux.queryRouter.Route(req)
 }
 
-func (mux *abciMux) CheckTx(tx []byte) types.ResponseCheckTx {
+func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	tx := req.Tx
+
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
 		mux.logger.Error("CheckTx: failed to de-multiplex",
@@ -518,7 +520,9 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	return response
 }
 
-func (mux *abciMux) DeliverTx(tx []byte) types.ResponseDeliverTx {
+func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
+	tx := req.Tx
+
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
 		mux.logger.Error("DeliverTx: failed to de-multiplex",
