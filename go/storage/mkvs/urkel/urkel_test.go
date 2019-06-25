@@ -349,9 +349,9 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 
 func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
-	tree := New(nil, ndb, Capacity(512, 0))
+	tree := New(nil, ndb, Capacity(128, 0))
 
-	keys, values := generateKeyValuePairs()
+	keys, values := generateKeyValuePairsEx("foo", 150)
 	for i := 0; i < len(keys); i++ {
 		err := tree.Insert(ctx, keys[i], values[i])
 		require.NoError(t, err, "Insert")
@@ -360,12 +360,21 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	_, _, err := tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
 
+	keys, values = generateKeyValuePairsEx("foo key 1", 150)
+	for i := 0; i < len(keys); i++ {
+		err = tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	_, _, err = tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+
 	stats := tree.Stats(ctx, 0)
 	// Only a subset of nodes should remain in cache.
-	require.EqualValues(t, 313, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 199, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
+	require.EqualValues(t, 89, stats.Cache.InternalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 39, stats.Cache.LeafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 1770, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 676, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
 func testDebugDump(t *testing.T, ndb db.NodeDB) {
@@ -601,13 +610,17 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	}
 }
 
-func generateKeyValuePairs() ([][]byte, [][]byte) {
-	keys := make([][]byte, insertItems)
-	values := make([][]byte, insertItems)
-	for i := 0; i < insertItems; i++ {
-		keys[i] = []byte(fmt.Sprintf("key %d", i))
-		values[i] = []byte(fmt.Sprintf("value %d", i))
+func generateKeyValuePairsEx(prefix string, count int) ([][]byte, [][]byte) {
+	keys := make([][]byte, count)
+	values := make([][]byte, count)
+	for i := 0; i < count; i++ {
+		keys[i] = []byte(fmt.Sprintf("%skey %d", prefix, i))
+		values[i] = []byte(fmt.Sprintf("%svalue %d", prefix, i))
 	}
 
 	return keys, values
+}
+
+func generateKeyValuePairs() ([][]byte, [][]byte) {
+	return generateKeyValuePairsEx("", insertItems)
 }

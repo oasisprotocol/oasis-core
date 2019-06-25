@@ -189,6 +189,26 @@ func (c *cache) commitValue(v *internal.Value) {
 	c.valueSize += valueSize
 }
 
+// rollbackNode marks a tree node as no longer being eligible for
+// eviction due to it becoming dirty.
+func (c *cache) rollbackNode(ptr *internal.Pointer) {
+	if ptr.LRU == nil {
+		// Node has not yet been committed to cache.
+		return
+	}
+
+	c.lruNodes.Remove(ptr.LRU)
+
+	switch ptr.Node.(type) {
+	case *internal.InternalNode:
+		c.internalNodeCount--
+	case *internal.LeafNode:
+		c.leafNodeCount--
+	}
+
+	ptr.LRU = nil
+}
+
 func (c *cache) newValuePtr(v *internal.Value) *internal.Value {
 	// TODO: Deduplicate values.
 	return v
@@ -224,7 +244,7 @@ func (c *cache) removeNode(ptr *internal.Pointer) {
 	case *internal.InternalNode:
 		c.internalNodeCount--
 	case *internal.LeafNode:
-		// Also remove the value
+		// Also remove the value.
 		c.removeValue(n.Value)
 		c.leafNodeCount--
 	}

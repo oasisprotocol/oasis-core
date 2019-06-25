@@ -71,6 +71,8 @@ func (t *Tree) doRemove(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		if changed {
 			n.Clean = false
 			ptr.Clean = false
+			// No longer eligible for eviction as it is dirty.
+			t.cache.rollbackNode(ptr)
 		}
 
 		return ptr, changed, nil
