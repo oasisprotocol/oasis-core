@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/tendermint/tendermint/abci/types"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -89,6 +90,20 @@ func (c *Context) EmitTag(key []byte, value []byte) {
 // GetTag returns a specific tag's value if it exists.
 func (c *Context) GetTag(key []byte) []byte {
 	return api.GetTag(c.tags, key)
+}
+
+// GetEvents returns the ABCI event vector corresponding to the tags.
+func (c *Context) GetEvents() []types.Event {
+	if len(c.tags) == 0 {
+		return nil
+	}
+
+	return []types.Event{
+		types.Event{
+			Type:       api.EventTypeEkiden,
+			Attributes: c.tags,
+		},
+	}
 }
 
 // Now returns the current tendermint time.

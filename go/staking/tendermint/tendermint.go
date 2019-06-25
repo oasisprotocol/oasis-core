@@ -242,30 +242,36 @@ func (b *tendermintBackend) worker(ctx context.Context) {
 }
 
 func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tags := ev.ResultBeginBlock.GetTags()
-	tags = append(tags, ev.ResultEndBlock.GetTags()...)
+	events := ev.ResultBeginBlock.GetEvents()
+	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), app.TagTakeEscrow) {
-			var e api.TakeEscrowEvent
-			if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-				b.logger.Error("worker: failed to get take escrow event from tag",
-					"err", err,
-				)
-				continue
+	for _, tmEv := range events {
+		if tmEv.GetType() != tmapi.EventTypeEkiden {
+			continue
+		}
+
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.TagTakeEscrow) {
+				var e api.TakeEscrowEvent
+				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+					b.logger.Error("worker: failed to get take escrow event from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				b.escrowNotifier.Broadcast(&e)
+			} else if bytes.Equal(pair.GetKey(), app.TagReleaseEscrow) {
+				var e api.ReleaseEscrowEvent
+				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+					b.logger.Error("worker: failed to get release escrow event from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				b.escrowNotifier.Broadcast(&e)
 			}
-
-			b.escrowNotifier.Broadcast(&e)
-		} else if bytes.Equal(pair.GetKey(), app.TagReleaseEscrow) {
-			var e api.ReleaseEscrowEvent
-			if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-				b.logger.Error("worker: failed to get release escrow event from tag",
-					"err", err,
-				)
-				continue
-			}
-
-			b.escrowNotifier.Broadcast(&e)
 		}
 	}
 }

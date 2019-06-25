@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	tmcmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
@@ -308,17 +308,18 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 			return
 		}
 
-		// Extract tags from event.
-		var tags []tmcmn.KVPair
+		// Extract relevant events.
+		var tmEvents []types.Event
+
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
-			tags = append(ev.ResultBeginBlock.GetTags(), ev.ResultEndBlock.GetTags()...)
+			tmEvents = append(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents()...)
 
 			r.Lock()
 			r.lastBlockHeight = ev.Block.Header.Height
 			r.Unlock()
 		case tmtypes.EventDataTx:
-			tags = ev.Result.GetTags()
+			tmEvents = ev.Result.GetEvents()
 
 			r.Lock()
 			r.lastBlockHeight = ev.Height
@@ -327,63 +328,69 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 			continue
 		}
 
-		for _, pair := range tags {
-			if bytes.Equal(pair.GetKey(), app.TagFinalized) {
-				block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), r.lastBlockHeight)
-				if err != nil {
-					r.logger.Error("worker: failed to get block from tag",
-						"err", err,
-					)
-					continue
-				}
+		for _, tmEv := range tmEvents {
+			if tmEv.GetType() != tmapi.EventTypeEkiden {
+				continue
+			}
 
-				notifiers := r.getRuntimeNotifiers(value.ID)
-
-				// Ensure latest block is set.
-				notifiers.Lock()
-				notifiers.lastBlock = block
-				notifiers.lastBlockHeight = r.lastBlockHeight
-				notifiers.Unlock()
-
-				// Index the block when an indexer is configured.
-				if r.blockIndex != nil {
-					err = r.blockIndex.Index(block, r.lastBlockHeight)
+			for _, pair := range tmEv.GetAttributes() {
+				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
+					block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), r.lastBlockHeight)
 					if err != nil {
-						r.logger.Error("worker: failed to index block",
+						r.logger.Error("worker: failed to get block from tag",
 							"err", err,
 						)
-						// TODO: Support on-demand reindexing.
+						continue
 					}
-				}
 
-				// Broadcast new block.
-				r.allBlockNotifier.Broadcast(block)
-				notifiers.blockNotifier.Broadcast(&api.AnnotatedBlock{
-					Height: r.lastBlockHeight,
-					Block:  block,
-				})
-			} else if bytes.Equal(pair.GetKey(), app.TagMergeDiscrepancyDetected) {
-				var value app.ValueMergeDiscrepancyDetected
-				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
-					r.logger.Error("worker: failed to get discrepancy from tag",
-						"err", err,
-					)
-					continue
-				}
+					notifiers := r.getRuntimeNotifiers(value.ID)
 
-				notifiers := r.getRuntimeNotifiers(value.ID)
-				notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
-			} else if bytes.Equal(pair.GetKey(), app.TagComputeDiscrepancyDetected) {
-				var value app.ValueComputeDiscrepancyDetected
-				if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
-					r.logger.Error("worker: failed to get discrepancy from tag",
-						"err", err,
-					)
-					continue
-				}
+					// Ensure latest block is set.
+					notifiers.Lock()
+					notifiers.lastBlock = block
+					notifiers.lastBlockHeight = r.lastBlockHeight
+					notifiers.Unlock()
 
-				notifiers := r.getRuntimeNotifiers(value.ID)
-				notifiers.eventNotifier.Broadcast(&api.Event{ComputeDiscrepancyDetected: &value.Event})
+					// Index the block when an indexer is configured.
+					if r.blockIndex != nil {
+						err = r.blockIndex.Index(block, r.lastBlockHeight)
+						if err != nil {
+							r.logger.Error("worker: failed to index block",
+								"err", err,
+							)
+							// TODO: Support on-demand reindexing.
+						}
+					}
+
+					// Broadcast new block.
+					r.allBlockNotifier.Broadcast(block)
+					notifiers.blockNotifier.Broadcast(&api.AnnotatedBlock{
+						Height: r.lastBlockHeight,
+						Block:  block,
+					})
+				} else if bytes.Equal(pair.GetKey(), app.TagMergeDiscrepancyDetected) {
+					var value app.ValueMergeDiscrepancyDetected
+					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
+						r.logger.Error("worker: failed to get discrepancy from tag",
+							"err", err,
+						)
+						continue
+					}
+
+					notifiers := r.getRuntimeNotifiers(value.ID)
+					notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
+				} else if bytes.Equal(pair.GetKey(), app.TagComputeDiscrepancyDetected) {
+					var value app.ValueComputeDiscrepancyDetected
+					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
+						r.logger.Error("worker: failed to get discrepancy from tag",
+							"err", err,
+						)
+						continue
+					}
+
+					notifiers := r.getRuntimeNotifiers(value.ID)
+					notifiers.eventNotifier.Broadcast(&api.Event{ComputeDiscrepancyDetected: &value.Event})
+				}
 			}
 		}
 	}

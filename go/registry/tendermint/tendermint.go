@@ -317,65 +317,71 @@ func (r *tendermintBackend) workerEvents(ctx context.Context) {
 }
 
 func (r *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tags := ev.ResultBeginBlock.GetTags()
-	tags = append(tags, ev.ResultEndBlock.GetTags()...)
+	events := ev.ResultBeginBlock.GetEvents()
+	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), app.TagNodesExpired) {
-			var nodes []*node.Node
-			if err := cbor.Unmarshal(pair.GetValue(), &nodes); err != nil {
-				r.logger.Error("worker: failed to get nodes from tag",
-					"err", err,
-				)
-			}
+	for _, tmEv := range events {
+		if tmEv.GetType() != tmapi.EventTypeEkiden {
+			continue
+		}
 
-			for _, node := range nodes {
-				r.nodeNotifier.Broadcast(&api.NodeEvent{
-					Node:           node,
-					IsRegistration: false,
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.TagNodesExpired) {
+				var nodes []*node.Node
+				if err := cbor.Unmarshal(pair.GetValue(), &nodes); err != nil {
+					r.logger.Error("worker: failed to get nodes from tag",
+						"err", err,
+					)
+				}
+
+				for _, node := range nodes {
+					r.nodeNotifier.Broadcast(&api.NodeEvent{
+						Node:           node,
+						IsRegistration: false,
+					})
+				}
+			} else if bytes.Equal(pair.GetKey(), app.TagRuntimeRegistered) {
+				var id signature.PublicKey
+				if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
+					r.logger.Error("worker: failed to get runtime from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				rt, err := r.GetRuntime(ctx, id)
+				if err != nil {
+					r.logger.Error("worker: failed to get runtime from registry",
+						"err", err,
+						"runtime", id,
+					)
+					continue
+				}
+
+				r.runtimeNotifier.Broadcast(rt)
+			} else if bytes.Equal(pair.GetKey(), app.TagEntityRegistered) {
+				var id signature.PublicKey
+				if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
+					r.logger.Error("worker: failed to get entity from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				ent, err := r.GetEntity(ctx, id)
+				if err != nil {
+					r.logger.Error("worker: failed to get entity from registry",
+						"err", err,
+						"entity", id,
+					)
+					continue
+				}
+
+				r.entityNotifier.Broadcast(&api.EntityEvent{
+					Entity:         ent,
+					IsRegistration: true,
 				})
 			}
-		} else if bytes.Equal(pair.GetKey(), app.TagRuntimeRegistered) {
-			var id signature.PublicKey
-			if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
-				r.logger.Error("worker: failed to get runtime from tag",
-					"err", err,
-				)
-				continue
-			}
-
-			rt, err := r.GetRuntime(ctx, id)
-			if err != nil {
-				r.logger.Error("worker: failed to get runtime from registry",
-					"err", err,
-					"runtime", id,
-				)
-				continue
-			}
-
-			r.runtimeNotifier.Broadcast(rt)
-		} else if bytes.Equal(pair.GetKey(), app.TagEntityRegistered) {
-			var id signature.PublicKey
-			if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
-				r.logger.Error("worker: failed to get entity from tag",
-					"err", err,
-				)
-				continue
-			}
-
-			ent, err := r.GetEntity(ctx, id)
-			if err != nil {
-				r.logger.Error("worker: failed to get entity from registry",
-					"err", err,
-					"entity", id,
-				)
-				continue
-			}
-
-			r.entityNotifier.Broadcast(&api.EntityEvent{
-				Entity:         ent,
-				IsRegistration: true,
-			})
 		}
 	}
 }
