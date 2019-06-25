@@ -431,6 +431,32 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 8890, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
+func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
+	batch := ndb.NewBatch()
+	defer batch.Reset()
+
+	var calls []int
+
+	batch.OnCommit(func() {
+		calls = append(calls, 1)
+	})
+	batch.OnCommit(func() {
+		calls = append(calls, 2)
+	})
+	batch.OnCommit(func() {
+		calls = append(calls, 3)
+	})
+
+	require.True(t, len(calls) == 0, "OnCommit hooks should not fire before commit")
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	err := batch.Commit(emptyRoot)
+	require.NoError(t, err, "Commit")
+	require.EqualValues(t, calls, []int{1, 2, 3}, "OnCommit hooks should fire in order")
+}
+
 // TODO: More tests for write logs.
 // TODO: More tests with bad syncer outputs.
 
@@ -484,6 +510,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testDebugStats(t, backend)
+	})
+	t.Run("OnCommitHooks", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testOnCommitHooks(t, backend)
 	})
 }
 
