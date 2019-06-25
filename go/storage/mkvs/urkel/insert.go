@@ -32,6 +32,8 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		if !n.Left.IsClean() || !n.Right.IsClean() {
 			n.Clean = false
 			ptr.Clean = false
+			// No longer eligible for eviction as it is dirty.
+			t.cache.rollbackNode(ptr)
 		}
 
 		return ptr, existed, nil
@@ -46,6 +48,8 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 			n.Value = t.cache.newValue(val)
 			n.Clean = false
 			ptr.Clean = false
+			// No longer eligible for eviction as it is dirty.
+			t.cache.rollbackNode(ptr)
 			return ptr, true, nil
 		}
 
