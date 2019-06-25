@@ -37,11 +37,8 @@ type badgerBackend struct {
 func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLockLRUSlots uint64) (api.Backend, error) {
 	logger := logging.GetLogger("storage/badger")
 
-	opts := badger.LSMOnlyOptions
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
-	opts.Logger = &badgerLogger{logger: logger}
-	// TODO: We may need to crank up MaxTableSize at some point.
+	opts := badger.DefaultOptions(dbDir)
+	opts = opts.WithLogger(NewLogAdapter(logger))
 
 	ndb, err := badgerNodedb.New(opts)
 	if err != nil {
@@ -145,6 +142,13 @@ func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*a
 	return &api.MKVSReceipt{
 		Signed: *signed,
 	}, nil
+}
+
+// NewLogAdapter returns a badger.Logger backed by an ekiden logger.
+func NewLogAdapter(logger *logging.Logger) badger.Logger {
+	return &badgerLogger{
+		logger: logger,
+	}
 }
 
 type badgerLogger struct {

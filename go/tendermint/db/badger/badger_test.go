@@ -1,4 +1,4 @@
-package bolt
+package badger
 
 import (
 	"io/ioutil"
@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/db/tests"
 )
 
-func TestBoltTendermintDB(t *testing.T) {
+func TestBadgerTendermintDB(t *testing.T) {
 	// Create a temporary directory to store the test database.
 	tmpDir, err := ioutil.TempDir("", "ekiden-go-tendermint-db-test")
 	require.NoError(t, err, "Failed to create temporary directory.")

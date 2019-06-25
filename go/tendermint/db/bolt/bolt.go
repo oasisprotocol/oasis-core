@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	bolt "github.com/etcd-io/bbolt"
@@ -18,7 +19,13 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
-const dbVersion = 1
+const (
+	// BackendName is the name of this implementation.
+	BackendName = "boltdb"
+
+	dbVersion = 1
+	dbSuffix  = ".bolt.db"
+)
 
 var (
 	baseLogger = logging.GetLogger("tendermint/db/bolt")
@@ -30,16 +37,16 @@ var (
 	_ dbm.Iterator   = (*boltDBIterator)(nil)
 	_ dbm.Batch      = (*boltDBBatch)(nil)
 
-	// BoltDBProvider is a DBProvider to be used when initializing
+	// DBProvider is a DBProvider to be used when initializing
 	// a tendermint node.
-	BoltDBProvider node.DBProvider = boltDBProvider
+	DBProvider node.DBProvider = boltDBProvider
 )
 
 func boltDBProvider(ctx *node.DBContext) (dbm.DB, error) {
 	if err := common.Mkdir(ctx.Config.DBDir()); err != nil {
 		return nil, err
 	}
-	return New(filepath.Join(ctx.Config.DBDir(), ctx.ID+".bolt.db"))
+	return New(filepath.Join(ctx.Config.DBDir(), ctx.ID), false)
 }
 
 type boltDBImpl struct {
@@ -55,7 +62,11 @@ type boltDBImpl struct {
 //
 // Note: This should only be used by tendermint, all other places
 // that need a K/V store should favor using BoltDB directly.
-func New(fn string) (dbm.DB, error) {
+func New(fn string, noSuffix bool) (dbm.DB, error) {
+	if !noSuffix && !strings.HasSuffix(fn, dbSuffix) {
+		fn = fn + dbSuffix
+	}
+
 	db, err := bolt.Open(fn, 0600, nil)
 	if err != nil {
 		return nil, err

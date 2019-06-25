@@ -28,7 +28,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
+	"github.com/oasislabs/ekiden/go/tendermint/db"
 )
 
 const (
@@ -931,7 +931,7 @@ func (s *ApplicationState) metricsWorker() {
 }
 
 func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
-	db, err := bolt.New(filepath.Join(dataDir, "abci-mux-state.bolt.db"))
+	db, err := db.New(filepath.Join(dataDir, "abci-mux-state"), false)
 	if err != nil {
 		return nil, err
 	}
