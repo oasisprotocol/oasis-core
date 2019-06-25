@@ -38,7 +38,7 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 	logger := logging.GetLogger("storage/badger")
 
 	opts := badger.DefaultOptions(dbDir)
-	opts = opts.WithLogger(&badgerLogger{logger: logger})
+	opts = opts.WithLogger(NewLogAdapter(logger))
 
 	ndb, err := badgerNodedb.New(opts)
 	if err != nil {
@@ -142,6 +142,13 @@ func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*a
 	return &api.MKVSReceipt{
 		Signed: *signed,
 	}, nil
+}
+
+// NewLogAdapter returns a badger.Logger backed by an ekiden logger.
+func NewLogAdapter(logger *logging.Logger) badger.Logger {
+	return &badgerLogger{
+		logger: logger,
+	}
 }
 
 type badgerLogger struct {

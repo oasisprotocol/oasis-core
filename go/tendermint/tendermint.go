@@ -36,7 +36,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
-	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
+	"github.com/oasislabs/ekiden/go/tendermint/db"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -386,6 +386,14 @@ func (t *tendermintService) lazyInit() error {
 		return tmGenDoc, nil
 	}
 
+	dbProvider, err := db.GetProvider()
+	if err != nil {
+		t.Logger.Error("failed to obtain database provider",
+			"err", err,
+		)
+		return err
+	}
+
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
 	// initialization, instead of t.node.Start().  This is a problem
 	// because at the time that lazyInit() is called, none of the ABCI
@@ -399,7 +407,7 @@ func (t *tendermintService) lazyInit() error {
 			&tmp2p.NodeKey{PrivKey: crypto.PrivateKeyToTendermint(t.nodeKey)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tenderminGenesisProvider,
-			bolt.BoltDBProvider,
+			dbProvider,
 			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
 			newLogAdapter(!viper.GetBool(cfgLogDebug)),
 		)
@@ -838,4 +846,6 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
+
+	db.RegisterFlags(cmd)
 }
