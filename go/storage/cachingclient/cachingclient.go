@@ -3,20 +3,14 @@
 package cachingclient
 
 import (
-	"bufio"
 	"context"
-	"io"
-	"os"
 	"sync"
 
-	"github.com/oasislabs/go-codec/codec"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/cache/lru"
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -82,12 +76,12 @@ func (v *cachedValue) Size() uint64 {
 	return uint64(len(v.value))
 }
 
-func (b *cachingClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+func (b *cachingClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	// TODO: Implement caching for MKVS operations (issue #1664).
 	return b.remote.Apply(ctx, root, expectedNewRoot, log)
 }
 
-func (b *cachingClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+func (b *cachingClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
 	// TODO: Implement caching for MKVS operations (issue #1664).
 	return b.remote.ApplyBatch(ctx, ops)
 }
@@ -125,73 +119,12 @@ func (b *cachingClientBackend) Initialized() <-chan struct{} {
 	return b.remote.Initialized()
 }
 
-func (b *cachingClientBackend) insertLocal(key api.Key, value []byte) bool {
-	err := b.local.Put(key, &cachedValue{value: value})
-	if err == nil {
-		return true
-	}
-
-	b.logger.Error("failed to insert into cache",
-		"err", err,
-		"key", key,
-		"value_size", len(value),
-	)
-	return false
-}
-
 func (b *cachingClientBackend) load() error {
 	b.logger.Info("loading cache from disk",
 		"path", b.dbPath,
 	)
 
-	f, err := os.Open(b.dbPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// This failure class is harmless, don't propagate the error.
-			err = nil
-		} else {
-			b.logger.Error("failed to open persisted cache",
-				"err", err,
-			)
-		}
-		return err
-	}
-	defer f.Close()
-
-	var (
-		totalKeys int
-		totalSize int
-
-		r      = bufio.NewReader(f)
-		ch     = make(chan []byte, 64) // Buffered, we're populating a cold cache.
-		doneCh = make(chan struct{})
-	)
-
-	go func() {
-		defer close(doneCh)
-		for v := range ch {
-			if b.insertLocal(api.HashStorageKey(v), append([]byte{}, v...)) {
-				totalKeys++
-				totalSize += len(v)
-			}
-		}
-	}()
-
-	dec := codec.NewDecoder(r, cbor.Handle)
-	defer dec.Release()
-	err = dec.Decode(&ch)
-	close(ch)
-	<-doneCh
-
-	if err != nil && err != io.EOF {
-		return errors.Wrap(err, "failed to de-serialize persisted cache")
-	}
-
-	b.logger.Info("loaded cache from disk",
-		"keys", totalKeys,
-		"bytes_written", totalSize,
-	)
-
+	// TODO: Implement caching for MKVS operations (issue #1664).
 	return nil
 }
 
@@ -200,45 +133,7 @@ func (b *cachingClientBackend) save() error {
 		"path", b.dbPath,
 	)
 
-	f, err := os.OpenFile(b.dbPath, os.O_CREATE|os.O_APPEND|os.O_TRUNC|os.O_WRONLY, 0600)
-	if err != nil {
-		return errors.Wrap(err, "failed to open persisted cache for overwrite")
-	}
-	defer f.Close()
-
-	var (
-		totalKeys int
-		totalSize int
-
-		w  = bufio.NewWriter(f)
-		ch = make(chan []byte) // Unbuffered, entries may be large.
-	)
-	defer w.Flush()
-
-	go func() {
-		defer close(ch)
-
-		for _, v := range b.local.Keys() {
-			cached, _ := b.local.Get(v)
-			cachedBytes := cached.(*cachedValue).value
-			ch <- cachedBytes
-
-			totalSize += len(cachedBytes)
-			totalKeys++
-		}
-	}()
-
-	enc := codec.NewEncoder(w, cbor.Handle)
-	defer enc.Release()
-	if err = enc.Encode(ch); err != nil {
-		return errors.Wrap(err, "failed to serialize/persist cache")
-	}
-
-	b.logger.Info("persisted cache to disk",
-		"keys", totalKeys,
-		"bytes_written", totalSize,
-	)
-
+	// TODO: Implement caching for MKVS operations (issue #1664).
 	return nil
 }
 

@@ -33,22 +33,22 @@ type leveldbBackend struct {
 	closeOnce  sync.Once
 }
 
-func (b *leveldbBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.MKVSReceipt, error) {
-	receipt := api.MKVSReceiptBody{
+func (b *leveldbBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
+	receipt := api.ReceiptBody{
 		Version: 1,
 		Roots:   roots,
 	}
-	signed, err := signature.SignSigned(*b.signingKey, api.MKVSReceiptSignatureContext, &receipt)
+	signed, err := signature.SignSigned(*b.signingKey, api.ReceiptSignatureContext, &receipt)
 	if err != nil {
 		return nil, err
 	}
 
-	return &api.MKVSReceipt{
+	return &api.Receipt{
 		Signed: *signed,
 	}, nil
 }
 
-func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
 	var newRoots []hash.Hash
 	for _, op := range ops {
 		newRoot, err := b.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
@@ -59,17 +59,17 @@ func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*
 	}
 
 	receipt, err := b.signReceipt(ctx, newRoots)
-	return []*api.MKVSReceipt{receipt}, err
+	return []*api.Receipt{receipt}, err
 }
 
-func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	newRoot, err := b.rootCache.Apply(ctx, root, expectedNewRoot, log)
 	if err != nil {
 		return nil, err
 	}
 
 	receipt, err := b.signReceipt(ctx, []hash.Hash{*newRoot})
-	return []*api.MKVSReceipt{receipt}, err
+	return []*api.Receipt{receipt}, err
 }
 
 func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
