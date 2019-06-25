@@ -18,7 +18,7 @@ use ekiden_keymanager_api::{
     ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
     INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
-use ekiden_keymanager_client::KeyManagerClient;
+use ekiden_keymanager_client::{KeyManagerClient, RemoteClient};
 use ekiden_runtime::{
     common::{
         crypto::{
@@ -33,6 +33,8 @@ use ekiden_runtime::{
     storage::StorageContext,
     BUILD_INFO,
 };
+
+use crate::{context::Context as KmContext, policy::Policy};
 
 lazy_static! {
     // Global KDF object.
@@ -61,22 +63,12 @@ lazy_static! {
 }
 
 /// A dummy key for use in non-SGX tests where integrity is not needed.
-/// Public Key: 0x9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f
 #[cfg(not(target_env = "sgx"))]
-const INSECURE_SIGNING_KEY_PKCS8: &'static [u8] = &[
-    48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 124, 181, 54, 35, 91, 34, 238,
-    29, 127, 17, 115, 64, 41, 135, 165, 19, 211, 246, 106, 37, 136, 149, 157, 187, 145, 157, 192,
-    170, 25, 201, 141, 161, 35, 3, 33, 0, 157, 65, 168, 116, 184, 14, 57, 164, 12, 150, 68, 233,
-    100, 240, 228, 249, 103, 16, 12, 145, 101, 75, 253, 118, 102, 67, 95, 233, 6, 175, 6, 15,
-];
+const INSECURE_SIGNING_KEY_SEED: &str = "ekiden test key manager RAK seed";
 
 const MASTER_SECRET_STORAGE_KEY: &'static [u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
 const MASTER_SECRET_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal master secret v0";
-
-pub(crate) struct Context {
-    pub km_client: Arc<dyn KeyManagerClient>,
-}
 
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
@@ -176,7 +168,7 @@ impl Kdf {
         &self,
         req: &InitRequest,
         ctx: &mut RpcContext,
-        //client: Arc<KeyManagerClient>,
+        policy_checksum: Vec<u8>,
     ) -> Fallible<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
 
@@ -208,11 +200,18 @@ impl Kdf {
                     // Couldn't load, fetch the master secret from another
                     // enclave instance.
 
-                    let rctx = runtime_context!(ctx, Context);
+                    let rctx = runtime_context!(ctx, KmContext);
 
-                    let result = rctx
-                        .km_client
-                        .replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
+                    let km_client = RemoteClient::new_runtime(
+                        rctx.runtime_id,
+                        Policy::global().may_replicate_from(),
+                        rctx.protocol.clone(),
+                        ctx.rak.clone(),
+                        1, // Not used, doesn't matter.
+                    );
+
+                    let result =
+                        km_client.replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
                     let master_secret =
                         Executor::with_current(|executor| executor.block_on(result))?;
                     (master_secret.unwrap(), true)
@@ -274,8 +273,9 @@ impl Kdf {
         }
         #[cfg(not(target_env = "sgx"))]
         {
-            let priv_key =
-                Arc::new(signature::PrivateKey::from_pkcs8(INSECURE_SIGNING_KEY_PKCS8).unwrap());
+            let priv_key = Arc::new(signature::PrivateKey::from_test_seed(
+                INSECURE_SIGNING_KEY_SEED.to_string(),
+            ));
 
             let signer: Arc<dyn signature::Signer> = priv_key;
             inner.signer = Some(signer);
@@ -283,8 +283,9 @@ impl Kdf {
 
         // Build the response and sign it with the RAK.
         let init_response = InitResponse {
-            is_secure: BUILD_INFO.is_secure,
+            is_secure: BUILD_INFO.is_secure && !Policy::unsafe_skip(),
             checksum: inner.checksum.as_ref().unwrap().clone(),
+            policy_checksum,
         };
 
         let body = serde_cbor::to_vec(&init_response)?;

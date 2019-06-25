@@ -8,6 +8,7 @@ source .buildkite/scripts/common.sh
 # Set up environment
 ####################
 export EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
+export EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
 export RUST_BACKTRACE="1"
 
 ########################################

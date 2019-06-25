@@ -79,7 +79,7 @@ impl RAK {
                 private_key: None,
                 avr: None,
                 avr_timestamp: None,
-                enclave_identity: avr::get_enclave_identity(),
+                enclave_identity: avr::EnclaveIdentity::current(),
                 target_info: None,
                 nonce: None,
             }),
@@ -203,10 +203,10 @@ impl RAK {
             .enclave_identity
             .as_ref()
             .expect("Enclave identity must be configured");
-        if authenticated_avr.mr_enclave != enclave_identity.mr_enclave {
+        if authenticated_avr.identity.mr_enclave != enclave_identity.mr_enclave {
             return Err(AVRError::MrEnclaveMismatch.into());
         }
-        if authenticated_avr.mr_signer != enclave_identity.mr_signer {
+        if authenticated_avr.identity.mr_signer != enclave_identity.mr_signer {
             return Err(AVRError::MrSignerMismatch.into());
         }
 

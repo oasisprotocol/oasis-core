@@ -1,9 +1,7 @@
 // Package keymanager implementes the key manager management applicaiton.
 package keymanager
 
-import (
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-)
+import tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 
 const (
 	// TransactionTag is a unique byte to identify transactions for
@@ -21,7 +19,7 @@ var (
 
 	// QueryApp is a query for filtering transactions processed by the
 	// key manager application.
-	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
+	QueryApp = tmapi.QueryForEvent([]byte(AppName), tmapi.TagAppNameValue)
 )
 
 const (
@@ -31,5 +29,3 @@ const (
 	// QueryGetStatuses is a path for a GetStatuses query.
 	QueryGetStatuses = AppName + "/statuses"
 )
-
-// TODO: Policy updates etc here.

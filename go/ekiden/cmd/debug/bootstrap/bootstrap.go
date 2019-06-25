@@ -22,6 +22,7 @@ const (
 	cfgBootstrapRuntime    = "debug.bootstrap.runtime"
 	cfgBootstrapEntity     = "debug.bootstrap.entity"
 	cfgBootstrapRootHash   = "debug.bootstrap.roothash"
+	cfgBootstrapKeyManager = "debug.bootstrap.keymanager"
 	cfgBootstrapStorage    = "debug.bootstrap.storage"
 )
 
@@ -75,6 +76,14 @@ func doBootstrap(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	keymanager := viper.GetStringSlice(cfgBootstrapKeyManager)
+	if err := cmdGenesis.AppendKeyManagerState(template, keymanager, logger); err != nil {
+		logger.Error("failed to parse key manager genesis state",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
 	storage := viper.GetStringSlice(cfgBootstrapStorage)
 	if err := cmdGenesis.AppendStorageState(template, storage, logger); err != nil {
 		logger.Error("failed to parse storage genesis state",
@@ -117,6 +126,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgBootstrapEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRuntime, nil, "path to runtime registration file")
 		cmd.Flags().StringSlice(cfgBootstrapRootHash, nil, "path to roothash genesis blocks file")
+		cmd.Flags().StringSlice(cfgBootstrapKeyManager, nil, "path to key manger genesis status file")
 		cmd.Flags().StringSlice(cfgBootstrapStorage, nil, "path to storage genesis state file")
 	}
 
@@ -127,6 +137,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 		cfgBootstrapRuntime,
 		cfgBootstrapEntity,
 		cfgBootstrapRootHash,
+		cfgBootstrapKeyManager,
 		cfgBootstrapStorage,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

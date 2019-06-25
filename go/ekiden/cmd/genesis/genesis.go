@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/genesis"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -28,6 +29,7 @@ const (
 	cfgEntity      = "entity"
 	cfgRuntime     = "runtime"
 	cfgRootHash    = "roothash"
+	cfgKeyManager  = "keymanager"
 	cfgStorage     = "storage"
 	cfgValidator   = "validator"
 )
@@ -115,6 +117,14 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	roothash := viper.GetStringSlice(cfgRootHash)
 	if err := AppendRootHashState(doc, roothash, logger); err != nil {
 		logger.Error("failed to parse roothash genesis state",
+			"err", err,
+		)
+		return
+	}
+
+	keymanager := viper.GetStringSlice(cfgKeyManager)
+	if err := AppendKeyManagerState(doc, keymanager, logger); err != nil {
+		logger.Error("failed to parse key manager genesis state",
 			"err", err,
 		)
 		return
@@ -267,6 +277,38 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 	return nil
 }
 
+// AppendKeyManagerState appends the key manager genesis state given a vector of
+// key manager statuses.
+func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.Logger) error {
+	var kmSt keymanager.Genesis
+
+	for _, v := range statuses {
+		b, err := ioutil.ReadFile(v)
+		if err != nil {
+			l.Error("failed to load genesis key manager status",
+				"err", err,
+				"filename", v,
+			)
+			return err
+		}
+
+		var status keymanager.Status
+		if err = json.Unmarshal(b, &status); err != nil {
+			l.Error("failed to parse genesis key manager status",
+				"err", err,
+				"filename", v,
+			)
+			return err
+		}
+
+		kmSt.Statuses = append(kmSt.Statuses, &status)
+	}
+
+	doc.KeyManager = kmSt
+
+	return nil
+}
+
 // AppendStorageState appends the storage genesis state given a vector
 // of state filenames.
 func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logger) error {
@@ -305,6 +347,7 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgRuntime, nil, "path to runtime registration file")
 		cmd.Flags().StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
+		cmd.Flags().StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 		cmd.Flags().StringSlice(cfgStorage, nil, "path to storage genesis state file")
 		cmd.Flags().StringSlice(cfgValidator, nil, "path to validator file")
 	}
@@ -314,6 +357,7 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cfgEntity,
 		cfgRuntime,
 		cfgRootHash,
+		cfgKeyManager,
 		cfgStorage,
 		cfgValidator,
 	} {
