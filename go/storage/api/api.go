@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -76,19 +77,19 @@ func (s *Receipt) UnmarshalCBOR(data []byte) error {
 
 // NodeID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
-type NodeID = urkel.NodeID
+type NodeID = node.ID
 
 // Node is either an InternalNode or a LeafNode.
-type Node = urkel.Node
+type Node = node.Node
 
 // Pointer is a pointer to another node.
-type Pointer = urkel.Pointer
+type Pointer = node.Pointer
 
 // InternalNode is an internal node with two children.
-type InternalNode = urkel.InternalNode
+type InternalNode = node.InternalNode
 
 // LeafNode is a leaf node containing a key/value pair.
-type LeafNode = urkel.LeafNode
+type LeafNode = node.LeafNode
 
 // SubtreeIndex is a subtree index.
 type SubtreeIndex = syncer.SubtreeIndex

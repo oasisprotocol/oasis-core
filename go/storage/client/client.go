@@ -31,7 +31,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 const (
@@ -525,12 +525,12 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	}
 	resp := respRaw.(*storage.GetNodeResponse)
 
-	node, err := urkel.NodeUnmarshalBinary(resp.GetNode())
+	n, err := urkelNode.UnmarshalBinary(resp.GetNode())
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client: failed to unmarshal node")
 	}
 
-	return node, nil
+	return n, nil
 }
 
 func (b *storageClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {

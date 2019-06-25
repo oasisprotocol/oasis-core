@@ -10,20 +10,12 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
 // ErrClosed is the error returned when methods are used after Close is called.
 var ErrClosed = errors.New("urkel: tree is closed")
-
-// Re-export the node structures, as we need them in the storage API.
-type NodeID = internal.NodeID
-type Node = internal.Node
-type Pointer = internal.Pointer
-type InternalNode = internal.InternalNode
-type LeafNode = internal.LeafNode
-type Value = internal.Value
 
 type Stats struct {
 	MaxDepth          uint8
@@ -125,7 +117,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 // the given node database.
 func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ...Option) (*Tree, error) {
 	t := New(rs, ndb, options...)
-	t.cache.setPendingRoot(&internal.Pointer{
+	t.cache.setPendingRoot(&node.Pointer{
 		Clean: true,
 		Hash:  root,
 	})
@@ -150,7 +142,7 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 
 // HasRoot checks the given NodeDB to see if the given root exists.
 func HasRoot(ndb db.NodeDB, root hash.Hash) bool {
-	_, err := ndb.GetNode(root, &internal.Pointer{
+	_, err := ndb.GetNode(root, &node.Pointer{
 		Clean: true,
 		Hash:  root,
 	})

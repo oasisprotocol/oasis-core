@@ -8,7 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 var (
@@ -36,7 +36,7 @@ type badgerNodeDB struct {
 	db *badger.DB
 }
 
-func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
+func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel/db/badger: attempted to get invalid pointer from node database")
 	}
@@ -55,10 +55,10 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to Get node from backing store")
 	}
 
-	var node internal.Node
+	var n node.Node
 	if err = item.Value(func(val []byte) error {
 		var vErr error
-		node, vErr = internal.NodeUnmarshalBinary(val)
+		n, vErr = node.UnmarshalBinary(val)
 		return vErr
 	}); err != nil {
 		d.logger.Error("failed to unmarshal node",
@@ -67,7 +67,7 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to unmarshal node")
 	}
 
-	return node, nil
+	return n, nil
 }
 
 func (d *badgerNodeDB) GetValue(id hash.Hash) ([]byte, error) {
@@ -120,7 +120,7 @@ type badgerBatch struct {
 	bat *badger.WriteBatch
 }
 
-func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *internal.Pointer) api.Subtree {
+func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &badgerSubtree{batch: ba}
 	}
@@ -143,18 +143,18 @@ type badgerSubtree struct {
 	batch *badgerBatch
 }
 
-func (s *badgerSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+func (s *badgerSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
 	switch n := ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		if err = s.batch.bat.Set(append(nodeKeyPrefix, n.Hash[:]...), data); err != nil {
 			return err
 		}
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		if err = s.batch.bat.Set(append(valueKeyPrefix, n.Value.Hash[:]...), n.Value.Value); err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (s *badgerSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
 	return nil
 }
 
-func (s *badgerSubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+func (s *badgerSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 

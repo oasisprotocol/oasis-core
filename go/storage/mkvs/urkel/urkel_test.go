@@ -16,7 +16,7 @@ import (
 	badgerDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
 	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
 	memoryDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
@@ -33,7 +33,7 @@ type dummySerialSyncer struct {
 	backing syncer.ReadSyncer
 }
 
-func (s *dummySerialSyncer) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*syncer.Subtree, error) {
+func (s *dummySerialSyncer) GetSubtree(ctx context.Context, root hash.Hash, id node.ID, maxDepth uint8) (*syncer.Subtree, error) {
 	obj, err := s.backing.GetSubtree(ctx, root, id, maxDepth)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (s *dummySerialSyncer) GetPath(ctx context.Context, root hash.Hash, key has
 	return st, nil
 }
 
-func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id internal.NodeID) (internal.Node, error) {
+func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id node.ID) (node.Node, error) {
 	obj, err := s.backing.GetNode(ctx, root, id)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id inte
 	if err != nil {
 		return nil, err
 	}
-	return NodeUnmarshalBinary(bytes)
+	return node.UnmarshalBinary(bytes)
 }
 
 func (s *dummySerialSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
@@ -592,7 +592,7 @@ func TestSubtreeSerializationSimple(t *testing.T) {
 	_, root, err := tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
 
-	st, err := tree.GetSubtree(ctx, root, internal.NodeID{Path: root, Depth: 0}, 10)
+	st, err := tree.GetSubtree(ctx, root, node.ID{Path: root, Depth: 0}, 10)
 	require.NoError(t, err, "GetSubtree")
 
 	binary, err := st.MarshalBinary()

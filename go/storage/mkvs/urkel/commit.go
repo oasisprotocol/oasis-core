@@ -5,7 +5,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 // doCommit commits all dirty nodes and values into the underlying node
@@ -17,7 +17,7 @@ func doCommit(
 	batch db.Batch,
 	subtree db.Subtree,
 	depth uint8,
-	ptr *internal.Pointer,
+	ptr *node.Pointer,
 ) (h hash.Hash, err error) {
 	if ptr == nil {
 		h.Empty()
@@ -41,7 +41,7 @@ func doCommit(
 	case nil:
 		// Dead node.
 		ptr.Hash.Empty()
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		// Internal node.
 		if n.Clean {
 			panic("urkel: non-clean pointer has clean node")
@@ -78,7 +78,7 @@ func doCommit(
 			n.Clean = true
 		})
 		ptr.Hash = n.Hash
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		// Leaf node.
 		if n.Clean {
 			panic("urkel: non-clean pointer has clean node")

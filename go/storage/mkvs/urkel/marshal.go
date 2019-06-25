@@ -1,22 +1,17 @@
 package urkel
 
 import (
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 var (
-	_ SizedBinaryUnmarshaler = (*internal.InternalNode)(nil)
-	_ SizedBinaryUnmarshaler = (*internal.LeafNode)(nil)
-	_ SizedBinaryUnmarshaler = (*internal.Value)(nil)
+	_ SizedBinaryUnmarshaler = (*node.InternalNode)(nil)
+	_ SizedBinaryUnmarshaler = (*node.LeafNode)(nil)
+	_ SizedBinaryUnmarshaler = (*node.Value)(nil)
 )
 
 // SizedBinaryUnmarshaler defines an unmarshaling method that
 // returns the number of bytes consumed.
 type SizedBinaryUnmarshaler interface {
 	SizedUnmarshalBinary(data []byte) (int, error)
-}
-
-// NodeUnmarshalBinary unmarshals a node of arbitrary type.
-func NodeUnmarshalBinary(bytes []byte) (internal.Node, error) {
-	return internal.NodeUnmarshalBinary(bytes)
 }
