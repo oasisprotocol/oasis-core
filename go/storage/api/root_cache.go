@@ -10,15 +10,19 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
 // RootCache is a LRU based tree cache.
 type RootCache struct {
-	nodedb nodedb.NodeDB
+	localDB      nodedb.NodeDB
+	remoteSyncer syncer.ReadSyncer
 
 	rootCache       *lru.Cache
 	applyLocks      *lru.Cache
 	applyLocksGuard sync.Mutex
+
+	persistEverything urkel.Option
 }
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
@@ -29,7 +33,7 @@ func (rc *RootCache) GetTree(ctx context.Context, root hash.Hash) (*urkel.Tree, 
 		return cachedTree.(*urkel.Tree), nil
 	}
 
-	newTree, err := urkel.NewWithRoot(ctx, nil, rc.nodedb, root)
+	newTree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create new tree")
 	}
@@ -47,7 +51,7 @@ func (rc *RootCache) Apply(ctx context.Context, root, expectedNewRoot hash.Hash,
 	var r hash.Hash
 
 	// Check if we already have the expected new root in our local DB.
-	if urkel.HasRoot(rc.nodedb, expectedNewRoot) {
+	if urkel.HasRoot(rc.localDB, expectedNewRoot) {
 		// We do, don't apply anything.
 		r = expectedNewRoot
 
@@ -55,7 +59,7 @@ func (rc *RootCache) Apply(ctx context.Context, root, expectedNewRoot hash.Hash,
 		_, _ = rc.rootCache.Get(expectedNewRoot)
 	} else {
 		// We don't, apply operations.
-		tree, err := urkel.NewWithRoot(ctx, nil, rc.nodedb, root)
+		tree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +106,7 @@ func (rc *RootCache) getApplyLock(root, expectedNewRoot hash.Hash) *sync.Mutex {
 	return &lock
 }
 
-func NewRootCache(nodedb nodedb.NodeDB, lruSizeInBytes, applyLockLRUSlots uint64) (*RootCache, error) {
+func NewRootCache(localDB nodedb.NodeDB, remoteSyncer syncer.ReadSyncer, lruSizeInBytes, applyLockLRUSlots uint64) (*RootCache, error) {
 	rootCache, err := lru.New(lru.Capacity(lruSizeInBytes, true))
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create rootCache")
@@ -113,9 +117,15 @@ func NewRootCache(nodedb nodedb.NodeDB, lruSizeInBytes, applyLockLRUSlots uint64
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create applyLocks")
 	}
 
+	// In the cachingclient, we want to persist everything that we obtain
+	// from the remote syncer in our local database.
+	persistEverything := urkel.PersistEverythingFromSyncer(remoteSyncer != nil)
+
 	return &RootCache{
-		nodedb:     nodedb,
-		rootCache:  rootCache,
-		applyLocks: applyLocks,
+		localDB:           localDB,
+		remoteSyncer:      remoteSyncer,
+		rootCache:         rootCache,
+		applyLocks:        applyLocks,
+		persistEverything: persistEverything,
 	}, nil
 }

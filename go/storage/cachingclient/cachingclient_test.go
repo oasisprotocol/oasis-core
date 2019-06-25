@@ -23,10 +23,7 @@ import (
 
 const cacheSize = 10
 
-// TODO: Update this test stub after implementing caching of MKVS ops.
-// Should be implemented as part of
-// https://github.com/oasislabs/ekiden/issues/1664.
-func TestSingleAndPersistence(t *testing.T) {
+func TestCachingClient(t *testing.T) {
 	var err error
 
 	var sk signature.PrivateKey
@@ -57,7 +54,14 @@ func TestSingleAndPersistence(t *testing.T) {
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
 
-	// TODO: Check if retrieving values from MKVS uses cache.
+	// Check if the values match.
+	for i, kv := range wl {
+		var h hash.Hash
+		h.FromBytes(kv.Value)
+		v, e := client.GetValue(context.Background(), expectedNewRoot, h)
+		require.NoError(t, e, "Get1")
+		require.EqualValues(t, kv.Value, v, "Get1 - value: %d", i)
+	}
 
 	// Test the persistence.
 	client.Cleanup()
@@ -65,44 +69,15 @@ func TestSingleAndPersistence(t *testing.T) {
 	_, err = New(remote)
 	require.NoError(t, err, "New - reopen")
 
-	// TODO: Check if retrieving values from MKVS uses cache.
+	// Check if the values are still fetchable.
+	for i, kv := range wl {
+		var h hash.Hash
+		h.FromBytes(kv.Value)
+		v, e := client.GetValue(context.Background(), expectedNewRoot, h)
+		require.NoError(t, e, "Get2")
+		require.EqualValues(t, kv.Value, v, "Get2 - value: %d", i)
+	}
 }
-
-// TODO: Update this test after implementing caching of MKVS ops.
-// Should be implemented as part of
-// https://github.com/oasislabs/ekiden/issues/1664.
-// func TestBatch(t *testing.T) {
-// 	remote := memory.New(mock.New(), nil)
-// 	client, cacheDir := requireNewClient(t, remote)
-// 	defer func() {
-// 		client.Cleanup()
-// 		os.RemoveAll(cacheDir)
-// 	}()
-
-// 	kvs := makeTestKeyValues([]byte("TestBatch"), cacheSize)
-// 	var (
-// 		ks []api.Key
-// 		vs []api.Value
-// 	)
-// 	for _, v := range kvs {
-// 		vs = append(vs, api.Value{
-// 			Data:       v.Value,
-// 			Expiration: 666,
-// 		})
-// 		ks = append(ks, v.Key)
-// 	}
-
-// 	err := client.InsertBatch(context.Background(), vs, api.InsertOptions{LocalOnly: false})
-// 	require.NoError(t, err, "InsertBatch")
-
-// 	values, err := client.GetBatch(context.Background(), ks)
-// 	require.NoError(t, err, "GetBatch")
-// 	for i, v := range values {
-// 		require.EqualValues(t, kvs[i].Value, v, "GetBatch - value: %d", i)
-// 	}
-// }
-
-//
 
 func requireNewClient(t *testing.T, remote api.Backend) (api.Backend, string) {
 	<-remote.Initialized()
@@ -120,33 +95,6 @@ func requireNewClient(t *testing.T, remote api.Backend) (api.Backend, string) {
 
 	return client, cacheDir
 }
-
-// TODO: Update these commented helper functions as part of
-// https://github.com/oasislabs/ekiden/issues/1664.
-
-// func requireGet(t *testing.T, client api.Backend, key api.Key, expected []byte) bool {
-// 	mkvsReceipt, err := client.Get(context.Background(), key)
-// 	switch value {
-// 	case nil:
-// 		require.Error(t, err, "Get(miss)")
-// 		require.Equal(t, api.ErrKeyNotFound, err, "Get(miss) error is ErrKeyNotFound")
-// 		return false
-// 	default:
-// 		require.NoError(t, err, "Get(hit)")
-// 		require.EqualValues(t, expected, value, "Get() returned expected value")
-// 		return true
-// 	}
-// }
-
-// func requireKVs(t *testing.T, client api.Backend, kvs []keyValue, expectedHits int) {
-// 	var valuesInCache int
-// 	for _, v := range kvs {
-// 		if requireGet(t, client, v.Key, v.Value) {
-// 			valuesInCache++
-// 		}
-// 	}
-// 	require.Equal(t, expectedHits, valuesInCache, "Cache has expected number of entries")
-// }
 
 func makeTestWriteLog(seed []byte, n int) api.WriteLog {
 	h := crypto.SHA512.New()

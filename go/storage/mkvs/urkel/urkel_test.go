@@ -15,6 +15,7 @@ import (
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	badgerDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
 	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
+	lruDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/lru"
 	memoryDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
@@ -572,6 +573,53 @@ func TestUrkelBadgerBackend(t *testing.T) {
 			require.True(t, ok, "finiBackend")
 
 			os.RemoveAll(dir)
+		})
+}
+
+func TestUrkelLRUBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
+		// Create a new random temporary file under /tmp.
+		f, err := ioutil.TempFile("", "mkvs.test.lrudb")
+		require.NoError(t, err, "TempFile")
+		fname := f.Name()
+		f.Close()
+
+		// Create a LRU-backed Node DB.
+		ndb, err := lruDb.New(16*1024*1024, fname)
+		require.NoError(t, err, "New")
+
+		return ndb, fname
+	},
+		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
+			// Save something to test persistence.
+			tree := New(nil, ndb)
+			persistenceKey := []byte("persistenceTest")
+			persistenceVal := []byte("nothing lasts forever")
+			err := tree.Insert(context.Background(), persistenceKey, persistenceVal)
+			require.NoError(t, err, "Insert")
+			_, root, err := tree.Commit(context.Background())
+			require.NoError(t, err, "Commit")
+
+			// Close the database (this persists the LRU cache to file).
+			ndb.Close()
+
+			// Now try reopening it to see if loading works.
+			fname, ok := custom.(string)
+			require.True(t, ok, "finiBackend")
+
+			d, derr := lruDb.New(16*1024*1024, fname)
+			require.NoError(t, derr, "New (persistence)")
+
+			// Fetch persisted value.
+			tree, terr := NewWithRoot(context.Background(), nil, d, root)
+			require.NoError(t, terr, "NewWithRoot (persistence)")
+			v, verr := tree.Get(context.Background(), persistenceKey)
+			require.NoError(t, verr, "Get (persistence)")
+			require.Equal(t, persistenceVal, v)
+
+			// OK, we're done, clean up.
+			d.Close()
+			os.Remove(fname)
 		})
 }
 

@@ -41,6 +41,8 @@ type cache struct {
 	valueCapacity uint64
 	// Prefetch depth.
 	prefetchDepth uint8
+	// Persist all the nodes and values we obtain from the remote syncer?
+	persistEverythingFromSyncer bool
 	// Syncer remote GetNode timeout.
 	syncerGetNodeTimeout time.Duration
 	// Syncer remote subtree prefetch timeout.
@@ -52,14 +54,15 @@ type cache struct {
 
 func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) cache {
 	return cache{
-		db:                    ndb,
-		rs:                    rs,
-		lruNodes:              list.New(),
-		lruValues:             list.New(),
-		syncerGetNodeTimeout:  1 * time.Second,
-		syncerPrefetchTimeout: 5 * time.Second,
-		valueCapacity:         16 * 1024 * 1024,
-		nodeCapacity:          5000,
+		db:                          ndb,
+		rs:                          rs,
+		lruNodes:                    list.New(),
+		lruValues:                   list.New(),
+		persistEverythingFromSyncer: false,
+		syncerGetNodeTimeout:        1 * time.Second,
+		syncerPrefetchTimeout:       5 * time.Second,
+		valueCapacity:               16 * 1024 * 1024,
+		nodeCapacity:                5000,
 	}
 }
 
@@ -461,10 +464,18 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 		return nil, errors.New("urkel: reconstructed root pointer is nil")
 	}
 
-	// Create a no-op database so we can run commit. We don't want to persist
-	// everything we retrieve from a remote endpoint as this may be dangerous.
-	db, _ := db.NewNopNodeDB()
-	batch := db.NewBatch()
+	var d db.NodeDB
+	if !c.persistEverythingFromSyncer {
+		// Create a no-op database so we can run commit. We don't want to
+		// persist everything we retrieve from a remote endpoint as this
+		// may be dangerous.
+		d, _ = db.NewNopNodeDB()
+	} else {
+		// Sometimes we do want to persist everything from the syncer.
+		// This is used in the cachingclient, for example.
+		d = c.db
+	}
+	batch := d.NewBatch()
 	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
 	syncRoot, err := doCommit(ctx, c, batch, subtree, depth, ptr)

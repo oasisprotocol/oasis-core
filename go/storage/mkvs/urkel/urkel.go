@@ -92,6 +92,16 @@ func SyncerPrefetchTimeout(timeout time.Duration) Option {
 	}
 }
 
+// PersistEverythingFromSyncer sets whether to persist all the nodes and
+// values obtained from the remote syncer to local database.
+//
+// If not specified, the default is false.
+func PersistEverythingFromSyncer(doit bool) Option {
+	return func(t *Tree) {
+		t.cache.persistEverythingFromSyncer = doit
+	}
+}
+
 // New creates a new empty Urkel tree backed by the given node database.
 func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 	if rs == nil {
