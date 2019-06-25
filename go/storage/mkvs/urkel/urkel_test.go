@@ -11,7 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
+	memoryDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
@@ -72,7 +74,7 @@ func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id inte
 	if err != nil {
 		return nil, err
 	}
-	return db.NodeUnmarshalBinary(bytes)
+	return NodeUnmarshalBinary(bytes)
 }
 
 func (s *dummySerialSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
@@ -479,7 +481,7 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 func TestUrkelMemoryBackend(t *testing.T) {
 	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
 		// Create a memory-backed Node DB.
-		ndb, _ := db.NewMemoryNodeDB()
+		ndb, _ := memoryDb.New()
 		return ndb, nil
 	},
 		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
@@ -494,8 +496,8 @@ func TestUrkelLevelDBBackend(t *testing.T) {
 		require.NoError(t, err, "TempDir")
 
 		// Create a LevelDB-backed Node DB.
-		ndb, err := db.NewLevelDBNodeDB(dir)
-		require.NoError(t, err, "NewLevelDBNodeDB")
+		ndb, err := levelDb.New(dir)
+		require.NoError(t, err, "New")
 
 		return ndb, dir
 	},
@@ -583,7 +585,7 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	ctx := context.Background()
 
 	for n := 0; n < b.N; n++ {
-		ndb, _ := db.NewMemoryNodeDB()
+		ndb, _ := memoryDb.New()
 		tree := New(nil, ndb)
 
 		for i := 0; i < numValues; i++ {

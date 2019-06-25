@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
@@ -153,11 +153,15 @@ func (c *cache) commitNode(ptr *internal.Pointer) {
 	}
 
 	ptr.LRU = c.lruNodes.PushFront(ptr)
-	switch ptr.Node.(type) {
+	switch n := ptr.Node.(type) {
 	case *internal.InternalNode:
 		c.internalNodeCount++
 	case *internal.LeafNode:
 		c.leafNodeCount++
+
+		if n.Value != nil {
+			c.commitValue(n.Value)
+		}
 	}
 }
 
@@ -310,6 +314,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 	switch err {
 	case nil:
 		ptr.Node = node
+		// Commit node to cache.
+		c.commitNode(ptr)
 	case db.ErrNodeNotFound:
 		// Node not found in local node database, try the syncer.
 		var cancel context.CancelFunc
@@ -327,6 +333,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 			}
 
 			ptr.Node = node
+			// Commit node to cache.
+			c.commitNode(ptr)
 		} else {
 			// If target key is known, we can try prefetching the whole path
 			// instead of one node at a time.
@@ -335,6 +343,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 				return nil, err
 			}
 
+			// reconstructSubtree commits nodes to cache so a separate commitNode
+			// is not needed.
 			var newPtr *internal.Pointer
 			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
 				return nil, err
@@ -431,11 +441,13 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 		return nil, errors.New("urkel: reconstructed root pointer is nil")
 	}
 
-	batch := c.db.NewBatch()
-	defer batch.Reset()
+	// Create a no-op database so we can run commit. We don't want to persist
+	// everything we retrieve from a remote endpoint as this may be dangerous.
+	db, _ := db.NewNopNodeDB()
+	batch := db.NewBatch()
+	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
-	updates := &cacheUpdates{}
-	syncRoot, err := doCommit(ctx, c, updates, batch, ptr)
+	syncRoot, err := doCommit(ctx, c, batch, subtree, depth, ptr)
 	if err != nil {
 		return nil, err
 	}
@@ -445,11 +457,11 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 			syncRoot,
 		)
 	}
-
-	if err = batch.Commit(root); err != nil {
+	// We must commit even though this is a no-op database in order to fire
+	// the on-commit hooks.
+	if err := batch.Commit(root); err != nil {
 		return nil, err
 	}
-	updates.Commit()
 
 	return ptr, nil
 }

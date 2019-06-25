@@ -13,7 +13,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	badgerNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
 )
 
 const (
@@ -42,7 +43,7 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 	opts.Logger = &badgerLogger{logger: logger}
 	// TODO: We may need to crank up MaxTableSize at some point.
 
-	ndb, err := nodedb.NewBadgerNodeDB(opts)
+	ndb, err := badgerNodedb.New(opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to open node database")
 	}

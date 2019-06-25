@@ -9,7 +9,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	levelNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
 )
 
 const (
@@ -120,7 +121,7 @@ func (b *leveldbBackend) Initialized() <-chan struct{} {
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
 func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes uint64, applyLockLRUSlots uint64) (api.Backend, error) {
-	ndb, err := nodedb.NewLevelDBNodeDB(dbDir)
+	ndb, err := levelNodedb.New(dbDir)
 	if err != nil {
 		ndb.Close()
 		return nil, err

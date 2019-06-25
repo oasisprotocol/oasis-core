@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 )
 
 // RootCache is a LRU based tree cache.
