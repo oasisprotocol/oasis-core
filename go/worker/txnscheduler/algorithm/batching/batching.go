@@ -2,6 +2,8 @@
 package batching
 
 import (
+	"sync"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -21,6 +23,8 @@ const (
 )
 
 type batchingState struct {
+	sync.RWMutex
+
 	cfg           config
 	incomingQueue *incomingQueue
 
@@ -38,6 +42,10 @@ type config struct {
 }
 
 func (s *batchingState) scheduleBatch(force bool) error {
+	// Guarding against EpochTransition() modifying current epoch.
+	s.RLock()
+	defer s.RUnlock()
+
 	batch, err := s.incomingQueue.Take(force)
 	if err != nil && err != errNoBatchAvailable {
 		s.logger.Error("failed to get batch from the queue",
@@ -77,6 +85,9 @@ func (s *batchingState) scheduleBatch(force bool) error {
 }
 
 func (s *batchingState) EpochTransition(epoch *committee.EpochSnapshot) error {
+	s.Lock()
+	defer s.Unlock()
+
 	s.epoch = epoch
 	return nil
 }
