@@ -50,8 +50,8 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	root.Empty()
 	wl := prepareWriteLog(testValues)
 	expectedNewRoot := CalculateExpectedNewRoot(t, wl)
-	var receipts []*api.MKVSReceipt
-	var receiptBody api.MKVSReceiptBody
+	var receipts []*api.Receipt
+	var receiptBody api.ReceiptBody
 	var err error
 
 	// Apply write log to an empty root.

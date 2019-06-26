@@ -169,15 +169,15 @@ func (h *Header) RootsForStorageReceipt() []hash.Hash {
 // verification. This should be implemented as part of:
 // https://github.com/oasislabs/ekiden/issues/1351.
 func (h *Header) VerifyStorageReceiptSignatures() error {
-	receiptBody := storage.MKVSReceiptBody{
+	receiptBody := storage.ReceiptBody{
 		Version: 1,
 		Roots:   h.RootsForStorageReceipt(),
 	}
-	receipt := storage.MKVSReceipt{}
+	receipt := storage.Receipt{}
 	receipt.Signed.Blob = receiptBody.MarshalCBOR()
 	for _, sig := range h.StorageSignatures {
 		receipt.Signed.Signature = sig
-		var tmp storage.MKVSReceiptBody
+		var tmp storage.ReceiptBody
 		if err := receipt.Open(&tmp); err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func (h *Header) VerifyStorageReceiptSignatures() error {
 
 // VerifyStorageReceipt validates that the provided storage receipt
 // matches the header.
-func (h *Header) VerifyStorageReceipt(receipt *storage.MKVSReceiptBody) error {
+func (h *Header) VerifyStorageReceipt(receipt *storage.ReceiptBody) error {
 	roots := h.RootsForStorageReceipt()
 	if len(receipt.Roots) != len(roots) {
 		return errors.New("roothash: receipt has unexpected number of roots")

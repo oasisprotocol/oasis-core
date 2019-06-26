@@ -454,7 +454,7 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		// For now accept a signature from anyone.
 		signatures := []signature.Signature{}
 		for _, receipt := range receipts {
-			var receiptBody storage.MKVSReceiptBody
+			var receiptBody storage.ReceiptBody
 			if err = receipt.Open(&receiptBody); err != nil {
 				n.logger.Error("failed to open receipt",
 					"receipt", receipt,

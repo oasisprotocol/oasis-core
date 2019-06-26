@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -63,17 +63,17 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 	}, nil
 }
 
-func (ba *badgerBackend) Apply(ctx context.Context, root, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+func (ba *badgerBackend) Apply(ctx context.Context, root, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	newRoot, err := ba.rootCache.Apply(ctx, root, expectedNewRoot, log)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to Apply")
 	}
 
 	receipt, err := ba.signReceipt(ctx, []hash.Hash{*newRoot})
-	return []*api.MKVSReceipt{receipt}, err
+	return []*api.Receipt{receipt}, err
 }
 
-func (ba *badgerBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+func (ba *badgerBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
 	newRoots := make([]hash.Hash, 0, len(ops))
 	for _, op := range ops {
 		newRoot, err := ba.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
@@ -84,7 +84,7 @@ func (ba *badgerBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*
 	}
 
 	receipt, err := ba.signReceipt(ctx, newRoots)
-	return []*api.MKVSReceipt{receipt}, err
+	return []*api.Receipt{receipt}, err
 }
 
 func (ba *badgerBackend) Cleanup() {
@@ -131,17 +131,17 @@ func (ba *badgerBackend) GetValue(ctx context.Context, root hash.Hash, id hash.H
 	return tree.GetValue(ctx, root, id)
 }
 
-func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.MKVSReceipt, error) {
-	receiptBody := api.MKVSReceiptBody{
+func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
+	receiptBody := api.ReceiptBody{
 		Version: 1,
 		Roots:   roots,
 	}
-	signed, err := signature.SignSigned(*ba.signingKey, api.MKVSReceiptSignatureContext, &receiptBody)
+	signed, err := signature.SignSigned(*ba.signingKey, api.ReceiptSignatureContext, &receiptBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to sign receipt")
 	}
 
-	return &api.MKVSReceipt{
+	return &api.Receipt{
 		Signed: *signed,
 	}, nil
 }

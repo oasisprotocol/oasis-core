@@ -5,20 +5,20 @@ import (
 	"fmt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8, key hash.Hash, val []byte) (*internal.Pointer, bool, error) {
-	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, nil)
+func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth uint8, key hash.Hash, val []byte) (*node.Pointer, bool, error) {
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, Depth: depth}, ptr, nil)
 	if err != nil {
 		return nil, false, err
 	}
 
-	switch n := node.(type) {
+	switch n := nd.(type) {
 	case nil:
 		// Insert into nil node, create a new leaf node.
 		return t.cache.newLeafNode(key, val), false, nil
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		var existed bool
 		if getKeyBit(key, depth) {
 			n.Right, existed, err = t.doInsert(ctx, n.Right, depth+1, key, val)
@@ -37,7 +37,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		}
 
 		return ptr, existed, nil
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		// If the key matches, we can just update the value.
 		if n.Key.Equal(&key) {
 			if n.Value.Equal(val) {
@@ -56,7 +56,7 @@ func (t *Tree) doInsert(ctx context.Context, ptr *internal.Pointer, depth uint8,
 		existingBit := getKeyBit(n.Key, depth)
 		newBit := getKeyBit(key, depth)
 
-		var left, right *internal.Pointer
+		var left, right *node.Pointer
 		if existingBit != newBit {
 			// No bit collision at this depth, create an internal node with
 			// two leaves.

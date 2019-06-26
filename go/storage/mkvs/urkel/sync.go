@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
@@ -17,7 +17,7 @@ var _ syncer.ReadSyncer = (*Tree)(nil)
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeID, maxDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id node.ID, maxDepth uint8) (*syncer.Subtree, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -50,7 +50,7 @@ func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id internal.NodeI
 
 func (t *Tree) doGetSubtree(
 	ctx context.Context,
-	ptr *internal.Pointer,
+	ptr *node.Pointer,
 	depth uint8,
 	path hash.Hash,
 	st *syncer.Subtree,
@@ -63,25 +63,25 @@ func (t *Tree) doGetSubtree(
 	default:
 	}
 
-	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: path, Depth: depth}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path, Depth: depth}, ptr, nil)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
-	if node == nil {
+	if nd == nil {
 		return syncer.SubtreePointer{Index: syncer.InvalidSubtreeIndex, Valid: true}, nil
 	}
 
 	if depth >= maxDepth {
 		// Nodes at maxDepth are always full nodes.
-		idx, err := st.AddFullNode(node.Extract())
+		idx, err := st.AddFullNode(nd.Extract())
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
 	}
 
-	switch n := node.(type) {
-	case *internal.InternalNode:
+	switch n := nd.(type) {
+	case *node.InternalNode:
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
 
@@ -105,9 +105,9 @@ func (t *Tree) doGetSubtree(
 		}
 
 		return syncer.SubtreePointer{Index: idx, Valid: true}, nil
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		// All encountered leaves are always full nodes.
-		idx, err := st.AddFullNode(node.Extract())
+		idx, err := st.AddFullNode(nd.Extract())
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
@@ -115,7 +115,6 @@ func (t *Tree) doGetSubtree(
 		return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
 	default:
 		panic("urkel: invalid node type")
-
 	}
 }
 
@@ -135,7 +134,7 @@ func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, start
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	subtreeRoot, err := t.cache.derefNodeID(ctx, internal.NodeID{Path: key, Depth: startDepth})
+	subtreeRoot, err := t.cache.derefNodeID(ctx, node.ID{Path: key, Depth: startDepth})
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
@@ -155,7 +154,7 @@ func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, start
 
 func (t *Tree) doGetPath(
 	ctx context.Context,
-	ptr *internal.Pointer,
+	ptr *node.Pointer,
 	depth uint8,
 	key hash.Hash,
 	st *syncer.Subtree,
@@ -167,25 +166,25 @@ func (t *Tree) doGetPath(
 	default:
 	}
 
-	node, err := t.cache.derefNodePtr(ctx, internal.NodeID{Path: key, Depth: depth}, ptr, &key)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, Depth: depth}, ptr, &key)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
-	if node == nil {
+	if nd == nil {
 		return syncer.SubtreePointer{Index: syncer.InvalidSubtreeIndex, Valid: true}, nil
 	}
 
 	if !getKeyBit(key, depth) {
 		// Off-path nodes are always full nodes.
-		idx, err := st.AddFullNode(node.Extract())
+		idx, err := st.AddFullNode(nd.Extract())
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
 	}
 
-	switch n := node.(type) {
-	case *internal.InternalNode:
+	switch n := nd.(type) {
+	case *node.InternalNode:
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
 
@@ -209,9 +208,9 @@ func (t *Tree) doGetPath(
 		}
 
 		return syncer.SubtreePointer{Index: idx, Full: false, Valid: true}, nil
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		// All encountered leaves are always full nodes.
-		idx, err := st.AddFullNode(node.Extract())
+		idx, err := st.AddFullNode(nd.Extract())
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
@@ -219,7 +218,6 @@ func (t *Tree) doGetPath(
 		return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
 	default:
 		panic("urkel: invalid node type")
-
 	}
 }
 
@@ -228,7 +226,7 @@ func (t *Tree) doGetPath(
 // It is the responsibility of the caller to validate that the node
 // is consistent. The node's cached hash should be considered invalid
 // and must be recomputed locally.
-func (t *Tree) GetNode(ctx context.Context, root hash.Hash, id internal.NodeID) (internal.Node, error) {
+func (t *Tree) GetNode(ctx context.Context, root hash.Hash, id node.ID) (node.Node, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -243,11 +241,11 @@ func (t *Tree) GetNode(ctx context.Context, root hash.Hash, id internal.NodeID) 
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
-	node, err := t.cache.derefNodePtr(ctx, id, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, id, ptr, nil)
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
-	return node.Extract(), nil
+	return nd.Extract(), nil
 }
 
 // GetValue retrieves a specific value under the given root.
@@ -265,7 +263,7 @@ func (t *Tree) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]by
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	val, err := t.cache.derefValue(ctx, &internal.Value{Clean: true, Hash: id})
+	val, err := t.cache.derefValue(ctx, &node.Value{Clean: true, Hash: id})
 	if err != nil {
 		return nil, syncer.ErrValueNotFound
 	}

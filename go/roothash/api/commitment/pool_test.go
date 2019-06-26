@@ -306,11 +306,11 @@ func TestPoolTwoCommitments(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receiptBody := storage.MKVSReceiptBody{
+		receiptBody := storage.ReceiptBody{
 			Version: 1,
 			Roots:   body.RootsForStorageReceipt(),
 		}
-		signed, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receiptBody)
+		signed, err := signature.SignSigned(sk1, storage.ReceiptSignatureContext, &receiptBody)
 		require.NoError(t, err, "SignSigned")
 		body.StorageSignatures = []signature.Signature{signed.Signature}
 
@@ -712,11 +712,11 @@ func TestMultiPool(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body2.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receiptBody := storage.MKVSReceiptBody{
+		receiptBody := storage.ReceiptBody{
 			Version: 1,
 			Roots:   body2.RootsForStorageReceipt(),
 		}
-		signed, err := signature.SignSigned(sks1[0], storage.MKVSReceiptSignatureContext, &receiptBody)
+		signed, err := signature.SignSigned(sks1[0], storage.ReceiptSignatureContext, &receiptBody)
 		require.NoError(t, err, "SignSigned")
 		body2.StorageSignatures = []signature.Signature{signed.Signature}
 
@@ -839,11 +839,11 @@ func TestTryFinalize(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receiptBody := storage.MKVSReceiptBody{
+		receiptBody := storage.ReceiptBody{
 			Version: 1,
 			Roots:   body.RootsForStorageReceipt(),
 		}
-		signed, err := signature.SignSigned(sk1, storage.MKVSReceiptSignatureContext, &receiptBody)
+		signed, err := signature.SignSigned(sk1, storage.ReceiptSignatureContext, &receiptBody)
 		require.NoError(t, err, "SignSigned")
 		body.StorageSignatures = []signature.Signature{signed.Signature}
 
@@ -1033,11 +1033,11 @@ func generateStorageReceiptSignature(t *testing.T, body *ComputeBody) signature.
 	sk, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey")
 
-	receiptBody := storage.MKVSReceiptBody{
+	receiptBody := storage.ReceiptBody{
 		Version: 1,
 		Roots:   body.RootsForStorageReceipt(),
 	}
-	signed, err := signature.SignSigned(sk, storage.MKVSReceiptSignatureContext, &receiptBody)
+	signed, err := signature.SignSigned(sk, storage.ReceiptSignatureContext, &receiptBody)
 	require.NoError(t, err, "SignSigned")
 
 	return signed.Signature
