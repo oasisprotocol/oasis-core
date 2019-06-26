@@ -12,7 +12,7 @@ const (
 	TransactionTag byte = 0x05
 
 	// AppName is the ABCI application name.
-	AppName string = "999_staking"
+	AppName string = "100_staking"
 )
 
 var (
