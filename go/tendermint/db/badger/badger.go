@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	dbm "github.com/tendermint/tendermint/libs/db"
